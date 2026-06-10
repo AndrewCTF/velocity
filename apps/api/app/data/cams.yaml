@@ -1,0 +1,13 @@
+# Hand-curated public webcams — OWNER-PUBLISHED feeds ONLY.
+# Legality policy: a cam belongs here only when its operator intentionally
+# publishes the URL (gov portals, tourism boards, harbor authorities).
+# Aggregators of unsecured private cams (Insecam-style) are banned.
+#
+# Schema per entry:
+#   id:            unique slug (used in /api/cams/{id}/snapshot)
+#   name:          display name (map label)
+#   lat, lon:      WGS84
+#   snapshot_url:  direct still-image URL (jpg/png)
+#   hls_url:       OPTIONAL live HLS stream (.m3u8)
+#   attribution:   license/owner line shown in the entity panel
+cams: []

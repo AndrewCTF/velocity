@@ -16,6 +16,7 @@ from app.routes import ais as ais_routes
 from app.routes import alerts as alerts_routes
 from app.routes import aviation as aviation_routes
 from app.routes import cables as cables_routes
+from app.routes import cams as cams_routes
 from app.routes import config as config_routes
 from app.routes import correlations as correlations_routes
 from app.routes import cyber as cyber_routes
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(timeline_routes.router)
     app.include_router(maritime_routes.router)
     app.include_router(jamming_routes.router)
+    app.include_router(cams_routes.router)
 
     return app
 
