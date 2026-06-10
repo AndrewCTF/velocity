@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as Cesium from 'cesium';
-import { DefaultHeightmapResource, MartiniTerrainProvider } from '@macrostrat/cesium-martini';
+import { MapboxTerrainProvider } from '@macrostrat/cesium-martini';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useTime, useSelection } from '../state/stores.js';
 import type { ImageryMode } from '../state/stores.js';
@@ -76,13 +76,20 @@ function buildSatImagery(): Cesium.ImageryLayer {
 // Terrain from our /tiles/terrain proxy (terrarium transcoded server-side
 // to Mapbox terrain-RGB), meshed client-side by cesium-martini. Replaces
 // ion World Terrain — keyless, disk-cached.
+//
+// MapboxTerrainProvider (not MartiniTerrainProvider) on purpose: the
+// package's bare MartiniTerrainProvider has an upstream bug — its default
+// decoder constructs a WorkerFarm with no worker and crashes with
+// "Cannot set properties of undefined (setting 'onmessage')". The Mapbox
+// wrapper wires the bundled decode worker correctly and accepts a custom
+// urlTemplate, and our proxy serves exactly the Mapbox terrain-RGB
+// encoding it decodes.
 function buildFreeTerrain(): Cesium.TerrainProvider {
-  const resource = new DefaultHeightmapResource({
-    url: '/tiles/terrain/{z}/{x}/{y}.png',
+  return new MapboxTerrainProvider({
+    urlTemplate: '/tiles/terrain/{z}/{x}/{y}.png',
     maxZoom: 15,
     tileSize: 256,
-  });
-  return new MartiniTerrainProvider({ resource }) as unknown as Cesium.TerrainProvider;
+  }) as unknown as Cesium.TerrainProvider;
 }
 
 export function GlobeCanvas({

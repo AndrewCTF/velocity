@@ -36,7 +36,14 @@ export interface TrackPoint {
 }
 
 const MAX_POINTS_PER_ENTITY = 60; // ~last 60 fixes
-const MAX_TRACKED_ENTITIES = 5000;
+// Must exceed the live entity population or eviction thrashes: with the
+// Digitraffic global snapshot (~18.5k vessels) + ADS-B (~2k aircraft) a
+// 5 000 cap meant every vessel poll evicted every aircraft ring, so the
+// selection polyline never reached 2 points. 25 000 matches the per-layer
+// entity cap (MAX_PER_LAYER in PollGeoJsonAdapter); in steady state no
+// eviction happens at all, which also removes the O(n) evict scan per
+// insert.
+const MAX_TRACKED_ENTITIES = 25_000;
 
 class TrackStore {
   private tracks = new Map<string, TrackPoint[]>();

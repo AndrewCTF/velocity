@@ -22,6 +22,7 @@ Sources (all keyless):
 
 from __future__ import annotations
 
+import asyncio
 from io import BytesIO
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -62,14 +63,25 @@ def _cache_for(root: str) -> TileCache:
     return tc
 
 
+# A cold Cesium boot requests ~70 tiles at once; EOX (and friends) throttle
+# that burst and the un-cached tiles 502 until the user pans back. Gate the
+# upstream fetches and retry once with a short backoff so a cold start
+# warms the cache cleanly instead of spraying failures.
+_FETCH_SEMAPHORE = asyncio.Semaphore(8)
+
+
 async def _fetch_bytes(url: str) -> bytes | None:
-    try:
-        r = await get_client().get(url)
-    except Exception:
-        return None
-    if r.status_code != 200:
-        return None
-    return r.content
+    async with _FETCH_SEMAPHORE:
+        for attempt in (0, 1):
+            try:
+                r = await get_client().get(url)
+            except Exception:
+                r = None
+            if r is not None and r.status_code == 200:
+                return r.content
+            if attempt == 0:
+                await asyncio.sleep(0.5)
+    return None
 
 
 @router.get("/tiles/basemap/{z}/{x}/{y}.png")

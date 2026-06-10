@@ -47,6 +47,29 @@ def test_fanout_falls_back_to_opensky(monkeypatch: pytest.MonkeyPatch) -> None:
     assert asyncio.run(adsb._do_global_fanout()) == fc
 
 
+def test_merge_with_previous_carries_recent_drops_stale() -> None:
+    import time as _time
+
+    now = _time.time()
+    new = {
+        "type": "FeatureCollection",
+        "features": [{"id": "aircraft:a", "properties": {"seen_at": now}}],
+    }
+    prev = {
+        "type": "FeatureCollection",
+        "features": [
+            {"id": "aircraft:a", "properties": {"seen_at": now - 5, "old": True}},
+            {"id": "aircraft:b", "properties": {"seen_at": now - 5}},
+            {"id": "aircraft:c", "properties": {"seen_at": now - 120}},
+        ],
+    }
+    merged = adsb._merge_with_previous(new, prev)
+    ids = {f["id"] for f in merged["features"]}
+    assert ids == {"aircraft:a", "aircraft:b"}  # b carried, c aged out
+    a = next(f for f in merged["features"] if f["id"] == "aircraft:a")
+    assert "old" not in a["properties"]  # fresh fix wins over carried copy
+
+
 def test_opensky_skipped_without_creds(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.config import Settings
 

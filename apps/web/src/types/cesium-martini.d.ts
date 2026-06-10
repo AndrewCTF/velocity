@@ -30,8 +30,18 @@ declare module '@macrostrat/cesium-martini' {
     constructor(opts: MartiniTerrainOpts);
   }
 
+  export interface MapboxTerrainOpts extends Omit<MartiniTerrainOpts, 'resource'> {
+    urlTemplate?: string;
+    accessToken?: string;
+    highResolution?: boolean;
+    imageFormat?: 'webp' | 'png' | 'pngraw';
+    maxZoom?: number;
+    tileSize?: number;
+    skipOddLevels?: boolean;
+  }
+
   export class MapboxTerrainProvider {
-    constructor(opts?: Record<string, unknown>);
+    constructor(opts?: MapboxTerrainOpts);
   }
 
   const _default: typeof MapboxTerrainProvider;
