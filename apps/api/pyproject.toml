@@ -15,6 +15,8 @@ dependencies = [
   "redis>=5.0.8",
   "apscheduler>=3.10.4",
   "orjson>=3.10.7",
+  "pillow>=10.0",
+  "numpy>=1.26",
 ]
 
 [project.optional-dependencies]

@@ -3,11 +3,26 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from io import BytesIO
 
 import httpx
 import pytest
 
 import app.upstream as upstream
+
+
+def _terrarium_png(elev_m: float) -> bytes:
+    """Encode a flat 2x2 terrarium tile at the given elevation."""
+    from PIL import Image
+
+    v = elev_m + 32768.0
+    r = int(v // 256)
+    g = int(v % 256)
+    b = int(round((v - int(v)) * 256)) % 256
+    img = Image.new("RGB", (2, 2), (r, g, b))
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 @pytest.fixture
@@ -25,7 +40,7 @@ def mock_upstream(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
         if "arcgisonline" in host:
             return httpx.Response(200, content=b"\xff\xd8-esri")
         if "s3.amazonaws.com" in host:
-            return httpx.Response(200, content=b"\x89PNG-terrain")
+            return httpx.Response(200, content=_terrarium_png(1234.0))
         return httpx.Response(404)
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -56,9 +71,18 @@ def test_sat_z_split_eox_low_esri_high(client, mock_upstream: list[str]) -> None
     assert r_high.content == b"\xff\xd8-esri"
 
 
-def test_terrain_proxies_terrarium_and_caps_z(client, mock_upstream: list[str]) -> None:
+def test_terrain_transcodes_terrarium_to_mapbox_rgb(
+    client, mock_upstream: list[str]
+) -> None:
+    from PIL import Image
+
     assert client.get("/tiles/terrain/16/0/0.png").status_code == 400
     r = client.get("/tiles/terrain/10/163/357.png")
     assert r.status_code == 200
-    assert r.content == b"\x89PNG-terrain"
     assert any("elevation-tiles-prod" in u for u in mock_upstream)
+    # Decode the response with the Mapbox terrain-RGB formula — must round-
+    # trip the 1234 m elevation the terrarium fixture encoded.
+    img = Image.open(BytesIO(r.content)).convert("RGB")
+    pr, pg, pb = img.getpixel((0, 0))
+    elev = (pr * 65536 + pg * 256 + pb) / 10.0 - 10000.0
+    assert abs(elev - 1234.0) < 0.2

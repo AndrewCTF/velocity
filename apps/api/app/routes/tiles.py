@@ -13,10 +13,16 @@ Sources (all keyless):
   Sentinel data)". Rendered in the frontend attribution footer.
 - sat z>=14: Esri World Imagery legacy tile endpoint — attribution
   "(c) Esri"; high-zoom complement to the 10 m Sentinel mosaic.
-- terrain: AWS Open Data Mapzen terrarium elevation tiles (z 0-15).
+- terrain: AWS Open Data Mapzen terrarium elevation tiles (z 0-15),
+  transcoded per-tile to Mapbox terrain-RGB encoding because the frontend's
+  cesium-martini worker decoder only understands that formula. The
+  transcode runs once per tile ever — the disk cache stores the converted
+  PNG.
 """
 
 from __future__ import annotations
+
+from io import BytesIO
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
@@ -130,6 +136,32 @@ async def sat_tile(
     )
 
 
+def _terrarium_to_mapbox_rgb(png_bytes: bytes) -> bytes | None:
+    """Re-encode a terrarium elevation PNG as Mapbox terrain-RGB.
+
+    terrarium: elev = R*256 + G + B/256 - 32768
+    mapbox:    elev = (R*65536 + G*256 + B)/10 - 10000
+    Lazy numpy/PIL imports keep cold-start cost off every other route.
+    """
+    import numpy as np
+    from PIL import Image
+
+    try:
+        img = Image.open(BytesIO(png_bytes)).convert("RGB")
+        a = np.asarray(img, dtype=np.float64)
+        elev = a[..., 0] * 256.0 + a[..., 1] + a[..., 2] / 256.0 - 32768.0
+        v = np.clip((elev + 10000.0) * 10.0, 0.0, float(2**24 - 1)).astype(np.uint32)
+        out = np.empty(a.shape, dtype=np.uint8)
+        out[..., 0] = (v >> 16) & 0xFF
+        out[..., 1] = (v >> 8) & 0xFF
+        out[..., 2] = v & 0xFF
+        buf = BytesIO()
+        Image.fromarray(out, "RGB").save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        return None
+
+
 @router.get("/tiles/terrain/{z}/{x}/{y}.png")
 async def terrain_tile(
     z: int, x: int, y: int, settings: Settings = Depends(get_settings)
@@ -138,12 +170,15 @@ async def terrain_tile(
         raise HTTPException(400, "z out of range (terrarium max 15)")
 
     async def load() -> bytes | None:
-        return await _fetch_bytes(
+        raw = await _fetch_bytes(
             f"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
         )
+        if raw is None:
+            return None
+        return _terrarium_to_mapbox_rgb(raw)
 
     data = await _cache_for(settings.tile_cache_dir).get(
-        "terrarium", z, x, y, "png", _TTL_TERRAIN, load
+        "terrain-rgb", z, x, y, "png", _TTL_TERRAIN, load
     )
     if data is None:
         raise HTTPException(502, "terrain upstream failed")
