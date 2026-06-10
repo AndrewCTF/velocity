@@ -18,6 +18,7 @@ import { fetchRuntimeConfig } from './transport/config.js';
 import { AlertSubscriber } from './alerts/AlertSubscriber.js';
 import { AlertsPanel } from './alerts/AlertsPanel.js';
 import { AlertsRailList } from './alerts/AlertsRailList.js';
+import { Attribution } from './shell/Attribution.js';
 
 export function App(): JSX.Element {
   const registry = useMemo(() => {
@@ -99,6 +100,7 @@ export function App(): JSX.Element {
         bottom={<Timeline viewer={viewer} />}
       />
       <AlertsPanel open={alertsOpen} onClose={() => setAlertsOpen(false)} viewer={viewer} />
+      <Attribution />
     </>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as Cesium from 'cesium';
+import { DefaultHeightmapResource, MartiniTerrainProvider } from '@macrostrat/cesium-martini';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useTime, useSelection } from '../state/stores.js';
 import type { ImageryMode } from '../state/stores.js';
@@ -34,6 +35,29 @@ function buildDarkBasemap(): Cesium.ImageryLayer {
     credit: '© OpenStreetMap · © CARTO',
   });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
+}
+
+// Keyless satellite stack: EOX Sentinel-2 (z≤13) + Esri World Imagery
+// (z≥14), proxied + disk-cached by the backend. No ion token involved.
+function buildSatImagery(): Cesium.ImageryLayer {
+  const provider = new Cesium.UrlTemplateImageryProvider({
+    url: '/tiles/sat/{z}/{x}/{y}.jpg',
+    maximumLevel: 19,
+    credit: 'Sentinel-2 cloudless by EOX · © Esri',
+  });
+  return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
+}
+
+// Terrain from our /tiles/terrain proxy (terrarium transcoded server-side
+// to Mapbox terrain-RGB), meshed client-side by cesium-martini. Replaces
+// ion World Terrain — keyless, disk-cached.
+function buildFreeTerrain(): Cesium.TerrainProvider {
+  const resource = new DefaultHeightmapResource({
+    url: '/tiles/terrain/{z}/{x}/{y}.png',
+    maxZoom: 15,
+    tileSize: 256,
+  });
+  return new MartiniTerrainProvider({ resource }) as unknown as Cesium.TerrainProvider;
 }
 
 export function GlobeCanvas({
@@ -177,7 +201,9 @@ export function GlobeCanvas({
     if (!viewer) return;
     const scene = viewer.scene;
     const hasIon = Boolean(ionToken);
-    const wantSat = imageryMode === '3d-sat' && hasIon;
+    // 3d-sat no longer requires ion: imagery + terrain come from our own
+    // keyless proxies. ion remains an optional bonus (OSM Buildings).
+    const wantSat = imageryMode === '3d-sat';
 
     const gen = ++stackGenRef.current;
     const stale = (): boolean => gen !== stackGenRef.current || !viewerRef.current;
@@ -205,19 +231,16 @@ export function GlobeCanvas({
     scene.imageryLayers.removeAll();
 
     if (wantSat) {
-      // Cesium World Imagery (asset 2) is the satellite-look basemap.
-      scene.imageryLayers.add(
-        Cesium.ImageryLayer.fromProviderAsync(Cesium.IonImageryProvider.fromAssetId(2), {}),
-      );
+      // Keyless satellite basemap via our cached proxy.
+      scene.imageryLayers.add(buildSatImagery());
 
-      // World Terrain (asset 1) gives proper elevation under buildings.
-      Cesium.CesiumTerrainProvider.fromIonAssetId(1)
-        .then((tp) => {
-          if (stale()) return;
-          viewer.terrainProvider = tp;
-          scene.requestRender();
-        })
-        .catch((e: unknown) => console.warn('World Terrain failed:', e));
+      // Keyless terrain via cesium-martini over /tiles/terrain.
+      try {
+        viewer.terrainProvider = buildFreeTerrain();
+      } catch (e) {
+        console.warn('martini terrain failed, staying on ellipsoid:', e);
+      }
+      scene.requestRender();
 
       // Drop any prior ion-stack tilesets before adding fresh ones.
       if (osmBuildingsRef.current) {
@@ -229,19 +252,22 @@ export function GlobeCanvas({
         googleTilesetRef.current = null;
       }
 
-      // OSM 3D buildings. If the swap is invalidated mid-load, destroy the
+      // OSM 3D buildings — the only remaining ion consumer, so it's gated
+      // on the token. If the swap is invalidated mid-load, destroy the
       // late-arriving tileset so we don't leak WebGL resources on rapid toggle.
-      Cesium.createOsmBuildingsAsync()
-        .then((tileset) => {
-          if (stale()) {
-            tileset.destroy();
-            return;
-          }
-          scene.primitives.add(tileset);
-          osmBuildingsRef.current = tileset;
-          scene.requestRender();
-        })
-        .catch((e: unknown) => console.warn('OSM buildings failed:', e));
+      if (hasIon) {
+        Cesium.createOsmBuildingsAsync()
+          .then((tileset) => {
+            if (stale()) {
+              tileset.destroy();
+              return;
+            }
+            scene.primitives.add(tileset);
+            osmBuildingsRef.current = tileset;
+            scene.requestRender();
+          })
+          .catch((e: unknown) => console.warn('OSM buildings failed:', e));
+      }
 
       // Optional: Google Photorealistic 3D Tiles. When enabled, hide the
       // ellipsoid globe so the photogrammetry is the surface.
