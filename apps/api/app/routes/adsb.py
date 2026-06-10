@@ -23,6 +23,8 @@ Design notes (post-breaker rewrite):
 - Frontend polls every 1s + snapshot ≤1s old = end-to-end ≤2s.
 - ~120 hand-picked dense cells over land (was 250+). Smaller grid × tighter
   TTL beats larger grid × longer TTL when egress is throttled.
+- OpenSky (authed, env creds) sits between the anonymous firehoses and the
+  per-cell grid in the degradation ladder.
 """
 
 from __future__ import annotations
@@ -36,6 +38,9 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 
+from app.config import get_settings
+from app.ingest.opensky import fetch_states, states_to_geojson
+from app.routes.aviation import _token_manager
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["adsb"])
@@ -505,6 +510,26 @@ async def _try_firehose() -> list[dict[str, Any]] | None:
     return None
 
 
+async def _try_opensky_global() -> dict[str, Any] | None:
+    """Authed OpenSky /states/all — the last firehose resort.
+
+    Only fires when every anonymous aggregator refused us. OpenSky's authed
+    quota is a finite daily credit budget, so it's the safety net, not the
+    primary. Returns a ready GeoJSON FeatureCollection (states_to_geojson
+    emits the same aircraft schema the frontend adapter consumes) or None
+    when creds are missing / the call failed / the sky came back empty."""
+    settings = get_settings()
+    if not (settings.opensky_client_id and settings.opensky_client_secret):
+        return None
+    try:
+        tm = _token_manager(settings)
+        raw = await fetch_states(tm, None)
+        fc = states_to_geojson(raw)
+    except Exception:
+        return None
+    return fc if fc.get("features") else None
+
+
 async def _do_global_fanout() -> dict[str, Any]:
     """Return a merged GeoJSON FeatureCollection of all globally airborne
     aircraft. Tries the firehose hosts first (single-shot ~17k aircraft);
@@ -527,6 +552,11 @@ async def _do_global_fanout() -> dict[str, Any]:
             elif (a.get("seen_pos") or 1e9) < (cur.get("seen_pos") or 1e9):
                 by_hex[hexid] = a
         return _aircraft_geojson(list(by_hex.values()))
+
+    # Authed OpenSky firehose — fires only when all anonymous hosts refused.
+    opensky_fc = await _try_opensky_global()
+    if opensky_fc:
+        return opensky_fc
 
     # Grid fallback. Only fires when every firehose host refused us.
     # 8s read / 4s connect. Lower than the old 15s because we want fast
