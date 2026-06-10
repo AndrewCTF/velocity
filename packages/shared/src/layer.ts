@@ -53,7 +53,8 @@ export type EmitsKind =
   | 'outage'
   | 'detection'
   | 'quake'
-  | 'fire';
+  | 'fire'
+  | 'camera';
 
 export interface LayerRefresh {
   mode: 'pull' | 'push' | 'static';

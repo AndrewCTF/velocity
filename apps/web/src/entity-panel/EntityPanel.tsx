@@ -5,6 +5,7 @@ import { tracks } from '../intel/tracks.js';
 import { fetchEnrichment, type Enrichment } from '../transport/entity.js';
 import { flyToPosition } from '../globe/camera.js';
 import { Sparkline } from './Sparkline.js';
+import { CameraCard } from './CameraCard.js';
 import type { Alert } from '@osint/shared';
 import { apiFetch } from '../transport/http.js';
 
@@ -116,6 +117,14 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
       )}
 
       {snap?.position && <PositionCard pos={snap.position} />}
+
+      {snap?.kind === 'camera' && typeof snap.properties['cam_id'] === 'string' && (
+        <CameraCard
+          camId={snap.properties['cam_id']}
+          hlsUrl={(snap.properties['hls_url'] as string | null) ?? null}
+          attribution={String(snap.properties['attribution'] ?? '')}
+        />
+      )}
 
       <TrackCard kind={snap?.kind ?? ''} points={track} />
 

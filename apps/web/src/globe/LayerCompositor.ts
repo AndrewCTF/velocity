@@ -280,5 +280,6 @@ function styleFromEmits(emits: readonly string[] | undefined): StyleKind {
   if (e === 'vessel') return 'vessel';
   if (e === 'fire') return 'fire';
   if (e === 'quake') return 'quake';
+  if (e === 'camera') return 'camera';
   return 'generic';
 }

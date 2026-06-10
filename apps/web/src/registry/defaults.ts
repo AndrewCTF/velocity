@@ -306,6 +306,23 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     opacity: 1,
     visibleByDefault: false,
   },
+  // Public webcams — owner-published gov road/weather cams + curated list.
+  // Off by default; cam markers are city furniture, not contacts.
+  {
+    id: 'infra.cams.public',
+    group: 'infra',
+    title: 'CCTV — public road/weather cams',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/cams',
+    refresh: { mode: 'pull', ttlSec: 3600 },
+    time: { temporal: false },
+    crs: 'EPSG:4326',
+    license: 'Fintraffic CC BY 4.0 / Caltrans public / curated',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['camera'],
+  },
 ] as const;
 
 export function registerDefaults(registry: LayerRegistry): void {

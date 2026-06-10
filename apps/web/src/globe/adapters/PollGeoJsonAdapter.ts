@@ -1,6 +1,13 @@
 import * as Cesium from 'cesium';
 import type { LayerAdapter, AdapterCtx } from './types.js';
-import { aircraftStyle, fireStyle, jammingPolygonStyle, quakeStyle, vesselStyle } from './styles.js';
+import {
+  aircraftStyle,
+  cameraStyle,
+  fireStyle,
+  jammingPolygonStyle,
+  quakeStyle,
+  vesselStyle,
+} from './styles.js';
 import { labelFor, aircraftLabelText, vesselLabelText } from './labelStyle.js';
 import { tracks } from '../../intel/tracks.js';
 import { aircraftDedup } from '../../intel/registry.js';
@@ -28,7 +35,7 @@ function currentValue<T>(prop: Cesium.Property | undefined): T | undefined {
   }
 }
 
-export type StyleKind = 'quake' | 'aircraft' | 'fire' | 'vessel' | 'jamming' | 'generic';
+export type StyleKind = 'quake' | 'aircraft' | 'fire' | 'vessel' | 'jamming' | 'camera' | 'generic';
 
 interface Props {
   ctx: AdapterCtx;
@@ -550,6 +557,23 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           outlineWidth: 1,
           translucencyByDistance: new Cesium.NearFarScalar(1.5e6, 1.0, 4.0e7, 0.35),
         };
+        break;
+      }
+      case 'camera': {
+        const s = cameraStyle();
+        opts.billboard = {
+          image: s.imageUri,
+          scale: s.scale,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          // Cams are dense city furniture — only paint below ~4,000 km.
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4_000_000),
+        };
+        const name = props['name'];
+        if (typeof name === 'string' && name.length > 0) {
+          opts.label = labelFor(name);
+          opts.name = name;
+        }
         break;
       }
       default:

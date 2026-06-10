@@ -16,6 +16,7 @@
     "@macrostrat/cesium-martini": "^1.6.0",
     "@osint/shared": "workspace:*",
     "cesium": "^1.123.0",
+    "hls.js": "^1.6.16",
     "maplibre-gl": "^5.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

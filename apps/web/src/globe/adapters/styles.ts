@@ -333,3 +333,14 @@ export function satelliteStyle(): { imageUri: string; scale: number; color: Cesi
     color: Cesium.Color.fromCssColorString(HEX_ACCENT),
   };
 }
+
+// ── CCTV cams ─────────────────────────────────────────────────────────────
+// Public webcams — neutral slate so they read as infrastructure, not as a
+// contact. Static points: no rotation, no per-poll restyle.
+const HEX_CAMERA = '#e2e8f0';
+export function cameraStyle(): { imageUri: string; scale: number } {
+  return {
+    imageUri: cachedIcon(`camera:${HEX_CAMERA}`, () => icons.camera(HEX_CAMERA)),
+    scale: 1.0,
+  };
+}

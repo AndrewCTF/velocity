@@ -129,6 +129,16 @@ function darkVesselSvg(color: string): string {
   </svg>`;
 }
 
+// CCTV camera — housing + lens barrel + mount stem.
+function cameraSvg(color: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
+    <rect x="3" y="6" width="13" height="8" rx="2" fill="${color}" stroke="#000" stroke-width="0.75"/>
+    <path d="M16 8.5 L21 6.5 L21 13.5 L16 11.5 Z" fill="${color}" stroke="#000" stroke-width="0.75"/>
+    <circle cx="8" cy="10" r="2.2" fill="#0b0e14"/>
+    <rect x="8.5" y="14" width="2" height="4" fill="${color}" stroke="#000" stroke-width="0.5"/>
+  </svg>`;
+}
+
 // Emergency triangle
 function emergencySvg(color: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22">
@@ -152,6 +162,7 @@ export const icons = {
   satellite: (color: string) => dataUri(satelliteSvg(color)),
   darkVessel: (color: string) => dataUri(darkVesselSvg(color)),
   emergency: (color: string) => dataUri(emergencySvg(color)),
+  camera: (color: string) => dataUri(cameraSvg(color)),
 };
 
 // Cache so we don't reflow data URIs every render.
