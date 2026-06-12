@@ -842,7 +842,9 @@ function jammingStyle(props: Record<string, unknown>): {
   return { color, pixelSize };
 }
 
-function aircraftBillboard(s: ReturnType<typeof aircraftStyle>): Cesium.BillboardGraphics.ConstructorOptions {
+function aircraftBillboard(
+  s: ReturnType<typeof aircraftStyle>,
+): Cesium.BillboardGraphics.ConstructorOptions {
   return {
     image: s.imageUri,
     scale: s.scale,
@@ -867,7 +869,9 @@ function aircraftBillboard(s: ReturnType<typeof aircraftStyle>): Cesium.Billboar
   };
 }
 
-function vesselBillboard(s: ReturnType<typeof vesselStyle>): Cesium.BillboardGraphics.ConstructorOptions {
+function vesselBillboard(
+  s: ReturnType<typeof vesselStyle>,
+): Cesium.BillboardGraphics.ConstructorOptions {
   // Individual vessel icons only paint when the camera is below ~600 km — at
   // world / continent scale the EntityCluster aggregate stands in for them so
   // the Baltic doesn't render as a single green blob. The NearFarScalar fades
