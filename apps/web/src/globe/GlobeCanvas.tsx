@@ -236,7 +236,6 @@ export function GlobeCanvas({
     };
     // Intentionally exclude imageryMode/enableGoogle3D — they are handled by
     // the swap effect below so toggling never remounts the viewer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ionToken, registry, onViewerReady]);
 
   // Swap the imagery stack in place whenever imageryMode (or its inputs)
@@ -358,6 +357,9 @@ export function GlobeCanvas({
 
     return () => {
       // Bump generation so any in-flight tile promise for this run is a no-op.
+      // stackGenRef is a monotonic counter, not a DOM ref — reading the live
+      // value in cleanup is exactly the point of the generation pattern.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       stackGenRef.current++;
     };
   }, [imageryMode, ionToken, enableGoogle3D]);

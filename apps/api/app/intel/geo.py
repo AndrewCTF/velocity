@@ -65,13 +65,14 @@ def aircraft_category(props: dict[str, Any]) -> AircraftCategory:
 
 # ── Vessels (ITU-R M.1371 §3.1.1 ship type, 0-99) ────────────────────────────
 
-VesselCategory = str  # cargo|tanker|fishing|passenger|military|sailing|pleasure|tug
+VesselCategory = str  # cargo|tanker|fishing|passenger|military|sailing|pleasure|tug|sar
 
 
 def vessel_category(ship_type: Any) -> VesselCategory:
     """Collapse the ITU ship-type code into a render/analysis bucket.
 
-    Mirrors styles.ts vessel classifier. Unknown / missing → 'other'."""
+    Mirrors styles.ts vessel classifier (classifyShipType) — keep the two in
+    lockstep per CLAUDE.md. Unknown / missing → 'other'."""
     try:
         code = int(ship_type)
     except (TypeError, ValueError):
@@ -90,6 +91,10 @@ def vessel_category(ship_type: Any) -> VesselCategory:
         return "passenger"
     if code in (50, 53):
         return "tug"
+    # 51 = Search & Rescue vessel — styles.ts renders this as its own red
+    # 'sar' category; the intel layer must report the same label.
+    if code == 51:
+        return "sar"
     if code == 55:
         return "military"
     if 60 <= code <= 69:

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.auth import ApiKeyMiddleware
 from app.config import get_settings
@@ -41,25 +40,37 @@ from app.routes import weather as weather_routes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    correlate_runner.start()
+    # OSINT_DISABLE_BACKGROUND short-circuits every boot-time poller. Unit
+    # tests set it (tests/conftest.py) so TestClient lifespans never fire
+    # real upstream HTTP from the correlate loops.
+    background = not os.environ.get("OSINT_DISABLE_BACKGROUND")
+    settings = get_settings()
+    if background:
+        correlate_runner.start()
+        # Start the global AIS upstream at boot (not only when a browser opens
+        # /ws/ais) so the MCP/intel vessel tools have data without a frontend.
+        if settings.aisstream_key:
+            ais_routes._ensure_upstream(settings.aisstream_key)
     try:
         yield
     finally:
         await correlate_runner.stop_all()
-        # Cancel the intel AOI priority warmer so the background task never
-        # outlives the app's event loop (clean shutdown + test isolation).
+        # Cancel the intel AOI priority warmer and the ADS-B snapshot
+        # refresher so no background task outlives the app's event loop
+        # (clean shutdown + test isolation).
         from app.intel import aoi  # noqa: PLC0415
 
         await aoi.stop_warmer()
+        await adsb_routes.stop_snapshot()
+        await ais_routes._stop_upstream()
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    # Hot-path serialization: every route annotates its return type, so
+    # FastAPI serializes straight to JSON bytes via pydantic-core — already
+    # faster than swapping in ORJSONResponse (which FastAPI now deprecates).
     app = FastAPI(title="OSINT Console API", version="0.1.0", lifespan=lifespan)
-
-    limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
-    app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     app.add_middleware(
         CORSMiddleware,
@@ -69,6 +80,10 @@ def create_app() -> FastAPI:
     )
     # No-op when API_KEY env is unset; enforces X-API-Key otherwise.
     app.add_middleware(ApiKeyMiddleware)
+    # Added last → outermost. The global ADS-B snapshot is a multi-MB JSON
+    # body once per second per client; gzip cuts it ~10x on the wire.
+    # compresslevel 5 trades a little ratio for much less CPU than default 9.
+    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
     app.include_router(config_routes.router)
     app.include_router(health_routes.router)

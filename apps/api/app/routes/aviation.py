@@ -42,7 +42,9 @@ async def aviation_states(
     bbox_args = (lamin, lomin, lamax, lomax)
     if any(b is not None for b in bbox_args):
         if not all(b is not None for b in bbox_args):
-            raise HTTPException(status_code=400, detail="bbox requires all of lamin,lomin,lamax,lomax")
+            raise HTTPException(
+                status_code=400, detail="bbox requires all of lamin,lomin,lamax,lomax"
+            )
         bbox = (lamin, lomin, lamax, lomax)  # type: ignore[assignment]
 
     tm = _token_manager(settings)

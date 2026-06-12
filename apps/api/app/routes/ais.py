@@ -45,14 +45,18 @@ _SHIP_TYPE_CACHE_MAX = 50_000
 
 
 async def _broadcast(payload: str) -> None:
-    dead: list[WebSocket] = []
-    for c in list(_clients):
-        try:
-            await c.send_text(payload)
-        except Exception:
-            dead.append(c)
-    for c in dead:
-        _clients.discard(c)
+    # Concurrent sends: the old serial loop head-of-line-blocked every client
+    # behind the slowest one — at AISStream message rates a single stalled tab
+    # backed the whole bridge up.
+    clients = list(_clients)
+    if not clients:
+        return
+    results = await asyncio.gather(
+        *(c.send_text(payload) for c in clients), return_exceptions=True
+    )
+    for c, res in zip(clients, results, strict=True):
+        if isinstance(res, BaseException):
+            _clients.discard(c)
 
 
 async def _run_upstream(key: str) -> None:
@@ -180,6 +184,21 @@ def _ensure_upstream(key: str) -> None:
     global _upstream_task
     if _upstream_task is None or _upstream_task.done():
         _upstream_task = asyncio.create_task(_run_upstream(key))
+
+
+async def _stop_upstream() -> None:
+    """Cancel the AISStream upstream task (wired into the app lifespan for a
+    clean shutdown). Safe to call when none is running."""
+    global _upstream_task
+    task = _upstream_task
+    _upstream_task = None
+    if task is None or task.done():
+        return
+    task.cancel()
+    try:
+        await task
+    except (asyncio.CancelledError, Exception):  # noqa: BLE001
+        pass
 
 
 @router.websocket("/ws/ais")

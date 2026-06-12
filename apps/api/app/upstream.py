@@ -103,5 +103,18 @@ class TtlCache:
     def invalidate(self, key: str) -> None:
         self._data.pop(key, None)
 
+    def shorten(self, key: str, max_ttl_sec: float) -> None:
+        """Cap an existing entry's remaining TTL at `max_ttl_sec` from now.
+
+        Used by callers that cache a value with a long TTL but want certain
+        results (e.g. an empty cell) to expire sooner — without poking the
+        private `_data` dict from outside."""
+        entry = self._data.get(key)
+        if entry is None:
+            return
+        cap = time.monotonic() + max_ttl_sec
+        if entry[0] > cap:
+            self._data[key] = (cap, entry[1])
+
 
 cache = TtlCache()

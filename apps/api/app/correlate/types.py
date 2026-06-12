@@ -13,7 +13,10 @@ class Observation:
     t: float  # epoch seconds
     lon: float
     lat: float
-    emits_kind: Literal["vessel", "aircraft", "satellite", "emitter", "event", "outage", "detection", "quake", "fire"]
+    emits_kind: Literal[
+        "vessel", "aircraft", "satellite", "emitter",
+        "event", "outage", "detection", "quake", "fire",
+    ]
     attrs: dict[str, Any] = field(default_factory=dict)
 
 

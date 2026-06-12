@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import Settings, get_settings
-from app.main import create_app
+# MUST be set before any TestClient lifespan runs: `with TestClient(app)`
+# executes the app lifespan, which would otherwise start the correlate
+# runner's background loops — several of which fire REAL upstream HTTP
+# (OpenSky, airplanes.live) on their first tick. Unit tests must never
+# touch the network.
+os.environ.setdefault("OSINT_DISABLE_BACKGROUND", "1")
+
+from app.config import Settings, get_settings  # noqa: E402
+from app.main import create_app  # noqa: E402
 
 # One tile-cache dir per test session — _test_settings() is called per
 # request via dependency_overrides, and a fresh mkdtemp per call would

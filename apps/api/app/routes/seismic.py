@@ -7,7 +7,7 @@ existing PollGeoJsonAdapter renders it as 'quake' style.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -25,7 +25,7 @@ async def emsc(
     key = f"emsc:{minmag}:{hours}"
 
     async def load() -> dict[str, Any]:
-        end = datetime.now(tz=timezone.utc)
+        end = datetime.now(tz=UTC)
         start = end - timedelta(hours=hours)
         params: dict[str, Any] = {
             "format": "json",

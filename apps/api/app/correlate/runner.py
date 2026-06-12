@@ -82,16 +82,34 @@ def _aircraft_obs_from_geojson(fc: dict[str, Any], source: str) -> list[Observat
 
 
 async def _opensky_loop(stop: asyncio.Event) -> None:
+    """Authed-only OpenSky ingest.
+
+    HARD-GATED on configured OAuth creds. Running this anonymously would
+    burn the same per-IP ~400-credit/day budget that `routes.adsb`'s paced
+    breadth tier (`_opensky_cached`) depends on — draining it ~3x faster and
+    blanking the global aircraft count hours earlier. Anonymous deployments
+    already get OpenSky data via `_global_loop`'s adsb_global ingest.
+    """
     s = get_settings()
     tm = OpenSkyTokenManager(s.opensky_client_id, s.opensky_client_secret)
+    if not tm.enabled:
+        return
+    backoff = 0.0
     while not stop.is_set():
         try:
             raw = await fetch_states(tm, None)
             obs = _aircraft_obs_from_geojson(_states_to_fc(raw), "opensky")
             store.add_many(obs)
+            backoff = 0.0
+        except httpx.HTTPStatusError as e:
+            # 429 = credit budget exhausted; back off exponentially (capped)
+            # instead of hammering a host that is refusing us every 30 s.
+            if e.response is not None and e.response.status_code == 429:
+                backoff = min(backoff * 2 + 30.0, 900.0)
+            log.debug("opensky loop status: %s", e)
         except httpx.HTTPError as e:
             log.debug("opensky loop transient: %s", e)
-        await asyncio.sleep(30)
+        await asyncio.sleep(30 + backoff)
 
 
 def _states_to_fc(raw: dict[str, Any]) -> dict[str, Any]:
@@ -341,9 +359,10 @@ def start() -> None:
     if _tasks:
         return
     _stop.clear()
-    # OpenSky is still in here as an opt-in (cred-gated), but the primary
-    # feed for aircraft observations is the in-process /api/adsb/global
-    # loopback in _global_loop, which fans out airplanes.live + ADSB.lol.
+    # OpenSky is opt-in (the loop exits immediately without OAuth creds —
+    # see _opensky_loop); the primary feed for aircraft observations is the
+    # in-process /api/adsb/global loopback in _global_loop, which fans out
+    # airplanes.live + ADSB.lol + the paced anonymous OpenSky breadth tier.
     _tasks.append(asyncio.create_task(_opensky_loop(_stop), name="opensky_loop"))
     _tasks.append(asyncio.create_task(_global_loop(_stop), name="global_loop"))
     _tasks.append(asyncio.create_task(_mil_loop(_stop), name="mil_loop"))

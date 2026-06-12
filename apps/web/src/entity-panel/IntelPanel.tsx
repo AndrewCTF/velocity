@@ -6,11 +6,14 @@ import { intel } from '../intel/registry.js';
 import type { DarkVesselCandidate } from '../intel/darkVessel.js';
 import { flyToChokepoint, flyToPosition } from '../globe/camera.js';
 import { useReducedMotion } from '../shell/useReducedMotion.js';
+import { apiFetch } from '../transport/http.js';
 import type { Alert } from '@osint/shared';
 
 async function fetchJammingAlerts(): Promise<Alert[]> {
   try {
-    const res = await fetch('/api/jamming/alerts?limit=50');
+    // apiFetch (NOT raw fetch) — CLAUDE.md: every browser → backend call must
+    // carry the X-API-Key header when one is configured.
+    const res = await apiFetch('/api/jamming/alerts?limit=50');
     if (!res.ok) return [];
     const data = (await res.json()) as { alerts: Alert[] };
     return data.alerts ?? [];

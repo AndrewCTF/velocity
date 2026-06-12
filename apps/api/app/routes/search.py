@@ -46,17 +46,26 @@ def _result(
 
 
 def _match_observations(q: str, kinds: set[str]) -> list[Observation]:
+    """Substring match against the LATEST fix per entity.
+
+    `store.latest()` is one observation per entity (newest), so results carry
+    current positions and are already deduplicated — the old full-window scan
+    returned the OLDEST matching fix first and burned O(buffer) per keystroke.
+    Newest-first so the most recently active contacts rank on top."""
     qlower = q.lower()
-    return [
+    out = [
         o
-        for o in store.window(seconds=20 * 3600, kinds=kinds)
-        if any(
+        for o in store.latest()
+        if o.emits_kind in kinds
+        and any(
             qlower in str(v).lower()
             for k, v in o.attrs.items()
             if k in ("callsign", "icao24", "registration", "name", "mmsi", "operator")
             and v is not None
         )
     ]
+    out.sort(key=lambda o: o.t, reverse=True)
+    return out
 
 
 _CHOKEPOINTS = [
@@ -81,7 +90,10 @@ _CHOKEPOINTS = [
 
 
 @router.get("/api/search")
-async def search(q: str = Query(..., min_length=1, max_length=64), limit: int = Query(10, ge=1, le=50)) -> dict[str, Any]:
+async def search(
+    q: str = Query(..., min_length=1, max_length=64),
+    limit: int = Query(10, ge=1, le=50),
+) -> dict[str, Any]:
     q = q.strip()
     results: list[dict[str, Any]] = []
 
@@ -94,38 +106,35 @@ async def search(q: str = Query(..., min_length=1, max_length=64), limit: int = 
             results.append(_result("place", f"poi:{lat},{lon}", f"{lat:.4f}, {lon:.4f}", lon, lat))
             return {"results": results}
 
-    # 2. ICAO24 exact
+    # 2. ICAO24 exact — O(1) via the latest-per-entity index.
     if ICAO24_RE.match(q):
         icao = q.lower()
         eid = f"aircraft:{icao}"
-        # try to resolve a fresh position from the store
-        live = next(
-            (o for o in store.window(7200, kinds={"aircraft"}) if o.attrs.get("icao24") == icao),
-            None,
-        )
+        live = store.latest_for(eid)
         if live:
             cs = live.attrs.get("callsign") or icao.upper()
             results.append(_result("aircraft", eid, f"{cs}  ({icao})", live.lon, live.lat))
         else:
             results.append(_result("aircraft", eid, icao.upper(), 0, 0, "icao24 — no recent fix"))
 
-    # 3. MMSI exact
+    # 3. MMSI exact — O(1) via the latest-per-entity index.
     if MMSI_RE.match(q):
         eid = f"vessel:{q}"
-        live = next(
-            (o for o in store.window(7200, kinds={"vessel"}) if str(o.attrs.get("mmsi")) == q),
-            None,
-        )
+        live = store.latest_for(eid)
         if live:
             nm = live.attrs.get("name") or q
             results.append(_result("vessel", eid, f"{nm}  (MMSI {q})", live.lon, live.lat))
         else:
             results.append(_result("vessel", eid, f"MMSI {q}", 0, 0, "no recent fix"))
 
-    # 4. Substring across recent observations (callsign / registration / name)
+    # 4. Substring across latest fixes (callsign / registration / name).
+    # Dedupe BEFORE applying the limit — the old code sliced first, so
+    # duplicate ids consumed result slots and the response came up short.
     matches = _match_observations(q, kinds={"aircraft", "vessel"})
     seen: set[str] = {r["id"] for r in results}
-    for o in matches[: max(0, limit - len(results))]:
+    for o in matches:
+        if len(results) >= limit:
+            break
         if o.id in seen:
             continue
         seen.add(o.id)

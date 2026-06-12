@@ -15,6 +15,7 @@ appropriate upstream:
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,6 +25,13 @@ from app.correlate.store import store
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["entity"])
+
+# Strict id shapes. These values are interpolated into upstream URL PATHS
+# (hexdb.io, planespotters.net, USGS) — without validation a crafted eid like
+# "aircraft:../../x?y=" steers the backend to arbitrary paths on those hosts.
+ICAO24_RE = re.compile(r"^[0-9a-fA-F]{6}$")
+MMSI_RE = re.compile(r"^\d{1,9}$")
+QUAKE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 # ── ITU-R M.585 MMSI MID → flag country (top maritime flag states + key MIDs).
 # Maps the first 3 digits of an MMSI to ISO country / flag of registry. Not
@@ -192,10 +200,16 @@ async def entity(
         raise HTTPException(400, "empty id")
 
     if kind == "aircraft":
+        if not ICAO24_RE.match(raw):
+            raise HTTPException(400, "aircraft id must be a 6-char ICAO24 hex")
         return await _enrich_aircraft(raw, callsign)
     if kind == "vessel":
+        if not MMSI_RE.match(raw):
+            raise HTTPException(400, "vessel id must be a numeric MMSI")
         return await _enrich_vessel(raw, settings)
     if kind == "quake":
+        if not QUAKE_ID_RE.match(raw):
+            raise HTTPException(400, "malformed quake id")
         return await _enrich_quake(raw)
     raise HTTPException(404, f"no enrichment for kind {kind}")
 
@@ -556,7 +570,7 @@ async def _enrich_quake(qid: str) -> dict[str, Any]:
 
     async def load() -> dict[str, Any]:
         r = await get_client().get(
-            f"https://earthquake.usgs.gov/fdsnws/event/1/query",
+            "https://earthquake.usgs.gov/fdsnws/event/1/query",
             params={"format": "geojson", "eventid": qid},
         )
         if r.status_code != 200:

@@ -52,7 +52,7 @@ async def alerts_ws(ws: WebSocket) -> None:
             try:
                 a = await asyncio.wait_for(q.get(), timeout=20.0)
                 await ws.send_text(json.dumps(a.to_json()))
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # heartbeat to keep the socket alive through proxies
                 await ws.send_text(json.dumps({"kind": "heartbeat"}))
     except WebSocketDisconnect:

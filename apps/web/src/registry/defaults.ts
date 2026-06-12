@@ -36,22 +36,25 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     visibleByDefault: false,
     emits: ['quake'],
   },
-  // Fires disabled by default to save memory on high-volume sessions.
-  // {
-  //   id: 'hazards.nasa.firms',
-  //   group: 'hazards',
-  //   title: 'Fires — NASA FIRMS VIIRS',
-  //   kind: 'geojson',
-  //   auth: 'apikey',
-  //   endpoint: '/api/firms?source=VIIRS_SNPP_NRT&days=1',
-  //   refresh: { mode: 'pull', ttlSec: 600 },
-  //   time: { temporal: true },
-  //   crs: 'EPSG:4326',
-  //   license: 'NASA (CC0 / cite)',
-  //   opacity: 1,
-  //   visibleByDefault: false,
-  //   emits: ['fire'],
-  // },
+  // CLAUDE.md guardrail: FIRMS must stay REGISTERED (degrades gracefully to
+  // an empty collection + note when FIRMS_MAP_KEY is unset). Off by default
+  // to save memory on high-volume sessions — operators enable it from the
+  // LayerRail.
+  {
+    id: 'hazards.nasa.firms',
+    group: 'hazards',
+    title: 'Fires — NASA FIRMS VIIRS',
+    kind: 'geojson',
+    auth: 'apikey',
+    endpoint: '/api/firms?source=VIIRS_SNPP_NRT&days=1',
+    refresh: { mode: 'pull', ttlSec: 600 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'NASA (CC0 / cite)',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['fire'],
+  },
   {
     id: 'hazards.nasa.eonet',
     group: 'hazards',

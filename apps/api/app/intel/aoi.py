@@ -39,6 +39,11 @@ _AOI_TTL = 4.0
 _WARMER_PERIOD = 4.0
 _MAX_AOIS = 8
 _MAX_RADIUS_NM = 250  # /v2/point hard ceiling on airplanes.live / adsb.lol
+# An AOI nobody has focused/queried for this long is evicted by the warmer.
+# Without this, up to _MAX_AOIS stale areas kept hitting upstream every
+# _WARMER_PERIOD seconds FOREVER after the agent session that registered
+# them ended.
+_AOI_IDLE_EVICT_S = 900.0
 
 
 class AOI:
@@ -241,11 +246,15 @@ async def stop_warmer() -> None:
 
 
 async def _warmer_loop() -> None:
-    """Keep every registered AOI hot on a short cycle. Self-terminates when
-    no AOIs remain so we don't spin an idle task forever."""
+    """Keep every registered AOI hot on a short cycle. Evicts AOIs that have
+    not been focused/accessed within _AOI_IDLE_EVICT_S, and self-terminates
+    when no AOIs remain so we don't spin an idle task forever."""
     idle_cycles = 0
     while True:
         await asyncio.sleep(_WARMER_PERIOD)
+        now = time.time()
+        for key in [k for k, a in _AOIS.items() if now - a.last_access > _AOI_IDLE_EVICT_S]:
+            _AOIS.pop(key, None)
         aois = list(_AOIS.values())
         if not aois:
             idle_cycles += 1

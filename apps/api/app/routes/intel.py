@@ -181,7 +181,9 @@ async def intel_sources() -> dict[str, Any]:
     s = get_settings()
     return {
         "always_on": [
-            "adsb (adsb.lol + airplanes.live firehose/grid)",
+            "adsb (adsb.lol + airplanes.live grid)",
+            "opensky /states/all (anonymous — the ~13k global breadth tier; "
+            "OAuth creds only raise the daily credit budget)",
             "ais (digitraffic Finland/Baltic)",
             "jamming (derived from ADS-B NACp/NIC)",
             "usgs quakes",
@@ -189,7 +191,7 @@ async def intel_sources() -> dict[str, Any]:
         "key_gated": {
             "aisstream": bool(s.aisstream_key),
             "firms_fires": bool(s.firms_map_key),
-            "opensky": bool(s.opensky_client_id and s.opensky_client_secret),
+            "opensky_authed": bool(s.opensky_client_id and s.opensky_client_secret),
             "gfw_dark_vessels": bool(s.gfw_token),
         },
         "ollama": {"host": s.ollama_host, "model": s.ollama_model or "(auto-detect)"},

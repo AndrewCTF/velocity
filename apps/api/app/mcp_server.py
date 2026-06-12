@@ -33,7 +33,7 @@ import os
 import subprocess
 import sys
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -340,7 +340,9 @@ async def lookup_aircraft(ident: str) -> dict[str, Any]:
     """Look up one aircraft by ICAO24 hex (exact) or callsign (substring).
     Returns its current state, registration, an integrity/threat assessment,
     and the latest server-held fix."""
-    return await _get(f"/api/intel/aircraft/{ident}")
+    # quote(): ident is agent-supplied free text going into a URL path —
+    # escape it so "x/../y" style values cannot re-route the request.
+    return await _get(f"/api/intel/aircraft/{quote(ident, safe='')}")
 
 
 @mcp.tool()

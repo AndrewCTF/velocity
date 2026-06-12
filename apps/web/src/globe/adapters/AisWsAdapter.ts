@@ -153,7 +153,7 @@ export class AisWsAdapter implements LayerAdapter {
     // the polling adapter and this websocket adapter in lockstep.
     const labelText = vesselLabelText(props);
     if (e) {
-      e.position = new Cesium.ConstantPositionProperty(pos);
+      this.updatePosition(e, pos);
       if (e.billboard) {
         // Diff before reassigning — a fresh ConstantProperty re-decodes the
         // data: URI on every WS frame and produces visible blink-off-then-on
@@ -165,6 +165,12 @@ export class AisWsAdapter implements LayerAdapter {
         const curRot = currentValue<number>(e.billboard.rotation);
         if (curRot == null || Math.abs(curRot - s.rotationRad) >= 0.01) {
           e.billboard.rotation = new Cesium.ConstantProperty(s.rotationRad);
+        }
+        // Ship type often arrives only after the first ShipStaticData frame —
+        // the category (and with it the icon scale) upgrades mid-session.
+        const curScale = currentValue<number>(e.billboard.scale);
+        if (curScale == null || Math.abs(curScale - s.scale) >= 0.02) {
+          e.billboard.scale = new Cesium.ConstantProperty(s.scale);
         }
       }
       // Keep label in sync when a previously-anonymous vessel later
@@ -189,7 +195,13 @@ export class AisWsAdapter implements LayerAdapter {
           alignedAxis: Cesium.Cartesian3.UNIT_Z,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3_000_000),
+          // Match the polling adapter's vessel treatment exactly (see
+          // vesselBillboard in PollGeoJsonAdapter): icons paint below
+          // ~600 km and cross-fade to the cluster bubbles above that.
+          // The old 3,000 km cutoff here made AISStream vessels pop in/out
+          // at a different zoom band than Digitraffic ones.
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 600_000),
+          translucencyByDistance: new Cesium.NearFarScalar(150_000, 1.0, 600_000, 0.0),
         },
         ...(labelText && { label: labelFor(labelText) }),
         properties: props,
@@ -224,6 +236,55 @@ export class AisWsAdapter implements LayerAdapter {
     this.props.ctx.viewer.scene.requestRender();
   }
 
+  // Smooth position updates — CLAUDE.md: vessels must update in place via
+  // SampledPositionProperty + LinearApproximation, never be snapped with a
+  // fresh ConstantPositionProperty on an existing entity (icons jump).
+  // Mirrors PollGeoJsonAdapter's vessel branch: stationary bypass, linear
+  // interpolation, near-duplicate decimation, 5-minute sample pruning.
+  private updatePosition(e: Cesium.Entity, newPos: Cesium.Cartesian3): void {
+    const t0 = this.props.ctx.viewer.clock.currentTime;
+    const prevPos = e.position?.getValue(t0) as Cesium.Cartesian3 | undefined;
+    if (
+      prevPos &&
+      Cesium.Cartesian3.distance(prevPos, newPos) < 100 &&
+      !(e.position instanceof Cesium.SampledPositionProperty)
+    ) {
+      // Anchored / moored — keep the cheap constant property.
+      e.position = new Cesium.ConstantPositionProperty(newPos);
+      return;
+    }
+    let sampled = e.position as Cesium.SampledPositionProperty | undefined;
+    if (!(sampled instanceof Cesium.SampledPositionProperty)) {
+      sampled = new Cesium.SampledPositionProperty();
+      sampled.setInterpolationOptions({
+        interpolationAlgorithm: Cesium.LinearApproximation,
+        interpolationDegree: 1,
+      });
+      sampled.forwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
+      sampled.backwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
+      if (prevPos) sampled.addSample(t0, prevPos);
+      e.position = sampled;
+    }
+    const tNow = t0.clone();
+    // Decimate: skip near-duplicate samples (<50 m within 60 s) so an
+    // anchored vessel doesn't grow its sample array on every WS frame.
+    const prevSample = sampled.getValue(t0) as Cesium.Cartesian3 | undefined;
+    if (prevSample) {
+      const movedM = Cesium.Cartesian3.distance(prevSample, newPos);
+      if (movedM < 50) return;
+    }
+    sampled.addSample(tNow, newPos);
+    const cutoff = Cesium.JulianDate.addSeconds(tNow, -300, new Cesium.JulianDate());
+    sampled.removeSamples(
+      new Cesium.TimeInterval({
+        start: Cesium.JulianDate.fromIso8601('1970-01-01T00:00:00Z'),
+        stop: cutoff,
+        isStartIncluded: true,
+        isStopIncluded: false,
+      }),
+    );
+  }
+
   private prune(): void {
     const cutoff = Date.now() - PRUNE_AFTER_MS;
     const entities = this.ds.entities;
@@ -233,6 +294,10 @@ export class AisWsAdapter implements LayerAdapter {
         this.lastSeen.delete(id);
       }
     }
+    // Bound the dark-vessel tracker too: candidates only ever come from
+    // fixes ≤ gap+lookback (90 min) old, so anything past 2h is dead weight.
+    // Without this the per-MMSI map grew unbounded over long sessions.
+    intel.darkVessels.prune(2 * 60 * 60 * 1000);
     this.props.ctx.viewer.scene.requestRender();
   }
 

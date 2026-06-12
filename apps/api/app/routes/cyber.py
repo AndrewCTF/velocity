@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config import Settings, get_settings
 from app.upstream import cache, get_client
@@ -29,8 +29,11 @@ async def ioda_outages(days: int = Query(7, ge=1, le=30)) -> dict[str, Any]:
             "https://api.ioda.caida.org/v2/outages/events",
             params={"from": f"-{days}d", "until": "now"},
         )
+        # RAISE on failure: get_or_fetch only caches loader RETURNS, so an
+        # upstream blip stays uncached and retries next call instead of
+        # pinning an "error" payload for the full 30-min TTL.
         if r.status_code != 200:
-            return {"items": [], "error": f"upstream {r.status_code}"}
+            raise HTTPException(502, f"ioda upstream {r.status_code}")
         j = r.json()
         return {"items": j.get("data") or j.get("events") or []}
 
@@ -55,7 +58,7 @@ async def cloudflare_outages(
             headers={"Authorization": f"Bearer {token}"},
         )
         if r.status_code != 200:
-            return {"items": [], "error": f"upstream {r.status_code}"}
+            raise HTTPException(502, f"cloudflare radar upstream {r.status_code}")
         j = r.json()
         return {"items": (j.get("result") or {}).get("annotations") or []}
 

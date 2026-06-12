@@ -1,11 +1,17 @@
 """Starter fusion rules.
 
 Per research_updated.md §1.3. Each rule consumes Observations from the
-sliding window and emits Alerts. Phase 1 ships several rules that produce
-value with the data we already ingest:
+sliding window and emits Alerts. Wired into the background runner
+(`app.correlate.runner._rule_loop`):
 
 - emergency_squawk           — any aircraft with squawk 7500/7600/7700
+- proximity_mil_vessel       — /v2/mil aircraft within 25 km of an AIS vessel
+- major_quake                — USGS quake at/above magnitude threshold
 - gps_jam_cluster            — clusters of aircraft reporting degraded GNSS
+
+Library rules (tested, available for AOI wiring but not yet scheduled):
+
+- mil_aircraft_in_aoi        — /mil contact inside a monitored bbox
 - ais_gap_in_aoi             — vessels not seen for ≥gapMs while last fix in AOI
 """
 
@@ -17,7 +23,6 @@ from collections.abc import Iterable
 from typing import Any
 
 from app.correlate.types import Alert, Observation
-
 
 EMERGENCY_SQUAWKS = {"7500", "7600", "7700"}
 
@@ -44,10 +49,13 @@ def proximity_mil_vessel(
     Useful even when neither is in a saved AOI.
     """
     observations = list(obs)
+    # ONLY the /v2/mil ingest (source="adsb_mil") counts as military here.
+    # "airplanes_live" is the EMERGENCY-SQUAWK loop's source tag — counting it
+    # produced spurious "MIL near vessel" alerts for civilian aircraft
+    # squawking 7700 over shipping lanes.
     mils = [
         o for o in observations
-        if o.emits_kind == "aircraft"
-        and (o.attrs.get("source") in ("adsb_mil", "airplanes_live"))
+        if o.emits_kind == "aircraft" and o.attrs.get("source") == "adsb_mil"
     ]
     ships = [o for o in observations if o.emits_kind == "vessel"]
     if not mils or not ships:
@@ -260,7 +268,9 @@ def haversine_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     dp = math.radians(lat2 - lat1)
     dl = math.radians(lon2 - lon1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
+    # Clamp: floating-point error can push `a` past 1.0 for near-antipodal
+    # pairs, and math.asin would raise a domain error inside the rule loop.
+    return 2 * r * math.asin(min(1.0, math.sqrt(a)))
 
 
 def mil_aircraft_in_aoi(

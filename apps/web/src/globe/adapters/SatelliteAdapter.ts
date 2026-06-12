@@ -32,8 +32,9 @@ interface OmmRecord {
 const MAX_SATS = 4000; // hard cap to keep frame budget healthy
 
 // Polls CelesTrak (every refreshSec) for the active group's two-line elements
-// and propagates positions on a 5s tick. Cesium gets positions via a CallbackProperty
-// so we don't bake the orbit into samples; cheap to update.
+// and propagates positions on a 5s tick. Each tick reassigns a
+// ConstantPositionProperty per satellite — orbits are never baked into
+// samples, so a TLE refresh is just a map rebuild.
 export class SatelliteAdapter implements LayerAdapter {
   private ds: Cesium.CustomDataSource;
   private satrecs = new Map<string, { rec: SatRec; name: string }>();

@@ -215,7 +215,9 @@ def test_ais_gap_in_aoi() -> None:
 async def test_bus_publish_then_subscribe_replay() -> None:
     bus = AlertBus()
     q = bus.subscribe()
-    bus.publish(Alert(id="x", rule_id="r", severity="high", t=0, lon=0, lat=0, confidence=1, message="m"))
+    bus.publish(
+        Alert(id="x", rule_id="r", severity="high", t=0, lon=0, lat=0, confidence=1, message="m")
+    )
     a = await asyncio.wait_for(q.get(), timeout=1.0)
     assert a.id == "x"
 
@@ -224,5 +226,10 @@ async def test_bus_publish_then_subscribe_replay() -> None:
 async def test_bus_recent_buffer_capped() -> None:
     bus = AlertBus()
     for i in range(600):
-        bus.publish(Alert(id=str(i), rule_id="r", severity="high", t=0, lon=0, lat=0, confidence=1, message=f"m{i}"))
+        bus.publish(
+            Alert(
+                id=str(i), rule_id="r", severity="high",
+                t=0, lon=0, lat=0, confidence=1, message=f"m{i}",
+            )
+        )
     assert len(bus.recent(1000)) <= 500

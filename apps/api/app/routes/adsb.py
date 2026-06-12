@@ -393,7 +393,7 @@ _ANCHOR_POINTS: tuple[tuple[float, float], ...] = (
 
 
 async def _fetch_anchor_fallback(
-    timeout: httpx.Timeout,
+    cell_timeout: httpx.Timeout,
 ) -> list[dict[str, Any]]:
     """Sparse anchor-grid fallback when the main fan-out collapsed.
 
@@ -411,7 +411,7 @@ async def _fetch_anchor_fallback(
                 host = _HEAD_HOSTS[(primary_idx + offset) % len(_HEAD_HOSTS)]
                 url = f"{host}/v2/point/{lat}/{lon}/250"
                 try:
-                    r = await client.get(url, timeout=timeout)
+                    r = await client.get(url, timeout=cell_timeout)
                 except (httpx.TimeoutException, httpx.TransportError):
                     continue
                 if r.status_code in (429, 403):
@@ -477,7 +477,9 @@ _SNAPSHOT_MIN_RETAIN_FRACTION = 0.5
 _SNAPSHOT_STALE_S = 30.0
 
 
-async def _fetch_cell(primary_idx: int, lat: float, lon: float, cell_timeout: httpx.Timeout) -> list[dict[str, Any]]:
+async def _fetch_cell(
+    primary_idx: int, lat: float, lon: float, cell_timeout: httpx.Timeout
+) -> list[dict[str, Any]]:
     """Load one cell from cache; on miss, hit primary host and fall through
     the host list when primary returns non-2xx."""
     cache_key = f"adsb:cell:{lat:.2f}:{lon:.2f}"
@@ -524,11 +526,7 @@ async def _fetch_cell(primary_idx: int, lat: float, lon: float, cell_timeout: ht
         return []
     # Shorten the cache expiry for empty results.
     if not result:
-        entry = cache._data.get(cache_key)
-        if entry is not None:
-            short_expiry = time.monotonic() + _CELL_TTL_EMPTY
-            if entry[0] > short_expiry:
-                cache._data[cache_key] = (short_expiry, entry[1])
+        cache.shorten(cache_key, _CELL_TTL_EMPTY)
     return result
 
 
@@ -785,8 +783,9 @@ def _merge_with_previous(
     aircraft missing from the current fan-out is carried forward until its
     last fix is older than max_age_s; the frontend tints stale contacts via
     seen_pos/seen_at, so carried-forward aircraft degrade visibly instead
-    of vanishing. 75 s covers the worst observed throttled fan-out cycle
-    (~30 s) plus two missed cycles — below that, contacts flickered."""
+    of vanishing. 180 s covers the worst observed throttled fan-out cycle
+    (~30 s) plus several missed OpenSky pulls (15 s pacing + backoff) —
+    shorter windows made oceanic OpenSky-only contacts flicker."""
     now = time.time()
     by_id: dict[Any, dict[str, Any]] = {}
     for f in new_fc.get("features") or []:
@@ -826,7 +825,11 @@ async def _refresh_snapshot_forever() -> None:
                 fc = _merge_with_previous(fc, _LATEST_SNAPSHOT)
                 new_count = len(fc.get("features") or [])
                 prev_count = len(_LATEST_SNAPSHOT.get("features") or [])
-                age = time.monotonic() - _LATEST_SNAPSHOT_AT if _LATEST_SNAPSHOT_AT else float("inf")
+                age = (
+                    time.monotonic() - _LATEST_SNAPSHOT_AT
+                    if _LATEST_SNAPSHOT_AT
+                    else float("inf")
+                )
                 stale = age >= _SNAPSHOT_STALE_S
                 accept = new_count > 0 and (
                     stale
@@ -875,6 +878,25 @@ async def adsb_global() -> dict[str, Any]:
         # The features list itself is shared (immutable from the caller's
         # POV — every refresh assigns a new FeatureCollection).
         return dict(_LATEST_SNAPSHOT)
+
+
+async def stop_snapshot() -> None:
+    """Cancel the background snapshot refresher and reset the bootstrap flag.
+
+    Wired into the app lifespan so the task never outlives its event loop
+    (clean shutdown, no "Task was destroyed but it is pending" on reload,
+    test isolation). Safe to call when no refresher is running."""
+    global _SNAPSHOT_TASK, _SNAPSHOT_STARTED
+    task = _SNAPSHOT_TASK
+    _SNAPSHOT_TASK = None
+    _SNAPSHOT_STARTED = False
+    if task is None or task.done():
+        return
+    task.cancel()
+    try:
+        await task
+    except (asyncio.CancelledError, Exception):  # noqa: BLE001
+        pass
 
 
 @router.get("/api/adsb/snapshot_age")

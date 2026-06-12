@@ -14,5 +14,7 @@ __pycache__/
 coverage/
 .vite/
 .turbo/
-data/tilecache/
+# Anywhere in the tree — the cache lives at apps/api/data/tilecache; the old
+# root-anchored pattern missed it and 2.7k PNGs got committed.
+**/data/tilecache/
 .playwright-mcp/

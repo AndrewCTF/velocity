@@ -7,7 +7,10 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /srv
 
 COPY apps/api/pyproject.toml ./pyproject.toml
-RUN pip install --upgrade pip && pip install -e ".[dev]"
+# Runtime deps only — dev tooling (pytest/ruff) does not belong in the image;
+# `make test-api` runs against the local venv, and compose bind-mounts tests
+# purely so they hot-reload alongside app code.
+RUN pip install --upgrade pip && pip install -e .
 
 COPY apps/api/app ./app
 COPY apps/api/tests ./tests

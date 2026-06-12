@@ -9,9 +9,9 @@ See [`frontend.md`](./frontend.md), [`research.md`](./research.md), and [`resear
 ## Stack
 
 - **Frontend**: Vite + React 18 + TypeScript + CesiumJS + MapLibre GL JS v5.24 + Tailwind + Zustand
-- **Backend**: FastAPI (Python 3.12) + SQLAlchemy 2 + asyncpg + APScheduler + websockets
+- **Backend**: FastAPI (Python 3.12) + httpx + websockets — all Phase 1 state is in-process (bounded observation store + disk tile cache)
 - **Agent access**: Model Context Protocol server (`app.mcp_server`, MCP SDK) + optional local Ollama analysis
-- **Data**: PostgreSQL 16 + PostGIS 3.4 + TimescaleDB 2.x + Redis 7
+- **Data (Phase 2, planned)**: PostgreSQL 16 + PostGIS + TimescaleDB hypertables + Redis — the observation store migrates per plan §locked-decisions #5
 - **Infra**: Docker Compose, nginx reverse proxy
 
 ## Layout
@@ -32,12 +32,24 @@ osint/
 ## Quick start
 
 ```bash
-cp .env.example .env       # fill in CESIUM_ION_TOKEN at minimum
+cp .env.example .env       # optional — every key is optional, empty works
 pnpm install
-docker compose up          # boots db, redis, api, web, nginx on :8080
+docker compose up          # boots api, web, nginx on :8080
 ```
 
 Open <http://localhost:8080>.
+
+### Local dev without docker
+
+```bash
+make install                                      # pnpm install + api venv
+cd apps/api && .venv/bin/uvicorn app.main:app     # backend on :8000
+pnpm dev                                          # vite on :5173, proxies /api → localhost:8000
+```
+
+Set `VITE_API_URL` if the backend is anywhere other than `http://localhost:8000`.
+If you set `API_KEY` on the backend, build/serve the web app with a matching
+`VITE_API_KEY` — the bundle attaches it as `X-API-Key` on every call.
 
 ## Tests
 

@@ -25,7 +25,9 @@ def _reset_cache() -> None:
     upstream.cache._locks.clear()
 
 
-def _f(lon: float, lat: float, *, nac_p: int | None = None, nic: int | None = None) -> dict[str, Any]:
+def _f(
+    lon: float, lat: float, *, nac_p: int | None = None, nic: int | None = None
+) -> dict[str, Any]:
     return {
         "type": "Feature",
         "id": f"aircraft:{lon}:{lat}",

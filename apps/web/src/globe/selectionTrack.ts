@@ -13,9 +13,10 @@ import { tracks, type TrackPoint } from '../intel/tracks.js';
 // vessels (all alts ≈ 0) we clamp to ground so the line follows the sea
 // surface curvature; for aircraft we keep alt so the line floats with the jet.
 
-// Brighter magenta than the previous #d946ef — more contrast against both
-// the dark basemap and the satellite imagery.
-const ACCENT = Cesium.Color.fromCssColorString('#ff2bd6').withAlpha(0.95);
+// CLAUDE.md operator-visible spec: selection magenta polyline #d946ef
+// width 4 + black outline width 6. Do not "brighten" without updating the
+// guardrail doc — past drift here shipped an off-spec #ff2bd6/5/7 combo.
+const ACCENT = Cesium.Color.fromCssColorString('#d946ef').withAlpha(0.95);
 const OUTLINE = Cesium.Color.BLACK.withAlpha(0.5);
 const REFRESH_MS = 250; // 4 Hz — line appears the moment the 2nd fix lands
 
@@ -121,7 +122,7 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
         id: '__selectionTrack__outline',
         polyline: {
           positions: new Cesium.CallbackProperty(() => positions, false),
-          width: 7,
+          width: 6,
           material: new Cesium.ColorMaterialProperty(OUTLINE),
           clampToGround: clamp,
           arcType: Cesium.ArcType.GEODESIC,
@@ -137,7 +138,7 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
         id: '__selectionTrack__',
         polyline: {
           positions: new Cesium.CallbackProperty(() => positions, false),
-          width: 5,
+          width: 4,
           material: new Cesium.PolylineGlowMaterialProperty({
             color: ACCENT,
             glowPower: 0.25,

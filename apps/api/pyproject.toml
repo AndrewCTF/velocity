@@ -3,6 +3,12 @@ name = "osint-api"
 version = "0.1.0"
 description = "OSINT geospatial console — FastAPI backend"
 requires-python = ">=3.12"
+# NOTE: Postgres/Timescale + Redis are Phase 2 (the observation store
+# migrates to a hypertable per plan §locked-decisions #5). Their client libs
+# (sqlalchemy/asyncpg/redis/apscheduler) were removed from Phase 1 deps
+# because nothing imports them — re-add alongside the actual integration.
+# orjson was likewise dropped: FastAPI serializes annotated returns straight
+# to JSON bytes via pydantic-core and deprecates ORJSONResponse.
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.6",
@@ -10,15 +16,9 @@ dependencies = [
   "pydantic-settings>=2.5.0",
   "httpx>=0.27.2",
   "websockets>=13.0",
-  "sqlalchemy>=2.0.35",
-  "asyncpg>=0.29.0",
-  "redis>=5.0.8",
-  "apscheduler>=3.10.4",
-  "orjson>=3.10.7",
   "pillow>=10.0",
   "numpy>=1.26",
   "pyyaml>=6.0",
-  "slowapi>=0.1.9",
   "mcp>=1.2.0",
 ]
 
@@ -31,7 +31,6 @@ dev = [
   "pytest-asyncio>=0.24.0",
   "httpx>=0.27.2",
   "ruff>=0.6.8",
-  "mypy>=1.11.2",
 ]
 
 [build-system]
@@ -48,6 +47,11 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "B", "UP", "ASYNC"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom IS a call in an argument default —
+# Depends()/Query() are designed for exactly that position.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
+
 [tool.ruff.lint.per-file-ignores]
 # Manual MCP integration drivers run against a live backend (not unit tests):
 # allow long assertion lines and the blocking urllib store-seed call.
@@ -57,7 +61,3 @@ select = ["E", "F", "I", "W", "B", "UP", "ASYNC"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-[tool.mypy]
-python_version = "3.12"
-strict = true
-plugins = ["pydantic.mypy"]

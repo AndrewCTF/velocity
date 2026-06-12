@@ -4,10 +4,12 @@ import cesium from 'vite-plugin-cesium';
 
 declare const process: { env: Record<string, string | undefined> };
 
-// VITE_API_URL lets you target the API from either a Docker (`http://api:8000`)
-// or local-dev (`http://localhost:8000`) backend. Default to the docker name
-// since `docker compose up` is the documented happy path.
-const apiTarget = process.env['VITE_API_URL'] ?? 'http://api:8000';
+// VITE_API_URL lets you target the API from either a Docker (`http://api:8000`,
+// set explicitly in docker-compose.yml) or a local backend. Default to
+// localhost so a bare `pnpm dev` against `uvicorn app.main:app` works with
+// zero configuration — the old `api:8000` default only resolved inside the
+// compose network and broke every request outside it.
+const apiTarget = process.env['VITE_API_URL'] ?? 'http://localhost:8000';
 const wsTarget = apiTarget.replace(/^http/, 'ws');
 
 export default defineConfig({

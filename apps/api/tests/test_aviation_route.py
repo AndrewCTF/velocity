@@ -41,7 +41,10 @@ def test_states_anonymous_works_without_credentials(client: TestClient) -> None:
     # callsign is index 1; lon=5, lat=6
     payload = _opensky_payload(
         [
-            ["a1b2c3d4", "DAL123  ", "United States", 0, 0, -73.8, 40.6, 11000.0, False, 230.0, 90.0, 0.0, None, 11200.0, "1200", False, 0, None],
+            [
+                "a1b2c3d4", "DAL123  ", "United States", 0, 0, -73.8, 40.6, 11000.0,
+                False, 230.0, 90.0, 0.0, None, 11200.0, "1200", False, 0, None,
+            ],
         ]
     )
     captured: dict[str, Any] = {}
@@ -70,8 +73,14 @@ def test_states_bbox_requires_all_four(client: TestClient) -> None:
 def test_states_skips_rows_with_null_position() -> None:
     payload = _opensky_payload(
         [
-            ["ok1", "OK1", "X", 0, 0, 1.0, 2.0, None, False, None, None, None, None, None, None, False, 0, None],
-            ["bad", "BAD", "X", 0, 0, None, None, None, False, None, None, None, None, None, None, False, 0, None],
+            [
+                "ok1", "OK1", "X", 0, 0, 1.0, 2.0, None, False,
+                None, None, None, None, None, None, False, 0, None,
+            ],
+            [
+                "bad", "BAD", "X", 0, 0, None, None, None, False,
+                None, None, None, None, None, None, False, 0, None,
+            ],
         ]
     )
     fc = states_to_geojson(payload)

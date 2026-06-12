@@ -21,6 +21,13 @@ function aoiBboxQuery(): string | null {
 export class LayerCompositor {
   private adapters = new Map<string, LayerAdapter>();
   private unsubscribe: (() => void) | null = null;
+  // Layer id → desired opacity. Needed because adapters add entities on
+  // every poll AFTER spawn() ran — a one-shot walk at spawn time hit an
+  // empty datasource and the descriptor's opacity silently never applied.
+  private desiredOpacity = new Map<string, number>();
+  // Layer id → detach function for the collectionChanged listener that
+  // re-applies opacity to late-added entities.
+  private opacityListeners = new Map<string, () => void>();
 
   constructor(
     private readonly registry: LayerRegistry,
@@ -81,11 +88,31 @@ export class LayerCompositor {
     void adapter.attach(this.viewer);
     reportStatus({ status: 'amber', note: 'connecting' });
     this.setOpacity(d.id, d.opacity);
+    // Entities arrive on every poll/WS frame AFTER this point — keep the
+    // layer's opacity applied to them as they are added.
+    const ds = (adapter as { ds?: Cesium.CustomDataSource }).ds;
+    if (ds) {
+      const onChanged = (
+        _c: Cesium.EntityCollection,
+        added: Cesium.Entity[],
+      ): void => {
+        const opacity = this.desiredOpacity.get(d.id);
+        if (opacity == null || opacity >= 1) return;
+        for (const e of added) applyEntityOpacity(e, opacity);
+      };
+      ds.entities.collectionChanged.addEventListener(onChanged);
+      this.opacityListeners.set(d.id, () =>
+        ds.entities.collectionChanged.removeEventListener(onChanged),
+      );
+    }
   }
 
   private kill(id: string): void {
     const a = this.adapters.get(id);
     if (!a) return;
+    this.opacityListeners.get(id)?.();
+    this.opacityListeners.delete(id);
+    this.desiredOpacity.delete(id);
     a.detach();
     this.adapters.delete(id);
     useFeeds.getState().setFeed({ id, label: id, status: 'unknown' });
@@ -93,44 +120,16 @@ export class LayerCompositor {
 
   private setOpacity(id: string, opacity: number): void {
     // CustomDataSource doesn't have a single opacity knob, so we walk the
-    // entities and set billboard/point alpha. Polyline cables override.
-    //
-    // CRITICAL: when an entity's billboard.color is a CallbackProperty (the
-    // emergency-squawk pulse for aircraft, see aircraftBillboard) we MUST
-    // NOT replace it — overwriting with a static white-with-alpha kills the
-    // pulse and leaves the icon a flat colour forever. For non-callback
-    // colours we preserve the existing tint and only mutate the alpha.
+    // entities and set billboard/point alpha (and a collectionChanged
+    // listener installed at spawn() applies the same to entities added by
+    // later polls). Polyline cables override.
+    this.desiredOpacity.set(id, opacity);
     const a = this.adapters.get(id);
     if (!a) return;
     const ds = (a as { ds?: Cesium.CustomDataSource | Cesium.GeoJsonDataSource }).ds;
     if (!ds) return;
     for (const e of ds.entities.values) {
-      if (e.billboard) {
-        const cur = e.billboard.color;
-        if (cur instanceof Cesium.CallbackProperty) {
-          // Emergency pulse — leave it alone.
-        } else if (cur) {
-          const orig = cur.getValue(Cesium.JulianDate.now()) as Cesium.Color | undefined;
-          if (orig) {
-            e.billboard.color = new Cesium.ConstantProperty(orig.withAlpha(opacity));
-          }
-        } else {
-          e.billboard.color = new Cesium.ConstantProperty(Cesium.Color.WHITE.withAlpha(opacity));
-        }
-      }
-      if (e.point && e.point.color) {
-        if (e.point.color instanceof Cesium.CallbackProperty) {
-          // Pulsing point colour — preserve.
-        } else {
-          const orig = e.point.color.getValue(Cesium.JulianDate.now()) as Cesium.Color | undefined;
-          if (orig) e.point.color = new Cesium.ConstantProperty(orig.withAlpha(opacity));
-        }
-      }
-      if (e.polyline?.material) {
-        e.polyline.material = new Cesium.ColorMaterialProperty(
-          Cesium.Color.fromCssColorString('#2dd4bf').withAlpha(opacity),
-        );
-      }
+      applyEntityOpacity(e, opacity);
     }
     this.viewer.scene.requestRender();
   }
@@ -197,6 +196,42 @@ export class LayerCompositor {
       return adapter;
     }
     return null;
+  }
+}
+
+// Apply a layer-level opacity to one entity's renderable bits.
+//
+// CRITICAL: when an entity's billboard.color is a CallbackProperty (the
+// emergency-squawk pulse for aircraft, see aircraftBillboard) we MUST NOT
+// replace it — overwriting with a static white-with-alpha kills the pulse
+// and leaves the icon a flat colour forever. For non-callback colours we
+// preserve the existing tint and only mutate the alpha.
+function applyEntityOpacity(e: Cesium.Entity, opacity: number): void {
+  if (e.billboard) {
+    const cur = e.billboard.color;
+    if (cur instanceof Cesium.CallbackProperty) {
+      // Emergency pulse — leave it alone.
+    } else if (cur) {
+      const orig = cur.getValue(Cesium.JulianDate.now()) as Cesium.Color | undefined;
+      if (orig) {
+        e.billboard.color = new Cesium.ConstantProperty(orig.withAlpha(opacity));
+      }
+    } else {
+      e.billboard.color = new Cesium.ConstantProperty(Cesium.Color.WHITE.withAlpha(opacity));
+    }
+  }
+  if (e.point && e.point.color) {
+    if (e.point.color instanceof Cesium.CallbackProperty) {
+      // Pulsing point colour — preserve.
+    } else {
+      const orig = e.point.color.getValue(Cesium.JulianDate.now()) as Cesium.Color | undefined;
+      if (orig) e.point.color = new Cesium.ConstantProperty(orig.withAlpha(opacity));
+    }
+  }
+  if (e.polyline?.material) {
+    e.polyline.material = new Cesium.ColorMaterialProperty(
+      Cesium.Color.fromCssColorString('#2dd4bf').withAlpha(opacity),
+    );
   }
 }
 

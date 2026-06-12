@@ -6,8 +6,6 @@
 // in production it's expected to be set in the same way (Vite inlines env
 // vars prefixed with VITE_ into the bundle).
 
-declare const importMeta: { env?: { VITE_API_KEY?: string } };
-
 function readKey(): string | null {
   // Vite exposes import.meta.env at runtime via the bundler.
   try {
