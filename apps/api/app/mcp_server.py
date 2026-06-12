@@ -28,8 +28,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import atexit
 import os
+import subprocess
+import sys
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -60,9 +64,111 @@ def _headers() -> dict[str, str]:
     return {"X-API-Key": key} if key else {}
 
 
+# ── backend auto-start ────────────────────────────────────────────────────────
+# The MCP server is a thin client over the OSINT backend. If that backend is
+# not running, every tool errors and a driving agent can spin in a retry loop.
+# So on the first tool call we make sure a backend exists: reuse one already
+# listening, else spawn uvicorn ourselves (localhost only) and wait — bounded —
+# for it to come up. Set OSINT_MCP_NO_AUTOSTART=1 to disable.
+
+_BACKEND_LOCK = asyncio.Lock()
+_BACKEND_READY = False
+_BACKEND_PROC: subprocess.Popen[bytes] | None = None
+_AUTOSTART_WAIT_S = 60
+
+
+def _is_localhost(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+
+
+def _api_port() -> int:
+    return urlparse(_api_base()).port or 8000
+
+
+def _apps_api_dir() -> str:
+    import app  # noqa: PLC0415
+
+    return os.path.dirname(os.path.dirname(os.path.abspath(app.__file__)))
+
+
+async def _backend_healthy(timeout_s: float = 2.0) -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as c:
+            r = await c.get(_api_base() + "/api/intel/sources", headers=_headers())
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+def _spawn_uvicorn(cmd: list[str]) -> subprocess.Popen[bytes]:
+    """Sync spawn (Popen returns immediately; isolated from the async path)."""
+    return subprocess.Popen(
+        cmd,
+        cwd=_apps_api_dir(),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=dict(os.environ),
+    )
+
+
+def _terminate_backend() -> None:
+    proc = _BACKEND_PROC
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
+
+
+async def _prewarm() -> None:
+    """Kick the global ADS-B snapshot so the first get_situation isn't slow."""
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as c:
+            await c.get(_api_base() + "/api/adsb/global", headers=_headers())
+    except Exception:
+        pass
+
+
+async def _ensure_backend() -> None:
+    """Idempotent: guarantee a reachable backend before a tool runs."""
+    global _BACKEND_READY, _BACKEND_PROC
+    if _BACKEND_READY:
+        return
+    async with _BACKEND_LOCK:
+        if _BACKEND_READY:
+            return
+        if await _backend_healthy():
+            _BACKEND_READY = True
+            return
+        # Only auto-start a LOCAL backend, and only if not opted out.
+        if os.environ.get("OSINT_MCP_NO_AUTOSTART") or not _is_localhost(_api_base()):
+            return
+        # Spawn at most ONCE per process. If a prior attempt didn't come up,
+        # don't re-spawn (avoids stacking uvicorns / re-waiting every call) —
+        # just let later calls re-check health in case it's still warming.
+        if _BACKEND_PROC is not None:
+            return
+        cmd = [
+            sys.executable, "-m", "uvicorn", "app.main:app",
+            "--host", "127.0.0.1", "--port", str(_api_port()), "--log-level", "warning",
+        ]
+        try:
+            _BACKEND_PROC = _spawn_uvicorn(cmd)
+        except Exception:
+            return  # can't spawn (e.g. uvicorn missing) — tools report cleanly
+        atexit.register(_terminate_backend)
+        for _ in range(_AUTOSTART_WAIT_S):
+            await asyncio.sleep(1.0)
+            if await _backend_healthy():
+                _BACKEND_READY = True
+                asyncio.create_task(_prewarm())  # warm snapshot off the hot path
+                return
+        # Did not come up in time; leave _BACKEND_READY False so the next tool
+        # call retries once more rather than looping on a dead spawn.
+
+
 async def _get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     """GET an intel endpoint. Returns parsed JSON or a structured error dict —
     never raises, so a tool call always yields something the agent can read."""
+    await _ensure_backend()
     url = _api_base() + path
     clean = {k: v for k, v in (params or {}).items() if v is not None}
     # Generous ceiling: the backend's FIRST global call cold-starts the ADS-B
@@ -77,7 +183,9 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any
             "error": "backend_unreachable",
             "detail": str(exc),
             "url": url,
-            "hint": "Start the API: cd apps/api && .venv/bin/uvicorn app.main:app --port 8000",
+            "hint": "Backend auto-start did not come up in time. It may still be "
+            "warming — retry once. Or start it manually: uv run --project "
+            f"{_apps_api_dir()} uvicorn app.main:app --port {_api_port()}",
         }
     if r.status_code != 200:
         return {"error": f"backend_{r.status_code}", "detail": r.text[:400], "url": url}

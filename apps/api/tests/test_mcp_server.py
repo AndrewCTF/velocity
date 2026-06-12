@@ -13,6 +13,16 @@ from app import mcp_server as M
 _DEAD = "http://127.0.0.1:9"  # discard port — refuses connection immediately
 
 
+@pytest.fixture(autouse=True)
+def _no_autostart(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Never spawn a real uvicorn from the test process (would block on the
+    # auto-start health wait). The auto-start path is exercised live, not here.
+    monkeypatch.setenv("OSINT_MCP_NO_AUTOSTART", "1")
+    # Reset the module's spawn/ready latches between tests.
+    M._BACKEND_READY = False
+    M._BACKEND_PROC = None
+
+
 @pytest.mark.asyncio
 async def test_backend_unreachable_returns_structured_error(
     monkeypatch: pytest.MonkeyPatch,
