@@ -239,8 +239,9 @@ def _build_global_grid() -> list[tuple[float, float]]:
     # Decimate down to ~110 cells (deterministic stride so cells are stable
     # across polls — same cell → same cache key → cache hit). Without this
     # the 4° land mesh is ~250 cells, blowing the upstream budget when
-    # 2 of 3 hosts are rate-limited.
-    target = 110
+    # 2 of 3 hosts are rate-limited. Increased to 200 for better coverage
+    # now that firehose is blocked — grid is primary source.
+    target = 200
     if len(cells) > target:
         stride = max(1, len(cells) // target)
         cells = cells[::stride]
