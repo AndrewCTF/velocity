@@ -34,6 +34,7 @@ import hashlib
 import time
 from math import cos, radians
 from typing import Any
+import random
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
@@ -43,7 +44,40 @@ from app.ingest.opensky import fetch_states, states_to_geojson
 from app.routes.aviation import _token_manager
 from app.upstream import cache, get_client
 
+# Proxy rotation for rate-limit bypass. Fetched from public sources.
+_PROXIES: list[str] = []
+_PROXY_LOCK = asyncio.Lock()
+
 router = APIRouter(tags=["adsb"])
+
+
+async def _fetch_proxies() -> list[str]:
+    """Fetch free proxy list from public source."""
+    try:
+        r = await get_client().get(
+            "https://www.proxy-list.download/api/v1/get?type=http",
+            timeout=10.0,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            proxies = [f"http://{ip}:{port}" for ip, port in data.get("LISTA", [])]
+            return proxies[:50]  # Limit to 50 for sanity
+    except Exception:
+        pass
+    return []
+
+
+async def _ensure_proxies() -> None:
+    """Lazy-load proxy list on first use."""
+    global _PROXIES
+    async with _PROXY_LOCK:
+        if not _PROXIES:
+            _PROXIES.extend(await _fetch_proxies())
+
+
+def _get_random_proxy() -> str | None:
+    """Get random proxy from pool, or None if empty."""
+    return random.choice(_PROXIES) if _PROXIES else None
 
 # Cap concurrent upstream ADS-B fetches across the global fan-out. Cell-level
 # caches still allow parallel cache hits; this semaphore only gates the actual
@@ -477,28 +511,39 @@ async def _fetch_cell(primary_idx: int, lat: float, lon: float, cell_timeout: ht
 
 
 async def _try_firehose() -> list[dict[str, Any]] | None:
-    """Try each firehose endpoint with exponential backoff on 429.
-    Retry rate-limited hosts after wait. Returns 10-15k aircraft or None."""
+    """Try firehose with proxy rotation to bypass rate-limiting.
+    Cycle through random proxies + exponential backoff. Returns 10-15k aircraft."""
+    await _ensure_proxies()
     client = get_client()
     timeout = httpx.Timeout(15.0, connect=5.0)
+
     for url in _FIREHOSE_URLS:
-        # Exponential backoff for 429: try up to 3 times with delays
-        for attempt in range(3):
+        # Try with proxies + direct. Proxies first for rate-limit bypass.
+        attempts_with_proxies = 2 if _PROXIES else 0
+        for attempt in range(attempts_with_proxies + 1):
             try:
                 async with _UPSTREAM_SEMAPHORE:
-                    r = await client.get(url, timeout=timeout)
+                    if attempt < attempts_with_proxies and _PROXIES:
+                        # Try with random proxy
+                        proxy = _get_random_proxy()
+                        r = await client.get(
+                            url,
+                            timeout=timeout,
+                            proxies=proxy,
+                        )
+                    else:
+                        # Direct request (no proxy)
+                        r = await client.get(url, timeout=timeout)
             except (httpx.TimeoutException, httpx.TransportError):
-                if attempt < 2:
-                    await asyncio.sleep(2 ** attempt)  # 1s, 2s backoff
+                if attempt < attempts_with_proxies:
+                    await asyncio.sleep(1)
                 continue
 
-            # 429 rate-limit: retry with backoff
+            # 429: skip to next proxy
             if r.status_code == 429:
-                if attempt < 2:
-                    await asyncio.sleep(2 + (2 ** attempt))  # 3s, 5s, 9s
                 continue
 
-            # 403/451/5xx: give up on this host, try next
+            # 403/451/5xx: give up on this host
             if r.status_code != 200:
                 break
 
