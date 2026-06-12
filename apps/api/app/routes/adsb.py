@@ -552,24 +552,41 @@ async def _do_global_fanout() -> dict[str, Any]:
                 by_hex[hexid] = a
         return _aircraft_geojson(list(by_hex.values()))
 
-    # Authed OpenSky firehose — fires only when all anonymous hosts refused.
-    opensky_fc = await _try_opensky_global()
-    if opensky_fc:
-        return opensky_fc
-
-    # Grid fallback. Only fires when every firehose host refused us.
-    # 8s read / 4s connect. Lower than the old 15s because we want fast
-    # fall-through on a wedged TCP connection.
+    # Firehose failed — try OpenSky + Grid in parallel for better coverage.
+    # OpenSky gives ~5-8k, Grid gives 3-4k; merge for max aircraft discovery.
     cell_timeout = httpx.Timeout(8.0, connect=4.0)
 
-    tasks = [
+    opensky_fc_task = _try_opensky_global()
+    grid_tasks = [
         _fetch_cell(_primary_host_idx(lat, lon), lat, lon, cell_timeout)
         for (lat, lon) in _GLOBAL_GRID
     ]
-    cell_batches = await asyncio.gather(*tasks)
 
-    # Dedupe by ICAO24 hex across all cells; freshest wins.
+    # Run OpenSky + Grid in parallel
+    opensky_fc = await opensky_fc_task
+    cell_batches = await asyncio.gather(*grid_tasks)
+
+    # Merge OpenSky + Grid by hex dedup
     by_hex: dict[str, dict[str, Any]] = {}
+    if opensky_fc:
+        for feat in opensky_fc.get("features", []):
+            props = feat.get("properties", {})
+            hexid = props.get("icao24", "").lower()
+            if hexid:
+                a = {
+                    "hex": hexid,
+                    "lat": feat["geometry"]["coordinates"][1],
+                    "lon": feat["geometry"]["coordinates"][0],
+                    "alt_baro": props.get("baro_alt_m"),
+                    "flight": props.get("callsign"),
+                    "track": props.get("track_deg"),
+                    "gs": props.get("velocity_ms"),
+                    "seen_pos": props.get("seen_pos_s", 0),
+                    "_seen_at": time.time(),
+                }
+                by_hex[hexid] = a
+
+    # Merge Grid cells (dedupe vs OpenSky: freshest wins)
     for batch in cell_batches:
         for a in batch:
             hexid = (a.get("hex") or "").lower()
