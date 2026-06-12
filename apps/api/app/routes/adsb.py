@@ -15,11 +15,14 @@ Design notes (post-breaker rewrite):
   starved the merge. Simpler "try each host in order, take first 200, cache
   result" approach is faster and self-heals: a host that 429'd one cell may
   still serve the next once its sliding window advances.
-- Per-cell TTL is aggressive (10s full / 5s empty) so the frontend perceives
-  sub-2-second updates. The sticky snapshot dict IS the merge cache — the
-  hot route returns it in microseconds. The background refresher loop
-  targets a 1s cycle (sleep = max(0, 1.0 - elapsed)) so a fast fan-out
-  doesn't burn CPU and a slow fan-out doesn't add extra idle latency.
+- Per-cell TTL is 30s full / 5s empty (CLAUDE.md guardrail). A productive
+  cell holds 30s so steady-state upstream load is ~4-5 cells/sec — under
+  airplanes.live's burst limit, which is often the ONLY reachable host. Empty
+  cells keep a 5s TTL so a transiently-throttled cell refills fast. The
+  sticky snapshot dict IS the merge cache — the hot route returns it in
+  microseconds. The background refresher loop targets a 1s cycle (sleep =
+  max(0, 1.0 - elapsed)) so a fast fan-out doesn't burn CPU and a slow
+  fan-out doesn't add extra idle latency.
 - Frontend polls every 1s + snapshot ≤1s old = end-to-end ≤2s.
 - ~120 hand-picked dense cells over land (was 250+). Smaller grid × tighter
   TTL beats larger grid × longer TTL when egress is throttled.
@@ -39,7 +42,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 
 from app.config import get_settings
-from app.ingest.opensky import fetch_states, states_to_geojson
+from app.ingest.opensky import OpenSkyTokenManager, fetch_states, states_to_geojson
 from app.routes.aviation import _token_manager
 from app.upstream import cache, get_client
 
@@ -49,13 +52,28 @@ router = APIRouter(tags=["adsb"])
 # caches still allow parallel cache hits; this semaphore only gates the actual
 # upstream call inside `load_cell` so cold-start (all-miss) bursts cannot
 # stampede the shared httpx client or trip per-host rate limits.
-_UPSTREAM_SEMAPHORE = asyncio.Semaphore(64)
+#
+# Sized to airplanes.live's burst tolerance. Measured: ~8 concurrent
+# /v2/point requests all return 200+JSON; ~15 concurrent trips the limiter,
+# which answers with EITHER HTTP 429 OR — the sneaky case — HTTP 200 and a
+# text/plain "You have been rate limited" body. With adsb.lol / adsb.fi
+# frequently unreachable, airplanes.live is often the ONLY live host, so a
+# 64-wide burst rate-limited most cells into empty results and the map showed
+# only a few hundred aircraft. The 10s per-cell cache carries steady-state
+# load; this cap only paces the cold-start stampede. Keep ≤8.
+_UPSTREAM_SEMAPHORE = asyncio.Semaphore(8)
 
-# Per-cell cache TTLs. Higher (10s full / 5s empty) to prioritize coverage
-# over freshness. Sticky snapshot (1s cycle) caps end-to-end age regardless.
-# Longer TTL reduces upstream rate-limit pressure → better firehose hit rate
-# and more aircraft discovery globally.
-_CELL_TTL_FULL = 10.0
+# Per-cell cache TTLs. CLAUDE.md pins the per-cell server cache at 30s — a
+# productive cell holds its aircraft for 30s so the background loop only
+# refetches ~134/30 ≈ 4-5 cells/sec in steady state, far under airplanes.live's
+# burst limit. (At the old 10s this was ~13 cells/sec, which — combined with a
+# 64-wide semaphore — bursted the only live host into rate-limiting most cells
+# into emptiness.) The merge-with-previous carry-forward (75s) interpolates
+# positions on the frontend, so 30s server cache is invisible to the operator.
+# Empty cells keep a SHORT 5s TTL so a cell that came back empty under transient
+# throttle retries quickly and fills in as the limiter cools, instead of being
+# pinned blank for the full 30s.
+_CELL_TTL_FULL = 30.0
 _CELL_TTL_EMPTY = 5.0
 
 
@@ -132,6 +150,36 @@ def _to_ms(knots: Any) -> float | None:
         return float(knots) * 0.514444 if knots is not None else None
     except (TypeError, ValueError):
         return None
+
+
+class _UpstreamUnavailable(Exception):
+    """Every host for a cell failed or rate-limited. Distinct from a genuine
+    empty-airspace answer — the caller must NOT cache this as an empty cell."""
+
+
+def _parse_ac(r: httpx.Response) -> list[dict[str, Any]] | None:
+    """Aircraft list from a JSON 200, or None when the body is not JSON.
+
+    airplanes.live signals throttling with EITHER HTTP 429 OR — the case that
+    silently broke the grid — HTTP 200 with a `text/plain` body
+    ("You have been rate limited ..."). A bare `r.json()` raises ValueError on
+    that body; the old code swallowed it and returned an empty cell, which then
+    cached as "no aircraft here" for several seconds. We instead return None to
+    mean "throttled / junk — try another host, don't cache", kept distinct from
+    a valid JSON body whose `ac` list is genuinely empty (→ `[]`, safe to
+    cache)."""
+    if "json" not in r.headers.get("content-type", "").lower():
+        return None
+    try:
+        j = r.json()
+    except ValueError:
+        return None
+    if not isinstance(j, dict):
+        return None
+    ac = j.get("ac")
+    if ac is None:
+        ac = j.get("aircraft")
+    return list(ac or [])
 
 
 # ── ADSB.lol ──────────────────────────────────────────────────────────────
@@ -370,9 +418,9 @@ async def _fetch_anchor_fallback(
                     continue
                 if r.status_code != 200:
                     continue
-                try:
-                    ac = list(r.json().get("ac") or [])
-                except ValueError:
+                ac = _parse_ac(r)
+                if ac is None:
+                    # 200 + rate-limit text — walk to the next host.
                     continue
                 return [dict(a, _seen_at=time.time(), _host=host) for a in ac]
             return []
@@ -451,16 +499,24 @@ async def _fetch_cell(primary_idx: int, lat: float, lon: float, cell_timeout: ht
                     continue
                 if r.status_code != 200:
                     continue
-                try:
-                    ac = list(r.json().get("ac") or [])
-                except ValueError:
+                ac = _parse_ac(r)
+                if ac is None:
+                    # 200 but a non-JSON body — airplanes.live's text/plain
+                    # rate-limit notice (or an HTML error page). Treat exactly
+                    # like a 429 and walk to the next host instead of caching
+                    # an empty cell.
                     continue
-                # 200 OK — empty list is a legitimate "no aircraft here"
-                # answer. The shorter EMPTY TTL below shortens the cache
-                # so an ocean-edge cell that briefly sees a flight
+                # 200 OK + JSON — an empty `ac` list is a legitimate "no
+                # aircraft here" answer. The shorter EMPTY TTL below shortens
+                # the cache so an ocean-edge cell that briefly sees a flight
                 # recovers in 3s instead of being pinned to empty for 5s.
                 return [dict(a, _seen_at=time.time(), _host=host) for a in ac]
-            return []
+            # No host returned parseable JSON — all timed out, errored, or
+            # rate-limited. Raise so get_or_fetch does NOT persist an empty
+            # list: a transient all-throttled cell must be retried on the next
+            # fan-out, not pinned to empty for _CELL_TTL_EMPTY seconds (which
+            # is what blanked most of the map under burst load).
+            raise _UpstreamUnavailable(f"cell {lat:.2f},{lon:.2f}: all hosts failed")
 
     try:
         result = await cache.get_or_fetch(cache_key, _CELL_TTL_FULL, load_cell)
@@ -477,138 +533,247 @@ async def _fetch_cell(primary_idx: int, lat: float, lon: float, cell_timeout: ht
 
 
 async def _try_firehose() -> list[dict[str, Any]] | None:
-    """Try each firehose endpoint with exponential backoff on 429.
-    Retry rate-limited hosts after wait. Returns 10-15k aircraft or None."""
+    """Try each single-shot firehose endpoint; first one with a real payload
+    wins. Returns ~10-15k aircraft or None when every host refuses.
+
+    FAIL FAST. The previous version retried each host up to 3× with 1-9s
+    sleeps on 429/timeout — up to ~30s burned per background cycle when all
+    three hosts were down (the common case: airplanes.live has no global
+    endpoint and 404s here, adsb.lol is unreachable from some egress IPs, and
+    adsb.fi's snapshot 403s). That delay starved the per-cell grid fallback,
+    which is the path that actually produces aircraft. A 429 or unreachable
+    host now just advances to the next host immediately; retrying a wedged
+    firehose is pointless when the grid is the real workhorse, and a working
+    firehose answers on the first try anyway. `_parse_ac` rejects the
+    HTTP-200 text/plain rate-limit body the same way it does in the grid."""
     client = get_client()
-    timeout = httpx.Timeout(15.0, connect=5.0)
+    timeout = httpx.Timeout(8.0, connect=2.0)
     for url in _FIREHOSE_URLS:
-        # Exponential backoff for 429: try up to 3 times with delays
-        for attempt in range(3):
-            try:
-                async with _UPSTREAM_SEMAPHORE:
-                    r = await client.get(url, timeout=timeout)
-            except (httpx.TimeoutException, httpx.TransportError):
-                if attempt < 2:
-                    await asyncio.sleep(2 ** attempt)  # 1s, 2s backoff
-                continue
-
-            # 429 rate-limit: retry with backoff
-            if r.status_code == 429:
-                if attempt < 2:
-                    await asyncio.sleep(2 + (2 ** attempt))  # 3s, 5s, 9s
-                continue
-
-            # 403/451/5xx: give up on this host, try next
-            if r.status_code != 200:
-                break
-
-            try:
-                j = r.json()
-            except ValueError:
-                break
-
-            ac = j.get("ac") or j.get("aircraft") or []
-            if not ac:
-                break
-
-            now = time.time()
-            return [dict(a, _seen_at=now, _host=url) for a in ac]
-
+        try:
+            async with _UPSTREAM_SEMAPHORE:
+                r = await client.get(url, timeout=timeout)
+        except (httpx.TimeoutException, httpx.TransportError):
+            continue
+        if r.status_code != 200:
+            continue
+        ac = _parse_ac(r)
+        if not ac:
+            continue
+        now = time.time()
+        return [dict(a, _seen_at=now, _host=url) for a in ac]
     return None
 
 
 async def _try_opensky_global() -> dict[str, Any] | None:
-    """Authed OpenSky /states/all — the last firehose resort.
+    """OpenSky /states/all — the global breadth source (~13k aircraft).
 
-    Only fires when every anonymous aggregator refused us. OpenSky's authed
-    quota is a finite daily credit budget, so it's the safety net, not the
-    primary. Returns a ready GeoJSON FeatureCollection (states_to_geojson
-    emits the same aircraft schema the frontend adapter consumes) or None
-    when creds are missing / the call failed / the sky came back empty."""
+    This is the single endpoint that actually returns the whole planet in one
+    shot. The anonymous aggregator "firehoses" are all dead from typical egress
+    IPs (airplanes.live has no global verb → 404, adsb.lol /v2/all-with-pos →
+    451 legal block, adsb.fi /v2/snapshot → 403), so the per-cell grid alone
+    caps out around 1.5-3k. OpenSky fills the gap.
+
+    Works ANONYMOUSLY — `fetch_states` omits the Authorization header when no
+    creds are configured, and OpenSky still serves anonymous /states/all
+    (capped at 400 credits/day by source IP). With OAuth creds the daily budget
+    is larger; either way `_opensky_cached` paces the call rate. Returns a ready
+    GeoJSON FeatureCollection (same schema the adapter consumes) or None on
+    failure / empty sky. 429 is surfaced (raised) so the caller can back off.
+
+    Two budgets, tried in order:
+    1. AUTHED (if creds configured) — larger daily credit pool, 5s resolution.
+    2. ANONYMOUS (by source IP) — separate ~400 credits/day, 10s resolution.
+    When the authed pool is spent (429) we retry anonymously, so a drained
+    OAuth account doesn't blank the breadth layer while the IP still has
+    credits (and vice versa)."""
     settings = get_settings()
-    if not (settings.opensky_client_id and settings.opensky_client_secret):
-        return None
+    tm = _token_manager(settings)  # token only attached if creds present
     try:
-        tm = _token_manager(settings)
-        raw = await fetch_states(tm, None)
-        fc = states_to_geojson(raw)
-    except Exception:
+        raw = await fetch_states(tm, None)  # may raise HTTPStatusError on 429
+    except httpx.HTTPStatusError as e:
+        # Authed budget spent — fall back to the separate anonymous IP budget.
+        # If we were already anonymous, re-raise so the caller backs off.
+        if e.response is not None and e.response.status_code == 429 and tm.enabled:
+            raw = await fetch_states(_ANON_TM, None)  # may raise 429 again
+        else:
+            raise
+    fc = states_to_geojson(raw)
+    if not fc.get("features"):
         return None
-    return fc if fc.get("features") else None
+    # Stamp source + seen_at so the frontend can tint staleness and the
+    # carry-forward merge can age these aircraft like any other.
+    now = time.time()
+    for f in fc["features"]:
+        props = f.setdefault("properties", {})
+        props.setdefault("source", "opensky")
+        props["seen_at"] = now
+    return fc
 
 
-async def _do_global_fanout() -> dict[str, Any]:
-    """Return a merged GeoJSON FeatureCollection of all globally airborne
-    aircraft. Tries the firehose hosts first (single-shot ~17k aircraft);
-    falls back to the per-cell /v2/point grid + anchor fallback when every
-    firehose is rate-limited / blocked. This is the expensive path —
-    callers should not invoke it from a request handler. The background
-    snapshot refresher is the sole steady-state caller."""
-    # Firehose path. When upstream is healthy this is the only network call
-    # we make this tick — and it returns ~5× more aircraft than the grid.
-    firehose = await _try_firehose()
-    if firehose:
-        by_hex: dict[str, dict[str, Any]] = {}
-        for a in firehose:
-            hexid = (a.get("hex") or "").lower()
-            if not hexid:
-                continue
-            cur = by_hex.get(hexid)
-            if cur is None:
-                by_hex[hexid] = a
-            elif (a.get("seen_pos") or 1e9) < (cur.get("seen_pos") or 1e9):
-                by_hex[hexid] = a
-        return _aircraft_geojson(list(by_hex.values()))
+# OpenSky pull pacing. OpenSky's free budget is a daily credit pool, so we
+# CANNOT pull /states/all every 1s background tick. `_opensky_cached` pulls at
+# most once per (_OPENSKY_INTERVAL_S + adaptive backoff) and serves the last
+# good 13k FeatureCollection on every tick in between. Because the cached FC is
+# served forever until a newer pull replaces it, the snapshot aircraft COUNT
+# stays high even after the daily budget is spent — only position freshness for
+# OpenSky-only (oceanic) contacts degrades, and the per-cell grid keeps the
+# dense regions live. On a 429 we exponentially back off (capped) so a spent
+# budget stretches instead of hammering a host that's refusing us.
+# 15s between pulls: conserves the limited daily credit budget (a global
+# /states/all costs 4 credits; anonymous IP budget is ~400/day) while keeping
+# breadth positions fresh enough that frontend interpolation looks live. The
+# per-cell airplanes.live grid refreshes dense regions faster on top of this.
+_OPENSKY_INTERVAL_S = 15.0
+_OPENSKY_BACKOFF_CAP_S = 900.0
+# Always-anonymous token manager for the 429 fallback (separate IP budget).
+_ANON_TM = OpenSkyTokenManager("", "")
 
-    # Authed OpenSky firehose — fires only when all anonymous hosts refused.
-    opensky_fc = await _try_opensky_global()
-    if opensky_fc:
-        return opensky_fc
+# Wall-clock budget for the per-cell grid overlay inside a fan-out tick. Beyond
+# this, the grid is abandoned for the tick (its completed cells are already
+# cached) so a throttled airplanes.live can't stall the OpenSky-driven snapshot.
+_GRID_BUDGET_S = 8.0
+_OPENSKY_FC: dict[str, Any] = {"type": "FeatureCollection", "features": []}
+_OPENSKY_AT: float = 0.0  # monotonic seconds of last pull attempt
+_OPENSKY_BACKOFF_S: float = 0.0
+_OPENSKY_LOCK = asyncio.Lock()
 
-    # Grid fallback. Only fires when every firehose host refused us.
-    # 8s read / 4s connect. Lower than the old 15s because we want fast
-    # fall-through on a wedged TCP connection.
-    cell_timeout = httpx.Timeout(8.0, connect=4.0)
 
+async def _opensky_cached() -> dict[str, Any] | None:
+    """Throttled OpenSky breadth. Pulls at most once per interval (+backoff);
+    serves the cached FeatureCollection between pulls."""
+    global _OPENSKY_FC, _OPENSKY_AT, _OPENSKY_BACKOFF_S
+    async with _OPENSKY_LOCK:
+        age = time.monotonic() - _OPENSKY_AT if _OPENSKY_AT else float("inf")
+        if age < _OPENSKY_INTERVAL_S + _OPENSKY_BACKOFF_S:
+            return _OPENSKY_FC if _OPENSKY_FC.get("features") else None
+        _OPENSKY_AT = time.monotonic()  # stamp before await so we don't double-pull
+        try:
+            fc = await _try_opensky_global()
+        except httpx.HTTPStatusError as e:
+            # 429 (or other status error): keep serving the last good FC and
+            # grow the backoff so we don't burn the daily credit budget.
+            if e.response is not None and e.response.status_code == 429:
+                _OPENSKY_BACKOFF_S = min(
+                    _OPENSKY_BACKOFF_S * 2 + 15.0, _OPENSKY_BACKOFF_CAP_S
+                )
+            return _OPENSKY_FC if _OPENSKY_FC.get("features") else None
+        except Exception:
+            return _OPENSKY_FC if _OPENSKY_FC.get("features") else None
+        if fc and fc.get("features"):
+            _OPENSKY_FC = fc
+            _OPENSKY_BACKOFF_S = 0.0  # healthy — reset backoff
+        return _OPENSKY_FC if _OPENSKY_FC.get("features") else None
+
+
+# Opportunistic firehose pacing. The single-shot firehose hosts are dead from
+# most egress IPs, but a deploy host with clean connectivity may have a working
+# one (adsb.lol unmetered, no daily budget — strictly better than OpenSky when
+# reachable). We try it, and if it's dead we skip retrying for this long so we
+# don't burn ~2s of connect-timeout on every 1s background tick.
+_FIREHOSE_DEAD_SKIP_S = 30.0
+_FIREHOSE_NEXT_TRY: float = 0.0
+
+
+async def _firehose_throttled() -> list[dict[str, Any]] | None:
+    """`_try_firehose`, but skip it for _FIREHOSE_DEAD_SKIP_S after a miss so a
+    dead firehose doesn't tax every tick. A working firehose is retried every
+    tick (we only back off when it fails)."""
+    global _FIREHOSE_NEXT_TRY
+    if time.monotonic() < _FIREHOSE_NEXT_TRY:
+        return None
+    fh = await _try_firehose()
+    if not fh:
+        _FIREHOSE_NEXT_TRY = time.monotonic() + _FIREHOSE_DEAD_SKIP_S
+    return fh
+
+
+def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]]) -> None:
+    """Convert raw aggregator aircraft dicts → features and union into by_id,
+    overwriting any existing entry for the same id (caller orders sources so the
+    freshest source is merged last)."""
+    for f in _aircraft_geojson(raw).get("features") or []:
+        fid = f.get("id")
+        if fid is not None:
+            by_id[fid] = f
+
+
+async def _grid_fanout() -> list[dict[str, Any]]:
+    """Per-cell airplanes.live /v2/point grid + low-water anchor fallback.
+    Returns raw aircraft dicts (hex-keyed). Provides dense-region freshness on
+    top of the OpenSky breadth layer."""
+    # 6s read / 2s connect. A short connect timeout makes walking the host list
+    # cheap when the deterministic primary is an unreachable host.
+    cell_timeout = httpx.Timeout(6.0, connect=2.0)
     tasks = [
         _fetch_cell(_primary_host_idx(lat, lon), lat, lon, cell_timeout)
         for (lat, lon) in _GLOBAL_GRID
     ]
     cell_batches = await asyncio.gather(*tasks)
-
-    # Dedupe by ICAO24 hex across all cells; freshest wins.
-    by_hex: dict[str, dict[str, Any]] = {}
+    out: list[dict[str, Any]] = []
     for batch in cell_batches:
-        for a in batch:
-            hexid = (a.get("hex") or "").lower()
-            if not hexid:
-                continue
-            cur = by_hex.get(hexid)
-            if cur is None:
-                by_hex[hexid] = a
-            elif (a.get("seen_pos") or 1e9) < (cur.get("seen_pos") or 1e9):
-                by_hex[hexid] = a
+        out.extend(batch)
+    # Anchor fallback only when the grid produced essentially nothing.
+    by_hex_count = len({(a.get("hex") or "").lower() for a in out if a.get("hex")})
+    if by_hex_count < _FALLBACK_MIN_AIRCRAFT:
+        out.extend(await _fetch_anchor_fallback(cell_timeout))
+    return out
 
-    # Second-tier fallback. When the per-cell grid produced essentially
-    # nothing (every host throttling, transient network blip), try the
-    # small anchor set against whatever hosts are still serving.
-    if len(by_hex) < _FALLBACK_MIN_AIRCRAFT:
-        anchor_aircraft = await _fetch_anchor_fallback(cell_timeout)
-        for a in anchor_aircraft:
-            hexid = (a.get("hex") or "").lower()
-            if not hexid:
-                continue
-            cur = by_hex.get(hexid)
-            if cur is None:
-                by_hex[hexid] = a
-            elif (a.get("seen_pos") or 1e9) < (cur.get("seen_pos") or 1e9):
-                by_hex[hexid] = a
 
-    return _aircraft_geojson(list(by_hex.values()))
+async def _do_global_fanout() -> dict[str, Any]:
+    """Return a merged GeoJSON FeatureCollection of all globally airborne
+    aircraft, unioned across every reachable source so the count approaches the
+    ~13k aircraft actually airborne worldwide:
+
+      1. OpenSky /states/all (throttled+cached) — global breadth, ~13k.
+      2. Opportunistic single-shot firehose — overlays real-time global data on
+         deploy hosts where one is reachable.
+      3. airplanes.live /v2/point grid — dense-region freshness (sub-2s in busy
+         airspace), merged LAST so it wins conflicts with the slower tiers.
+
+    Deduped by feature id (aircraft:<icao24>); later (fresher) sources overwrite
+    earlier ones. This is the expensive path — only the background snapshot
+    refresher should call it.
+
+    The three tiers run CONCURRENTLY and the grid is time-boxed: a throttled
+    airplanes.live (slow per-cell host-walks) must NOT stall the snapshot, since
+    OpenSky alone already supplies the ~13k breadth. Grid cells that don't
+    finish inside the budget are cancelled, but any that completed are cached,
+    so the next tick — reading those warm cells — finishes the grid fast."""
+    by_id: dict[Any, dict[str, Any]] = {}
+
+    osky_task = asyncio.ensure_future(_opensky_cached())
+    fh_task = asyncio.ensure_future(_firehose_throttled())
+    grid_task = asyncio.ensure_future(_grid_fanout())
+
+    # 1. Breadth — OpenSky global (~13k). Served from cache between paced pulls,
+    #    so it contributes its full count on every tick.
+    osky = await osky_task
+    if osky:
+        for f in osky.get("features") or []:
+            fid = f.get("id")
+            if fid is not None:
+                by_id[fid] = f
+
+    # 2. Opportunistic firehose (deploy hosts with a reachable global verb).
+    firehose = await fh_task
+    if firehose:
+        _merge_raw_into(by_id, firehose)
+
+    # 3. Dense-region freshness overlay — wins conflicts (merged last). Bounded
+    #    so a throttled grid can't hold the snapshot hostage; completed cells are
+    #    cached for the next tick regardless.
+    try:
+        grid = await asyncio.wait_for(grid_task, timeout=_GRID_BUDGET_S)
+    except TimeoutError:
+        grid = []
+    if grid:
+        _merge_raw_into(by_id, grid)
+
+    return {"type": "FeatureCollection", "features": list(by_id.values())}
 
 
 def _merge_with_previous(
-    new_fc: dict[str, Any], prev_fc: dict[str, Any], max_age_s: float = 75.0
+    new_fc: dict[str, Any], prev_fc: dict[str, Any], max_age_s: float = 180.0
 ) -> dict[str, Any]:
     """Union the fresh fan-out with recently-seen aircraft from the previous
     snapshot.

@@ -28,6 +28,7 @@ from app.routes import eq as eq_routes
 from app.routes import events as events_routes
 from app.routes import firms as firms_routes
 from app.routes import health as health_routes
+from app.routes import intel as intel_routes
 from app.routes import jamming as jamming_routes
 from app.routes import maritime as maritime_routes
 from app.routes import search as search_routes
@@ -45,6 +46,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await correlate_runner.stop_all()
+        # Cancel the intel AOI priority warmer so the background task never
+        # outlives the app's event loop (clean shutdown + test isolation).
+        from app.intel import aoi  # noqa: PLC0415
+
+        await aoi.stop_warmer()
 
 
 def create_app() -> FastAPI:
@@ -86,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(maritime_routes.router)
     app.include_router(jamming_routes.router)
     app.include_router(cams_routes.router)
+    app.include_router(intel_routes.router)
 
     return app
 

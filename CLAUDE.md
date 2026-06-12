@@ -46,11 +46,32 @@ not regress any of them. If unsure, leave the relevant code path alone.
 
 ### Refresh cadence
 
-- ADS-B global: 4 s frontend poll, per-cell 30 s server cache, 12-concurrent
-  upstream semaphore. Do not raise the poll interval above 10 s.
+- ADS-B global: 1 s frontend poll (`registry/defaults.ts` `ttlSec: 1`), backend
+  sticky snapshot on a 1 s target cycle. Do not raise the poll above 10 s.
 - AIS Digitraffic: 30 s. AISStream WS: live push.
-- The fan-out (`apps/api/app/routes/adsb.py:_GLOBAL_GRID`) currently spans
-  140+ cells covering continents + corridors. Densify only — never thin out.
+
+### Aircraft count + sources (operator-visible)
+
+- **The global snapshot must carry ≥8 000 aircraft** in steady state (~13 k is
+  normal). A drop to a few hundred/thousand is a regression — see the
+  `airplanes.live rate-limit 200+text` post-mortem.
+- The feed is a UNION of tiers, deduped by `aircraft:<icao24>`
+  (`apps/api/app/routes/adsb.py:_do_global_fanout`), freshest wins:
+  1. **OpenSky `/states/all`** — the ~13 k breadth source. Works keyless
+     (anonymous IP budget); falls back from authed→anonymous on 429. Throttled
+     to one pull / 15 s and cached + served between pulls, so the count holds
+     even after the daily credit budget is spent.
+  2. **airplanes.live `/v2/point` grid** (`_GLOBAL_GRID`, 130+ cells) —
+     dense-region freshness overlay, time-boxed (8 s) so a throttled grid can
+     never stall the snapshot. Densify the grid only — never thin out.
+- Upstream burst semaphore is **8** (`_UPSTREAM_SEMAPHORE`): airplanes.live
+  rate-limits above ~8 concurrent `/v2/point` calls, and its limiter answers
+  with HTTP 200 + a `text/plain` body (NOT just 429) — `_parse_ac` must reject
+  non-JSON bodies, and `load_cell` must RAISE (not cache empty) on all-host
+  failure. Do not "simplify" either away.
+- The single-shot firehose URLs (`_FIREHOSE_URLS`) are dead from most egress
+  IPs (airplanes.live `/v2/all*` 404, adsb.lol 451, adsb.fi 403) and are tried
+  opportunistically with a 30 s dead-skip. OpenSky is the real breadth source.
 
 ### Labels
 

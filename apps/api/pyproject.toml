@@ -19,7 +19,11 @@ dependencies = [
   "numpy>=1.26",
   "pyyaml>=6.0",
   "slowapi>=0.1.9",
+  "mcp>=1.2.0",
 ]
+
+[project.scripts]
+osint-mcp = "app.mcp_server:main"
 
 [project.optional-dependencies]
 dev = [
@@ -43,6 +47,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "B", "UP", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+# Manual MCP integration drivers run against a live backend (not unit tests):
+# allow long assertion lines and the blocking urllib store-seed call.
+"tests/mcp_*_check.py" = ["E501", "ASYNC210"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

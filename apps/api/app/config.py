@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     # When unset (default), no auth — fine for single-analyst localhost.
     api_key: str = ""
 
+    # ── MCP server + local AI (Ollama) ──
+    # The MCP server (app.mcp_server) calls this backend over HTTP and can
+    # launch a local Ollama model for deeper, in-the-loop analysis without
+    # spending the calling agent's context. All optional; degrade gracefully.
+    ollama_host: str = "http://localhost:11434"  # OLLAMA_HOST
+    ollama_model: str = ""  # OLLAMA_MODEL ("" → auto-detect smallest installed)
+    api_base: str = "http://localhost:8000"  # API_BASE (MCP → backend)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

@@ -169,6 +169,12 @@ async def _global_loop(stop: asyncio.Event) -> None:
     # imports from app.upstream, which imports nothing from us).
     from app.routes.adsb import adsb_global  # noqa: PLC0415
 
+    # Boot warmup: don't fire the heavy global fan-out the instant the app
+    # starts. Lets the event loop finish booting before the first ~13k-aircraft
+    # ingest, avoids a cold-start upstream stampede, and keeps fast unit tests
+    # isolated from this background loop's HTTP traffic.
+    await asyncio.sleep(2)
+
     while not stop.is_set():
         try:
             fc = await adsb_global()
