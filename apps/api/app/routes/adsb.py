@@ -15,7 +15,7 @@ Design notes (post-breaker rewrite):
   starved the merge. Simpler "try each host in order, take first 200, cache
   result" approach is faster and self-heals: a host that 429'd one cell may
   still serve the next once its sliding window advances.
-- Per-cell TTL is aggressive (5s full / 3s empty) so the frontend perceives
+- Per-cell TTL is aggressive (10s full / 5s empty) so the frontend perceives
   sub-2-second updates. The sticky snapshot dict IS the merge cache — the
   hot route returns it in microseconds. The background refresher loop
   targets a 1s cycle (sleep = max(0, 1.0 - elapsed)) so a fast fan-out
@@ -49,15 +49,14 @@ router = APIRouter(tags=["adsb"])
 # caches still allow parallel cache hits; this semaphore only gates the actual
 # upstream call inside `load_cell` so cold-start (all-miss) bursts cannot
 # stampede the shared httpx client or trip per-host rate limits.
-_UPSTREAM_SEMAPHORE = asyncio.Semaphore(48)
+_UPSTREAM_SEMAPHORE = asyncio.Semaphore(64)
 
-# Per-cell cache TTLs. Aggressive (5s full / 3s empty) to meet the
-# sub-2-second end-to-end refresh budget. The sticky snapshot above this
-# (refreshed on a 1s target cycle) is what the hot route returns directly,
-# so the worst-case freshness for a stale cell is ~5s — but in steady state
-# most cells are <5s old and the observed snapshot age stays under 2s.
-_CELL_TTL_FULL = 5.0
-_CELL_TTL_EMPTY = 3.0
+# Per-cell cache TTLs. Higher (10s full / 5s empty) to prioritize coverage
+# over freshness. Sticky snapshot (1s cycle) caps end-to-end age regardless.
+# Longer TTL reduces upstream rate-limit pressure → better firehose hit rate
+# and more aircraft discovery globally.
+_CELL_TTL_FULL = 10.0
+_CELL_TTL_EMPTY = 5.0
 
 
 def _aircraft_geojson(items: list[dict[str, Any]]) -> dict[str, Any]:
