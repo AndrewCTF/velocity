@@ -239,9 +239,8 @@ def _build_global_grid() -> list[tuple[float, float]]:
     # Decimate down to ~110 cells (deterministic stride so cells are stable
     # across polls — same cell → same cache key → cache hit). Without this
     # the 4° land mesh is ~250 cells, blowing the upstream budget when
-    # 2 of 3 hosts are rate-limited. Increased to 200 for better coverage
-    # now that firehose is blocked — grid is primary source.
-    target = 200
+    # 2 of 3 hosts are rate-limited. Optimal: ~110-120 cells.
+    target = 110
     if len(cells) > target:
         stride = max(1, len(cells) // target)
         cells = cells[::stride]
@@ -478,35 +477,43 @@ async def _fetch_cell(primary_idx: int, lat: float, lon: float, cell_timeout: ht
 
 
 async def _try_firehose() -> list[dict[str, Any]] | None:
-    """Try each firehose endpoint in order. Returns the first non-empty
-    aircraft list, or None if every host failed (rate-limit, block, 5xx,
-    timeout). A successful firehose returns ~10-15k aircraft globally —
-    the per-cell grid is a fallback only."""
+    """Try each firehose endpoint with exponential backoff on 429.
+    Retry rate-limited hosts after wait. Returns 10-15k aircraft or None."""
     client = get_client()
     timeout = httpx.Timeout(15.0, connect=5.0)
     for url in _FIREHOSE_URLS:
-        try:
-            async with _UPSTREAM_SEMAPHORE:
-                r = await client.get(url, timeout=timeout)
-        except (httpx.TimeoutException, httpx.TransportError):
-            continue
-        # 429 (rate-limit), 403 (Cloudflare block), 451 (ODbL block on
-        # adsb.lol), any 5xx — walk to the next host. Same fall-through
-        # philosophy as the per-cell grid: no breaker, no long-term memory
-        # of failure, the host may recover by the next refresh tick.
-        if r.status_code != 200:
-            continue
-        try:
-            j = r.json()
-        except ValueError:
-            continue
-        # Aggregators differ: airplanes.live / adsb.lol use "ac",
-        # adsb.fi's /v2/snapshot uses "aircraft". Accept either.
-        ac = j.get("ac") or j.get("aircraft") or []
-        if not ac:
-            continue
-        now = time.time()
-        return [dict(a, _seen_at=now, _host=url) for a in ac]
+        # Exponential backoff for 429: try up to 3 times with delays
+        for attempt in range(3):
+            try:
+                async with _UPSTREAM_SEMAPHORE:
+                    r = await client.get(url, timeout=timeout)
+            except (httpx.TimeoutException, httpx.TransportError):
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)  # 1s, 2s backoff
+                continue
+
+            # 429 rate-limit: retry with backoff
+            if r.status_code == 429:
+                if attempt < 2:
+                    await asyncio.sleep(2 + (2 ** attempt))  # 3s, 5s, 9s
+                continue
+
+            # 403/451/5xx: give up on this host, try next
+            if r.status_code != 200:
+                break
+
+            try:
+                j = r.json()
+            except ValueError:
+                break
+
+            ac = j.get("ac") or j.get("aircraft") or []
+            if not ac:
+                break
+
+            now = time.time()
+            return [dict(a, _seen_at=now, _host=url) for a in ac]
+
     return None
 
 
