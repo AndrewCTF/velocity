@@ -109,13 +109,11 @@ interface FeatureCollection {
   note?: string;
 }
 
-// Per-layer entity cap. Bumped from 12 000 → 25 000 so Digitraffic Finland's
-// ~18 400-vessel global snapshot lands in full instead of being silently
-// truncated by ~6 000 contacts. 25k upserts under Cesium's PropertyBag +
-// SampledPositionProperty path stays well under one render frame on a
-// reference desktop GPU; the heaviest cost is the icon-data-URI decode
-// path, which is amortised by the diffed billboard updates above.
-const MAX_PER_LAYER = 25_000;
+// Per-layer entity cap. Tight limit (12k) for memory efficiency on mobile.
+// Real-time feeds often show duplicate coverage (mil + global) so loss of
+// the tail is acceptable once dedup kicks in. Memory pressure is worse than
+// completeness at edge — prefer fast interaction over full entity set.
+const MAX_PER_LAYER = 12_000;
 
 // djb2 string hash → unsigned 32-bit, base36 for compact ids. Used only to
 // synthesise a stable id when the upstream feature carries no id but does
@@ -452,12 +450,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
             }
             if (!skip) {
               sampled.addSample(tNow, newPos);
-              // Prune anything older than 30 minutes so the in-memory sample
-              // array stays bounded regardless of session length. 30 min is
-              // long enough that the past-trail polyline (entity panel) still
-              // shows a useful track, short enough that we don't carry a
-              // session's worth of fixes per vessel forever.
-              const cutoff = Cesium.JulianDate.addSeconds(tNow, -1800, new Cesium.JulianDate());
+              // Prune anything older than 10 minutes. Short window keeps
+              // memory usage constant and low (FR24-style). Entity panel
+              // sparkline still shows meaningful recent track history.
+              const cutoff = Cesium.JulianDate.addSeconds(tNow, -600, new Cesium.JulianDate());
               sampled.removeSamples(
                 new Cesium.TimeInterval({
                   start: Cesium.JulianDate.fromIso8601('1970-01-01T00:00:00Z'),
