@@ -181,14 +181,18 @@ export class LayerCompositor {
         styleKind: style,
         ...(acceptsBbox && { bboxQuery: aoiBboxQuery }),
       });
-      // Vessel feeds carry ~18k entities at world scale — cluster them so the
-      // Baltic doesn't render as a single green blob. We poke at the adapter's
-      // internal CustomDataSource here (rather than push clustering down into
-      // PollGeoJsonAdapter) because clustering is a per-layer policy decision,
-      // not a per-adapter one.
-      if (style === 'vessel') {
+      // Cluster all high-volume feeds (aircraft + vessels) to prevent
+      // over-crowding at world scale. Clustering is a per-layer policy
+      // decision (not pushed into PollGeoJsonAdapter).
+      if (style === 'aircraft' || style === 'vessel') {
         const ds = (adapter as unknown as { ds?: Cesium.CustomDataSource }).ds;
-        if (ds) configureVesselClustering(ds);
+        if (ds) {
+          if (style === 'vessel') {
+            configureVesselClustering(ds);
+          } else {
+            configureAircraftClustering(ds);
+          }
+        }
       }
       return adapter;
     }
@@ -251,6 +255,62 @@ function configureVesselClustering(ds: Cesium.CustomDataSource): void {
     );
     cluster.point.show = false;
   });
+}
+
+function configureAircraftClustering(ds: Cesium.CustomDataSource): void {
+  ds.clustering.enabled = true;
+  ds.clustering.pixelRange = 28;
+  ds.clustering.minimumClusterSize = 12;
+  ds.clustering.clusterBillboards = true;
+  ds.clustering.clusterLabels = true;
+  ds.clustering.clusterPoints = false;
+  ds.clustering.clusterEvent.addEventListener((_clustered, cluster) => {
+    cluster.label.show = true;
+    cluster.label.text = String(cluster.label.text);
+    cluster.label.font = '10px "IBM Plex Mono", monospace';
+    cluster.label.fillColor = Cesium.Color.fromCssColorString('#0b0e14');
+    cluster.label.showBackground = false;
+    cluster.label.pixelOffset = new Cesium.Cartesian2(0, 0);
+    cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
+    cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
+    cluster.billboard.show = true;
+    cluster.billboard.image = aircraftClusterDot();
+    cluster.billboard.verticalOrigin = Cesium.VerticalOrigin.CENTER;
+    cluster.billboard.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
+    cluster.billboard.translucencyByDistance = new Cesium.NearFarScalar(
+      200_000,
+      0.0,
+      400_000,
+      1.0,
+    );
+    cluster.label.translucencyByDistance = new Cesium.NearFarScalar(
+      200_000,
+      0.0,
+      400_000,
+      1.0,
+    );
+    cluster.point.show = false;
+  });
+}
+
+let cachedClusterDot: string | null = null;
+function aircraftClusterDot(): string {
+  if (cachedClusterDot) return cachedClusterDot;
+  const canvas = document.createElement('canvas');
+  canvas.width = 24;
+  canvas.height = 24;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.beginPath();
+    ctx.arc(12, 12, 10, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.65)';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#0b0e14';
+    ctx.stroke();
+  }
+  cachedClusterDot = canvas.toDataURL('image/png');
+  return cachedClusterDot;
 }
 
 let cachedClusterRing: string | null = null;
