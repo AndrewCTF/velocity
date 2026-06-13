@@ -79,6 +79,10 @@ interface Props {
   // Optional bbox provider — re-evaluated every poll so AOI changes propagate
   // without recreating the adapter.
   bboxQuery?: () => string | null;
+  // When true, re-poll on camera moveEnd (debounced) so a viewport-scoped
+  // query loads the newly-revealed area immediately instead of after the next
+  // timer tick. Used by the high-volume viewport layers (global ADS-B + AIS).
+  refreshOnMove?: boolean;
 }
 
 interface PointGeometry {
@@ -177,8 +181,29 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     this.ds = new Cesium.CustomDataSource(props.ctx.descriptor.id);
   }
 
+  // Detach handle for the camera moveEnd listener (viewport layers only).
+  private detachMove: (() => void) | null = null;
+
   async attach(viewer: Cesium.Viewer): Promise<void> {
     await viewer.dataSources.add(this.ds);
+    // The await above yields — the viewer can be torn down before we resume
+    // (HMR / rapid layer toggle). Bail if so; accessing viewer.camera on a
+    // destroyed viewer throws "Cannot read properties of undefined".
+    if (this.detached || viewer.isDestroyed()) return;
+    if (this.props.refreshOnMove) {
+      // Debounce so a multi-step zoom/pan coalesces into one re-poll of the
+      // new viewport (not one per intermediate camera event).
+      let t: number | null = null;
+      const onMove = (): void => {
+        if (t != null) window.clearTimeout(t);
+        t = window.setTimeout(() => this.refresh(), 200);
+      };
+      viewer.camera.moveEnd.addEventListener(onMove);
+      this.detachMove = () => {
+        if (t != null) window.clearTimeout(t);
+        if (!viewer.isDestroyed()) viewer.camera.moveEnd.removeEventListener(onMove);
+      };
+    }
     this.scheduleNext(0);
   }
 
@@ -194,6 +219,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
 
   detach(): void {
     this.detached = true;
+    this.detachMove?.();
+    this.detachMove = null;
     if (this.timer != null) {
       window.clearTimeout(this.timer);
       this.timer = null;

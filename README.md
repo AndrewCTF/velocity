@@ -4,7 +4,7 @@ A single-analyst, defence/offence-grade open-source intelligence platform: a 3D/
 
 It is also a **Model Context Protocol** server: an AI agent can query the same live feeds (aircraft, vessels, GPS jamming, fused anomalies) as distilled JSON — see the [MCP section](#mcp-server--query-the-live-console-from-an-ai-agent) below.
 
-See [`frontend.md`](./frontend.md), [`research.md`](./research.md), and [`research_updated.md`](./research_updated.md) for the full specs, [`docs/adsb-aircraft-pipeline.md`](./docs/adsb-aircraft-pipeline.md) for how the ~13 k-aircraft global feed is sourced and merged, and [`docs/mcp-server.md`](./docs/mcp-server.md) for the agent-facing MCP + intel API.
+See [`docs/frontend.md`](./docs/frontend.md), [`docs/research.md`](./docs/research.md), and [`docs/research_updated.md`](./docs/research_updated.md) for the full specs, [`docs/adsb-aircraft-pipeline.md`](./docs/adsb-aircraft-pipeline.md) for how the ~13 k-aircraft global feed is sourced and merged, and [`docs/mcp-server.md`](./docs/mcp-server.md) for the agent-facing MCP + intel API.
 
 ## Stack
 

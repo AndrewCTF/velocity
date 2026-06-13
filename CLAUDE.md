@@ -121,3 +121,80 @@ not regress any of them. If unsure, leave the relevant code path alone.
   polyline appears within 4 s.
 - Click an empty area, confirm the polyline + reticle clear.
 - Stay on the page for 30 s and confirm icons don't blink off-then-on.
+
+## Lessons from past sessions — DO NOT repeat these mistakes
+
+These are real failures from prior work on this repo. Each cost the operator
+time or eroded trust. Read them before claiming coverage, building a feed, or
+shipping.
+
+### Never claim coverage/parity without a measurement
+
+- A prior session called the keyless AIS firehose "global" in code, a commit
+  message, AND `/api/intel/sources` — it was **Norway-only** (Kystverket). It
+  also asserted keyless aircraft was "already satisfied (~13k = the full
+  picture)" — it was ~60 % of what FlightAware sees, and more keyless sources
+  existed. The operator had to push back twice before the numbers were checked.
+- RULE: the words **global / complete / full / already covered / parity** are
+  banned from code, comments, commits, and docs unless a live probe with a
+  COUNT backs them up that turn. Prefer "Northern Europe (~18 k)" over "global".
+  When unsure of coverage, MEASURE (probe the endpoint, count distinct ids)
+  before you write a single claim.
+
+### "Configured" ≠ "working"
+
+- `/api/intel/sources` showed `opensky_authed: true` simply because creds were
+  *set* — but the creds were expired and every authed call 401'd. A `bool(key)`
+  check proves nothing about whether the upstream actually answers.
+- RULE: to claim a source works, hit it and read the status/count. A set key is
+  not a working key.
+
+### Exhaust the data-source search before declaring a ceiling
+
+- A session concluded "keyless aircraft caps at ~12.7 k, the aggregators block
+  datacenter IPs, 21 k is impossible" — then the operator pointed at tar1090 /
+  sdr-enthusiasts and there WAS more: open mirrors (`globe.theairtraffic.com`,
+  `skylink.hpradar.com`), the `api.adsb.lol/v2/point/0/0/20000` full-snapshot
+  quirk, and a headless-browser bridge that reads tar1090's own
+  `g.planesOrdered` (~14.6 k). "Whole globe" means try harder: more hosts, the
+  ecosystem's own tooling, a real browser for Cloudflare-gated sites.
+
+### Feed hygiene (ADS-B / AIS upstreams)
+
+- Rotate across hosts; pull ONE per cycle, not all at once. Hitting every feed
+  every few seconds rate-limits them and wastes bandwidth (each readsb
+  `aircraft.json` is ~1 MB gzip). `adsb_feed_interval_s` is 30 s for a reason.
+- Some hosts (adsb.lol) answer **HTTP 451 to a non-browser User-Agent** — feed
+  fetches must send a real browser UA. airplanes.live/adsb.fi/adsb.one
+  Cloudflare-block datacenter IPs entirely; only `theairtraffic` + `hpradar`
+  serve open `aircraft.json` keyless from a server.
+- AISStream has an API cap — keep it ON DEMAND (started on `/ws/ais` connect,
+  stopped when the last viewer leaves). Keyless firehoses stay always-on.
+
+### Playwright: pass FUNCTIONS to `page.evaluate`, not strings
+
+- `page.evaluate("() => {...}")` evaluates the string as an EXPRESSION and
+  returns the function object — it never CALLS it. A reader defined as a
+  template-string constant silently returned nothing and the
+  `tools/adsb-globe-feeder` sidecar served 0 aircraft for many debugging turns.
+  Define real functions and pass `page.evaluate(fn, arg)`.
+- The headless globe-feeder only works because it keeps ONE page open and reads
+  the store; do NOT re-move the map on every read (that resets tar1090's load) —
+  zoom to world once, then read, and nudge only ~once/30 s.
+
+### Process / shell discipline
+
+- `pkill -f "<path>/index.js"` does NOT match a process whose argv is just
+  `node index.js`. Find a server by its PORT holder
+  (`ss -ltnp | grep ':<port>'` → kill that pid), not a guessed argv pattern.
+  Repeated stale processes here caused EADDRINUSE and a stale log that masked
+  whether new code was even running. Use a fresh log file per run.
+
+### Commit / doc voice
+
+- Commits are stripped of AI attribution by a global hook AND the operator wants
+  human-style messages (see auto-memory `global-commit-msg-ai-scrub-hook`). Do
+  not add `Co-Authored-By`/"Generated with" lines. Write what was measured, not
+  marketing ("union climbs to ~14k", not "now global").
+- Keep the repo root tidy: no dev/proof screenshots committed (gitignored), docs
+  live under `docs/`. App art is SVG in code, not PNG files.

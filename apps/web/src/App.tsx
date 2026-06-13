@@ -10,6 +10,7 @@ import { ChokepointsList } from './layer-rail/ChokepointsList.js';
 import { FeedsPanel } from './layer-rail/FeedsPanel.js';
 import { EntityPanel } from './entity-panel/EntityPanel.js';
 import { IntelPanel } from './entity-panel/IntelPanel.js';
+import { NewsPanel } from './news-panel/NewsPanel.js';
 import { Timeline } from './timeline/Timeline.js';
 import { GlobeCanvas } from './globe/GlobeCanvas.js';
 import { LayerRegistry } from './registry/LayerRegistry.js';
@@ -64,6 +65,7 @@ export function App(): JSX.Element {
       { id: 'selection', label: 'Selection', content: <EntityPanel viewer={viewer} /> },
       { id: 'alerts', label: 'Alerts', content: <AlertsRailList viewer={viewer} /> },
       { id: 'intel', label: 'Intel', content: <IntelPanel viewer={viewer} /> },
+      { id: 'news', label: 'News', content: <NewsPanel /> },
     ],
     [viewer],
   );

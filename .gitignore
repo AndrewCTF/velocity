@@ -17,4 +17,14 @@ coverage/
 # Anywhere in the tree — the cache lives at apps/api/data/tilecache; the old
 # root-anchored pattern missed it and 2.7k PNGs got committed.
 **/data/tilecache/
+# History playback SQLite store (refills from live data; never commit).
+**/data/history.db
+**/data/history.db-*
 .playwright-mcp/
+# Dev screenshots / scratch images at the repo root — keep the tree tidy.
+# (Real product art lives in code as SVG, or under docs/ if ever needed.)
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
