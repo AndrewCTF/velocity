@@ -51,6 +51,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # /ws/ais) so the MCP/intel vessel tools have data without a frontend.
         if settings.aisstream_key:
             ais_routes._ensure_upstream(settings.aisstream_key)
+        # Keyless global AIS firehose (Kystverket NMEA) — no key required, so it
+        # runs unconditionally and feeds the same store + browser broadcast.
+        from app import ais_firehose  # noqa: PLC0415
+
+        ais_firehose.start()
+        # Position history store for 3D replay/scrub.
+        from app import history  # noqa: PLC0415
+
+        history.start()
+        # News debias / fact-check refresher.
+        if settings.news_enabled:
+            from app.routes import news as news_routes  # noqa: PLC0415
+
+            news_routes.start_refresher()
     try:
         yield
     finally:
@@ -63,6 +77,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await aoi.stop_warmer()
         await adsb_routes.stop_snapshot()
         await ais_routes._stop_upstream()
+        if background:
+            from app import (
+                ais_firehose,  # noqa: PLC0415
+                history,  # noqa: PLC0415
+            )
+            from app.routes import news as news_routes  # noqa: PLC0415
+
+            await ais_firehose.stop()
+            await history.stop()
+            await news_routes.stop_refresher()
 
 
 def create_app() -> FastAPI:

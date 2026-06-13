@@ -207,14 +207,24 @@ async def ais_ws(ws: WebSocket, settings: Settings = Depends(get_settings)) -> N
         await ws.close(code=1008)
         return
     await ws.accept()
-    if not settings.aisstream_key:
+    # AISStream is the key-gated upstream; the keyless Kystverket firehose
+    # (started at boot) also fans out to _clients, so we accept the socket even
+    # with no key — vessels still flow. We only flag info when NEITHER source
+    # can run.
+    if settings.aisstream_key:
+        _ensure_upstream(settings.aisstream_key)
+    elif not settings.ais_firehose_enabled:
         await ws.send_text(
-            json.dumps({"kind": "info", "message": "AISSTREAM_KEY not configured"})
+            json.dumps(
+                {
+                    "kind": "info",
+                    "message": "No AIS source: set AISSTREAM_KEY or enable the keyless firehose",
+                }
+            )
         )
         await ws.close()
         return
 
-    _ensure_upstream(settings.aisstream_key)
     _clients.add(ws)
     try:
         while True:

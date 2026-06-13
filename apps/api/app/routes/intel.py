@@ -179,13 +179,16 @@ async def intel_aois() -> dict[str, Any]:
 @router.get("/api/intel/sources")
 async def intel_sources() -> dict[str, Any]:
     """Data-source health + which feeds are key-gated vs always-on."""
+    from app import ais_firehose  # noqa: PLC0415
+
     s = get_settings()
     return {
         "always_on": [
-            "adsb (adsb.lol + airplanes.live grid)",
+            "adsb (adsb.lol + airplanes.live grid — keyless aircraft firehose)",
             "opensky /states/all (anonymous — the ~13k global breadth tier; "
             "OAuth creds only raise the daily credit budget)",
             "ais (digitraffic Finland/Baltic)",
+            "ais firehose (Kystverket NMEA — keyless global vessel stream)",
             "jamming (derived from ADS-B NACp/NIC)",
             "usgs quakes",
         ],
@@ -195,6 +198,7 @@ async def intel_sources() -> dict[str, Any]:
             "opensky_authed": bool(s.opensky_client_id and s.opensky_client_secret),
             "gfw_dark_vessels": bool(s.gfw_token),
         },
+        "ais_firehose": ais_firehose.stats(),
         "ollama": {"host": s.ollama_host, "model": s.ollama_model or "(auto-detect)"},
         "llm": llm.status(),
     }

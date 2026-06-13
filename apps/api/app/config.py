@@ -84,6 +84,14 @@ class Settings(BaseSettings):
     news_refresh_sec: int = 600  # backend RSS poll cadence
     news_max_items: int = 400  # cap retained headlines
 
+    # ── Keyless AIS firehose (Kystverket public NMEA stream) ──
+    # Norway's Kystverket publishes an anonymous AIS NMEA feed over TCP that
+    # needs no key. We decode it and feed the same store + browser broadcast as
+    # the (key-gated) AISStream bridge, so vessels appear with zero keys set.
+    ais_firehose_enabled: bool = True
+    ais_firehose_host: str = "153.44.253.27"
+    ais_firehose_port: int = 5631
+
     # ── Historical playback ──
     # Position history store for 3D replay/scrub. SQLite by default; safe to
     # delete (refills as live data flows). Disable to run fully stateless.
