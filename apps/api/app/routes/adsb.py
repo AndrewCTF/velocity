@@ -685,6 +685,80 @@ async def _firehose_throttled() -> list[dict[str, Any]] | None:
     return fh
 
 
+# Keyless full-feed ADS-B. Open global readsb/tar1090 instances (theairtraffic,
+# hpradar, the user's own ultrafeeder) serve their FULL aircraft set as
+# aircraft.json — no key, no Cloudflare block — so they add the aircraft
+# OpenSky's network misses (measured union ~14k vs ~12.7k OpenSky-only).
+#
+# RATE-LIMIT DISCIPLINE: we pull exactly ONE feed per cycle, round-robin, every
+# adsb_feed_interval_s (default 30 s). With two feeds each host is therefore hit
+# only once per ~60 s — gentle enough that no single API throttles us. Each
+# feed's last good slice is retained and the slices are unioned (deduped by
+# icao24) on every read, so the snapshot keeps all feeds' aircraft even though
+# only one refreshed this cycle. A slice older than _FEED_SLICE_MAX_AGE_S is
+# dropped so a dead feed's aircraft don't linger.
+_FEED_SLICES: dict[str, tuple[float, list[dict[str, Any]]]] = {}  # url -> (mono_ts, ac)
+_FEED_ROTATE_IDX: int = 0
+_READSB_NEXT_PULL: float = 0.0
+_READSB_LOCK = asyncio.Lock()
+_FEED_SLICE_MAX_AGE_S = 180.0
+
+
+def _feed_urls() -> list[str]:
+    return [u.strip() for u in get_settings().adsb_feed_urls.split(",") if u.strip()]
+
+
+async def _fetch_one_feed(client: httpx.AsyncClient, url: str) -> list[dict[str, Any]]:
+    try:
+        r = await client.get(url, timeout=httpx.Timeout(12.0, connect=5.0))
+    except (httpx.TimeoutException, httpx.TransportError):
+        return []
+    if r.status_code != 200 or "json" not in r.headers.get("content-type", ""):
+        return []
+    try:
+        return r.json().get("aircraft") or []
+    except Exception:  # noqa: BLE001 — non-JSON / truncated body
+        return []
+
+
+async def _readsb_feeds() -> list[dict[str, Any]]:
+    """Union of recent keyless readsb feed slices; refreshes ONE feed per cycle.
+
+    Round-robin + paced (adsb_feed_interval_s) so no single aggregator is
+    rate-limited. Returns the deduped union of every non-stale slice.
+    """
+    global _FEED_ROTATE_IDX, _READSB_NEXT_PULL
+    urls = _feed_urls()
+    if not urls:
+        return []
+    interval = get_settings().adsb_feed_interval_s
+    if time.monotonic() >= _READSB_NEXT_PULL:
+        async with _READSB_LOCK:
+            if time.monotonic() >= _READSB_NEXT_PULL:
+                idx = _FEED_ROTATE_IDX % len(urls)
+                url = urls[idx]
+                _FEED_ROTATE_IDX = idx + 1
+                ac = await _fetch_one_feed(get_client(), url)
+                if ac:
+                    _FEED_SLICES[url] = (time.monotonic(), ac)
+                # Pace off the NEXT pull regardless, so a failing feed doesn't
+                # hammer — it just gets retried after the interval in its turn.
+                _READSB_NEXT_PULL = time.monotonic() + interval
+
+    cutoff = time.monotonic() - max(_FEED_SLICE_MAX_AGE_S, 3 * interval)
+    merged: dict[str, dict[str, Any]] = {}
+    for url in list(_FEED_SLICES):
+        ts, ac = _FEED_SLICES[url]
+        if ts < cutoff or url not in urls:
+            _FEED_SLICES.pop(url, None)  # stale or de-configured feed
+            continue
+        for a in ac:
+            hexid = (a.get("hex") or "").lower()
+            if hexid and a.get("lat") is not None and a.get("lon") is not None:
+                merged[hexid] = a
+    return list(merged.values())
+
+
 def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]]) -> None:
     """Convert raw aggregator aircraft dicts → features and union into by_id,
     overwriting any existing entry for the same id (caller orders sources so the
@@ -740,6 +814,7 @@ async def _do_global_fanout() -> dict[str, Any]:
     by_id: dict[Any, dict[str, Any]] = {}
 
     osky_task = asyncio.ensure_future(_opensky_cached())
+    feeds_task = asyncio.ensure_future(_readsb_feeds())
     fh_task = asyncio.ensure_future(_firehose_throttled())
     grid_task = asyncio.ensure_future(_grid_fanout())
 
@@ -752,12 +827,20 @@ async def _do_global_fanout() -> dict[str, Any]:
             if fid is not None:
                 by_id[fid] = f
 
-    # 2. Opportunistic firehose (deploy hosts with a reachable global verb).
+    # 2. Keyless full-feed readsb instances (theairtraffic, hpradar, the user's
+    #    ultrafeeder) — full global aircraft.json at ~1s. Adds the aircraft
+    #    OpenSky's feeders miss (+~1.3k measured) and is fresher, so it merges
+    #    AFTER OpenSky.
+    feeds = await feeds_task
+    if feeds:
+        _merge_raw_into(by_id, feeds)
+
+    # 3. Opportunistic firehose (deploy hosts with a reachable global verb).
     firehose = await fh_task
     if firehose:
         _merge_raw_into(by_id, firehose)
 
-    # 3. Dense-region freshness overlay — wins conflicts (merged last). Bounded
+    # 4. Dense-region freshness overlay — wins conflicts (merged last). Bounded
     #    so a throttled grid can't hold the snapshot hostage; completed cells are
     #    cached for the next tick regardless.
     try:

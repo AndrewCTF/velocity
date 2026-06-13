@@ -45,6 +45,23 @@ class Settings(BaseSettings):
     cloudflare_token: str = ""
     openaip_key: str = ""
 
+    # ── Keyless full-feed ADS-B (readsb / tar1090 aircraft.json) ──
+    # Several aggregators run an OPEN global readsb/tar1090 instance that serves
+    # its FULL aircraft set as aircraft.json with no key and no Cloudflare block
+    # — the "tar1090 way" to get all the data. Unioned with OpenSky into the
+    # global snapshot, deduped by icao24. Point this at YOUR own ultrafeeder /
+    # tar1090 (sdr-enthusiasts Docker stack) to fold in its coverage too.
+    # Comma-separated. To avoid rate-limiting any single host we pull ONE feed
+    # per cycle, round-robin, every adsb_feed_interval_s — so with 2 feeds each
+    # host is hit only once per ~60 s. Recent per-feed slices are kept + unioned
+    # between pulls; OpenSky (15 s) still carries breadth, so the slow feed
+    # cadence only affects the EXTRA aircraft these feeds add.
+    adsb_feed_urls: str = (
+        "https://globe.theairtraffic.com/data/aircraft.json,"
+        "https://skylink.hpradar.com/data/aircraft.json"
+    )
+    adsb_feed_interval_s: float = 30.0  # rotate one feed per this interval (30 s–1 m)
+
     # ── infra ──
     database_url: str = "postgresql+asyncpg://osint:osint@localhost:5432/osint"
     redis_url: str = "redis://localhost:6379/0"
