@@ -33,6 +33,7 @@ Design notes (post-breaker rewrite):
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import hashlib
 import time
 from math import cos, radians
@@ -608,21 +609,26 @@ async def _try_opensky_global() -> dict[str, Any] | None:
     return fc
 
 
-# OpenSky pull pacing. OpenSky's free budget is a daily credit pool, so we
-# CANNOT pull /states/all every 1s background tick. `_opensky_cached` pulls at
-# most once per (_OPENSKY_INTERVAL_S + adaptive backoff) and serves the last
-# good 13k FeatureCollection on every tick in between. Because the cached FC is
-# served forever until a newer pull replaces it, the snapshot aircraft COUNT
-# stays high even after the daily budget is spent — only position freshness for
-# OpenSky-only (oceanic) contacts degrades, and the per-cell grid keeps the
-# dense regions live. On a 429 we exponentially back off (capped) so a spent
-# budget stretches instead of hammering a host that's refusing us.
-# 15s between pulls: conserves the limited daily credit budget (a global
-# /states/all costs 4 credits; anonymous IP budget is ~400/day) while keeping
-# breadth positions fresh enough that frontend interpolation looks live. The
-# per-cell airplanes.live grid refreshes dense regions faster on top of this.
+# OpenSky pull pacing + daily circuit breaker. OpenSky's free budget is a daily
+# credit pool (≈400 credits/day anonymous, keyed by source IP; a global
+# /states/all costs 4 credits) that resets at 0000 UTC. Two rules:
+#
+#  1. PACING — pull at most once per _OPENSKY_INTERVAL_S; serve the last good
+#     FeatureCollection on every tick in between. The cached FC keeps the
+#     snapshot COUNT high even after the budget is spent — only OpenSky-only
+#     (oceanic) position freshness degrades; the per-cell grid keeps dense
+#     regions live.
+#  2. BREAKER — on ANY failed pull (429 budget-spent, network, parse) DISABLE
+#     OpenSky until the next 0000 UTC reset instead of retrying. The daily budget
+#     cannot recover before midnight UTC, so the old exponential backoff just
+#     burned connect timeouts and, when authed, leaked more credits on each
+#     rejected call. The breaker is in-memory, so it also clears on process
+#     restart → "test once per start, and again each 0000 UTC".
+#
+# The pull itself runs in a BACKGROUND task (`_opensky_refresh_once`); the hot
+# read (`_opensky_cached`) only ever returns the cached FC, so OpenSky's 5-6MB
+# /states/all download NEVER blocks the fan-out.
 _OPENSKY_INTERVAL_S = 15.0
-_OPENSKY_BACKOFF_CAP_S = 900.0
 # Always-anonymous token manager for the 429 fallback (separate IP budget).
 _ANON_TM = OpenSkyTokenManager("", "")
 
@@ -631,58 +637,102 @@ _ANON_TM = OpenSkyTokenManager("", "")
 # cached) so a throttled airplanes.live can't stall the OpenSky-driven snapshot.
 _GRID_BUDGET_S = 8.0
 _OPENSKY_FC: dict[str, Any] = {"type": "FeatureCollection", "features": []}
-_OPENSKY_AT: float = 0.0  # monotonic seconds of last pull attempt
-_OPENSKY_BACKOFF_S: float = 0.0
-_OPENSKY_LOCK = asyncio.Lock()
+_OPENSKY_AT: float = 0.0  # monotonic seconds of last pull START
+# Wall-clock epoch (time.time) until which the breaker keeps OpenSky disabled;
+# 0.0 = closed/healthy. Set to the next 0000 UTC on a failed pull.
+_OPENSKY_DISABLED_UNTIL: float = 0.0
+# In-flight background pull. Guards against kicking a second pull while one is
+# running, and lets the hot read return without ever awaiting the download.
+_OPENSKY_REFRESH_TASK: asyncio.Task[None] | None = None
+
+
+def _next_utc_midnight_epoch() -> float:
+    """Wall-clock epoch (UTC) of the next 0000 — OpenSky's daily budget reset."""
+    now = dt.datetime.now(dt.UTC)
+    nxt = dt.datetime.combine(
+        now.date() + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC
+    )
+    return nxt.timestamp()
+
+
+async def _opensky_refresh_once() -> None:
+    """Background OpenSky pull: refresh the cached FC, or trip the daily breaker.
+
+    Runs as its own task so the 5-6MB /states/all download never blocks the
+    fan-out. On ANY failure the breaker opens until the next 0000 UTC reset (see
+    the pacing/breaker note above)."""
+    global _OPENSKY_FC, _OPENSKY_DISABLED_UNTIL
+    try:
+        fc = await _try_opensky_global()
+    except Exception:
+        _OPENSKY_DISABLED_UNTIL = _next_utc_midnight_epoch()
+        return
+    if fc and fc.get("features"):
+        _OPENSKY_FC = fc
 
 
 async def _opensky_cached() -> dict[str, Any] | None:
-    """Throttled OpenSky breadth. Pulls at most once per interval (+backoff);
-    serves the cached FeatureCollection between pulls."""
-    global _OPENSKY_FC, _OPENSKY_AT, _OPENSKY_BACKOFF_S
-    async with _OPENSKY_LOCK:
-        age = time.monotonic() - _OPENSKY_AT if _OPENSKY_AT else float("inf")
-        if age < _OPENSKY_INTERVAL_S + _OPENSKY_BACKOFF_S:
-            return _OPENSKY_FC if _OPENSKY_FC.get("features") else None
-        _OPENSKY_AT = time.monotonic()  # stamp before await so we don't double-pull
-        try:
-            fc = await _try_opensky_global()
-        except httpx.HTTPStatusError as e:
-            # 429 (or other status error): keep serving the last good FC and
-            # grow the backoff so we don't burn the daily credit budget.
-            if e.response is not None and e.response.status_code == 429:
-                _OPENSKY_BACKOFF_S = min(
-                    _OPENSKY_BACKOFF_S * 2 + 15.0, _OPENSKY_BACKOFF_CAP_S
-                )
-            return _OPENSKY_FC if _OPENSKY_FC.get("features") else None
-        except Exception:
-            return _OPENSKY_FC if _OPENSKY_FC.get("features") else None
-        if fc and fc.get("features"):
-            _OPENSKY_FC = fc
-            _OPENSKY_BACKOFF_S = 0.0  # healthy — reset backoff
-        return _OPENSKY_FC if _OPENSKY_FC.get("features") else None
+    """INSTANT breadth read. Serves the last good OpenSky FeatureCollection and,
+    when a refresh is due and the breaker is closed, kicks one off in the
+    BACKGROUND. NEVER awaits the pull — the fan-out must not wait on OpenSky's
+    5-6MB /states/all download.
+
+    Stays `async` (the fan-out awaits it) but holds no network await; the
+    awaited coroutine resolves in microseconds."""
+    global _OPENSKY_AT, _OPENSKY_REFRESH_TASK
+    breaker_open = bool(_OPENSKY_DISABLED_UNTIL) and time.time() < _OPENSKY_DISABLED_UNTIL
+    refreshing = _OPENSKY_REFRESH_TASK is not None and not _OPENSKY_REFRESH_TASK.done()
+    age = time.monotonic() - _OPENSKY_AT if _OPENSKY_AT else float("inf")
+    if not breaker_open and not refreshing and age >= _OPENSKY_INTERVAL_S:
+        # Stamp BEFORE create_task so the interval paces from pull-start and a
+        # re-entrant call in the same tick can't double-kick.
+        _OPENSKY_AT = time.monotonic()
+        _OPENSKY_REFRESH_TASK = asyncio.create_task(_opensky_refresh_once())
+    return _OPENSKY_FC if _OPENSKY_FC.get("features") else None
 
 
 # Opportunistic firehose pacing. The single-shot firehose hosts are dead from
 # most egress IPs, but a deploy host with clean connectivity may have a working
 # one (adsb.lol unmetered, no daily budget — strictly better than OpenSky when
-# reachable). We try it, and if it's dead we skip retrying for this long so we
-# don't burn ~2s of connect-timeout on every 1s background tick.
+# reachable). Two drags this path must avoid:
+#  - a WORKING firehose downloads 5-6MB; awaiting it on the hot path stalled the
+#    fan-out for seconds.
+#  - DEAD hosts cost connect timeouts; we skip retrying for _FIREHOSE_DEAD_SKIP_S
+#    after a miss so they don't tax every tick.
+# So the pull runs in a BACKGROUND task and the hot read serves the last good
+# raw list instantly. Downstream `_merge_with_previous` (180s) ages out a stale
+# cached firehose if the host later goes dark.
 _FIREHOSE_DEAD_SKIP_S = 30.0
 _FIREHOSE_NEXT_TRY: float = 0.0
+_FIREHOSE_RAW: list[dict[str, Any]] = []  # last good raw aircraft list
+_FIREHOSE_REFRESH_TASK: asyncio.Task[None] | None = None
+
+
+async def _firehose_refresh_once() -> None:
+    """Background firehose pull: refresh the cached raw list, or arm the
+    dead-skip. Runs as its own task so a working firehose's 5-6MB download — and
+    dead hosts' connect timeouts — never block the fan-out."""
+    global _FIREHOSE_RAW, _FIREHOSE_NEXT_TRY
+    fh = await _try_firehose()
+    if fh:
+        _FIREHOSE_RAW = fh
+    else:
+        _FIREHOSE_NEXT_TRY = time.monotonic() + _FIREHOSE_DEAD_SKIP_S
 
 
 async def _firehose_throttled() -> list[dict[str, Any]] | None:
-    """`_try_firehose`, but skip it for _FIREHOSE_DEAD_SKIP_S after a miss so a
-    dead firehose doesn't tax every tick. A working firehose is retried every
-    tick (we only back off when it fails)."""
-    global _FIREHOSE_NEXT_TRY
-    if time.monotonic() < _FIREHOSE_NEXT_TRY:
-        return None
-    fh = await _try_firehose()
-    if not fh:
-        _FIREHOSE_NEXT_TRY = time.monotonic() + _FIREHOSE_DEAD_SKIP_S
-    return fh
+    """INSTANT firehose read. Serves the last good raw list and, when outside the
+    dead-skip window with no pull in flight, kicks one off in the BACKGROUND.
+    NEVER awaits the 5-6MB download. Stays `async` (the fan-out awaits it) but
+    holds no network await."""
+    global _FIREHOSE_REFRESH_TASK
+    if time.monotonic() >= _FIREHOSE_NEXT_TRY:
+        refreshing = (
+            _FIREHOSE_REFRESH_TASK is not None and not _FIREHOSE_REFRESH_TASK.done()
+        )
+        if not refreshing:
+            _FIREHOSE_REFRESH_TASK = asyncio.create_task(_firehose_refresh_once())
+    return _FIREHOSE_RAW or None
 
 
 def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]]) -> None:
@@ -902,22 +952,27 @@ async def start_snapshot() -> None:
 
 
 async def stop_snapshot() -> None:
-    """Cancel the background snapshot refresher and reset the bootstrap flag.
+    """Cancel the background snapshot refresher (and any in-flight feed pulls)
+    and reset the bootstrap flag.
 
-    Wired into the app lifespan so the task never outlives its event loop
+    Wired into the app lifespan so the tasks never outlive their event loop
     (clean shutdown, no "Task was destroyed but it is pending" on reload,
-    test isolation). Safe to call when no refresher is running."""
+    test isolation). Safe to call when nothing is running."""
     global _SNAPSHOT_TASK, _SNAPSHOT_STARTED
-    task = _SNAPSHOT_TASK
+    global _OPENSKY_REFRESH_TASK, _FIREHOSE_REFRESH_TASK
+    tasks = [_SNAPSHOT_TASK, _OPENSKY_REFRESH_TASK, _FIREHOSE_REFRESH_TASK]
     _SNAPSHOT_TASK = None
+    _OPENSKY_REFRESH_TASK = None
+    _FIREHOSE_REFRESH_TASK = None
     _SNAPSHOT_STARTED = False
-    if task is None or task.done():
-        return
-    task.cancel()
-    try:
-        await task
-    except (asyncio.CancelledError, Exception):  # noqa: BLE001
-        pass
+    for task in tasks:
+        if task is None or task.done():
+            continue
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
 
 
 @router.get("/api/adsb/snapshot_age")
@@ -966,13 +1021,27 @@ async def adsb_fi_global() -> dict[str, Any]:
 # ── airplanes.live ────────────────────────────────────────────────────────
 @router.get("/api/adsb/live/mil")
 async def adsb_live_mil() -> dict[str, Any]:
+    # Walk _HEAD_HOSTS, first 200-with-JSON wins. A single host's /v2/mil is
+    # flaky (rate-limit answered with 200+text/plain, or 403/404 from some
+    # egress IPs) — a hardcoded single host turned every blip into a 502. Match
+    # the /api/adsb/live/emergencies fan-out: try each host, guard the JSON
+    # parse against text/plain limiter bodies, and degrade to an empty
+    # collection rather than failing the layer.
     async def load() -> dict[str, Any]:
-        url = "https://api.airplanes.live/v2/mil"
-        r = await get_client().get(url)
-        if r.status_code != 200:
-            raise HTTPException(502, f"airplanes.live upstream {r.status_code}")
-        j = r.json()
-        return _aircraft_geojson(j.get("ac") or [])
+        for host in _HEAD_HOSTS:
+            url = f"{host}/v2/mil"
+            try:
+                r = await get_client().get(url)
+            except (httpx.TimeoutException, httpx.TransportError):
+                continue
+            if r.status_code != 200:
+                continue
+            try:
+                ac = r.json().get("ac") or []
+            except ValueError:
+                continue
+            return _aircraft_geojson(ac)
+        return {"type": "FeatureCollection", "features": []}
 
     return await cache.get_or_fetch("airplaneslive:mil", 30.0, load)
 
@@ -982,13 +1051,24 @@ async def adsb_live_squawk(code: str) -> dict[str, Any]:
     if not code.isdigit() or len(code) != 4:
         raise HTTPException(400, "squawk must be 4 digits")
 
+    # Same fan-out as /mil and /emergencies: a single host's /v2/squawk is
+    # flaky (200+text/plain limiter body, or 403/404 per egress IP). Walk hosts,
+    # guard the JSON parse, degrade to an empty collection rather than 502.
     async def load() -> dict[str, Any]:
-        url = f"https://api.airplanes.live/v2/squawk/{code}"
-        r = await get_client().get(url)
-        if r.status_code != 200:
-            raise HTTPException(502, f"airplanes.live upstream {r.status_code}")
-        j = r.json()
-        return _aircraft_geojson(j.get("ac") or [])
+        for host in _HEAD_HOSTS:
+            url = f"{host}/v2/squawk/{code}"
+            try:
+                r = await get_client().get(url)
+            except (httpx.TimeoutException, httpx.TransportError):
+                continue
+            if r.status_code != 200:
+                continue
+            try:
+                ac = r.json().get("ac") or []
+            except ValueError:
+                continue
+            return _aircraft_geojson(ac)
+        return {"type": "FeatureCollection", "features": []}
 
     return await cache.get_or_fetch(f"airplaneslive:sq:{code}", 15.0, load)
 

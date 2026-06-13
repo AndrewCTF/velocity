@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import httpx
 import pytest
@@ -143,3 +144,167 @@ def test_opensky_pulls_anonymously_without_creds(monkeypatch: pytest.MonkeyPatch
     assert len(fc["features"]) == 1
     assert fc["features"][0]["properties"]["source"] == "opensky"
     assert "seen_at" in fc["features"][0]["properties"]
+
+
+# ── OpenSky daily circuit breaker ───────────────────────────────────────────
+def test_opensky_breaker_trips_until_next_utc_midnight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A failed pull must DISABLE OpenSky until the next 0000 UTC reset — not
+    # retry with a short backoff. The daily credit budget can't recover before
+    # midnight UTC, so hammering it just burns timeouts / leaks authed credits.
+    saved = (adsb._OPENSKY_DISABLED_UNTIL, adsb._OPENSKY_FC, adsb._OPENSKY_AT)
+    try:
+        adsb._OPENSKY_DISABLED_UNTIL = 0.0
+
+        async def boom() -> dict:
+            raise httpx.HTTPStatusError(
+                "429",
+                request=httpx.Request("GET", "https://opensky-network.org/api/states/all"),
+                response=httpx.Response(429),
+            )
+
+        monkeypatch.setattr(adsb, "_try_opensky_global", boom)
+        asyncio.run(adsb._opensky_refresh_once())
+        now = time.time()
+        assert adsb._OPENSKY_DISABLED_UNTIL > now  # breaker open
+        # ≤ ~24h out: it points at the NEXT 0000 UTC, never further.
+        assert adsb._OPENSKY_DISABLED_UNTIL <= now + 86400 + 1
+        assert adsb._OPENSKY_DISABLED_UNTIL == adsb._next_utc_midnight_epoch()
+    finally:
+        (adsb._OPENSKY_DISABLED_UNTIL, adsb._OPENSKY_FC, adsb._OPENSKY_AT) = saved
+
+
+def test_opensky_cached_skips_pull_while_breaker_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # While the breaker is open, the hot read serves the cached FC and kicks NO
+    # pull — even though the interval says a refresh is "due".
+    saved = (
+        adsb._OPENSKY_DISABLED_UNTIL,
+        adsb._OPENSKY_AT,
+        adsb._OPENSKY_REFRESH_TASK,
+        adsb._OPENSKY_FC,
+    )
+    try:
+        called = {"n": 0}
+
+        async def boom() -> dict:
+            called["n"] += 1
+            raise RuntimeError("must not pull while breaker open")
+
+        monkeypatch.setattr(adsb, "_try_opensky_global", boom)
+        adsb._OPENSKY_DISABLED_UNTIL = time.time() + 3600  # open for 1h
+        adsb._OPENSKY_AT = 0.0  # would otherwise be "due"
+        adsb._OPENSKY_REFRESH_TASK = None
+        adsb._OPENSKY_FC = {
+            "type": "FeatureCollection",
+            "features": [{"id": "aircraft:cached"}],
+        }
+
+        async def run() -> dict | None:
+            out = await adsb._opensky_cached()
+            await asyncio.sleep(0)  # let any (erroneously) scheduled task run
+            return out
+
+        out = asyncio.run(run())
+        assert out is adsb._OPENSKY_FC  # served cached
+        assert called["n"] == 0  # no pull kicked
+        assert adsb._OPENSKY_REFRESH_TASK is None
+    finally:
+        (
+            adsb._OPENSKY_DISABLED_UNTIL,
+            adsb._OPENSKY_AT,
+            adsb._OPENSKY_REFRESH_TASK,
+            adsb._OPENSKY_FC,
+        ) = saved
+
+
+def test_opensky_cached_kicks_pull_in_background_without_blocking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The fan-out must NEVER wait on OpenSky's 5-6MB /states/all download.
+    # `_opensky_cached` returns the cached FC immediately while the pull is still
+    # in flight, then the background task swaps in the fresh FC.
+    saved = (
+        adsb._OPENSKY_DISABLED_UNTIL,
+        adsb._OPENSKY_AT,
+        adsb._OPENSKY_REFRESH_TASK,
+        adsb._OPENSKY_FC,
+    )
+    try:
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def slow() -> dict:
+            started.set()
+            await release.wait()  # block "the pull"
+            return {"type": "FeatureCollection", "features": [{"id": "aircraft:new"}]}
+
+        monkeypatch.setattr(adsb, "_try_opensky_global", slow)
+        adsb._OPENSKY_DISABLED_UNTIL = 0.0
+        adsb._OPENSKY_AT = 0.0  # due
+        adsb._OPENSKY_REFRESH_TASK = None
+        adsb._OPENSKY_FC = {
+            "type": "FeatureCollection",
+            "features": [{"id": "aircraft:old"}],
+        }
+
+        async def run() -> set[str]:
+            out = await adsb._opensky_cached()  # must NOT block on slow()
+            await started.wait()  # background pull did start
+            assert adsb._OPENSKY_REFRESH_TASK is not None
+            assert not adsb._OPENSKY_REFRESH_TASK.done()  # still blocked → non-blocking
+            ids = {f["id"] for f in out["features"]}  # type: ignore[union-attr]
+            release.set()
+            await adsb._OPENSKY_REFRESH_TASK  # finish so no pending-task warning
+            return ids
+
+        ids = asyncio.run(run())
+        assert ids == {"aircraft:old"}  # returned CACHED, not the pull result
+        # background task swapped in the fresh pull
+        assert {f["id"] for f in adsb._OPENSKY_FC["features"]} == {"aircraft:new"}
+    finally:
+        (
+            adsb._OPENSKY_DISABLED_UNTIL,
+            adsb._OPENSKY_AT,
+            adsb._OPENSKY_REFRESH_TASK,
+            adsb._OPENSKY_FC,
+        ) = saved
+
+
+def test_firehose_throttled_kicks_pull_in_background_without_blocking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Same guarantee for the firehose: a working 5-6MB mirror must not stall the
+    # fan-out. The read returns instantly (cached / None) and the pull runs in
+    # the background.
+    saved = (adsb._FIREHOSE_NEXT_TRY, adsb._FIREHOSE_RAW, adsb._FIREHOSE_REFRESH_TASK)
+    try:
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def slow_fh() -> list[dict]:
+            started.set()
+            await release.wait()
+            return [{"hex": "feed01", "lat": 1.0, "lon": 2.0}]
+
+        monkeypatch.setattr(adsb, "_try_firehose", slow_fh)
+        adsb._FIREHOSE_NEXT_TRY = 0.0
+        adsb._FIREHOSE_RAW = []
+        adsb._FIREHOSE_REFRESH_TASK = None
+
+        async def run() -> list[dict] | None:
+            out = await adsb._firehose_throttled()  # must NOT block
+            await started.wait()
+            assert adsb._FIREHOSE_REFRESH_TASK is not None
+            assert not adsb._FIREHOSE_REFRESH_TASK.done()
+            release.set()
+            await adsb._FIREHOSE_REFRESH_TASK
+            return out
+
+        out = asyncio.run(run())
+        assert out is None  # nothing cached yet → instant None, not a block
+        assert adsb._FIREHOSE_RAW == [{"hex": "feed01", "lat": 1.0, "lon": 2.0}]
+    finally:
+        (adsb._FIREHOSE_NEXT_TRY, adsb._FIREHOSE_RAW, adsb._FIREHOSE_REFRESH_TASK) = saved

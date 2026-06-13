@@ -47,8 +47,8 @@ radius, works fine) is the dense-region freshness overlay.
 Runs the tiers **concurrently** and merges by id (later = fresher wins):
 
 ```
-osky_task  = _opensky_cached()      # breadth ~13k (throttled + cached)
-fh_task    = _firehose_throttled()  # opportunistic single-shot
+osky_task  = _opensky_cached()      # breadth ~13k — INSTANT cached read, bg pull
+fh_task    = _firehose_throttled()  # opportunistic single-shot — INSTANT, bg pull
 grid_task  = _grid_fanout()         # airplanes.live /v2/point cells
 
 by_id  = {opensky features}
@@ -62,6 +62,14 @@ host-walks) must never stall the OpenSky-driven snapshot. Grid cells that don't
 finish in the budget are abandoned for the tick; cells that did finish are
 cached, so the next tick reads them warm and completes fast.
 
+The **feed tiers never block the fan-out.** `_opensky_cached` and
+`_firehose_throttled` are instant cached reads: when a refresh is due they kick
+the actual pull into a **background task** and return the last good payload
+immediately. Without this, a 5-6 MB `/states/all` (or firehose mirror) download
+froze the snapshot for the ~several seconds of the transfer on every refresh —
+the cadence drag this design removes. The grid's 8 s time-box is the only thing
+that can make a tick slow, and only when many cells are cold.
+
 ### OpenSky tier (`_opensky_cached` / `_try_opensky_global`)
 
 - **Anonymous-capable.** `fetch_states` omits the `Authorization` header when no
@@ -70,13 +78,21 @@ cached, so the next tick reads them warm and completes fast.
   pool, 5 s resolution); on `429` (authed pool spent) retry on the **separate
   anonymous per-IP budget** (~400 credits/day, 10 s resolution). 4 credits per
   global call.
-- **Throttled + cached.** Pull at most once per `_OPENSKY_INTERVAL_S` (15 s);
-  serve the cached FeatureCollection on every tick in between. Because the
-  cached FC is served until a newer pull replaces it, **the aircraft count holds
-  even after the daily budget is spent** — only position freshness for
-  OpenSky-only (oceanic) contacts degrades, while the grid keeps dense regions
-  live. On `429` we exponentially back off (capped at 900 s) so a spent budget
-  stretches instead of hammering.
+- **Throttled + cached + background.** Pull at most once per
+  `_OPENSKY_INTERVAL_S` (15 s); serve the cached FeatureCollection on every tick
+  in between. The pull runs in a **background task** (`_opensky_refresh_once`) —
+  the hot read never awaits the 5-6 MB download. Because the cached FC is served
+  until a newer pull replaces it, **the aircraft count holds even after the
+  daily budget is spent** — only position freshness for OpenSky-only (oceanic)
+  contacts degrades, while the grid keeps dense regions live.
+- **Daily circuit breaker.** On ANY failed pull (429 budget-spent, network,
+  parse) OpenSky is **disabled until the next 0000 UTC** reset
+  (`_next_utc_midnight_epoch` → `_OPENSKY_DISABLED_UNTIL`) instead of retrying.
+  The daily credit pool cannot recover before midnight UTC, so the old
+  exponential backoff just burned connect timeouts and leaked authed credits on
+  every rejected call. The breaker is in-memory, so a **process restart also
+  clears it** → "test once per start, and again each 0000 UTC". The cached FC
+  keeps serving the whole time the breaker is open.
 
 ### Grid tier (`_grid_fanout` / `_fetch_cell`)
 
@@ -102,7 +118,7 @@ cached, so the next tick reads them warm and completes fast.
 | `_UPSTREAM_SEMAPHORE` | `8` | Max concurrent upstream fetches. **Keep ≤8** — airplanes.live trips ~>8 concurrent. |
 | `_CELL_TTL_FULL` / `_EMPTY` | `30` / `5` s | Per-cell cache. 30 s keeps steady-state load ~4-5 cells/s. |
 | `_OPENSKY_INTERVAL_S` | `15` s | Min seconds between OpenSky pulls (budget pacing). |
-| `_OPENSKY_BACKOFF_CAP_S` | `900` s | Max 429 backoff. |
+| `_OPENSKY_DISABLED_UNTIL` | dynamic | Breaker gate: a failed pull sets it to the next 0000 UTC; OpenSky is skipped until then (or process restart). |
 | `_GRID_BUDGET_S` | `8` s | Wall-clock cap on the grid overlay per tick. |
 | `_FIREHOSE_DEAD_SKIP_S` | `30` s | Skip a dead firehose for this long. |
 | `_merge_with_previous(max_age_s)` | `180` s | Carry-forward window for contacts missing from a tick. |
@@ -127,7 +143,7 @@ cached, so the next tick reads them warm and completes fast.
 | Symptom | Cause | Where |
 |---|---|---|
 | Count drops to a few hundred | rate-limit text cached as empty | `_parse_ac` / `load_cell` raise |
-| Count drops to ~1.6 k | OpenSky tier not contributing (429 both budgets, or creds gate) | `_opensky_cached`, anon fallback |
+| Count drops to ~1.6 k | OpenSky tier not contributing (breaker open: 429 on both budgets → disabled till 0000 UTC) | `_opensky_refresh_once` breaker, `_OPENSKY_DISABLED_UNTIL` |
 | Snapshot age climbs to 30–60 s | grid not time-boxed, blocks the tick | `_GRID_BUDGET_S` |
 | Icons blink off/on | snapshot rejected/replaced wholesale | retain-fraction + carry-forward |
 
