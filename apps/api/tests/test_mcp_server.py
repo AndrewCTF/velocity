@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from app import llm
 from app import mcp_server as M
 
 _DEAD = "http://127.0.0.1:9"  # discard port — refuses connection immediately
@@ -33,21 +34,23 @@ async def test_backend_unreachable_returns_structured_error(
     assert "hint" in out  # tells the agent how to start the backend
 
 
-def test_pick_model_prefers_small() -> None:
-    assert M._pick_model(["llama3:70b", "qwen2.5:3b"], "") == "qwen2.5:3b"
+def test_pick_ollama_prefers_small() -> None:
+    assert llm._pick_ollama(["llama3:70b", "qwen2.5:3b"], "") == "qwen2.5:3b"
     moe = "qwen3-coder:30b-a3b-q4_K_M"
-    assert M._pick_model(["mistral:7b", moe], "") == moe
-    assert M._pick_model([], "") is None
+    assert llm._pick_ollama(["mistral:7b", moe], "") == moe
+    assert llm._pick_ollama([], "") is None
     # explicit prefer that isn't installed → still returned (let Ollama resolve)
-    assert M._pick_model(["a", "b"], "phi3:mini") == "phi3:mini"
+    assert llm._pick_ollama(["a", "b"], "phi3:mini") == "phi3:mini"
     # explicit prefer that matches by prefix
-    assert M._pick_model(["qwen2.5:3b-instruct"], "qwen2.5:3b") == "qwen2.5:3b-instruct"
+    assert llm._pick_ollama(["qwen2.5:3b-instruct"], "qwen2.5:3b") == "qwen2.5:3b-instruct"
 
 
 @pytest.mark.asyncio
-async def test_deep_analyze_degrades_without_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_deep_analyze_degrades_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_BASE", _DEAD)
     monkeypatch.setenv("OLLAMA_HOST", _DEAD)
+    # Neutralise DeepSeek so the tool genuinely has no backend (no network).
+    monkeypatch.setattr(llm, "deepseek_config", lambda: (None, "https://api.deepseek.com"))
     out = await M.deep_analyze("any question")
     # No model reachable → analysis is None but the gathered data is returned
     # so the calling agent can still reason over it itself.
@@ -57,5 +60,5 @@ async def test_deep_analyze_degrades_without_ollama(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
-async def test_ollama_models_empty_on_dead_host() -> None:
-    assert await M._ollama_models(_DEAD) == []
+async def test_ollama_tags_empty_on_dead_host() -> None:
+    assert await llm._ollama_tags(_DEAD, 2.0) == []

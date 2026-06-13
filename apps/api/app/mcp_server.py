@@ -12,16 +12,18 @@ Design principles (the MCP brief):
 - **Area-primary.** ``focus_area`` marks a region PRIMARY: a dedicated fresh
   fetch + ongoing priority refresh, independent of global rate limits. Other
   regions keep streaming from the global snapshot.
-- **Think deeper, locally.** ``deep_analyze`` pulls the relevant intel JSON and
-  hands it to a local Ollama model to reason over — heavy analysis happens on
-  the box, only the conclusion returns to the agent's context.
+- **Think deeper, off-context.** ``deep_analyze`` pulls the relevant intel JSON
+  and hands it to a real reasoning model — DeepSeek (``deepseek-reasoner``) when
+  configured, else a local Ollama model — so heavy analysis happens off the
+  agent's context and only the conclusion returns.
 
 Run:
     python -m app.mcp_server                # stdio (Claude Code / Desktop / SDK)
     python -m app.mcp_server --http --port 8765   # streamable-HTTP
     python -m app.mcp_server --list-tools   # introspect, for CI / verification
 
-Config (env or apps/api/.env): API_BASE, API_KEY, OLLAMA_HOST, OLLAMA_MODEL.
+Config (env or apps/api/.env): API_BASE, API_KEY, DEEPSEEK_API_KEY (or the
+opencode DeepSeek key), OLLAMA_HOST, OLLAMA_MODEL.
 """
 
 from __future__ import annotations
@@ -409,7 +411,7 @@ async def data_sources() -> dict[str, Any]:
     return await _get("/api/intel/sources")
 
 
-# ── Ollama deep analysis ──────────────────────────────────────────────────────
+# ── deep analysis (DeepSeek reasoner, Ollama fallback) ────────────────────────
 
 _SYS_PROMPT = (
     "You are a GEOINT analyst working a live open-source intelligence console. "
@@ -423,36 +425,6 @@ _SYS_PROMPT = (
     "queries. If the data is thin, say so plainly — do not invent."
 )
 
-_SMALL_HINTS = ("a3b", "1b", "2b", "3b", "mini", "small", "phi", "gemma2:2b", "qwen2.5:3b")
-
-
-async def _ollama_models(host: str) -> list[str]:
-    try:
-        async with httpx.AsyncClient(timeout=8.0) as c:
-            r = await c.get(host.rstrip("/") + "/api/tags")
-        if r.status_code != 200:
-            return []
-        return [m.get("name", "") for m in (r.json().get("models") or []) if m.get("name")]
-    except Exception:
-        return []
-
-
-def _pick_model(models: list[str], prefer: str) -> str | None:
-    if prefer:
-        # exact or prefix match against an installed tag
-        for m in models:
-            if m == prefer or m.startswith(prefer):
-                return m
-        return prefer  # let Ollama try; it may pull/resolve
-    if not models:
-        return None
-    # Prefer a small/fast model so deep_analyze stays responsive.
-    for hint in _SMALL_HINTS:
-        for m in models:
-            if hint in m.lower():
-                return m
-    return models[0]
-
 
 @mcp.tool()
 async def deep_analyze(
@@ -461,24 +433,28 @@ async def deep_analyze(
     lon: float | None = None,
     radius_nm: float = 250.0,
     model: str | None = None,
+    tier: str = "reason",
 ) -> dict[str, Any]:
-    """Have a LOCAL Ollama model reason deeply over the live intel.
+    """Have a reasoning model reason deeply over the live intel.
 
     Gathers the relevant data (global situation, plus a focused area bundle +
-    jamming + anomalies when lat/lon given), feeds it to a small local model,
-    and returns the model's analysis. Heavy reasoning runs on the box; only the
-    conclusion enters your context. Falls back to returning the raw structured
-    data (analysis=null) if Ollama is unreachable.
+    jamming + anomalies when lat/lon given) and feeds it to a real reasoning
+    model — DeepSeek (``deepseek-reasoner``) when configured, else a local
+    Ollama model. Heavy reasoning runs off-context; only the conclusion enters
+    the agent's context. Falls back to returning the raw structured data
+    (analysis=null) if no LLM backend is reachable.
 
     Args:
         question: what to analyse (e.g. "Is there coordinated GPS jamming near
             the Baltic, and which aircraft are affected?").
         lat, lon, radius_nm: optional area to focus on (loaded PRIMARY).
-        model: optional Ollama model override; defaults to the smallest
-            installed model.
+        model: optional Ollama model override used only on the Ollama fallback.
+        tier: ``reason`` (deepseek-reasoner, default — judgement) or ``fast``
+            (deepseek-chat — quicker, shallower).
     """
-    settings = get_settings()
-    host = os.environ.get("OLLAMA_HOST") or settings.ollama_host
+    import json as _json
+
+    from app import llm  # noqa: PLC0415
 
     # 1) gather context (already compact)
     context: dict[str, Any] = {"question": question, "situation": await get_situation()}
@@ -488,54 +464,31 @@ async def deep_analyze(
         context["global_jamming"] = await gps_jamming()
         context["global_anomalies"] = await anomalies()
 
-    # 2) choose a model
-    models = await _ollama_models(host)
-    chosen = _pick_model(models, model or os.environ.get("OLLAMA_MODEL") or settings.ollama_model)
-    if not chosen:
+    # 2) reason off-context (DeepSeek → Ollama → raw data)
+    res = await llm.complete(
+        _SYS_PROMPT,
+        f"QUESTION: {question}\n\nLIVE INTEL JSON:\n"
+        + _json.dumps(context, separators=(",", ":"))[:60000],
+        tier=tier,
+        temperature=0.2,
+        max_tokens=2048,
+        ollama_model=model or "",
+    )
+    if not res.ok:
         return {
             "analysis": None,
-            "model": None,
-            "note": f"Ollama unreachable at {host} or no models installed. "
-            "Returning the structured intel for you to analyse directly. "
-            "Install a small model, e.g. `ollama pull qwen2.5:3b`.",
-            "available_models": models,
-            "data": context,
-        }
-
-    # 3) reason locally
-    import json as _json
-
-    payload = {
-        "model": chosen,
-        "stream": False,
-        "options": {"temperature": 0.2},
-        "messages": [
-            {"role": "system", "content": _SYS_PROMPT},
-            {
-                "role": "user",
-                "content": f"QUESTION: {question}\n\nLIVE INTEL JSON:\n"
-                + _json.dumps(context, separators=(",", ":"))[:60000],
-            },
-        ],
-    }
-    try:
-        async with httpx.AsyncClient(timeout=300.0) as c:
-            r = await c.post(host.rstrip("/") + "/api/chat", json=payload)
-        if r.status_code != 200:
-            raise RuntimeError(f"ollama {r.status_code}: {r.text[:200]}")
-        body = r.json()
-        analysis = (body.get("message") or {}).get("content", "").strip()
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "analysis": None,
-            "model": chosen,
-            "note": f"Ollama call failed ({exc}). Returning structured intel instead.",
+            "model": res.model,
+            "backend": res.backend,
+            "note": f"No LLM backend reachable ({res.error}). Returning structured "
+            "intel for you to analyse directly. Configure DEEPSEEK_API_KEY / the "
+            "opencode DeepSeek key, or `ollama pull qwen2.5:3b`.",
             "data": context,
         }
 
     return {
-        "analysis": analysis,
-        "model": chosen,
+        "analysis": res.text,
+        "model": res.model,
+        "backend": res.backend,
         "focused_on": (
             {"lat": lat, "lon": lon, "radius_nm": radius_nm} if lat is not None else "global"
         ),
@@ -544,6 +497,35 @@ async def deep_analyze(
             "jamming_high": context["situation"].get("gps_jamming", {}).get("high"),
         },
     }
+
+
+# ── news intelligence (debias / fact-check) ──────────────────────────────────
+
+
+@mcp.tool()
+async def news_analysis() -> dict[str, Any]:
+    """Cross-source, debiased world-news intelligence.
+
+    Scrapes ~12 outlets (BBC, Reuters, AP, Al Jazeera, Guardian, CNN, Fox, …),
+    then a reasoning model strips bias/propaganda and separates VERIFIED FACTS
+    (corroborated by ≥2 independent outlets) from ATTRIBUTED CLAIMS and
+    rhetoric. A leader promising "the war will end soon" is flagged as rhetoric,
+    never reported as fact. Returns events with neutral_summary, verified_facts,
+    attributed_claims, bias_flags, propaganda_techniques, rhetoric_flags and a
+    confidence. May take ~30s when the cache is cold (it reasons over the feed).
+    """
+    return await _get("/api/news/analysis")
+
+
+@mcp.tool()
+async def fact_check(claim: str) -> dict[str, Any]:
+    """Adjudicate one free-text claim against current world-news headlines.
+
+    Returns ``{verdict: true|false|misleading|unverified, reasoning,
+    supporting_sources, confidence}``. Use it to sanity-check a statement before
+    treating it as fact.
+    """
+    return await _get("/api/news/factcheck", {"claim": claim})
 
 
 # ── entrypoint ─────────────────────────────────────────────────────────────────

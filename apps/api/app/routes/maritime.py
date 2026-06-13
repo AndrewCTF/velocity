@@ -13,10 +13,11 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.correlate.store import store
 from app.correlate.types import Observation
+from app.routes.adsb import viewport_filter
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["maritime"])
@@ -66,7 +67,13 @@ async def _load_vessel_metadata() -> dict[int, dict[str, Any]]:
 
 
 @router.get("/api/maritime/digitraffic")
-async def digitraffic_vessels() -> dict[str, Any]:
+async def digitraffic_vessels(
+    lamin: float | None = Query(None, ge=-90, le=90),
+    lomin: float | None = Query(None, ge=-180, le=180),
+    lamax: float | None = Query(None, ge=-90, le=90),
+    lomax: float | None = Query(None, ge=-180, le=180),
+    limit: int | None = Query(None, ge=1, le=20000),
+) -> dict[str, Any]:
     async def load() -> dict[str, Any]:
         headers = {"Digitraffic-User": "osint-console/0.1"}
         r = await get_client().get(LOCATIONS_URL, headers=headers)
@@ -176,5 +183,11 @@ async def digitraffic_vessels() -> dict[str, Any]:
             store.add_many(batch)
         return {"type": "FeatureCollection", "features": feats}
 
-    # Digitraffic positions update every ~minute; cache aligns.
-    return await cache.get_or_fetch("digitraffic:locations", 30.0, load)
+    # Digitraffic positions update every ~minute; cache aligns. The full FC is
+    # cached once; each request filters it to the caller's viewport so the
+    # frontend only instantiates on-screen vessels (the ~18.5k full set is the
+    # web UI's bottleneck).
+    full = await cache.get_or_fetch("digitraffic:locations", 30.0, load)
+    if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
+        return full
+    return viewport_filter(full, lamin, lomin, lamax, lomax, limit)

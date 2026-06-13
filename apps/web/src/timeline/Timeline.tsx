@@ -2,12 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { useTime } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
+import { installHistoryPlayback, type PlaybackController, type PlaybackInfo } from '../globe/HistoryPlayback.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
 }
 
 const SPEEDS = [1, 10, 60, 600, 3600] as const;
+const REPLAY_WINDOWS = [
+  { label: '1h', sec: 3600 },
+  { label: '6h', sec: 21_600 },
+  { label: '24h', sec: 86_400 },
+] as const;
 const POLL_MS = 5_000;
 
 interface Density {
@@ -26,6 +32,37 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
   const [density, setDensity] = useState<Density | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ start: number; end: number } | null>(null);
+
+  // Historical playback (replay recorded tracks for the current view).
+  const playbackRef = useRef<PlaybackController | null>(null);
+  const [replayWindow, setReplayWindow] = useState<number>(3600);
+  const [replay, setReplay] = useState<{ active: boolean; loading: boolean; info: PlaybackInfo | null }>(
+    { active: false, loading: false, info: null },
+  );
+
+  useEffect(() => {
+    if (!viewer) return;
+    const ctrl = installHistoryPlayback(viewer);
+    playbackRef.current = ctrl;
+    return () => {
+      ctrl.destroy();
+      playbackRef.current = null;
+      setReplay({ active: false, loading: false, info: null });
+    };
+  }, [viewer]);
+
+  const toggleReplay = async (): Promise<void> => {
+    const ctrl = playbackRef.current;
+    if (!ctrl) return;
+    if (ctrl.isActive()) {
+      ctrl.clear();
+      setReplay({ active: false, loading: false, info: null });
+      return;
+    }
+    setReplay((r) => ({ ...r, loading: true }));
+    const info = await ctrl.load(replayWindow);
+    setReplay({ active: ctrl.isActive(), loading: false, info });
+  };
 
   // Drive Cesium clock from store state
   useEffect(() => {
@@ -123,6 +160,41 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
               {s}×
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-1" aria-label="Historical replay">
+          <span className="micro">replay</span>
+          {REPLAY_WINDOWS.map((w) => (
+            <button
+              key={w.sec}
+              type="button"
+              onClick={() => setReplayWindow(w.sec)}
+              disabled={replay.active}
+              className={`mono text-[10px] px-1.5 py-0.5 border rounded-sm ${
+                replayWindow === w.sec
+                  ? 'border-accent-line text-accent'
+                  : 'border-line text-txt-2 hover:border-accent-line'
+              } disabled:opacity-40`}
+              aria-pressed={replayWindow === w.sec}
+            >
+              {w.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => void toggleReplay()}
+            disabled={replay.loading}
+            className={`mono text-[10px] px-2 py-0.5 border rounded-sm ${
+              replay.active ? 'border-accent-line text-accent' : 'border-line text-txt-1 hover:border-accent-line'
+            }`}
+            aria-pressed={replay.active}
+          >
+            {replay.loading ? '…' : replay.active ? '◼ exit' : '▶ replay'}
+          </button>
+          {replay.active && replay.info && (
+            <span className="mono micro tabular-nums text-txt-2">
+              {replay.info.tracks}t·{replay.info.points}p
+            </span>
+          )}
         </div>
         <div className="flex-1 flex items-center gap-3">
           <span className="micro flex items-center gap-1"><i className="inline-block w-2 h-2 bg-ok" />detections</span>
