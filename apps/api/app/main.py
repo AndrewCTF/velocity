@@ -47,6 +47,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     if background:
         correlate_runner.start()
+        # Warm the global ADS-B snapshot at boot (non-blocking) so the first
+        # browser poll returns instantly instead of stalling on a cold
+        # synchronous fan-out. The refresher fills the snapshot before a
+        # browser opens.
+        await adsb_routes.start_snapshot()
         # Start the global AIS upstream at boot (not only when a browser opens
         # /ws/ais) so the MCP/intel vessel tools have data without a frontend.
         if settings.aisstream_key:

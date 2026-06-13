@@ -11,8 +11,14 @@ import * as Cesium from 'cesium';
 //   land, snow, satellite imagery).
 // - Translucent dark pill so labels never blend into bright textures.
 // - Pixel offset (12, -2) places the chip up and to the right of the icon.
-// - DistanceDisplayCondition out to 5,000 km matches the rough zoom band
-//   where the user is still inspecting individual platforms.
+// - DistanceDisplayCondition out to 400 km. Labels are Cesium's single most
+//   expensive primitive (per-glyph geometry + an outline pass, far less
+//   batched than the instanced billboard collection). At the old 5,000 km
+//   band, zooming to a busy region painted THOUSANDS of text labels every
+//   frame — the dominant cause of the render lag. Every entity still HAS a
+//   label (CLAUDE.md invariant); it's just distance-culled exactly like the
+//   billboard already is, so only the handful near the camera draw text. The
+//   cluster bubbles cover identification at wider zoom.
 export function labelFor(text: string): Cesium.LabelGraphics.ConstructorOptions {
   return {
     text,
@@ -25,8 +31,8 @@ export function labelFor(text: string): Cesium.LabelGraphics.ConstructorOptions 
     showBackground: true,
     backgroundColor: Cesium.Color.fromCssColorString('#0b0e14').withAlpha(0.65),
     backgroundPadding: new Cesium.Cartesian2(4, 2),
-    scaleByDistance: new Cesium.NearFarScalar(1.5e5, 1.0, 1.0e7, 0.0),
-    distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5_000_000),
+    scaleByDistance: new Cesium.NearFarScalar(1.5e5, 1.0, 4.0e5, 0.85),
+    distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 400_000),
   };
 }
 
