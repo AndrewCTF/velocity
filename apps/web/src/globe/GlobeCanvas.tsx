@@ -7,6 +7,7 @@ import type { ImageryMode } from '../state/stores.js';
 import { LayerCompositor } from './LayerCompositor.js';
 import { installSelectionReticle } from './selectionReticle.js';
 import { installSelectionTrack } from './selectionTrack.js';
+import { prewarmIcons } from './icons.js';
 
 interface Props {
   ionToken: string;
@@ -28,6 +29,26 @@ interface Props {
 // it and show the (free) sat globe instead so orbit panning burns zero
 // Google quota.
 const GOOGLE_3D_MAX_CAMERA_HEIGHT_M = 30_000;
+
+// Above this camera altitude OSM extruded buildings are sub-pixel — you
+// can't see them, so hiding the tileset above it skips their tile fetch +
+// draw entirely. Below it (city / street scale) they paint as before.
+const OSM_BUILDINGS_MAX_CAMERA_HEIGHT_M = 100_000;
+
+// Hide the OSM buildings tileset when the camera is too high to see it.
+// No-ops when the show state didn't change, so it's safe to call from
+// camera.changed under requestRenderMode (render only requested on flips).
+function applyBuildingsGate(
+  viewer: Cesium.Viewer,
+  tileset: Cesium.Cesium3DTileset,
+): void {
+  const h = viewer.camera.positionCartographic.height;
+  const visible = h < OSM_BUILDINGS_MAX_CAMERA_HEIGHT_M;
+  if (tileset.show !== visible) {
+    tileset.show = visible;
+    viewer.scene.requestRender();
+  }
+}
 
 // Flip the Google tileset/globe/credit trio in one place. No-ops when the
 // state didn't change, so calling it from camera.changed stays cheap and
@@ -122,6 +143,10 @@ export function GlobeCanvas({
     if (!containerRef.current) return;
     if (viewerRef.current) return;
 
+    // Build + decode every entity icon before the compositor starts polling,
+    // so the first (13k+ entity) render frame doesn't stall decoding icons.
+    prewarmIcons();
+
     Cesium.Ion.defaultAccessToken = ionToken;
 
     const viewerOpts: Cesium.Viewer.ConstructorOptions = {
@@ -137,6 +162,18 @@ export function GlobeCanvas({
       timeline: false,
       requestRenderMode: true,
       maximumRenderTimeChange: Infinity,
+      // Ask the browser for the discrete GPU. On hybrid-graphics laptops
+      // WebGL defaults to the integrated chip, which chokes on the dense
+      // billboard/label scene; 'high-performance' picks the dGPU when one
+      // exists (no-op on single-GPU machines, so it's always safe).
+      // failIfMajorPerformanceCaveat:false keeps us running (software fallback)
+      // rather than throwing on locked-down boxes.
+      contextOptions: {
+        webgl: {
+          powerPreference: 'high-performance',
+          failIfMajorPerformanceCaveat: false,
+        },
+      },
       // Boot on the proxied dark basemap; the 3D-sat stack is applied as a
       // post-construction swap so toggling never remounts the viewer.
       baseLayer: buildDarkBasemap(),
@@ -226,6 +263,8 @@ export function GlobeCanvas({
     const onCameraChanged = (): void => {
       const ts = googleTilesetRef.current;
       if (ts) applyGoogleGate(viewer, ts, googleWantedRef.current);
+      const bld = osmBuildingsRef.current;
+      if (bld) applyBuildingsGate(viewer, bld);
     };
     viewer.camera.changed.addEventListener(onCameraChanged);
 
@@ -325,6 +364,9 @@ export function GlobeCanvas({
             }
             scene.primitives.add(tileset);
             osmBuildingsRef.current = tileset;
+            // Apply the height gate immediately so a high boot camera never
+            // pays to draw sub-pixel buildings before the first camera move.
+            applyBuildingsGate(viewer, tileset);
             scene.requestRender();
           })
           .catch((e: unknown) => console.warn('OSM buildings failed:', e));

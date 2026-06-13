@@ -1034,6 +1034,27 @@ async def adsb_global(
     return viewport_filter(snap, lamin, lomin, lamax, lomax, limit)
 
 
+async def start_snapshot() -> None:
+    """Warm the sticky snapshot at app boot so the first browser poll returns
+    instantly instead of paying for a cold synchronous fan-out.
+
+    Non-blocking on purpose: it only creates the background refresher (which
+    fills the snapshot on its first cycle), it does NOT await a synchronous
+    bootstrap fan-out — that would stall app startup for the several seconds
+    OpenSky + the grid take. By the time a browser opens and polls, the
+    refresher has already populated the snapshot. Idempotent: a no-op once the
+    refresher is running, and it sets _SNAPSHOT_STARTED so the lazy bootstrap
+    in adsb_global is skipped (no double fan-out)."""
+    global _SNAPSHOT_STARTED, _SNAPSHOT_TASK
+    if _SNAPSHOT_STARTED:
+        return
+    async with _SNAPSHOT_BOOTSTRAP_LOCK:
+        if _SNAPSHOT_STARTED:
+            return
+        _SNAPSHOT_TASK = asyncio.create_task(_refresh_snapshot_forever())
+        _SNAPSHOT_STARTED = True
+
+
 async def stop_snapshot() -> None:
     """Cancel the background snapshot refresher and reset the bootstrap flag.
 
