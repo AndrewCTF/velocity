@@ -27,9 +27,11 @@ from app.routes import eq as eq_routes
 from app.routes import events as events_routes
 from app.routes import firms as firms_routes
 from app.routes import health as health_routes
+from app.routes import history as history_routes
 from app.routes import intel as intel_routes
 from app.routes import jamming as jamming_routes
 from app.routes import maritime as maritime_routes
+from app.routes import news as news_routes_mod
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
 from app.routes import space as space_routes
@@ -47,15 +49,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     if background:
         correlate_runner.start()
-        # Warm the global ADS-B snapshot at boot (non-blocking) so the first
-        # browser poll returns instantly instead of stalling on a cold
-        # synchronous fan-out. The refresher fills the snapshot before a
-        # browser opens.
-        await adsb_routes.start_snapshot()
-        # Start the global AIS upstream at boot (not only when a browser opens
-        # /ws/ais) so the MCP/intel vessel tools have data without a frontend.
-        if settings.aisstream_key:
-            ais_routes._ensure_upstream(settings.aisstream_key)
+        # AISStream (keyed) is engaged ON DEMAND — only when a browser opens
+        # /ws/ais — and dropped when the last viewer leaves, to conserve its
+        # API message cap. It is NOT started at boot. The keyless Kystverket
+        # firehose below runs unconditionally so the MCP/intel vessel tools and
+        # the always-on store still have vessels without a frontend.
+        from app import ais_firehose  # noqa: PLC0415
+
+        ais_firehose.start()
+        # Extra keyless regional AIS (Norway Kystdatahuset + Finland Digitraffic
+        # MQTT) — densify Northern-Europe vessels without any key.
+        from app import ais_keyless  # noqa: PLC0415
+
+        ais_keyless.start()
+        # Position history store for 3D replay/scrub.
+        from app import history  # noqa: PLC0415
+
+        history.start()
+        # News debias / fact-check refresher.
+        if settings.news_enabled:
+            from app.routes import news as news_routes  # noqa: PLC0415
+
+            news_routes.start_refresher()
     try:
         yield
     finally:
@@ -68,6 +83,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await aoi.stop_warmer()
         await adsb_routes.stop_snapshot()
         await ais_routes._stop_upstream()
+        if background:
+            from app import (
+                ais_firehose,  # noqa: PLC0415
+                ais_keyless,  # noqa: PLC0415
+                history,  # noqa: PLC0415
+            )
+            from app.routes import news as news_routes  # noqa: PLC0415
+
+            await ais_firehose.stop()
+            await ais_keyless.stop()
+            await history.stop()
+            await news_routes.stop_refresher()
 
 
 def create_app() -> FastAPI:
@@ -113,6 +140,8 @@ def create_app() -> FastAPI:
     app.include_router(jamming_routes.router)
     app.include_router(cams_routes.router)
     app.include_router(intel_routes.router)
+    app.include_router(news_routes_mod.router)
+    app.include_router(history_routes.router)
 
     return app
 

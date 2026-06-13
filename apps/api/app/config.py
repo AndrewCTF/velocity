@@ -45,6 +45,24 @@ class Settings(BaseSettings):
     cloudflare_token: str = ""
     openaip_key: str = ""
 
+    # ── Keyless full-feed ADS-B (readsb / tar1090 aircraft.json) ──
+    # Several aggregators run an OPEN global readsb/tar1090 instance that serves
+    # its FULL aircraft set as aircraft.json with no key and no Cloudflare block
+    # — the "tar1090 way" to get all the data. Unioned with OpenSky into the
+    # global snapshot, deduped by icao24. Point this at YOUR own ultrafeeder /
+    # tar1090 (sdr-enthusiasts Docker stack) to fold in its coverage too.
+    # Comma-separated. To avoid rate-limiting any single host we pull ONE feed
+    # per cycle, round-robin, every adsb_feed_interval_s — so with 2 feeds each
+    # host is hit only once per ~60 s. Recent per-feed slices are kept + unioned
+    # between pulls; OpenSky (15 s) still carries breadth, so the slow feed
+    # cadence only affects the EXTRA aircraft these feeds add.
+    adsb_feed_urls: str = (
+        "https://globe.theairtraffic.com/data/aircraft.json,"
+        "https://skylink.hpradar.com/data/aircraft.json,"
+        "https://api.adsb.lol/v2/point/0/0/20000"  # ADSBx-v2 'ac' key, ~12.5k global
+    )
+    adsb_feed_interval_s: float = 30.0  # rotate one feed per this interval (30 s–1 m)
+
     # ── infra ──
     database_url: str = "postgresql+asyncpg://osint:osint@localhost:5432/osint"
     redis_url: str = "redis://localhost:6379/0"
@@ -68,6 +86,41 @@ class Settings(BaseSettings):
     ollama_host: str = "http://localhost:11434"  # OLLAMA_HOST
     ollama_model: str = ""  # OLLAMA_MODEL ("" → auto-detect smallest installed)
     api_base: str = "http://localhost:8000"  # API_BASE (MCP → backend)
+
+    # ── DeepSeek (OpenAI-compatible) — primary reasoning backend ──
+    # The analytical tools (deep_analyze, news debias/fact-check) prefer
+    # DeepSeek and fall back to Ollama. When unset, app.llm reads the key +
+    # base from the user's opencode config (~/.config/opencode/opencode.jsonc).
+    deepseek_api_key: str = ""  # DEEPSEEK_API_KEY
+    deepseek_base_url: str = ""  # DEEPSEEK_BASE_URL ("" → opencode/default)
+    deepseek_model_fast: str = "deepseek-chat"  # extraction / classification
+    deepseek_model_reason: str = "deepseek-reasoner"  # judgement / fact-check
+
+    # ── News debias / fact-check engine ──
+    # Keyless RSS world feeds; analysis runs through app.llm. All optional.
+    news_enabled: bool = True
+    news_refresh_sec: int = 600  # backend RSS poll cadence
+    news_max_items: int = 400  # cap retained headlines
+
+    # ── Keyless AIS firehose (Kystverket public NMEA stream) ──
+    # Norway's Kystverket publishes an anonymous AIS NMEA feed over TCP that
+    # needs no key. We decode it and feed the same store + browser broadcast as
+    # the (key-gated) AISStream bridge, so vessels appear with zero keys set.
+    ais_firehose_enabled: bool = True
+    ais_firehose_host: str = "153.44.253.27"
+    ais_firehose_port: int = 5631
+    # Extra keyless regional AIS: Norway Kystdatahuset (REST GeoJSON poll) and
+    # Finland Digitraffic (live MQTT-over-WSS). Both feed the same /ws/ais layer.
+    ais_kystdatahuset_enabled: bool = True
+    ais_kystdatahuset_interval_s: float = 60.0
+    ais_digitraffic_mqtt_enabled: bool = True
+
+    # ── Historical playback ──
+    # Position history store for 3D replay/scrub. SQLite by default; safe to
+    # delete (refills as live data flows). Disable to run fully stateless.
+    history_enabled: bool = True
+    history_db_path: str = "./data/history.db"
+    history_retention_hours: int = 48
 
 
 @lru_cache(maxsize=1)

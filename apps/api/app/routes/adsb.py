@@ -735,6 +735,90 @@ async def _firehose_throttled() -> list[dict[str, Any]] | None:
     return _FIREHOSE_RAW or None
 
 
+# Keyless full-feed ADS-B. Open global readsb/tar1090 instances (theairtraffic,
+# hpradar, the user's own ultrafeeder) serve their FULL aircraft set as
+# aircraft.json — no key, no Cloudflare block — so they add the aircraft
+# OpenSky's network misses (measured union ~14k vs ~12.7k OpenSky-only).
+#
+# RATE-LIMIT DISCIPLINE: we pull exactly ONE feed per cycle, round-robin, every
+# adsb_feed_interval_s (default 30 s). With two feeds each host is therefore hit
+# only once per ~60 s — gentle enough that no single API throttles us. Each
+# feed's last good slice is retained and the slices are unioned (deduped by
+# icao24) on every read, so the snapshot keeps all feeds' aircraft even though
+# only one refreshed this cycle. A slice older than _FEED_SLICE_MAX_AGE_S is
+# dropped so a dead feed's aircraft don't linger.
+_FEED_SLICES: dict[str, tuple[float, list[dict[str, Any]]]] = {}  # url -> (mono_ts, ac)
+_FEED_ROTATE_IDX: int = 0
+_READSB_NEXT_PULL: float = 0.0
+_READSB_LOCK = asyncio.Lock()
+_FEED_SLICE_MAX_AGE_S = 180.0
+# Some hosts (adsb.lol) answer 451 to a non-browser User-Agent — send a real one.
+_FEED_UA = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+
+def _feed_urls() -> list[str]:
+    return [u.strip() for u in get_settings().adsb_feed_urls.split(",") if u.strip()]
+
+
+async def _fetch_one_feed(client: httpx.AsyncClient, url: str) -> list[dict[str, Any]]:
+    try:
+        r = await client.get(
+            url, timeout=httpx.Timeout(12.0, connect=5.0), headers={"User-Agent": _FEED_UA}
+        )
+    except (httpx.TimeoutException, httpx.TransportError):
+        return []
+    if r.status_code != 200 or "json" not in r.headers.get("content-type", ""):
+        return []
+    try:
+        j = r.json()
+        # readsb tar1090 uses "aircraft"; ADSBx-v2 (adsb.lol) uses "ac". Both
+        # carry the same readsb fields (hex/lat/lon/track/alt_baro/gs).
+        return j.get("aircraft") or j.get("ac") or []
+    except Exception:  # noqa: BLE001 — non-JSON / truncated body
+        return []
+
+
+async def _readsb_feeds() -> list[dict[str, Any]]:
+    """Union of recent keyless readsb feed slices; refreshes ONE feed per cycle.
+
+    Round-robin + paced (adsb_feed_interval_s) so no single aggregator is
+    rate-limited. Returns the deduped union of every non-stale slice.
+    """
+    global _FEED_ROTATE_IDX, _READSB_NEXT_PULL
+    urls = _feed_urls()
+    if not urls:
+        return []
+    interval = get_settings().adsb_feed_interval_s
+    if time.monotonic() >= _READSB_NEXT_PULL:
+        async with _READSB_LOCK:
+            if time.monotonic() >= _READSB_NEXT_PULL:
+                idx = _FEED_ROTATE_IDX % len(urls)
+                url = urls[idx]
+                _FEED_ROTATE_IDX = idx + 1
+                ac = await _fetch_one_feed(get_client(), url)
+                if ac:
+                    _FEED_SLICES[url] = (time.monotonic(), ac)
+                # Pace off the NEXT pull regardless, so a failing feed doesn't
+                # hammer — it just gets retried after the interval in its turn.
+                _READSB_NEXT_PULL = time.monotonic() + interval
+
+    cutoff = time.monotonic() - max(_FEED_SLICE_MAX_AGE_S, 3 * interval)
+    merged: dict[str, dict[str, Any]] = {}
+    for url in list(_FEED_SLICES):
+        ts, ac = _FEED_SLICES[url]
+        if ts < cutoff or url not in urls:
+            _FEED_SLICES.pop(url, None)  # stale or de-configured feed
+            continue
+        for a in ac:
+            hexid = (a.get("hex") or "").lower()
+            if hexid and a.get("lat") is not None and a.get("lon") is not None:
+                merged[hexid] = a
+    return list(merged.values())
+
+
 def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]]) -> None:
     """Convert raw aggregator aircraft dicts → features and union into by_id,
     overwriting any existing entry for the same id (caller orders sources so the
@@ -790,6 +874,7 @@ async def _do_global_fanout() -> dict[str, Any]:
     by_id: dict[Any, dict[str, Any]] = {}
 
     osky_task = asyncio.ensure_future(_opensky_cached())
+    feeds_task = asyncio.ensure_future(_readsb_feeds())
     fh_task = asyncio.ensure_future(_firehose_throttled())
     grid_task = asyncio.ensure_future(_grid_fanout())
 
@@ -802,12 +887,20 @@ async def _do_global_fanout() -> dict[str, Any]:
             if fid is not None:
                 by_id[fid] = f
 
-    # 2. Opportunistic firehose (deploy hosts with a reachable global verb).
+    # 2. Keyless full-feed readsb instances (theairtraffic, hpradar, the user's
+    #    ultrafeeder) — full global aircraft.json at ~1s. Adds the aircraft
+    #    OpenSky's feeders miss (+~1.3k measured) and is fresher, so it merges
+    #    AFTER OpenSky.
+    feeds = await feeds_task
+    if feeds:
+        _merge_raw_into(by_id, feeds)
+
+    # 3. Opportunistic firehose (deploy hosts with a reachable global verb).
     firehose = await fh_task
     if firehose:
         _merge_raw_into(by_id, firehose)
 
-    # 3. Dense-region freshness overlay — wins conflicts (merged last). Bounded
+    # 4. Dense-region freshness overlay — wins conflicts (merged last). Bounded
     #    so a throttled grid can't hold the snapshot hostage; completed cells are
     #    cached for the next tick regardless.
     try:
@@ -889,6 +982,16 @@ async def _refresh_snapshot_forever() -> None:
                 if accept:
                     _LATEST_SNAPSHOT = fc
                     _LATEST_SNAPSHOT_AT = time.monotonic()
+            # Mirror accepted aircraft fixes into the history store for 3D
+            # replay. Outside the snapshot lock; ingest_aircraft only buffers
+            # in memory (rate-limited, no I/O) so it can't stall the tick.
+            if accept:
+                try:
+                    from app import history  # noqa: PLC0415
+
+                    history.ingest_aircraft(fc.get("features") or [])
+                except Exception:  # noqa: BLE001
+                    pass
         except Exception:
             # Never let the background loop die — a transient httpx /
             # cancellation / asyncio exception just rolls into the next tick.
@@ -897,10 +1000,60 @@ async def _refresh_snapshot_forever() -> None:
         await asyncio.sleep(max(0.0, _SNAPSHOT_TARGET_CYCLE_S - elapsed))
 
 
+def viewport_filter(
+    fc: dict[str, Any],
+    lamin: float | None,
+    lomin: float | None,
+    lamax: float | None,
+    lomax: float | None,
+    limit: int | None,
+) -> dict[str, Any]:
+    """Filter a Point FeatureCollection to a bbox + decimate to ``limit``.
+
+    Serves only the on-screen subset so the frontend never instantiates the
+    full ~12k/18k entity set (the per-poll upsert + re-cluster of that many
+    entities is the web UI's real bottleneck — render itself is cheap). When no
+    bbox/limit is given the input is returned unchanged. Tolerates the
+    antimeridian (lomin > lomax). Decimation is a uniform stride so the thinned
+    set stays spatially even rather than clipping a corner.
+    """
+    feats = fc.get("features") or []
+    if None not in (lamin, lomin, lamax, lomax):
+        wrap = lomin > lomax  # type: ignore[operator]
+        kept: list[dict[str, Any]] = []
+        for f in feats:
+            try:
+                coords = f["geometry"]["coordinates"]
+                lon, lat = float(coords[0]), float(coords[1])
+            except (KeyError, TypeError, ValueError, IndexError):
+                continue
+            if lat < lamin or lat > lamax:  # type: ignore[operator]
+                continue
+            in_lon = (lon >= lomin or lon <= lomax) if wrap else (lomin <= lon <= lomax)
+            if not in_lon:
+                continue
+            kept.append(f)
+        feats = kept
+    if limit and len(feats) > limit:
+        stride = len(feats) / limit
+        feats = [feats[int(i * stride)] for i in range(limit)]
+    return {"type": "FeatureCollection", "features": feats}
+
+
 @router.get("/api/adsb/global")
-async def adsb_global() -> dict[str, Any]:
-    """Return the latest complete aircraft snapshot. Near-instant — never
-    blocks on the fan-out, never returns a partial result.
+async def adsb_global(
+    lamin: float | None = Query(None, ge=-90, le=90),
+    lomin: float | None = Query(None, ge=-180, le=180),
+    lamax: float | None = Query(None, ge=-90, le=90),
+    lomax: float | None = Query(None, ge=-180, le=180),
+    limit: int | None = Query(None, ge=1, le=20000),
+) -> dict[str, Any]:
+    """Return the latest aircraft snapshot, optionally scoped to a viewport.
+
+    With ``lamin/lomin/lamax/lomax`` (+ optional ``limit``) the snapshot is
+    filtered to that bbox and decimated — the frontend sends its camera view so
+    only on-screen aircraft are instantiated. With no params the FULL snapshot
+    is returned (back-compat for the MCP/intel tools).
 
     First call kicks off the background refresher and does one synchronous
     bootstrap fetch so the response isn't empty. Subsequent calls return
@@ -924,10 +1077,11 @@ async def adsb_global() -> dict[str, Any]:
                 _SNAPSHOT_TASK = asyncio.create_task(_refresh_snapshot_forever())
                 _SNAPSHOT_STARTED = True
     async with _SNAPSHOT_LOCK:
+        snap = _LATEST_SNAPSHOT
+    if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
         # Shallow copy so the caller can't mutate the live snapshot dict.
-        # The features list itself is shared (immutable from the caller's
-        # POV — every refresh assigns a new FeatureCollection).
-        return dict(_LATEST_SNAPSHOT)
+        return dict(snap)
+    return viewport_filter(snap, lamin, lomin, lamax, lomax, limit)
 
 
 async def start_snapshot() -> None:

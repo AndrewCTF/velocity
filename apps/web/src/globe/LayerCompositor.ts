@@ -17,6 +17,35 @@ function aoiBboxQuery(): string | null {
   return `lamin=${s}&lomin=${w}&lamax=${n}&lomax=${e}`;
 }
 
+// Camera-viewport bbox provider for the high-volume layers (global ADS-B + AIS).
+// Returns a lamin/lomin/lamax/lomax + limit query so the backend serves ONLY
+// on-screen contacts — the per-poll upsert + re-cluster of the full ~30k entity
+// set is the web UI's real cost (the GPU render itself is ~8 ms). At near-global
+// zoom it drops the bbox and just caps + decimates, since everything is on
+// screen anyway.
+function viewportQuery(viewer: Cesium.Viewer, limit: number): () => string | null {
+  return () => {
+    const rect = viewer.camera.computeViewRectangle();
+    if (!rect) return `limit=${limit}`;
+    const s = Cesium.Math.toDegrees(rect.south);
+    const n = Cesium.Math.toDegrees(rect.north);
+    const w = Cesium.Math.toDegrees(rect.west);
+    const e = Cesium.Math.toDegrees(rect.east);
+    const widthDeg = ((e - w) % 360 + 360) % 360;
+    if (widthDeg > 170 || n - s > 140) return `limit=${limit}`; // ~world view → cap only
+    // Pad ~15% so contacts just outside the frame are loaded before they
+    // scroll in; clamp to the backend's accepted ranges.
+    const padLat = (n - s) * 0.15;
+    const padLon = widthDeg * 0.15;
+    const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+    const S = clamp(s - padLat, -90, 90).toFixed(3);
+    const N = clamp(n + padLat, -90, 90).toFixed(3);
+    const W = clamp(w - padLon, -180, 180).toFixed(3);
+    const E = clamp(e + padLon, -180, 180).toFixed(3);
+    return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
+  };
+}
+
 // Bridges LayerRegistry → Cesium. One adapter per enabled layer.
 export class LayerCompositor {
   private adapters = new Map<string, LayerAdapter>();
@@ -170,15 +199,28 @@ export class LayerCompositor {
       const style: StyleKind =
         d.id === 'env.jamming.nacp' ? 'jamming' : styleFromEmits(d.emits);
       const ttl = d.refresh.ttlSec ?? 30;
-      // Only the aviation routes accept bbox via lamin/lomin/lamax/lomax;
-      // gating by id keeps the descriptor agnostic.
-      const acceptsBbox = d.id === 'aviation.opensky.states';
+      // Bbox scoping (lamin/lomin/lamax/lomax). The two high-volume layers use a
+      // CAMERA-VIEWPORT query + cap so only on-screen contacts are instantiated
+      // (the fix for web-UI lag); OpenSky uses the AOI bbox; everything else is
+      // global. refreshOnMove re-polls the viewport layers on camera moveEnd.
+      let bboxQuery: (() => string | null) | undefined;
+      let refreshOnMove = false;
+      if (d.id === 'aviation.opensky.states') {
+        bboxQuery = aoiBboxQuery;
+      } else if (d.id === 'aviation.adsb.global') {
+        bboxQuery = viewportQuery(ctx.viewer, 5000);
+        refreshOnMove = true;
+      } else if (d.id === 'maritime.digitraffic') {
+        bboxQuery = viewportQuery(ctx.viewer, 6000);
+        refreshOnMove = true;
+      }
       const adapter = new PollGeoJsonAdapter({
         ctx,
         endpoint: d.endpoint,
         intervalSec: ttl,
         styleKind: style,
-        ...(acceptsBbox && { bboxQuery: aoiBboxQuery }),
+        ...(bboxQuery && { bboxQuery }),
+        ...(refreshOnMove && { refreshOnMove }),
       });
       // Cluster all high-volume feeds (aircraft + vessels) to prevent
       // over-crowding at world scale. Clustering is a per-layer policy

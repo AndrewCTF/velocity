@@ -196,6 +196,23 @@ export function GlobeCanvas({
     scene.fog.density = 0.0002;
     scene.globe.enableLighting = false;
     scene.globe.showGroundAtmosphere = true;
+
+    // Full-resolution close-up. requestRenderMode stays true (these only change
+    // how sharp a *requested* frame is, not how often we render):
+    //  - resolutionScale → native device pixels (capped at 2 so a 3x phone
+    //    doesn't quadruple the GPU load).
+    //  - lower globe maximumScreenSpaceError → finer terrain/imagery tiles when
+    //    the camera is close (2 is the default; ~1.4 ≈ "full res").
+    //  - minimumZoomDistance ~2 m so an analyst can drop right onto a contact
+    //    or a runway instead of stopping ~100 m up.
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2);
+    scene.globe.maximumScreenSpaceError = 1.4;
+    scene.globe.preloadSiblings = true;
+    scene.screenSpaceCameraController.minimumZoomDistance = 2.0;
+    // Keep the far plane huge so the whole disk still draws from orbit even
+    // with the tighter near zoom.
+    scene.screenSpaceCameraController.maximumZoomDistance = 60_000_000;
+
     // Strip the default credit logo so the dark chrome is clean.
     (viewer.cesiumWidget.creditContainer as HTMLElement).style.display = 'none';
 
