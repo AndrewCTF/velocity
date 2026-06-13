@@ -1213,8 +1213,8 @@ async def adsb_snapshot_age() -> dict[str, Any]:
 
     `age_s` is wall-clock-monotonic seconds since the last accepted snapshot;
     `features` is the current snapshot aircraft count. Used to verify the
-    background refresher is keeping the snapshot under the ≤2s end-to-end
-    freshness budget."""
+    background refresher is keeping the snapshot under the ≤10s end-to-end
+    freshness budget (5s target cycle, fan-out capped at 10s)."""
     async with _SNAPSHOT_LOCK:
         age = (
             time.monotonic() - _LATEST_SNAPSHOT_AT
