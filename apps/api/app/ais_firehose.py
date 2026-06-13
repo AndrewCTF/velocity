@@ -238,7 +238,15 @@ async def _run() -> None:
                         _stats["positions"] += 1
                         await ais_routes._broadcast(frame)
             finally:
+                # Close + drain the socket before reconnecting so the FD is
+                # released promptly. wait_closed() can itself raise on an
+                # already-broken peer — that's exactly when we're here, so
+                # swallow it rather than masking the real error.
                 writer.close()
+                try:
+                    await writer.wait_closed()
+                except Exception:  # noqa: BLE001
+                    pass
         except asyncio.CancelledError:
             _stats["connected"] = False
             raise
