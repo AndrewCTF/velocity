@@ -175,3 +175,48 @@ export function cachedIcon(key: string, factory: () => string): string {
   }
   return v;
 }
+
+// Every (key → factory) the style layer can ask for, enumerated so we can
+// build + GPU-decode them ONCE up front instead of lazily on the first heavy
+// render frame (13k+ entities). Keep in sync with styles.ts cachedIcon keys.
+const PREWARM: Array<[string, () => string]> = [
+  ['aircraft:#ef4444', () => icons.aircraft('#ef4444')], // emergency (tinted airliner)
+  ['aircraft:#f59e0b', () => icons.aircraft('#f59e0b')], // military
+  ['aircraft:#facc15', () => icons.aircraft('#facc15')], // airliner
+  ['heli:#c084fc', () => icons.helicopter('#c084fc')],
+  ['glider:#93c5fd', () => icons.glider('#93c5fd')],
+  ['private:#2dd4bf', () => icons.privateAircraft('#2dd4bf')],
+  ['vessel:cargo:#14b8a6', () => icons.cargoShip('#14b8a6')],
+  ['vessel:tanker:#d97706', () => icons.tanker('#d97706')],
+  ['vessel:fishing:#5eead4', () => icons.fishing('#5eead4')],
+  ['vessel:passenger:#38bdf8', () => icons.vessel('#38bdf8')],
+  ['vessel:vessel-mil:#f59e0b', () => icons.vessel('#f59e0b')],
+  ['vessel:sailing:#a5f3fc', () => icons.pleasureCraft('#a5f3fc')],
+  ['vessel:pleasure:#4ade80', () => icons.pleasureCraft('#4ade80')],
+  ['vessel:tug:#c084fc', () => icons.vessel('#c084fc')],
+  ['vessel:sar:#ef4444', () => icons.vessel('#ef4444')],
+  ['vessel:generic:#34d399', () => icons.vessel('#34d399')],
+  ['vessel:dark:#ef4444', () => icons.darkVessel('#ef4444')],
+];
+
+let _prewarmed = false;
+
+// Build every known icon data URI into the cache AND kick off the browser's
+// async image decode for each, so by the time the first poll's billboards
+// reference them the textures are already decoded — no per-icon decode stall
+// interleaved with the first render frame. Idempotent. Safe to call before
+// the Cesium viewer is interactive. No-op outside the browser (SSR/tests).
+export function prewarmIcons(): void {
+  if (_prewarmed) return;
+  _prewarmed = true;
+  for (const [key, factory] of PREWARM) {
+    const uri = cachedIcon(key, factory);
+    if (typeof Image !== 'undefined') {
+      const img = new Image();
+      img.src = uri;
+      // decode() warms the GPU/image cache off the critical path; ignore
+      // rejection (e.g. detached document) — it's a best-effort warmup.
+      void img.decode?.().catch(() => {});
+    }
+  }
+}
