@@ -57,6 +57,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from app import ais_firehose  # noqa: PLC0415
 
         ais_firehose.start()
+        # Extra keyless regional AIS (Norway Kystdatahuset + Finland Digitraffic
+        # MQTT) — densify Northern-Europe vessels without any key.
+        from app import ais_keyless  # noqa: PLC0415
+
+        ais_keyless.start()
         # Position history store for 3D replay/scrub.
         from app import history  # noqa: PLC0415
 
@@ -81,11 +86,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if background:
             from app import (
                 ais_firehose,  # noqa: PLC0415
+                ais_keyless,  # noqa: PLC0415
                 history,  # noqa: PLC0415
             )
             from app.routes import news as news_routes  # noqa: PLC0415
 
             await ais_firehose.stop()
+            await ais_keyless.stop()
             await history.stop()
             await news_routes.stop_refresher()
 

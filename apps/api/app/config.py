@@ -109,6 +109,11 @@ class Settings(BaseSettings):
     ais_firehose_enabled: bool = True
     ais_firehose_host: str = "153.44.253.27"
     ais_firehose_port: int = 5631
+    # Extra keyless regional AIS: Norway Kystdatahuset (REST GeoJSON poll) and
+    # Finland Digitraffic (live MQTT-over-WSS). Both feed the same /ws/ais layer.
+    ais_kystdatahuset_enabled: bool = True
+    ais_kystdatahuset_interval_s: float = 60.0
+    ais_digitraffic_mqtt_enabled: bool = True
 
     # ── Historical playback ──
     # Position history store for 3D replay/scrub. SQLite by default; safe to

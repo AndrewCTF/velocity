@@ -75,6 +75,105 @@ def _remember_name(mmsi: int, name: str | None) -> None:
     _name_by_mmsi[mmsi] = name
 
 
+async def publish_vessel(
+    mmsi: Any,
+    lat: Any,
+    lon: Any,
+    *,
+    sog: float | None = None,
+    cog: float | None = None,
+    heading: float | None = None,
+    name: str | None = None,
+    ship_type: Any = None,
+    source: str = "",
+) -> bool:
+    """Normalize one vessel fix → store + history + browser broadcast.
+
+    Shared by every keyless AIS source (Kystverket NMEA, Kystdatahuset REST,
+    Digitraffic MQTT) so they all feed the same /ws/ais layer, observation
+    store, and the cross-source name/ship-type caches keyed by MMSI. Returns
+    True when a frame was broadcast.
+    """
+    try:
+        mmsi = int(mmsi)
+    except (TypeError, ValueError):
+        return False
+    try:
+        latf, lonf = float(lat), float(lon)
+    except (TypeError, ValueError):
+        return False
+    if not (-90.0 <= latf <= 90.0) or not (-180.0 <= lonf <= 180.0):
+        return False
+
+    if name:
+        _remember_name(mmsi, name if isinstance(name, str) else str(name))
+    if ship_type is not None:
+        try:
+            ais_routes._remember_ship_type(mmsi, int(ship_type))
+        except (TypeError, ValueError):
+            pass
+
+    # Clean AIS "not available" sentinels.
+    if isinstance(sog, (int, float)) and sog >= _SOG_NA:
+        sog = None
+    if isinstance(cog, (int, float)) and cog >= _COG_NA:
+        cog = None
+    if heading == _HEADING_NA:
+        heading = None
+
+    name_out = _name_by_mmsi.get(mmsi)
+    ship_type_out = ais_routes._ship_type_by_mmsi.get(mmsi)
+    out: dict[str, Any] = {
+        "kind": "vessel",
+        "id": f"vessel:{mmsi}",
+        "mmsi": mmsi,
+        "name": name_out,
+        "lat": latf,
+        "lon": lonf,
+        "msgType": None,
+        "t": None,
+        "shipType": ship_type_out,
+        "sog": sog,
+        "cog": cog,
+        "heading": heading,
+        "source": source,
+    }
+    try:
+        store.add(
+            Observation(
+                id=f"vessel:{mmsi}",
+                source=source or "ais",
+                t=time.time(),
+                lon=lonf,
+                lat=latf,
+                emits_kind="vessel",
+                attrs={
+                    "mmsi": mmsi,
+                    "name": name_out,
+                    "sog": sog,
+                    "cog": cog,
+                    "heading": heading,
+                    "shipType": ship_type_out,
+                },
+            )
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from app import history  # noqa: PLC0415
+
+        history.ingest_vessels(
+            [{"id": f"vessel:{mmsi}", "lon": lonf, "lat": latf, "cog": cog, "name": name_out}]
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        await ais_routes._broadcast(json.dumps(out, separators=(",", ":")))
+    except Exception:  # noqa: BLE001
+        return False
+    return True
+
+
 def _strip_tag(line: str) -> str:
     r"""Strip a leading NMEA TAG block (``\s:…,c:…*hh\``) before the ``!`` sentence."""
     if line.startswith("\\"):
