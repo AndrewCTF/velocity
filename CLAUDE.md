@@ -46,8 +46,10 @@ not regress any of them. If unsure, leave the relevant code path alone.
 
 ### Refresh cadence
 
-- ADS-B global: 1 s frontend poll (`registry/defaults.ts` `ttlSec: 1`), backend
-  sticky snapshot on a 1 s target cycle. Do not raise the poll above 10 s.
+- ADS-B global: 5 s frontend poll (`registry/defaults.ts` `ttlSec: 5`), backend
+  sticky snapshot on a 5 s target cycle (`_SNAPSHOT_TARGET_CYCLE_S`), and each
+  fan-out is wall-clock-capped at 10 s (`_FANOUT_BUDGET_S`). Do not raise the
+  poll above 10 s.
 - AIS Digitraffic: 30 s. AISStream WS: live push.
 
 ### Aircraft count + sources (operator-visible)
@@ -58,9 +60,10 @@ not regress any of them. If unsure, leave the relevant code path alone.
 - The feed is a UNION of tiers, deduped by `aircraft:<icao24>`
   (`apps/api/app/routes/adsb.py:_do_global_fanout`), freshest wins:
   1. **OpenSky `/states/all`** — the ~13 k breadth source. Works keyless
-     (anonymous IP budget); falls back from authed→anonymous on 429. Throttled
-     to one pull / 15 s and cached + served between pulls, so the count holds
-     even after the daily credit budget is spent.
+     (anonymous IP budget); falls back from authed→anonymous on 429. Pulled
+     once on boot, then once per UTC day at 00:00 UTC when the credit budget
+     resets (`_opensky_cached` / `_utc_day`), and cached + served between pulls,
+     so the count holds all day on ~4 credits.
   2. **airplanes.live `/v2/point` grid** (`_GLOBAL_GRID`, 130+ cells) —
      dense-region freshness overlay, time-boxed (8 s) so a throttled grid can
      never stall the snapshot. Densify the grid only — never thin out.

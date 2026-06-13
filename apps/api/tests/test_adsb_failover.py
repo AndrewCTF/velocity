@@ -54,6 +54,7 @@ def test_fanout_unions_opensky_firehose_and_grid(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(adsb, "_firehose_throttled", no_firehose)
     monkeypatch.setattr(adsb, "_readsb_feeds", no_feeds)
     monkeypatch.setattr(adsb, "_grid_fanout", fake_grid)
+    monkeypatch.setattr(adsb, "_GRID_NEXT_TRY", 0.0)  # don't let a prior test's dead-skip win
     out = asyncio.run(adsb._do_global_fanout())
     ids = {f["id"] for f in out["features"]}
     assert ids == {"aircraft:abc123", "aircraft:def456"}  # breadth ∪ grid
@@ -90,6 +91,7 @@ def test_grid_overlay_wins_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(adsb, "_firehose_throttled", no_firehose)
     monkeypatch.setattr(adsb, "_readsb_feeds", no_feeds)
     monkeypatch.setattr(adsb, "_grid_fanout", fake_grid)
+    monkeypatch.setattr(adsb, "_GRID_NEXT_TRY", 0.0)  # don't let a prior test's dead-skip win
     out = asyncio.run(adsb._do_global_fanout())
     feats = out["features"]
     assert len(feats) == 1

@@ -16,10 +16,9 @@ from app.routes import adsb
 @pytest.fixture(autouse=True)
 def _reset_feed_state(monkeypatch: pytest.MonkeyPatch) -> None:
     adsb._FEED_SLICES.clear()
-    adsb._FEED_ROTATE_IDX = 0
-    adsb._READSB_NEXT_PULL = 0.0
+    adsb._FEED_NEXT_PULL.clear()
     monkeypatch.setenv("ADSB_FEED_URLS", "https://feed-a/aircraft.json,https://feed-b/aircraft.json")
-    monkeypatch.setenv("ADSB_FEED_INTERVAL_S", "0")  # pull every call so rotation is observable
+    monkeypatch.setenv("ADSB_FEED_INTERVAL_S", "0")  # every mirror is due every call
     from app.config import get_settings
 
     get_settings.cache_clear()
@@ -35,7 +34,7 @@ def _stub_feeds(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, list[dict]])
 
 
 @pytest.mark.asyncio
-async def test_round_robin_one_feed_per_cycle(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_pulls_all_due_feeds_concurrently(monkeypatch: pytest.MonkeyPatch) -> None:
     _stub_feeds(
         monkeypatch,
         {
@@ -43,12 +42,10 @@ async def test_round_robin_one_feed_per_cycle(monkeypatch: pytest.MonkeyPatch) -
             "https://feed-b/aircraft.json": [{"hex": "b1", "lat": 2, "lon": 2}],
         },
     )
-    u1 = await adsb._readsb_feeds()
-    assert len(adsb._FEED_SLICES) == 1  # only ONE feed pulled this cycle
-    assert {a["hex"] for a in u1} == {"a1"}
-    u2 = await adsb._readsb_feeds()
-    assert len(adsb._FEED_SLICES) == 2  # rotated to the second feed
-    assert {a["hex"] for a in u2} == {"a1", "b1"}  # union of both slices
+    # interval 0 → both mirrors are due → both pulled in one cycle (fresh).
+    u = await adsb._readsb_feeds()
+    assert len(adsb._FEED_SLICES) == 2
+    assert {a["hex"] for a in u} == {"a1", "b1"}
 
 
 @pytest.mark.asyncio
@@ -84,9 +81,9 @@ async def test_stale_slice_evicted(monkeypatch: pytest.MonkeyPatch) -> None:
     url = "https://feed-a/aircraft.json"
     _, ac = adsb._FEED_SLICES[url]
     adsb._FEED_SLICES[url] = (time.monotonic() - 10_000.0, ac)
-    # Stop further pulls so we observe eviction, not a fresh re-pull.
+    # Re-pull returns nothing (feed went dark) so the stale slice isn't
+    # refreshed and gets evicted past the age window.
     monkeypatch.setattr(adsb, "_fetch_one_feed", _noop)
-    adsb._READSB_NEXT_PULL = time.monotonic() + 9999
     u = await adsb._readsb_feeds()
     assert u == []
     assert url not in adsb._FEED_SLICES

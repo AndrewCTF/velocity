@@ -38,3 +38,33 @@ export function flyToGlobal(viewer: Cesium.Viewer, durationSec = 1.0): void {
     orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
   });
 }
+
+// Find an entity by id across all data sources + the root collection.
+function findEntity(viewer: Cesium.Viewer, entityId: string): Cesium.Entity | null {
+  for (let i = 0; i < viewer.dataSources.length; i++) {
+    const e = viewer.dataSources.get(i).entities.getById(entityId);
+    if (e) return e;
+  }
+  return viewer.entities.getById(entityId) ?? null;
+}
+
+// CONTINUOUS follow — the camera stays centred on the entity as its position
+// updates (FR24 "follow this flight"). Cesium's trackedEntity reads the
+// entity's SampledPositionProperty every frame, so the camera flies WITH the
+// aircraft instead of a one-shot slew that stops the moment it lands. Returns
+// false when the entity isn't on the globe (e.g. it left the viewport).
+export function followEntity(viewer: Cesium.Viewer, entityId: string): boolean {
+  const e = findEntity(viewer, entityId);
+  if (!e) return false;
+  viewer.trackedEntity = e;
+  return true;
+}
+
+export function stopFollow(viewer: Cesium.Viewer): void {
+  viewer.trackedEntity = undefined;
+}
+
+export function isFollowing(viewer: Cesium.Viewer, entityId: string | null): boolean {
+  const t = viewer.trackedEntity;
+  return !!t && !!entityId && t.id === entityId;
+}

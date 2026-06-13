@@ -3,7 +3,7 @@ import * as Cesium from 'cesium';
 import { useSelection, useAlerts } from '../state/stores.js';
 import { tracks } from '../intel/tracks.js';
 import { fetchEnrichment, type Enrichment } from '../transport/entity.js';
-import { flyToPosition } from '../globe/camera.js';
+import { flyToPosition, followEntity, stopFollow } from '../globe/camera.js';
 import { Sparkline } from './Sparkline.js';
 import { CameraCard } from './CameraCard.js';
 import type { Alert } from '@osint/shared';
@@ -82,6 +82,16 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
     return () => aborter.abort();
   }, [id, callsignHint]);
 
+  // Continuous-follow toggle. Reset when the selection changes; stop following
+  // on unmount so the camera doesn't stay locked to a stale entity.
+  const [following, setFollowing] = useState(false);
+  useEffect(() => {
+    setFollowing(false);
+    return () => {
+      if (viewer) stopFollow(viewer);
+    };
+  }, [id, viewer]);
+
   if (!id) {
     return (
       <div className="p-4">
@@ -105,6 +115,24 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
             className="mono text-[10px] px-2 py-1 border border-line rounded-sm hover:border-accent-line text-txt-1"
           >
             slew to
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (following) {
+                stopFollow(viewer);
+                setFollowing(false);
+              } else {
+                setFollowing(followEntity(viewer, id));
+              }
+            }}
+            className={`mono text-[10px] px-2 py-1 border rounded-sm ${
+              following
+                ? 'border-accent-line text-accent'
+                : 'border-line hover:border-accent-line text-txt-1'
+            }`}
+          >
+            {following ? '◼ following' : '▶ follow'}
           </button>
           <button
             type="button"

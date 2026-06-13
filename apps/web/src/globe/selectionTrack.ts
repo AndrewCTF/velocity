@@ -32,25 +32,26 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
   let outlineEntity: Cesium.Entity | null = null;
   let glowEntity: Cesium.Entity | null = null;
   let seedEntity: Cesium.Entity | null = null;
-  let lastLen = 0;
 
-  // Build positions. Returns the positions array and a clamp hint:
-  // - if every alt is 0 (vessel feed) → clamp to ground so the line hugs
-  //   the curving sea surface
-  // - if any alt > 100 m (aircraft) → do not clamp so the line floats at altitude
-  // Returns positions for ALL fixes (including the singleton case) — the
-  // caller decides whether to draw a polyline (≥2) or a seed circle (1).
-  const buildPositions = (id: string): { positions: Cesium.Cartesian3[]; clamp: boolean } => {
+  // STABLE positions array. The polylines read it via a CallbackProperty, so we
+  // mutate it IN PLACE every fix and never reassign the polyline.positions
+  // property — replacing the property with a fresh ConstantProperty each update
+  // (the old behaviour) made Cesium destroy + rebuild the polyline primitive,
+  // which is exactly the "trail flashes on every new position" the operator saw.
+  const livePositions: Cesium.Cartesian3[] = [];
+  let liveClamp = false; // set once when the polyline is created (homogeneous track)
+
+  // Refill livePositions in place from the ring buffer; returns the point count.
+  const rebuild = (id: string): number => {
     const pts = tracks.get(id);
-    if (pts.length === 0) return { positions: [], clamp: false };
+    livePositions.length = 0;
     let anyAircraftAlt = false;
-    const out = new Array<Cesium.Cartesian3>(pts.length);
-    for (let i = 0; i < pts.length; i++) {
-      const p = pts[i] as TrackPoint;
+    for (const p of pts as TrackPoint[]) {
       if (p.alt > 100) anyAircraftAlt = true;
-      out[i] = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt);
+      livePositions.push(Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt));
     }
-    return { positions: out, clamp: !anyAircraftAlt };
+    if (pts.length > 0) liveClamp = !anyAircraftAlt;
+    return pts.length;
   };
 
   const removeSeed = () => {
@@ -69,7 +70,6 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
       ds.entities.remove(glowEntity);
       glowEntity = null;
     }
-    lastLen = 0;
   };
 
   const renderTrack = (id: string | null) => {
@@ -79,99 +79,94 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
       viewer.scene.requestRender();
       return;
     }
-    const { positions, clamp } = buildPositions(id);
-    if (positions.length === 0) {
-      // Nothing yet — entity hasn't reported a single fix to the ring buffer.
-      // Could happen if the user clicks something the moment it appears.
+    const n = rebuild(id);
+    if (n === 0) {
       removePolylines();
       removeSeed();
       return;
     }
-    if (positions.length === 1) {
-      // Single-point placeholder: a small magenta circle at the only known
-      // fix. Replaced by the polyline as soon as a 2nd fix lands. Gives the
-      // user immediate visual feedback that the selection is being tracked.
+    if (n === 1) {
+      // Single-point placeholder until a 2nd fix lands. Mutate the seed in
+      // place too (ConstantPositionProperty on a point primitive is cheap and
+      // doesn't rebuild a line).
       removePolylines();
-      const onlyPos = positions[0]!;
+      const onlyPos = livePositions[0]!;
       if (!seedEntity) {
         seedEntity = ds.entities.add({
           id: '__selectionTrack__seed',
-          position: onlyPos,
+          position: new Cesium.ConstantPositionProperty(onlyPos),
           point: {
             color: ACCENT,
             pixelSize: 12,
             outlineColor: OUTLINE,
             outlineWidth: 2,
-            heightReference: clamp ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
+            heightReference: liveClamp
+              ? Cesium.HeightReference.CLAMP_TO_GROUND
+              : Cesium.HeightReference.NONE,
             distanceDisplayCondition: SHOW_RANGE,
           },
         });
       } else {
-        seedEntity.position = new Cesium.ConstantPositionProperty(onlyPos);
+        (seedEntity.position as Cesium.ConstantPositionProperty).setValue(onlyPos);
       }
-      lastLen = 1;
       viewer.scene.requestRender();
       return;
     }
-    // ≥2 points — draw the trail polyline and drop any seed circle.
+    // ≥2 points. Create the polylines ONCE (CallbackProperty reads the live
+    // array every frame); on later fixes we only requestRender — the array was
+    // already mutated by rebuild() above, so no property is reassigned and the
+    // primitive is updated, not recreated. No flash.
     removeSeed();
     if (!outlineEntity) {
-      // Dark, slightly wider polyline UNDER the glow line, so the magenta
-      // trail stays readable against bright basemap pixels (clouds, daylight).
       outlineEntity = ds.entities.add({
         id: '__selectionTrack__outline',
         polyline: {
-          positions: new Cesium.CallbackProperty(() => positions, false),
+          positions: new Cesium.CallbackProperty(() => livePositions, false),
           width: 6,
           material: new Cesium.ColorMaterialProperty(OUTLINE),
-          clampToGround: clamp,
+          clampToGround: liveClamp,
           arcType: Cesium.ArcType.GEODESIC,
           distanceDisplayCondition: SHOW_RANGE,
         },
       });
-    } else if (outlineEntity.polyline) {
-      outlineEntity.polyline.positions = new Cesium.ConstantProperty(positions);
-      outlineEntity.polyline.clampToGround = new Cesium.ConstantProperty(clamp);
     }
     if (!glowEntity) {
       glowEntity = ds.entities.add({
         id: '__selectionTrack__',
         polyline: {
-          positions: new Cesium.CallbackProperty(() => positions, false),
+          positions: new Cesium.CallbackProperty(() => livePositions, false),
           width: 4,
           material: new Cesium.PolylineGlowMaterialProperty({
             color: ACCENT,
             glowPower: 0.25,
             taperPower: 1.0,
           }),
-          clampToGround: clamp,
+          clampToGround: liveClamp,
           arcType: Cesium.ArcType.GEODESIC,
           distanceDisplayCondition: SHOW_RANGE,
         },
       });
-    } else if (glowEntity.polyline) {
-      glowEntity.polyline.positions = new Cesium.ConstantProperty(positions);
-      glowEntity.polyline.clampToGround = new Cesium.ConstantProperty(clamp);
     }
-    lastLen = positions.length;
     viewer.scene.requestRender();
   };
 
-  // Initial sync + selection subscription.
+  // Initial sync + selection subscription. On a NEW selection, drop the old
+  // primitives so the fresh track doesn't inherit the previous flight's clamp.
   const onSelect = (id: string | null) => {
     if (id === currentId) return;
     currentId = id;
-    lastLen = 0;
+    removePolylines();
+    removeSeed();
     renderTrack(id);
   };
   onSelect(useSelection.getState().selectedEntityId);
   const unsub = useSelection.subscribe((s) => onSelect(s.selectedEntityId));
 
-  // 4 Hz re-poll so the polyline appears as soon as a 2nd fix lands.
+  // 4 Hz re-render so the trail follows the live fixes (and keeps following
+  // even once the ring buffer is full at MAX_POINTS — length stops growing but
+  // the contents still shift, so a length check alone would freeze the trail).
   const timer = window.setInterval(() => {
-    if (!currentId) return;
-    const len = tracks.get(currentId).length;
-    if (len !== lastLen) renderTrack(currentId);
+    if (currentId) renderTrack(currentId);
   }, REFRESH_MS);
 
   return () => {

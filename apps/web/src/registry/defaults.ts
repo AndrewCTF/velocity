@@ -96,10 +96,10 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     kind: 'geojson',
     auth: 'none',
     endpoint: '/api/adsb/global',
-    // 1s pull: the backend sticky snapshot refreshes on a 1s target cycle,
+    // 5s pull: the backend sticky snapshot refreshes on a 5s target cycle,
     // and the hot route returns it in microseconds (no fan-out per request).
-    // Frontend 1s poll + ≤1s old snapshot = ≤2s end-to-end refresh.
-    refresh: { mode: 'pull', ttlSec: 1 },
+    // Frontend 5s poll + ≤5s old snapshot = ≤10s end-to-end refresh.
+    refresh: { mode: 'pull', ttlSec: 5 },
     time: { temporal: true },
     crs: 'EPSG:4326',
     license: 'ADSB.lol / airplanes.live (NC)',
