@@ -21,3 +21,10 @@ coverage/
 **/data/history.db
 **/data/history.db-*
 .playwright-mcp/
+# Dev screenshots / scratch images at the repo root — keep the tree tidy.
+# (Real product art lives in code as SVG, or under docs/ if ever needed.)
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
