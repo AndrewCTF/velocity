@@ -47,8 +47,12 @@ def test_fanout_unions_opensky_firehose_and_grid(monkeypatch: pytest.MonkeyPatch
         # raw aggregator dict for a DIFFERENT aircraft — proves the union.
         return [{"hex": "def456", "lat": 3.0, "lon": 4.0, "alt_baro": 5000}]
 
+    async def no_feeds() -> list[dict]:
+        return []
+
     monkeypatch.setattr(adsb, "_opensky_cached", fake_opensky)
     monkeypatch.setattr(adsb, "_firehose_throttled", no_firehose)
+    monkeypatch.setattr(adsb, "_readsb_feeds", no_feeds)
     monkeypatch.setattr(adsb, "_grid_fanout", fake_grid)
     out = asyncio.run(adsb._do_global_fanout())
     ids = {f["id"] for f in out["features"]}
@@ -79,8 +83,12 @@ def test_grid_overlay_wins_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_grid() -> list[dict]:
         return [{"hex": "abc123", "lat": 9.0, "lon": 9.0, "alt_baro": 7000}]
 
+    async def no_feeds() -> list[dict]:
+        return []
+
     monkeypatch.setattr(adsb, "_opensky_cached", fake_opensky)
     monkeypatch.setattr(adsb, "_firehose_throttled", no_firehose)
+    monkeypatch.setattr(adsb, "_readsb_feeds", no_feeds)
     monkeypatch.setattr(adsb, "_grid_fanout", fake_grid)
     out = asyncio.run(adsb._do_global_fanout())
     feats = out["features"]

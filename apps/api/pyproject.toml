@@ -20,6 +20,8 @@ dependencies = [
   "numpy>=1.26",
   "pyyaml>=6.0",
   "mcp>=1.2.0",
+  "pyais>=2.6.0",
+  "feedparser>=6.0.11",
 ]
 
 [project.scripts]
