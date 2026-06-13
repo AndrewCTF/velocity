@@ -61,7 +61,14 @@ class Settings(BaseSettings):
         "https://skylink.hpradar.com/data/aircraft.json,"
         "https://api.adsb.lol/v2/point/0/0/20000"  # ADSBx-v2 'ac' key, ~12.5k global
     )
-    adsb_feed_interval_s: float = 30.0  # rotate one feed per this interval (30 s–1 m)
+    # Per-feed poll cadence. Full readsb aircraft.json MIRRORS are CDN-ish files
+    # refreshed ~1 s (tar1090 itself polls them ~1 s), so polling each every
+    # adsb_feed_interval_s is gentle AND keeps positions fresh — stale fixes are
+    # what make tracked aircraft jump. Rate-limit-sensitive /v2 APIs (adsb.lol)
+    # use the slow interval; a localhost sidecar uses the fast one.
+    adsb_feed_interval_s: float = 5.0  # full aircraft.json mirrors
+    adsb_feed_slow_interval_s: float = 20.0  # /v2 + /re-api APIs (rate-limited)
+    adsb_feed_fast_interval_s: float = 2.0  # localhost sidecar (no limit)
 
     # ── infra ──
     database_url: str = "postgresql+asyncpg://osint:osint@localhost:5432/osint"

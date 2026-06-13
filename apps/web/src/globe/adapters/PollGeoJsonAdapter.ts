@@ -58,6 +58,18 @@ function deadReckon(
   return [Cesium.Math.toDegrees(lon2), Cesium.Math.toDegrees(lat2)];
 }
 
+// Initial great-circle bearing (deg, 0=N) from point 1 to point 2. Used as a
+// heading fallback so an icon whose feed omits track/cog still points the way
+// it's actually moving instead of freezing pointing north.
+function bearingDeg(lon1: number, lat1: number, lon2: number, lat2: number): number {
+  const phi1 = Cesium.Math.toRadians(lat1);
+  const phi2 = Cesium.Math.toRadians(lat2);
+  const dLambda = Cesium.Math.toRadians(lon2 - lon1);
+  const y = Math.sin(dLambda) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+  return (Cesium.Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+}
+
 // Read a Cesium property's *current* value. Works for ConstantProperty,
 // CallbackProperty, etc. Returns undefined if the property is unset.
 function currentValue<T>(prop: Cesium.Property | undefined): T | undefined {
@@ -176,6 +188,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // the tweener keeps flying the dead-reckoned segment instead of getting
   // a duplicate sample stamped at receipt time.
   private lastFixEpoch = new Map<string, number>();
+  // entityId → last [lon, lat], so we can derive a heading from movement when
+  // the feed doesn't carry track/cog (otherwise the icon points north).
+  private lastPos = new Map<string, [number, number]>();
 
   constructor(private readonly props: Props) {
     this.ds = new Cesium.CustomDataSource(props.ctx.descriptor.id);
@@ -234,6 +249,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     }
     this.ownedIcao.clear();
     this.lastFixEpoch.clear();
+    this.lastPos.clear();
     try {
       this.props.ctx.viewer.dataSources.remove(this.ds, true);
     } catch {
@@ -376,6 +392,23 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       }
 
       nextIds.add(id);
+
+      // Heading fallback: when the feed omits track/cog, derive it from the
+      // direction of actual movement (bearing from the previous fix) and write
+      // it back into props so BOTH the icon rotation (aircraftStyle/vesselStyle)
+      // and the dead-reckoning vector use it. Without this a vectorless contact
+      // froze pointing north.
+      if (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') {
+        const hdgKey = this.props.styleKind === 'aircraft' ? 'track_deg' : 'cog';
+        const prev = this.lastPos.get(id);
+        if (typeof props[hdgKey] !== 'number' && prev) {
+          const [plon, plat] = prev;
+          if (Math.abs(plon - lon) > 1e-6 || Math.abs(plat - lat) > 1e-6) {
+            props[hdgKey] = bearingDeg(plon, plat, lon, lat);
+          }
+        }
+        this.lastPos.set(id, [lon, lat]);
+      }
 
       // Feed track ring for the entity-panel sparkline
       if (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') {
@@ -520,6 +553,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       if (!nextIds.has(oldId)) {
         entities.removeById(oldId);
         this.lastFixEpoch.delete(oldId);
+        this.lastPos.delete(oldId);
         const icao = this.ownedIcao.get(oldId);
         if (icao) {
           aircraftDedup.release(icao, layerIdForPrune);
