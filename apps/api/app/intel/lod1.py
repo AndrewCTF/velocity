@@ -18,8 +18,13 @@ from app.imagery import cdse
 from app.intel import sar_damage
 
 DEFAULT_H = 18.0
-MAXB = 6000
-_OVERPASS = "https://overpass-api.de/api/interpreter"
+MAXB = 9000
+# Public Overpass mirrors, tried in order — the primary 429s under load.
+_OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+]
 
 # Largest freeform bbox span (degrees) we'll extrude on demand. A whole-city
 # Overpass `way["building"]` query past this melts Overpass and floods the
@@ -28,24 +33,56 @@ _OVERPASS = "https://overpass-api.de/api/interpreter"
 # scale this 3D view is meant for.
 MAX_BBOX_SPAN = 0.09
 
-# aoi -> (bbox lon0,lat0,lon1,lat1, sar_pre, sar_post). Reuses sar_damage AOIs.
+# aoi -> (sar_pre, sar_post). Reuses sar_damage.AOIS for the bbox. Each date
+# pair brackets the documented conflict window for that city; detect_damage
+# pulls the ~12-day Sentinel-1 mosaic nearest each date.
 DAMAGE_DATES = {
+    # Lebanon — Israel–Hezbollah escalation, Sep–Nov 2024.
     "beirut-dahieh": ("2024-08-20", "2024-11-25"),
+    "south-lebanon": ("2024-08-20", "2024-11-25"),
+    # Gaza — post 7 Oct 2023.
     "gaza-city": ("2023-09-20", "2024-08-01"),
+    "khan-younis": ("2023-10-01", "2024-04-15"),
+    "rafah": ("2024-02-01", "2024-08-01"),
+    # Ukraine.
+    "mariupol": ("2022-02-15", "2022-05-25"),
+    "bakhmut": ("2022-08-01", "2023-05-25"),
 }
 
 _cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _TTL = 12 * 3600.0
 
 
+def _overpass_query(q: str) -> dict[str, Any]:
+    """POST an Overpass QL query, retrying across public mirrors.
+
+    The main instance returns HTTP 429 under load (and times out), which used to
+    propagate as a 500 and break the whole war-damage layer. Walk the mirror
+    list with a short backoff so a single throttled endpoint doesn't sink the
+    request; raise only if EVERY mirror fails.
+    """
+    import json
+    import time as _time
+
+    data = urllib.parse.urlencode({"data": q}).encode()
+    last_err: Exception | None = None
+    for i, endpoint in enumerate(_OVERPASS_ENDPOINTS):
+        req = urllib.request.Request(
+            endpoint, data=data, headers={"User-Agent": "osint-research/1.0"}
+        )
+        try:
+            return json.loads(urllib.request.urlopen(req, timeout=180).read())
+        except Exception as e:  # 429, timeout, transient DNS — try the next mirror
+            last_err = e
+            if i < len(_OVERPASS_ENDPOINTS) - 1:
+                _time.sleep(1.5)
+    raise RuntimeError(f"all Overpass mirrors failed: {last_err}")
+
+
 def _fetch_footprints(bbox: tuple[float, float, float, float]) -> list[dict[str, Any]]:
     lon0, lat0, lon1, lat1 = bbox
     q = f'[out:json][timeout:120];(way["building"]({lat0},{lon0},{lat1},{lon1}););out geom;'
-    data = urllib.parse.urlencode({"data": q}).encode()
-    req = urllib.request.Request(_OVERPASS, data=data, headers={"User-Agent": "osint-research/1.0"})
-    import json
-
-    d = json.loads(urllib.request.urlopen(req, timeout=150).read())
+    d = _overpass_query(q)
     out = []
     for e in d.get("elements", []):
         g = e.get("geometry")

@@ -24,15 +24,18 @@ import numpy as np
 
 from app.imagery import cdse
 
-# Conflict AOIs (lon0, lat0, lon1, lat1).
+# Conflict AOIs (lon0, lat0, lon1, lat1). Spans widened (~2-3x) to cover the
+# whole damaged urban area rather than a single district — the SAR raster is a
+# fixed 1024x768 grid, so a bigger bbox just trades resolution for coverage.
 AOIS: dict[str, tuple[float, float, float, float]] = {
-    "gaza-city": (34.42, 31.49, 34.53, 31.56),
-    "khan-younis": (34.27, 31.32, 34.37, 31.39),
-    "mariupol": (37.50, 47.07, 37.62, 47.14),
-    "bakhmut": (37.97, 48.57, 38.04, 48.62),
+    "gaza-city": (34.40, 31.46, 34.54, 31.58),
+    "khan-younis": (34.26, 31.30, 34.40, 31.42),
+    "rafah": (34.21, 31.26, 34.32, 31.34),
+    "mariupol": (37.45, 47.04, 37.66, 47.18),
+    "bakhmut": (37.92, 48.54, 38.08, 48.66),
     # Lebanon — Israeli strikes 2024 (Beirut southern suburbs + south border).
-    "beirut-dahieh": (35.49, 33.83, 35.53, 33.87),
-    "south-lebanon": (35.28, 33.10, 35.42, 33.22),
+    "beirut-dahieh": (35.46, 33.80, 35.56, 33.90),
+    "south-lebanon": (35.22, 33.06, 35.46, 33.26),
 }
 
 

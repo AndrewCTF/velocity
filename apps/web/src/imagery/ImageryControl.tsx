@@ -22,6 +22,18 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Curated war-damage AOIs (Sentinel-1 SAR collapse candidates, red). Each maps
+// to a backend AOI key in app/intel/sar_damage.py.
+const DAMAGE_AOIS: { id: string; label: string }[] = [
+  { id: 'beirut-dahieh', label: 'Beirut — Dahieh (2024)' },
+  { id: 'south-lebanon', label: 'South Lebanon (2024)' },
+  { id: 'gaza-city', label: 'Gaza City (2023–24)' },
+  { id: 'khan-younis', label: 'Khan Younis (2023–24)' },
+  { id: 'rafah', label: 'Rafah (2024)' },
+  { id: 'mariupol', label: 'Mariupol (2022)' },
+  { id: 'bakhmut', label: 'Bakhmut (2022–23)' },
+];
+
 // Satellite imagery overlay picker + day stepper + opacity. Drives the
 // useImagery store's `overlay` (provider + layer + date) and `overlayOpacity`,
 // which GlobeCanvas renders on the globe. Lists EVERY keyless GIBS layer +
@@ -114,13 +126,21 @@ export function ImageryControl() {
         >
           Load 3D buildings here
         </button>
-        <button
-          type="button"
-          onClick={() => setLod1Aoi(lod1Aoi ? null : 'beirut-dahieh')}
-          title="Curated war-damage AOI: red = Sentinel-1 SAR collapse candidate"
-        >
-          {lod1Aoi ? 'Hide war-damage 3D' : 'War-damage 3D — Beirut Dahieh'}
-        </button>
+        <label className="imagery-control__row">
+          <span>War-damage 3D</span>
+          <select
+            value={lod1Aoi ?? ''}
+            onChange={(e) => setLod1Aoi(e.target.value || null)}
+            title="Curated AOI: red = Sentinel-1 SAR collapse candidate"
+          >
+            <option value="">Off</option>
+            {DAMAGE_AOIS.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       {overlay && !isStatic && (
         <div className="imagery-control__date">
