@@ -172,14 +172,17 @@ import path (heavy deps: torch, gsplat, diffusers) — separate service + env.
 - Every quantitative claim ("best", "high fidelity") is backed by one of these gates
   on a named held-out set, or it is not made.
 
-## 9. Open decisions (need your call before planning)
+## 9. Locked decisions (operator, 2026-06-14)
 
-1. **Compute path:** fine-tune-on-5090 (self-contained) vs from-scratch colorizer on
-   rented cloud (strongest, costs money). Recommend (1) first.
-2. **Imagery tier:** free 10 m (Sentinel) proof, or budget for VHR (Maxar/Airbus) to
-   actually reach "very high fidelity"?
-3. **First AOI:** pick one (intact city to validate fidelity, e.g. a Gulf city) before
-   a damaged AOI.
+1. **Compute:** RTX 5090 local **fine-tune path first** (pretrained backbones +
+   LoRA/ControlNet + per-scene 3DGS, sequential). No cloud spend now. Cloud
+   (from-scratch colorizer) is revisited only if §8 gates fail — and only after I
+   report the gap with numbers; "best in market" is never asserted without a passed
+   benchmark.
+2. **Imagery:** free **10 m Sentinel** now, every artifact **explicitly labeled a
+   proof**. VHR deferred (revisit only if fidelity gates demand + operator approves spend).
+3. **AOI order:** **intact Gulf city first** (validate raw fidelity + colorization),
+   **then a damaged AOI** (exercise destruction LoRA + Phase 4 hand-off).
 
 ## 10. Phasing
 
