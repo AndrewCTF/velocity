@@ -33,6 +33,7 @@ from app.routes import intel as intel_routes
 from app.routes import jamming as jamming_routes
 from app.routes import maritime as maritime_routes
 from app.routes import news as news_routes_mod
+from app.routes import sar as sar_routes
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
 from app.routes import space as space_routes
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
     app.include_router(alerts_routes.router)
     app.include_router(tiles_routes.router)
     app.include_router(imagery_routes.router)
+    app.include_router(sar_routes.router)
     app.include_router(search_routes.router)
     app.include_router(correlations_routes.router)
     app.include_router(timeline_routes.router)
