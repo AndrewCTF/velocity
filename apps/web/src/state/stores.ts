@@ -85,9 +85,18 @@ interface ImageryState {
   setMode: (m: ImageryMode) => void;
   overlay: ImageryOverlay | null;
   setOverlay: (o: ImageryOverlay | null) => void;
-  // LOD1 war-damage 3D: AOI to load + extrude in the globe (null = none).
+  // Overlay blend opacity 0..1 (applied to the GIBS/CDSE imagery layer alpha).
+  overlayOpacity: number;
+  setOverlayOpacity: (a: number) => void;
+  // LOD1 war-damage 3D: curated AOI to load + extrude in the globe (null = none).
   lod1Aoi: string | null;
   setLod1Aoi: (a: string | null) => void;
+  // On-demand 3D buildings anywhere. 'here' = extrude the current camera view;
+  // GlobeCanvas resolves it to a bbox and clears it back to null once loaded.
+  // null = no freeform request pending/active.
+  lod1Here: boolean;
+  requestLod1Here: () => void;
+  clearLod1Here: () => void;
 }
 
 // Imagery stack toggle — flips the GlobeCanvas between the default
@@ -100,8 +109,13 @@ export const useImagery = create<ImageryState>((set) => ({
   setMode: (m) => set({ mode: m }),
   overlay: null,
   setOverlay: (o) => set({ overlay: o }),
+  overlayOpacity: 1,
+  setOverlayOpacity: (a) => set({ overlayOpacity: Math.min(1, Math.max(0, a)) }),
   lod1Aoi: null,
   setLod1Aoi: (a) => set({ lod1Aoi: a }),
+  lod1Here: false,
+  requestLod1Here: () => set({ lod1Here: true }),
+  clearLod1Here: () => set({ lod1Here: false }),
 }));
 
 export type WsStatus = 'connecting' | 'open' | 'closed';

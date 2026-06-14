@@ -67,8 +67,13 @@ def _cache_for(root: str) -> TileCache:
 # A cold Cesium boot requests ~70 tiles at once; EOX (and friends) throttle
 # that burst and the un-cached tiles 502 until the user pans back. Gate the
 # upstream fetches and retry once with a short backoff so a cold start
-# warms the cache cleanly instead of spraying failures.
-_FETCH_SEMAPHORE = asyncio.Semaphore(8)
+# warms the cache cleanly instead of spraying failures. 24 (was 8): Esri /
+# EOX both serve a CDN that tolerates this, and a fat client link otherwise
+# sat idle behind the gate while a freshly-panned region loaded one slow
+# batch at a time — the "imagery loads too slow" report. Esri/EOX answer 200
+# well past 8 concurrent; only the airplanes.live ADS-B grid needs the strict
+# 8 cap (different file, _UPSTREAM_SEMAPHORE).
+_FETCH_SEMAPHORE = asyncio.Semaphore(24)
 
 
 async def _fetch_bytes(url: str) -> bytes | None:

@@ -21,6 +21,13 @@ DEFAULT_H = 18.0
 MAXB = 6000
 _OVERPASS = "https://overpass-api.de/api/interpreter"
 
+# Largest freeform bbox span (degrees) we'll extrude on demand. A whole-city
+# Overpass `way["building"]` query past this melts Overpass and floods the
+# globe with >MAXB footprints, so an over-wide request is shrunk to this span
+# centred on the request. ~0.09 deg ≈ 8-10 km — a city district, which is the
+# scale this 3D view is meant for.
+MAX_BBOX_SPAN = 0.09
+
 # aoi -> (bbox lon0,lat0,lon1,lat1, sar_pre, sar_post). Reuses sar_damage AOIs.
 DAMAGE_DATES = {
     "beirut-dahieh": ("2024-08-20", "2024-11-25"),
@@ -71,6 +78,71 @@ def _ring_area_m2(ring: list[list[float]], lat0: float) -> float:
     k = 111320 * math.cos(math.radians(lat0))
     p = [(x * k, y * 110540) for x, y in ring]
     return abs(sum(p[i][0] * p[i + 1][1] - p[i + 1][0] * p[i][1] for i in range(len(p) - 1))) / 2
+
+
+def normalize_bbox(
+    parts: list[float],
+) -> tuple[float, float, float, float]:
+    """Order + size-clamp a freeform (lon0,lat0,lon1,lat1) request.
+
+    Guarantees lon0<lon1, lat0<lat1 and that neither span exceeds
+    MAX_BBOX_SPAN (shrinking toward the centre if it does). Raises ValueError
+    on out-of-range coordinates so the route can answer 400, not 500.
+    """
+    lon0, lat0, lon1, lat1 = parts
+    if lon0 > lon1:
+        lon0, lon1 = lon1, lon0
+    if lat0 > lat1:
+        lat0, lat1 = lat1, lat0
+    if not (-180 <= lon0 <= 180 and -180 <= lon1 <= 180 and -90 <= lat0 <= 90 and -90 <= lat1 <= 90):
+        raise ValueError("bbox coordinates out of range")
+    clon, clat = (lon0 + lon1) / 2, (lat0 + lat1) / 2
+    if lon1 - lon0 > MAX_BBOX_SPAN:
+        lon0, lon1 = clon - MAX_BBOX_SPAN / 2, clon + MAX_BBOX_SPAN / 2
+    if lat1 - lat0 > MAX_BBOX_SPAN:
+        lat0, lat1 = clat - MAX_BBOX_SPAN / 2, clat + MAX_BBOX_SPAN / 2
+    return (lon0, lat0, lon1, lat1)
+
+
+async def build_bbox(bbox: tuple[float, float, float, float]) -> dict[str, Any]:
+    """Freeform LOD1 for an arbitrary bbox anywhere on Earth.
+
+    Real OSM footprints + OSM-or-estimate heights, extruded — NO SAR damage
+    overlay (damage detection needs a curated pre/post date pair per AOI; for
+    general locations there is none, so `damaged` is always False rather than
+    invented). For the curated war-damage AOIs use build(aoi) instead.
+    """
+    key = "bbox:" + ",".join(f"{c:.4f}" for c in bbox)
+    hit = _cache.get(key)
+    if hit and time.monotonic() - hit[0] < _TTL:
+        return hit[1]
+    blds = await asyncio.to_thread(_fetch_footprints, bbox)
+    blds.sort(key=lambda b: _ring_area_m2(b["ring"], bbox[1]), reverse=True)
+    blds = blds[:MAXB]
+    feats = [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Polygon", "coordinates": [b["ring"]]},
+            "properties": {
+                "height": round(b["height"], 1),
+                "height_src": b["height_src"],
+                "damaged": False,
+            },
+        }
+        for b in blds
+    ]
+    fc = {
+        "type": "FeatureCollection",
+        "features": feats,
+        "summary": {
+            "bbox": list(bbox),
+            "buildings": len(feats),
+            "damaged": 0,
+            "note": "footprints OSM; heights osm-or-estimate; no SAR damage overlay (general AOI)",
+        },
+    }
+    _cache[key] = (time.monotonic(), fc)
+    return fc
 
 
 async def build(aoi: str) -> dict[str, Any]:

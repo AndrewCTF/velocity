@@ -5,7 +5,7 @@ import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useTime, useSelection, useImagery } from '../state/stores.js';
 import type { ImageryMode } from '../state/stores.js';
 import { imageryOverlayUrl } from '../imagery/gibsUrl.js';
-import { loadLod1, clearLod1 } from '../lod1/lod1Layer.js';
+import { loadLod1, loadLod1Bbox, clearLod1 } from '../lod1/lod1Layer.js';
 import { LayerCompositor } from './LayerCompositor.js';
 import { installSelectionReticle } from './selectionReticle.js';
 import { installSelectionTrack } from './selectionTrack.js';
@@ -159,10 +159,13 @@ export function GlobeCanvas({
   const stackGenRef = useRef(0);
   const sceneMode = useTime((s) => s.sceneMode);
   const imageryOverlay = useImagery((s) => s.overlay);
+  const overlayOpacity = useImagery((s) => s.overlayOpacity);
   const lod1Aoi = useImagery((s) => s.lod1Aoi);
+  const lod1Here = useImagery((s) => s.lod1Here);
+  const clearLod1Here = useImagery((s) => s.clearLod1Here);
   const gibsLayerRef = useRef<Cesium.ImageryLayer | null>(null);
 
-  // LOD1 war-damage 3D: load + extrude the AOI's buildings when the store asks.
+  // LOD1 war-damage 3D: load + extrude the curated AOI's buildings on request.
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
@@ -172,6 +175,36 @@ export function GlobeCanvas({
     }
     loadLod1(viewer, lod1Aoi).catch((e) => console.warn('lod1 load failed:', e));
   }, [lod1Aoi]);
+
+  // On-demand 3D buildings anywhere: resolve the current camera view to a bbox
+  // and extrude OSM footprints there. The backend size-clamps the bbox, so a
+  // zoomed-out request quietly loads a city-district-sized patch at the centre.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !lod1Here) return;
+    const rect = viewer.camera.computeViewRectangle();
+    let bbox: [number, number, number, number] | null = null;
+    if (rect) {
+      bbox = [
+        Cesium.Math.toDegrees(rect.west),
+        Cesium.Math.toDegrees(rect.south),
+        Cesium.Math.toDegrees(rect.east),
+        Cesium.Math.toDegrees(rect.north),
+      ];
+    } else {
+      // Camera sees space/horizon — fall back to the point under the camera.
+      const c = viewer.camera.positionCartographic;
+      if (c) {
+        const lon = Cesium.Math.toDegrees(c.longitude);
+        const lat = Cesium.Math.toDegrees(c.latitude);
+        bbox = [lon - 0.04, lat - 0.04, lon + 0.04, lat + 0.04];
+      }
+    }
+    if (bbox) {
+      loadLod1Bbox(viewer, bbox).catch((e) => console.warn('lod1 (here) load failed:', e));
+    }
+    clearLod1Here();
+  }, [lod1Here, clearLod1Here]);
 
   // GIBS overlay: add/remove a date-templated imagery layer on top of the
   // base when the store's `overlay` changes. Guarded on the viewer existing
@@ -191,11 +224,21 @@ export function GlobeCanvas({
         imageryOverlay.date,
         imageryOverlay.maxZ,
       );
+      lyr.alpha = overlayOpacity;
       scene.imageryLayers.add(lyr);
       gibsLayerRef.current = lyr;
     }
     scene.requestRender();
   }, [imageryOverlay]);
+
+  // Live overlay opacity — set the layer alpha without rebuilding the layer
+  // (a rebuild would flash the tiles), so the slider feels instant.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !gibsLayerRef.current) return;
+    gibsLayerRef.current.alpha = overlayOpacity;
+    viewer.scene.requestRender();
+  }, [overlayOpacity]);
 
   // One-time viewer construction. Always starts on the dark basemap so the
   // app boots without an ion token; if the initial imageryMode is '3d-sat'
@@ -225,7 +268,16 @@ export function GlobeCanvas({
       selectionIndicator: false,
       timeline: false,
       requestRenderMode: true,
-      maximumRenderTimeChange: Infinity,
+      // 0 (was Infinity): under requestRenderMode, a render is requested when
+      // the simulation clock advances past this many seconds. Infinity meant
+      // ONLY explicit requestRender() calls painted — so interpolated aircraft/
+      // vessel motion only stepped forward once per poll (a visible hop, the
+      // "teleport / inconsistent refresh" report). 0 re-renders every frame the
+      // clock advances, so SampledPositionProperty interpolation plays smoothly
+      // between fixes while live; when the timeline is paused (shouldAnimate
+      // false) the clock is frozen, nothing changes, and the scene idles — so
+      // requestRenderMode still saves GPU when nothing is moving.
+      maximumRenderTimeChange: 0,
       // Ask the browser for the discrete GPU. On hybrid-graphics laptops
       // WebGL defaults to the integrated chip, which chokes on the dense
       // billboard/label scene; 'high-performance' picks the dGPU when one

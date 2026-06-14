@@ -113,7 +113,7 @@ def test_aggregate_omits_clean_cells() -> None:
 
 
 def test_route_returns_aggregated_cells(client: TestClient) -> None:
-    # Mock /api/adsb/global by patching adsb_global directly.
+    # Mock the snapshot by patching global_snapshot (the seam jamming reads).
     async def fake_global() -> dict[str, Any]:
         return {
             "type": "FeatureCollection",
@@ -125,7 +125,7 @@ def test_route_returns_aggregated_cells(client: TestClient) -> None:
         }
 
     from app.routes import adsb as adsb_routes
-    with patch.object(adsb_routes, "adsb_global", new=fake_global):
+    with patch.object(adsb_routes, "global_snapshot", new=fake_global):
         r = client.get("/api/jamming/nacp")
     assert r.status_code == 200
     body = r.json()

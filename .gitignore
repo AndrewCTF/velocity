@@ -33,3 +33,10 @@ apps/ml/fusion/runs/
 apps/ml/fusion/.mamba-cuda/
 apps/ml/fusion/EOGS/
 apps/ml/fusion/.mamba-root/
+apps/ml/fusion/.mamba-colmap/
+apps/ml/fusion/maxar/
+apps/ml/fusion/3dgs/
+apps/ml/fusion/3dgs_data/
+apps/ml/fusion/3dgs_data.zip
+apps/ml/fusion/drone/
+apps/ml/fusion/output_3dgs/

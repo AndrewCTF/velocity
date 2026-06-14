@@ -53,15 +53,48 @@ function findEntity(viewer: Cesium.Viewer, entityId: string): Cesium.Entity | nu
 // entity's SampledPositionProperty every frame, so the camera flies WITH the
 // aircraft instead of a one-shot slew that stops the moment it lands. Returns
 // false when the entity isn't on the globe (e.g. it left the viewport).
+// Active-follow bookkeeping so we can keep the camera glued to the contact even
+// as the feed prunes + re-adds its entity on a poll (which would otherwise
+// orphan viewer.trackedEntity and freeze/lose the camera).
+let followId: string | null = null;
+let followTick: (() => void) | null = null;
+
 export function followEntity(viewer: Cesium.Viewer, entityId: string): boolean {
   const e = findEntity(viewer, entityId);
   if (!e) return false;
-  viewer.trackedEntity = e;
+  stopFollow(viewer); // clear any prior follow first
+  followId = entityId;
+  // The tracked camera is recomputed every clock tick, but under
+  // requestRenderMode nothing schedules a render for that move, so the view
+  // froze the instant the initial slew ended ("follow doesn't work" / "doesn't
+  // follow fast enough"). Force continuous rendering for the follow's duration;
+  // stopFollow restores the power-saving default.
+  viewer.scene.requestRenderMode = false;
+  viewer.trackedEntity = e; // trackedEntity keeps the icon centred + orbitable
+  // Re-assert the tracked entity whenever the feed replaces it. A poll that
+  // momentarily drops then re-adds this contact creates a NEW Entity object;
+  // viewer.trackedEntity still points at the destroyed one, so the camera
+  // stopped following and the icon "went missing". On each tick, if a live
+  // entity with our id exists but isn't the one we're tracking, re-point. The
+  // identity guard means no churn (and no re-zoom) on the common path.
+  followTick = (): void => {
+    if (!followId) return;
+    const live = findEntity(viewer, followId);
+    if (live && viewer.trackedEntity !== live) viewer.trackedEntity = live;
+  };
+  viewer.clock.onTick.addEventListener(followTick);
   return true;
 }
 
 export function stopFollow(viewer: Cesium.Viewer): void {
+  followId = null;
+  if (followTick) {
+    viewer.clock.onTick.removeEventListener(followTick);
+    followTick = null;
+  }
   viewer.trackedEntity = undefined;
+  // Restore the default scene's power-saving render mode (CLAUDE.md invariant).
+  viewer.scene.requestRenderMode = true;
 }
 
 export function isFollowing(viewer: Cesium.Viewer, entityId: string | null): boolean {

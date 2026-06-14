@@ -89,7 +89,9 @@ def _patch_snapshot():
 
     from app.routes import adsb as adsb_routes
 
-    return patch.object(adsb_routes, "adsb_global", new=fake_global)
+    # Patch the plain snapshot helper — the single seam every internal consumer
+    # (intel, jamming, analytics, the route handler) now reads through.
+    return patch.object(adsb_routes, "global_snapshot", new=fake_global)
 
 
 # ── classification helpers ────────────────────────────────────────────────────
@@ -284,7 +286,7 @@ def _patch_empty():
 
     from app.routes import adsb as adsb_routes
 
-    return patch.object(adsb_routes, "adsb_global", new=empty)
+    return patch.object(adsb_routes, "global_snapshot", new=empty)
 
 
 def test_empty_snapshot_no_crash(client: TestClient) -> None:

@@ -127,6 +127,13 @@ def states_to_geojson(raw: dict[str, Any]) -> dict[str, Any]:
                     "baro_alt_m": baro_alt,
                     "geo_alt_m": geo_alt,
                     "squawk": squawk,
+                    # time_position = unix time of the LAST position report for this
+                    # state vector (may be null). last_contact = unix time of the
+                    # last message of any kind. Kept so the caller can stamp an
+                    # honest position age (seen_pos_s) instead of pretending a
+                    # cached daily snapshot is "now" — see _try_opensky_global.
+                    "time_position": s[3],
+                    "last_contact": s[4],
                     "kind": "aircraft",
                 },
             }

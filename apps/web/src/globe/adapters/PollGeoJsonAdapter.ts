@@ -412,13 +412,21 @@ export class PollGeoJsonAdapter implements LayerAdapter {
 
       // Feed track ring for the entity-panel sparkline
       if (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') {
-        // Track points are stamped with the fix's OBSERVATION time when the
-        // backend provides it (seen_at), not receipt time — under bursty
-        // refresh, receipt-time stamps bunched fixes together and the trail
-        // polyline drew stair-steps.
+        // Track points are stamped with the fix's true OBSERVATION time, not
+        // receipt time — under bursty refresh, receipt-time stamps bunched
+        // fixes together and the trail polyline drew stair-steps. Observation
+        // time = seen_at − seen_pos_s (how old the POSITION is), so a stale
+        // source that wins a poll lands at its real (earlier) time and the
+        // trail's time-regression guard drops it instead of drawing a backward
+        // spike.
         const seenAtProp = props['seen_at'];
+        const seenPosProp = props['seen_pos_s'];
+        const obsSec =
+          typeof seenAtProp === 'number'
+            ? seenAtProp - (typeof seenPosProp === 'number' ? seenPosProp : 0)
+            : null;
         const tp: { t: number; lon: number; lat: number; alt: number; sog?: number; track?: number } = {
-          t: typeof seenAtProp === 'number' ? seenAtProp * 1000 : Date.now(),
+          t: obsSec != null ? obsSec * 1000 : Date.now(),
           lon,
           lat,
           alt: alt ?? 0,

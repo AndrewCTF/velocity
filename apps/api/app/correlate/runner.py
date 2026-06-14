@@ -185,7 +185,7 @@ async def _global_loop(stop: asyncio.Event) -> None:
     """
     # Import here to avoid a circular import at module load (routes.adsb
     # imports from app.upstream, which imports nothing from us).
-    from app.routes.adsb import adsb_global  # noqa: PLC0415
+    from app.routes.adsb import global_snapshot  # noqa: PLC0415
 
     # Boot warmup: don't fire the heavy global fan-out the instant the app
     # starts. Lets the event loop finish booting before the first ~13k-aircraft
@@ -195,7 +195,7 @@ async def _global_loop(stop: asyncio.Event) -> None:
 
     while not stop.is_set():
         try:
-            fc = await adsb_global()
+            fc = await global_snapshot()
             obs = _aircraft_obs_from_geojson(fc, "adsb_global")
             store.add_many(obs)
         except Exception as e:  # noqa: BLE001

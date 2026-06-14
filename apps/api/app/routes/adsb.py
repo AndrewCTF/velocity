@@ -463,11 +463,13 @@ _SNAPSHOT_LOCK = asyncio.Lock()
 _SNAPSHOT_BOOTSTRAP_LOCK = asyncio.Lock()
 _SNAPSHOT_TASK: asyncio.Task[None] | None = None
 _SNAPSHOT_STARTED = False
-# Background task target cycle. Each iteration sleeps for max(0, 5.0 -
-# elapsed_fanout). A fast fan-out (~0.3s) waits ~4.7s; a slow one (>5s) loops
-# immediately. Combined with the frontend's 5s pull this gives ≤10s
-# end-to-end refresh.
-_SNAPSHOT_TARGET_CYCLE_S = 5.0
+# Background task target cycle. Each iteration sleeps for max(0, cycle -
+# elapsed_fanout). A fast fan-out (~0.3s) waits out the rest; a slow one loops
+# immediately. 2s keeps the merged snapshot fresh for the 1s frontend pull
+# without hammering upstreams: OpenSky is served from its daily cache and the
+# keyless feeds self-pace internally (adsb_feed_interval_s), so a faster cycle
+# re-merges already-cached slices rather than issuing new upstream fetches.
+_SNAPSHOT_TARGET_CYCLE_S = 2.0
 # A new snapshot is accepted only if it's non-empty AND retains at least this
 # fraction of the previous snapshot's aircraft count. Absorbs the "host
 # rate-limit blip" that used to drop the visible count from 3959 to 48.
@@ -601,11 +603,24 @@ async def _try_opensky_global() -> dict[str, Any] | None:
         return None
     # Stamp source + seen_at so the frontend can tint staleness and the
     # carry-forward merge can age these aircraft like any other.
+    #
+    # seen_at stays = the serve/pull time (so the carry-forward breadth merge,
+    # which ages by `now - seen_at`, keeps this always-served tier fresh). But
+    # we ALSO stamp seen_pos_s = how old each aircraft's POSITION actually is,
+    # from OpenSky's per-state time_position. Without this, OpenSky positions
+    # looked 0 s old (seen_pos absent → frontend assumes fresh), so when a given
+    # icao24 flips from the live grid/feeds to the cached OpenSky snapshot, the
+    # frontend's monotonic fix guard accepted the STALE OpenSky position and the
+    # icon teleported backwards. With an honest seen_pos_s the stale fix loses
+    # the freshness comparison and the icon holds its live track instead.
     now = time.time()
     for f in fc["features"]:
         props = f.setdefault("properties", {})
         props.setdefault("source", "opensky")
         props["seen_at"] = now
+        tp = props.get("time_position")
+        if isinstance(tp, (int, float)) and tp > 0:
+            props["seen_pos_s"] = max(0.0, now - float(tp))
     return fc
 
 
@@ -1141,24 +1156,16 @@ def viewport_filter(
     return {"type": "FeatureCollection", "features": feats}
 
 
-@router.get("/api/adsb/global")
-async def adsb_global(
-    lamin: float | None = Query(None, ge=-90, le=90),
-    lomin: float | None = Query(None, ge=-180, le=180),
-    lamax: float | None = Query(None, ge=-90, le=90),
-    lomax: float | None = Query(None, ge=-180, le=180),
-    limit: int | None = Query(None, ge=1, le=20000),
-) -> dict[str, Any]:
-    """Return the latest aircraft snapshot, optionally scoped to a viewport.
+async def global_snapshot() -> dict[str, Any]:
+    """The full aircraft snapshot (no viewport filter), bootstrapping the
+    background refresher on first call.
 
-    With ``lamin/lomin/lamax/lomax`` (+ optional ``limit``) the snapshot is
-    filtered to that bbox and decimated — the frontend sends its camera view so
-    only on-screen aircraft are instantiated. With no params the FULL snapshot
-    is returned (back-compat for the MCP/intel tools).
-
-    First call kicks off the background refresher and does one synchronous
-    bootstrap fetch so the response isn't empty. Subsequent calls return
-    immediately with whatever the background task last accepted."""
+    Plain helper so INTERNAL callers (e.g. the jamming layer) can read the
+    snapshot directly. Calling the route handler ``adsb_global()`` in-process
+    passed its unresolved ``Query(...)`` defaults straight through to
+    viewport_filter, which then compared Query objects ('>' not supported
+    between instances of 'Query') and 500'd — that broke the GPS-jamming layer.
+    """
     global _SNAPSHOT_STARTED, _SNAPSHOT_TASK, _LATEST_SNAPSHOT, _LATEST_SNAPSHOT_AT
     if not _SNAPSHOT_STARTED:
         # Bootstrap under a lock so every concurrent first caller waits on
@@ -1178,10 +1185,31 @@ async def adsb_global(
                 _SNAPSHOT_TASK = asyncio.create_task(_refresh_snapshot_forever())
                 _SNAPSHOT_STARTED = True
     async with _SNAPSHOT_LOCK:
-        snap = _LATEST_SNAPSHOT
+        # Shallow copy so callers can't mutate the live snapshot dict.
+        return dict(_LATEST_SNAPSHOT)
+
+
+@router.get("/api/adsb/global")
+async def adsb_global(
+    lamin: float | None = Query(None, ge=-90, le=90),
+    lomin: float | None = Query(None, ge=-180, le=180),
+    lamax: float | None = Query(None, ge=-90, le=90),
+    lomax: float | None = Query(None, ge=-180, le=180),
+    limit: int | None = Query(None, ge=1, le=20000),
+) -> dict[str, Any]:
+    """Return the latest aircraft snapshot, optionally scoped to a viewport.
+
+    With ``lamin/lomin/lamax/lomax`` (+ optional ``limit``) the snapshot is
+    filtered to that bbox and decimated — the frontend sends its camera view so
+    only on-screen aircraft are instantiated. With no params the FULL snapshot
+    is returned (back-compat for the MCP/intel tools).
+
+    First call kicks off the background refresher and does one synchronous
+    bootstrap fetch so the response isn't empty. Subsequent calls return
+    immediately with whatever the background task last accepted."""
+    snap = await global_snapshot()
     if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
-        # Shallow copy so the caller can't mutate the live snapshot dict.
-        return dict(snap)
+        return snap
     return viewport_filter(snap, lamin, lomin, lamax, lomax, limit)
 
 
@@ -1253,10 +1281,10 @@ async def adsb_snapshot_age() -> dict[str, Any]:
     }
 
 
-# Kept for backward compatibility — alias of /api/adsb/global.
+# Kept for backward compatibility — alias of /api/adsb/global (full snapshot).
 @router.get("/api/adsb/lol/global")
 async def adsb_lol_global() -> dict[str, Any]:
-    return await adsb_global()
+    return await global_snapshot()
 
 
 @router.get("/api/adsb/fi/global")

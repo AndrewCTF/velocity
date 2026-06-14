@@ -238,7 +238,10 @@ function pickVesselVisual(kind: VesselKind): { hex: string; iconKey: string; fac
 export function vesselStyle(props: Record<string, unknown>, opts: { darkCandidate?: boolean } = {}): VesselStyle {
   const cog = (props['cog'] as number | null) ?? (props['heading'] as number | null) ?? null;
   const sog = (props['sog'] as number | null) ?? null;
-  const dark = Boolean(opts.darkCandidate);
+  // Dark-vessel flag comes either from the in-process AIS-gap tracker (opts) or,
+  // for the Sentinel-1 SAR layer, straight off the feature (darkCandidate is
+  // true when a SAR target has no nearby AIS contact; null = AIS unknown).
+  const dark = opts.darkCandidate ?? props['darkCandidate'] === true;
 
   // Read ITU ship-type code from any of the casings the upstream feeds use.
   const rawShipType =
