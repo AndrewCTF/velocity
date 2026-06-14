@@ -202,6 +202,8 @@ export class AisWsAdapter implements LayerAdapter {
           // at a different zoom band than Digitraffic ones.
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 600_000),
           translucencyByDistance: new Cesium.NearFarScalar(150_000, 1.0, 600_000, 0.0),
+          // Scale with distance, matching the polling adapter's vessels.
+          scaleByDistance: new Cesium.NearFarScalar(5_000, 1.7, 400_000, 0.6),
         },
         ...(labelText && { label: labelFor(labelText) }),
         properties: props,

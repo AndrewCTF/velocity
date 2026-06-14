@@ -42,9 +42,10 @@ CARTO_HOSTS = [
 ]
 
 _EOX_LAYER = "s2cloudless-2024_3857"
-# z <= split → EOX Sentinel-2 (10 m source res tops out ~z13);
-# z > split → Esri World Imagery (sub-meter in cities).
-_SAT_SPLIT_Z = 13
+# z <= split → EOX Sentinel-2 (10 m cloudless mosaic, broad/low-zoom);
+# z > split → Esri World Imagery (sub-meter, sharp). Split lowered 13->10 so the
+# sharp source kicks in earlier and city zooms aren't blurry.
+_SAT_SPLIT_Z = 10
 
 _TTL_BASEMAP = 30 * 86400.0
 _TTL_SAT = 365 * 86400.0
