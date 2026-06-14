@@ -4,9 +4,11 @@ import { useImagery } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
 
 interface CatalogLayer {
+  provider: string;
   id: string;
   title: string;
   group: string;
+  max_z: number;
 }
 
 function shiftDate(date: string, days: number): string {
@@ -19,8 +21,9 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Keyless NASA GIBS imagery overlay picker + day stepper. Drives the
-// useImagery store's `overlay`, which GlobeCanvas renders on the globe.
+// Satellite imagery overlay picker + day stepper. Drives the useImagery store's
+// `overlay` (provider + layer + date), which GlobeCanvas renders on the globe.
+// Lists keyless GIBS + keyed CDSE Sentinel layers from /api/imagery/catalog.
 export function ImageryControl() {
   const overlay = useImagery((s) => s.overlay);
   const setOverlay = useImagery((s) => s.setOverlay);
@@ -42,20 +45,26 @@ export function ImageryControl() {
   }, []);
 
   const date = overlay?.date ?? today();
+  const selectedKey = overlay ? `${overlay.provider}:${overlay.layer}` : '';
 
   return (
     <div className="imagery-control">
       <label className="imagery-control__row">
         <span>Satellite imagery</span>
         <select
-          value={overlay?.layer ?? ''}
-          onChange={(e) =>
-            setOverlay(e.target.value ? { layer: e.target.value, date } : null)
-          }
+          value={selectedKey}
+          onChange={(e) => {
+            const hit = layers.find((l) => `${l.provider}:${l.id}` === e.target.value);
+            setOverlay(
+              hit
+                ? { provider: hit.provider, layer: hit.id, date, maxZ: hit.max_z }
+                : null,
+            );
+          }}
         >
           <option value="">Off</option>
           {layers.map((l) => (
-            <option key={l.id} value={l.id}>
+            <option key={`${l.provider}:${l.id}`} value={`${l.provider}:${l.id}`}>
               {l.title}
             </option>
           ))}

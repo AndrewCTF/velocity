@@ -1,5 +1,6 @@
-// Backend proxy URL for a GIBS layer on a given UTC date. Cesium fills
-// {z}/{x}/{y}; the backend re-templates to the GIBS WMTS-REST upstream.
-export function gibsOverlayUrl(layer: string, date: string): string {
-  return `/api/imagery/gibs/${layer}/{z}/{x}/{y}?date=${date}`;
+// Backend proxy URL for an imagery layer on a given UTC date. Cesium fills
+// {z}/{x}/{y}; the backend re-templates to the provider's upstream
+// (GIBS WMTS-REST or CDSE Sentinel Hub Process API).
+export function imageryOverlayUrl(provider: string, layer: string, date: string): string {
+  return `/api/imagery/${provider}/${layer}/{z}/{x}/{y}?date=${date}`;
 }

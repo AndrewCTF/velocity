@@ -71,11 +71,13 @@ export const useTime = create<TimeState>((set) => ({
 
 export type ImageryMode = '2d-dark' | '3d-sat';
 
-// Date-templated GIBS imagery overlay drawn on top of the base layer.
-// null = off; else a GIBS layer id + UTC date (YYYY-MM-DD).
+// Date-templated imagery overlay drawn on top of the base layer.
+// null = off; else a provider + layer id + UTC date (YYYY-MM-DD) + max zoom.
 export interface ImageryOverlay {
+  provider: string;
   layer: string;
   date: string;
+  maxZ: number;
 }
 
 interface ImageryState {

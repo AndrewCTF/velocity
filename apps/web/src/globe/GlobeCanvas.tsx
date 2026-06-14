@@ -4,7 +4,7 @@ import { MapboxTerrainProvider } from '@macrostrat/cesium-martini';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useTime, useSelection, useImagery } from '../state/stores.js';
 import type { ImageryMode } from '../state/stores.js';
-import { gibsOverlayUrl } from '../imagery/gibsUrl.js';
+import { imageryOverlayUrl } from '../imagery/gibsUrl.js';
 import { LayerCompositor } from './LayerCompositor.js';
 import { installSelectionReticle } from './selectionReticle.js';
 import { installSelectionTrack } from './selectionTrack.js';
@@ -95,17 +95,18 @@ function buildSatImagery(): Cesium.ImageryLayer {
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
 
-// GIBS imagery overlay (keyless, date-templated) drawn ON TOP of the base
-// layer. Proxied + disk-cached by the backend at /api/imagery/gibs/*.
-function buildGibsOverlay(
+// Imagery overlay (date-templated) drawn ON TOP of the base layer. Proxied +
+// disk-cached by the backend at /api/imagery/{provider}/* (GIBS or CDSE).
+function buildImageryOverlay(
+  providerId: string,
   layer: string,
   date: string,
   maxLevel: number,
 ): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
-    url: gibsOverlayUrl(layer, date),
+    url: imageryOverlayUrl(providerId, layer, date),
     maximumLevel: maxLevel,
-    credit: 'NASA EOSDIS GIBS',
+    credit: providerId === 'cdse' ? 'Copernicus Sentinel / CDSE' : 'NASA EOSDIS GIBS',
   });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
@@ -166,7 +167,12 @@ export function GlobeCanvas({
       gibsLayerRef.current = null;
     }
     if (imageryOverlay) {
-      const lyr = buildGibsOverlay(imageryOverlay.layer, imageryOverlay.date, 9);
+      const lyr = buildImageryOverlay(
+        imageryOverlay.provider,
+        imageryOverlay.layer,
+        imageryOverlay.date,
+        imageryOverlay.maxZ,
+      );
       scene.imageryLayers.add(lyr);
       gibsLayerRef.current = lyr;
     }
