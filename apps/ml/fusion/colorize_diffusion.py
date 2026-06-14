@@ -69,7 +69,7 @@ class SN6Diff(Dataset):
                 break
             i = np.random.randint(0, len(self.pairs))
         sar = np.clip(sar, 0, SAR_CLIP) / SAR_CLIP            # [0,1] ControlNet hint
-        rgb = rgb / 127.5 - 1.0                               # [-1,1] VAE input
+        rgb = np.clip(rgb, 0, 255) / 127.5 - 1.0              # [-1,1] VAE input (PS-RGB is uint8)
         return torch.from_numpy(sar), torch.from_numpy(rgb)
 
 
@@ -145,6 +145,11 @@ def main():
                     pin_memory=True, persistent_workers=True, prefetch_factor=4)
 
     vae, unet, tok, txt, sched, controlnet = load_models(dev)
+    # Loss target + sampler both assume epsilon-prediction. Fail loudly if the
+    # base ever points at a v-prediction checkpoint (e.g. an *-v model).
+    assert sched.config.prediction_type == "epsilon", (
+        f"base scheduler is {sched.config.prediction_type}; this trainer assumes epsilon"
+    )
     print("models loaded; controlnet params trainable", flush=True)
     opt = torch.optim.AdamW(controlnet.parameters(), lr=a.lr)
     sf = vae.config.scaling_factor
@@ -166,7 +171,7 @@ def main():
                 eps = unet(noisy, t, encoder_hidden_states=enc,
                            down_block_additional_residuals=down,
                            mid_block_additional_residual=mid).sample
-                loss = F.mse_loss(eps.float(), noise.float()) / a.accum
+            loss = F.mse_loss(eps.float(), noise.float()) / a.accum
             loss.backward()
             if (step + 1) % a.accum == 0:
                 opt.step(); opt.zero_grad(set_to_none=True)
@@ -187,6 +192,8 @@ def main():
                 mem = torch.cuda.max_memory_allocated() / 1e9
                 print(f"SMOKE_OK vram_peak={mem:.1f}GB", flush=True)
                 return
+    if step % a.accum != 0:  # flush trailing partial accumulation window
+        opt.step(); opt.zero_grad(set_to_none=True)
     controlnet.save_pretrained(os.path.join(a.out, "controlnet"))
     print("TRAIN_DONE", flush=True)
 
