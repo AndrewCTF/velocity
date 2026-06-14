@@ -913,6 +913,9 @@ function aircraftBillboard(
     // aircraft icons. The previous 12M m cut-off meant analysts saw a blank
     // globe on first paint until they zoomed in.
     distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 40_000_000),
+    // Scale with camera distance: ~1.7x base when close (≤10 km), ~0.5x when far
+    // (≥5000 km), so icons grow as you zoom in and don't clutter at world scale.
+    scaleByDistance: new Cesium.NearFarScalar(10_000, 1.7, 5_000_000, 0.5),
     ...(s.emergency && {
       color: new Cesium.CallbackProperty(
         () =>
@@ -942,6 +945,8 @@ function vesselBillboard(
     horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
     distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 600_000),
     translucencyByDistance: new Cesium.NearFarScalar(150_000, 1.0, 600_000, 0.0),
+    // Grow as you zoom into a port (~1.7x ≤5 km) and shrink at range (~0.6x).
+    scaleByDistance: new Cesium.NearFarScalar(5_000, 1.7, 400_000, 0.6),
   };
 }
 
