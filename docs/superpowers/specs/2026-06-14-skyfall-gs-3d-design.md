@@ -1,7 +1,11 @@
 # Spec 5 — Skyfall-GS 3D urban reconstruction (incl. destruction)
 
+> **SUPERSEDED (2026-06-14):** merged into
+> `2026-06-14-fusion-skyfall-3d-design.md` (Spec 5★), which unifies this with the
+> multi-sensor fusion/colorization work per operator direction. Kept for history.
+
 - Date: 2026-06-14
-- Status: draft (awaiting review)
+- Status: superseded
 - Depends on: Spec A (multi-view/multi-date satellite imagery supply + Cesium serving path).
 - Upstream method: **Skyfall-GS**, "Synthesizing Immersive 3D Urban Scenes from Satellite Imagery", arXiv 2510.15869, project https://skyfall-gs.jayinnn.dev/ .
 - Class: **research-grade, GPU.** Single workstation.

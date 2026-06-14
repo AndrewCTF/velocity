@@ -1,7 +1,12 @@
 # Spec 4 — Imagery reconstruction model (LiDAR + SAR + weather → optical)
 
+> **SUPERSEDED (2026-06-14):** merged into
+> `2026-06-14-fusion-skyfall-3d-design.md` (Spec 5★), which unifies this
+> reconstruction/colorization work with the Skyfall-GS 3D pipeline per operator
+> direction. Kept for history.
+
 - Date: 2026-06-14
-- Status: draft (awaiting review)
+- Status: superseded
 - Depends on: Spec A (imagery foundation supplies training data + serving path).
 - Class: **research-grade ML.** Real model training. Single-workstation budget.
 
