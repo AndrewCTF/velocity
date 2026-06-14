@@ -921,7 +921,7 @@ async def _grid_throttled() -> list[dict[str, Any]]:
 
 
 async def _await_within(
-    task: "asyncio.Future[Any]", deadline: float
+    task: asyncio.Future[Any], deadline: float
 ) -> Any:
     """Await ``task`` but never past the fan-out ``deadline`` (monotonic secs).
 

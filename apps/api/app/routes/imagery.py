@@ -13,7 +13,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.config import Settings, get_settings
-from app.imagery import gibs
+from app.imagery import cdse, gibs
 from app.tilecache import TileCache
 from app.upstream import get_client
 
@@ -51,7 +51,9 @@ async def _fetch_bytes(url: str) -> bytes | None:
 
 @router.get("/api/imagery/catalog")
 async def imagery_catalog() -> dict:
-    return {"layers": [{"provider": "gibs", **layer} for layer in gibs.catalog()]}
+    layers = [{"provider": "gibs", **layer} for layer in gibs.catalog()]
+    layers += [{"provider": "cdse", **layer} for layer in cdse.catalog()]
+    return {"layers": layers}
 
 
 @router.get("/api/imagery/{provider}/{layer}/{z}/{x}/{y}")
@@ -64,23 +66,31 @@ async def imagery_tile(
     date: str = Query(..., description="YYYY-MM-DD"),
     settings: Settings = Depends(get_settings),
 ) -> Response:
-    if provider != "gibs":
+    if provider not in ("gibs", "cdse"):
         raise HTTPException(404, "unknown provider")
     if not _DATE_RE.match(date):
         raise HTTPException(400, "date must be YYYY-MM-DD")
     try:
-        meta = gibs.layer(layer)
-        url = gibs.tile_url(layer, date, z, x, y)
+        if provider == "gibs":
+            meta = gibs.layer(layer)
+            url = gibs.tile_url(layer, date, z, x, y)
+
+            async def load() -> bytes | None:
+                return await _fetch_bytes(url)
+        else:
+            if not cdse.available():
+                raise HTTPException(503, "cdse credentials not configured")
+            meta = cdse.layer(layer)
+
+            async def load() -> bytes | None:
+                return await cdse.fetch_tile(layer, date, z, x, y)
     except KeyError:
         raise HTTPException(404, "unknown layer") from None
     if not (0 <= z <= meta["max_z"]):
         raise HTTPException(400, "z out of range")
 
-    async def load() -> bytes | None:
-        return await _fetch_bytes(url)
-
     data = await _cache_for(settings.tile_cache_dir).get(
-        f"gibs/{layer}/{date}", z, x, y, meta["ext"], _TTL, load
+        f"{provider}/{layer}/{date}", z, x, y, meta["ext"], _TTL, load
     )
     if data is None:
         raise HTTPException(502, "imagery upstream failed")

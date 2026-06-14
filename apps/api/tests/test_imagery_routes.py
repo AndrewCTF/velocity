@@ -4,7 +4,9 @@ def test_catalog_lists_gibs(client):
     body = r.json()
     ids = {layer["id"] for layer in body["layers"]}
     assert "MODIS_Terra_CorrectedReflectance_TrueColor" in ids
-    assert all(layer["provider"] == "gibs" for layer in body["layers"])
+    # gibs always present; cdse layers appear only when creds configured.
+    assert all(layer["provider"] in ("gibs", "cdse") for layer in body["layers"])
+    assert all("id" in layer and "title" in layer for layer in body["layers"])
 
 
 def test_tile_proxies_and_caches(client, monkeypatch):

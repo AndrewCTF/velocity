@@ -28,6 +28,7 @@ from app.routes import events as events_routes
 from app.routes import firms as firms_routes
 from app.routes import health as health_routes
 from app.routes import history as history_routes
+from app.routes import imagery as imagery_routes
 from app.routes import intel as intel_routes
 from app.routes import jamming as jamming_routes
 from app.routes import maritime as maritime_routes
@@ -35,7 +36,6 @@ from app.routes import news as news_routes_mod
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
 from app.routes import space as space_routes
-from app.routes import imagery as imagery_routes
 from app.routes import tiles as tiles_routes
 from app.routes import timeline as timeline_routes
 from app.routes import weather as weather_routes
