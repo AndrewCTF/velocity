@@ -28,3 +28,5 @@ coverage/
 /*.jpeg
 /*.gif
 /*.webp
+apps/ml/fusion/data/
+apps/ml/fusion/runs/
