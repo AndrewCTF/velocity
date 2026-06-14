@@ -21,9 +21,13 @@ interface Props {
   //                         Requires ionToken; with runtime google flag, also
   //                         adds Google Photorealistic 3D Tiles.
   imageryMode?: ImageryMode;
-  // Optional feature flag — if true AND imageryMode === '3d-sat' AND ionToken,
-  // load Google Photorealistic 3D Tiles and hide the ellipsoid globe.
+  // Optional feature flag — if true AND imageryMode === '3d-sat' AND a Google
+  // Maps key is set, load Google Photorealistic 3D Tiles (global photogrammetry)
+  // and hide the ellipsoid globe.
   enableGoogle3D?: boolean;
+  // Google Maps Platform key (Map Tiles API). Set as Cesium.GoogleMaps.defaultApiKey
+  // so createGooglePhotorealistic3DTileset() can fetch the global 3D tiles.
+  googleApiKey?: string;
 }
 
 // Above this camera altitude the Google photogrammetry is sub-pixel — hide
@@ -136,6 +140,7 @@ export function GlobeCanvas({
   onViewerReady,
   imageryMode = '2d-dark',
   enableGoogle3D = false,
+  googleApiKey = '',
 }: Props): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -191,6 +196,9 @@ export function GlobeCanvas({
     prewarmIcons();
 
     Cesium.Ion.defaultAccessToken = ionToken;
+    // Global Photorealistic 3D Tiles fetch via the Google Map Tiles API key
+    // (not ion). Without this, createGooglePhotorealistic3DTileset() can't init.
+    if (googleApiKey) Cesium.GoogleMaps.defaultApiKey = googleApiKey;
 
     const viewerOpts: Cesium.Viewer.ConstructorOptions = {
       animation: false,

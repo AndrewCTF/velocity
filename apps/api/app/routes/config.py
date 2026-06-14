@@ -23,6 +23,8 @@ class Features(BaseModel):
 
 class RuntimeConfig(BaseModel):
     cesium_ion_token: str = Field(..., alias="cesiumIonToken")
+    # Google Maps key for global Photorealistic 3D Tiles (browser-side, referrer-restricted).
+    google_api_key: str = Field("", alias="googleApiKey")
     features: Features
     classification: str
     build_id: str = Field(..., alias="buildId")
@@ -34,6 +36,7 @@ class RuntimeConfig(BaseModel):
 def get_config(settings: Settings = Depends(get_settings)) -> RuntimeConfig:
     return RuntimeConfig(
         cesiumIonToken=settings.cesium_ion_token,
+        googleApiKey=settings.gmaps_key,
         features=Features(enableGoogle3D=settings.enable_google_3d),
         classification=settings.classification,
         buildId=settings.build_id,

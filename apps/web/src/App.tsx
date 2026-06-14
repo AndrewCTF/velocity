@@ -95,6 +95,7 @@ export function App(): JSX.Element {
               onViewerReady={onViewerReady}
               imageryMode={imageryMode}
               enableGoogle3D={config.features.enableGoogle3D}
+              googleApiKey={config.googleApiKey}
             />
           ) : (
             <BootLoading />
