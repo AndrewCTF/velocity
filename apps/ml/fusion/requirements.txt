@@ -1,0 +1,16 @@
+# GPU env for fusion Stages C–G. Install into a py3.12 venv (see README).
+# torch/torchvision come from the cu128 index (Blackwell sm_120):
+#   uv pip install --python .venv/bin/python torch torchvision --index-url https://download.pytorch.org/whl/cu128
+diffusers
+transformers
+accelerate
+peft
+safetensors
+numpy
+pillow
+rasterio
+scikit-image
+kornia
+einops
+opencv-python-headless
+# gsplat   # Stage E only — build separately once CUDA toolkit (nvcc) is present
