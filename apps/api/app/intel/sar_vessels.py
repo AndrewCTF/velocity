@@ -28,9 +28,16 @@ from app.imagery import cdse
 
 _R = 6378137.0
 
-# Strait of Hormuz default AOI (lon0, lat0, lon1, lat1).
+# Water-dominant AOIs (lon0, lat0, lon1, lat1). Land contamination is the main
+# false-positive source for a coastline-mask-free baseline, so the default AOIs
+# are open-water boxes. A proper coastline/OSM-water mask (Spec A) would let the
+# AOI include the coast.
 AOIS: dict[str, tuple[float, float, float, float]] = {
-    "hormuz": (55.9, 26.4, 56.9, 27.1),
+    # Central Strait of Hormuz shipping channel (water).
+    "hormuz": (56.35, 26.50, 56.85, 26.78),
+    # Fujairah anchorage at the Gulf-of-Oman approaches to Hormuz — one of the
+    # busiest tanker anchorages on earth; clean open-water demo.
+    "fujairah": (56.46, 24.98, 56.82, 25.45),
 }
 
 
@@ -137,9 +144,10 @@ def _ais_match(
 async def detect_dark_vessels(
     aoi: str = "hormuz",
     date: str | None = None,
-    width: int = 768,
-    height: int = 640,
-    k: float = 4.0,
+    width: int = 1000,
+    height: int = 760,
+    k: float = 5.0,
+    max_area: int = 120,
 ) -> dict[str, Any]:
     """Fetch a Sentinel-1 VV scene for the AOI, detect vessels, cross-ref AIS.
 
@@ -163,7 +171,7 @@ async def detect_dark_vessels(
     from PIL import Image
 
     arr = np.asarray(Image.open(BytesIO(img)).convert("L"))
-    targets = detect_targets(arr, k=k)
+    targets = detect_targets(arr, k=k, max_area=max_area)
 
     # AIS coverage for the AOI from the observation store (keyless feeds).
     lon0, lat0, lon1, lat1 = AOIS[aoi]
