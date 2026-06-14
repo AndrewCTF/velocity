@@ -41,9 +41,9 @@ _MAX_SAMPLE = 25
 
 
 async def _snapshot() -> list[dict[str, Any]]:
-    from app.routes.adsb import adsb_global  # noqa: PLC0415
+    from app.routes.adsb import global_snapshot  # noqa: PLC0415
 
-    fc = await adsb_global()
+    fc = await global_snapshot()
     return list(fc.get("features") or [])
 
 

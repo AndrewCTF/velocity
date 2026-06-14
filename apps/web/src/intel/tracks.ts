@@ -65,6 +65,14 @@ class TrackStore {
     // for vessels), producing a dense smooth curve over 60 s instead of
     // looking like a straight line for slow-moving traffic.
     const last = arr[arr.length - 1];
+    // Time-regression guard (applies even to forced pushes): never append a fix
+    // OLDER than the latest one we already hold. When a contact momentarily
+    // flips to a staler source (e.g. the cached OpenSky snapshot wins a poll
+    // the live feed missed), its position is behind — appending it drew a
+    // backward spike in the trail even though the icon's motion model rejected
+    // it. Same observation time (equal t) is fine; only strictly-older is a
+    // regression. p.t is the fix's true observation time (see adapters).
+    if (last && p.t < last.t) return;
     const dLon = last ? Math.abs(last.lon - p.lon) : Infinity;
     const dLat = last ? Math.abs(last.lat - p.lat) : Infinity;
     const dt = last ? p.t - last.t : Infinity;

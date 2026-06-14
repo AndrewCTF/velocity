@@ -41,16 +41,30 @@ not regress any of them. If unsure, leave the relevant code path alone.
 - `SampledPositionProperty` with `LinearApproximation` is used to interpolate
   between fixes — do not replace it with `ConstantPositionProperty` on
   existing entities or icons will jump.
-- `requestRenderMode: true` must stay on. Continuous renders are reserved for
-  the selection reticle / track polyline timer.
+- `requestRenderMode: true` must stay on, BUT `maximumRenderTimeChange: 0`
+  (GlobeCanvas viewer opts) so the scene re-renders every frame the simulation
+  clock advances — that is what makes `SampledPositionProperty` interpolation
+  play SMOOTHLY between fixes instead of hopping once per poll (the "teleport"
+  report). When the timeline is paused (`shouldAnimate` false) the clock is
+  frozen, nothing changes, and the scene idles — so requestRenderMode still
+  saves GPU. Do not set `maximumRenderTimeChange` back to `Infinity`. Follow
+  (`camera.ts`) flips `requestRenderMode` off for its duration and restores it.
 
 ### Refresh cadence
 
-- ADS-B global: 5 s frontend poll (`registry/defaults.ts` `ttlSec: 5`), backend
-  sticky snapshot on a 5 s target cycle (`_SNAPSHOT_TARGET_CYCLE_S`), and each
-  fan-out is wall-clock-capped at 10 s (`_FANOUT_BUDGET_S`). Do not raise the
-  poll above 10 s.
-- AIS Digitraffic: 30 s. AISStream WS: live push.
+- ADS-B global: 1 s frontend poll (`registry/defaults.ts` `ttlSec: 1`), backend
+  sticky snapshot on a 2 s target cycle (`_SNAPSHOT_TARGET_CYCLE_S`), and each
+  fan-out is wall-clock-capped at 10 s (`_FANOUT_BUDGET_S`). The 1 s poll is
+  cheap (the hot route serves the sticky snapshot in microseconds); motion
+  between polls is interpolated + rendered every frame. Do not raise the poll
+  above 10 s.
+- Internal consumers of the snapshot (jamming, intel, analytics, correlate)
+  MUST call `global_snapshot()`, never the `adsb_global()` route handler in
+  process — the handler's `Query(...)` defaults reach `viewport_filter` and 500
+  ('>' not supported between instances of 'Query'). This broke the jamming layer.
+- AIS Digitraffic: 30 s (Baltic only). AISStream WS: live push (needs key).
+  Sentinel-1 SAR dark-vessel layer (`maritime.sar.hormuz`): 6 h poll — the only
+  keyless vessel coverage for the Strait of Hormuz.
 
 ### Aircraft count + sources (operator-visible)
 

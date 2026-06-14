@@ -32,12 +32,33 @@ async def dark_vessels_sar(
 
 
 @router.get("/api/intel/lod1")
-async def lod1_buildings(aoi: str = Query("beirut-dahieh")) -> dict[str, Any]:
-    """LOD1 building GeoJSON (footprints + height + SAR-damage flag) for the
-    globe to extrude. Cached 12h (Overpass + SAR fetch is slow)."""
+async def lod1_buildings(
+    aoi: str | None = Query(None, description="curated war-damage AOI key"),
+    bbox: str | None = Query(
+        None, description="freeform lon0,lat0,lon1,lat1 — extrude buildings anywhere"
+    ),
+) -> dict[str, Any]:
+    """LOD1 building GeoJSON for the globe to extrude. Cached 12h (Overpass slow).
+
+    Two modes:
+    - bbox=lon0,lat0,lon1,lat1 → freeform, anywhere on Earth. OSM footprints +
+      heights only (no SAR damage; needs no credentials).
+    - aoi=<key> → a curated war-damage AOI: footprints + heights + Sentinel-1
+      backscatter-drop damage flag (needs CDSE credentials).
+    """
+    if bbox is not None:
+        try:
+            parts = [float(x) for x in bbox.split(",")]
+            if len(parts) != 4:
+                raise ValueError("need 4 comma-separated numbers")
+            box = lod1.normalize_bbox(parts)
+        except ValueError as e:
+            raise HTTPException(400, f"bad bbox: {e}") from None
+        return await lod1.build_bbox(box)
+
     if not cdse.available():
         raise HTTPException(503, "cdse credentials not configured")
     try:
-        return await lod1.build(aoi)
+        return await lod1.build(aoi or "beirut-dahieh")
     except KeyError:
         raise HTTPException(404, f"unknown aoi (have {sorted(lod1.DAMAGE_DATES)})") from None

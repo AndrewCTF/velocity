@@ -147,9 +147,9 @@ async def _direct_point(lat: float, lon: float, radius_nm: int) -> dict[str, Any
 
 async def _snapshot_subset(bbox: BBox) -> dict[str, Any]:
     """Fallback: filter the warm global snapshot to the AOI bbox."""
-    from app.routes.adsb import adsb_global  # noqa: PLC0415
+    from app.routes.adsb import global_snapshot  # noqa: PLC0415
 
-    snap = await adsb_global()
+    snap = await global_snapshot()
     feats: list[dict[str, Any]] = []
     for f in snap.get("features") or []:
         ll = feature_lonlat(f)

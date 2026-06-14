@@ -175,10 +175,13 @@ def _aggregate_jamming(features: list[dict[str, Any]]) -> dict[str, Any]:
 async def jamming_nacp() -> dict[str, Any]:
     """GPS jamming heat layer derived from live ADS-B integrity flags."""
     # Import here to dodge the routes ↔ routes import cycle at module load.
-    from app.routes.adsb import adsb_global  # noqa: PLC0415
+    # Use the plain snapshot helper, NOT the adsb_global route handler — calling
+    # the handler in-process passes its unresolved Query() defaults into
+    # viewport_filter and 500s ('>' not supported between instances of 'Query').
+    from app.routes.adsb import global_snapshot  # noqa: PLC0415
 
     async def load() -> dict[str, Any]:
-        fc = await adsb_global()
+        fc = await global_snapshot()
         return _aggregate_jamming(list(fc.get("features") or []))
 
     return await cache.get_or_fetch("jamming:nacp", 60.0, load)

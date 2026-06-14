@@ -96,10 +96,12 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     kind: 'geojson',
     auth: 'none',
     endpoint: '/api/adsb/global',
-    // 5s pull: the backend sticky snapshot refreshes on a 5s target cycle,
-    // and the hot route returns it in microseconds (no fan-out per request).
-    // Frontend 5s poll + ≤5s old snapshot = ≤10s end-to-end refresh.
-    refresh: { mode: 'pull', ttlSec: 5 },
+    // 1s pull for a steady cadence: the backend sticky snapshot refreshes on a
+    // 2s target cycle and the hot route returns it in microseconds (no fan-out
+    // per request), so a 1s poll is cheap and consistent. Motion BETWEEN polls
+    // is interpolated and rendered every frame (GlobeCanvas maximumRenderTime-
+    // Change), so positions glide rather than hop once per poll.
+    refresh: { mode: 'pull', ttlSec: 1 },
     time: { temporal: true },
     crs: 'EPSG:4326',
     license: 'ADSB.lol / airplanes.live (NC)',
@@ -228,6 +230,28 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     // they don't see the same vessel twice). Keeping the no-key Digitraffic
     // feed as the default vessel layer means a fresh install renders ships
     // without any setup, while not double-painting MMSIs once the key arrives.
+    visibleByDefault: false,
+    emits: ['vessel'],
+  },
+  // Keyless vessel coverage for the Strait of Hormuz, where Digitraffic (Baltic
+  // only) and AISStream (needs a key) show nothing. Sentinel-1 SAR detects
+  // ship-sized backscatter targets regardless of AIS; targets with no nearby
+  // AIS report render as red dark-vessel diamonds (darkCandidate). Uses the
+  // operator's CDSE credentials. Detection is heavy (SAR fetch + CFAR) and
+  // Sentinel-1 revisits are ~12h, so this polls slowly. Off by default; flip on
+  // from the LayerRail when watching Hormuz.
+  {
+    id: 'maritime.sar.hormuz',
+    group: 'maritime',
+    title: 'Vessels — Sentinel-1 SAR (Hormuz, no key)',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/intel/dark-vessels/sar?aoi=hormuz',
+    refresh: { mode: 'pull', ttlSec: 6 * 3600 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'Contains modified Copernicus Sentinel data',
+    opacity: 1,
     visibleByDefault: false,
     emits: ['vessel'],
   },
