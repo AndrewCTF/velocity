@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react';
 import * as Cesium from 'cesium';
 import { MapboxTerrainProvider } from '@macrostrat/cesium-martini';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
-import { useTime, useSelection } from '../state/stores.js';
+import { useTime, useSelection, useImagery } from '../state/stores.js';
 import type { ImageryMode } from '../state/stores.js';
+import { gibsOverlayUrl } from '../imagery/gibsUrl.js';
 import { LayerCompositor } from './LayerCompositor.js';
 import { installSelectionReticle } from './selectionReticle.js';
 import { installSelectionTrack } from './selectionTrack.js';
@@ -94,6 +95,21 @@ function buildSatImagery(): Cesium.ImageryLayer {
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
 
+// GIBS imagery overlay (keyless, date-templated) drawn ON TOP of the base
+// layer. Proxied + disk-cached by the backend at /api/imagery/gibs/*.
+function buildGibsOverlay(
+  layer: string,
+  date: string,
+  maxLevel: number,
+): Cesium.ImageryLayer {
+  const provider = new Cesium.UrlTemplateImageryProvider({
+    url: gibsOverlayUrl(layer, date),
+    maximumLevel: maxLevel,
+    credit: 'NASA EOSDIS GIBS',
+  });
+  return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
+}
+
 // Terrain from our /tiles/terrain proxy (terrarium transcoded server-side
 // to Mapbox terrain-RGB), meshed client-side by cesium-martini. Replaces
 // ion World Terrain — keyless, disk-cached.
@@ -135,6 +151,27 @@ export function GlobeCanvas({
   // toggle) cannot install a stale tileset into the current scene.
   const stackGenRef = useRef(0);
   const sceneMode = useTime((s) => s.sceneMode);
+  const imageryOverlay = useImagery((s) => s.overlay);
+  const gibsLayerRef = useRef<Cesium.ImageryLayer | null>(null);
+
+  // GIBS overlay: add/remove a date-templated imagery layer on top of the
+  // base when the store's `overlay` changes. Guarded on the viewer existing
+  // so declaration order vs the viewer-creation effect doesn't matter.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const scene = viewer.scene;
+    if (gibsLayerRef.current) {
+      scene.imageryLayers.remove(gibsLayerRef.current, true);
+      gibsLayerRef.current = null;
+    }
+    if (imageryOverlay) {
+      const lyr = buildGibsOverlay(imageryOverlay.layer, imageryOverlay.date, 9);
+      scene.imageryLayers.add(lyr);
+      gibsLayerRef.current = lyr;
+    }
+    scene.requestRender();
+  }, [imageryOverlay]);
 
   // One-time viewer construction. Always starts on the dark basemap so the
   // app boots without an ion token; if the initial imageryMode is '3d-sat'

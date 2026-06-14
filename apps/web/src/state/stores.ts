@@ -71,9 +71,18 @@ export const useTime = create<TimeState>((set) => ({
 
 export type ImageryMode = '2d-dark' | '3d-sat';
 
+// Date-templated GIBS imagery overlay drawn on top of the base layer.
+// null = off; else a GIBS layer id + UTC date (YYYY-MM-DD).
+export interface ImageryOverlay {
+  layer: string;
+  date: string;
+}
+
 interface ImageryState {
   mode: ImageryMode;
   setMode: (m: ImageryMode) => void;
+  overlay: ImageryOverlay | null;
+  setOverlay: (o: ImageryOverlay | null) => void;
 }
 
 // Imagery stack toggle — flips the GlobeCanvas between the default
@@ -84,6 +93,8 @@ interface ImageryState {
 export const useImagery = create<ImageryState>((set) => ({
   mode: '2d-dark',
   setMode: (m) => set({ mode: m }),
+  overlay: null,
+  setOverlay: (o) => set({ overlay: o }),
 }));
 
 export type WsStatus = 'connecting' | 'open' | 'closed';

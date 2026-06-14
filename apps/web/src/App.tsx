@@ -6,6 +6,7 @@ import { TabbedPanel, type TabDef } from './shell/TabbedPanel.js';
 import { CommandBar } from './command-bar/CommandBar.js';
 import { useImagery } from './state/stores.js';
 import { LayerRail } from './layer-rail/LayerRail.js';
+import { ImageryControl } from './imagery/ImageryControl.js';
 import { ChokepointsList } from './layer-rail/ChokepointsList.js';
 import { FeedsPanel } from './layer-rail/FeedsPanel.js';
 import { EntityPanel } from './entity-panel/EntityPanel.js';
@@ -54,6 +55,7 @@ export function App(): JSX.Element {
   const leftTabs: TabDef[] = useMemo(
     () => [
       { id: 'layers', label: 'Layers', content: <LayerRail registry={registry} viewer={viewer} /> },
+      { id: 'imagery', label: 'Imagery', content: <ImageryControl /> },
       { id: 'chokepoints', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} /> },
       { id: 'feeds', label: 'Feeds', content: <FeedsPanel /> },
     ],
