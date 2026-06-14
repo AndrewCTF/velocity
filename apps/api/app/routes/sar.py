@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.imagery import cdse
-from app.intel import sar_vessels
+from app.intel import lod1, sar_vessels
 
 router = APIRouter(tags=["intel-sar"])
 
@@ -29,3 +29,15 @@ async def dark_vessels_sar(
     result = await sar_vessels.detect_dark_vessels(aoi=aoi, date=date)
     # Strip internal verification payloads (raw bytes / arrays) from the API body.
     return {k: v for k, v in result.items() if not k.startswith("_")}
+
+
+@router.get("/api/intel/lod1")
+async def lod1_buildings(aoi: str = Query("beirut-dahieh")) -> dict[str, Any]:
+    """LOD1 building GeoJSON (footprints + height + SAR-damage flag) for the
+    globe to extrude. Cached 12h (Overpass + SAR fetch is slow)."""
+    if not cdse.available():
+        raise HTTPException(503, "cdse credentials not configured")
+    try:
+        return await lod1.build(aoi)
+    except KeyError:
+        raise HTTPException(404, f"unknown aoi (have {sorted(lod1.DAMAGE_DATES)})") from None

@@ -5,6 +5,7 @@ import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useTime, useSelection, useImagery } from '../state/stores.js';
 import type { ImageryMode } from '../state/stores.js';
 import { imageryOverlayUrl } from '../imagery/gibsUrl.js';
+import { loadLod1, clearLod1 } from '../lod1/lod1Layer.js';
 import { LayerCompositor } from './LayerCompositor.js';
 import { installSelectionReticle } from './selectionReticle.js';
 import { installSelectionTrack } from './selectionTrack.js';
@@ -158,7 +159,19 @@ export function GlobeCanvas({
   const stackGenRef = useRef(0);
   const sceneMode = useTime((s) => s.sceneMode);
   const imageryOverlay = useImagery((s) => s.overlay);
+  const lod1Aoi = useImagery((s) => s.lod1Aoi);
   const gibsLayerRef = useRef<Cesium.ImageryLayer | null>(null);
+
+  // LOD1 war-damage 3D: load + extrude the AOI's buildings when the store asks.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (!lod1Aoi) {
+      clearLod1(viewer);
+      return;
+    }
+    loadLod1(viewer, lod1Aoi).catch((e) => console.warn('lod1 load failed:', e));
+  }, [lod1Aoi]);
 
   // GIBS overlay: add/remove a date-templated imagery layer on top of the
   // base when the store's `overlay` changes. Guarded on the viewer existing

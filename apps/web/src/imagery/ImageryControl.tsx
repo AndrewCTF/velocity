@@ -27,6 +27,8 @@ function today(): string {
 export function ImageryControl() {
   const overlay = useImagery((s) => s.overlay);
   const setOverlay = useImagery((s) => s.setOverlay);
+  const lod1Aoi = useImagery((s) => s.lod1Aoi);
+  const setLod1Aoi = useImagery((s) => s.setLod1Aoi);
   const [layers, setLayers] = useState<CatalogLayer[]>([]);
 
   useEffect(() => {
@@ -70,6 +72,15 @@ export function ImageryControl() {
           ))}
         </select>
       </label>
+      <div className="imagery-control__lod1">
+        <button
+          type="button"
+          onClick={() => setLod1Aoi(lod1Aoi ? null : 'beirut-dahieh')}
+          title="Extrude OSM footprints, color from Sentinel-2, red = SAR collapse candidate"
+        >
+          {lod1Aoi ? 'Hide war-damage 3D' : 'Load war-damage 3D — Beirut Dahieh'}
+        </button>
+      </div>
       {overlay && (
         <div className="imagery-control__date">
           <button

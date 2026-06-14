@@ -85,6 +85,9 @@ interface ImageryState {
   setMode: (m: ImageryMode) => void;
   overlay: ImageryOverlay | null;
   setOverlay: (o: ImageryOverlay | null) => void;
+  // LOD1 war-damage 3D: AOI to load + extrude in the globe (null = none).
+  lod1Aoi: string | null;
+  setLod1Aoi: (a: string | null) => void;
 }
 
 // Imagery stack toggle — flips the GlobeCanvas between the default
@@ -97,6 +100,8 @@ export const useImagery = create<ImageryState>((set) => ({
   setMode: (m) => set({ mode: m }),
   overlay: null,
   setOverlay: (o) => set({ overlay: o }),
+  lod1Aoi: null,
+  setLod1Aoi: (a) => set({ lod1Aoi: a }),
 }));
 
 export type WsStatus = 'connecting' | 'open' | 'closed';
