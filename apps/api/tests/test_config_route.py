@@ -15,8 +15,17 @@ def test_returns_runtime_config_with_camel_case_keys(client: TestClient) -> None
     body = r.json()
 
     # camelCase contract — frontend reads these names verbatim
-    assert set(body.keys()) == {"cesiumIonToken", "features", "classification", "buildId"}
+    assert set(body.keys()) == {
+        "cesiumIonToken",
+        "googleApiKey",
+        "features",
+        "classification",
+        "buildId",
+    }
     assert body["cesiumIonToken"] == "test-ion-token"
+    # googleApiKey is a client-side Maps key (referrer-restricted), like the ion
+    # token; empty in tests since conftest sets no gmaps_key.
+    assert isinstance(body["googleApiKey"], str)
     assert body["classification"] == "UNCLAS"
     assert body["buildId"] == "test"
     assert body["features"] == {"enableGoogle3D": False}
