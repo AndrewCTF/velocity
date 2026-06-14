@@ -121,6 +121,15 @@ class Settings(BaseSettings):
     ais_kystdatahuset_enabled: bool = True
     ais_kystdatahuset_interval_s: float = 60.0
     ais_digitraffic_mqtt_enabled: bool = True
+    # Digitraffic /locations serves the LAST-KNOWN position of every vessel it
+    # has ever seen — ~86% are fixes months/years old (decommissioned, scrapped,
+    # or long out of coverage). An in-commission vessel keeps an AIS transponder
+    # ON and reports every few minutes even at anchor, so last-report recency is
+    # the only reliable "still in commission" proxy. Drop fixes older than this
+    # so the map shows live + parked-but-transmitting vessels, not ghost ships.
+    # 24h keeps anchored/slow reporters while cutting the multi-year dead. Set to
+    # 0 to disable the filter and serve every last-known position.
+    digitraffic_max_fix_age_s: float = 86400.0
 
     # ── Historical playback ──
     # Position history store for 3D replay/scrub. SQLite by default; safe to

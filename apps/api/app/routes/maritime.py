@@ -10,17 +10,20 @@ PollGeoJsonAdapter / MapLibre vessel paint reuse without changes.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.config import get_settings
 from app.correlate.store import store
 from app.correlate.types import Observation
 from app.routes.adsb import viewport_filter
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["maritime"])
+log = logging.getLogger(__name__)
 
 LOCATIONS_URL = "https://meri.digitraffic.fi/api/ais/v1/locations"
 METADATA_URL = "https://meri.digitraffic.fi/api/ais/v1/vessels"
@@ -66,6 +69,19 @@ async def _load_vessel_metadata() -> dict[int, dict[str, Any]]:
     return await cache.get_or_fetch("digitraffic:metadata", 12 * 3600.0, load)
 
 
+def _fix_epoch_s(timestamp: Any) -> float | None:
+    """Digitraffic position timestamps (`timestampExternal`/`timestamp`) are
+    epoch MILLISECONDS. Return epoch seconds, or None if missing/unparseable."""
+    if isinstance(timestamp, (int, float)):
+        return float(timestamp) / 1000.0
+    if isinstance(timestamp, str):
+        try:
+            return float(timestamp) / 1000.0
+        except ValueError:
+            return None
+    return None
+
+
 @router.get("/api/maritime/digitraffic")
 async def digitraffic_vessels(
     lamin: float | None = Query(None, ge=-90, le=90),
@@ -85,6 +101,8 @@ async def digitraffic_vessels(
         meta_by_mmsi = await _load_vessel_metadata()
         feats: list[dict[str, Any]] = []
         now = time.time()
+        max_fix_age = get_settings().digitraffic_max_fix_age_s
+        dropped_stale = 0
         batch: list[Observation] = []
         for f in j.get("features", []) or []:
             mmsi = f.get("mmsi") or (f.get("properties") or {}).get("mmsi")
@@ -101,6 +119,17 @@ async def digitraffic_vessels(
             cog = p.get("cog")
             heading = p.get("heading")
             timestamp = p.get("timestampExternal") or p.get("timestamp")
+            # "Still in commission" gate. An active vessel keeps its AIS
+            # transponder reporting every few minutes even parked at anchor, so a
+            # last fix older than the window is a decommissioned / scrapped /
+            # long-gone ghost (Digitraffic serves last-known for every MMSI it
+            # ever saw — ~86% are years stale). Drop it AND its correlation
+            # observation so the map shows only vessels actually present and
+            # transmitting. max_fix_age == 0 disables the gate.
+            sample_t = _fix_epoch_s(timestamp)
+            if max_fix_age > 0 and (sample_t is None or now - sample_t > max_fix_age):
+                dropped_stale += 1
+                continue
             # ITU-R M.1371 ship type (0-99). Digitraffic exposes it as
             # `shipType`; keep the camelCase the frontend already reads.
             ship_type = p.get("shipType")
@@ -143,23 +172,16 @@ async def digitraffic_vessels(
                 }
             )
             if mmsi is not None:
-                # Prefer the upstream sample timestamp (`timestampExternal` is
-                # epoch milliseconds per Digitraffic AIS spec) so correlation
-                # rules see when the position was actually reported, not when
-                # we ingested it. Fall back to `now` only if missing/unparseable.
-                sample_t = now
-                if isinstance(timestamp, (int, float)):
-                    sample_t = float(timestamp) / 1000.0
-                elif isinstance(timestamp, str):
-                    try:
-                        sample_t = float(timestamp) / 1000.0
-                    except ValueError:
-                        sample_t = now
+                # Prefer the upstream sample timestamp (parsed above from
+                # `timestampExternal`, epoch ms per Digitraffic AIS spec) so
+                # correlation rules see when the position was actually reported,
+                # not when we ingested it. Fall back to `now` only when the gate
+                # is disabled and the fix has no parseable timestamp.
                 batch.append(
                     Observation(
                         id=eid,
                         source="digitraffic",
-                        t=sample_t,
+                        t=sample_t if sample_t is not None else now,
                         lon=lon,
                         lat=lat,
                         emits_kind="vessel",
@@ -181,6 +203,15 @@ async def digitraffic_vessels(
                 )
         if batch:
             store.add_many(batch)
+        if dropped_stale:
+            log.info(
+                "digitraffic: kept %d in-commission vessels, dropped %d stale "
+                "(fix > %.0fh) of %d",
+                len(feats),
+                dropped_stale,
+                max_fix_age / 3600.0,
+                len(feats) + dropped_stale,
+            )
         return {"type": "FeatureCollection", "features": feats}
 
     # Digitraffic positions update every ~minute; cache aligns. The full FC is
