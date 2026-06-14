@@ -35,6 +35,7 @@ from app.routes import news as news_routes_mod
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
 from app.routes import space as space_routes
+from app.routes import imagery as imagery_routes
 from app.routes import tiles as tiles_routes
 from app.routes import timeline as timeline_routes
 from app.routes import weather as weather_routes
@@ -133,6 +134,7 @@ def create_app() -> FastAPI:
     app.include_router(entity_routes.router)
     app.include_router(alerts_routes.router)
     app.include_router(tiles_routes.router)
+    app.include_router(imagery_routes.router)
     app.include_router(search_routes.router)
     app.include_router(correlations_routes.router)
     app.include_router(timeline_routes.router)
