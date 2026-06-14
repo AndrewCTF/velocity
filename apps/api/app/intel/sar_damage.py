@@ -30,6 +30,9 @@ AOIS: dict[str, tuple[float, float, float, float]] = {
     "khan-younis": (34.27, 31.32, 34.37, 31.39),
     "mariupol": (37.50, 47.07, 37.62, 47.14),
     "bakhmut": (37.97, 48.57, 38.04, 48.62),
+    # Lebanon — Israeli strikes 2024 (Beirut southern suburbs + south border).
+    "beirut-dahieh": (35.49, 33.83, 35.53, 33.87),
+    "south-lebanon": (35.28, 33.10, 35.42, 33.22),
 }
 
 
