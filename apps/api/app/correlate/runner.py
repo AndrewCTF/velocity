@@ -357,6 +357,22 @@ async def _incident_watch_loop(stop: asyncio.Event) -> None:
         await asyncio.sleep(60)
 
 
+async def _baseline_loop(stop: asyncio.Event) -> None:
+    """Sample global activity metrics every 5 min into the rolling baseline so
+    the /api/intel/baseline 'is this normal?' z-scores have something to compare
+    against. Matures within ~1h of uptime."""
+    from app.intel import baseline as intel_baseline  # noqa: PLC0415
+
+    await asyncio.sleep(25)
+    while not stop.is_set():
+        try:
+            metrics = await intel_baseline.current_metrics(None)
+            intel_baseline.baseline_store.sample("global", metrics)
+        except Exception as e:  # noqa: BLE001
+            log.exception("baseline_loop: %s", e)
+        await asyncio.sleep(300)
+
+
 def _publish(alert: object) -> None:
     # Dedupe key uses the set of contributing observation ids (stable across
     # position updates). Critical for proximity rules whose `message` embeds
@@ -410,6 +426,7 @@ def start() -> None:
     _tasks.append(asyncio.create_task(_emerg_loop(_stop), name="emerg_loop"))
     _tasks.append(asyncio.create_task(_rule_loop(_stop), name="rule_loop"))
     _tasks.append(asyncio.create_task(_incident_watch_loop(_stop), name="incident_watch_loop"))
+    _tasks.append(asyncio.create_task(_baseline_loop(_stop), name="baseline_loop"))
 
 
 async def stop_all() -> None:

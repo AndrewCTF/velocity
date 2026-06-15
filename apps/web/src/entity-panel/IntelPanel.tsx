@@ -29,6 +29,12 @@ interface BriefEvidence {
   lon: number;
   lat: number;
 }
+interface EmitterEstimate {
+  lon: number;
+  lat: number;
+  cep_km: number;
+  n_cells: number;
+}
 interface BriefIncident {
   id: string;
   threat_level: string;
@@ -40,6 +46,7 @@ interface BriefIncident {
   narrative: string;
   evidence: BriefEvidence[];
   follow_up: string[];
+  emitter_estimate?: EmitterEstimate | null;
 }
 interface BriefResp {
   top_threat_level: string;
@@ -250,6 +257,12 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
                   </span>
                 </div>
                 <p className="text-[11px] text-txt-1 leading-tight mt-1">{inc.narrative}</p>
+                {inc.emitter_estimate && (
+                  <p className="mono micro text-warn mt-1">
+                    emitter ≈ {inc.emitter_estimate.lat.toFixed(2)},{inc.emitter_estimate.lon.toFixed(2)} ±
+                    {inc.emitter_estimate.cep_km}km
+                  </p>
+                )}
                 <div className="flex items-center gap-2 mt-1">
                   <button
                     type="button"
