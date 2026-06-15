@@ -51,6 +51,31 @@ Set `VITE_API_URL` if the backend is anywhere other than `http://localhost:8000`
 If you set `API_KEY` on the backend, build/serve the web app with a matching
 `VITE_API_KEY` — the bundle attaches it as `X-API-Key` on every call.
 
+## System requirements
+
+The heavy component is the **client**: a CesiumJS WebGL2 globe rendering up to
+~14 k animated entities (aircraft + vessels) plus terrain/imagery. It is GPU- and
+main-thread-bound in the browser, not on the server. A discrete GPU is strongly
+recommended; on hybrid-graphics laptops make sure the browser uses the dGPU
+(`chrome://gpu` → "GPU0 … ACTIVE"). High-DPI/4K multiplies GPU load (render scale
+is capped at 1.5×); MSAA is off in favour of FXAA to keep render-target VRAM low.
+
+| | Minimum (runs, reduced) | Recommended (smooth, full feeds) | Ideal (everything, 4K, 100+ fps) |
+|---|---|---|---|
+| **GPU** | Any WebGL2 GPU — integrated (Intel Iris Xe, AMD Vega, Apple M1) | Discrete, ≥4 GB VRAM (GTX 1660 / RTX 2060 / RX 5600 / M1 Pro) | RTX 3070 / RX 6800 or better, ≥8 GB VRAM |
+| **CPU** | Dual-core x86-64 / Apple Silicon | Quad-core+ | 8-core+ |
+| **RAM** | 8 GB | 16 GB | 32 GB |
+| **Display** | 1080p | 1080p–1440p | up to 4K |
+| **Browser** | Chrome/Edge 110+ or Firefox 110+ (WebGL2 required) | Chrome/Edge (latest) | Chrome/Edge (latest) |
+| **Experience** | Zoom into regions; world-view aircraft capped; ~30 fps | All feeds, smooth pan, ~60 fps | Full ~14 k-entity union + 3D-sat terrain, 100+ fps |
+
+More system RAM = a larger Cesium tile cache (`tileCacheSize`, default raised to
+1000) and smoother panning, since tiles stay resident instead of being re-fetched.
+
+**Backend (server):** Python 3.12, ~1 GB RAM, outbound HTTPS. Runs comfortably on
+a small VPS or the same machine as the browser; it is not the performance
+bottleneck.
+
 ## Tests
 
 ```bash

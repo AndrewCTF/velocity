@@ -360,6 +360,11 @@ export function GlobeCanvas({
     viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
     scene.globe.maximumScreenSpaceError = 2.0;
     scene.globe.preloadSiblings = false;
+    // Heavier tile caching (default 100): keep ~1000 terrain+imagery tiles
+    // resident so panning around a theatre re-uses cached tiles instead of
+    // re-fetching + re-decoding them — trades RAM (plentiful) for smoother
+    // motion. ~1000 tiles is a few hundred MB; raise further if RAM allows.
+    scene.globe.tileCacheSize = 1000;
     scene.screenSpaceCameraController.minimumZoomDistance = 2.0;
     // Keep the far plane huge so the whole disk still draws from orbit even
     // with the tighter near zoom.
