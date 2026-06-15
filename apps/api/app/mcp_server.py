@@ -436,6 +436,60 @@ async def intel_brief(
 
 
 @mcp.tool()
+async def whats_changed(
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_nm: float = 500.0,
+) -> dict[str, Any]:
+    """Standing watch — what CHANGED since the last check, not the full picture.
+
+    Returns incidents that are NEW, ESCALATED, DE-ESCALATED, or RESOLVED. Global
+    (no coords) reflects the background watch loop (recomputed ~every 60s); an
+    AOI (lat/lon) diffs against YOUR previous whats_changed call for that area,
+    so you can poll one region and be told only what moved. Use this to monitor
+    instead of re-reading the whole brief each time.
+    """
+    return await _get(
+        "/api/intel/watch", {"lat": lat, "lon": lon, "radius_nm": radius_nm}
+    )
+
+
+@mcp.tool()
+async def incident_history(
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_nm: float = 500.0,
+    hours: float = 6.0,
+) -> dict[str, Any]:
+    """Timeline of how each incident built up over the recent window — per
+    incident, the series of (time, threat_level, score) observations. Reveals
+    sequence (e.g. jamming first, then dark vessels, then a reported event).
+    Global uses the background watch history; an AOI uses your prior watch calls.
+    """
+    return await _get(
+        "/api/intel/incident-history",
+        {"lat": lat, "lon": lon, "radius_nm": radius_nm, "hours": hours},
+    )
+
+
+@mcp.tool()
+async def vessel_dossier(mmsi: str) -> dict[str, Any]:
+    """Pattern-of-life dossier for one vessel (MMSI): recent track, AIS gaps,
+    derived speed profile (loiter / transit / loiter-then-dash), area covered,
+    which live incidents it appears in, and a behaviour assessment. The track is
+    the store's ~1h retention window."""
+    return await _get(f"/api/intel/dossier/vessel/{quote(mmsi, safe='')}")
+
+
+@mcp.tool()
+async def aircraft_dossier(ident: str) -> dict[str, Any]:
+    """Pattern-of-life dossier for one aircraft (ICAO24 hex or callsign): recent
+    track, gaps, derived speed profile, GNSS-integrity, emergency/military flags,
+    and which live incidents it appears in."""
+    return await _get(f"/api/intel/dossier/aircraft/{quote(ident, safe='')}")
+
+
+@mcp.tool()
 async def list_focus_areas() -> dict[str, Any]:
     """List the priority areas currently loaded PRIMARY (with fetch stats and
     whether each is served by a dedicated fetch or the degraded snapshot

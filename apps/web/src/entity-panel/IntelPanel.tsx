@@ -60,6 +60,37 @@ async function fetchBrief(center?: readonly number[]): Promise<BriefResp | null>
   }
 }
 
+interface WatchChange {
+  key: string;
+  threat_level: string;
+  domains: string[];
+  narrative: string;
+  centroid: { lon: number; lat: number };
+  from_level?: string;
+}
+interface WatchResp {
+  changes: {
+    had_baseline: boolean;
+    new: WatchChange[];
+    escalated: WatchChange[];
+    deescalated: WatchChange[];
+    resolved: WatchChange[];
+    steady: number;
+    active: number;
+  };
+}
+
+// Standing watch — the global background diff (new / escalated / resolved).
+async function fetchWatch(): Promise<WatchResp | null> {
+  try {
+    const res = await apiFetch('/api/intel/watch');
+    if (!res.ok) return null;
+    return (await res.json()) as WatchResp;
+  } catch {
+    return null;
+  }
+}
+
 interface Props {
   viewer: Cesium.Viewer | null;
 }
@@ -94,6 +125,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
   );
   const [jammingAlerts, setJammingAlerts] = useState<Alert[]>([]);
   const [brief, setBrief] = useState<BriefResp | null>(null);
+  const [watch, setWatch] = useState<WatchResp | null>(null);
 
   // Poll the dark-vessel tracker once a second. Cheap — it's an in-process Map.
   useEffect(() => {
@@ -147,7 +179,31 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
     };
   }, [activeAoi]);
 
+  // Poll the global standing-watch diff every 30 s (what changed since the
+  // background loop's last tick). Push alerts for HIGH transitions arrive
+  // separately on the alert bus → command-bar ticker + Alerts drawer.
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      fetchWatch()
+        .then((w) => {
+          if (!cancelled) setWatch(w);
+        })
+        .catch(() => {
+          /* swallow — fetchWatch never rejects */
+        });
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
   const topCorrelations: Alert[] = alerts.slice(0, 5);
+  const ch = watch?.changes;
+  const changeItems: WatchChange[] = ch ? [...ch.new, ...ch.escalated] : [];
 
   const satOn = imageryMode === '3d-sat';
   return (
@@ -214,6 +270,48 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
           </ul>
         )}
       </section>
+
+      {ch && (
+        <section>
+          <div className="flex items-baseline justify-between">
+            <h3 className="micro">Changes</h3>
+            <span className="mono micro tabular-nums text-txt-3">
+              +{ch.new.length} ↑{ch.escalated.length} −{ch.resolved.length} · {ch.active} active
+            </span>
+          </div>
+          {changeItems.length === 0 ? (
+            <p className="micro normal-case tracking-normal text-txt-3 mt-1">
+              {ch.had_baseline ? 'No new or escalated incidents since last tick.' : 'Establishing baseline…'}
+            </p>
+          ) : (
+            <ul className="mt-1 space-y-1">
+              {changeItems.slice(0, 5).map((c) => (
+                <li key={c.key} className="border border-line rounded-sm p-2 bg-bg-2/50">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className={`micro uppercase ${TL[c.threat_level] ?? ''}`}>
+                      {c.from_level ? `${c.from_level}→${c.threat_level}` : `NEW · ${c.threat_level}`}
+                    </span>
+                    <span className="mono micro tabular-nums text-txt-3 truncate">
+                      {c.domains.join(' + ')}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-txt-1 leading-tight mt-1">{c.narrative}</p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      viewer &&
+                      flyToPosition(viewer, c.centroid.lon, c.centroid.lat, 300_000, reduced ? 0 : 1.0)
+                    }
+                    className="mono text-[10px] px-1.5 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1 mt-1"
+                  >
+                    slew to
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       <section>
         <h3 className="micro">Dark vessels</h3>

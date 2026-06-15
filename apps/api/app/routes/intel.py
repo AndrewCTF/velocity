@@ -21,8 +21,9 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app import llm
 from app.config import get_settings
-from app.intel import analytics, aoi, incidents
+from app.intel import analytics, aoi, dossier, incidents
 from app.intel.geo import BBox, bbox_from_radius
+from app.intel.incident_store import incident_store
 
 router = APIRouter(tags=["intel"])
 
@@ -189,6 +190,81 @@ async def intel_brief(
     """
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
     return await incidents.brief(bbox, link_km=link_km, window_s=window_hours * 3600.0)
+
+
+def _scope_for(bbox: BBox | None) -> str:
+    if bbox is None:
+        return "global"
+    d = bbox.as_dict()
+    return (f"aoi:{round(d['min_lon'], 1)}:{round(d['min_lat'], 1)}:"
+            f"{round(d['max_lon'], 1)}:{round(d['max_lat'], 1)}")
+
+
+@router.get("/api/intel/watch")
+async def intel_watch(
+    min_lon: float | None = Query(None),
+    min_lat: float | None = Query(None),
+    max_lon: float | None = Query(None),
+    max_lat: float | None = Query(None),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_nm: float = Query(500.0, ge=1, le=5000),
+) -> dict[str, Any]:
+    """Standing watch: what CHANGED since the last check (new / escalated /
+    de-escalated / resolved incidents).
+
+    Global: returns the background watch loop's latest diff (recomputed every
+    ~60s) plus the current top-line — read-only, no clobbering the baseline.
+    AOI (centre+radius or bbox): records a fresh snapshot under that area's scope
+    and diffs it against YOUR previous call for the same area — so an agent can
+    poll one AOI and be told only what moved.
+    """
+    bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+    b = await incidents.brief(bbox)
+    if bbox is None:
+        changes = incident_store.last_changes("global") or {
+            "scope": "global", "had_baseline": False, "new": [], "escalated": [],
+            "deescalated": [], "resolved": [], "steady": 0, "active": b["incident_count"],
+            "note": "watch loop has not ticked yet",
+        }
+    else:
+        changes = incident_store.record(_scope_for(bbox), b["incidents"])
+    return {
+        "top_threat_level": b["top_threat_level"],
+        "incident_count": b["incident_count"],
+        "by_level": b["by_level"],
+        "changes": changes,
+    }
+
+
+@router.get("/api/intel/incident-history")
+async def intel_incident_history(
+    min_lon: float | None = Query(None),
+    min_lat: float | None = Query(None),
+    max_lon: float | None = Query(None),
+    max_lat: float | None = Query(None),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_nm: float = Query(500.0, ge=1, le=5000),
+    hours: float = Query(6.0, ge=0.25, le=24.0),
+) -> dict[str, Any]:
+    """Per-incident timeline over the recent window — how each convergence built
+    up. Global uses the background watch loop's history; an AOI uses the history
+    accumulated by your prior /watch calls for that area."""
+    bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+    return incident_store.history(_scope_for(bbox), hours * 3600.0)
+
+
+@router.get("/api/intel/dossier/vessel/{mmsi}")
+async def intel_vessel_dossier(mmsi: str) -> dict[str, Any]:
+    """Pattern-of-life dossier for one vessel (MMSI)."""
+    return await dossier.vessel_dossier(mmsi)
+
+
+@router.get("/api/intel/dossier/aircraft/{ident}")
+async def intel_aircraft_dossier(ident: str) -> dict[str, Any]:
+    """Pattern-of-life dossier for one aircraft (ICAO24 hex or callsign)."""
+    return await dossier.aircraft_dossier(ident)
 
 
 @router.get("/api/intel/aois")

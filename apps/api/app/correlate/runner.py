@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
 from typing import Any
 
 import httpx
@@ -23,7 +24,7 @@ from app.correlate.rules import (
     proximity_mil_vessel,
 )
 from app.correlate.store import store
-from app.correlate.types import Observation
+from app.correlate.types import Alert, Observation
 from app.ingest.opensky import OpenSkyTokenManager, fetch_states
 from app.upstream import get_client
 
@@ -317,6 +318,45 @@ async def _rule_loop(stop: asyncio.Event) -> None:
         await asyncio.sleep(10)
 
 
+async def _incident_watch_loop(stop: asyncio.Event) -> None:
+    """Standing watch: every 60 s recompute the GLOBAL cross-domain incident
+    brief, record it (building the change-diff + history the /watch and
+    /incident-history endpoints serve), and PUSH any new-or-escalated HIGH
+    incident to the alert bus so it reaches the command-bar ticker + drawer +
+    WS without the operator watching the Intel tab.
+    """
+    # Lazy imports: keep the intel layer out of the runner's import graph at
+    # module load, mirroring the in-process route loopbacks elsewhere here.
+    from app.intel import incidents as intel_incidents  # noqa: PLC0415
+    from app.intel.incident_store import incident_store  # noqa: PLC0415
+
+    await asyncio.sleep(20)  # let the first global snapshot warm
+    while not stop.is_set():
+        try:
+            b = await intel_incidents.brief(None)
+            diff = incident_store.record("global", b["incidents"])
+            for inc in diff["new"] + diff["escalated"]:
+                if inc.get("threat_level") != "high":
+                    continue
+                c = inc.get("centroid") or {}
+                _publish(
+                    Alert(
+                        id=str(uuid.uuid4()),
+                        rule_id="incident",
+                        severity="high",
+                        t=time.time(),
+                        lon=float(c.get("lon", 0.0)),
+                        lat=float(c.get("lat", 0.0)),
+                        confidence=0.8,
+                        message=inc.get("narrative") or "cross-domain incident",
+                        contributing=[inc.get("key") or ""],
+                    )
+                )
+        except Exception as e:  # noqa: BLE001
+            log.exception("incident_watch_loop: %s", e)
+        await asyncio.sleep(60)
+
+
 def _publish(alert: object) -> None:
     # Dedupe key uses the set of contributing observation ids (stable across
     # position updates). Critical for proximity rules whose `message` embeds
@@ -369,6 +409,7 @@ def start() -> None:
     _tasks.append(asyncio.create_task(_quake_loop(_stop), name="quake_loop"))
     _tasks.append(asyncio.create_task(_emerg_loop(_stop), name="emerg_loop"))
     _tasks.append(asyncio.create_task(_rule_loop(_stop), name="rule_loop"))
+    _tasks.append(asyncio.create_task(_incident_watch_loop(_stop), name="incident_watch_loop"))
 
 
 async def stop_all() -> None:
