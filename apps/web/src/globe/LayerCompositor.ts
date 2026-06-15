@@ -23,16 +23,25 @@ function aoiBboxQuery(): string | null {
 // set is the web UI's real cost (the GPU render itself is ~8 ms). At near-global
 // zoom it drops the bbox and just caps + decimates, since everything is on
 // screen anyway.
-function viewportQuery(viewer: Cesium.Viewer, limit: number): () => string | null {
+function viewportQuery(
+  viewer: Cesium.Viewer,
+  limit: number,
+  worldLimit: number = limit,
+): () => string | null {
   return () => {
     const rect = viewer.camera.computeViewRectangle();
-    if (!rect) return `limit=${limit}`;
+    if (!rect) return `limit=${worldLimit}`;
     const s = Cesium.Math.toDegrees(rect.south);
     const n = Cesium.Math.toDegrees(rect.north);
     const w = Cesium.Math.toDegrees(rect.west);
     const e = Cesium.Math.toDegrees(rect.east);
     const widthDeg = ((e - w) % 360 + 360) % 360;
-    if (widthDeg > 170 || n - s > 140) return `limit=${limit}`; // ~world view → cap only
+    // ~world view: there's no bbox to scope by, and 14k individual dots are
+    // visually indistinguishable at this zoom, so cap to worldLimit to keep the
+    // entity-update loop cheap. Zooming in drops below the threshold and loads
+    // the FULL local traffic (up to `limit`) for the viewport — so China/Russia
+    // etc. show everything when you actually look at them.
+    if (widthDeg > 170 || n - s > 140) return `limit=${worldLimit}`;
     // Pad ~15% so contacts just outside the frame are loaded before they
     // scroll in; clamp to the backend's accepted ranges.
     const padLat = (n - s) * 0.15;
@@ -208,10 +217,11 @@ export class LayerCompositor {
       if (d.id === 'aviation.opensky.states') {
         bboxQuery = aoiBboxQuery;
       } else if (d.id === 'aviation.adsb.global') {
-        // 20000 = the backend's max limit, so the full ~14k global union renders
-        // at world view instead of being capped at 5k (the "only ~4k aircraft"
-        // report). Zoomed in, viewportQuery still bbox-scopes the fetch.
-        bboxQuery = viewportQuery(ctx.viewer, 20000);
+        // Zoomed in: up to 20000 in the viewport (full local traffic — the China/
+        // Russia coverage that matters when you actually look there). Full-globe
+        // view: capped to 4000 so the entity-update loop stays cheap; 14k
+        // individual dots are indistinguishable at world zoom anyway.
+        bboxQuery = viewportQuery(ctx.viewer, 20000, 4000);
         refreshOnMove = true;
       } else if (d.id === 'maritime.digitraffic') {
         bboxQuery = viewportQuery(ctx.viewer, 6000);
