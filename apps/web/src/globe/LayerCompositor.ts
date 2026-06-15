@@ -208,7 +208,10 @@ export class LayerCompositor {
       if (d.id === 'aviation.opensky.states') {
         bboxQuery = aoiBboxQuery;
       } else if (d.id === 'aviation.adsb.global') {
-        bboxQuery = viewportQuery(ctx.viewer, 5000);
+        // 20000 = the backend's max limit, so the full ~14k global union renders
+        // at world view instead of being capped at 5k (the "only ~4k aircraft"
+        // report). Zoomed in, viewportQuery still bbox-scopes the fetch.
+        bboxQuery = viewportQuery(ctx.viewer, 20000);
         refreshOnMove = true;
       } else if (d.id === 'maritime.digitraffic') {
         bboxQuery = viewportQuery(ctx.viewer, 6000);

@@ -590,14 +590,19 @@ async def _try_opensky_global() -> dict[str, Any] | None:
     settings = get_settings()
     tm = _token_manager(settings)  # token only attached if creds present
     try:
-        raw = await fetch_states(tm, None)  # may raise HTTPStatusError on 429
-    except httpx.HTTPStatusError as e:
-        # Authed budget spent — fall back to the separate anonymous IP budget.
-        # If we were already anonymous, re-raise so the caller backs off.
-        if e.response is not None and e.response.status_code == 429 and tm.enabled:
-            raw = await fetch_states(_ANON_TM, None)  # may raise 429 again
-        else:
+        raw = await fetch_states(tm, None)
+    except Exception:  # noqa: BLE001
+        # The AUTHED attempt failed for ANY reason — budget spent (429),
+        # credentials invalid/expired (401/403 at the OAuth token endpoint), a
+        # token-manager error, or a transient network fault. Fall back to the
+        # SEPARATE anonymous-by-IP budget so a dead OAuth account never blanks
+        # the global breadth tier (the bug that left Russia/China at ~0 aircraft
+        # while opensky_authed reported "true" — configured != working). Only
+        # when we were already anonymous (no creds) do we surface the error so
+        # the caller can back off.
+        if not tm.enabled:
             raise
+        raw = await fetch_states(_ANON_TM, None)  # anonymous /states/all
     fc = states_to_geojson(raw)
     if not fc.get("features"):
         return None
