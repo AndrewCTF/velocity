@@ -360,11 +360,12 @@ export function GlobeCanvas({
     viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
     scene.globe.maximumScreenSpaceError = 2.0;
     scene.globe.preloadSiblings = false;
-    // Heavier tile caching (default 100): keep ~1000 terrain+imagery tiles
-    // resident so panning around a theatre re-uses cached tiles instead of
-    // re-fetching + re-decoding them — trades RAM (plentiful) for smoother
-    // motion. ~1000 tiles is a few hundred MB; raise further if RAM allows.
-    scene.globe.tileCacheSize = 1000;
+    // Terrain+imagery tile cache. Kept at the Cesium default (100): an earlier
+    // bump to 1000 pushed VRAM the wrong way (these tiles are GPU textures, not
+    // system RAM), which on a high-VRAM card let the cache balloon. 100 is a
+    // sane resident-tile bound; the real "smoothness" lever is the discrete GPU,
+    // not a bigger cache.
+    scene.globe.tileCacheSize = 100;
     scene.screenSpaceCameraController.minimumZoomDistance = 2.0;
     // Keep the far plane huge so the whole disk still draws from orbit even
     // with the tighter near zoom.
@@ -529,6 +530,11 @@ export function GlobeCanvas({
               tileset.destroy();
               return;
             }
+            // Hard-cap the buildings tileset VRAM (defaults can overflow well
+            // past 1 GB) and coarsen it so far fewer building tiles are resident.
+            tileset.cacheBytes = 256 * 1024 * 1024;
+            tileset.maximumCacheOverflowBytes = 256 * 1024 * 1024;
+            tileset.maximumScreenSpaceError = 24;
             scene.primitives.add(tileset);
             osmBuildingsRef.current = tileset;
             // Apply the height gate immediately so a high boot camera never

@@ -53,28 +53,36 @@ If you set `API_KEY` on the backend, build/serve the web app with a matching
 
 ## System requirements
 
-The heavy component is the **client**: a CesiumJS WebGL2 globe rendering up to
-~14 k animated entities (aircraft + vessels) plus terrain/imagery. It is GPU- and
-main-thread-bound in the browser, not on the server. A discrete GPU is strongly
-recommended; on hybrid-graphics laptops make sure the browser uses the dGPU
-(`chrome://gpu` → "GPU0 … ACTIVE"). High-DPI/4K multiplies GPU load (render scale
-is capped at 1.5×); MSAA is off in favour of FXAA to keep render-target VRAM low.
+The heavy component is the **client**: a CesiumJS WebGL2 globe. It is GPU- and
+browser-main-thread-bound; the backend is light. WebGL2 is required (Chrome/Edge
+110+, Firefox 110+). On hybrid-graphics laptops, force the discrete GPU
+(`chrome://gpu` → adapter "ACTIVE").
 
-| | Minimum (runs, reduced) | Recommended (smooth, full feeds) | Ideal (everything, 4K, 100+ fps) |
-|---|---|---|---|
-| **GPU** | Any WebGL2 GPU — integrated (Intel Iris Xe, AMD Vega, Apple M1) | Discrete, ≥4 GB VRAM (GTX 1660 / RTX 2060 / RX 5600 / M1 Pro) | RTX 3070 / RX 6800 or better, ≥8 GB VRAM |
-| **CPU** | Dual-core x86-64 / Apple Silicon | Quad-core+ | 8-core+ |
-| **RAM** | 8 GB | 16 GB | 32 GB |
-| **Display** | 1080p | 1080p–1440p | up to 4K |
-| **Browser** | Chrome/Edge 110+ or Firefox 110+ (WebGL2 required) | Chrome/Edge (latest) | Chrome/Edge (latest) |
-| **Experience** | Zoom into regions; world-view aircraft capped; ~30 fps | All feeds, smooth pan, ~60 fps | Full ~14 k-entity union + 3D-sat terrain, 100+ fps |
+**VRAM is mode-dependent — be honest with yourself about which mode you run:**
 
-More system RAM = a larger Cesium tile cache (`tileCacheSize`, default raised to
-1000) and smoother panning, since tiles stay resident instead of being re-fetched.
+- **2D-dark (default basemap):** light. The globe is a proxied 2D raster basemap
+  plus the entity layers (aircraft/vessels). Runs on integrated graphics / ~2–4 GB
+  VRAM. This is the right mode for modest hardware.
+- **3D-sat (satellite imagery + world terrain + OSM 3D buildings, optional Google
+  Photorealistic 3D):** **VRAM-heavy.** CesiumJS streams terrain meshes, high-res
+  imagery, and 3D-tile building/photogrammetry sets, and it caches into whatever
+  VRAM is available — measured at **20+ GB on a 32 GB card**. Tilesets are now
+  individually cache-capped (Google 3D ~1.5 GB, OSM buildings ~0.5 GB) and MSAA is
+  off (FXAA instead), but with terrain + global imagery + a high-DPI/4K canvas the
+  resident set is still large. On a card with less VRAM Cesium evicts/re-fetches
+  more aggressively (lower fps, more pop-in) but still runs.
 
-**Backend (server):** Python 3.12, ~1 GB RAM, outbound HTTPS. Runs comfortably on
-a small VPS or the same machine as the browser; it is not the performance
-bottleneck.
+| Tier | GPU | RAM | Display | What you get |
+|---|---|---|---|---|
+| Minimum | WebGL2 integrated (Iris Xe / Vega / M1) | 8 GB | 1080p | 2D-dark, regional zoom, ~30 fps. 3D-sat will be rough. |
+| Recommended | Discrete ≥8 GB VRAM (RTX 3060 / RX 6700 / M-Pro) | 16 GB | 1080p–1440p | 2D-dark smooth; 3D-sat usable at city scale. |
+| 3D-sat / 4K | RTX 4070+/16 GB VRAM or better | 32 GB | up to 4K | Full 3D-sat terrain + buildings; high fps. |
+
+These tiers reflect **observed** behaviour, not a wish — 3D-sat genuinely wants a
+lot of VRAM, and a low-VRAM "minimum" only applies to 2D-dark.
+
+**Backend (server):** Python 3.12, ~1 GB RAM, outbound HTTPS — runs on a small
+VPS or the same box; not the bottleneck.
 
 ## Tests
 
