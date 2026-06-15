@@ -364,6 +364,14 @@ export function GlobeCanvas({
     // Keep the far plane huge so the whole disk still draws from orbit even
     // with the tighter near zoom.
     scene.screenSpaceCameraController.maximumZoomDistance = 60_000_000;
+    // MSAA OFF (Cesium defaults to 4x). 4x multisampling quadruples every HDR
+    // float framebuffer in the pipeline (scene color, OIT, bloom, …); on a 4K
+    // panel at the device pixel ratio that is gigabytes of render-target VRAM —
+    // the dominant slice of the 20+ GB allocation, with the GPU otherwise idle.
+    // FXAA gives clean edges at a fraction of the memory + fill cost.
+    scene.msaaSamples = 1;
+    const fxaa = scene.postProcessStages?.fxaa;
+    if (fxaa) fxaa.enabled = true;
 
     // Strip the default credit logo so the dark chrome is clean.
     (viewer.cesiumWidget.creditContainer as HTMLElement).style.display = 'none';
