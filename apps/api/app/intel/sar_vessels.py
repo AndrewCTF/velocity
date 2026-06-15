@@ -8,11 +8,16 @@ detection is mapped pixel->lon/lat and matched to the nearest AIS contact; a
 detection with no AIS match in an AOI that HAS AIS coverage is a dark-vessel
 candidate.
 
-Honest limitation: the keyless AIS feeds cover Northern Europe (Kystverket /
-Digitraffic), not the Gulf. Over the Strait of Hormuz the store has ~no AIS, so
-`ais_coverage` is reported and detections are flagged `darkCandidate: null`
-(unknown) rather than falsely asserted dark — a global AIS source (AISStream)
-is required to confirm dark vessels there.
+Honest limitation: the keyless AIS feeds cover Northern Europe (Kystverket NMEA
+firehose, Digitraffic Baltic, Kystdatahuset Norway — see the consolidated
+`/api/maritime/keyless` endpoint), not the maritime chokepoints these AOIs sit
+on (Strait of Hormuz, Bab-el-Mandeb, Gulf of Aden, Gulf of Suez, Kerch Strait,
+Taiwan Strait). Over those boxes the store has ~no AIS, so `ais_coverage` is
+reported and detections are flagged `darkCandidate: null` (unknown) rather than
+falsely asserted dark — a keyed AIS source (e.g. AISStream) is required to
+confirm a detection is non-broadcasting there. A detection only becomes a
+`darkCandidate: true` when the AOI actually HAS AIS in the store and no contact
+sits within the match radius.
 """
 
 from __future__ import annotations
@@ -28,17 +33,53 @@ from app.imagery import cdse
 
 _R = 6378137.0
 
-# Water-dominant AOIs (lon0, lat0, lon1, lat1). Land contamination is the main
-# false-positive source for a coastline-mask-free baseline, so the default AOIs
-# are open-water boxes. A proper coastline/OSM-water mask (Spec A) would let the
-# AOI include the coast.
-AOIS: dict[str, tuple[float, float, float, float]] = {
+# Water-dominant AOIs. Land contamination is the main false-positive source for a
+# coastline-mask-free baseline, so the boxes are kept small (~0.3-0.6 deg) and
+# open-water so one Sentinel-1 IW GRD scene covers each and CFAR stays tractable.
+# A proper coastline/OSM-water mask (Spec A) would let the AOI include the coast.
+#
+# Each entry: key -> (label, (lon0, lat0, lon1, lat1)). Sentinel-1 GRD coverage
+# was probed against the CDSE OData catalogue (products intersecting the box in
+# the last 30 days) and the box was confirmed to return a non-blank S1_GRD_VV
+# scene with bright-target signal before being added here.
+AOIS: dict[str, tuple[str, tuple[float, float, float, float]]] = {
     # Central Strait of Hormuz shipping channel (water).
-    "hormuz": (56.35, 26.50, 56.85, 26.78),
+    "hormuz": ("Strait of Hormuz", (56.35, 26.50, 56.85, 26.78)),
     # Fujairah anchorage at the Gulf-of-Oman approaches to Hormuz — one of the
     # busiest tanker anchorages on earth; clean open-water demo.
-    "fujairah": (56.46, 24.98, 56.82, 25.45),
+    "fujairah": ("Fujairah anchorage", (56.46, 24.98, 56.82, 25.45)),
+    # Southern Red Sea funnel between Perim Island and Djibouti — all Suez-bound
+    # traffic, heavy AIS-off / dark-fleet behaviour. Probed: 44 GRD products /30d,
+    # latest 2026-06-12; full-swath VV scene with bright targets.
+    "bab-el-mandeb": ("Bab-el-Mandeb Strait", (43.18, 12.50, 43.52, 12.82)),
+    # Eastern approach to Bab-el-Mandeb off Berbera/Bosaso — historic piracy
+    # waters, AIS-dark dhows/ship-to-ship transfers. Probed: 18 GRD products /30d,
+    # latest 2026-06-14; partial-swath but clear bright-target signal.
+    "gulf-of-aden": ("Gulf of Aden approaches", (45.05, 11.85, 45.60, 12.35)),
+    # Southern queuing/anchorage approach to the Suez Canal — dense tanker/cargo
+    # concentration with known AIS gaps. Probed: 50 GRD products /30d, latest
+    # 2026-06-11; full-swath VV scene, strongest signal of the Red Sea set.
+    "suez-gulf-approach": ("Gulf of Suez southern approach", (32.48, 29.70, 32.74, 30.02)),
+    # Kerch Strait gate to the Sea of Azov — contested Russia/Ukraine choke with
+    # shadow-fleet / AIS-off traffic. Probed: 66 GRD products /30d, latest
+    # 2026-06-14. Land flanks the channel (pixel mean ~200), so detect_targets'
+    # land_block suppression carries more load here; raise k or shrink the box if
+    # coastal false positives appear.
+    "kerch-strait": ("Kerch Strait", (36.32, 45.08, 36.70, 45.42)),
+    # Narrowest part of the Taiwan Strait off Pingtan — gray-zone militia /
+    # dredger activity often AIS-dark. Probed: 32 GRD products /30d, latest
+    # 2026-06-14; full-swath VV scene, water-dominant box.
+    "taiwan-strait": ("Taiwan Strait (off Pingtan)", (119.25, 24.45, 119.80, 24.92)),
 }
+
+
+def aoi_bbox(aoi: str) -> tuple[float, float, float, float]:
+    """Lon/lat corners (lon0, lat0, lon1, lat1) for a registered AOI key."""
+    return AOIS[aoi][1]
+
+
+def aoi_label(aoi: str) -> str:
+    return AOIS[aoi][0]
 
 
 def epsg3857_to_lonlat(x: float, y: float) -> tuple[float, float]:
@@ -160,7 +201,8 @@ async def detect_dark_vessels(
         raise KeyError(aoi)
     if date is None:
         date = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
-    bbox = cdse.lonlat_bbox_3857(*AOIS[aoi])
+    aoi_box = aoi_bbox(aoi)
+    bbox = cdse.lonlat_bbox_3857(*aoi_box)
     img = await cdse.fetch_image("S1_GRD_VV", bbox, width, height, date)
     if not img:
         return {
@@ -174,7 +216,7 @@ async def detect_dark_vessels(
     targets = detect_targets(arr, k=k, max_area=max_area)
 
     # AIS coverage for the AOI from the observation store (keyless feeds).
-    lon0, lat0, lon1, lat1 = AOIS[aoi]
+    lon0, lat0, lon1, lat1 = aoi_box
     vessels = [
         (o.lon, o.lat)
         for o in store.latest("vessel")
@@ -212,6 +254,7 @@ async def detect_dark_vessels(
         "features": features,
         "summary": {
             "aoi": aoi,
+            "label": aoi_label(aoi),
             "date": date,
             "detections": len(features),
             "ais_coverage": len(vessels),

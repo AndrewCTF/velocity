@@ -46,10 +46,14 @@ mcp = FastMCP(
     "osint-geoint",
     instructions=(
         "Live geospatial intelligence over open ADS-B (aircraft), AIS (vessels), "
-        "GPS-jamming (ADS-B NACp/NIC), and a fusion engine. Start with "
-        "get_situation() to orient, then focus_area(lat,lon,radius_nm) to load a "
-        "region PRIMARY and pull density / GPS jamming / anomalies for it. Use "
-        "deep_analyze() to have a local model reason over the data."
+        "GPS-jamming (ADS-B NACp/NIC), Sentinel-1 SAR dark vessels, geocoded "
+        "events, and a cross-domain fusion engine. Workflow: get_situation() to "
+        "orient -> intel_brief() for ranked, cited cross-domain INCIDENTS (the "
+        "fused picture, global or scoped) -> focus_area(lat,lon,radius_nm) to "
+        "load an incident's region PRIMARY -> query_vessels / gps_jamming / "
+        "query_aircraft to drill into its evidence -> deep_analyze() to have a "
+        "reasoning model judge it. intel_brief is the headline tool: it chains "
+        "signals into incidents so you don't correlate raw layers by hand."
     ),
 )
 
@@ -397,6 +401,41 @@ async def anomalies(
 
 
 @mcp.tool()
+async def intel_brief(
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_nm: float = 500.0,
+    min_lon: float | None = None,
+    min_lat: float | None = None,
+    max_lon: float | None = None,
+    max_lat: float | None = None,
+    link_km: float = 50.0,
+    window_hours: float = 6.0,
+) -> dict[str, Any]:
+    """Cross-domain INCIDENT brief — the headline analytic tool.
+
+    Fuses the raw layers into ranked, cited INCIDENTS instead of returning
+    signals you have to correlate yourself. An incident is a CONVERGENCE: signals
+    within ``link_km`` across >=2 domains (GPS-jamming, dark/AIS-off vessels,
+    military air, AIS gaps, emergencies, geocoded events, quakes) — or a single
+    critical/high signal. Each incident carries a rule-based narrative, a
+    threat_level, the contributing evidence (with IDs), and recommended follow-up
+    queries. Omit coordinates for a global brief; pass a centre+radius or bbox to
+    scope it. Start here, then drill into an incident's centroid with
+    query_vessels / gps_jamming / deep_analyze.
+    """
+    return await _get(
+        "/api/intel/brief",
+        {
+            "lat": lat, "lon": lon, "radius_nm": radius_nm,
+            "min_lon": min_lon, "min_lat": min_lat,
+            "max_lon": max_lon, "max_lat": max_lat,
+            "link_km": link_km, "window_hours": window_hours,
+        },
+    )
+
+
+@mcp.tool()
 async def list_focus_areas() -> dict[str, Any]:
     """List the priority areas currently loaded PRIMARY (with fetch stats and
     whether each is served by a dedicated fetch or the degraded snapshot
@@ -416,7 +455,10 @@ async def data_sources() -> dict[str, Any]:
 _SYS_PROMPT = (
     "You are a GEOINT analyst working a live open-source intelligence console. "
     "You are given distilled JSON from live ADS-B (aircraft), AIS (vessels), a "
-    "GPS-jamming layer (ADS-B NACp/NIC, GPSJam method), and a fusion engine. "
+    "GPS-jamming layer (ADS-B NACp/NIC, GPSJam method), and a cross-domain "
+    "fusion engine whose `incident_brief` already chains co-located signals into "
+    "ranked, cited INCIDENTS — lead your analysis from those incidents, then use "
+    "the raw situation/area data to corroborate or challenge them. "
     "Reason ONLY over the provided JSON. Cite concrete numbers and IDs. Flag: "
     "GPS jamming/spoofing footprints, emergency squawks (7500 hijack / 7600 "
     "radio-fail / 7700 general), dark vessels, abnormal traffic density, and "
@@ -456,13 +498,16 @@ async def deep_analyze(
 
     from app import llm  # noqa: PLC0415
 
-    # 1) gather context (already compact)
+    # 1) gather context (already compact). The cross-domain incident BRIEF is the
+    #    centrepiece — the reasoner judges fused, cited incidents rather than
+    #    re-correlating raw layers in its head.
     context: dict[str, Any] = {"question": question, "situation": await get_situation()}
+    context["incident_brief"] = await intel_brief(
+        lat=lat, lon=lon, radius_nm=radius_nm,
+        window_hours=12.0 if lat is None else 6.0,
+    )
     if lat is not None and lon is not None:
         context["focus_area"] = await focus_area(lat, lon, radius_nm)
-    else:
-        context["global_jamming"] = await gps_jamming()
-        context["global_anomalies"] = await anomalies()
 
     # 2) reason off-context (DeepSeek → Ollama → raw data)
     res = await llm.complete(

@@ -12,6 +12,37 @@ interface CatalogLayer {
   static?: boolean;
 }
 
+interface GeocodeHit {
+  name: string;
+  lat: number;
+  lon: number;
+  type: string;
+}
+
+interface EventFeature {
+  id?: string;
+  geometry?: { type?: string; coordinates?: number[] };
+  properties?: Record<string, unknown>;
+}
+
+interface EventsAllResponse {
+  features: EventFeature[];
+  count: number;
+  sources: Record<string, { ok: boolean; kept?: number; note?: string; error?: string }>;
+}
+
+function eventLabel(f: EventFeature): string {
+  const p = f.properties ?? {};
+  const title =
+    (p.title as string) ||
+    (p.name as string) ||
+    (p.event_type as string) ||
+    (p.html as string) ||
+    'event';
+  const src = (p.source as string) ?? '';
+  return src ? `${title} · ${src}` : title;
+}
+
 function shiftDate(date: string, days: number): string {
   const d = new Date(date + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + days);
@@ -46,7 +77,78 @@ export function ImageryControl() {
   const lod1Aoi = useImagery((s) => s.lod1Aoi);
   const setLod1Aoi = useImagery((s) => s.setLod1Aoi);
   const requestLod1Here = useImagery((s) => s.requestLod1Here);
+  const eventsLocation = useImagery((s) => s.eventsLocation);
+  const setEventsLocation = useImagery((s) => s.setEventsLocation);
+  const eventsRadiusKm = useImagery((s) => s.eventsRadiusKm);
+  const setEventsRadiusKm = useImagery((s) => s.setEventsRadiusKm);
+  const requestFlyTo = useImagery((s) => s.requestFlyTo);
   const [layers, setLayers] = useState<CatalogLayer[]>([]);
+
+  // ── Location / events search state (local UI, applied to the store on submit).
+  const [cityQuery, setCityQuery] = useState('');
+  const [geocodeHits, setGeocodeHits] = useState<GeocodeHit[]>([]);
+  const [geocoding, setGeocoding] = useState(false);
+  const [latInput, setLatInput] = useState('');
+  const [lonInput, setLonInput] = useState('');
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [events, setEvents] = useState<EventFeature[]>([]);
+  const [eventsSummary, setEventsSummary] = useState<EventsAllResponse['sources'] | null>(null);
+
+  async function runGeocode(): Promise<void> {
+    const q = cityQuery.trim();
+    if (!q) return;
+    setGeocoding(true);
+    try {
+      const r = await apiFetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+      const b: { results?: GeocodeHit[] } = await r.json();
+      setGeocodeHits(b.results ?? []);
+    } catch {
+      setGeocodeHits([]);
+    } finally {
+      setGeocoding(false);
+    }
+  }
+
+  // Apply a location: sync the store, fly the camera there, and fetch every
+  // event (eonet+gdelt+acled) within the radius around it.
+  async function applyLocation(lat: number, lon: number, name?: string): Promise<void> {
+    setEventsLocation({ lat, lon, ...(name !== undefined ? { name } : {}) });
+    setLatInput(lat.toFixed(4));
+    setLonInput(lon.toFixed(4));
+    requestFlyTo(lat, lon);
+    setEventsLoading(true);
+    setEventsError(null);
+    try {
+      const r = await apiFetch(
+        `/api/events/all?lat=${lat}&lon=${lon}&radius_km=${eventsRadiusKm}`,
+      );
+      if (!r.ok) throw new Error(`events ${r.status}`);
+      const b: EventsAllResponse = await r.json();
+      setEvents(b.features ?? []);
+      setEventsSummary(b.sources ?? null);
+    } catch (e) {
+      setEvents([]);
+      setEventsSummary(null);
+      setEventsError(e instanceof Error ? e.message : 'failed');
+    } finally {
+      setEventsLoading(false);
+    }
+  }
+
+  function applyTypedCoords(): void {
+    const lat = Number(latInput);
+    const lon = Number(lonInput);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      setEventsError('lat/lon must be numbers');
+      return;
+    }
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      setEventsError('lat ∈ [-90,90], lon ∈ [-180,180]');
+      return;
+    }
+    void applyLocation(lat, lon);
+  }
 
   useEffect(() => {
     let alive = true;
@@ -106,6 +208,131 @@ export function ImageryControl() {
           ))}
         </select>
       </label>
+      <div className="imagery-control__events">
+        <div className="imagery-control__row">
+          <span>Find events at a location</span>
+        </div>
+        <form
+          className="imagery-control__row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void runGeocode();
+          }}
+        >
+          <input
+            type="text"
+            placeholder="City or place name…"
+            value={cityQuery}
+            onChange={(e) => setCityQuery(e.target.value)}
+            aria-label="City name"
+          />
+          <button type="submit" disabled={geocoding || !cityQuery.trim()}>
+            {geocoding ? '…' : 'Search'}
+          </button>
+        </form>
+        {geocodeHits.length > 0 && (
+          <ul className="imagery-control__geocode">
+            {geocodeHits.map((h) => (
+              <li key={`${h.lat},${h.lon},${h.name}`}>
+                <button
+                  type="button"
+                  title={`${h.lat.toFixed(4)}, ${h.lon.toFixed(4)} (${h.type})`}
+                  onClick={() => {
+                    setGeocodeHits([]);
+                    void applyLocation(h.lat, h.lon, h.name);
+                  }}
+                >
+                  {h.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="imagery-control__row imagery-control__latlon">
+          <input
+            type="number"
+            step="any"
+            placeholder="lat"
+            value={latInput}
+            onChange={(e) => setLatInput(e.target.value)}
+            aria-label="Latitude"
+          />
+          <input
+            type="number"
+            step="any"
+            placeholder="lon"
+            value={lonInput}
+            onChange={(e) => setLonInput(e.target.value)}
+            aria-label="Longitude"
+          />
+          <button type="button" onClick={applyTypedCoords}>
+            Go
+          </button>
+        </div>
+        <label className="imagery-control__row">
+          <span>Radius {eventsRadiusKm} km</span>
+          <input
+            type="range"
+            min={10}
+            max={3000}
+            step={10}
+            value={eventsRadiusKm}
+            onChange={(e) => setEventsRadiusKm(Number(e.target.value))}
+            onMouseUp={() => {
+              if (eventsLocation)
+                void applyLocation(eventsLocation.lat, eventsLocation.lon, eventsLocation.name);
+            }}
+          />
+        </label>
+        {eventsLocation && (
+          <div className="imagery-control__events-result">
+            {eventsLoading ? (
+              <span>Loading events…</span>
+            ) : eventsError ? (
+              <span className="imagery-control__events-error">Error: {eventsError}</span>
+            ) : (
+              <>
+                <span>
+                  {events.length} event{events.length === 1 ? '' : 's'} within{' '}
+                  {eventsRadiusKm} km
+                  {eventsLocation.name ? ` of ${eventsLocation.name.split(',')[0]}` : ''}
+                </span>
+                {eventsSummary && (
+                  <span className="imagery-control__events-sources">
+                    {Object.entries(eventsSummary)
+                      .map(([k, v]) => `${k}: ${v.ok ? (v.kept ?? 0) : '×'}`)
+                      .join('  ·  ')}
+                  </span>
+                )}
+                {events.length > 0 && (
+                  <ul className="imagery-control__events-list">
+                    {events.slice(0, 50).map((f, i) => {
+                      const c = f.geometry?.coordinates;
+                      const flon = c?.[0];
+                      const flat = c?.[1];
+                      const canFly = typeof flon === 'number' && typeof flat === 'number';
+                      return (
+                        <li key={f.id ?? i}>
+                          <button
+                            type="button"
+                            disabled={!canFly}
+                            onClick={() => {
+                              if (typeof flon === 'number' && typeof flat === 'number')
+                                requestFlyTo(flat, flon);
+                            }}
+                          >
+                            {eventLabel(f)}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
       {overlay && (
         <label className="imagery-control__row">
           <span>Opacity {Math.round(overlayOpacity * 100)}%</span>

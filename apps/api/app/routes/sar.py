@@ -21,7 +21,7 @@ async def dark_vessels_sar(
     date: str | None = Query(None, description="YYYY-MM-DD; defaults to today"),
 ) -> dict[str, Any]:
     if aoi not in sar_vessels.AOIS:
-        raise HTTPException(404, f"unknown aoi (have: {sorted(sar_vessels.AOIS)})")
+        raise HTTPException(400, f"unknown aoi (have: {sorted(sar_vessels.AOIS)})")
     if date is not None and not _DATE_RE.match(date):
         raise HTTPException(400, "date must be YYYY-MM-DD")
     if not cdse.available():

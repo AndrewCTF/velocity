@@ -53,3 +53,68 @@ def test_ais_match_radius():
     vessels = [(56.40, 26.75)]
     assert sar_vessels._ais_match(56.405, 26.752, vessels, 0.02) is True
     assert sar_vessels._ais_match(56.50, 26.95, vessels, 0.02) is False
+
+
+def test_every_aoi_resolves_to_valid_small_water_box():
+    # Hormuz must stay registered and unchanged.
+    assert sar_vessels.aoi_bbox("hormuz") == (56.35, 26.50, 56.85, 26.78)
+    for key, (label, box) in sar_vessels.AOIS.items():
+        assert isinstance(label, str) and label
+        assert sar_vessels.aoi_label(key) == label
+        bbox = sar_vessels.aoi_bbox(key)
+        assert bbox == box
+        lon0, lat0, lon1, lat1 = bbox
+        # corners in range and ordered min<max
+        assert -180.0 <= lon0 < lon1 <= 180.0
+        assert -90.0 <= lat0 < lat1 <= 90.0
+        # small enough that one Sentinel-1 IW GRD scene covers the box
+        assert (lon1 - lon0) <= 0.8
+        assert (lat1 - lat0) <= 0.8
+        # the 3857 projection used by detect_dark_vessels must accept it
+        proj = cdse.lonlat_bbox_3857(*bbox)
+        assert proj[0] < proj[2] and proj[1] < proj[3]
+
+
+def test_aoi_bbox_unknown_raises_keyerror():
+    import pytest
+
+    with pytest.raises(KeyError):
+        sar_vessels.aoi_bbox("atlantis")
+
+
+def test_route_rejects_unknown_aoi_with_400(client):
+    r = client.get("/api/intel/dark-vessels/sar", params={"aoi": "atlantis"})
+    assert r.status_code == 400
+    assert "unknown aoi" in r.json()["detail"]
+
+
+def test_route_rejects_bad_date_with_400(client):
+    # A *valid* aoi must clear the registry check (no 400 for the aoi) and fail
+    # only on the date format — proving the key resolved through validation,
+    # without firing any CDSE network call.
+    r = client.get(
+        "/api/intel/dark-vessels/sar",
+        params={"aoi": "bab-el-mandeb", "date": "06-15-2026"},
+    )
+    assert r.status_code == 400
+    assert "date" in r.json()["detail"]
+
+
+def test_every_aoi_passes_route_registry_validation(client, monkeypatch):
+    # Stub detect_dark_vessels + the creds gate so the route never touches the
+    # network: this isolates the registry-validation branch. Every registered
+    # key must NOT 400 (it resolves); the route then returns the stub body.
+    import app.routes.sar as sar_route
+
+    async def _fake(aoi, date):  # noqa: ANN001
+        return {"type": "FeatureCollection", "features": [], "_secret": 1, "ok": aoi}
+
+    monkeypatch.setattr(sar_route.cdse, "available", lambda: True)
+    monkeypatch.setattr(sar_route.sar_vessels, "detect_dark_vessels", _fake)
+    for key in sar_vessels.AOIS:
+        r = client.get("/api/intel/dark-vessels/sar", params={"aoi": key})
+        assert r.status_code == 200, key
+        body = r.json()
+        assert body["ok"] == key
+        # internal verification payloads (leading underscore) stay out of the body
+        assert "_secret" not in body

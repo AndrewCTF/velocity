@@ -16,6 +16,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app import maritime_keyless
 from app.config import get_settings
 from app.correlate.store import store
 from app.correlate.types import Observation
@@ -82,14 +83,15 @@ def _fix_epoch_s(timestamp: Any) -> float | None:
     return None
 
 
-@router.get("/api/maritime/digitraffic")
-async def digitraffic_vessels(
-    lamin: float | None = Query(None, ge=-90, le=90),
-    lomin: float | None = Query(None, ge=-180, le=180),
-    lamax: float | None = Query(None, ge=-90, le=90),
-    lomax: float | None = Query(None, ge=-180, le=180),
-    limit: int | None = Query(None, ge=1, le=20000),
-) -> dict[str, Any]:
+async def digitraffic_snapshot() -> dict[str, Any]:
+    """Full in-commission Digitraffic vessel FeatureCollection (no viewport
+    filter), cached 30 s and feeding the correlation store.
+
+    Plain helper so INTERNAL callers (the consolidated ``/api/maritime/keyless``
+    endpoint) read it directly — calling the ``digitraffic_vessels`` route
+    handler in-process would pass its unresolved ``Query(...)`` defaults into
+    ``viewport_filter`` (the same bug that 500'd the ADS-B jamming layer)."""
+
     async def load() -> dict[str, Any]:
         headers = {"Digitraffic-User": "osint-console/0.1"}
         r = await get_client().get(LOCATIONS_URL, headers=headers)
@@ -115,7 +117,12 @@ async def digitraffic_vessels(
             lon = float(coords[0])
             lat = float(coords[1])
             p = f.get("properties") or {}
-            sog = p.get("sog")
+            # Digitraffic `sog` is already KNOTS; mask the AIS 102.3-kn "not
+            # available" sentinel so it doesn't paint as a 102-knot ghost and
+            # so the knots normalization holds across every keyless source
+            # (NIT N5). cog/heading sentinels are left as-is here — the
+            # frontend ITU/heading paint already tolerates them.
+            sog = maritime_keyless._clean_sog_kn(p.get("sog"))
             cog = p.get("cog")
             heading = p.get("heading")
             timestamp = p.get("timestampExternal") or p.get("timestamp")
@@ -166,6 +173,10 @@ async def digitraffic_vessels(
                         "heading": heading,
                         "shipType": ship_type,
                         "timestamp": timestamp,
+                        # epoch seconds of the upstream fix (parsed above) so the
+                        # consolidated keyless feed can pick the freshest report
+                        # when a vessel is seen by more than one source.
+                        "t": sample_t,
                         "kind": "vessel",
                         "source": "digitraffic",
                     },
@@ -218,7 +229,106 @@ async def digitraffic_vessels(
     # cached once; each request filters it to the caller's viewport so the
     # frontend only instantiates on-screen vessels (the ~18.5k full set is the
     # web UI's bottleneck).
-    full = await cache.get_or_fetch("digitraffic:locations", 30.0, load)
+    return await cache.get_or_fetch("digitraffic:locations", 30.0, load)
+
+
+@router.get("/api/maritime/digitraffic")
+async def digitraffic_vessels(
+    lamin: float | None = Query(None, ge=-90, le=90),
+    lomin: float | None = Query(None, ge=-180, le=180),
+    lamax: float | None = Query(None, ge=-90, le=90),
+    lomax: float | None = Query(None, ge=-180, le=180),
+    limit: int | None = Query(None, ge=1, le=20000),
+) -> dict[str, Any]:
+    full = await digitraffic_snapshot()
+    if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
+        return full
+    return viewport_filter(full, lamin, lomin, lamax, lomax, limit)
+
+
+@router.get("/api/maritime/keyless")
+async def keyless_vessels(
+    lamin: float | None = Query(None, ge=-90, le=90),
+    lomin: float | None = Query(None, ge=-180, le=180),
+    lamax: float | None = Query(None, ge=-90, le=90),
+    lomax: float | None = Query(None, ge=-180, le=180),
+    limit: int | None = Query(None, ge=1, le=20000),
+) -> dict[str, Any]:
+    """Consolidated no-key vessel feed: Digitraffic (Baltic / Gulf of Finland)
+    ∪ Kystdatahuset (Norwegian coast / North Sea / Arctic), deduped by MMSI
+    with the freshest fix winning.
+
+    Freshest-wins compares each feature's ``properties.t`` (the upstream per-fix
+    timestamp — Kystdatahuset ``date_time_utc``, Digitraffic
+    ``timestampExternal`` — falling back to ingest time only when absent), so a
+    real-timestamped source is no longer clobbered by one that stamps now()
+    (NIT N4). SOG is normalized to knots with the 102.3-kn AIS sentinel masked
+    on every source (NIT N5).
+
+    Each source degrades independently — a failure of one returns its features
+    as empty and the other still renders; a total double-failure serves the
+    last good union from cache (stale-on-failure). Coverage is REGIONAL
+    Northern Europe (~4.5k distinct vessels measured this run over bbox
+    lon[-8.4, 34.0] lat[55.3, 80.6]); the Med, Black Sea, Americas, and APAC
+    have no keyless live point feed reachable from this egress and still need
+    AISStream (key, on-demand). Same GeoJSON vessel shape as
+    ``/api/maritime/digitraffic`` so the frontend paint reuses unchanged.
+    """
+
+    async def load() -> dict[str, Any]:
+        # Digitraffic comes pre-built (+ correlation-store fed) from its own
+        # cached loader; pull the full FC and reuse its already-normalized,
+        # in-commission features. Kystverket is fetched + normalized here.
+        try:
+            dig_fc = await digitraffic_snapshot()
+            dig_feats = dig_fc.get("features") or []
+        except Exception as e:  # noqa: BLE001
+            log.warning("keyless: digitraffic source failed: %s", e)
+            dig_feats = []
+        kyst_feats = await maritime_keyless.fetch_kystdatahuset()
+
+        # Feed the fusion store with the Kystdatahuset fixes so correlation
+        # rules (and the SAR dark-vessel cross-ref) see Norwegian vessels too.
+        # Digitraffic features are already stored by its own loader.
+        if kyst_feats:
+            now = time.time()
+            batch: list[Observation] = []
+            for f in kyst_feats:
+                p = f["properties"]
+                lon, lat = f["geometry"]["coordinates"]
+                # Use the per-fix timestamp the parser resolved from
+                # date_time_utc (epoch s); fall back to ingest time only when
+                # the upstream omitted it — same fairness rule as the dedup so
+                # the store and the layer agree on a fix's age (NIT N4).
+                fix_t = p.get("t")
+                batch.append(
+                    Observation(
+                        id=f["id"],
+                        source="kystdatahuset",
+                        t=fix_t if isinstance(fix_t, (int, float)) else now,
+                        lon=lon,
+                        lat=lat,
+                        emits_kind="vessel",
+                        attrs={
+                            "mmsi": p.get("mmsi"),
+                            "name": p.get("name"),
+                            "sog": p.get("sog"),
+                            "cog": p.get("cog"),
+                            "heading": p.get("heading"),
+                            "shipType": p.get("shipType"),
+                        },
+                    )
+                )
+            if batch:
+                store.add_many(batch)
+
+        feats = maritime_keyless.merge_vessel_features(dig_feats, kyst_feats)
+        return {"type": "FeatureCollection", "features": feats}
+
+    # 30 s aligns with Digitraffic's own cache; Kystdatahuset realtime updates
+    # at a similar cadence. The union is cached once and viewport-filtered per
+    # request so the frontend only instantiates on-screen vessels.
+    full = await cache.get_or_fetch("maritime:keyless", 30.0, load)
     if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
         return full
     return viewport_filter(full, lamin, lomin, lamax, lomax, limit)

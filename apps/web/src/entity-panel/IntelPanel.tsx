@@ -22,6 +22,44 @@ async function fetchJammingAlerts(): Promise<Alert[]> {
   }
 }
 
+interface BriefEvidence {
+  domain: string;
+  severity: string;
+  summary: string;
+  lon: number;
+  lat: number;
+}
+interface BriefIncident {
+  id: string;
+  threat_level: string;
+  score: number;
+  domains: string[];
+  signal_count: number;
+  centroid: { lon: number; lat: number };
+  span_km: number;
+  narrative: string;
+  evidence: BriefEvidence[];
+  follow_up: string[];
+}
+interface BriefResp {
+  top_threat_level: string;
+  incident_count: number;
+  scope: string;
+  incidents: BriefIncident[];
+}
+
+// Cross-domain incident brief — global, or scoped to the active AOI's centre.
+async function fetchBrief(center?: readonly number[]): Promise<BriefResp | null> {
+  try {
+    const q = center ? `?lat=${center[1]}&lon=${center[0]}&radius_nm=300` : '';
+    const res = await apiFetch(`/api/intel/brief${q}`);
+    if (!res.ok) return null;
+    return (await res.json()) as BriefResp;
+  } catch {
+    return null;
+  }
+}
+
 interface Props {
   viewer: Cesium.Viewer | null;
 }
@@ -32,6 +70,13 @@ const SEV_LABEL: Record<string, string> = {
   medium: 'text-warn',
   low: 'text-accent',
   info: 'text-txt-2',
+};
+
+// Threat-level → colour for the incident brief badges.
+const TL: Record<string, string> = {
+  high: 'text-alert',
+  elevated: 'text-warn',
+  low: 'text-accent',
 };
 
 // Intel rail tab — operator-facing situational summary:
@@ -48,6 +93,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
     intel.darkVessels.candidates([]),
   );
   const [jammingAlerts, setJammingAlerts] = useState<Alert[]>([]);
+  const [brief, setBrief] = useState<BriefResp | null>(null);
 
   // Poll the dark-vessel tracker once a second. Cheap — it's an in-process Map.
   useEffect(() => {
@@ -78,6 +124,29 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
     };
   }, []);
 
+  // Poll the cross-domain incident brief every 30 s, scoped to the active AOI
+  // when one is set (else global). This is the fused, cited picture — the same
+  // /api/intel/brief the MCP intel_brief() tool serves.
+  useEffect(() => {
+    let cancelled = false;
+    const center = activeAoi?.center;
+    const tick = () => {
+      fetchBrief(center)
+        .then((b) => {
+          if (!cancelled) setBrief(b);
+        })
+        .catch(() => {
+          /* swallow — fetchBrief never rejects */
+        });
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [activeAoi]);
+
   const topCorrelations: Alert[] = alerts.slice(0, 5);
 
   const satOn = imageryMode === '3d-sat';
@@ -95,6 +164,56 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
           3D sat: {satOn ? 'on' : 'off'}
         </span>
       </div>
+
+      <section>
+        <div className="flex items-baseline justify-between">
+          <h3 className="micro">Incident brief{brief ? ` · ${brief.scope}` : ''}</h3>
+          {brief && (
+            <span className={`micro uppercase ${TL[brief.top_threat_level] ?? 'text-txt-3'}`}>
+              {brief.top_threat_level}
+            </span>
+          )}
+        </div>
+        <p className="micro normal-case tracking-normal text-txt-3 leading-snug mt-1">
+          Cross-domain convergences — jamming + dark vessels + military + events fused into cited incidents.
+        </p>
+        {!brief || brief.incident_count === 0 ? (
+          <p className="micro normal-case tracking-normal text-txt-3 mt-1">
+            No cross-domain incidents{brief ? '' : ' (loading…)'}.
+          </p>
+        ) : (
+          <ul className="mt-1 space-y-1">
+            {brief.incidents.slice(0, 6).map((inc) => (
+              <li key={inc.id} className="border border-line rounded-sm p-2 bg-bg-2/50">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className={`micro uppercase ${TL[inc.threat_level] ?? ''}`}>
+                    {inc.threat_level}
+                  </span>
+                  <span className="mono micro tabular-nums text-txt-3 truncate" title={inc.domains.join(' + ')}>
+                    {inc.domains.join(' + ')}
+                  </span>
+                </div>
+                <p className="text-[11px] text-txt-1 leading-tight mt-1">{inc.narrative}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      viewer &&
+                      flyToPosition(viewer, inc.centroid.lon, inc.centroid.lat, 300_000, reduced ? 0 : 1.0)
+                    }
+                    className="mono text-[10px] px-1.5 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1"
+                  >
+                    slew to
+                  </button>
+                  <span className="mono micro tabular-nums text-txt-3">
+                    {inc.signal_count} signal{inc.signal_count === 1 ? '' : 's'} · {inc.span_km}km
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section>
         <h3 className="micro">Dark vessels</h3>

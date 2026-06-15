@@ -5,11 +5,14 @@ Kystverket NMEA firehose, via :func:`app.ais_firehose.publish_vessel`, so the
 vessel layer densifies over Northern Europe with zero API keys.
 
   * Kystdatahuset (Norway) — REST GeoJSON poll. FeatureCollection of LineStrings
-    (recent track per vessel); the last coordinate is the latest fix.
+    (recent track per vessel); the last coordinate is the latest fix. ``speed``
+    is SOG in KNOTS (AIS 0.1-kn resolution); ``publish_vessel`` masks the
+    102.3-kn "not available" sentinel.
   * Digitraffic (Finland/Baltic) — live MQTT 3.1.1 over WSS. We speak the wire
     protocol directly over ``websockets`` (no MQTT dependency): CONNECT →
     SUBSCRIBE ``vessels-v2/+/location`` → decode PUBLISH frames. The MMSI is in
-    the topic; the payload is ``{lat, lon, sog, cog, heading, …}``.
+    the topic; the payload is ``{lat, lon, sog, cog, heading, …}`` with ``sog``
+    in KNOTS.
 
 There is NO keyless GLOBAL AIS — these are dense regional feeds (Norway +
 Baltic). Worldwide vessels still require AISStream (key, on-demand).

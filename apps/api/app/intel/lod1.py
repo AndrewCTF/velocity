@@ -131,7 +131,10 @@ def normalize_bbox(
         lon0, lon1 = lon1, lon0
     if lat0 > lat1:
         lat0, lat1 = lat1, lat0
-    if not (-180 <= lon0 <= 180 and -180 <= lon1 <= 180 and -90 <= lat0 <= 90 and -90 <= lat1 <= 90):
+    if not (
+        -180 <= lon0 <= 180 and -180 <= lon1 <= 180
+        and -90 <= lat0 <= 90 and -90 <= lat1 <= 90
+    ):
         raise ValueError("bbox coordinates out of range")
     clon, clat = (lon0 + lon1) / 2, (lat0 + lat1) / 2
     if lon1 - lon0 > MAX_BBOX_SPAN:

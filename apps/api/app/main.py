@@ -26,6 +26,7 @@ from app.routes import entity as entity_routes
 from app.routes import eq as eq_routes
 from app.routes import events as events_routes
 from app.routes import firms as firms_routes
+from app.routes import geocode as geocode_routes
 from app.routes import health as health_routes
 from app.routes import history as history_routes
 from app.routes import imagery as imagery_routes
@@ -128,6 +129,7 @@ def create_app() -> FastAPI:
     app.include_router(ais_routes.router)
     app.include_router(seismic_routes.router)
     app.include_router(events_routes.router)
+    app.include_router(geocode_routes.router)
     app.include_router(cables_routes.router)
     app.include_router(space_routes.router)
     app.include_router(weather_routes.router)

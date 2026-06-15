@@ -6,15 +6,19 @@
   3-month rolling window; we ask for the last 24h.
 - /api/events/acled  — ACLED conflict events. Requires ACLED_KEY + email.
   Falls back to an empty FeatureCollection when unconfigured.
+- /api/events/all    — aggregate of the three above, filtered to a radius
+  around an operator-chosen point. Returns ONE FeatureCollection.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config import Settings, get_settings
+from app.intel.geo import feature_lonlat, haversine_km
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["events"])
@@ -35,14 +39,13 @@ EONET_CATEGORIES = {
 }
 
 
-@router.get("/api/events/eonet")
-async def eonet(
-    status: str = Query("open"),
-    category: str | None = Query(None),
-    limit: int = Query(150, ge=1, le=500),
+async def _load_eonet(
+    status: str = "open", category: str | None = None, limit: int = 150
 ) -> dict[str, Any]:
-    if category and category not in EONET_CATEGORIES:
-        raise HTTPException(400, f"unknown category {category}")
+    """Internal EONET loader (cached). Called by the /eonet route AND by the
+    /all aggregate — never via the route handler in-process, so FastAPI's
+    Query(...) defaults can't leak into the call (mirrors the ADS-B snapshot
+    discipline in adsb.py)."""
     key = f"eonet:{status}:{category}:{limit}"
 
     async def load() -> dict[str, Any]:
@@ -86,12 +89,25 @@ async def eonet(
     return await cache.get_or_fetch(key, 600.0, load)
 
 
-@router.get("/api/events/gdelt")
-async def gdelt(
-    query: str = Query("(protest OR strike OR clash OR military)"),
-    timespan: str = Query("24h"),
-    maxrecords: int = Query(250, ge=10, le=250),
+@router.get("/api/events/eonet")
+async def eonet(
+    status: str = Query("open"),
+    category: str | None = Query(None),
+    limit: int = Query(150, ge=1, le=500),
 ) -> dict[str, Any]:
+    if category and category not in EONET_CATEGORIES:
+        raise HTTPException(400, f"unknown category {category}")
+    return await _load_eonet(status, category, limit)
+
+
+async def _load_gdelt(
+    query: str = "(protest OR strike OR clash OR military)",
+    timespan: str = "24h",
+    maxrecords: int = 250,
+) -> dict[str, Any]:
+    """Internal GDELT loader (cached). GDELT GEO 2.0 caps `maxrecords` at 250
+    per call and serves a 3-month rolling window; we request the widest
+    timespan the caller asks for, clamped to that ceiling upstream."""
     key = f"gdelt:{query}:{timespan}:{maxrecords}"
 
     async def load() -> dict[str, Any]:
@@ -121,11 +137,18 @@ async def gdelt(
     return await cache.get_or_fetch(key, 900.0, load)
 
 
-@router.get("/api/events/acled")
-async def acled(
-    days: int = Query(7, ge=1, le=90),
-    settings: Settings = Depends(get_settings),
+@router.get("/api/events/gdelt")
+async def gdelt(
+    query: str = Query("(protest OR strike OR clash OR military)"),
+    timespan: str = Query("24h"),
+    maxrecords: int = Query(250, ge=10, le=250),
 ) -> dict[str, Any]:
+    return await _load_gdelt(query, timespan, maxrecords)
+
+
+async def _load_acled(settings: Settings, days: int = 7) -> dict[str, Any]:
+    """Internal ACLED loader (cached, key-gated). Degrades to an empty
+    FeatureCollection + note when ACLED_KEY / ACLED_EMAIL are unset."""
     # ACLED needs key + email. Without those, return empty + note.
     key = getattr(settings, "acled_key", "") or ""
     email = getattr(settings, "acled_email", "") or ""
@@ -178,3 +201,90 @@ async def acled(
         return {"type": "FeatureCollection", "features": feats}
 
     return await cache.get_or_fetch(cache_key, 1800.0, load)
+
+
+@router.get("/api/events/acled")
+async def acled(
+    days: int = Query(7, ge=1, le=90),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    return await _load_acled(settings, days)
+
+
+# Honest upstream ceilings for the aggregate (documented, not "all of Earth"):
+#   EONET   — limit caps at 500 open natural events worldwide.
+#   GDELT   — GEO 2.0 caps maxrecords at 250 per call; 3-month rolling window.
+#   ACLED   — up to 500 rows for the requested day window; key-gated.
+# The /all endpoint fans out to all three, dedupes by feature id, and keeps
+# only features within radius_km of (lat, lon). It is NOT a claim of complete
+# global event coverage — it is the union of these three feeds near a point.
+_EONET_MAX = 500
+_GDELT_MAX = 250
+
+
+@router.get("/api/events/all")
+async def events_all(
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+    radius_km: float = Query(500.0, gt=0.0, le=20000.0),
+    days: int = Query(7, ge=1, le=90),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Aggregate eonet + gdelt + acled, filtered to within radius_km of the
+    given point. Returns ONE FeatureCollection of every matching event.
+
+    Each source is loaded at its widest practical setting (see ceilings above)
+    and then spatially filtered here — so a small radius still searches the
+    whole feed, it just keeps fewer features. Sources that fail (or ACLED when
+    unconfigured) degrade gracefully: their features are simply absent and a
+    per-source status is reported in `sources`.
+    """
+    # GDELT timespan: ask for as long a window as the operator wants, capped to
+    # GDELT's documented 3-month (~90 day) rolling window.
+    gdelt_timespan = f"{min(days, 90)}d"
+
+    results = await asyncio.gather(
+        _load_eonet(status="open", category=None, limit=_EONET_MAX),
+        _load_gdelt(timespan=gdelt_timespan, maxrecords=_GDELT_MAX),
+        _load_acled(settings, days),
+        return_exceptions=True,
+    )
+    labels = ("eonet", "gdelt", "acled")
+    sources: dict[str, Any] = {}
+    feats: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for label, res in zip(labels, results, strict=True):
+        if isinstance(res, BaseException):
+            sources[label] = {"ok": False, "error": str(res), "kept": 0}
+            continue
+        src_feats = (res or {}).get("features") or []
+        kept = 0
+        for f in src_feats:
+            lonlat = feature_lonlat(f)
+            if lonlat is None:
+                continue
+            flon, flat = lonlat
+            if haversine_km(lon, lat, flon, flat) > radius_km:
+                continue
+            fid = f.get("id") or f"{label}:{flon:.5f},{flat:.5f}"
+            if fid in seen:
+                continue
+            seen.add(fid)
+            feats.append(f)
+            kept += 1
+        note = (res or {}).get("note")
+        sources[label] = {
+            "ok": True,
+            "kept": kept,
+            "available": len(src_feats),
+            **({"note": note} if note else {}),
+        }
+
+    return {
+        "type": "FeatureCollection",
+        "features": feats,
+        "center": {"lat": lat, "lon": lon, "radius_km": radius_km},
+        "count": len(feats),
+        "sources": sources,
+    }

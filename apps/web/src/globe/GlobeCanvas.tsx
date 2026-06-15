@@ -163,6 +163,8 @@ export function GlobeCanvas({
   const lod1Aoi = useImagery((s) => s.lod1Aoi);
   const lod1Here = useImagery((s) => s.lod1Here);
   const clearLod1Here = useImagery((s) => s.clearLod1Here);
+  const flyTo = useImagery((s) => s.flyTo);
+  const clearFlyTo = useImagery((s) => s.clearFlyTo);
   const gibsLayerRef = useRef<Cesium.ImageryLayer | null>(null);
 
   // LOD1 war-damage 3D: load + extrude the curated AOI's buildings on request.
@@ -205,6 +207,24 @@ export function GlobeCanvas({
     }
     clearLod1Here();
   }, [lod1Here, clearLod1Here]);
+
+  // Events-anywhere: fly the camera to an operator-chosen point. One-shot
+  // request from useImagery (ImageryControl city-search / lat-lon / event
+  // list); mirrors the lod1Here request/clear pattern. `seq` in the request
+  // object guarantees this effect re-fires even for repeated identical coords.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !flyTo) return;
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(
+        flyTo.lon,
+        flyTo.lat,
+        flyTo.altMeters ?? 350_000,
+      ),
+      duration: 1.0,
+    });
+    clearFlyTo();
+  }, [flyTo, clearFlyTo]);
 
   // GIBS overlay: add/remove a date-templated imagery layer on top of the
   // base when the store's `overlay` changes. Guarded on the viewer existing

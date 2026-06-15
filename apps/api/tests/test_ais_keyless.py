@@ -13,6 +13,7 @@ import pytest
 
 from app import ais_firehose
 from app import ais_keyless as K
+from app import maritime_keyless as MK
 from app.routes import ais as ais_routes
 
 
@@ -138,3 +139,215 @@ async def test_publish_vessel_sentinels_and_validation(monkeypatch: pytest.Monke
     before = len(frames)
     assert await ais_firehose.publish_vessel(9, 91.0, 0.0) is False
     assert len(frames) == before
+
+
+# ── consolidated keyless maritime feed (app.maritime_keyless) ─────────────────
+
+
+def test_merge_vessel_features_dedup_freshest_wins() -> None:
+    # Same MMSI from two sources → the fix with the larger `t` wins.
+    digi = [
+        {
+            "id": "vessel:1",
+            "geometry": {"type": "Point", "coordinates": [5.0, 60.0]},
+            "properties": {"mmsi": 1, "t": 100.0, "source": "digitraffic"},
+        }
+    ]
+    kyst = [
+        {
+            "id": "vessel:1",
+            "geometry": {"type": "Point", "coordinates": [6.0, 61.0]},
+            "properties": {"mmsi": 1, "t": 200.0, "source": "kystdatahuset"},
+        },
+        {
+            "id": "vessel:2",
+            "geometry": {"type": "Point", "coordinates": [7.0, 62.0]},
+            "properties": {"mmsi": 2, "t": None, "source": "kystdatahuset"},
+        },
+    ]
+    merged = MK.merge_vessel_features(digi, kyst)
+    assert [f["id"] for f in merged] == ["vessel:1", "vessel:2"]
+    one = next(f for f in merged if f["id"] == "vessel:1")
+    assert one["properties"]["t"] == 200.0  # fresher Kystdatahuset fix wins
+    assert one["properties"]["source"] == "kystdatahuset"
+
+
+def test_merge_vessel_features_known_t_beats_none() -> None:
+    a = [{"id": "vessel:1", "properties": {"mmsi": 1, "t": None}}]
+    b = [{"id": "vessel:1", "properties": {"mmsi": 1, "t": 50.0}}]
+    # Whichever order, the feature with a known timestamp is preferred.
+    assert MK.merge_vessel_features(a, b)[0]["properties"]["t"] == 50.0
+    assert MK.merge_vessel_features(b, a)[0]["properties"]["t"] == 50.0
+
+
+def test_merge_vessel_features_drops_mmsi_less() -> None:
+    feats = [
+        {"id": "x", "properties": {}},  # no mmsi, non-vessel id → dropped
+        {"id": "vessel:7", "properties": {"mmsi": 7}},
+    ]
+    out = MK.merge_vessel_features(feats)
+    assert [f["id"] for f in out] == ["vessel:7"]
+
+
+def test_merge_resolves_mmsi_from_id_when_props_missing() -> None:
+    # MMSI on the `vessel:<mmsi>` id alone is enough to dedup.
+    a = [{"id": "vessel:42", "properties": {"t": 1.0}}]
+    b = [{"id": "vessel:42", "properties": {"t": 2.0}}]
+    out = MK.merge_vessel_features(a, b)
+    assert len(out) == 1 and out[0]["properties"]["t"] == 2.0
+
+
+def test_parse_kystdatahuset_normalizes_and_filters() -> None:
+    fc = {
+        "features": [
+            {
+                "geometry": {"type": "LineString", "coordinates": [[5.0, 60.0], [7.7, 57.9]]},
+                "properties": {
+                    "mmsi": 257,
+                    "ship_name": "MS TEST",
+                    "speed": 12.0,
+                    "cog": 90.0,
+                    "true_heading": 88,
+                    "ship_type": 70,
+                },
+            },
+            # null-island placeholder → dropped
+            {"geometry": {"type": "Point", "coordinates": [0.0, 0.0]}, "properties": {"mmsi": 9}},
+            # no mmsi → dropped
+            {"geometry": {"type": "Point", "coordinates": [10.0, 59.0]}, "properties": {}},
+            # unusable geometry → dropped
+            {"geometry": {"type": "Polygon", "coordinates": []}, "properties": {"mmsi": 5}},
+        ]
+    }
+    out = MK.parse_kystdatahuset(fc)
+    assert len(out) == 1
+    f = out[0]
+    assert f["id"] == "vessel:257"
+    # LAST coord of the LineString is the latest fix.
+    assert f["geometry"]["coordinates"] == [7.7, 57.9]
+    p = f["properties"]
+    assert p["mmsi"] == 257 and p["name"] == "MS TEST"
+    assert p["sog"] == 12.0 and p["cog"] == 90.0 and p["heading"] == 88
+    assert p["shipType"] == 70 and p["source"] == "kystdatahuset"
+    assert p["t"] is not None  # realtime feed stamped with ingest time
+
+
+# ── NIT N4 (fair freshest-wins) + N5 (knots) ──────────────────────────────────
+
+
+def test_parse_iso_utc_handles_naive_z_and_fractional() -> None:
+    # Naive ISO is interpreted as UTC (what date_time_utc promises).
+    assert MK._parse_iso_utc("2026-06-15T11:44:00") == 1781523840.0
+    # Explicit Z and fractional seconds both parse to the same/adjacent epoch.
+    assert MK._parse_iso_utc("2026-06-15T11:44:00Z") == 1781523840.0
+    assert MK._parse_iso_utc("2026-06-15T11:44:00.500") == 1781523840.5
+    # Garbage / empty / non-string → None (caller falls back to now()).
+    assert MK._parse_iso_utc("not-a-date") is None
+    assert MK._parse_iso_utc("") is None
+    assert MK._parse_iso_utc(None) is None
+    assert MK._parse_iso_utc(123) is None
+
+
+def test_clean_sog_kn_masks_na_sentinel_keeps_real_knots() -> None:
+    # 102.3 kn (raw 1023) is the AIS "speed not available" sentinel → None.
+    assert MK._clean_sog_kn(102.3) is None
+    assert MK._clean_sog_kn(150.0) is None
+    # Real speeds (already knots) pass through unchanged.
+    assert MK._clean_sog_kn(0.0) == 0.0
+    assert MK._clean_sog_kn(11.8) == 11.8
+    assert MK._clean_sog_kn(None) is None
+
+
+def test_parse_kystdatahuset_uses_per_fix_timestamp() -> None:
+    fc = {
+        "features": [
+            {
+                "geometry": {"type": "Point", "coordinates": [5.3, 62.1]},
+                "properties": {
+                    "mmsi": 259236000,
+                    "ship_name": "LYNGHOLM",
+                    "speed": 0.0,
+                    "date_time_utc": "2026-06-15T11:44:00",
+                },
+            },
+            # No date_time_utc → falls back to ingest time (a fresh, large t).
+            {
+                "geometry": {"type": "Point", "coordinates": [6.0, 60.0]},
+                "properties": {"mmsi": 111, "speed": 5.0},
+            },
+        ]
+    }
+    out = MK.parse_kystdatahuset(fc)
+    by_id = {f["id"]: f for f in out}
+    # The dated fix carries the parsed epoch, NOT now().
+    assert by_id["vessel:259236000"]["properties"]["t"] == 1781523840.0
+    # The undated fix falls back to now() — recent, much larger than the dated one.
+    assert by_id["vessel:111"]["properties"]["t"] > 1781523840.0
+
+
+def test_parse_kystdatahuset_masks_speed_sentinel() -> None:
+    fc = {
+        "features": [
+            {
+                "geometry": {"type": "Point", "coordinates": [5.0, 60.0]},
+                "properties": {"mmsi": 222, "speed": 102.3},  # AIS NA sentinel
+            }
+        ]
+    }
+    out = MK.parse_kystdatahuset(fc)
+    assert out[0]["properties"]["sog"] is None
+
+
+def test_merge_kystdatahuset_no_longer_always_wins() -> None:
+    # NIT N4 regression guard: a Digitraffic fix with a FRESHER real timestamp
+    # must beat a Kystdatahuset fix whose t is its (older) date_time_utc, even
+    # though Kystdatahuset's row appears later in the union order.
+    digi = [
+        {
+            "id": "vessel:259236000",
+            "geometry": {"type": "Point", "coordinates": [5.0, 62.0]},
+            "properties": {"mmsi": 259236000, "t": 1781523900.0, "source": "digitraffic"},
+        }
+    ]
+    kyst = MK.parse_kystdatahuset(
+        {
+            "features": [
+                {
+                    "geometry": {"type": "Point", "coordinates": [5.3, 62.1]},
+                    "properties": {"mmsi": 259236000, "date_time_utc": "2026-06-15T11:44:00"},
+                }
+            ]
+        }
+    )
+    assert kyst[0]["properties"]["t"] == 1781523840.0  # older than the digi fix
+    merged = MK.merge_vessel_features(digi, kyst)
+    assert len(merged) == 1
+    # Freshest (Digitraffic) wins — Kystdatahuset no longer unfairly clobbers it.
+    assert merged[0]["properties"]["source"] == "digitraffic"
+
+
+@pytest.mark.asyncio
+async def test_fetch_kystdatahuset_degrades_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Boom:
+        async def get(self, *a, **k):  # noqa: ANN002, ANN003
+            raise RuntimeError("network down")
+
+    monkeypatch.setattr(MK, "get_client", lambda: _Boom())
+    assert await MK.fetch_kystdatahuset() == []  # never raises, empty on failure
+
+
+@pytest.mark.asyncio
+async def test_fetch_kystdatahuset_rejects_non_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Resp:
+        status_code = 200
+        headers = {"content-type": "text/plain"}
+
+        def json(self):  # noqa: ANN201
+            raise AssertionError("must not parse a non-json body")
+
+    class _Client:
+        async def get(self, *a, **k):  # noqa: ANN002, ANN003
+            return _Resp()
+
+    monkeypatch.setattr(MK, "get_client", lambda: _Client())
+    assert await MK.fetch_kystdatahuset() == []

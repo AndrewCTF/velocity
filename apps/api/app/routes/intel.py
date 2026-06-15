@@ -21,7 +21,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app import llm
 from app.config import get_settings
-from app.intel import analytics, aoi
+from app.intel import analytics, aoi, incidents
 from app.intel.geo import BBox, bbox_from_radius
 
 router = APIRouter(tags=["intel"])
@@ -168,6 +168,27 @@ async def intel_anomalies(
 ) -> dict[str, Any]:
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
     return await analytics.anomalies(bbox)
+
+
+@router.get("/api/intel/brief")
+async def intel_brief(
+    min_lon: float | None = Query(None),
+    min_lat: float | None = Query(None),
+    max_lon: float | None = Query(None),
+    max_lat: float | None = Query(None),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_nm: float = Query(500.0, ge=1, le=5000),
+    link_km: float = Query(50.0, ge=1, le=500),
+    window_hours: float = Query(6.0, ge=0.25, le=72.0),
+) -> dict[str, Any]:
+    """Cross-domain incident brief: signals fused into ranked, cited incidents.
+
+    Omit coordinates for a global brief; pass a centre+radius or a bbox to scope
+    it. ``link_km`` is the convergence distance; ``window_hours`` bounds recency.
+    """
+    bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+    return await incidents.brief(bbox, link_km=link_km, window_s=window_hours * 3600.0)
 
 
 @router.get("/api/intel/aois")

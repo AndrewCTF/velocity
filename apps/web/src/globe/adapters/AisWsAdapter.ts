@@ -33,6 +33,10 @@ interface VesselMsg {
   // ITU-R M.1371 ship type code (0-99); backend caches it across messages
   // and includes it on every vessel frame once known.
   shipType?: number | null;
+  // Originating keyless feed (kystverket | digitraffic | kystdatahuset) or
+  // aisstream. Surfaced on the entity panel so an analyst can tell which
+  // upstream a contact came from. Optional — older frames omit it.
+  source?: string;
   message?: string;
 }
 
@@ -139,6 +143,7 @@ export class AisWsAdapter implements LayerAdapter {
       cog: m.cog,
       heading: m.heading,
       shipType: m.shipType ?? null,
+      source: m.source,
       kind: 'vessel',
     };
     const s = vesselStyle(props);

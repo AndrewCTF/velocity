@@ -80,6 +80,25 @@ export interface ImageryOverlay {
   maxZ: number;
 }
 
+// Operator-chosen focus point for the "events anywhere" search — a location
+// (lat/lon, optionally named) plus a radius in km. Drives /api/events/all.
+export interface EventsLocation {
+  lat: number;
+  lon: number;
+  name?: string;
+}
+
+// A one-shot request for GlobeCanvas to fly the camera to a point. Mirrors the
+// lod1Here request/clear pattern: the producer sets it, the GlobeCanvas
+// consumer acts on it and clears it back to null. seq forces a new object even
+// when the same coordinates are requested twice in a row.
+export interface FlyToRequest {
+  lat: number;
+  lon: number;
+  altMeters?: number;
+  seq: number;
+}
+
 interface ImageryState {
   mode: ImageryMode;
   setMode: (m: ImageryMode) => void;
@@ -97,6 +116,15 @@ interface ImageryState {
   lod1Here: boolean;
   requestLod1Here: () => void;
   clearLod1Here: () => void;
+  // Events-anywhere focus: the operator-chosen location + search radius (km).
+  eventsLocation: EventsLocation | null;
+  eventsRadiusKm: number;
+  setEventsLocation: (l: EventsLocation | null) => void;
+  setEventsRadiusKm: (km: number) => void;
+  // One-shot camera flyTo request consumed by GlobeCanvas (null = none pending).
+  flyTo: FlyToRequest | null;
+  requestFlyTo: (lat: number, lon: number, altMeters?: number) => void;
+  clearFlyTo: () => void;
 }
 
 // Imagery stack toggle — flips the GlobeCanvas between the default
@@ -116,6 +144,21 @@ export const useImagery = create<ImageryState>((set) => ({
   lod1Here: false,
   requestLod1Here: () => set({ lod1Here: true }),
   clearLod1Here: () => set({ lod1Here: false }),
+  eventsLocation: null,
+  eventsRadiusKm: 500,
+  setEventsLocation: (l) => set({ eventsLocation: l }),
+  setEventsRadiusKm: (km) => set({ eventsRadiusKm: Math.min(20000, Math.max(1, km)) }),
+  flyTo: null,
+  requestFlyTo: (lat, lon, altMeters) =>
+    set((s) => ({
+      flyTo: {
+        lat,
+        lon,
+        seq: (s.flyTo?.seq ?? 0) + 1,
+        ...(altMeters !== undefined ? { altMeters } : {}),
+      },
+    })),
+  clearFlyTo: () => set({ flyTo: null }),
 }));
 
 export type WsStatus = 'connecting' | 'open' | 'closed';
