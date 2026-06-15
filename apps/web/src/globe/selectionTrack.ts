@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { useSelection } from '../state/stores.js';
 import { tracks, type TrackPoint } from '../intel/tracks.js';
+import { apiFetch } from '../transport/http.js';
 
 // Magenta/violet polyline through the selected entity's last ~60 positions,
 // mirroring the "purple line" flightradar24 draws through a selected flight.
@@ -41,17 +42,43 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
   const livePositions: Cesium.Cartesian3[] = [];
   let liveClamp = false; // set once when the polyline is created (homogeneous track)
 
-  // Refill livePositions in place from the ring buffer; returns the point count.
+  // Full recent flight trail fetched once on selection (tar1090 trace_full via
+  // /api/adsb/trace). The client ring only accumulates positions since the page
+  // opened (≤60 points) — short and slow to fill — so we seed the polyline with
+  // the real flight history and let the live ring extend its tail.
+  let historical: TrackPoint[] = [];
+  let fetchToken = 0;
+
+  const loadHistorical = async (id: string, token: number): Promise<void> => {
+    if (!id.startsWith('aircraft:')) return; // only aircraft have a trace upstream
+    const icao = id.slice('aircraft:'.length);
+    try {
+      const r = await apiFetch(`/api/adsb/trace/${encodeURIComponent(icao)}`);
+      if (!r.ok) return;
+      const b = (await r.json()) as { points?: { t: number; lon: number; lat: number; alt_m: number }[] };
+      if (token !== fetchToken) return; // selection changed while we were fetching
+      historical = (b.points ?? []).map((p) => ({ t: p.t, lon: p.lon, lat: p.lat, alt: p.alt_m }));
+      renderTrack(id);
+    } catch {
+      /* keep the live-only trail */
+    }
+  };
+
+  // Refill livePositions in place from the historical trace + the live ring's
+  // newer tail; returns the point count.
   const rebuild = (id: string): number => {
-    const pts = tracks.get(id);
+    const ring = tracks.get(id) as TrackPoint[];
+    const lastHistT = historical.length ? historical[historical.length - 1]!.t : -Infinity;
+    const tail = historical.length ? ring.filter((p) => p.t > lastHistT) : ring;
+    const merged = historical.length ? [...historical, ...tail] : ring;
     livePositions.length = 0;
     let anyAircraftAlt = false;
-    for (const p of pts as TrackPoint[]) {
+    for (const p of merged) {
       if (p.alt > 100) anyAircraftAlt = true;
       livePositions.push(Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt));
     }
-    if (pts.length > 0) liveClamp = !anyAircraftAlt;
-    return pts.length;
+    if (merged.length > 0) liveClamp = !anyAircraftAlt;
+    return merged.length;
   };
 
   const removeSeed = () => {
@@ -155,9 +182,12 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
   const onSelect = (id: string | null) => {
     if (id === currentId) return;
     currentId = id;
+    historical = [];
+    fetchToken++;
     removePolylines();
     removeSeed();
     renderTrack(id);
+    if (id) void loadHistorical(id, fetchToken);
   };
   onSelect(useSelection.getState().selectedEntityId);
   const unsub = useSelection.subscribe((s) => onSelect(s.selectedEntityId));

@@ -102,6 +102,7 @@ def detect_targets(
     max_area: int = 400,
     land_block: int = 16,
     land_fill: float = 0.5,
+    water_bg_sigma: float = 2.0,
 ) -> list[dict[str, Any]]:
     """Find small bright blobs (vessels) in a 2-D SAR amplitude array.
 
@@ -109,11 +110,21 @@ def detect_targets(
     (land/coast) are suppressed. Remaining bright pixels are grouped by
     8-connectivity (union-find over the sparse set); components with area in
     [min_area, max_area] are returned as detections with pixel centroids.
+
+    WATER-CONTEXT GATE (``water_bg_sigma``): a real ship is a bright blob on DARK
+    open water; a coastal/land return is a bright blob on a BRIGHT background.
+    Each candidate's local background (a padded window median) must sit within
+    ``water_bg_sigma`` robust-σ of the global median, else it is dropped. This is
+    what stops the detector painting "vessels on land" over chokepoint AOIs whose
+    box necessarily includes coastline (the block suppression alone misses
+    textured coast).
     """
     a = arr.astype(np.float32)
     med = float(np.median(a))
     mad = float(np.median(np.abs(a - med))) or 1.0
-    thr = med + k * 1.4826 * mad
+    scale = 1.4826 * mad
+    thr = med + k * scale
+    bg_max = med + water_bg_sigma * scale
     mask = a > thr
 
     # Suppress large bright regions (land/coast): zero blocks that are mostly lit.
@@ -162,6 +173,15 @@ def detect_targets(
             continue
         rr = ys[members]
         cc = xs[members]
+        r0, r1 = int(rr.min()), int(rr.max())
+        c0, c1 = int(cc.min()), int(cc.max())
+        # Water-context gate: the blob must sit on a DARK background (open water).
+        # Sample a padded window's median; a coast/land detection's surroundings
+        # are bright and exceed bg_max → reject it as land contamination.
+        pad = 12
+        win = a[max(0, r0 - pad) : r1 + 1 + pad, max(0, c0 - pad) : c1 + 1 + pad]
+        if win.size and float(np.median(win)) > bg_max:
+            continue
         out.append(
             {
                 "row": float(rr.mean()),

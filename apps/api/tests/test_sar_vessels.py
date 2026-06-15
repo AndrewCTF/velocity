@@ -24,6 +24,23 @@ def test_detect_targets_rejects_pure_clutter():
     assert sar_vessels.detect_targets(img, k=5.0) == []
 
 
+def test_water_context_gate_rejects_bright_background_blob():
+    # A bright blob on DARK water is a ship; the same blob on a brighter (land)
+    # background is rejected by the water-context gate — the fix for "vessels on
+    # land" over coastal chokepoint AOIs. The land patch here is moderately
+    # bright (below the detection threshold, so it neither lights up as its own
+    # component nor trips the block suppression) — only the gate rejects it.
+    rng = np.random.default_rng(3)
+    img = (rng.random((200, 200)) * 30 + 5).astype(np.float32)  # dark water, med ~20
+    img[0:60, 120:180] = 50 + rng.random((60, 60)) * 5  # moderately bright land patch
+    img[40:42, 40:42] = 255  # ship on dark water -> kept
+    img[40:42, 150:152] = 255  # "ship" on the bright patch -> rejected by water gate
+    targets = sar_vessels.detect_targets(img, k=4.0)
+    found = {(round(t["row"]), round(t["col"])) for t in targets}
+    assert any(abs(fr - 40) <= 1 and abs(fc - 40) <= 1 for fr, fc in found)
+    assert not any(abs(fr - 40) <= 2 and abs(fc - 150) <= 2 for fr, fc in found)
+
+
 def test_detect_targets_suppresses_large_bright_region():
     rng = np.random.default_rng(2)
     img = (rng.random((200, 200)) * 20).astype(np.float32)

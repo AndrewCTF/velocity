@@ -1396,3 +1396,109 @@ async def adsb_live_emergencies() -> dict[str, Any]:
         return {"type": "FeatureCollection", "features": feats}
 
     return await cache.get_or_fetch("airplaneslive:emerg", 15.0, load)
+
+
+# ── per-aircraft full flight trail (tar1090 trace_full) ──────────────────────
+# The selection polyline was built only from positions accumulated client-side
+# since the page opened — short, slow to fill. adsb.lol serves the FULL recent
+# trace (tar1090 trace_full: up to ~24 h, thousands of points) keyless, so we
+# seed the trail from it on selection. airplanes.live's trace 403s a datacenter
+# IP; OpenSky's /tracks path is the fallback.
+
+
+def _parse_tar1090_trace(j: dict[str, Any]) -> list[dict[str, Any]]:
+    base = j.get("timestamp")
+    try:
+        base = float(base)
+    except (TypeError, ValueError):
+        return []
+    out: list[dict[str, Any]] = []
+    for e in j.get("trace") or []:
+        # entry: [dt_s, lat, lon, alt(ft|"ground"), gs, track, ...]
+        if not isinstance(e, list) or len(e) < 4:
+            continue
+        try:
+            t = base + float(e[0])
+            lat = float(e[1])
+            lon = float(e[2])
+        except (TypeError, ValueError):
+            continue
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            continue
+        alt = e[3]
+        alt_m = round(float(alt) * 0.3048) if isinstance(alt, (int, float)) else 0
+        out.append({"t": int(t * 1000), "lon": round(lon, 5), "lat": round(lat, 5), "alt_m": alt_m})
+    return out
+
+
+async def _fetch_opensky_track(h: str) -> list[dict[str, Any]]:
+    try:
+        r = await get_client().get(
+            f"https://opensky-network.org/api/tracks/all?icao24={h}&time=0",
+            headers={"User-Agent": _FEED_UA},
+            follow_redirects=True,
+        )
+    except Exception:  # noqa: BLE001
+        return []
+    if r.status_code != 200:
+        return []
+    try:
+        j = r.json()
+    except ValueError:
+        return []
+    out: list[dict[str, Any]] = []
+    for wp in j.get("path") or []:
+        # waypoint: [time, lat, lon, baro_alt, track, on_ground]
+        if not isinstance(wp, list) or len(wp) < 4:
+            continue
+        try:
+            t = float(wp[0])
+            lat = float(wp[1])
+            lon = float(wp[2])
+        except (TypeError, ValueError):
+            continue
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            continue
+        alt_m = round(float(wp[3])) if isinstance(wp[3], (int, float)) else 0
+        out.append({"t": int(t * 1000), "lon": round(lon, 5), "lat": round(lat, 5), "alt_m": alt_m})
+    return out
+
+
+@router.get("/api/adsb/trace/{icao}")
+async def adsb_trace(icao: str) -> dict[str, Any]:
+    """Full recent flight trail for one aircraft, ordered oldest→newest.
+
+    Pulls the keyless tar1090 ``trace_full`` from adsb.lol (up to ~24 h of the
+    flight, thousands of points); falls back to the OpenSky track path. Returns
+    ``{icao, source, count, points: [{t (epoch ms), lon, lat, alt_m}]}`` —
+    downsampled to <=800 points so the polyline + payload stay light.
+    """
+    h = icao.lower().strip()
+    if len(h) != 6 or any(c not in "0123456789abcdef" for c in h):
+        raise HTTPException(400, "icao must be 6 hex chars")
+
+    async def load() -> dict[str, Any]:
+        url = f"https://globe.adsb.lol/data/traces/{h[-2:]}/trace_full_{h}.json"
+        pts: list[dict[str, Any]] = []
+        source = "none"
+        try:
+            r = await get_client().get(
+                url, headers={"User-Agent": _FEED_UA}, follow_redirects=True
+            )
+            if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
+                pts = _parse_tar1090_trace(r.json())
+                if pts:
+                    source = "adsb.lol"
+        except Exception:  # noqa: BLE001
+            pts = []
+        if not pts:
+            pts = await _fetch_opensky_track(h)
+            if pts:
+                source = "opensky"
+        # Downsample evenly so a 2 600-point trace doesn't bloat the polyline.
+        if len(pts) > 800:
+            step = len(pts) / 800.0
+            pts = [pts[int(i * step)] for i in range(800)]
+        return {"icao": h, "source": source, "count": len(pts), "points": pts}
+
+    return await cache.get_or_fetch(f"adsbtrace:{h}", 45.0, load)
