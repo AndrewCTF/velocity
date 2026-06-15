@@ -346,9 +346,20 @@ export function GlobeCanvas({
     //    the camera is close (2 is the default; ~1.4 ≈ "full res").
     //  - minimumZoomDistance ~2 m so an analyst can drop right onto a contact
     //    or a runway instead of stopping ~100 m up.
-    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2);
-    scene.globe.maximumScreenSpaceError = 1.4;
-    scene.globe.preloadSiblings = true;
+    // VRAM/throughput budget (a 14k-entity scene + global terrain+imagery was
+    // filling ~24 GB and thrashing even a high-end GPU). Three levers, tuned so
+    // the GPU isn't the bottleneck:
+    //  - resolutionScale capped at 1.5 (was 2.0): a 2x render on a 4K panel is an
+    //    8K back-buffer (and Cesium keeps several full-screen passes), so the cap
+    //    roughly halves render-target VRAM with no visible softening at 1.5x.
+    //  - maximumScreenSpaceError 2.0 (was 1.4): 1.4 loads ~2x the terrain/imagery
+    //    tiles of the 2.0 default for an imperceptible sharpness gain — the main
+    //    driver of the tile-cache VRAM blow-up.
+    //  - preloadSiblings OFF (was on): stop speculatively loading the ring of
+    //    adjacent tiles (~3x tile fetch/upload); the visible set is enough.
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
+    scene.globe.maximumScreenSpaceError = 2.0;
+    scene.globe.preloadSiblings = false;
     scene.screenSpaceCameraController.minimumZoomDistance = 2.0;
     // Keep the far plane huge so the whole disk still draws from orbit even
     // with the tighter near zoom.
