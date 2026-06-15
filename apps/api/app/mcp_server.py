@@ -436,6 +436,53 @@ async def intel_brief(
 
 
 @mcp.tool()
+async def detect_deception(
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_nm: float = 500.0,
+) -> dict[str, Any]:
+    """Denial & deception — "am I being fed?". Flags MANIPULATED tracks distinct
+    from jamming: AIS duplicate-MMSI (one identity, two hulls) and impossible
+    teleports; ADS-B GPS spoofing (many aircraft snapped to one false position)
+    and kinematic position-injection. Run before trusting a feed in a contested
+    area. Omit coords for global."""
+    return await _get(
+        "/api/intel/deception", {"lat": lat, "lon": lon, "radius_nm": radius_nm}
+    )
+
+
+@mcp.tool()
+async def locate_emitter(
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_nm: float = 500.0,
+) -> dict[str, Any]:
+    """Estimate a GPS jammer/spoofer LOCATION from the degraded-ADS-B footprint
+    (severity-weighted centroid + CEP + confidence). Turns "jamming somewhere
+    here" into "emitter ~here ±N km". Footprint-centroid estimate (~tens of km),
+    not RF direction-finding — stated in the response. Scope with lat/lon."""
+    return await _get(
+        "/api/intel/emitter", {"lat": lat, "lon": lon, "radius_nm": radius_nm}
+    )
+
+
+@mcp.tool()
+async def area_baseline(
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_nm: float = 500.0,
+) -> dict[str, Any]:
+    """Is this normal? Current vessel / dark-vessel / jamming / military counts
+    z-scored against a rolling baseline, with anomalies called out (e.g. "dark
+    vessels +5σ", "traffic -3σ"). Global uses the background sampler; polling an
+    AOI repeatedly builds that area's baseline. Distinguishes a real shift from
+    a normal day."""
+    return await _get(
+        "/api/intel/baseline", {"lat": lat, "lon": lon, "radius_nm": radius_nm}
+    )
+
+
+@mcp.tool()
 async def whats_changed(
     lat: float | None = None,
     lon: float | None = None,

@@ -21,7 +21,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app import llm
 from app.config import get_settings
-from app.intel import analytics, aoi, dossier, incidents
+from app.intel import analytics, aoi, baseline, deception, dossier, emitter, incidents
+from app.intel.baseline import baseline_store
 from app.intel.geo import BBox, bbox_from_radius
 from app.intel.incident_store import incident_store
 
@@ -253,6 +254,59 @@ async def intel_incident_history(
     accumulated by your prior /watch calls for that area."""
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
     return incident_store.history(_scope_for(bbox), hours * 3600.0)
+
+
+@router.get("/api/intel/deception")
+async def intel_deception(
+    min_lon: float | None = Query(None),
+    min_lat: float | None = Query(None),
+    max_lon: float | None = Query(None),
+    max_lat: float | None = Query(None),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_nm: float = Query(500.0, ge=1, le=5000),
+) -> dict[str, Any]:
+    """Denial & deception sweep: spoofed AIS identity/position + ADS-B GPS
+    spoofing (distinct from the jamming layer)."""
+    bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+    return await deception.detect(bbox)
+
+
+@router.get("/api/intel/emitter")
+async def intel_emitter(
+    min_lon: float | None = Query(None),
+    min_lat: float | None = Query(None),
+    max_lon: float | None = Query(None),
+    max_lat: float | None = Query(None),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_nm: float = Query(500.0, ge=1, le=5000),
+) -> dict[str, Any]:
+    """Estimate a GPS jammer/spoofer location from the degraded-ADS-B footprint
+    (severity-weighted centroid + CEP). Footprint estimate, not RF DF."""
+    bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+    return await emitter.estimate(bbox)
+
+
+@router.get("/api/intel/baseline")
+async def intel_baseline(
+    min_lon: float | None = Query(None),
+    min_lat: float | None = Query(None),
+    max_lon: float | None = Query(None),
+    max_lat: float | None = Query(None),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_nm: float = Query(500.0, ge=1, le=5000),
+) -> dict[str, Any]:
+    """Is this normal? Current vessel/dark/jamming/military counts z-scored
+    against a rolling baseline. Global uses the background sampler; an AOI
+    samples-on-read so repeated polls of the same area build its baseline."""
+    bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+    scope = _scope_for(bbox)
+    current = await baseline.current_metrics(bbox)
+    if bbox is not None:  # build an AOI baseline from the caller's own polling
+        baseline_store.sample(scope, current)
+    return baseline_store.assess(scope, current)
 
 
 @router.get("/api/intel/dossier/vessel/{mmsi}")

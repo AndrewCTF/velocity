@@ -32,7 +32,7 @@ from typing import Any
 
 from app.correlate.bus import bus, jamming_recent
 from app.correlate.store import store
-from app.intel import analytics
+from app.intel import analytics, deception, emitter
 from app.intel.geo import BBox, aircraft_category, feature_lonlat, haversine_km
 
 # Domains the fusion engine reasons over. The narrative + scoring key off these.
@@ -44,6 +44,7 @@ DOMAINS = (
     "ais-gap",
     "event",
     "quake",
+    "spoofing",
 )
 
 _SEV_WEIGHT = {"critical": 5, "high": 3, "medium": 2, "low": 1}
@@ -187,6 +188,17 @@ async def _gather(bbox: BBox | None, window_s: float) -> list[Signal]:
     #    signal — a lone headline is not actionable on its own.
     add(await _event_signals(bbox, cutoff))
 
+    # 7) Deception — manipulated tracks (spoofed AIS identity/position, GPS
+    #    position-injection), distinct from the degraded-NACp jamming layer. A
+    #    spoofing finding converging with dark vessels / jamming is the signature
+    #    of coordinated concealment.
+    dec = deception.detect_gps(bbox, feats) + deception.detect_ais(bbox)
+    add([
+        Signal("spoofing", f.get("severity", "medium"), now, f["lon"], f["lat"],
+               f["detail"], {"type": f["type"]})
+        for f in dec
+    ])
+
     return out
 
 
@@ -302,6 +314,12 @@ def _narrate(cluster: list[Signal]) -> str:
     if "quake" in d and len(d) > 1:
         qk = next(s for s in cluster if s.domain == "quake")
         return f"{qk.summary}, co-located with {', '.join(sorted(d - {'quake'}))} activity."
+    if "spoofing" in d and (d & {"dark-vessel", "gps-jamming", "ais-gap"}):
+        other = sorted(d - {"spoofing"})
+        return (f"Spoofed/manipulated tracks co-located with {', '.join(other)} — "
+                "signature of coordinated denial & deception, not just interference.")
+    if {"spoofing", "military"} <= d:
+        return "Track spoofing co-located with military air activity — likely active deception."
     if {"dark-vessel", "gps-jamming"} <= d:
         return (f"{cnt('dark-vessel')} dark/AIS-off vessel(s) inside a GPS-jamming footprint "
                 "— possible deliberate AIS concealment under electronic-warfare cover.")
@@ -329,7 +347,9 @@ def _follow_up(domains: set[str], lat: float, lon: float) -> list[str]:
     if "dark-vessel" in domains or "ais-gap" in domains:
         fu.append(f"query_vessels(lat={lat:.3f}, lon={lon:.3f}, {r}, dark_only=True)")
     if "gps-jamming" in domains:
-        fu.append(f"gps_jamming(lat={lat:.3f}, lon={lon:.3f}, {r})")
+        fu.append(f"locate_emitter(lat={lat:.3f}, lon={lon:.3f}, {r})")
+    if "spoofing" in domains:
+        fu.append(f"detect_deception(lat={lat:.3f}, lon={lon:.3f}, {r})")
     if "military" in domains or "air-emergency" in domains:
         fu.append(f"query_aircraft(lat={lat:.3f}, lon={lon:.3f}, {r}, category='military')")
     fu.append(f"deep_analyze('assess this incident', lat={lat:.3f}, lon={lon:.3f})")
@@ -371,6 +391,13 @@ async def brief(
              "lon": round(s.lon, 4), "lat": round(s.lat, 4), "ref": s.ref}
             for s in sorted(cl, key=lambda s: _SEV_WEIGHT.get(s.severity, 1), reverse=True)
         ][:_MAX_EVIDENCE]
+        # If this incident contains a GPS-jamming footprint, estimate the emitter
+        # from its jamming cell centroids (defense-grade EW product).
+        emitter_estimate = None
+        if "gps-jamming" in domains:
+            emitter_estimate = emitter.estimate_for_incident(
+                [(s.lon, s.lat) for s in cl if s.domain == "gps-jamming"]
+            )
         incidents.append({
             "id": uuid.uuid4().hex[:10],
             "threat_level": level,
@@ -380,6 +407,7 @@ async def brief(
             "centroid": {"lon": round(clon, 4), "lat": round(clat, 4)},
             "span_km": round(span, 1),
             "newest_age_s": int(time.time() - newest),
+            "emitter_estimate": emitter_estimate,
             "narrative": _narrate(cl),
             "evidence": evidence,
             "evidence_truncated": len(cl) > len(evidence),
