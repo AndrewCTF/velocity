@@ -258,6 +258,8 @@ async def digitraffic_vessels(
 
 def _obs_to_vessel_feature(o: Observation) -> dict[str, Any]:
     a = o.attrs or {}
+    sog = a.get("sog")
+    parked = isinstance(sog, (int, float)) and sog < get_settings().parked_sog_kn
     return {
         "type": "Feature",
         "id": o.id,
@@ -274,14 +276,49 @@ def _obs_to_vessel_feature(o: Observation) -> dict[str, Any]:
             "t": o.t,
             "kind": "vessel",
             "source": o.source,
+            "parked": bool(parked),
         },
     }
 
 
-def vessel_snapshot() -> dict[str, Any]:
-    """Latest fix per MMSI across all AIS sources within the store retention."""
-    feats = [_obs_to_vessel_feature(o) for o in store.latest("vessel")]
-    return {"type": "FeatureCollection", "features": feats}
+# Parked-vessel cache: stationary ships (SOG < parked_sog_kn) retained far longer
+# than the 1h live store, because a parked ship's old fix is still its current
+# position. Refreshed each poll from the live store; a vessel that moves again is
+# dropped (it departed the anchorage). This is what makes "parking mode" carry a
+# lot more stationary vessels than the live snapshot alone.
+_PARKED: dict[str, dict[str, Any]] = {}
+
+
+def _update_parked() -> None:
+    s = get_settings()
+    for o in store.latest("vessel"):
+        sog = (o.attrs or {}).get("sog")
+        if isinstance(sog, (int, float)) and sog < s.parked_sog_kn:
+            _PARKED[o.id] = _obs_to_vessel_feature(o)
+        else:
+            _PARKED.pop(o.id, None)  # moving again → left the anchorage
+    cutoff = time.time() - s.parked_ttl_s
+    for k in [k for k, v in _PARKED.items() if (v["properties"].get("t") or 0) < cutoff]:
+        _PARKED.pop(k, None)
+
+
+def parked_count() -> int:
+    return len(_PARKED)
+
+
+def vessel_snapshot(parked_only: bool = False) -> dict[str, Any]:
+    """Latest fix per MMSI across all AIS sources.
+
+    Default: the live store (within retention) UNIONED with the long-retained
+    parked cache (live wins on conflict) — strictly more vessels. parked_only:
+    just the stationary set (parking mode).
+    """
+    if parked_only:
+        return {"type": "FeatureCollection", "features": list(_PARKED.values())}
+    by_id = {o.id: _obs_to_vessel_feature(o) for o in store.latest("vessel")}
+    for vid, feat in _PARKED.items():
+        by_id.setdefault(vid, feat)  # add parked ships the live store has aged out
+    return {"type": "FeatureCollection", "features": list(by_id.values())}
 
 
 @router.get("/api/maritime/snapshot")
@@ -291,8 +328,9 @@ async def maritime_snapshot(
     lamax: float | None = Query(None, ge=-90, le=90),
     lomax: float | None = Query(None, ge=-180, le=180),
     limit: int | None = Query(None, ge=1, le=20000),
+    parked: int | None = Query(None, description="1 = parking mode: stationary vessels only"),
 ) -> dict[str, Any]:
-    full = vessel_snapshot()
+    full = vessel_snapshot(parked_only=bool(parked))
     if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
         return full
     return viewport_filter(full, lamin, lomin, lamax, lomax, limit)
@@ -312,6 +350,7 @@ async def _poll_forever() -> None:
     while True:
         try:
             await digitraffic_snapshot()  # store.add_many runs inside load()
+            _update_parked()  # refresh the long-retained parked cache from the store
         except Exception:  # noqa: BLE001 — one bad poll must not kill the loop
             pass
         await asyncio.sleep(interval)

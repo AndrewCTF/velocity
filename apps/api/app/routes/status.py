@@ -43,10 +43,13 @@ async def status() -> dict[str, Any]:
     # within the store retention window. Northern Europe only without an AISStream
     # key; global AIS needs one.
     vessels = 0
+    parked = 0
     try:
         from app.correlate.store import store  # noqa: PLC0415
+        from app.routes import maritime  # noqa: PLC0415
 
         vessels = len(store.latest("vessel"))
+        parked = maritime.parked_count()
     except Exception:  # noqa: BLE001 — never let vessels break status
         vessels = 0
 
@@ -68,8 +71,8 @@ async def status() -> dict[str, Any]:
         _feed(
             "AIS vessels — keyless",
             keyless_ais_on and vessels > 0,
-            f"{vessels} live vessels — Northern Europe only (Norway + Baltic). "
-            "Global AIS needs an AISStream key (BYOK).",
+            f"{vessels} vessels ({parked} parked, long-retained) — Northern Europe "
+            "only (Norway + Baltic). Global AIS needs an AISStream key (BYOK).",
             count=vessels,
         ),
         _feed(
@@ -104,6 +107,7 @@ async def status() -> dict[str, Any]:
         "aircraft_age_s": age,
         "aircraft_floor": _AIRCRAFT_FLOOR,
         "vessel_count": vessels,
+        "parked_count": parked,
         "feeds": feeds,
         "note": (
             "Live counts from the running snapshot. Coverage is uneven by design — "

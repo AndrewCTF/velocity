@@ -192,6 +192,12 @@ class Settings(BaseSettings):
     # /locations) into the unified vessel store. Keeps /api/maritime/snapshot warm
     # without a browser; Digitraffic positions update ~1/min so 30 s is ample.
     ais_poll_interval_s: float = 30.0
+    # Parking mode: a vessel with SOG below parked_sog_kn is "parked" (anchored /
+    # moored / drifting). Parked ships don't move, so an old fix is still
+    # accurate — we retain them for parked_ttl_s (much longer than the 1h live
+    # store) so the snapshot carries far more stationary vessels without ghosts.
+    parked_sog_kn: float = 0.5
+    parked_ttl_s: float = 43200.0  # 12h
     # Extra keyless regional AIS: Norway Kystdatahuset (REST GeoJSON poll) and
     # Finland Digitraffic (live MQTT-over-WSS). Both feed the same /ws/ais layer.
     ais_kystdatahuset_enabled: bool = True
