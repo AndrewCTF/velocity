@@ -84,7 +84,21 @@ export function aircraftStyle(props: Record<string, unknown>): AircraftStyle {
   // false even though the value is logically present. Falsy guard with `!= null`
   // (not `!!`) so the integer 0 — which couldn't be a real squawk anyway —
   // wouldn't accidentally short-circuit if it ever appeared.
-  const emergency = squawk != null && EMERGENCY_SQUAWKS.has(String(squawk));
+  const emergSquawk = squawk != null && EMERGENCY_SQUAWKS.has(String(squawk));
+  // readsb also carries an `emergency` field (general/lifeguard/minfuel/nordo/
+  // unlawful/downed) — a real emergency can be declared WITHOUT a 7500/7600/7700
+  // squawk, so those aircraft were never turning red. Treat any non-empty,
+  // non-"none" value as an emergency too.
+  const emergFlag = (() => {
+    const e = props['emergency'];
+    if (typeof e === 'boolean') return e;
+    if (typeof e === 'string') {
+      const v = e.trim().toLowerCase();
+      return v !== '' && v !== 'none' && v !== 'no';
+    }
+    return false;
+  })();
+  const emergency = emergSquawk || emergFlag;
   const military =
     isMilitaryCallsign(callsign) || source === 'adsb_mil' || source === 'airplanes_live';
 

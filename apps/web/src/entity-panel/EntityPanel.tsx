@@ -503,6 +503,11 @@ function EnrichmentCard({
     'photo_license',
     'photo_credit',
     'description',
+    // Owned by FlightCard — these are objects; the generic grid would render
+    // them as "[object Object]".
+    'origin',
+    'destination',
+    'route_airline',
   ]);
   const note = (enrichment as { note?: string }).note;
   const wikidata = (enrichment as { wikidata_url?: string }).wikidata_url;
