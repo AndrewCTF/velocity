@@ -70,6 +70,24 @@ AOIS: dict[str, tuple[str, tuple[float, float, float, float]]] = {
     # dredger activity often AIS-dark. Probed: 32 GRD products /30d, latest
     # 2026-06-14; full-swath VV scene, water-dominant box.
     "taiwan-strait": ("Taiwan Strait (off Pingtan)", (119.25, 24.45, 119.80, 24.92)),
+    # ── Shadow-fleet / sanctions-evasion STS hubs + chokepoints. Each bbox was
+    #    probed against the CDSE OData catalogue (Sentinel-1 GRD products
+    #    intersecting the box in the trailing 30 days) on 2026-06-19; the count is
+    #    the verified revisit. Land-flanked boxes (Baltic/Black Sea ports) lean on
+    #    detect_targets' land_block suppression — shrink the box if coastal FPs
+    #    appear.
+    "ust-luga": ("Ust-Luga (Baltic)", (28.20, 59.62, 28.75, 59.88)),  # 96 GRD/30d
+    "gibraltar": ("Strait of Gibraltar", (-5.60, 35.85, -5.20, 36.10)),  # 74 GRD/30d
+    "gulf-of-paria": ("Gulf of Paria (Venezuela STS)", (-62.45, 9.85, -61.90, 10.45)),  # 70 GRD/30d
+    "laconian-gulf": ("Laconian Gulf STS (Greece)", (22.80, 36.35, 23.30, 36.75)),  # 68 GRD/30d
+    "primorsk": ("Primorsk approaches (Baltic)", (28.50, 60.10, 29.00, 60.42)),  # 68 GRD/30d
+    "novorossiysk": ("Novorossiysk", (37.70, 44.58, 38.05, 44.80)),  # 66 GRD/30d
+    "kalamata-gythio": ("Gulf of Laconia approaches", (22.35, 36.55, 22.85, 36.95)),  # 50 GRD/30d
+    "lombok-strait": ("Lombok Strait", (115.55, -8.85, 116.05, -8.35)),  # 16 GRD/30d
+    "singapore-strait": ("Singapore Strait STS", (103.60, 1.05, 104.10, 1.30)),  # 14 GRD/30d
+    "kozmino": ("Kozmino / Nakhodka Bay", (132.70, 42.65, 133.15, 42.98)),  # 10 GRD/30d
+    "sunda-strait": ("Sunda Strait", (105.55, -6.15, 106.10, -5.65)),  # 10 GRD/30d
+    "malacca-linggi": ("Malacca / Linggi STS", (101.45, 2.20, 101.95, 2.60)),  # 10 GRD/30d
 }
 
 

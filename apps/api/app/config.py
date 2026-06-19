@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     opensky_client_id: str = ""
     opensky_client_secret: str = ""
     aisstream_key: str = ""
+    # When true AND aisstream_key is set, run the AISStream upstream ALWAYS-ON
+    # (global vessel firehose) from boot, instead of only while a browser holds
+    # /ws/ais open. AISStream's free tier has a message cap, so this is opt-in —
+    # leave it off to keep AISStream on-demand and conserve the budget.
+    aisstream_firehose: bool = False  # AISSTREAM_FIREHOSE
     firms_map_key: str = ""
     gfw_token: str = ""
     cdse_client_id: str = ""

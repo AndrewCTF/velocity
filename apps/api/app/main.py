@@ -100,6 +100,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import ais_keyless  # noqa: PLC0415
 
             ais_keyless.start()
+            # AISStream global firehose (opt-in, keyed): when AISSTREAM_FIREHOSE
+            # is set, run the keyed upstream always-on from boot so global
+            # vessels stream without needing a browser on /ws/ais. Off by default
+            # (AISStream's free tier is capped) — then it stays on-demand.
+            if settings.aisstream_key and settings.aisstream_firehose:
+                # ais_routes is imported at module scope; do NOT re-import here —
+                # a local import would shadow it and UnboundLocalError the
+                # shutdown call below on the no-background (test) path.
+                ais_routes._ensure_upstream(settings.aisstream_key)
             # Position history store for 3D replay/scrub.
             from app import history  # noqa: PLC0415
 
