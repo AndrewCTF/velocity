@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { App } from './App.js';
 import { App2D } from './App2D.js';
 import { AuthProvider, useAuth } from './auth/AuthContext.js';
 import { LoginPage } from './auth/LoginPage.js';
 import { SignupPage } from './auth/SignupPage.js';
+import { SettingsModal } from './settings/SettingsModal.js';
 
 // Served under the Vite base path (e.g. "/app" in production, "/" in dev), so
 // the router's basename tracks it — keeps client routes correct behind /app.
@@ -27,11 +29,24 @@ export function AppRouter(): JSX.Element {
 
 function TopBar(): JSX.Element | null {
   const loc = useLocation();
+  const { user } = useAuth();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // The auth pages are full-screen cards — no overlay chrome on them.
   if (loc.pathname === '/login' || loc.pathname === '/signup') return null;
   const is2D = loc.pathname.startsWith('/2d');
   return (
     <div className="absolute top-1 right-2 z-[1000] flex items-center gap-2">
+      {user && (
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          title="API keys & settings"
+          className="mono text-[10px] px-2 py-0.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
+        >
+          ⚙ Keys
+        </button>
+      )}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <AccountChip />
       <div className="flex gap-1">
         <Link

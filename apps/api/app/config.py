@@ -135,6 +135,14 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
 
+    # ── BYOK (bring-your-own-key) ──
+    # Symmetric key (Fernet, urlsafe-base64 32 bytes) used to encrypt user API
+    # keys at rest in Supabase `public.user_keys`. The plaintext key never lands
+    # in the DB — only Fernet ciphertext — so a DB compromise alone can't read
+    # them. Generate once: `python -c "from cryptography.fernet import Fernet;
+    # print(Fernet.generate_key().decode())"`. When unset, the BYOK routes 503.
+    byok_enc_key: str = ""  # BYOK_ENC_KEY
+
     # ── MCP server + local AI (Ollama) ──
     # The MCP server (app.mcp_server) calls this backend over HTTP and can
     # launch a local Ollama model for deeper, in-the-loop analysis without

@@ -223,7 +223,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                         </div>
                       )}
                       <div className="pl-[17px] mt-0.5">
-                        <span className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3" title={l.license}>
+                        <span className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3">
                           {l.auth} · {l.refresh.ttlSec ? `${l.refresh.ttlSec}s` : l.refresh.mode}
                         </span>
                       </div>

@@ -102,3 +102,59 @@ returns velocity_tier language sql stable set search_path = public as $$
   end
   from public.subscriptions s where s.user_id = uid;
 $$;
+
+-- ---- BYOK: per-user upstream API keys (Fernet-encrypted at rest) -----------
+-- The backend encrypts each key with BYOK_ENC_KEY before insert and decrypts
+-- on read, so this table only ever holds ciphertext + a last-4 hint. RLS
+-- scopes every row to its owner; PostgREST upsert needs insert+update grants.
+create table if not exists public.user_keys (
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  provider   text not null,
+  ciphertext text not null,
+  hint       text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (user_id, provider)
+);
+
+alter table public.user_keys enable row level security;
+
+drop policy if exists user_keys_self_select on public.user_keys;
+drop policy if exists user_keys_self_insert on public.user_keys;
+drop policy if exists user_keys_self_update on public.user_keys;
+drop policy if exists user_keys_self_delete on public.user_keys;
+
+create policy user_keys_self_select on public.user_keys for select using (auth.uid() = user_id);
+create policy user_keys_self_insert on public.user_keys for insert with check (auth.uid() = user_id);
+create policy user_keys_self_update on public.user_keys for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy user_keys_self_delete on public.user_keys for delete using (auth.uid() = user_id);
+
+grant select, insert, update, delete on public.user_keys to authenticated;
+
+-- ---- per-user alert rules (standing watches) ------------------------------
+create table if not exists public.alert_rules (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  label        text not null,
+  lat          double precision not null,
+  lon          double precision not null,
+  radius_nm    double precision not null default 50,
+  kinds        text[] not null default '{}',
+  min_severity int not null default 1,
+  channel      text not null default 'inapp',
+  enabled      boolean not null default true,
+  created_at   timestamptz not null default now()
+);
+
+alter table public.alert_rules enable row level security;
+
+drop policy if exists alert_rules_self_select on public.alert_rules;
+drop policy if exists alert_rules_self_insert on public.alert_rules;
+drop policy if exists alert_rules_self_update on public.alert_rules;
+drop policy if exists alert_rules_self_delete on public.alert_rules;
+
+create policy alert_rules_self_select on public.alert_rules for select using (auth.uid() = user_id);
+create policy alert_rules_self_insert on public.alert_rules for insert with check (auth.uid() = user_id);
+create policy alert_rules_self_update on public.alert_rules for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy alert_rules_self_delete on public.alert_rules for delete using (auth.uid() = user_id);
+
+grant select, insert, update, delete on public.alert_rules to authenticated;

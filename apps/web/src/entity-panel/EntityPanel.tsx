@@ -157,7 +157,6 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
         <CameraCard
           camId={snap.properties['cam_id']}
           hlsUrl={(snap.properties['hls_url'] as string | null) ?? null}
-          attribution={String(snap.properties['attribution'] ?? '')}
         />
       )}
 
@@ -361,10 +360,6 @@ function EntityPhotoCard({
   const thumb = e.photo_thumb_url ?? null;
   const desc = e.description ?? null;
   if (!thumb && !desc) return null;
-  // Prefer photographer (Planespotters) → photo_credit (Wikipedia) → 'source'.
-  const creditName = e.photo_photographer || e.photo_credit || null;
-  const license = e.photo_license || null;
-  const link = e.photo_link || null;
   return (
     <section>
       <SectionLabel title="Photo" />
@@ -376,18 +371,6 @@ function EntityPhotoCard({
             loading="lazy"
             className="block w-full max-w-[280px] rounded-sm border border-line"
           />
-          {(creditName || license || link) && (
-            <p className="mono text-[10px] text-txt-3 mt-1 truncate">
-              {link ? (
-                <a href={link} target="_blank" rel="noreferrer" className="hover:underline">
-                  {creditName ?? 'photo'}
-                </a>
-              ) : (
-                <span>{creditName ?? 'photo'}</span>
-              )}
-              {license ? ` · ${license}` : ''}
-            </p>
-          )}
         </div>
       )}
       {desc && (

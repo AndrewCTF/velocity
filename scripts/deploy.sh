@@ -72,6 +72,12 @@ deploy_api() {
     -e "${SSH_BIN}" \
     "${ROOT}/apps/api/" "${DROPLET_USER}@${DROPLET_HOST}:${REMOTE_API_DIR}/"
 
+  echo "==> [api] sync python deps (pip install -e .)"
+  # Installs any new/changed deps (e.g. cryptography for BYOK) into the host
+  # venv BEFORE restart, so a new import can't crash boot. No-op when unchanged.
+  ${SSH_BIN} "${DROPLET_USER}@${DROPLET_HOST}" \
+    "cd ${REMOTE_API_DIR} && .venv/bin/pip install -e . -q"
+
   echo "==> [api] restart velocity-api + health"
   # shellcheck disable=SC2029
   ${SSH_BIN} "${DROPLET_USER}@${DROPLET_HOST}" '

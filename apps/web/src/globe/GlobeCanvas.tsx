@@ -84,7 +84,6 @@ function buildDarkBasemap(): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
     url: '/tiles/basemap/{z}/{x}/{y}.png',
     maximumLevel: 18,
-    credit: '© OpenStreetMap · © CARTO',
   });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
@@ -95,7 +94,6 @@ function buildSatImagery(): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
     url: '/tiles/sat/{z}/{x}/{y}.jpg',
     maximumLevel: 19,
-    credit: 'Sentinel-2 cloudless by EOX · © Esri',
   });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
@@ -111,7 +109,6 @@ function buildImageryOverlay(
   const provider = new Cesium.UrlTemplateImageryProvider({
     url: imageryOverlayUrl(providerId, layer, date),
     maximumLevel: maxLevel,
-    credit: providerId === 'cdse' ? 'Copernicus Sentinel / CDSE' : 'NASA EOSDIS GIBS',
   });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
@@ -435,9 +432,6 @@ export function GlobeCanvas({
     viewer.camera.changed.addEventListener(onCameraChanged);
 
     viewerRef.current = viewer;
-    // DEV-only debug handle so motion/clock can be inspected from the console
-    // or an automation harness. Guarded by import.meta.env.DEV so it never ships.
-    if (import.meta.env.DEV) (window as unknown as { __viewer?: Cesium.Viewer }).__viewer = viewer;
     const compositor = new LayerCompositor(registry, viewer);
     compositor.start();
     compositorRef.current = compositor;
