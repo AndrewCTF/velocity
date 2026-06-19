@@ -623,7 +623,13 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // delta (a stale fix catching up, or a bad jump) SLIDES smoothly instead of
     // streaking across the map.
     const sinceLastS = prev ? (nowMs - prev[2]) / 1000 : this.props.intervalSec;
-    const glideS = Math.min(20, Math.max(1.5, sinceLastS, moveDist / 300));
+    // Pace the glide to ~1.15× the last inter-fix gap (not exactly the gap), so
+    // the icon is still moving when the NEXT real fix lands instead of reaching
+    // the fix early and HOLDING — that early-arrival-then-hold is the visible
+    // "refresh pauses for a while". Still pure interpolation between two REAL
+    // fixes (each rendered point is on the line between real observations); it
+    // just renders ~15% behind real-time to stay continuous. No extrapolation.
+    const glideS = Math.min(20, Math.max(1.5, sinceLastS * 1.15, moveDist / 300));
     const arriveJD = Cesium.JulianDate.addSeconds(t0, glideS, new Cesium.JulianDate());
     const cutFrom = Cesium.JulianDate.addSeconds(t0, -0.25, new Cesium.JulianDate());
     sampled!.removeSamples(
