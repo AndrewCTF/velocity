@@ -43,7 +43,18 @@ export function AuthForm({ mode }: { mode: Mode }): JSX.Element {
     setBusy(true);
     try {
       if (mode === 'signup') {
-        const { data, error: err } = await supabase.auth.signUp({ email, password });
+        // Where the email-confirmation link sends the user back to. Derived from
+        // the live origin + Vite base ("/app/" in prod) so it's correct in every
+        // environment — without this, Supabase falls back to its Auth "Site URL"
+        // (defaults to http://localhost:3000). This URL must also be in the
+        // project's Auth → Redirect URLs allow-list.
+        const base = import.meta.env.BASE_URL || '/';
+        const emailRedirectTo = `${window.location.origin}${base.endsWith('/') ? base : base + '/'}`;
+        const { data, error: err } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo },
+        });
         if (err) throw err;
         // When email confirmation is ON (hosted default), signUp returns a
         // user but NO session — the user must click the email link first.
