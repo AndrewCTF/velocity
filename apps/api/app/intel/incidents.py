@@ -359,6 +359,21 @@ def _follow_up(domains: set[str], lat: float, lon: float) -> list[str]:
 # ── public: the brief ─────────────────────────────────────────────────────────
 
 
+# Domains that are DERIVED inferences, not direct measurements. Each evidence
+# item from these carries a `basis` so a downstream brief/quote never launders an
+# inference into a stated fact (the journalist/defense provenance requirement).
+_INFERRED: dict[str, str] = {
+    "gps-jamming": "inference from ADS-B NACp/NIC degradation — not a direct RF/SIGINT cut",
+    "dark-vessel": "SAR radar contact with no matching AIS — a candidate, not a confirmed vessel",
+    "spoofing": "deterministic deception heuristic (duplicate id / impossible "
+    "kinematics / spoof cluster)",
+}
+
+# Scaling divisor: a score at/above this reads as full confidence. Tuned so a
+# lone high signal lands ~0.4 and a multi-domain critical cluster approaches 1.0.
+_CONF_FULL = 16.0
+
+
 async def brief(
     bbox: BBox | None = None,
     link_km: float = _DEFAULT_LINK_KM,
@@ -388,7 +403,9 @@ async def brief(
         newest = max(s.t for s in cl)
         evidence = [
             {"domain": s.domain, "severity": s.severity, "summary": s.summary,
-             "lon": round(s.lon, 4), "lat": round(s.lat, 4), "ref": s.ref}
+             "lon": round(s.lon, 4), "lat": round(s.lat, 4), "ref": s.ref,
+             "kind": "inferred" if s.domain in _INFERRED else "measured",
+             **({"basis": _INFERRED[s.domain]} if s.domain in _INFERRED else {})}
             for s in sorted(cl, key=lambda s: _SEV_WEIGHT.get(s.severity, 1), reverse=True)
         ][:_MAX_EVIDENCE]
         # If this incident contains a GPS-jamming footprint, estimate the emitter
@@ -402,6 +419,7 @@ async def brief(
             "id": uuid.uuid4().hex[:10],
             "threat_level": level,
             "score": score,
+            "confidence": round(min(1.0, score / _CONF_FULL), 2),
             "domains": sorted(domains),
             "signal_count": len(cl),
             "centroid": {"lon": round(clon, 4), "lat": round(clat, 4)},
@@ -439,4 +457,12 @@ async def brief(
         "method": "cross-domain convergence: signals within link_km fused; promoted "
         "to an incident on >=2 domains or a critical/high signal. Narrative is "
         "rule-based; every claim cites its contributing signals.",
+        "provenance": "Each evidence item carries its primary upstream reference "
+        "(`ref`: e.g. ICAO24, MMSI, Sentinel-1 scene) and a `kind` of measured or "
+        "inferred; inferred items include the `basis` of the inference. Citations "
+        "resolve to source records, not to Velocity.",
+        "coverage_caveat": "Coverage is uneven: ADS-B is broad but not total; keyless "
+        "AIS is densest in Northern Europe (global AIS needs a key); SAR dark-vessel "
+        "detection runs only over curated chokepoint AOIs. Absence of a signal in a "
+        "thin-coverage area is NOT evidence of absence.",
     }

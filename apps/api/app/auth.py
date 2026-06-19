@@ -40,7 +40,7 @@ from starlette.types import ASGIApp
 
 from app.config import Settings, get_settings
 
-PUBLIC_PATHS = {"/api/health", "/api/config", "/docs", "/openapi.json", "/redoc"}
+PUBLIC_PATHS = {"/api/health", "/api/status", "/api/config", "/docs", "/openapi.json", "/redoc"}
 PUBLIC_PREFIXES = ("/tiles/",)
 
 
