@@ -21,7 +21,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from app import llm
-from app.intel import analytics, baseline, deception, emitter, incidents
+from app.intel import analytics, baseline, deception, dossier, emitter, incidents
 from app.intel.geo import BBox, bbox_from_radius
 from app.intel.incident_store import incident_store
 
@@ -54,6 +54,26 @@ async def _t_aircraft(a: dict[str, Any], b: BBox | None) -> dict[str, Any]:
     return await analytics.query_aircraft(
         _bbox(a, b), category=cat if isinstance(cat, str) else None
     )
+
+
+async def _t_lookup_aircraft(a: dict[str, Any], _b: BBox | None) -> dict[str, Any]:
+    # Identify ONE named aircraft by callsign / tail / ICAO24 hex. Returns its
+    # registration, type, live position AND flight route (departure + destination
+    # airport, distance-to-go, ETA). This is the tool for "where is/where did
+    # flight X come from / where is it going / when does it land".
+    ident = str(a.get("ident") or a.get("callsign") or a.get("icao24") or "").strip()
+    if not ident:
+        return {"error": "lookup_aircraft needs 'ident' — a callsign, tail number, or ICAO24 hex."}
+    return await analytics.lookup_aircraft(ident)
+
+
+async def _t_lookup_vessel(a: dict[str, Any], _b: BBox | None) -> dict[str, Any]:
+    # Identify ONE named vessel by MMSI (9 digits). Returns its dossier — identity,
+    # latest fix, track stats, and any incident membership.
+    ident = str(a.get("ident") or a.get("mmsi") or "").strip()
+    if not ident:
+        return {"error": "lookup_vessel needs 'ident' — a 9-digit MMSI."}
+    return await dossier.vessel_dossier(ident)
 
 
 async def _t_jamming(a: dict[str, Any], b: BBox | None) -> dict[str, Any]:
@@ -193,6 +213,19 @@ TOOLS: dict[str, tuple[str, ToolFn]] = {
         "Aircraft in an area. Args: lat,lon,radius_nm, category(airliner|military|...).",
         _t_aircraft,
     ),
+    "lookup_aircraft": (
+        "Identify ONE specific aircraft/flight by callsign (e.g. KLM589, BAW123), tail "
+        "number, or ICAO24 hex. Returns registration, type, live position AND the flight "
+        "ROUTE: departure + destination airport, distance-to-go, and ETA. THIS is the tool "
+        "for any question about a named flight — where it departed, where it's going, when "
+        "it lands. Args: ident(str).",
+        _t_lookup_aircraft,
+    ),
+    "lookup_vessel": (
+        "Identify ONE specific vessel by MMSI (9 digits): identity, latest fix, track, and "
+        "incident membership. Use for any question about a named ship. Args: ident(str).",
+        _t_lookup_vessel,
+    ),
     "gps_jamming": (
         "GPS-jamming cells (degraded ADS-B). Args: lat,lon,radius_nm (omit=global).",
         _t_jamming,
@@ -249,19 +282,32 @@ _SYS = (
     "You have live tools over real ADS-B/AIS/SAR/GPS-jamming/event data PLUS a debiased "
     "world-news desk and the incident history:\n"
     "{catalog}\n\n"
-    "You are seeded with the fused incident brief, what changed since the last watch tick, "
-    "and the current world-news picture. On each turn reply with ONE JSON object, nothing else:\n"
+    "The fused incident brief, what-changed, and world-news you were seeded with are BACKGROUND "
+    "context — NOT the operator's question. ANSWER THE OPERATOR'S ACTUAL QUESTION FIRST, with "
+    "real numbers from a tool.\n\n"
+    "PICK THE RIGHT TOOL FOR THE QUESTION:\n"
+    "- Operator names a specific FLIGHT/aircraft — a callsign (e.g. KLM589, KL589, BAW123, "
+    "UAL1), a tail number, or a 6-char ICAO24 hex → call lookup_aircraft{{\"ident\":\"<that>\"}}. "
+    "A flight callsign is an AIRCRAFT; NEVER treat it as a vessel or a generic area sweep. Then "
+    "report its route: departure airport, destination, distance-to-go, and ETA.\n"
+    "- Operator names a specific SHIP — a 9-digit MMSI or ship name → call lookup_vessel.\n"
+    "- Question is about an AREA or the overall picture → use the area tools "
+    "(query_aircraft / query_vessels / gps_jamming / anomalies / intel_brief) scoped by "
+    "lat,lon,radius_nm.\n"
+    "- Drill into incidents (use a relevant incident centroid for lat/lon), locate emitters, or "
+    "cross-check news ONLY when the question is about threats/incidents — not about one named "
+    "asset.\n\n"
+    "On each turn reply with ONE JSON object, nothing else:\n"
     '  call a tool:    {{"action":"tool","thought":"<one line: why this tool now>",'
     '"say":"<1-2 plain sentences telling the operator what you see and what you are checking>",'
     '"tool":"<name>","args":{{...}}}}\n'
     '  stop gathering: {{"action":"done","thought":"<one line>",'
-    '"say":"<2-3 plain sentences summarising what the evidence shows>"}}\n\n'
-    "Write the `say` field for a human reading along — narrate the situation, do not just name "
-    "the tool. Call a tool ONLY to add evidence the seed lacks: drill into an incident's "
-    "lat/lon, locate an emitter, confirm dark vessels under jamming, read how a convergence "
-    "built up over time (incident_history), or cross-check a reported event against the live "
-    "geospatial picture (world_news / fact_check). Use the centroid of a relevant incident for "
-    "lat/lon. STOP within 1-3 tool calls once you can answer. Never invent ids or numbers."
+    '"say":"<2-3 plain sentences ANSWERING the operator with the real numbers you found>"}}\n\n'
+    "Write `say` for a human reading along — narrate what you FOUND, do not just name the tool. "
+    "If a lookup returns found=false, say so plainly and try ONE sensible variant of the ident "
+    "(e.g. KLM589 → KL589) — do NOT pivot to unrelated incidents or invent a route. STOP within "
+    "1-3 tool calls once you can answer. Never invent ids, routes, airports, or numbers — report "
+    "only what a tool actually returned."
 )
 
 _SYNTH_SYS = (
