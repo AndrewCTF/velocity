@@ -31,6 +31,38 @@ class Settings(BaseSettings):
     classification: str = "UNCLAS"
     build_id: str = "dev"
 
+    # ── commercial-licensing mode ──
+    # Velocity ships as a paid SaaS, so the DEPLOYED backend must only touch data
+    # sources whose licence permits COMMERCIAL use. When True the source adapters
+    # select the commercial-legal set (ADS-B → adsb.lol ODbL; satellite → CDSE
+    # Sentinel/Copernicus; basemap → OpenFreeMap/self-host; weather → NWS/NOAA;
+    # events → GDELT/EONET) and the non-commercial ones (OpenSky, airplanes.live,
+    # EOX cloudless, Esri, Maxar Open Data, Global Fishing Watch, ACLED,
+    # Open-Meteo hosted, Planespotters, public Overpass/Nominatim) are OFF.
+    # Default False so local dev + the test suite keep the fuller non-commercial
+    # sources; the Cloudflare Container sets COMMERCIAL_MODE=1. The gateway also
+    # overrides PER REQUEST via the X-Velocity-Tier header (see tier.py): a
+    # paying customer is always served the commercial-legal set.
+    # See docs/commercial-licensing.md for the full per-source audit.
+    commercial_mode: bool = False
+    # On a commercial_mode deployment, also serve the non-commercial firehoses
+    # to FREE (unentitled) sessions. Off by default: the operator ingesting NC
+    # data is itself commercial use, so leave this False unless you accept that.
+    allow_nc_for_free: bool = False
+    # Commercial-OK raster dark basemap URL template ({z}/{x}/{y}) used when a
+    # request is served commercial-legal (CARTO's hosted tiles are enterprise-
+    # only). E.g. a self-hosted OpenFreeMap/Protomaps raster renderer or a
+    # MapTiler key'd URL. Empty → /tiles/basemap 503s for commercial requests
+    # and the client falls back to the satellite layer.
+    commercial_basemap_url: str = ""
+    # OSM data is ODbL (commercial-OK) but the PUBLIC Overpass/Nominatim
+    # instances forbid commercial/heavy use. On a commercial deployment the
+    # operator must point these at self-hosted endpoints; left empty, the
+    # buildings (LOD1) + geocode/reverse-geocode features are disabled in
+    # commercial_mode rather than hit the public instances.
+    nominatim_url: str = ""  # e.g. https://nominatim.your-host.tld
+    overpass_url: str = ""  # e.g. https://overpass.your-host.tld/api/interpreter
+
     # ── third-party secrets (NEVER exposed) ──
     opensky_client_id: str = ""
     opensky_client_secret: str = ""
@@ -74,8 +106,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://osint:osint@localhost:5432/osint"
     redis_url: str = "redis://localhost:6379/0"
     # Disk tile cache root (basemap / sat / terrain proxies). Grows with use;
-    # safe to delete at any time — it refills on demand.
+    # safe to delete at any time — it refills on demand. Self-bounding: once the
+    # cache exceeds tile_cache_max_bytes it LRU-evicts oldest tiles back under
+    # the cap (see app.tilecache). 0 disables the cap (unbounded growth).
     tile_cache_dir: str = "./data/tilecache"
+    tile_cache_max_bytes: int = 1_000_000_000  # ~1 GB; LRU-evicted past this
 
     # ── server ──
     api_host: str = "0.0.0.0"
@@ -86,6 +121,20 @@ class Settings(BaseSettings):
     # When unset (default), no auth — fine for single-analyst localhost.
     api_key: str = ""
 
+    # ── Supabase login gate ──
+    # When supabase_url + supabase_anon_key are set, non-public routes also
+    # accept a valid Supabase access token (Authorization: Bearer <jwt>, or
+    # ?key=<jwt> for WS) — the token the browser gets after signing in, i.e.
+    # "the API key you get from Supabase". A static api_key (above) still works
+    # in parallel for server/MCP callers. Token validation is LOCAL HS256 when
+    # supabase_jwt_secret is set (fast, no round-trip — mirrors the gateway
+    # Worker); otherwise a cached call to GoTrue's /auth/v1/user using the anon
+    # key. Either supabase_jwt_secret OR (supabase_url + supabase_anon_key) is
+    # enough to enable + enforce the gate.
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_jwt_secret: str = ""
+
     # ── MCP server + local AI (Ollama) ──
     # The MCP server (app.mcp_server) calls this backend over HTTP and can
     # launch a local Ollama model for deeper, in-the-loop analysis without
@@ -94,10 +143,20 @@ class Settings(BaseSettings):
     ollama_model: str = ""  # OLLAMA_MODEL ("" → auto-detect smallest installed)
     api_base: str = "http://localhost:8000"  # API_BASE (MCP → backend)
 
-    # ── DeepSeek (OpenAI-compatible) — primary reasoning backend ──
-    # The analytical tools (deep_analyze, news debias/fact-check) prefer
-    # DeepSeek and fall back to Ollama. When unset, app.llm reads the key +
-    # base from the user's opencode config (~/.config/opencode/opencode.jsonc).
+    # ── MiniMax-M3 via NVIDIA NIM (OpenAI-compatible) — PRIMARY reasoning backend ──
+    # The analytical tools prefer MiniMax-M3 (a reasoning model) hosted on
+    # NVIDIA's integrate endpoint; app.llm tries it first, then DeepSeek, then a
+    # local Ollama model. Key resolves from MINIMAX_API_KEY or NVIDIA_API_KEY
+    # (the NVIDIA-issued nvapi-… bearer). Never exposed to the browser.
+    minimax_api_key: str = ""  # MINIMAX_API_KEY
+    nvidia_api_key: str = ""  # NVIDIA_API_KEY (alias for the same NVIDIA endpoint)
+    minimax_base_url: str = "https://integrate.api.nvidia.com/v1"  # MINIMAX_BASE_URL
+    minimax_model: str = "minimaxai/minimax-m3"  # reasoning model id
+
+    # ── DeepSeek (OpenAI-compatible) — fallback reasoning backend ──
+    # Used when MiniMax is unconfigured/unreachable; falls back further to
+    # Ollama. When unset, app.llm reads the key + base from the user's opencode
+    # config (~/.config/opencode/opencode.jsonc).
     deepseek_api_key: str = ""  # DEEPSEEK_API_KEY
     deepseek_base_url: str = ""  # DEEPSEEK_BASE_URL ("" → opencode/default)
     deepseek_model_fast: str = "deepseek-chat"  # extraction / classification
@@ -137,6 +196,13 @@ class Settings(BaseSettings):
     history_enabled: bool = True
     history_db_path: str = "./data/history.db"
     history_retention_hours: int = 48
+    # Hard upper bound on the replay store. The hourly maintenance pass time-
+    # prunes to history_retention_hours, then if the file is still larger than
+    # history_max_bytes it drops the oldest rows until under the cap and
+    # VACUUMs to actually return the pages to the filesystem. 48 h of global
+    # ADS-B + AIS is ~8 GB, so the byte cap — not the hour window — is the
+    # binding limit. 0 disables the byte cap (hour window only).
+    history_max_bytes: int = 2_000_000_000  # ~2 GB
 
 
 @lru_cache(maxsize=1)

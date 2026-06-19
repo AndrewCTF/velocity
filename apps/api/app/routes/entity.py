@@ -234,6 +234,10 @@ async def _planespotters_photo(icao24: str) -> dict[str, Any] | None:
     """Planespotters Net public photo lookup by ICAO24 hex.
     No auth required; returns the first photo's thumbnail + credit data so
     the UI can render an inline preview. 12h cache per icao24."""
+    # Planespotters photos are photographer-copyrighted (non-commercial API
+    # terms) — omitted on a commercial deployment.
+    if get_settings().commercial_mode:
+        return None
     key = f"planespotters:hex:{icao24}"
 
     async def load() -> dict[str, Any] | None:
@@ -340,6 +344,12 @@ async def _nominatim_reverse(lat: float, lon: float) -> dict[str, Any] | None:
     """Reverse-geocode via OSM Nominatim. Free, no auth, but rate-limited and
     requires a contactable User-Agent — we set 'osint-console/0.1' per their
     usage policy. Cached 1h per ~11km grid cell (lat/lon rounded to 1 dp)."""
+    # The public nominatim.openstreetmap.org instance forbids commercial/heavy
+    # use; on a commercial deployment use the self-hosted NOMINATIM_URL, else skip.
+    s = get_settings()
+    base = s.nominatim_url or ("" if s.commercial_mode else "https://nominatim.openstreetmap.org")
+    if not base:
+        return None
     # Round to 1 decimal place (~11 km grid) so nearby vessels share a cache
     # entry and we don't hammer Nominatim from every selection.
     grid_lat = round(lat, 1)
@@ -349,7 +359,7 @@ async def _nominatim_reverse(lat: float, lon: float) -> dict[str, Any] | None:
     async def load() -> dict[str, Any] | None:
         try:
             r = await get_client().get(
-                "https://nominatim.openstreetmap.org/reverse",
+                f"{base.rstrip('/')}/reverse",
                 params={
                     "lat": f"{grid_lat}",
                     "lon": f"{grid_lon}",
@@ -488,8 +498,9 @@ async def _enrich_vessel(mmsi: str, settings: Settings) -> dict[str, Any]:
             if wikidata:
                 out["wikidata_url"] = f"https://www.wikidata.org/wiki/{wikidata}"
 
-    # Layer 3: GFW (token-gated). If absent, leave a note but keep no-key data.
-    token = settings.gfw_token
+    # Layer 3: GFW (token-gated). Global Fishing Watch is CC BY-NC — disabled on
+    # a commercial deployment regardless of token.
+    token = "" if settings.commercial_mode else settings.gfw_token
     if not token:
         if not (flag_country or "nearest_port" in out):
             out["enrichment"] = None

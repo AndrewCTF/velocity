@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.config import get_settings
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["geocode"])
@@ -33,12 +34,18 @@ async def geocode(
     norm = q.strip().lower()
     if not norm:
         raise HTTPException(400, "empty query")
+    # Public Nominatim forbids commercial/heavy use; commercial deployments must
+    # set NOMINATIM_URL (self-host). OSM data itself is ODbL (commercial-OK).
+    s = get_settings()
+    base = s.nominatim_url or ("" if s.commercial_mode else "https://nominatim.openstreetmap.org")
+    if not base:
+        raise HTTPException(503, "geocode disabled: set NOMINATIM_URL for commercial use")
     cache_key = f"nominatim:fwd:{norm}:{limit}"
 
     async def load() -> dict[str, Any]:
         try:
             r = await get_client().get(
-                "https://nominatim.openstreetmap.org/search",
+                f"{base.rstrip('/')}/search",
                 params={
                     "q": q.strip(),
                     "format": "jsonv2",

@@ -149,6 +149,15 @@ async def gdelt(
 async def _load_acled(settings: Settings, days: int = 7) -> dict[str, Any]:
     """Internal ACLED loader (cached, key-gated). Degrades to an empty
     FeatureCollection + note when ACLED_KEY / ACLED_EMAIL are unset."""
+    # ACLED's licence is non-commercial (commercial needs a paid agreement), so
+    # it is disabled on a commercial deployment — GDELT + EONET (open) cover
+    # conflict/disaster events there.
+    if settings.commercial_mode:
+        return {
+            "type": "FeatureCollection",
+            "features": [],
+            "note": "ACLED disabled (non-commercial licence); use GDELT/EONET",
+        }
     # ACLED needs key + email. Without those, return empty + note.
     key = getattr(settings, "acled_key", "") or ""
     email = getattr(settings, "acled_email", "") or ""

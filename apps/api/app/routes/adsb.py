@@ -1156,8 +1156,38 @@ def viewport_filter(
             kept.append(f)
         feats = kept
     if limit and len(feats) > limit:
-        stride = len(feats) / limit
-        feats = [feats[int(i * stride)] for i in range(limit)]
+        # STABLE decimation — keep a deterministic subset keyed by feature id,
+        # NOT a positional stride. The snapshot's feature order and exact count
+        # shift on every refresh (multi-source union + 180s carry-forward merge),
+        # so a positional `feats[int(i*stride)]` resampled a DIFFERENT subset
+        # every poll. The frontend upserts entities by id and interpolates motion
+        # in place, so that churned ~half the icons each second (measured: 112%
+        # id churn between two 1s polls) — destroying the motion model so
+        # aircraft never survived long enough to glide and sat frozen at world
+        # view. Hashing the id keeps the SAME aircraft visible poll-to-poll; only
+        # genuine entry/exit (or a hash-boundary flip) changes the set, so icons
+        # persist and interpolate smoothly. md5 (not the salted builtin hash) so
+        # the kept set is identical across worker processes and restarts.
+        # Two-key sort: (1) live tier first, (2) stable id hash within a tier.
+        #  - Tier biases the world-view cap toward aircraft that actually move:
+        #    OpenSky is pulled once/UTC-day and served cached, so its fixes are
+        #    frozen until tomorrow; the keyless feeds are sub-10s fresh. When we
+        #    can only show `limit` of ~9k, fill with movers so the globe looks
+        #    live instead of dotted with stale icons. Degrades gracefully — if
+        #    feeds are unreachable (datacenter egress) everything is OpenSky, all
+        #    tiers tie, and it falls back to pure stable-hash decimation.
+        #  - The hash (md5 of the id, not the salted builtin hash) is what's
+        #    STABLE across polls: it keeps the SAME subset visible each refresh
+        #    so the frontend's in-place motion interpolation survives. `source`
+        #    is per-aircraft constant, so the tier never oscillates either. Do
+        #    NOT key on seen_pos_s / any age field — those tick every snapshot
+        #    and would reintroduce the churn this whole block exists to kill.
+        def _keep_rank(f: dict[str, Any]) -> tuple[int, bytes]:
+            src = (f.get("properties") or {}).get("source")
+            tier = 1 if src == "opensky" else 0
+            return tier, hashlib.md5(str(f.get("id")).encode()).digest()  # noqa: S324 — not security
+
+        feats = sorted(feats, key=_keep_rank)[:limit]
     return {"type": "FeatureCollection", "features": feats}
 
 

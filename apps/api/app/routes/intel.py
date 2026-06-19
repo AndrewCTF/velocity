@@ -15,13 +15,16 @@ intel bundle for it in a single round trip.
 
 from __future__ import annotations
 
+import json
+import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from app import llm
 from app.config import get_settings
-from app.intel import analytics, aoi, baseline, deception, dossier, emitter, incidents
+from app.intel import agent, analytics, aoi, baseline, deception, dossier, emitter, incidents
 from app.intel.baseline import baseline_store
 from app.intel.geo import BBox, bbox_from_radius
 from app.intel.incident_store import incident_store
@@ -191,6 +194,231 @@ async def intel_brief(
     """
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
     return await incidents.brief(bbox, link_km=link_km, window_s=window_hours * 3600.0)
+
+
+_INVESTIGATE_SYS = (
+    "You are VELOCITY, an all-source intelligence analyst. You are given a list of REAL "
+    "cross-domain incidents already fused from live ADS-B, AIS, SAR, GPS-jamming and event "
+    "feeds for the operator's area, plus their question. Reason ONLY over the incidents "
+    "provided — never invent vessels, aircraft, numbers, or events not present. Cite incidents "
+    "by their exact id. If the evidence is thin, say so. Reply with ONLY a JSON object: "
+    '{"assessment": "<=3 sentence analyst judgement answering the question, grounded in the '
+    'incidents>", "findings": [{"id": "<incident id>", "label": "<short label>", "threat": '
+    '"high|elevated|low", "why": "<one line citing the domains/evidence>"}], '
+    '"recommended_detection": {"rule": "<a standing-detection rule in plain logic, e.g. '
+    "ais.gap>=3h AND sar.detect<=3km>\", \"scope\": \"<area>\"} | null, "
+    '"follow_up": ["<concrete next analytic step>", ...]}'
+)
+
+
+@router.get("/api/intel/investigate")
+async def intel_investigate(
+    q: str = Query(..., min_length=2, max_length=400, description="natural-language prompt"),
+    min_lon: float | None = Query(None),
+    min_lat: float | None = Query(None),
+    max_lon: float | None = Query(None),
+    max_lat: float | None = Query(None),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_nm: float = Query(500.0, ge=1, le=5000),
+    link_km: float = Query(50.0, ge=1, le=500),
+    window_hours: float = Query(6.0, ge=0.25, le=72.0),
+) -> dict[str, Any]:
+    """Agent investigator: runs the REAL cross-domain incident fusion for the scope,
+    then has the LLM reason over those CITED incidents to answer a natural-language
+    prompt — returning an analyst assessment, the steps taken, ranked findings (grounded
+    in real incident ids), a proposed standing detection, and follow-ups, with the real
+    model + token usage. Degrades to a deterministic brief-only summary (``llm_ok:false``,
+    ``backend:"rule-based"``) when no LLM backend answers — never fabricates."""
+    bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+    t0 = time.monotonic()
+    brief = await incidents.brief(bbox, link_km=link_km, window_s=window_hours * 3600.0)
+    scope = brief.get("scope") or _scope_for(bbox)
+    incidents_full = brief.get("incidents") or []
+
+    # Trim the real incidents to a model-sized, citable context.
+    top: list[dict[str, Any]] = [
+        {
+            "id": inc.get("id"),
+            "threat_level": inc.get("threat_level"),
+            "domains": inc.get("domains"),
+            "signal_count": inc.get("signal_count"),
+            "span_km": inc.get("span_km"),
+            "centroid": inc.get("centroid"),
+            "narrative": inc.get("narrative"),
+            "follow_up": inc.get("follow_up"),
+        }
+        for inc in incidents_full[:8]
+    ]
+
+    # The fusion pipeline's real stages, annotated with this run's real counts.
+    method_steps = [
+        {
+            "label": "Ingest theater signals",
+            "detail": str(brief.get("method") or "fuse live ADS-B/AIS/SAR/jamming/events"),
+            "result": f"{brief.get('signals_considered', '?')} signals",
+        },
+        {
+            "label": "Cluster convergences",
+            "detail": f"link ≤ {link_km:.0f} km · window {window_hours:.0f} h",
+            "result": f"{brief.get('incident_count', 0)} incidents",
+        },
+        {
+            "label": "Score + rank threat",
+            "detail": "domain convergence + recency",
+            "result": f"top {brief.get('top_threat_level', '—')}",
+        },
+    ]
+
+    user_payload = json.dumps(
+        {"question": q, "scope": scope, "by_level": brief.get("by_level"), "incidents": top},
+        ensure_ascii=False,
+    )
+    parsed, res = await llm.chat_json(
+        [
+            {"role": "system", "content": _INVESTIGATE_SYS},
+            {"role": "user", "content": user_payload},
+        ],
+        tier="fast",
+        max_tokens=1400,
+        timeout_s=160.0,  # MiniMax-M3 reasoning is slow; degrade to DeepSeek if it overruns
+    )
+    latency_ms = round((time.monotonic() - t0) * 1000)
+
+    base = {
+        "query": q,
+        "scope": scope,
+        "latency_ms": latency_ms,
+        "incident_count": brief.get("incident_count"),
+        "signals_considered": brief.get("signals_considered"),
+        "top_threat_level": brief.get("top_threat_level"),
+        "by_level": brief.get("by_level"),
+        "generated_at": brief.get("generated_at"),
+        "steps": method_steps,
+    }
+
+    if res.ok and isinstance(parsed, dict):
+        # Keep only model findings whose id matches a REAL incident, and enrich
+        # each with that incident's centroid (so the UI can fly to it) — strict
+        # anti-fabrication: a finding the model invented is dropped.
+        findings = _enrich_findings(parsed.get("findings") or [], top) or _fallback_findings(top)
+        return {
+            **base,
+            "llm_ok": True,
+            "backend": res.backend,
+            "model": res.model,
+            "usage": res.usage,
+            "assessment": parsed.get("assessment"),
+            "findings": findings,
+            "recommended_detection": parsed.get("recommended_detection"),
+            "follow_up": parsed.get("follow_up") or _first_follow_up(top),
+        }
+
+    # No LLM answer — deterministic brief-only result, clearly flagged.
+    return {
+        **base,
+        "llm_ok": False,
+        "backend": "rule-based",
+        "model": None,
+        "usage": {},
+        "llm_error": res.error,
+        "assessment": (top[0]["narrative"] if top else "No active convergences in scope."),
+        "findings": _fallback_findings(top),
+        "recommended_detection": None,
+        "follow_up": _first_follow_up(top),
+    }
+
+
+def _fallback_findings(top: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for i in top:
+        domains = i.get("domains") or []
+        out.append(
+            {
+                "id": i.get("id"),
+                "label": " + ".join(domains) if domains else "convergence",
+                "threat": i.get("threat_level"),
+                "why": (str(i.get("narrative") or ""))[:200],
+                "centroid": i.get("centroid"),
+                "domains": domains,
+            }
+        )
+    return out
+
+
+def _enrich_findings(
+    findings: list[Any], top: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Keep only model findings that cite a REAL incident id, backfilling each
+    with that incident's centroid + domains so the UI can fly to it."""
+    idx = {str(i.get("id")): i for i in top if i.get("id")}
+    out: list[dict[str, Any]] = []
+    for f in findings:
+        if not isinstance(f, dict):
+            continue
+        inc = idx.get(str(f.get("id")))
+        if inc is None:
+            continue
+        domains = inc.get("domains") or []
+        out.append(
+            {
+                "id": inc.get("id"),
+                "label": f.get("label") or (" + ".join(domains) if domains else "convergence"),
+                "threat": f.get("threat") or inc.get("threat_level"),
+                "why": f.get("why") or (str(inc.get("narrative") or ""))[:200],
+                "centroid": inc.get("centroid"),
+                "domains": domains,
+            }
+        )
+    return out
+
+
+def _first_follow_up(top: list[dict[str, Any]]) -> list[str]:
+    for i in top:
+        fu = i.get("follow_up")
+        if isinstance(fu, list) and fu:
+            return [str(x) for x in fu]
+    return []
+
+
+@router.get("/api/intel/agent")
+async def intel_agent(
+    q: str = Query(..., min_length=2, max_length=400, description="natural-language prompt"),
+    min_lon: float | None = Query(None),
+    min_lat: float | None = Query(None),
+    max_lon: float | None = Query(None),
+    max_lat: float | None = Query(None),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_nm: float = Query(500.0, ge=1, le=5000),
+) -> StreamingResponse:
+    """Streaming analyst agent — a REAL tool-calling loop (Server-Sent Events).
+
+    Seeds with the fused incident brief, then MiniMax-M3 reasons and calls the
+    live intel tools (query_vessels, gps_jamming, locate_emitter, …) step by
+    step until it returns a final assessment. Each step is streamed as an SSE
+    ``data:`` frame so the UI renders the loop live. Events:
+    start | tool_call | tool_result | thinking | note | error | final | done.
+    """
+    bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+
+    async def gen() -> Any:
+        try:
+            async for ev in agent.run_agent(q, bbox):
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+        except Exception as exc:  # noqa: BLE001
+            err = {"type": "error", "text": f"{type(exc).__name__}: {exc}"}
+            yield f"data: {json.dumps(err)}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 def _scope_for(bbox: BBox | None) -> str:

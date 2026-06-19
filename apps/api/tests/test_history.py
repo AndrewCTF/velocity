@@ -181,6 +181,41 @@ async def test_bbox_filter(tmp_path: pytest.TempPathFactory) -> None:
 
 
 @pytest.mark.asyncio
+async def test_size_cap_drops_oldest_keeps_newest(tmp_path: pytest.TempPathFactory) -> None:
+    """enforce_size_cap drops the OLDEST rows when the file exceeds the cap;
+    0 disables it and a cap above the file size is a no-op."""
+    import os
+
+    db = str(tmp_path / "cap.db")
+    _reset_module(db)
+
+    now = time.time()
+    # 200 rows with strictly increasing timestamps (a0 oldest ... a199 newest).
+    for i in range(200):
+        H._buffer.append(
+            ("aircraft", f"aircraft:a{i}", now - (200 - i), float(i % 90), 50.0, 0.0, "{}")
+        )
+    rows, H._buffer = H._buffer, []
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, H._flush_sync, rows)
+
+    size = await loop.run_in_executor(None, os.path.getsize, db)
+    assert H.enforce_size_cap(0) == 0, "cap=0 disables the byte cap"
+    assert H.enforce_size_cap(size * 2) == 0, "cap above file size is a no-op"
+
+    deleted = H.enforce_size_cap(size // 2)
+    assert deleted > 0, "a cap below file size must drop the oldest rows"
+    H._vacuum()  # must not raise; DB stays queryable
+
+    res = await H.query_tracks(
+        kind="aircraft", bbox=None, t_from=now - 500, t_to=now + 10, limit_ids=1000
+    )
+    ids = {t["id"] for t in res["tracks"]}
+    assert "aircraft:a199" in ids, "newest row must survive"
+    assert "aircraft:a0" not in ids, "oldest row must be dropped"
+
+
+@pytest.mark.asyncio
 async def test_vessel_ingest(tmp_path: pytest.TempPathFactory) -> None:
     """Vessel rows are buffered and queryable."""
     db = str(tmp_path / "hist6.db")

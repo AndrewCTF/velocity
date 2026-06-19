@@ -23,15 +23,24 @@ Sources (all keyless):
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 from io import BytesIO
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.config import Settings, get_settings
+from app.imagery import cdse
+from app.tier import commercial_request
 from app.tilecache import TileCache
 from app.upstream import get_client
 
 router = APIRouter(tags=["tiles"])
+
+
+def _recent_date() -> str:
+    """A recent UTC date for CDSE Sentinel mosaics (leastCC over the lookback).
+    Two days back to allow for processing/ingest latency."""
+    return (dt.datetime.now(dt.UTC) - dt.timedelta(days=2)).strftime("%Y-%m-%d")
 
 # Carto's basemap CDN. `dark_all` = dark with English labels everywhere.
 CARTO_HOSTS = [
@@ -56,10 +65,10 @@ _TTL_TERRAIN = 10 * 365 * 86400.0  # elevation doesn't change
 _caches: dict[str, TileCache] = {}
 
 
-def _cache_for(root: str) -> TileCache:
+def _cache_for(root: str, max_bytes: int = 0) -> TileCache:
     tc = _caches.get(root)
     if tc is None:
-        tc = TileCache(root)
+        tc = TileCache(root, max_bytes)
         _caches[root] = tc
     return tc
 
@@ -92,65 +101,102 @@ async def _fetch_bytes(url: str) -> bytes | None:
 
 @router.get("/tiles/basemap/{z}/{x}/{y}.png")
 async def basemap_tile(
-    z: int, x: int, y: int, settings: Settings = Depends(get_settings)
+    z: int,
+    x: int,
+    y: int,
+    settings: Settings = Depends(get_settings),
+    commercial: bool = Depends(commercial_request),
 ) -> Response:
     if not (0 <= z <= 22):
         raise HTTPException(400, "z out of range")
-    # round-robin shard for parallelism
-    host = CARTO_HOSTS[(x + y) % len(CARTO_HOSTS)]
+    # CARTO's hosted basemap tiles are enterprise/non-profit-only — not licensed
+    # for our commercial SaaS. Commercial requests use a configurable
+    # commercial-OK raster source (OpenFreeMap, a self-hosted OSM/Protomaps
+    # renderer, MapTiler, …) via COMMERCIAL_BASEMAP_URL. See
+    # docs/commercial-licensing.md.
+    if commercial:
+        tmpl = settings.commercial_basemap_url
+        if not tmpl:
+            raise HTTPException(
+                503,
+                "commercial basemap not configured — set COMMERCIAL_BASEMAP_URL "
+                "(OpenFreeMap/self-host) or the client can fall back to satellite",
+            )
+        url, source, marker = tmpl.format(z=z, x=x, y=y), "commercial-base", "commercial"
+    else:
+        host = CARTO_HOSTS[(x + y) % len(CARTO_HOSTS)]  # round-robin shard
+        url, source, marker = f"{host}/dark_all/{z}/{x}/{y}@2x.png", "carto", "carto-dark-matter"
 
     async def load() -> bytes | None:
-        return await _fetch_bytes(f"{host}/dark_all/{z}/{x}/{y}@2x.png")
+        return await _fetch_bytes(url)
 
-    data = await _cache_for(settings.tile_cache_dir).get(
-        "carto", z, x, y, "png", _TTL_BASEMAP, load
+    data = await _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes).get(
+        source, z, x, y, "png", _TTL_BASEMAP, load
     )
     if data is None:
         raise HTTPException(502, "basemap upstream failed")
     return Response(
         content=data,
         media_type="image/png",
-        headers={
-            "Cache-Control": "public, max-age=86400",
-            "X-Basemap": "carto-dark-matter",
-        },
+        headers={"Cache-Control": "public, max-age=86400", "X-Basemap": marker},
     )
 
 
 @router.get("/tiles/sat/{z}/{x}/{y}.jpg")
 async def sat_tile(
-    z: int, x: int, y: int, settings: Settings = Depends(get_settings)
+    z: int,
+    x: int,
+    y: int,
+    settings: Settings = Depends(get_settings),
+    commercial: bool = Depends(commercial_request),
 ) -> Response:
     if not (0 <= z <= 19):
         raise HTTPException(400, "z out of range")
-    if z <= _SAT_SPLIT_Z:
-        source = "eox"
-        url = (
-            f"https://tiles.maps.eox.at/wmts/1.0.0/{_EOX_LAYER}/default"
-            f"/GoogleMapsCompatible/{z}/{y}/{x}.jpg"
-        )
+    # EOX Sentinel-2 cloudless is CC BY-NC-SA and Esri World Imagery forbids
+    # commercial reuse, so commercial requests are served from CDSE Sentinel-2
+    # (Copernicus open data — commercial-OK). Copernicus is 10 m, so the sharp
+    # Esri high-zoom is dropped; the route caps at z14. See
+    # docs/commercial-licensing.md.
+    if commercial:
+        if not cdse.available():
+            raise HTTPException(503, "commercial satellite needs CDSE credentials")
+        if z > 14:
+            raise HTTPException(400, "z out of range (commercial Sentinel caps at 14)")
+        date = _recent_date()
+        source = "cdse-s2"
+        media, ext = "image/jpeg", "jpg"
+
+        async def load() -> bytes | None:
+            return await cdse.fetch_tile("S2_L2A_TRUECOLOR", date, z, x, y)
+
+        cache_key = f"cdse-s2/{date}"
     else:
-        source = "esri"
-        url = (
-            "https://services.arcgisonline.com/arcgis/rest/services"
-            f"/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-        )
+        if z <= _SAT_SPLIT_Z:
+            source = "eox"
+            url = (
+                f"https://tiles.maps.eox.at/wmts/1.0.0/{_EOX_LAYER}/default"
+                f"/GoogleMapsCompatible/{z}/{y}/{x}.jpg"
+            )
+        else:
+            source = "esri"
+            url = (
+                "https://services.arcgisonline.com/arcgis/rest/services"
+                f"/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            )
+        media, ext, cache_key = "image/jpeg", "jpg", source
 
-    async def load() -> bytes | None:
-        return await _fetch_bytes(url)
+        async def load() -> bytes | None:
+            return await _fetch_bytes(url)
 
-    data = await _cache_for(settings.tile_cache_dir).get(
-        source, z, x, y, "jpg", _TTL_SAT, load
+    data = await _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes).get(
+        cache_key, z, x, y, ext, _TTL_SAT, load
     )
     if data is None:
         raise HTTPException(502, "sat upstream failed")
     return Response(
         content=data,
-        media_type="image/jpeg",
-        headers={
-            "Cache-Control": "public, max-age=604800",
-            "X-Sat-Source": source,
-        },
+        media_type=media,
+        headers={"Cache-Control": "public, max-age=604800", "X-Sat-Source": source},
     )
 
 
@@ -195,7 +241,7 @@ async def terrain_tile(
             return None
         return _terrarium_to_mapbox_rgb(raw)
 
-    data = await _cache_for(settings.tile_cache_dir).get(
+    data = await _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes).get(
         "terrain-rgb", z, x, y, "png", _TTL_TERRAIN, load
     )
     if data is None:

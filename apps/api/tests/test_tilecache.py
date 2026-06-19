@@ -72,3 +72,35 @@ def test_failure_without_stale_returns_none(tmp_path: Path) -> None:
         return None
 
     assert asyncio.run(tc.get("s", 1, 0, 0, "png", 60, bad)) is None
+
+
+def test_lru_evicts_oldest_to_low_water(tmp_path: Path) -> None:
+    """Over the cap, _evict_sync deletes oldest-mtime tiles to the low-water
+    (90% of cap), keeping the freshest."""
+    import os
+
+    tc = TileCache(tmp_path, max_bytes=1000)
+    d = tmp_path / "s" / "1" / "0"
+    d.mkdir(parents=True)
+    for i in range(10):  # 10 x 200 B = 2000 B, mtimes increasing
+        p = d / f"{i}.png"
+        p.write_bytes(b"x" * 200)
+        os.utime(p, (1000 + i, 1000 + i))
+
+    tc._evict_sync()
+
+    survivors = sorted(int(p.stem) for p in d.glob("*.png"))
+    total = sum((d / f"{i}.png").stat().st_size for i in survivors)
+    assert total <= int(1000 * 0.9), "must evict down to the low-water"
+    assert 9 in survivors, "freshest tile kept"
+    assert 0 not in survivors, "oldest tile evicted"
+
+
+def test_no_eviction_when_cap_disabled(tmp_path: Path) -> None:
+    """max_bytes=0 means unbounded — _evict_sync must never delete."""
+    tc = TileCache(tmp_path, max_bytes=0)
+    d = tmp_path / "s" / "1" / "0"
+    d.mkdir(parents=True)
+    (d / "0.png").write_bytes(b"x" * 5000)
+    tc._evict_sync()
+    assert (d / "0.png").exists()

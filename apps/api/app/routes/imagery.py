@@ -13,7 +13,8 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.config import Settings, get_settings
-from app.imagery import cdse, gibs
+from app.imagery import cdse, gibs, ondemand
+from app.tier import commercial_request
 from app.tilecache import TileCache
 from app.upstream import get_client
 
@@ -27,10 +28,10 @@ _caches: dict[str, TileCache] = {}
 _FETCH_SEMAPHORE = asyncio.Semaphore(8)
 
 
-def _cache_for(root: str) -> TileCache:
+def _cache_for(root: str, max_bytes: int = 0) -> TileCache:
     tc = _caches.get(root)
     if tc is None:
-        tc = TileCache(root)
+        tc = TileCache(root, max_bytes)
         _caches[root] = tc
     return tc
 
@@ -54,6 +55,43 @@ async def imagery_catalog() -> dict:
     layers = [{"provider": "gibs", **layer} for layer in gibs.catalog()]
     layers += [{"provider": "cdse", **layer} for layer in cdse.catalog()]
     return {"layers": layers}
+
+
+@router.get("/api/imagery/aoi")
+async def imagery_aoi(
+    before: str = Query(..., description="before date, YYYY-MM-DD"),
+    after: str = Query(..., description="after date, YYYY-MM-DD"),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_km: float = Query(5.0, ge=0.1, le=100.0),
+    min_lon: float | None = Query(None),
+    min_lat: float | None = Query(None),
+    max_lon: float | None = Query(None),
+    max_lat: float | None = Query(None),
+    window_days: int = Query(30, ge=1, le=120, description="Maxar ± date window"),
+    commercial: bool = Depends(commercial_request),
+) -> dict:
+    """On-demand building imagery by location + before/after dates.
+
+    Set a location (lat/lon + radius_km, OR an explicit min/max bbox) and two
+    dates. Returns what imagery is available per provider — Maxar Open Data VHR
+    (event-gated) and Sentinel 10 m (global) — WITHOUT downloading anything.
+    Maxar is CC BY-NC, so it is omitted for commercial-tier requests.
+    Downloading-to-temp for reconstruction is `app.imagery.ondemand.scratch_aoi`.
+    """
+    for d in (before, after):
+        if not _DATE_RE.match(d):
+            raise HTTPException(400, "dates must be YYYY-MM-DD")
+    bbox = None
+    if None not in (min_lon, min_lat, max_lon, max_lat):
+        bbox = (min_lon, min_lat, max_lon, max_lat)
+    elif lat is None or lon is None:
+        raise HTTPException(400, "provide lat+lon (+radius_km) or a min/max bbox")
+    try:
+        aoi = ondemand.aoi_bbox(lat=lat, lon=lon, radius_km=radius_km, bbox=bbox)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    return await ondemand.search_aoi(aoi, before, after, window_days, commercial=commercial)
 
 
 @router.get("/api/imagery/{provider}/{layer}/{z}/{x}/{y}")
@@ -89,7 +127,7 @@ async def imagery_tile(
     if not (0 <= z <= meta["max_z"]):
         raise HTTPException(400, "z out of range")
 
-    data = await _cache_for(settings.tile_cache_dir).get(
+    data = await _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes).get(
         f"{provider}/{layer}/{date}", z, x, y, meta["ext"], _TTL, load
     )
     if data is None:

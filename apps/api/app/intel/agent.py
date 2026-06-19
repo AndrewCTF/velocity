@@ -303,7 +303,11 @@ def _narrate_brief(
         lead = incs[0]
         dom = " + ".join(lead.get("domains") or []) or "multi-domain"
         narr = str(lead.get("narrative") or "").strip()
-        parts.append(f"Lead incident — {dom}: {narr[:180]}" if narr else f"Lead incident is a {dom} convergence.")
+        parts.append(
+            f"Lead incident — {dom}: {narr[:180]}"
+            if narr
+            else f"Lead incident is a {dom} convergence."
+        )
     if isinstance(changes, dict) and changes.get("had_baseline"):
         nn = len(changes.get("new") or [])
         ee = len(changes.get("escalated") or [])
@@ -313,7 +317,11 @@ def _narrate_brief(
     if isinstance(news, dict) and news.get("events"):
         head = news["events"][0]
         parts.append(f"World-news desk leads with: {head.get('title')}.")
-    return " ".join(p.rstrip() + ("" if p.rstrip().endswith((".", "!", "?")) else ".") for p in parts if p.strip())
+    return " ".join(
+        p.rstrip() + ("" if p.rstrip().endswith((".", "!", "?")) else ".")
+        for p in parts
+        if p.strip()
+    )
 
 
 def _scope_label(bbox: BBox | None) -> str:

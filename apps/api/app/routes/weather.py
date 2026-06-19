@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.config import get_settings
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["weather"])
@@ -34,6 +35,13 @@ async def openmeteo(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
 ) -> dict[str, Any]:
+    # api.open-meteo.com is free for NON-commercial use only (data is CC BY, the
+    # hosted endpoint is not). On a commercial deployment, use NWS alerts/SWPC
+    # (public domain) or self-host Open-Meteo. See docs/commercial-licensing.md.
+    if get_settings().commercial_mode:
+        raise HTTPException(
+            503, "open-meteo hosted API is non-commercial; self-host or use NWS"
+        )
     key = f"openmeteo:{lat:.2f}:{lon:.2f}"
 
     async def load() -> dict[str, Any]:

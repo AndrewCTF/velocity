@@ -39,6 +39,9 @@ from urllib.parse import quote, urlparse
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server.transport_security import TransportSecuritySettings
+from starlette.routing import Route
 
 from app.config import get_settings
 
@@ -56,6 +59,62 @@ mcp = FastMCP(
         "signals into incidents so you don't correlate raw layers by hand."
     ),
 )
+
+
+# ── hosted mount (streamable-HTTP at /mcp of the FastAPI app) ──────────────────
+# The agent-facing endpoint. Mounting the MCP into the SAME uvicorn process the
+# globe runs lets every tool share the warm in-process snapshot + fusion engine
+# (the tools still self-call /api/intel/* over localhost, authenticated by the
+# static API_KEY). The Velocity gateway Worker proxies https://<host>/mcp here,
+# forwarding the caller's Supabase token; the backend's ApiKeyMiddleware gates it
+# like any other non-public route, so no MCP-specific auth is needed.
+
+
+class _MCPASGIApp:
+    """Raw-ASGI adapter for the streamable-HTTP session manager.
+
+    A plain function endpoint would be wrapped by Starlette as a
+    request/response handler; a class instance is left as a raw ASGI app, which
+    is what the transport needs (it negotiates SSE itself).
+    """
+
+    def __init__(self, manager: StreamableHTTPSessionManager) -> None:
+        self._manager = manager
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        await self._manager.handle_request(scope, receive, send)
+
+
+def build_mcp_mount() -> tuple[list[Route], StreamableHTTPSessionManager]:
+    """Return (routes, session_manager) to serve this server at ``/mcp``.
+
+    A FRESH manager per call — ``StreamableHTTPSessionManager.run()`` is one-shot
+    (it raises if entered twice), so every FastAPI app instance, including each
+    test app, needs its own. Usage::
+
+        routes, mgr = build_mcp_mount()
+        app.router.routes.extend(routes)         # in the app factory
+        async with mgr.run():  ...  yield         # in the app lifespan
+
+    Served as exact ``Route``s (``/mcp`` and ``/mcp/``), NOT a ``Mount`` — a
+    mount 307-redirects ``/mcp`` → ``/mcp/`` with a Location built from the
+    request host, which through the gateway Worker would point a client at the
+    bare backend origin. DNS-rebinding protection is disabled: the endpoint is
+    reached server-to-server through the Worker (the Host header is the
+    deployment origin, not a browser tab), and the Supabase-token check in
+    ``app.auth.ApiKeyMiddleware`` is the real gate.
+    """
+    manager = StreamableHTTPSessionManager(
+        app=mcp._mcp_server,
+        json_response=False,
+        stateless=False,
+        security_settings=TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        ),
+    )
+    endpoint = _MCPASGIApp(manager)
+    routes = [Route("/mcp", endpoint), Route("/mcp/", endpoint)]
+    return routes, manager
 
 
 # ── backend HTTP plumbing ─────────────────────────────────────────────────────
@@ -672,6 +731,47 @@ async def fact_check(claim: str) -> dict[str, Any]:
     treating it as fact.
     """
     return await _get("/api/news/factcheck", {"claim": claim})
+
+
+@mcp.tool()
+async def aoi_imagery(
+    before: str,
+    after: str,
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_km: float = 5.0,
+    min_lon: float | None = None,
+    min_lat: float | None = None,
+    max_lon: float | None = None,
+    max_lat: float | None = None,
+    window_days: int = 30,
+) -> dict[str, Any]:
+    """Building imagery for a location at two dates — set time + place directly.
+
+    Give a location (lat/lon + radius_km, OR an explicit min/max bbox) and a
+    before + after date (YYYY-MM-DD). Returns what imagery is available for each
+    date WITHOUT downloading: Maxar Open Data VHR (~0.3-0.5 m, event-gated — only
+    where a disaster/conflict event covers the AOI) and Sentinel (10 m, global,
+    any date). `best_source` says which to use. Reconstruction downloads the
+    scenes to a temp dir on demand and discards them — nothing is stored.
+
+    Args:
+        before, after: dates as YYYY-MM-DD.
+        lat, lon, radius_km: centre + radius (km) of the AOI.
+        min_lon/min_lat/max_lon/max_lat: explicit bbox (overrides lat/lon).
+        window_days: ± days around each date to search Maxar (events are sparse).
+    """
+    params: dict[str, Any] = {
+        "before": before,
+        "after": after,
+        "radius_km": radius_km,
+        "window_days": window_days,
+    }
+    if None not in (min_lon, min_lat, max_lon, max_lat):
+        params.update(min_lon=min_lon, min_lat=min_lat, max_lon=max_lon, max_lat=max_lat)
+    else:
+        params.update(lat=lat, lon=lon)
+    return await _get("/api/imagery/aoi", params)
 
 
 # ── entrypoint ─────────────────────────────────────────────────────────────────

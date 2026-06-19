@@ -16,6 +16,7 @@ import asyncio
 import collections
 import json
 import logging
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -194,13 +195,25 @@ async def _flush_loop() -> None:
         if _buffer:
             rows, _buffer = _buffer, []
             _rows_written += await loop.run_in_executor(None, _flush_sync, rows)
-        # Retention: delete rows past the window so history.db stays bounded.
+        # Retention: time-prune to the hour window, then enforce the byte cap,
+        # then VACUUM so deleted pages return to the filesystem (a bare DELETE
+        # leaves the file at its high-water mark — the "10 GB history.db" bug).
         if time.time() >= next_prune:
             next_prune = time.time() + _PRUNE_INTERVAL_S
-            hours = get_settings().history_retention_hours
+            settings = get_settings()
+            hours = settings.history_retention_hours
             deleted = await loop.run_in_executor(None, prune, hours)
+            deleted += await loop.run_in_executor(
+                None, enforce_size_cap, settings.history_max_bytes
+            )
             if deleted:
-                log.info("history: pruned %d rows older than %dh", deleted, hours)
+                await loop.run_in_executor(None, _vacuum)
+                log.info(
+                    "history: pruned %d rows (>%dh / >%d bytes), vacuumed",
+                    deleted,
+                    hours,
+                    settings.history_max_bytes,
+                )
 
 
 # ── query ─────────────────────────────────────────────────────────────────────
@@ -287,6 +300,61 @@ def prune(retention_hours: int) -> int:
     except Exception:  # noqa: BLE001
         log.exception("history: prune error")
         return 0
+
+
+def enforce_size_cap(max_bytes: int) -> int:
+    """Drop the oldest rows until the DB file is under *max_bytes*.
+
+    The on-disk file size only shrinks after a VACUUM, so we cannot delete-and-
+    measure in a loop. Instead we estimate the fraction of rows to drop from the
+    byte overage (with a 10 % margin) and delete that oldest slice in one pass;
+    the caller VACUUMs afterwards and the next hourly pass corrects any residue.
+    Returns the deleted row count. A max_bytes of 0 disables the cap.
+    """
+    if max_bytes <= 0:
+        return 0
+    path = _resolved_db_path()
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return 0
+    if size <= max_bytes:
+        return 0
+    try:
+        con = _connect()
+        try:
+            total = con.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
+            if total <= 0:
+                return 0
+            over_frac = 1.0 - (max_bytes / size)
+            to_drop = min(total - 1, int(total * over_frac * 1.1) + 1)
+            if to_drop <= 0:
+                return 0
+            # The timestamp of the to_drop-th oldest row is the delete cutoff.
+            row = con.execute(
+                "SELECT t FROM positions ORDER BY t LIMIT 1 OFFSET ?", (to_drop,)
+            ).fetchone()
+            if row is None:
+                return 0
+            cur = con.execute("DELETE FROM positions WHERE t <= ?", (row[0],))
+            deleted = cur.rowcount
+            con.commit()
+            return deleted
+        finally:
+            con.close()
+    except Exception:  # noqa: BLE001
+        log.exception("history: size-cap error")
+        return 0
+
+
+def _vacuum() -> None:
+    """Rewrite the DB file so freed pages return to the filesystem."""
+    try:
+        con = _connect()
+        con.execute("VACUUM")
+        con.close()
+    except Exception:  # noqa: BLE001
+        log.exception("history: vacuum error")
 
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────

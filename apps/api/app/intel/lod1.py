@@ -64,9 +64,22 @@ def _overpass_query(q: str) -> dict[str, Any]:
     import json
     import time as _time
 
+    from app.config import get_settings
+
+    # The public Overpass mirrors forbid commercial/heavy use. On a commercial
+    # deployment use the self-hosted OVERPASS_URL; if it is unset, refuse rather
+    # than hit the public mirrors (the route degrades to no buildings).
+    s = get_settings()
+    if s.commercial_mode:
+        if not s.overpass_url:
+            raise RuntimeError("commercial_mode: OVERPASS_URL (self-host) not configured")
+        endpoints = [s.overpass_url]
+    else:
+        endpoints = [s.overpass_url] if s.overpass_url else _OVERPASS_ENDPOINTS
+
     data = urllib.parse.urlencode({"data": q}).encode()
     last_err: Exception | None = None
-    for i, endpoint in enumerate(_OVERPASS_ENDPOINTS):
+    for i, endpoint in enumerate(endpoints):
         req = urllib.request.Request(
             endpoint, data=data, headers={"User-Agent": "osint-research/1.0"}
         )
@@ -74,7 +87,7 @@ def _overpass_query(q: str) -> dict[str, Any]:
             return json.loads(urllib.request.urlopen(req, timeout=180).read())
         except Exception as e:  # 429, timeout, transient DNS — try the next mirror
             last_err = e
-            if i < len(_OVERPASS_ENDPOINTS) - 1:
+            if i < len(endpoints) - 1:
                 _time.sleep(1.5)
     raise RuntimeError(f"all Overpass mirrors failed: {last_err}")
 

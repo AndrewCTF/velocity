@@ -46,6 +46,23 @@ def _test_settings() -> Settings:
     )
 
 
+@pytest.fixture(autouse=True)
+def _neutralise_minimax(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MiniMax-M3 is the PRIMARY LLM backend, configured from env
+    (NVIDIA_API_KEY) which the dev .env now carries. Unit tests must stay
+    hermetic (no network) and were written for the DeepSeek→Ollama fallback
+    chain, so default MiniMax to *unconfigured* here. A test that wants to
+    exercise it can re-patch ``llm.minimax_config``.
+    """
+    from app import llm
+
+    monkeypatch.setattr(
+        llm,
+        "minimax_config",
+        lambda: (None, "https://integrate.api.nvidia.com/v1", "minimaxai/minimax-m3"),
+    )
+
+
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     app = create_app()

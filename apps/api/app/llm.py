@@ -59,6 +59,27 @@ def _resolve_tier(tier: str) -> str:
     return _TIER_ALIASES.get((tier or "fast").lower(), "fast")
 
 
+# Reasoning models ignore sampling params (temperature/top_p) and reject
+# response_format. Detect them by id substring so we suppress those fields for
+# any reasoner regardless of vendor (deepseek-reasoner, MiniMax-M3, DeepSeek-R1,
+# OpenAI o1/o3, …). Adding a model id here is the one-line way to onboard a new
+# reasoner endpoint via the OpenAI-compatible slot.
+_REASONER_MARKERS = (
+    "reasoner",
+    "minimax-m3",
+    "-r1",
+    "deepseek-r",
+    "o1",
+    "o3",
+    "thinking",
+)
+
+
+def _is_reasoner(model: str) -> bool:
+    m = (model or "").lower()
+    return any(marker in m for marker in _REASONER_MARKERS)
+
+
 def deepseek_model_for(tier: str) -> str:
     s = get_settings()
     return s.deepseek_model_reason if _resolve_tier(tier) == "reason" else s.deepseek_model_fast
@@ -133,6 +154,18 @@ def deepseek_config() -> tuple[str | None, str]:
     return key, base.rstrip("/")
 
 
+def minimax_config() -> tuple[str | None, str, str]:
+    """Resolve ``(api_key, base_url, model)`` for the MiniMax-M3 NVIDIA endpoint.
+
+    ``api_key`` is ``None`` when neither MINIMAX_API_KEY nor NVIDIA_API_KEY is set.
+    """
+    s = get_settings()
+    key = (s.minimax_api_key or s.nvidia_api_key or "").strip() or None
+    base = (s.minimax_base_url or "https://integrate.api.nvidia.com/v1").strip()
+    model = (s.minimax_model or "minimaxai/minimax-m3").strip()
+    return key, base.rstrip("/"), model
+
+
 # ── result type ───────────────────────────────────────────────────────────────
 
 
@@ -182,9 +215,9 @@ async def _deepseek_chat(
         "max_tokens": max_tokens,
         "stream": False,
     }
-    # deepseek-reasoner ignores sampling params and rejects response_format;
-    # only send them for the chat model.
-    if "reasoner" not in model:
+    # Reasoning models ignore sampling params and reject response_format;
+    # only send them for non-reasoner (chat) models.
+    if not _is_reasoner(model):
         payload["temperature"] = temperature
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
@@ -215,6 +248,61 @@ async def _deepseek_chat(
     except Exception as exc:  # noqa: BLE001
         return LlmResult(
             text=None, model=model, backend="deepseek", error=f"deepseek call failed: {exc}"
+        )
+
+
+async def _minimax_chat(
+    messages: list[dict[str, str]],
+    *,
+    temperature: float,
+    max_tokens: int,
+    timeout_s: float,
+) -> LlmResult:
+    """MiniMax-M3 (reasoning) via NVIDIA's OpenAI-compatible /chat/completions.
+
+    M3 is a reasoning model — it emits ``reasoning_content`` then the final
+    ``content``; we return ``content`` (the answer) and let ``extract_json``
+    parse JSON out of it. Reasoning consumes tokens, so we floor ``max_tokens``
+    to give it room to actually finish.
+    """
+    key, base, model = minimax_config()
+    if not key:
+        return LlmResult(text=None, backend=None, error="minimax key not configured")
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max(max_tokens, 4096),
+        "temperature": temperature,
+        "top_p": 0.95,
+        "stream": False,
+    }
+    try:
+        async with _client(timeout_s) as c:
+            r = await c.post(
+                base + "/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+            )
+        if r.status_code != 200:
+            return LlmResult(
+                text=None,
+                model=model,
+                backend="minimax",
+                error=f"minimax {r.status_code}: {r.text[:200]}",
+            )
+        body = r.json()
+        msg = (body.get("choices") or [{}])[0].get("message") or {}
+        text = (msg.get("content") or "").strip()
+        return LlmResult(
+            text=text or None,
+            model=model,
+            backend="minimax",
+            usage=body.get("usage") or {},
+            error=None if text else "minimax returned empty content",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return LlmResult(
+            text=None, model=model, backend="minimax", error=f"minimax call failed: {exc}"
         )
 
 
@@ -302,6 +390,7 @@ async def chat(
     timeout_s: float | None = None,
     json_mode: bool = False,
     ollama_model: str = "",
+    fast: bool = False,
 ) -> LlmResult:
     """Run a chat completion. DeepSeek first, Ollama fallback.
 
@@ -311,12 +400,35 @@ async def chat(
         json_mode: ask the model for a JSON object (fast tier only).
         ollama_model: preferred local model when falling back.
     """
-    model = deepseek_model_for(tier)
+    # `fast=True` forces the quick chat model (DeepSeek-chat / Ollama) and skips
+    # the slow MiniMax-M3 reasoner entirely — used for the agent's tool-routing
+    # turns, where many cheap round-trips matter more than deep reasoning. The
+    # final synthesis turn runs WITHOUT fast so it gets M3.
+    model = deepseek_model_for("fast" if fast else tier)
     # reasoner is slow; give it room to actually finish before the answer.
     if timeout_s is not None:
         eff_timeout = timeout_s
+    elif fast:
+        eff_timeout = 35.0
     else:
         eff_timeout = 180.0 if _resolve_tier(tier) == "reason" else 90.0
+
+    # MiniMax-M3 (reasoning) is the PRIMARY backend when configured. It reasons
+    # before answering, so it needs a generous floor; DeepSeek/Ollama remain the
+    # fallbacks below if it is unconfigured or fails. `fast` skips it.
+    mm_key, _mm_base, _mm_model = minimax_config()
+    if mm_key and not fast:
+        # M3's NVIDIA endpoint carries large fixed reasoning/queue latency
+        # (~50-100s even for short replies), so give it a wide floor; DeepSeek/
+        # Ollama below answer fast if it errors or overruns.
+        mm = await _minimax_chat(
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout_s=max(eff_timeout, 150.0),
+        )
+        if mm.ok:
+            return mm
 
     ds = await _deepseek_chat(
         messages,
@@ -393,6 +505,7 @@ async def chat_json(
     max_tokens: int = 2048,
     timeout_s: float | None = None,
     ollama_model: str = "",
+    fast: bool = False,
 ) -> tuple[Any | None, LlmResult]:
     """Run ``chat`` and parse the reply as JSON. Returns ``(parsed_or_None, result)``."""
     res = await chat(
@@ -401,8 +514,9 @@ async def chat_json(
         temperature=temperature,
         max_tokens=max_tokens,
         timeout_s=timeout_s,
-        json_mode=(_resolve_tier(tier) == "fast"),
+        json_mode=(fast or _resolve_tier(tier) == "fast"),
         ollama_model=ollama_model,
+        fast=fast,
     )
     if not res.ok:
         return None, res
@@ -413,7 +527,15 @@ def status() -> dict[str, Any]:
     """What's configured — for /api/intel/sources, data_sources(), health."""
     s = get_settings()
     key, base = deepseek_config()
+    mm_key, mm_base, mm_model = minimax_config()
     return {
+        "primary": "minimax" if mm_key else ("deepseek" if key else "ollama"),
+        "minimax": {
+            "configured": bool(mm_key),
+            "base_url": mm_base,
+            "model": mm_model,
+            "reasoning": True,
+        },
         "deepseek": {
             "configured": bool(key),
             "base_url": base,

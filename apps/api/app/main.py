@@ -5,14 +5,17 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.auth import ApiKeyMiddleware
 from app.config import get_settings
 from app.correlate import runner as correlate_runner
+from app.mcp_server import build_mcp_mount
 from app.routes import adsb as adsb_routes
 from app.routes import ais as ais_routes
 from app.routes import alerts as alerts_routes
@@ -44,6 +47,28 @@ from app.routes import timeline as timeline_routes
 from app.routes import weather as weather_routes
 
 
+class SelectiveGZipMiddleware:
+    """GZip every response EXCEPT the MCP endpoint.
+
+    Starlette's GZipMiddleware buffers the response *start* message until the
+    first body chunk arrives — but the MCP streamable-HTTP standby GET stream
+    (SSE) sends no immediate body, so its headers would never reach the client
+    and the stream hangs (POST tool calls are unaffected, which is why it hides).
+    /mcp bypasses gzip entirely; its bodies are small JSON or SSE, not worth
+    compressing.
+    """
+
+    def __init__(self, app: ASGIApp, **kwargs: Any) -> None:
+        self._app = app
+        self._gzip = GZipMiddleware(app, **kwargs)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope.get("path", "").startswith("/mcp"):
+            await self._app(scope, receive, send)
+        else:
+            await self._gzip(scope, receive, send)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # OSINT_DISABLE_BACKGROUND short-circuits every boot-time poller. Unit
@@ -51,33 +76,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # real upstream HTTP from the correlate loops.
     background = not os.environ.get("OSINT_DISABLE_BACKGROUND")
     settings = get_settings()
-    if background:
-        correlate_runner.start()
-        # AISStream (keyed) is engaged ON DEMAND — only when a browser opens
-        # /ws/ais — and dropped when the last viewer leaves, to conserve its
-        # API message cap. It is NOT started at boot. The keyless Kystverket
-        # firehose below runs unconditionally so the MCP/intel vessel tools and
-        # the always-on store still have vessels without a frontend.
-        from app import ais_firehose  # noqa: PLC0415
-
-        ais_firehose.start()
-        # Extra keyless regional AIS (Norway Kystdatahuset + Finland Digitraffic
-        # MQTT) — densify Northern-Europe vessels without any key.
-        from app import ais_keyless  # noqa: PLC0415
-
-        ais_keyless.start()
-        # Position history store for 3D replay/scrub.
-        from app import history  # noqa: PLC0415
-
-        history.start()
-        # News debias / fact-check refresher.
-        if settings.news_enabled:
-            from app.routes import news as news_routes  # noqa: PLC0415
-
-            news_routes.start_refresher()
+    # The mounted /mcp endpoint's streamable-HTTP session manager runs a task
+    # group that must stay live for the whole app lifetime. Starlette does NOT
+    # invoke a mounted sub-app's lifespan, so drive it here (one-shot per app).
+    mcp_cm = app.state.mcp_manager.run()
+    await mcp_cm.__aenter__()
     try:
+        if background:
+            correlate_runner.start()
+            # AISStream (keyed) is engaged ON DEMAND — only when a browser opens
+            # /ws/ais — and dropped when the last viewer leaves, to conserve its
+            # API message cap. It is NOT started at boot. The keyless Kystverket
+            # firehose below runs unconditionally so the MCP/intel vessel tools and
+            # the always-on store still have vessels without a frontend.
+            from app import ais_firehose  # noqa: PLC0415
+
+            ais_firehose.start()
+            # Extra keyless regional AIS (Norway Kystdatahuset + Finland Digitraffic
+            # MQTT) — densify Northern-Europe vessels without any key.
+            from app import ais_keyless  # noqa: PLC0415
+
+            ais_keyless.start()
+            # Position history store for 3D replay/scrub.
+            from app import history  # noqa: PLC0415
+
+            history.start()
+            # News debias / fact-check refresher.
+            if settings.news_enabled:
+                from app.routes import news as news_routes  # noqa: PLC0415
+
+                news_routes.start_refresher()
         yield
     finally:
+        await mcp_cm.__aexit__(None, None, None)
         await correlate_runner.stop_all()
         # Cancel the intel AOI priority warmer and the ADS-B snapshot
         # refresher so no background task outlives the app's event loop
@@ -119,7 +150,8 @@ def create_app() -> FastAPI:
     # Added last → outermost. The global ADS-B snapshot is a multi-MB JSON
     # body once per second per client; gzip cuts it ~10x on the wire.
     # compresslevel 5 trades a little ratio for much less CPU than default 9.
-    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
+    # Selective: /mcp must NOT be gzipped (would stall its SSE stream).
+    app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024, compresslevel=5)
 
     app.include_router(config_routes.router)
     app.include_router(health_routes.router)
@@ -150,6 +182,17 @@ def create_app() -> FastAPI:
     app.include_router(news_routes_mod.router)
     app.include_router(history_routes.router)
     app.include_router(export_routes.router)
+
+    # Agent-facing MCP endpoint (streamable-HTTP) at /mcp, in-process so its
+    # tools share this app's warm snapshot + fusion engine. Gated by
+    # ApiKeyMiddleware (above) exactly like every other non-public route; the
+    # session manager is driven from the lifespan via app.state.mcp_manager.
+    # The backend IS this process, so the tools' self-hop must never try to
+    # auto-spawn a second uvicorn (would race / EADDRINUSE on :8000).
+    os.environ.setdefault("OSINT_MCP_NO_AUTOSTART", "1")
+    mcp_routes, mcp_manager = build_mcp_mount()
+    app.state.mcp_manager = mcp_manager
+    app.router.routes.extend(mcp_routes)
 
     return app
 
