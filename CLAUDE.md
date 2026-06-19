@@ -41,6 +41,13 @@ not regress any of them. If unsure, leave the relevant code path alone.
 - `SampledPositionProperty` with `LinearApproximation` is used to interpolate
   between fixes — do not replace it with `ConstantPositionProperty` on
   existing entities or icons will jump.
+- **NEVER synthesize/predict aircraft motion — real observed fixes only.** The
+  operator wants real data, not fake motion. `upsertAircraftSamples` glides
+  between CONSECUTIVE REAL fixes (linear interp from the icon's current rendered
+  point to the newest reported position) and HOLDs after — it must NOT
+  forward-extrapolate / dead-reckon the anchor ahead by velocity/heading past
+  the last real fix. Smoothness comes from delivering REAL fixes faster +
+  steadier (backend cadence, feed freshness), not from inventing positions.
 - `requestRenderMode: true` must stay on, BUT `maximumRenderTimeChange: 0`
   (GlobeCanvas viewer opts) so the scene re-renders every frame the simulation
   clock advances — that is what makes `SampledPositionProperty` interpolation
@@ -49,6 +56,17 @@ not regress any of them. If unsure, leave the relevant code path alone.
   frozen, nothing changes, and the scene idles — so requestRenderMode still
   saves GPU. Do not set `maximumRenderTimeChange` back to `Infinity`. Follow
   (`camera.ts`) flips `requestRenderMode` off for its duration and restores it.
+- **World-view decimation MUST be STABLE across polls.** At near-global zoom the
+  frontend asks `/api/adsb/global?limit=4000` (no bbox) and `viewport_filter`
+  (`routes/adsb.py`) caps ~9k aircraft to 4000. It keeps a deterministic subset
+  keyed by `md5(feature id)` (live tier — non-`opensky` source — first). It must
+  NOT use a positional stride (`feats[int(i*stride)]`): the snapshot's order and
+  count shift every refresh, so a stride resampled a DIFFERENT 4000 each poll →
+  the upsert-by-id frontend churned ~half its entities every second (measured
+  112% id churn / 2.5 s), which RESET the motion model so aircraft never lived
+  long enough to glide and sat frozen at world view. Never key the sort on an
+  age field (`seen_pos_s`/`seen_at`) — those tick every snapshot and reintroduce
+  the churn. Guarded by `tests/test_adsb_viewport_stable.py`.
 
 ### Refresh cadence
 
@@ -178,9 +196,15 @@ shipping.
 
 ### Feed hygiene (ADS-B / AIS upstreams)
 
-- Rotate across hosts; pull ONE per cycle, not all at once. Hitting every feed
-  every few seconds rate-limits them and wastes bandwidth (each readsb
-  `aircraft.json` is ~1 MB gzip). `adsb_feed_interval_s` is 30 s for a reason.
+- Feeds pull in a BACKGROUND task (`_pull_due_feeds`) on per-feed cadences, so a
+  slow body never blocks the fan-out. `theairtraffic` is the freshness PRIMARY
+  (~10k aircraft, position age median ~1.6 s, ~5 MB body downloading in ~2 s from
+  current egress) and is pulled fast (~8 s) — the old 30 s throttle was sized for
+  a 4-9 s download that no longer holds. Each readsb `aircraft.json` is several
+  MB, so don't drop the mirror cadences to ~1 s; ~5-8 s is the freshness/bandwidth
+  balance. Smoothness for the operator comes from delivering REAL fixes fast +
+  steady, NOT from synthesizing motion (dead-reckoning is forbidden — see the
+  motion guardrail above).
 - Some hosts (adsb.lol) answer **HTTP 451 to a non-browser User-Agent** — feed
   fetches must send a real browser UA. airplanes.live/adsb.fi/adsb.one
   Cloudflare-block datacenter IPs entirely; only `theairtraffic` + `hpradar`

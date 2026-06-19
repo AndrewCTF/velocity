@@ -555,7 +555,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // stale, unchanging positions that re-anchored every poll and oscillated
   // (glide out on the prediction, snap back to the stale anchor) — the "looping"
   // and "teleporting" the operator saw, made worse by a Lagrange curve through
-  // the three points.
+  // the three points. The operator does NOT want synthesized/predicted motion:
+  // ONLY real observed positions. So we never project past the last real fix.
   //
   // Fix: detect a new fix by POSITION CHANGE, not time. If the position is the
   // same as last anchored, HOLD (return). When it genuinely moves, glide from

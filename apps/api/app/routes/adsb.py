@@ -787,7 +787,6 @@ async def _firehose_throttled() -> list[dict[str, Any]] | None:
 # is dropped so a dead feed's aircraft don't linger.
 _FEED_SLICES: dict[str, tuple[float, list[dict[str, Any]]]] = {}  # url -> (mono_ts, ac)
 _FEED_NEXT_PULL: dict[str, float] = {}  # url -> next monotonic pull time
-_READSB_LOCK = asyncio.Lock()
 _FEED_SLICE_MAX_AGE_S = 180.0
 # Some hosts (adsb.lol) answer 451 to a non-browser User-Agent — send a real one.
 _FEED_UA = (
@@ -807,11 +806,14 @@ def _feed_interval(url: str) -> float:
     if "/v2/" in url or "/re-api" in url:
         return s.adsb_feed_slow_interval_s  # rate-limit-sensitive API
     if "theairtraffic.com" in url:
-        # theairtraffic's 3.6 MB body streams over 4-9 s. Pull it on a SLOW
-        # cadence (a breadth source, not a freshness source) so only ~1 cycle in
-        # N pays that cost; its slice is carried forward 180 s in between, so the
-        # hot 2 s refresh stays fast while theairtraffic's ~8 k still lands.
-        return max(30.0, s.adsb_feed_slow_interval_s)
+        # theairtraffic is the FRESHEST + BIGGEST real source measured from this
+        # egress: ~10k aircraft, position age median ~1.6 s, and the ~5 MB body
+        # now downloads in ~2 s (not the old 4-9 s). It's pulled in the BACKGROUND
+        # (_pull_one_feed), so a ~2 s download never blocks the fan-out — there's
+        # no reason to throttle it to 30 s. Pull it fast so the bulk of aircraft
+        # carry genuinely fresh REAL positions (operator wants real data refreshed
+        # consistently, NOT synthesized motion between stale fixes).
+        return max(8.0, s.adsb_feed_interval_s)
     return s.adsb_feed_interval_s  # full aircraft.json mirror
 
 
@@ -858,44 +860,81 @@ async def _fetch_one_feed(client: httpx.AsyncClient, url: str) -> list[dict[str,
         return []
 
 
-async def _readsb_feeds() -> list[dict[str, Any]]:
-    """Union of recent keyless readsb feed slices.
+# One INDEPENDENT background pull task per feed url. A shared gather over all due
+# feeds was a freshness trap: a dead/slow feed (adsb.lol /v2 times out at ~20 s
+# from a datacenter egress) held the whole gather, gating the fresh mirrors
+# (theairtraffic ~2 s, hpradar ~0.4 s) to the slow feed's cadence — so served
+# positions were ~14 s old even though theairtraffic's raw data is ~1.6 s. Per
+# feed each runs on its own cadence; a slow feed only delays itself.
+_FEED_TASKS: dict[str, asyncio.Task[None]] = {}
 
-    Pulls every feed that is DUE (per-feed cadence) concurrently, so fresh
-    mirrors keep positions current without hammering the slow APIs. Returns the
-    deduped (by icao24) union of every non-stale slice.
+
+def _ac_seen_pos(a: dict[str, Any]) -> float:
+    """readsb position age (s) for freshest-wins dedup; absent → treat as stale."""
+    v = a.get("seen_pos")
+    return v if isinstance(v, (int, float)) else 1e9
+
+
+async def _pull_one_feed(url: str) -> None:
+    """Pull ONE feed and update its slice. Independent task per feed so a slow or
+    dead feed never delays the fresh ones. Re-arms its own next-pull on the way
+    out (success or failure) so a dead feed retries on cadence, not every tick."""
+    ac: list[dict[str, Any]] = []
+    try:
+        ac = await _fetch_one_feed(get_client(), url)
+    finally:
+        _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
+    if ac:
+        _FEED_SLICES[url] = (time.monotonic(), ac)
+
+
+async def _readsb_feeds() -> list[dict[str, Any]]:
+    """Union of recent keyless readsb feed slices — read from cache, INSTANT.
+
+    Each DUE feed is refreshed by its OWN background task (kicked here, never
+    awaited) so a slow mirror can't stall the fan-out or the other feeds. Returns
+    the union deduped by icao24, FRESHEST upstream observation winning (so
+    theairtraffic's ~1.6 s fixes beat hpradar's ~5 s where they overlap). Stale
+    slices (> _FEED_SLICE_MAX_AGE_S) and de-configured feeds are dropped.
     """
     urls = _feed_urls()
     if not urls:
         return []
     now = time.monotonic()
-    due = [u for u in urls if now >= _FEED_NEXT_PULL.get(u, 0.0)]
-    if due:
-        async with _READSB_LOCK:
-            now = time.monotonic()
-            due = [u for u in urls if now >= _FEED_NEXT_PULL.get(u, 0.0)]
-            if due:
-                client = get_client()
-                results = await asyncio.gather(*(_fetch_one_feed(client, u) for u in due))
-                for url, ac in zip(due, results, strict=True):
-                    if ac:
-                        _FEED_SLICES[url] = (time.monotonic(), ac)
-                    # Re-arm even on failure so a dead feed is retried on its
-                    # cadence, not hammered every tick.
-                    _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
+    for u in urls:
+        if now >= _FEED_NEXT_PULL.get(u, 0.0):
+            t = _FEED_TASKS.get(u)
+            if t is None or t.done():
+                # Arm immediately so the due-check can't re-kick before the task
+                # sets its own next-pull in the finally.
+                _FEED_NEXT_PULL[u] = now + _feed_interval(u)
+                _FEED_TASKS[u] = asyncio.create_task(_pull_one_feed(u))
 
-    cutoff = time.monotonic() - _FEED_SLICE_MAX_AGE_S
-    merged: dict[str, dict[str, Any]] = {}
+    nowm = time.monotonic()
+    cutoff = nowm - _FEED_SLICE_MAX_AGE_S
+    # hexid -> (effective_age_s, aircraft). Effective age = how old this slice is
+    # PLUS the upstream position age inside it. Comparing raw seen_pos across
+    # slices was a freeze bug: a feed that succeeds once then goes dead (adsb.lol
+    # /v2 times out every cycle from this egress) keeps a FROZEN slice whose
+    # seen_pos stamps stay low, so it beat the live theairtraffic feed and the
+    # whole snapshot stopped moving. Folding in the slice's own age makes a stale
+    # slice lose, so the genuinely freshest REAL fix wins.
+    best: dict[str, tuple[float, dict[str, Any]]] = {}
     for url in list(_FEED_SLICES):
         ts, ac = _FEED_SLICES[url]
         if ts < cutoff or url not in urls:
             _FEED_SLICES.pop(url, None)  # stale or de-configured feed
             continue
+        slice_age = max(0.0, nowm - ts)
         for a in ac:
             hexid = (a.get("hex") or "").lower()
-            if hexid and a.get("lat") is not None and a.get("lon") is not None:
-                merged[hexid] = a
-    return list(merged.values())
+            if not hexid or a.get("lat") is None or a.get("lon") is None:
+                continue
+            eff = slice_age + _ac_seen_pos(a)
+            prev = best.get(hexid)
+            if prev is None or eff < prev[0]:
+                best[hexid] = (eff, a)
+    return [v[1] for v in best.values()]
 
 
 def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]]) -> None:
@@ -1301,7 +1340,13 @@ async def stop_snapshot() -> None:
     test isolation). Safe to call when nothing is running."""
     global _SNAPSHOT_TASK, _SNAPSHOT_STARTED
     global _OPENSKY_REFRESH_TASK, _FIREHOSE_REFRESH_TASK
-    tasks = [_SNAPSHOT_TASK, _OPENSKY_REFRESH_TASK, _FIREHOSE_REFRESH_TASK]
+    tasks = [
+        _SNAPSHOT_TASK,
+        _OPENSKY_REFRESH_TASK,
+        _FIREHOSE_REFRESH_TASK,
+        *_FEED_TASKS.values(),
+    ]
+    _FEED_TASKS.clear()
     _SNAPSHOT_TASK = None
     _OPENSKY_REFRESH_TASK = None
     _FIREHOSE_REFRESH_TASK = None
