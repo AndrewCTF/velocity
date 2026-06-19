@@ -6,6 +6,9 @@ import { AoiSelector } from './AoiSelector.js';
 import { SearchField } from './SearchField.js';
 import { flyToChokepoint, flyToGlobal } from '../globe/camera.js';
 import type { Chokepoint } from '../registry/chokepoints.js';
+import { Brand, StatusDot } from '../shell/instruments.js';
+import { useAgent } from '../state/agent.js';
+import { apiFetch } from '../transport/http.js';
 
 interface Props {
   viewer: Cesium.Viewer | null;
@@ -19,12 +22,8 @@ interface Props {
   onOpenAlerts?: () => void;
 }
 
-const STATUS_DOT: Record<string, string> = {
-  green: 'bg-ok',
-  amber: 'bg-warn',
-  red: 'bg-alert',
-  unknown: 'bg-txt-4',
-};
+// Each top-level cell: full height, hairline right divider, tight padding.
+const CELL = 'h-full flex items-center gap-2 px-3 border-r border-line';
 
 export function CommandBar({
   viewer,
@@ -51,46 +50,83 @@ export function CommandBar({
   };
 
   return (
-    <div className="flex h-full items-center gap-3 px-3">
-      <SearchField viewer={viewer} />
-      <AoiSelector onPick={onPickAoi} />
+    <div className="flex h-full items-stretch">
+      {/* brand mark */}
+      <div className={CELL}>
+        <Brand name="VELOCITY" version="v0.9.2" />
+      </div>
+
+      {/* unified search */}
+      <div className={CELL}>
+        <SearchField viewer={viewer} />
+      </div>
+
+      {/* area-of-interest selector */}
+      <div className={CELL}>
+        <AoiSelector onPick={onPickAoi} />
+      </div>
 
       {/* 3D satellite imagery toggle. Keyless: sat tiles + terrain come from
           our own cached proxies; an ion token only adds OSM Buildings. */}
-      <ImageryToggle
-        mode={imageryMode}
-        onToggle={() => setImageryMode(imageryMode === '3d-sat' ? '2d-dark' : '3d-sat')}
-      />
+      <div className={CELL}>
+        <ImageryToggle
+          mode={imageryMode}
+          onToggle={() => setImageryMode(imageryMode === '3d-sat' ? '2d-dark' : '3d-sat')}
+        />
+      </div>
 
-      {/* alert ticker — top alert in newest-first buffer; click opens panel */}
-      <AlertTicker {...(onOpenAlerts ? { onOpen: onOpenAlerts } : {})} />
+      {/* alert ticker — top alert in newest-first buffer; click opens panel.
+          flex-1 so it spans the gap between the controls and the right cluster. */}
+      <div className={`${CELL} flex-1 min-w-0`}>
+        <AlertTicker {...(onOpenAlerts ? { onOpen: onOpenAlerts } : {})} />
+      </div>
+
+      {/* AGENT indicator — opens the analyst console; shows the live cross-domain
+          incident count from the real /api/intel/brief fusion. */}
+      <div className={CELL}>
+        <AgentIndicator />
+      </div>
 
       {/* WS connection state — live/down pill so silence is unambiguous */}
-      <WsPill />
+      <div className={CELL}>
+        <WsPill />
+      </div>
 
       {/* UTC clock — operator orientation */}
-      <div className="mono text-[11px] text-txt-2" title="UTC">
-        {now.toISOString().slice(11, 19)}Z
+      <div className={CELL}>
+        <span className="mono text-[11px] text-txt-2 tabular-nums" title="UTC">
+          {now.toISOString().slice(11, 19)}Z
+        </span>
       </div>
 
       {/* classification banner */}
-      <div className="mono text-[10px] tracking-[0.5px] uppercase px-2 py-0.5 border border-line rounded-sm text-txt-1">
-        {classification}
+      <div className={CELL}>
+        <span className="mono text-[10px] tracking-[0.5px] uppercase px-2 py-0.5 border border-line rounded-sm text-txt-1">
+          {classification}
+        </span>
       </div>
 
       {/* feed-health cluster */}
-      <div className="flex items-center gap-2" role="status" aria-label="Feed health">
+      <div className={CELL} role="status" aria-label="Feed health">
         {feedList.length === 0 && <span className="micro">no feeds</span>}
         {feedList.map((f) => (
           <span
             key={f.id}
-            className="flex items-center gap-1 micro"
+            className="flex items-center gap-1.5"
             title={`${f.label}\nstatus: ${f.status}${f.lastSeen ? `\nlast: ${new Date(f.lastSeen).toISOString().slice(11, 19)}Z` : ''}`}
           >
-            <span className={`inline-block h-2 w-2 rounded-full ${STATUS_DOT[f.status] ?? 'bg-txt-4'}`} />
-            <span className="hidden xl:inline text-txt-2">{shortLabel(f.label)}</span>
+            <StatusDot tone={f.status} />
+            <span className="mono text-[9px] tracking-[0.4px] uppercase text-txt-2 hidden xl:inline">
+              {shortLabel(f.label)}
+            </span>
           </span>
         ))}
+      </div>
+
+      {/* system stats — live entity total (real, from the viewer) + UTC tick
+          source FPS, both genuinely measured. Last cell: no right divider. */}
+      <div className="h-full flex items-center gap-3 px-3">
+        <SysStats viewer={viewer} />
       </div>
     </div>
   );
@@ -98,6 +134,141 @@ export function CommandBar({
 
 function shortLabel(s: string): string {
   return s.split(' ')[0] ?? s;
+}
+
+/**
+ * AGENT indicator — the entry point to the analyst console (the "AI bar").
+ * Polls the real cross-domain incident brief (/api/intel/brief) for a live
+ * convergence count + top threat level; clicking opens the console. No
+ * fabricated state — when the brief is empty it reads "· quiet".
+ */
+function AgentIndicator(): JSX.Element {
+  const setOpen = useAgent((s) => s.setOpen);
+  const [count, setCount] = useState<number | null>(null);
+  const [threat, setThreat] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const r = await apiFetch('/api/intel/brief');
+        if (!r.ok) return;
+        const d = (await r.json()) as { incident_count?: number; top_threat_level?: string };
+        if (!alive) return;
+        setCount(d.incident_count ?? 0);
+        setThreat(d.top_threat_level ?? null);
+      } catch {
+        /* leave last-known; never fabricate */
+      }
+    };
+    void tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  const dotTone = threat === 'high' ? 'red' : threat === 'elevated' ? 'amber' : 'ok';
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      title="Open the Velocity analyst console (⌘K)"
+      aria-label="Open analyst console"
+      className="flex items-center gap-2 mono text-[9px] tracking-[0.5px] text-accent hover:text-txt-0"
+    >
+      <StatusDot tone={dotTone} />
+      <span>AGENT ▸</span>
+      {count === null ? (
+        <span className="text-txt-3">…</span>
+      ) : count > 0 ? (
+        <span className="text-txt-1">
+          <b className="font-medium">{count}</b> incidents · brief ready
+        </span>
+      ) : (
+        <span className="text-txt-3">· quiet</span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * Live readouts measured straight from the running viewer:
+ *  - ent: sum of entities across every attached data source, polled ~1 s.
+ *  - fps: render rate from requestAnimationFrame deltas (EMA over ~1 s).
+ * If the viewer is null (tests, pre-mount) the entity count is omitted and
+ * the FPS loop never starts — nothing is fabricated.
+ */
+function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | null {
+  const [entCount, setEntCount] = useState<number | null>(null);
+  const [fps, setFps] = useState<number | null>(null);
+
+  // Entity total — recomputed once a second from the live data sources.
+  useEffect(() => {
+    if (!viewer) {
+      setEntCount(null);
+      return;
+    }
+    const recount = (): void => {
+      // A destroyed viewer (HMR teardown / globe ErrorBoundary) is non-null but
+      // `.dataSources` throws — skip the tick rather than crash the command bar.
+      if (viewer.isDestroyed()) return;
+      let total = 0;
+      for (let i = 0; i < viewer.dataSources.length; i++) {
+        total += viewer.dataSources.get(i).entities.values.length;
+      }
+      setEntCount(total);
+    };
+    recount();
+    const t = window.setInterval(recount, 1000);
+    return () => window.clearInterval(t);
+  }, [viewer]);
+
+  // FPS — measured from rAF frame deltas, surfaced once a second so the
+  // number is stable. Only runs when a viewer is mounted (i.e. the globe
+  // is actually rendering); no viewer → no readout rather than a fake one.
+  useEffect(() => {
+    if (!viewer) {
+      setFps(null);
+      return;
+    }
+    let raf = 0;
+    let last = performance.now();
+    let frames = 0;
+    let acc = 0;
+    const tick = (t: number): void => {
+      const dt = t - last;
+      last = t;
+      frames += 1;
+      acc += dt;
+      if (acc >= 1000) {
+        setFps(Math.round((frames * 1000) / acc));
+        frames = 0;
+        acc = 0;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [viewer]);
+
+  if (entCount === null && fps === null) return null;
+
+  return (
+    <span className="mono text-[9px] tracking-[0.4px] uppercase text-txt-3 flex items-center gap-3 tabular-nums">
+      {entCount !== null && (
+        <span title="Total entities across all globe data sources">
+          ent <b className="text-txt-1 font-semibold">{entCount.toLocaleString()}</b>
+        </span>
+      )}
+      {fps !== null && (
+        <span title="Render rate (measured from animation-frame deltas)">
+          <b className="text-txt-1 font-semibold">{fps}</b>fps
+        </span>
+      )}
+    </span>
+  );
 }
 
 // "low" severity uses --sev-low (≡ txt-1) so it doesn't collide with the
@@ -132,7 +303,7 @@ function ImageryToggle({
       aria-label="Toggle 3D satellite imagery and buildings"
       data-testid="imagery-toggle"
       className={[
-        'mono text-[10px] tracking-[0.5px] uppercase px-2 py-0.5 border rounded-sm transition-colors',
+        'mono text-[9px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
         on
           ? 'border-accent-line text-accent bg-accent-dim'
           : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
@@ -140,8 +311,8 @@ function ImageryToggle({
         .filter(Boolean)
         .join(' ')}
     >
-      <span aria-hidden="true">{on ? '●' : '🛰'}</span>
-      <span className="ml-1">3D sat</span>
+      <span aria-hidden="true" className="mr-1">{on ? '◆' : '◇'}</span>
+      3D sat
     </button>
   );
 }
@@ -155,6 +326,7 @@ function WsPill(): JSX.Element {
   const ws = useConnection((s) => s.ws);
   const label = wsLabel(ws);
   const cls = wsClass(ws);
+  const dot = wsDot(ws);
   const title =
     ws === 'open'
       ? 'WebSocket connection to /ws/alerts is live'
@@ -168,9 +340,10 @@ function WsPill(): JSX.Element {
       title={title}
       data-testid="ws-pill"
       data-ws={ws}
-      className={`mono text-[10px] tracking-[0.5px] uppercase px-2 py-0.5 border rounded-sm ${cls}`}
+      className={`mono text-[9px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm flex items-center gap-1.5 ${cls}`}
     >
-      <span aria-hidden="true" className="mr-1">·</span>WS · {label}
+      <StatusDot tone={dot} />
+      WS · {label}
     </span>
   );
 }
@@ -197,33 +370,50 @@ function wsClass(s: WsStatus): string {
   }
 }
 
+function wsDot(s: WsStatus): string {
+  switch (s) {
+    case 'open':
+      return 'ok';
+    case 'connecting':
+      return 'neutral';
+    case 'closed':
+      return 'alert';
+  }
+}
+
+/**
+ * Mockup .ticker: a 2px alert bar on the left edge, mono throughout. When an
+ * alert is live the key "ALERT" reads in alert-red and the message in the soft
+ * tint #ffc9c5; when the buffer is empty it shows "— quiet". Wiring unchanged:
+ * click (or press A) opens the alerts panel.
+ */
 function AlertTicker({ onOpen }: { onOpen?: () => void }): JSX.Element {
   const alerts = useAlerts((s) => s.alerts);
   const total = alerts.length;
   const top = alerts[0];
-  const label = (
-    <>
-      <span className="micro">alerts</span>
-      <span className="mono text-[10px] text-txt-3 tabular-nums">{total}</span>
-      {top ? (
-        <span className={`mono text-[11px] truncate ${SEV_COLOR[top.severity] ?? 'text-txt-1'}`}>
-          ▸ [{top.severity}] {top.message}
-        </span>
-      ) : (
-        <span className="ml-1 text-txt-2 mono text-[11px]">— quiet</span>
-      )}
-    </>
-  );
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex-1 flex items-center gap-2 truncate text-left hover:text-accent focus:outline-none"
+      className="relative w-full flex items-center gap-2 truncate text-left pl-3 focus:outline-none group"
       aria-live="polite"
       aria-label={total > 0 ? `Open alerts panel (${total} alerts)` : 'Open alerts panel'}
       title="Open alerts panel (press A)"
     >
-      {label}
+      <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-alert" aria-hidden="true" />
+      {top ? (
+        <>
+          <span className="mono text-[9px] tracking-[0.7px] uppercase text-alert shrink-0 group-hover:text-accent transition-colors">
+            alert
+          </span>
+          <span className="mono text-[9px] text-txt-4 tabular-nums shrink-0">{total}</span>
+          <span className={`mono text-[11px] truncate ${SEV_COLOR[top.severity] ?? 'text-[#ffc9c5]'}`}>
+            [{top.severity}] {top.message}
+          </span>
+        </>
+      ) : (
+        <span className="mono text-[11px] text-txt-3 group-hover:text-accent transition-colors">— quiet</span>
+      )}
     </button>
   );
 }

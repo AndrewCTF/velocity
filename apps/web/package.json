@@ -16,6 +16,7 @@
   "dependencies": {
     "@macrostrat/cesium-martini": "^1.6.0",
     "@osint/shared": "workspace:*",
+    "@supabase/supabase-js": "2.108.2",
     "cesium": "^1.123.0",
     "hls.js": "^1.6.16",
     "maplibre-gl": "^5.0.0",

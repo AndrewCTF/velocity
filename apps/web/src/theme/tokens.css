@@ -1,39 +1,48 @@
-/* Design tokens — frontend.md §3. Single source of truth. */
+/* Design tokens — "Cobalt/Ink" instrument palette. Single source of truth.
+   Variable NAMES are stable (Tailwind utilities + every component reference
+   them); only the VALUES shift to the cooler, denser console look. */
 :root {
-  /* substrate */
-  --bg-0: #0b0e14;
-  --bg-1: #0d1117;
-  --bg-2: #11161f;
-  --bg-3: #161c27;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-2: rgba(255, 255, 255, 0.15);
+  /* substrate — cool ink, faint blue, richer than neutral charcoal */
+  --bg-0: #080a0f;
+  --bg-1: #0c1017;
+  --bg-2: #121826;
+  --bg-3: #1a2130;
+  --bg-4: #232d40;
+  /* hairlines — cool-tinted, not pure white → more refined */
+  --line: rgba(150, 175, 210, 0.08);
+  --line-2: rgba(150, 175, 210, 0.17);
 
-  /* text */
-  --txt-0: #e6edf3;
-  --txt-1: #c9d4e0;
-  --txt-2: #8b98a8;
-  --txt-3: #5f6b7a;
-  --txt-4: #3a4452;
+  /* text — slightly cool */
+  --txt-0: #eef2f8;
+  --txt-1: #c3cee0;
+  --txt-2: #8493a8;
+  --txt-3: #566377;
+  --txt-4: #36404f;
 
-  /* accent (interactive/selection) */
-  --accent: #2dd4bf;
-  --accent-dim: rgba(45, 212, 191, 0.12);
-  --accent-line: rgba(45, 212, 191, 0.4);
+  /* accent — cobalt azure (interactive / selection-ui / AI) */
+  --accent: #4d8dff;
+  --accent-dim: rgba(77, 141, 255, 0.13);
+  --accent-line: rgba(77, 141, 255, 0.42);
 
   /* SEMANTIC — threat state ONLY */
-  --warn: #f59e0b;
-  --warn-bg: rgba(245, 158, 11, 0.1);
-  --alert: #ef4444;
-  --alert-bg: rgba(239, 68, 68, 0.12);
-  --ok: #34d399;
-  /* Low severity — kept distinct from the teal selection accent so a
+  --warn: #f5a524;
+  --warn-bg: rgba(245, 165, 36, 0.1);
+  --alert: #ff5a52;
+  --alert-bg: rgba(255, 90, 82, 0.11);
+  --ok: #36d399;
+  /* magenta — selection / correlation lineage (matches the globe selection
+     polyline family; distinct from the cobalt interactive accent). */
+  --mag: #e25bef;
+  --mag-dim: rgba(226, 91, 239, 0.12);
+  --mag-line: rgba(226, 91, 239, 0.5);
+  /* Low severity — kept distinct from the cobalt selection accent so a
      "low" alert badge doesn't read as "selected". Mirrors --txt-1. */
-  --sev-low: #c9d4e0;
+  --sev-low: #c3cee0;
 
-  /* radii */
-  --r-sm: 4px;
-  --r-md: 8px;
-  --r-lg: 12px;
+  /* radii — tighter, instrument-grade */
+  --r-sm: 3px;
+  --r-md: 5px;
+  --r-lg: 8px;
 
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-sans: 'Inter', system-ui, sans-serif;
@@ -47,8 +56,8 @@ body,
   background: var(--bg-0);
   color: var(--txt-0);
   font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums; /* numerics don't jitter */
 }

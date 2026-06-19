@@ -180,6 +180,10 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
   }
 
   function destroy(): void {
+    // Runs from Timeline's effect cleanup, which can fire after the viewer is
+    // already destroyed (HMR teardown / globe ErrorBoundary). A destroyed
+    // viewer disposes its data sources for us and throws on access — bail.
+    if (viewer.isDestroyed()) return;
     if (active) clear();
     viewer.dataSources.remove(ds, true);
   }

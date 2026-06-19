@@ -8,6 +8,16 @@ import { Sparkline } from './Sparkline.js';
 import { CameraCard } from './CameraCard.js';
 import type { Alert } from '@osint/shared';
 import { apiFetch } from '../transport/http.js';
+import {
+  SectionLabel,
+  Badge,
+  KV,
+  KVRow,
+  Btn,
+  Hero,
+  IconTile,
+  type BadgeTone,
+} from '../shell/instruments.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -34,6 +44,8 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
     setTrack(tracks.get(id ?? ''));
     if (!viewer || !id) return;
     const tick = () => {
+      // A destroyed viewer (HMR / globe ErrorBoundary) throws on .dataSources.
+      if (viewer.isDestroyed()) return;
       const e = findEntity(viewer, id);
       if (!e) return;
       const props = readProperties(e);
@@ -95,7 +107,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   if (!id) {
     return (
       <div className="p-4">
-        <h2 className="micro">Selection</h2>
+        <SectionLabel title="Selection" />
         <p className="mt-2 text-txt-3 text-[11px]">No entity selected. Click an object on the globe.</p>
       </div>
     );
@@ -103,21 +115,23 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
 
   return (
     <div className="p-3 space-y-3">
-      <h2 className="micro">Selection</h2>
+      <SectionLabel title="Selection" />
 
       <Header snap={snap} id={id} enrichment={enrichment} />
 
+      {snap && <StatsCard snap={snap} />}
+
       {snap?.position && viewer && (
-        <div className="flex gap-2">
-          <button
-            type="button"
+        <div className="flex flex-wrap gap-2">
+          <Btn
+            tone="accent"
+            size="sm"
             onClick={() => flyToPosition(viewer, snap.position!.lon, snap.position!.lat, 350_000, 1.0)}
-            className="mono text-[10px] px-2 py-1 border border-line rounded-sm hover:border-accent-line text-txt-1"
           >
-            slew to
-          </button>
-          <button
-            type="button"
+            → Slew
+          </Btn>
+          <Btn
+            size="sm"
             onClick={() => {
               if (following) {
                 stopFollow(viewer);
@@ -126,25 +140,18 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
                 setFollowing(followEntity(viewer, id));
               }
             }}
-            className={`mono text-[10px] px-2 py-1 border rounded-sm ${
-              following
-                ? 'border-accent-line text-accent'
-                : 'border-line hover:border-accent-line text-txt-1'
-            }`}
+            className={following ? 'border-accent-line text-accent' : ''}
           >
-            {following ? '◼ following' : '▶ follow'}
-          </button>
-          <button
-            type="button"
+            {following ? '◼ Following' : '⌖ Follow'}
+          </Btn>
+          <Btn
+            size="sm"
             onClick={() => navigator.clipboard?.writeText(`${snap.position!.lat.toFixed(5)},${snap.position!.lon.toFixed(5)}`)}
-            className="mono text-[10px] px-2 py-1 border border-line rounded-sm hover:border-accent-line text-txt-1"
           >
-            copy lat,lon
-          </button>
+            Copy lat,lon
+          </Btn>
         </div>
       )}
-
-      {snap?.position && <PositionCard pos={snap.position} />}
 
       {snap?.kind === 'camera' && typeof snap.properties['cam_id'] === 'string' && (
         <CameraCard
@@ -164,9 +171,58 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
         <PropertiesCard properties={snap.properties} />
       )}
 
-      <CorrelationCard entityId={id} viewer={viewer ?? null} />
+      <CorrelationCard
+        entityId={id}
+        viewer={viewer ?? null}
+        {...(snap?.position ? { entityPos: snap.position } : {})}
+        {...(viewer
+          ? {
+              onFollow: () => {
+                if (following) {
+                  stopFollow(viewer);
+                  setFollowing(false);
+                } else {
+                  setFollowing(followEntity(viewer, id));
+                }
+              },
+              following,
+            }
+          : {})}
+      />
     </div>
   );
+}
+
+// ── entity kind → category glyph + threat colour ────────────────────────────
+// ◆ for dark/unknown, ✈ aircraft, ⛴ vessel. A dark-vessel candidate (the live
+// `darkCandidate` flag the SAR layer sets) flips the tile to alert red.
+function isDark(snap: PanelSnapshot | null): boolean {
+  return snap?.properties?.['darkCandidate'] === true;
+}
+function glyphFor(snap: PanelSnapshot | null): string {
+  if (isDark(snap)) return '◆';
+  switch (snap?.kind) {
+    case 'aircraft':
+      return '✈';
+    case 'vessel':
+      return '⛴';
+    default:
+      return '◆';
+  }
+}
+function kindBadgeTone(kind: string | undefined): BadgeTone {
+  switch (kind) {
+    case 'aircraft':
+      return 'accent';
+    case 'vessel':
+      return 'ok';
+    case 'quake':
+      return 'warn';
+    case 'camera':
+      return 'mag';
+    default:
+      return 'neutral';
+  }
 }
 
 // ── subcomponents ───────────────────────────────────────────────────────
@@ -185,38 +241,86 @@ function Header({
     (enrichment?.kind === 'vessel' && (enrichment as { name?: string }).name) ||
     snap?.name ||
     id;
-  const subtitle =
-    (enrichment?.kind === 'aircraft' && [
-      (enrichment as { operator?: string }).operator,
-      (enrichment as { type?: string }).type,
-    ]
-      .filter(Boolean)
-      .join(' · ')) ||
-    (enrichment?.kind === 'vessel' && (enrichment as { flag?: string }).flag) ||
-    snap?.kind;
+  // ID line built from the REAL properties we already read: prefer a
+  // domain identifier (MMSI / ICAO24), then flag, then last-seen.
+  const p = snap?.properties ?? {};
+  const idParts: string[] = [];
+  if (typeof p['mmsi'] === 'string' || typeof p['mmsi'] === 'number') idParts.push(`MMSI ${p['mmsi']}`);
+  if (typeof p['icao24'] === 'string') idParts.push((p['icao24'] as string).toUpperCase());
+  const flag =
+    (enrichment?.kind === 'vessel' && (enrichment as { flag?: string; flag_country?: string }).flag) ||
+    (enrichment?.kind === 'vessel' && (enrichment as { flag_country?: string }).flag_country) ||
+    (typeof p['flag'] === 'string' ? (p['flag'] as string) : null);
+  if (flag) idParts.push(String(flag));
+  if (typeof p['last_seen'] === 'string') idParts.push(`seen ${shortTime(p['last_seen'] as string)}`);
+  if (idParts.length === 0) idParts.push(id);
+
+  const dark = isDark(snap);
+  const operator =
+    (enrichment?.kind === 'aircraft' &&
+      [
+        (enrichment as { operator?: string }).operator,
+        (enrichment as { type?: string }).type,
+      ]
+        .filter(Boolean)
+        .join(' · ')) ||
+    null;
+  const tileColor = dark ? 'var(--alert)' : 'var(--txt-1)';
+
   return (
-    <header>
-      <div className="mono text-[14px] text-txt-0 truncate" title={String(display)}>{display}</div>
-      {subtitle && <div className="micro mt-0.5">{subtitle}</div>}
-      <div className="micro mt-0.5 text-txt-3">id: <span className="mono">{id}</span></div>
+    <header className="flex items-start gap-2.5">
+      <IconTile color={tileColor}>{glyphFor(snap)}</IconTile>
+      <div className="min-w-0 flex-1">
+        <div className="text-[14px] font-medium text-txt-0 truncate" title={String(display)}>
+          {display}
+        </div>
+        <div className="mono text-[9.5px] text-txt-2 mt-0.5 truncate" title={idParts.join(' · ')}>
+          {idParts.join(' · ')}
+        </div>
+        {operator && <div className="mono text-[9.5px] text-txt-3 mt-0.5 truncate">{operator}</div>}
+      </div>
+      {dark ? (
+        <Badge tone="alert">dark candidate</Badge>
+      ) : snap?.kind ? (
+        <Badge tone={kindBadgeTone(snap.kind)}>{snap.kind}</Badge>
+      ) : null}
     </header>
   );
 }
 
-function PositionCard({ pos }: { pos: { lon: number; lat: number; alt: number } }): JSX.Element {
-  return (
-    <section>
-      <h3 className="micro">Position</h3>
-      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
-        <dt className="text-txt-3">lat</dt>
-        <dd className="mono text-right">{pos.lat.toFixed(5)}°</dd>
-        <dt className="text-txt-3">lon</dt>
-        <dd className="mono text-right">{pos.lon.toFixed(5)}°</dd>
-        <dt className="text-txt-3">alt (m)</dt>
-        <dd className="mono text-right">{Math.round(pos.alt).toLocaleString()}</dd>
-      </dl>
-    </section>
-  );
+function shortTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.toISOString().slice(11, 19)}Z`;
+}
+
+// ── KV stats (mockup .kv) — only the real fields the snapshot surfaces ───────
+function StatsCard({ snap }: { snap: PanelSnapshot }): JSX.Element | null {
+  const p = snap.properties;
+  const num = (k: string): number | null => {
+    const v = p[k];
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  };
+  const isVessel = snap.kind === 'vessel';
+  const speed = isVessel ? num('sog') : num('sog') ?? num('velocity') ?? num('speed');
+  const course = isVessel ? num('cog') ?? num('heading') : num('track_deg') ?? num('heading');
+  const speedUnit = isVessel ? 'kn' : 'm/s';
+  const courseLabel = isVessel ? 'COG' : 'Course';
+  const speedLabel = isVessel ? 'SOG' : 'Speed';
+
+  const rows: JSX.Element[] = [];
+  if (snap.kind) rows.push(<KVRow key="type" k="Type" v={snap.kind} />);
+  if (speed !== null) rows.push(<KVRow key="spd" k={speedLabel} v={`${speed.toFixed(1)} ${speedUnit}`} />);
+  if (course !== null) rows.push(<KVRow key="crs" k={courseLabel} v={`${course.toFixed(0)}°`} />);
+  if (snap.position) {
+    rows.push(<KVRow key="lat" k="Lat" v={`${snap.position.lat.toFixed(5)}°`} />);
+    rows.push(<KVRow key="lon" k="Lon" v={`${snap.position.lon.toFixed(5)}°`} />);
+    if (snap.kind === 'aircraft' && Number.isFinite(snap.position.alt)) {
+      rows.push(<KVRow key="alt" k="Alt (m)" v={Math.round(snap.position.alt).toLocaleString()} />);
+    }
+  }
+  if (rows.length === 0) return null;
+  return <KV>{rows}</KV>;
 }
 
 function TrackCard({
@@ -228,8 +332,8 @@ function TrackCard({
 }): JSX.Element {
   return (
     <section>
-      <h3 className="micro">Track ({points.length} fixes)</h3>
-      <div className="mt-1 space-y-1">
+      <SectionLabel title="Track" count={`${points.length} fixes`} />
+      <div className="mt-1.5 space-y-1.5">
         {kind === 'aircraft' && <Sparkline points={points} field="alt" label="alt" unit="m" />}
         {(kind === 'aircraft' || kind === 'vessel') && (
           <Sparkline points={points} field="sog" label={kind === 'aircraft' ? 'velocity m/s' : 'sog kn'} />
@@ -263,9 +367,9 @@ function EntityPhotoCard({
   const link = e.photo_link || null;
   return (
     <section>
-      <h3 className="micro">Photo</h3>
+      <SectionLabel title="Photo" />
       {thumb && (
-        <div className="mt-1">
+        <div className="mt-1.5">
           <img
             src={thumb}
             alt="entity reference"
@@ -307,8 +411,8 @@ function EnrichmentCard({
   if (loading) {
     return (
       <section>
-        <h3 className="micro">Enrichment</h3>
-        <p className="micro">resolving…</p>
+        <SectionLabel title="Enrichment" />
+        <p className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">resolving…</p>
       </section>
     );
   }
@@ -335,8 +439,13 @@ function EnrichmentCard({
   const wikidata = (enrichment as { wikidata_url?: string }).wikidata_url;
   return (
     <section>
-      <h3 className="micro">Enrichment{enrichment.source ? ` · ${enrichment.source}` : ''}</h3>
-      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
+      <SectionLabel
+        title="Enrichment"
+        {...(typeof enrichment.source === 'string' && enrichment.source
+          ? { count: enrichment.source }
+          : {})}
+      />
+      <KV className="mt-1.5">
         {Object.entries(enrichment)
           .filter(([k]) => !specialKeys.has(k))
           .filter(([, v]) => v !== null && v !== undefined && v !== '')
@@ -344,9 +453,9 @@ function EnrichmentCard({
           .map(([k, v]) => (
             <PropRow key={k} k={k} v={v} />
           ))}
-      </dl>
-      {note && <p className="micro mt-1 text-txt-3">{note}</p>}
-      <div className="flex flex-wrap gap-2 mt-1">
+      </KV>
+      {note && <p className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">{note}</p>}
+      <div className="flex flex-wrap gap-2 mt-1.5">
         {wikidata && (
           <a
             href={wikidata}
@@ -375,15 +484,15 @@ function EnrichmentCard({
 function PropertiesCard({ properties }: { properties: Record<string, unknown> }): JSX.Element {
   return (
     <section>
-      <h3 className="micro">Live properties</h3>
-      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
+      <SectionLabel title="Live properties" />
+      <KV className="mt-1.5">
         {Object.entries(properties)
           .filter(([, v]) => v !== null && v !== undefined && v !== '')
           .slice(0, 16)
           .map(([k, v]) => (
             <PropRow key={k} k={k} v={v} />
           ))}
-      </dl>
+      </KV>
     </section>
   );
 }
@@ -396,9 +505,15 @@ interface CorrelationsResponse {
 function CorrelationCard({
   entityId,
   viewer,
+  entityPos,
+  onFollow,
+  following = false,
 }: {
   entityId: string | null;
   viewer?: Cesium.Viewer | null;
+  entityPos?: { lon: number; lat: number; alt: number };
+  onFollow?: () => void;
+  following?: boolean;
 }): JSX.Element {
   const liveAlerts = useAlerts((s) => s.alerts);
   const [history, setHistory] = useState<Alert[]>([]);
@@ -432,53 +547,93 @@ function CorrelationCard({
   if (!entityId) {
     return (
       <section>
-        <h3 className="micro">Correlations</h3>
-        <p className="text-[11px] text-txt-3">no entity selected</p>
+        <SectionLabel title="Correlations" />
+        <p className="text-[11px] text-txt-3 mt-1.5">no entity selected</p>
       </section>
     );
   }
   if (matches.length === 0) {
     return (
       <section>
-        <h3 className="micro">Correlations</h3>
-        <p className="text-[11px] text-txt-3">no correlations in window</p>
+        <SectionLabel title="Correlations" />
+        <p className="text-[11px] text-txt-3 mt-1.5">no correlations in window</p>
       </section>
     );
   }
+
+  // Top (newest) match drives the threat hero. Severity sets the tone; only
+  // real Alert fields (message / severity / confidence / ruleId) are shown —
+  // no fabricated AIS-gap / SAR-offset numbers.
+  const top = matches[0]!;
+  const heroTone: 'alert' | 'warn' =
+    top.severity === 'critical' || top.severity === 'high' ? 'alert' : 'warn';
+
   return (
-    <section>
-      <h3 className="micro">Correlations</h3>
-      <ul className="mt-1 space-y-1">
-        {matches.map((a) => (
-          <li key={a.id} className="border border-line rounded-sm p-2 bg-bg-2/60">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className={`micro ${sevClass(a.severity)}`}>{a.severity}</span>
-              <span className="mono micro tabular-nums">{a.ruleId}</span>
-            </div>
-            <p className="text-[11px] text-txt-1 leading-tight mt-1">{a.message}</p>
-            <div className="flex gap-2 mt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  if (viewer && a.geom?.type === 'Point') {
-                    const [lon, lat] = a.geom.coordinates as [number, number];
-                    flyToPosition(viewer, lon, lat, 200_000, 1.0);
-                  }
-                }}
-                className="mono text-[10px] px-1.5 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1"
-              >
-                slew to
-              </button>
-              <span className="mono micro tabular-nums text-txt-3">
-                {new Date(a.t).toISOString().slice(11, 19)}Z
-              </span>
-              <span className="mono micro tabular-nums text-txt-3">
-                conf {(a.confidence * 100).toFixed(0)}%
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
+    <section className="space-y-2">
+      <Hero tone={heroTone} title="⚠ Correlation">
+        <p className="text-[11px] text-txt-1 leading-snug mb-2">{top.message}</p>
+        <div className="flex items-center gap-2 mb-2">
+          <span className={`mono text-[9px] tracking-[0.5px] uppercase ${sevClass(top.severity)}`}>
+            {top.severity}
+          </span>
+          <span className="mono text-[9px] text-txt-3 tabular-nums">{top.ruleId}</span>
+          <span className="mono text-[9px] text-txt-3 tabular-nums">
+            conf {(top.confidence * 100).toFixed(0)}%
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {viewer && entityPos && (
+            <Btn
+              tone="accent"
+              size="sm"
+              onClick={() => flyToPosition(viewer, entityPos.lon, entityPos.lat, 200_000, 1.0)}
+            >
+              → Slew
+            </Btn>
+          )}
+          {onFollow && (
+            <Btn size="sm" onClick={onFollow} className={following ? 'border-accent-line text-accent' : ''}>
+              {following ? '◼ Following' : '⌖ Follow'}
+            </Btn>
+          )}
+        </div>
+      </Hero>
+
+      <div>
+        <SectionLabel title="Correlations" count={matches.length} />
+        <ul className="mt-1.5 space-y-1.5">
+          {matches.map((a) => (
+            <li key={a.id} className="border border-line rounded-sm p-2 bg-bg-2/60">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className={`mono text-[9px] tracking-[0.5px] uppercase ${sevClass(a.severity)}`}>
+                  {a.severity}
+                </span>
+                <span className="mono text-[9px] text-txt-3 tabular-nums">{a.ruleId}</span>
+              </div>
+              <p className="text-[11px] text-txt-1 leading-tight mt-1">{a.message}</p>
+              <div className="flex items-center gap-2 mt-1.5">
+                <Btn
+                  size="sm"
+                  onClick={() => {
+                    if (viewer && a.geom?.type === 'Point') {
+                      const [lon, lat] = a.geom.coordinates as [number, number];
+                      flyToPosition(viewer, lon, lat, 200_000, 1.0);
+                    }
+                  }}
+                >
+                  → Slew
+                </Btn>
+                <span className="mono text-[9px] tabular-nums text-txt-3">
+                  {new Date(a.t).toISOString().slice(11, 19)}Z
+                </span>
+                <span className="mono text-[9px] tabular-nums text-txt-3">
+                  conf {(a.confidence * 100).toFixed(0)}%
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }
@@ -499,12 +654,7 @@ function sevClass(s: string): string {
 }
 
 function PropRow({ k, v }: { k: string; v: unknown }): JSX.Element {
-  return (
-    <>
-      <dt className="text-txt-3">{k}</dt>
-      <dd className="mono text-right truncate">{format(v)}</dd>
-    </>
-  );
+  return <KVRow k={k} v={<span className="truncate inline-block max-w-full align-bottom">{format(v)}</span>} />;
 }
 
 function format(v: unknown): string {

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useFeeds, type FeedHealth, type FeedStatus } from '../state/stores.js';
+import { SectionLabel, StatusDot, Badge, type BadgeTone } from '../shell/instruments.js';
 
 // Feeds rail tab — grouped feed-health dashboard.
 // Reads useFeeds, groups entries by their upstream source (the layer-id prefix
@@ -7,18 +8,19 @@ import { useFeeds, type FeedHealth, type FeedStatus } from '../state/stores.js';
 // shows per-source counts, the worst status in the group, and per-feed
 // status/last-seen details.
 
-const STATUS_DOT: Record<FeedStatus, string> = {
-  green: 'bg-ok',
-  amber: 'bg-warn',
-  red: 'bg-alert',
-  unknown: 'bg-txt-4',
-};
-
 const STATUS_RANK: Record<FeedStatus, number> = {
   red: 3,
   amber: 2,
   unknown: 1,
   green: 0,
+};
+
+// Map a feed status to the StatusDot tone + summary-badge tone vocabulary.
+const STATUS_TONE: Record<FeedStatus, BadgeTone> = {
+  green: 'ok',
+  amber: 'warn',
+  red: 'alert',
+  unknown: 'neutral',
 };
 
 function upstreamOf(id: string): string {
@@ -71,69 +73,85 @@ export function FeedsPanel(): JSX.Element {
   }, [feedsMap]);
 
   return (
-    <div className="p-3 space-y-3">
-      <header className="flex items-baseline justify-between">
-        <h2 className="micro">Feeds</h2>
-        <span className="micro text-txt-3">{total} tracked</span>
-      </header>
+    <div className="px-3 py-2">
+      <SectionLabel title="Feeds" count={`${total} tracked`} />
 
-      <div className="flex flex-wrap gap-2 text-[11px]">
-        <StatusBadge label="green" count={byStatus.green} status="green" />
-        <StatusBadge label="amber" count={byStatus.amber} status="amber" />
-        <StatusBadge label="red" count={byStatus.red} status="red" />
-        <StatusBadge label="unknown" count={byStatus.unknown} status="unknown" />
+      {/* Status tally — one badge per state, mono counts */}
+      <div className="flex flex-wrap gap-1.5 mt-2.5">
+        <StatusTally label="green" count={byStatus.green} status="green" />
+        <StatusTally label="amber" count={byStatus.amber} status="amber" />
+        <StatusTally label="red" count={byStatus.red} status="red" />
+        <StatusTally label="unknown" count={byStatus.unknown} status="unknown" />
       </div>
 
       {total === 0 ? (
-        <p className="micro normal-case tracking-normal text-txt-3">
+        <p className="mono text-[10.5px] text-txt-3 leading-snug mt-3">
           No feed health reported yet. Adapters publish status as they connect.
         </p>
       ) : (
-        <ul className="space-y-3">
+        <div className="mt-3 flex flex-col gap-3">
           {groups.map(([source, list]) => {
             const worst = worstStatus(list);
             return (
-              <li key={source}>
-                <div className="flex items-center justify-between border-b border-line pb-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[worst]}`} />
-                    <span className="mono text-[12px] text-txt-0 truncate" title={source}>{source}</span>
-                  </div>
-                  <span className="micro tabular-nums">{list.length}</span>
+              <section key={source}>
+                <div className="flex items-center gap-2 pb-1 border-b border-line">
+                  <StatusDot tone={worst} />
+                  <span className="mono text-[11.5px] text-txt-0 truncate flex-1" title={source}>
+                    {source}
+                  </span>
+                  <span className="mono text-[9px] text-txt-3 tabular-nums">{list.length}</span>
                 </div>
-                <ul className="mt-1 space-y-1">
+                <ul className="mt-0.5">
                   {list.map((f) => (
-                    <li key={f.id} className="border-l border-line pl-2 py-0.5">
-                      <div className="flex items-center gap-2 text-[11px]">
-                        <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[f.status]}`} />
-                        <span className="text-txt-1 flex-1 truncate" title={f.label}>{f.label}</span>
-                        <span className="mono micro tabular-nums text-txt-3" title={f.lastSeen ? new Date(f.lastSeen).toISOString() : 'no last-seen'}>
+                    <li
+                      key={f.id}
+                      className="border-b border-[rgba(255,255,255,0.035)] last:border-b-0 py-[5px]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <StatusDot tone={f.status} />
+                        <span className="text-[11px] text-txt-1 flex-1 truncate" title={f.label}>
+                          {f.label}
+                        </span>
+                        <span
+                          className="mono text-[9px] tabular-nums text-txt-3 shrink-0"
+                          title={f.lastSeen ? new Date(f.lastSeen).toISOString() : 'no last-seen'}
+                        >
                           {formatLastSeen(f.lastSeen)}
                         </span>
                       </div>
                       {f.note && (
-                        <div className="pl-3.5 micro normal-case tracking-normal text-txt-3 leading-snug">
+                        <div className="mono text-[9.5px] text-txt-3 leading-snug pl-[14px] mt-0.5">
                           {f.note}
                         </div>
                       )}
                     </li>
                   ))}
                 </ul>
-              </li>
+              </section>
             );
           })}
-        </ul>
+        </div>
       )}
     </div>
   );
 }
 
-function StatusBadge({ label, count, status }: { label: string; count: number; status: FeedStatus }): JSX.Element {
+function StatusTally({
+  label,
+  count,
+  status,
+}: {
+  label: string;
+  count: number;
+  status: FeedStatus;
+}): JSX.Element {
   return (
-    <span className="inline-flex items-center gap-1 mono text-[10px] px-1.5 py-0.5 border border-line rounded-sm">
-      <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[status]}`} />
-      <span className="text-txt-2">{label}</span>
-      <span className="tabular-nums text-txt-1">{count}</span>
-    </span>
+    <Badge tone={STATUS_TONE[status]}>
+      <span className="inline-flex items-center gap-1">
+        <StatusDot tone={status} />
+        {label}
+        <span className="tabular-nums">{count}</span>
+      </span>
+    </Badge>
   );
 }
