@@ -1,39 +1,24 @@
 # Velocity
 
-**An all-source intelligence globe** — <https://projectvelocity.org>
+A 3D globe that pulls a stack of open intelligence feeds into one place — live
+aircraft, ships, satellites, GPS jamming, dark vessels, earthquakes, internet
+outages, conflict events, news — and correlates them on the server instead of
+leaving you to eyeball six tabs. It also runs as an MCP server, so an AI agent
+can ask it for live data instead of guessing from its training cut-off.
 
-A single-analyst, defence-grade open-source intelligence platform: a 3D/4D Cesium globe over **58 free/open upstream feeds** (measured — see `/api/intel/sources`), with a server-side fusion engine that correlates them across domains — AIS+SAR for dark vessels, ADS-B NACp clusters for GPS jamming, IODA/Cloudflare for internet outages — into single cross-domain incidents.
+**[Live demo](https://projectvelocity.org)** · [Quick start](#quick-start) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server--query-the-live-console-from-an-ai-agent)
 
-> **Phase-1 state is ephemeral.** Observations, incidents, and AOIs live
-> in-process; a backend restart clears them. Durable history (Postgres + PostGIS
-> + TimescaleDB) is Phase 2 — don't treat this as a system of record yet.
+[![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
+[![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen.svg)](#tests)
+[![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
-It is also a **Model Context Protocol** server: an AI agent can query the same live feeds (aircraft, vessels, GPS jamming, fused anomalies) as distilled JSON — see the [MCP section](#mcp-server--query-the-live-console-from-an-ai-agent) below.
+<p align="center">
+  <img src="docs/img/tour.gif" alt="Velocity — overview, zoom, and clicking an aircraft" width="880">
+</p>
 
-See [`docs/frontend.md`](./docs/frontend.md), [`docs/research.md`](./docs/research.md), and [`docs/research_updated.md`](./docs/research_updated.md) for the full specs, [`docs/adsb-aircraft-pipeline.md`](./docs/adsb-aircraft-pipeline.md) for how the ~13 k-aircraft global feed is sourced and merged, and [`docs/mcp-server.md`](./docs/mcp-server.md) for the agent-facing MCP + intel API.
-
-## Stack
-
-- **Frontend**: Vite + React 18 + TypeScript + CesiumJS + MapLibre GL JS v5.24 + Tailwind + Zustand
-- **Backend**: FastAPI (Python 3.12) + httpx + websockets — all Phase 1 state is in-process (bounded observation store + disk tile cache)
-- **Agent access**: Model Context Protocol server (`app.mcp_server`, MCP SDK) + optional local Ollama analysis
-- **Data (Phase 2, planned)**: PostgreSQL 16 + PostGIS + TimescaleDB hypertables + Redis — the observation store migrates per plan §locked-decisions #5
-- **Infra**: Docker Compose, nginx reverse proxy
-
-## Layout
-
-```
-osint/
-├── apps/web/                 # React + Cesium console
-├── apps/api/                 # FastAPI backend
-│   └── app/
-│       ├── intel/            # agent-facing analytics (classification, AOI, density, jamming)
-│       ├── routes/intel.py   # /api/intel/* deep-query JSON API
-│       └── mcp_server.py     # Model Context Protocol server (11 tools)
-├── packages/shared/          # Shared TS types (LayerDescriptor, Observation)
-├── docs/                     # adsb-aircraft-pipeline.md, mcp-server.md
-└── infra/                    # Docker, nginx, db init
-```
+> **Before you get excited:** it's a single-analyst tool, state lives in memory
+> (restart = gone), AIS coverage is mostly Northern Europe, and the 3D satellite
+> mode is a VRAM hog. Full caveats in [What it is, and what it isn't](#what-it-is-and-what-it-isnt).
 
 ## Quick start
 
@@ -43,9 +28,11 @@ pnpm install
 docker compose up          # boots api, web, nginx on :8080
 ```
 
-Open <http://localhost:8080>.
+Open <http://localhost:8080>. No API keys required — it comes up with live
+aircraft, vessels, quakes and the rest straight away.
 
-### Local dev without docker
+<details>
+<summary><b>Local dev without Docker</b></summary>
 
 ```bash
 make install                                      # pnpm install + api venv
@@ -53,9 +40,169 @@ cd apps/api && .venv/bin/uvicorn app.main:app     # backend on :8000
 pnpm dev                                          # vite on :5173, proxies /api → localhost:8000
 ```
 
-Set `VITE_API_URL` if the backend is anywhere other than `http://localhost:8000`.
-If you set `API_KEY` on the backend, build/serve the web app with a matching
-`VITE_API_KEY` — the bundle attaches it as `X-API-Key` on every call.
+Set `VITE_API_URL` if the backend isn't on `http://localhost:8000`. If you set
+`API_KEY` on the backend, build the web app with a matching `VITE_API_KEY` — it
+rides along as `X-API-Key` on every call.
+</details>
+
+## Take the tour
+
+**1 — The whole planet, live.** Thousands of aircraft plus vessels, satellites,
+quakes and more on one Cesium globe. Every aircraft and ship renders as its
+category icon, coloured and rotated to heading — never a bare dot.
+
+![Global view of the Velocity globe with live air traffic](docs/img/globe.png)
+
+**2 — Zoom anywhere.** Drag into a region and traffic, labels and coastlines
+fill in. Here's Europe and the Med — a few thousand aircraft at a glance, plus
+the layer rail on the left (toggle aircraft, vessels, jamming, quakes, …) and
+the timeline along the bottom.
+
+![Europe and the Mediterranean, dense live air traffic](docs/img/europe.png)
+
+**3 — Click anything.** Select an aircraft or vessel and the panel on the right
+fills with its dossier — position, a track-history sparkline, GPS integrity,
+and the raw fields — while a magenta line traces its recent track on the globe.
+Click empty space and it clears.
+
+![Selected aircraft with dossier panel and magenta track](docs/img/entity-panel.png)
+
+## What it is, and what it isn't
+
+The point is fusion. Plenty of sites already do one feed well — Flightradar24
+for planes, MarineTraffic for ships, [GPSJam](https://gpsjam.org) for jamming.
+Velocity goes after the seam between them: AIS plus radar imagery flags a ship
+that's switched its transponder off; a cluster of aircraft reporting bad GPS
+integrity becomes a jamming hotspot; when two or more of those line up in the
+same place and time, they get promoted to a single incident with a written,
+cited summary.
+
+A few things worth knowing up front, because I'd rather you read them here than
+be annoyed later:
+
+- It's built for one analyst, not a team — one optional API key, no accounts or
+  roles.
+- State lives in memory. Restart the backend and the incident and AOI history is
+  gone; durable storage (Postgres + PostGIS + TimescaleDB) is Phase 2.
+- AIS vessel coverage is mostly Northern Europe and the Baltic unless you bring
+  an AISStream key. Somewhere like the Strait of Hormuz has no live AIS here —
+  just the radar (SAR) layer.
+- The 3D satellite view will eat your VRAM. The default 2D dark map runs on a
+  laptop; check [System requirements](#system-requirements) before switching the
+  heavy mode on.
+
+None of it needs an API key to start. Keys only add reach.
+
+## What it pulls in
+
+Rough live numbers off a running backend — they move around through the day:
+
+| Feed | Typical live count | Where it comes from |
+| --- | --- | --- |
+| Aircraft (ADS-B) | 9–13k | OpenSky + airplanes.live |
+| Military aircraft | ~140 | adsb.lol |
+| Vessels (AIS) | ~4.7k, mostly N. Europe | Digitraffic + Kystverket |
+| GPS jamming | ~200 flagged 1° cells | ADS-B NACp/NIC — the GPSJam method |
+| Dark vessels | radar change-detection | Sentinel-1 SAR |
+| Fused incidents | ~25 | the correlation engine |
+| Satellites | 15.7k | CelesTrak |
+| Earthquakes | ~250/day | USGS + EMSC |
+| News + fact-check | ~260 articles | publisher RSS |
+| Internet outages | country level | IODA, Cloudflare |
+| Submarine cables | 714 | TeleGeography |
+| Conflict events | varies | GDELT, EONET, ACLED |
+| Wildfires | VIIRS hotspots | NASA FIRMS (needs a key) |
+| 3D war damage, imagery, webcams | — | Sentinel, GIBS, OSM |
+
+Optional keys, if you want more reach: AISStream for global AIS, an OpenSky
+login for a bigger ADS-B budget, `FIRMS_MAP_KEY` for fires, an ACLED key for
+conflict events, `CLOUDFLARE_TOKEN` for outages. `GET /api/intel/sources`
+reports what's actually live versus what's still waiting on a key.
+
+## MCP server — query the live console from an AI agent
+
+The part I think is genuinely new: the backend doubles as a **Model Context
+Protocol** server, so an AI agent can interrogate the same warm feeds the globe
+renders without scraping a dozen sites or flooding its own context. Ask "where
+is GPS being jammed right now?" and it answers from the live feed. Full
+architecture + `/api/intel/*` HTTP reference: [`docs/mcp-server.md`](./docs/mcp-server.md).
+It exposes 22 tools over `app.mcp_server` (a representative slice below; run
+`--list-tools` for the full set):
+
+| Tool | What it returns |
+| --- | --- |
+| `get_situation` | Global summary — aircraft by category, GNSS-degraded count, emergencies, worst jamming cells, vessel/alert counts. The cheap first call. |
+| `focus_area(lat,lon,radius_nm)` | **Loads a region PRIMARY** (dedicated fresh `/v2/point` fetch + ongoing priority refresh, independent of global rate limits) and returns a full bundle: aircraft + density + GPS jamming + vessels + fused anomalies. |
+| `aircraft_density` | Grid of cells (count, by category, GNSS-degraded) for an area. |
+| `gps_jamming` | GPSJam-method assessment (ADS-B NACp<8 / NIC<7, 1° bins) — flagged cells, severity, affected aircraft. Global or scoped. |
+| `query_aircraft` | Filtered query (bbox/centre, category, squawk, callsign, altitude band, emergency / gnss_degraded / on_ground). |
+| `lookup_aircraft(ident)` | One aircraft by ICAO24 or callsign + integrity/threat assessment. |
+| `query_vessels` | AIS vessels in an area, classified; `dark_only` for dark-vessel candidates. |
+| `anomalies` | Fused report: emergencies, jamming hotspots, dark vessels, alerts + a triage threat level. |
+| `list_focus_areas` / `data_sources` | Active priority AOIs / feed health. |
+| `deep_analyze(question, lat?, lon?)` | Gathers the relevant intel JSON and has a **reasoning model** reason over it — DeepSeek when configured, else a local Ollama model — so heavy analysis stays off the agent's context and only the conclusion returns. |
+
+Every tool returns compact, bounded JSON (counts, grids, ≤50-item samples) — an
+agent can sweep the planet for a few hundred tokens instead of pulling 15k
+features. Area-primary loading means the agent's region of interest stays fresh
+and dense even while the global firehose is being rate-limited; the rest of the
+world keeps streaming from the sticky snapshot.
+
+### Hosted — point your agent at the live endpoint
+
+On the hosted platform the MCP server is mounted into the backend at `/mcp`
+(streamable-HTTP), so there's nothing to install or run. Register it with any
+MCP client using your Velocity access token:
+
+```bash
+claude mcp add --transport http osint-geoint \
+  https://projectvelocity.org/mcp \
+  --header "Authorization: Bearer $VELOCITY_TOKEN"
+```
+
+`$VELOCITY_TOKEN` is your signed-in Velocity (Supabase) access token — the
+gateway Worker verifies it and the backend re-checks it, so the endpoint is
+gated to your session.
+
+### Self-host / develop
+
+```bash
+# 1. backend must be running (provides the warm feeds)
+uv run --project apps/api uvicorn app.main:app --port 8000
+
+# 2a. MCP server over stdio (Claude Code / Desktop / Agent SDK) — cross-platform
+uv run --project apps/api python -m app.mcp_server
+# 2b. or streamable-HTTP
+uv run --project apps/api python -m app.mcp_server --http --port 8765
+# introspect (no backend needed)
+uv run --project apps/api python -m app.mcp_server --list-tools
+```
+
+To register the local stdio server with Claude Code, run from the repo root:
+
+```bash
+claude mcp add osint-geoint -- uv run --project apps/api python -m app.mcp_server
+```
+
+`uv run` resolves the right interpreter on Linux, macOS, and Windows without
+hardcoding a venv path. No `uv`? Point it at the venv Python directly —
+`apps/api/.venv/bin/python -m app.mcp_server` (Linux/macOS) or
+`apps\api\.venv\Scripts\python.exe -m app.mcp_server` (Windows), run from
+`apps/api`.
+
+Config (env or `apps/api/.env`): `API_BASE`, `API_KEY`, `OLLAMA_HOST`,
+`OLLAMA_MODEL` (empty → smallest installed model auto-picked; `deep_analyze`
+degrades to returning raw JSON if Ollama is absent). The MCP server never
+crashes a tool call: backend down → structured `backend_unreachable` error;
+Ollama down → analysis falls back to raw intel JSON.
+
+## Export
+
+`GET /api/export?fmt=geojson|csv|kml&kinds=aircraft,vessels&bbox=min_lon,min_lat,max_lon,max_lat&limit=N`
+downloads the current live picture (the same snapshot the globe renders) as
+**GeoJSON** (QGIS / kepler.gl / Leaflet), **CSV** (spreadsheets), or **KML**
+(Google Earth). `bbox` clips to a viewport; `kinds` is comma-separated (default
+`aircraft`); `limit` caps features; vessels are best-effort.
 
 ## System requirements
 
@@ -90,25 +237,28 @@ lot of VRAM, and a low-VRAM "minimum" only applies to 2D-dark.
 **Backend (server):** Python 3.12, ~1 GB RAM, outbound HTTPS — runs on a small
 VPS or the same box; not the bottleneck.
 
-## What you get with zero keys
+## Stack
 
-Every key is optional; the app boots and is useful with none. Keys only *add* reach:
+- **Frontend**: Vite + React 18 + TypeScript + CesiumJS + MapLibre GL JS v5.24 + Tailwind + Zustand
+- **Backend**: FastAPI (Python 3.12) + httpx + websockets — all Phase 1 state is in-process (bounded observation store + disk tile cache)
+- **Agent access**: Model Context Protocol server (`app.mcp_server`, MCP SDK) + optional local Ollama analysis
+- **Data (Phase 2, planned)**: PostgreSQL 16 + PostGIS + TimescaleDB hypertables + Redis — the observation store migrates per plan §locked-decisions #5
+- **Infra**: Docker Compose, nginx reverse proxy
 
-| Capability | Keyless? | Key adds |
-| --- | --- | --- |
-| Aircraft (~13k global, ADS-B) | ✅ | OpenSky OAuth raises the daily credit budget |
-| Vessels — AIS, Northern Europe / Baltic | ✅ | AISStream key → global AIS |
-| GPS jamming, dark vessels (SAR), quakes, cables, satellites | ✅ | — |
-| Events (GDELT / EONET), cyber outages, news + fact-check, webcams | ✅ | — |
-| Wildfires (NASA FIRMS) | — | `FIRMS_MAP_KEY` |
-| Conflict events (ACLED) | — | ACLED key (non-commercial / academic) |
+## Layout
 
-## Export
-
-`GET /api/export?fmt=geojson|csv&kinds=aircraft,vessels&bbox=min_lon,min_lat,max_lon,max_lat`
-downloads the current live picture (the same snapshot the globe renders) as
-GeoJSON (QGIS / kepler.gl / Leaflet) or CSV. `bbox` clips to a viewport; `kinds`
-is comma-separated (default `aircraft`); vessels are best-effort.
+```
+osint/
+├── apps/web/                 # React + Cesium console
+├── apps/api/                 # FastAPI backend
+│   └── app/
+│       ├── intel/            # agent-facing analytics (classification, AOI, density, jamming)
+│       ├── routes/intel.py   # /api/intel/* deep-query JSON API
+│       └── mcp_server.py     # Model Context Protocol server (22 tools)
+├── packages/shared/          # Shared TS types (LayerDescriptor, Observation)
+├── docs/                     # adsb-aircraft-pipeline.md, mcp-server.md
+└── infra/                    # Docker, nginx, db init
+```
 
 ## Tests
 
@@ -118,60 +268,8 @@ cd apps/api && .venv/bin/pytest -q     # api: unit + route + intel/MCP degradati
 pnpm -r typecheck
 # manual MCP integration drivers (need backend on :8000):
 #   apps/api/.venv/bin/python tests/mcp_client_check.py   # stdio handshake
-#   apps/api/.venv/bin/python tests/mcp_full_check.py     # all 11 tools end-to-end + Ollama
+#   apps/api/.venv/bin/python tests/mcp_full_check.py     # tools end-to-end + Ollama
 ```
-
-## MCP server — query the live console from an AI agent
-
-The backend doubles as a **Model Context Protocol** server so an AI agent can
-interrogate the same warm feeds the globe renders, without flooding its own
-context. Full architecture + `/api/intel/*` HTTP reference:
-[`docs/mcp-server.md`](./docs/mcp-server.md). It exposes 11 tools over
-`app.mcp_server`:
-
-| Tool | What it returns |
-| --- | --- |
-| `get_situation` | Global summary — aircraft by category, GNSS-degraded count, emergencies, worst jamming cells, vessel/alert counts. The cheap first call. |
-| `focus_area(lat,lon,radius_nm)` | **Loads a region PRIMARY** (dedicated fresh `/v2/point` fetch + ongoing priority refresh, independent of global rate limits) and returns a full bundle: aircraft + density + GPS jamming + vessels + fused anomalies. |
-| `aircraft_density` | Grid of cells (count, by category, GNSS-degraded) for an area. |
-| `gps_jamming` | GPSJam-method assessment (ADS-B NACp<8 / NIC<7, 1° bins) — flagged cells, severity, affected aircraft. Global or scoped. |
-| `query_aircraft` | Filtered query (bbox/centre, category, squawk, callsign, altitude band, emergency / gnss_degraded / on_ground). |
-| `lookup_aircraft(ident)` | One aircraft by ICAO24 or callsign + integrity/threat assessment. |
-| `query_vessels` | AIS vessels in an area, classified; `dark_only` for dark-vessel candidates. |
-| `anomalies` | Fused report: emergencies, jamming hotspots, dark vessels, alerts + a triage threat level. |
-| `list_focus_areas` / `data_sources` | Active priority AOIs / feed health. |
-| `deep_analyze(question, lat?, lon?)` | Gathers the relevant intel JSON and has a **local Ollama model** reason over it — heavy analysis stays on the box, only the conclusion returns to the agent. |
-
-Every tool returns compact, bounded JSON (counts, grids, ≤50-item samples) — an
-agent can sweep the planet for a few hundred tokens instead of pulling 15k
-features. Area-primary loading means the agent's region of interest stays fresh
-and dense even while the global firehose is being rate-limited; the rest of the
-world keeps streaming from the sticky snapshot.
-
-```bash
-# 1. backend must be running (provides the warm feeds)
-uv run --project apps/api uvicorn app.main:app --port 8000
-
-# 2a. MCP server over stdio (Claude Code / Desktop / Agent SDK) — cross-platform
-uv run --project apps/api python -m app.mcp_server
-# 2b. or streamable-HTTP
-uv run --project apps/api python -m app.mcp_server --http --port 8765
-# introspect (no backend needed)
-uv run --project apps/api python -m app.mcp_server --list-tools
-```
-
-A ready `.mcp.json` at the repo root wires the `osint-geoint` server for
-Claude Code using `uv run`, so it resolves the right interpreter on Linux,
-macOS, and Windows without hardcoding a venv path. No `uv`? Call the venv
-Python directly — `apps/api/.venv/bin/python -m app.mcp_server` (Linux/macOS)
-or `apps\api\.venv\Scripts\python.exe -m app.mcp_server` (Windows), run from
-`apps/api`.
-
-Config (env or `apps/api/.env`): `API_BASE`, `API_KEY`, `OLLAMA_HOST`,
-`OLLAMA_MODEL` (empty → smallest installed model auto-picked; `deep_analyze`
-degrades to returning raw JSON if Ollama is absent). The MCP server never
-crashes a tool call: backend down → structured `backend_unreachable` error;
-Ollama down → analysis falls back to raw intel JSON.
 
 ## Phase status
 

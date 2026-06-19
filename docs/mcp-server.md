@@ -12,7 +12,7 @@ See also [`adsb-aircraft-pipeline.md`](./adsb-aircraft-pipeline.md) for how the
 ## Architecture
 
 ```
-agent ──stdio/http──▶ app.mcp_server (11 tools)
+agent ──stdio / http (/mcp)──▶ app.mcp_server (22 tools)
                           │  httpx
                           ▼
                      /api/intel/*  (app.routes.intel)
@@ -36,8 +36,9 @@ agent ──stdio/http──▶ app.mcp_server (11 tools)
   `anomalies`, `area_intel`. Reads the already-warm in-process snapshot — it
   opens **no** new steady-state upstream fan-out.
 - **`app/routes/intel.py`** — the `/api/intel/*` HTTP surface the MCP drives.
-- **`app/mcp_server.py`** — FastMCP server exposing 11 tools over that HTTP
-  surface (+ the Ollama-backed `deep_analyze`).
+- **`app/mcp_server.py`** — FastMCP server exposing 22 tools over that HTTP
+  surface (+ the Ollama-backed `deep_analyze`). `build_mcp_mount()` mounts it
+  into the FastAPI app at `/mcp` (streamable-HTTP) for the hosted deployment.
 
 ## Area-primary loading
 
@@ -80,19 +81,47 @@ or an explicit bbox (`min_lon,min_lat,max_lon,max_lat`).
 
 ## MCP tools
 
-11 tools — the full table is in the [README](../README.md#mcp-server--query-the-live-console-from-an-ai-agent):
+22 tools — a representative table is in the [README](../README.md#mcp-server--query-the-live-console-from-an-ai-agent);
+run `--list-tools` for the full set. A slice:
 `get_situation`, `focus_area`, `aircraft_density`, `gps_jamming`,
 `query_aircraft`, `lookup_aircraft`, `query_vessels`, `anomalies`,
-`list_focus_areas`, `data_sources`, `deep_analyze`.
+`intel_brief`, `detect_deception`, `locate_emitter`, `area_baseline`,
+`whats_changed`, `incident_history`, `vessel_dossier`, `aircraft_dossier`,
+`list_focus_areas`, `data_sources`, `deep_analyze`, `news_analysis`,
+`fact_check`, `aoi_imagery`.
 
-### `deep_analyze` (local Ollama)
+### `deep_analyze` (reasoning model)
 
-Gathers the relevant intel JSON and hands it to a **local Ollama model** to
-reason over — heavy analysis stays on the box, only the conclusion returns to
+Gathers the relevant intel JSON and hands it to a **reasoning model** — DeepSeek
+(`deepseek-reasoner`) when configured, else a **local Ollama model** — to
+reason over; heavy analysis stays off the agent's context, only the conclusion returns to
 the agent's context. Auto-picks the smallest installed model; degrades to
 returning the raw structured JSON (`analysis: null`) when Ollama is absent.
 
 ## Running
+
+### Hosted
+
+On the hosted deployment the MCP server is mounted into the FastAPI backend at
+`/mcp` (streamable-HTTP) — no separate process. The gateway Worker proxies
+`https://projectvelocity.org/mcp` to it, verifying the caller's Velocity
+(Supabase) token and forwarding it; the backend's `ApiKeyMiddleware` re-checks
+the token, so the endpoint is gated like every other non-public route. Connect
+any MCP client:
+
+```bash
+claude mcp add --transport http osint-geoint \
+  https://projectvelocity.org/mcp \
+  --header "Authorization: Bearer $VELOCITY_TOKEN"
+```
+
+> The backend's in-process tools self-call `/api/intel/*` over localhost, so a
+> hosted deployment must set `API_KEY` (the static key the self-hop presents)
+> **and** Supabase auth (`SUPABASE_JWT_SECRET`) so the directly-reachable
+> backend `/mcp` is gated too — not only the Worker path. See
+> [`deploy-cloudflare.md`](./deploy-cloudflare.md).
+
+### Self-host / develop
 
 ```bash
 # backend must be up (provides the warm feeds)
@@ -103,7 +132,8 @@ uv run --project apps/api python -m app.mcp_server --http --port 8765
 uv run --project apps/api python -m app.mcp_server --list-tools  # introspect
 ```
 
-`.mcp.json` at the repo root wires the `osint-geoint` server for Claude Code.
+Register the local stdio server with Claude Code:
+`claude mcp add osint-geoint -- uv run --project apps/api python -m app.mcp_server`.
 Config (env or `apps/api/.env`): `API_BASE`, `API_KEY`, `OLLAMA_HOST`,
 `OLLAMA_MODEL`.
 
@@ -128,5 +158,5 @@ The MCP server never crashes a tool call:
 cd apps/api && .venv/bin/pytest -q          # unit + route + degradation tests
 # manual integration drivers (need a live backend on :8000):
 .venv/bin/python tests/mcp_client_check.py  # MCP stdio handshake
-.venv/bin/python tests/mcp_full_check.py    # all 11 tools end-to-end + Ollama
+.venv/bin/python tests/mcp_full_check.py    # tools end-to-end + Ollama
 ```

@@ -14,10 +14,15 @@ __pycache__/
 # Local agent/editor configs that may hold API keys — never commit.
 opencode.jsonc
 .opencode.json
+.mcp.json
 *.log
 coverage/
 .vite/
 .turbo/
+# Cloudflare Worker local state + the built /app console bundle. deploy.sh
+# rebuilds site/app from apps/web on every deploy — it's an artifact, not source.
+.wrangler/
+site/app/
 # Anywhere in the tree — the cache lives at apps/api/data/tilecache; the old
 # root-anchored pattern missed it and 2.7k PNGs got committed.
 **/data/tilecache/
@@ -44,3 +49,4 @@ apps/ml/fusion/3dgs_data/
 apps/ml/fusion/3dgs_data.zip
 apps/ml/fusion/drone/
 apps/ml/fusion/output_3dgs/
+tmp/

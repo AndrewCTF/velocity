@@ -1,0 +1,13 @@
+{
+  "name": "velocity-gateway",
+  "private": true,
+  "type": "module",
+  "description": "Velocity gateway Worker — marketing site, auth/billing, and proxy to the FastAPI backend at BACKEND_URL",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.20.0"
+  }
+}

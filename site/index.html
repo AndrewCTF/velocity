@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Velocity — all-source intelligence globe</title>
+    <meta name="description" content="Velocity is a hosted all-source intelligence platform — fuse aircraft, ships, satellites, GPS jamming and cyber outages into one live 3D globe, detect war damage from orbit with Sentinel-1 radar, and query it from an AI agent. Start a free trial." />
+    <meta property="og:title" content="Velocity — all-source intelligence globe" />
+    <meta property="og:description" content="Detect war damage from orbit. Fuse every open feed. Hand it to an AI agent." />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css?v=3" />
+    <script src="vendor/gsap.min.js"></script>
+    <script src="vendor/ScrollTrigger.min.js"></script>
+    <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+  </head>
+
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="scanlines" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
+    <canvas id="bg" aria-hidden="true"></canvas>
+
+    <div class="hud" aria-hidden="true">
+      <div class="hud-tl"><span class="tick"></span> VELOCITY // GEOINT</div>
+      <div class="hud-tr" id="hud-clock">--:--:-- UTC</div>
+      <div class="hud-bl" id="hud-coord">LAT —— · LON ——</div>
+      <div class="hud-br">FEEDS 58 · HOSTED</div>
+    </div>
+
+    <header class="nav">
+      <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"></span> VELOCITY</a>
+      <nav class="nav-links">
+        <a href="#damage">Damage 3D</a>
+        <a href="#showcase">Console</a>
+        <a href="#agent">Agent</a>
+        <a href="#pricing">Pricing</a>
+        <a href="mailto:hello@projectvelocity.org?subject=Velocity%20demo">Book demo</a>
+        <a href="/login">Sign in</a>
+        <a class="cta" href="/login">Start free trial →</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-inner">
+          <p class="eyebrow"><span class="dot"></span> ALL-SOURCE · DEFENSE-GRADE · HOSTED</p>
+          <h1 class="hero-title">See what<br />moved.<br /><span class="accent">From orbit.</span></h1>
+          <p class="hero-sub">A live 3D globe that fuses aircraft, ships, satellites, GPS jamming and cyber outages — and reads <b>war damage straight off Sentinel-1 radar</b>. Then hands the whole picture to an AI agent.</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="/login">Start free trial</a>
+            <a class="btn btn-ghost" href="#damage">See damage detection</a>
+          </div>
+          <div class="hero-stats">
+            <div><b data-count="13041">0</b><span>aircraft, live</span></div>
+            <div><b data-count="58">0</b><span>fused feeds</span></div>
+            <div><b data-count="7">0</b><span>conflict AOIs</span></div>
+            <div><b>14-day</b><span>free trial</span></div>
+          </div>
+        </div>
+        <div class="scroll-hint" aria-hidden="true">SCROLL · DESCEND<span></span></div>
+      </section>
+
+      <section class="chapter" data-chapter="fusion">
+        <div class="chapter-card">
+          <span class="kicker">CONVERGENCE</span>
+          <h2>The signal lives in the seam between feeds.</h2>
+          <p>A dark ship on radar with no AIS. Aircraft losing GPS over the same bay. Velocity correlates across domains and promotes the overlap to one cited incident — automatically.</p>
+        </div>
+      </section>
+
+      <section class="damage" id="damage">
+        <div class="damage-head">
+          <span class="kicker">01 — DAMAGE ASSESSMENT · FROM SPACE</span>
+          <h2>Two radar passes.<br />Twelve days apart.</h2>
+          <p>Collapsed buildings stop bouncing radar the way they used to. Velocity diffs <b>Sentinel-1</b> backscatter across a conflict window, then extrudes <b>OSM footprints into LOD1 3D</b> — every collapse candidate flagged. All-weather, day or night, free satellite.</p>
+        </div>
+
+        <div class="damage-stage">
+          <canvas id="city"></canvas>
+          <div class="stage-tag stage-tl">RECON ▸ BEIRUT — DAHIEH</div>
+          <div class="stage-tag stage-tr">S1 VV · LOG-RATIO</div>
+          <div class="stage-tag stage-bl" id="stage-hint">DRAG TO ORBIT</div>
+          <div class="stage-legend"><span class="li intact">INTACT</span><span class="li dmg">COLLAPSE CANDIDATE</span></div>
+        </div>
+
+        <div class="damage-meta">
+          <div class="dm-stat"><b data-count="1914">0</b><span>buildings reconstructed</span></div>
+          <div class="dm-stat"><b data-count="212">0</b><span>collapse candidates</span></div>
+          <div class="dm-stat"><b>Aug–Nov ’24</b><span>pre / post window</span></div>
+          <div class="dm-chips">
+            <span>beirut-dahieh</span><span>south-lebanon</span><span>gaza-city</span><span>khan-younis</span><span>rafah</span><span>mariupol</span><span>bakhmut</span>
+          </div>
+        </div>
+        <p class="caveat">SAR change-detection finds <em>change</em>, not proof of damage — flood, construction and speckle also move backscatter. Output is a <b>candidate</b>, meant to be validated against UNOSAT / Copernicus EMS. Velocity never ships an unverified damage claim. Footprints are real OSM; heights are OSM tags or a flagged estimate. No invented geometry.</p>
+      </section>
+
+      <section class="pipeline-wrap">
+        <div class="section-head"><span class="kicker">FROM ORBIT TO 3D</span><h2>Four steps. No human in the loop.</h2></div>
+        <ol class="pipeline">
+          <li><span class="pn">01</span><h4>Two SAR passes</h4><p>Sentinel-1 VV backscatter, ~12 days apart, same orbit and grid. It's radar — cloud and darkness don't matter.</p></li>
+          <li><span class="pn">02</span><h4>Log-ratio diff</h4><p>log((post+1)/(pre+1)). A backscatter drop means the structure that was bouncing radar isn't anymore.</p></li>
+          <li><span class="pn">03</span><h4>Real footprints</h4><p>OSM building polygons + heights for the AOI. Tagged or estimated heights, flagged per building. No invented geometry.</p></li>
+          <li><span class="pn">04</span><h4>Extrude &amp; flag</h4><p>LOD1 3D in the globe; every footprint over a collapse cell turns red — a candidate for an analyst to confirm.</p></li>
+        </ol>
+      </section>
+
+      <section class="caps-wrap">
+        <div class="section-head"><span class="kicker">02 — WHAT IT DOES</span><h2>Six hard problems, one console.</h2></div>
+        <div class="caps">
+          <article class="cap"><b class="amber">SAR damage</b><p>Sentinel-1 VV log-ratio over a pre/post window → collapse candidates.</p></article>
+          <article class="cap"><b class="teal">LOD1 3D</b><p>Real OSM footprints + heights extruded, per-building damage flag.</p></article>
+          <article class="cap"><b class="red">Dark vessels</b><p>A ship on radar where AIS says no one is — Sentinel-1 × AIS gap.</p></article>
+          <article class="cap"><b class="amber">GPS jamming</b><p>ADS-B NACp&lt;8 / NIC&lt;7 binned to a 1° grid — the GPSJam method, live.</p></article>
+          <article class="cap"><b class="teal">Cross-domain fusion</b><p>≥2 domains in one place/time → a single cited incident.</p></article>
+          <article class="cap"><b class="teal">Agent API · MCP</b><p>22 tools, bounded JSON — sweep the planet for a few hundred tokens.</p></article>
+        </div>
+      </section>
+
+      <section class="feeds-wrap">
+        <div class="section-head"><span class="kicker">ONE UNION</span><h2>58 open feeds, deduped into one picture.</h2></div>
+        <div class="marquee"><div class="track">
+          <span>OpenSky</span><span>airplanes.live</span><span>adsb.lol</span><span>adsb.fi</span><span>Sentinel-1 SAR</span><span>Sentinel-2</span><span>NASA FIRMS</span><span>NASA EONET</span><span>NASA GIBS</span><span>Digitraffic AIS</span><span>Kystverket</span><span>AISStream</span><span>CelesTrak</span><span>USGS</span><span>EMSC</span><span>NOAA SWPC</span><span>Open-Meteo</span><span>Carto basemaps</span>
+          <span>OpenSky</span><span>airplanes.live</span><span>adsb.lol</span><span>adsb.fi</span><span>Sentinel-1 SAR</span><span>Sentinel-2</span><span>NASA FIRMS</span><span>NASA EONET</span><span>NASA GIBS</span><span>Digitraffic AIS</span><span>Kystverket</span><span>AISStream</span><span>CelesTrak</span><span>USGS</span><span>EMSC</span><span>NOAA SWPC</span><span>Open-Meteo</span><span>Carto basemaps</span>
+        </div></div>
+        <div class="marquee"><div class="track rev">
+          <span>GDELT</span><span>ACLED</span><span>IODA</span><span>Cloudflare Radar</span><span>OpenStreetMap</span><span>Overpass</span><span>TeleGeography cables</span><span>Global Fishing Watch</span><span>Wikidata</span><span>Esri imagery</span><span>Nominatim</span><span>Kystdatahuset</span><span>BBC</span><span>Reuters</span><span>Al Jazeera</span><span>France24</span><span>NPR</span><span>Submarine Cable Map</span>
+          <span>GDELT</span><span>ACLED</span><span>IODA</span><span>Cloudflare Radar</span><span>OpenStreetMap</span><span>Overpass</span><span>TeleGeography cables</span><span>Global Fishing Watch</span><span>Wikidata</span><span>Esri imagery</span><span>Nominatim</span><span>Kystdatahuset</span><span>BBC</span><span>Reuters</span><span>Al Jazeera</span><span>France24</span><span>NPR</span><span>Submarine Cable Map</span>
+        </div></div>
+      </section>
+
+      <section class="showcase" id="showcase">
+        <div class="section-head"><span class="kicker">03 — THE CONSOLE</span><h2>A cockpit for one analyst.</h2></div>
+        <figure class="shot shot-wide"><img src="assets/globe.png" alt="Velocity globe, thousands of live aircraft" loading="lazy" /><figcaption><span>GLOBAL</span> ~13k aircraft, vessels, satellites — every track its category icon.</figcaption></figure>
+        <div class="shot-grid">
+          <figure class="shot"><img src="assets/gulf.png" alt="Gulf and Strait of Hormuz" loading="lazy" /><figcaption><span>HORMUZ</span> chokepoint watch</figcaption></figure>
+          <figure class="shot"><img src="assets/detail.png" alt="Dense low-altitude traffic with labels" loading="lazy" /><figcaption><span>DETAIL</span> labelled, in-place updates</figcaption></figure>
+          <figure class="shot"><img src="assets/entity-panel.png" alt="Aircraft dossier and track" loading="lazy" /><figcaption><span>DOSSIER</span> track · integrity · raw fields</figcaption></figure>
+        </div>
+      </section>
+
+      <section class="usecases-wrap">
+        <div class="section-head"><span class="kicker">WHO RUNS IT</span><h2>For people who can't wait for the report.</h2></div>
+        <div class="usecases">
+          <article class="uc"><span class="uc-i">◣</span><h4>Conflict journalists</h4><p>Corroborate a strike, a dark tanker, a jamming claim — in minutes, reproducibly, behind no paywall.</p></article>
+          <article class="uc"><span class="uc-i">◈</span><h4>Defense &amp; OPSEC</h4><p>Watch your own GNSS health and coastline — and exactly what your forces leak into the open feeds.</p></article>
+          <article class="uc"><span class="uc-i">◇</span><h4>OSINT desks</h4><p>Six monitors collapse into one globe. Cross-domain incidents surface themselves, cited.</p></article>
+          <article class="uc"><span class="uc-i">⬡</span><h4>AI-agent builders</h4><p>Give a model live eyes on the planet over MCP — bounded JSON, not a brittle scrape.</p></article>
+        </div>
+      </section>
+
+      <section class="manifesto">
+        <p>Open data is everywhere.<br /><span class="accent">Reading it like a professional</span> is the hard part.<br />Velocity is the console that does it — hosted, managed, agent-ready.</p>
+      </section>
+
+      <section class="agent" id="agent">
+        <div class="section-head"><span class="kicker">04 — AGENT-NATIVE</span><h2>Ask the planet a question.</h2><p>Velocity is a Model Context Protocol server — 22 tools over streamable-HTTP. An agent calls a tool, gets bounded JSON — no scraping, no guessing.</p></div>
+        <div class="terminal" id="terminal" aria-label="Example agent session">
+          <div class="term-bar"><span></span><span></span><span></span> agent ▸ velocity-mcp</div>
+          <pre class="term-body"><code id="term-code"></code></pre>
+        </div>
+        <div class="terminal deploy-term" aria-label="Connect any MCP client">
+          <div class="term-bar"><span></span><span></span><span></span> connect ▸ one command</div>
+          <pre class="term-body"><code><span class="pr">$ </span><span class="k">claude mcp add</span> --transport http velocity \
+    <span class="s">https://projectvelocity.org/mcp</span> \
+    --header <span class="s">"Authorization: Bearer $VELOCITY_TOKEN"</span></code></pre>
+        </div>
+        <p class="caveat">Works with any MCP client — <b>Claude Code</b>, <b>Claude Desktop</b>, the <b>Agent SDK</b>. The endpoint is <b>https://projectvelocity.org/mcp</b>; authenticate with your Velocity access token (grab it from <b>Account</b> after sign-in). Nothing to install, no backend to run — it's the same hosted feeds the globe renders.</p>
+      </section>
+
+      <section class="stats-band">
+        <div><b data-count="58">0</b><span>fused feeds</span></div>
+        <div><b data-count="7">0</b><span>conflict AOIs</span></div>
+        <div><b data-count="22">0</b><span>agent tools (MCP)</span></div>
+        <div><b data-count="1" data-suffix="s">0</b><span>refresh cadence</span></div>
+        <div><b>Hosted</b><span>fully managed</span></div>
+      </section>
+
+      <section class="live" id="launch">
+        <div class="section-head"><span class="kicker">05 — LIVE</span><h2>Live snapshot</h2><p id="live-note">Sampled from a running backend.</p></div>
+        <div class="live-grid" id="live-grid">
+          <div class="live-cell"><b data-count="13041">0</b><span>aircraft</span></div>
+          <div class="live-cell"><b data-count="139">0</b><span>military</span></div>
+          <div class="live-cell"><b data-count="4668">0</b><span>vessels</span></div>
+          <div class="live-cell"><b data-count="200">0</b><span>jamming cells</span></div>
+          <div class="live-cell"><b data-count="25">0</b><span>incidents</span></div>
+          <div class="live-cell"><b data-count="714">0</b><span>cables</span></div>
+        </div>
+        <div class="live-actions">
+          <a class="btn btn-primary" href="/login">Start free trial</a>
+          <a class="btn btn-ghost" href="mailto:hello@projectvelocity.org?subject=Velocity%20demo">Book a demo</a>
+        </div>
+      </section>
+
+      <section class="deploy">
+        <div class="section-head"><span class="kicker">GET STARTED</span><h2>Signup to live globe in minutes.</h2><p>Fully hosted — we run the feeds, the fusion engine and the agent endpoint. No infrastructure, no data wrangling on your side.</p></div>
+        <ol class="pipeline">
+          <li><span class="pn">01</span><h4>Start your trial</h4><p>14 days, full platform, no card to look around.</p></li>
+          <li><span class="pn">02</span><h4>Pick your theatre</h4><p>Drop pins on the AOIs you watch; we keep them warm and fresh.</p></li>
+          <li><span class="pn">03</span><h4>Wire the agent</h4><p>One <code>claude mcp add</code> command points any MCP client at the hosted endpoint with your token — 22 tools, bounded JSON.</p></li>
+          <li><span class="pn">04</span><h4>Bring restricted data</h4><p>Connect ACLED / commercial imagery via BYOK on Team and up.</p></li>
+        </ol>
+      </section>
+
+      <section class="pricing" id="pricing">
+        <div class="section-head"><span class="kicker">06 — PRICING</span><h2>One analyst to a whole desk.</h2><p>Hosted, managed, billed monthly. 14-day free trial on Analyst &amp; Team — no card to start.</p></div>
+        <div class="tiers">
+          <article class="tier">
+            <header><h3>Analyst</h3><p class="price">$99<span>/ month</span></p></header>
+            <p class="tier-sub">Solo · hosted</p>
+            <ul><li>Live globe — all cleared feeds</li><li>SAR damage + LOD1 3D</li><li>MCP agent endpoint (your token)</li><li>GeoJSON / CSV / KML export</li><li>3 warm AOIs</li></ul>
+            <a class="btn btn-ghost" href="/login">Start free trial</a>
+          </article>
+          <article class="tier tier-feature">
+            <header><h3>Team</h3><p class="price">$499<span>/ month</span></p></header>
+            <p class="tier-sub">Up to 5 seats</p>
+            <ul><li>Everything in Analyst</li><li>BYOK restricted feeds — ACLED, commercial imagery, global AIS</li><li>Shared workspaces + alerting</li><li>15 warm AOIs, priority refresh</li><li>Standing-watch &amp; threat push</li></ul>
+            <a class="btn btn-primary" href="/login">Start free trial</a>
+          </article>
+          <article class="tier">
+            <header><h3>Enterprise</h3><p class="price">Custom</p></header>
+            <p class="tier-sub">On-prem · air-gap · SLA</p>
+            <ul><li>On-prem / air-gapped deploy</li><li>SSO, roles, audit trail</li><li>Persistence + replay</li><li>Fusion with your own sensors</li><li>Dedicated support &amp; SLA</li></ul>
+            <a class="btn btn-ghost" href="mailto:hello@projectvelocity.org?subject=Velocity%20Enterprise">Book a briefing</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="roadmap-wrap">
+        <div class="section-head"><span class="kicker">ROADMAP</span><h2>Where it's going.</h2></div>
+        <ol class="roadmap">
+          <li class="done"><span>P0</span>Foundation</li>
+          <li class="done"><span>P1</span>Live ADS-B · AIS · quakes · jamming</li>
+          <li class="done"><span>P3</span>Fusion engine · alerts · 2D mirror</li>
+          <li class="active"><span>P4</span>MCP server + intel API — shipped</li>
+          <li><span>P2</span>Replay + persistence (Postgres · Timescale)</li>
+        </ol>
+      </section>
+
+      <section class="faq-wrap">
+        <div class="section-head"><span class="kicker">STRAIGHT ANSWERS</span><h2>What you're already wondering.</h2></div>
+        <div class="faq">
+          <details><summary>Is the war-damage output verified?</summary><p>No — and we say so on the box. SAR change-detection flags <em>candidates</em> for an analyst to validate against UNOSAT / Copernicus EMS. It's a fast first pass, not a verdict.</p></details>
+          <details><summary>Is there a free tier?</summary><p>A 14-day trial on Analyst &amp; Team — full platform, no card to start. After that it's paid; there's no free production tier.</p></details>
+          <details><summary>How do restricted data feeds work?</summary><p>Open and commercially-cleared sources are included. Restricted feeds (ACLED, commercial imagery, global AIS) run BYOK on Team and Enterprise — you bring a licence, we plug it in. We never resell non-commercial data.</p></details>
+          <details><summary>Can I self-host or get the source?</summary><p>Velocity is a hosted product. On-prem / air-gapped deployment is available on Enterprise; otherwise we run it for you.</p></details>
+          <details><summary>Is it real-time?</summary><p>Aircraft refresh about every second. SAR is per satellite pass (days). History &amp; replay are on Enterprise.</p></details>
+          <details><summary>Will it run on my machine?</summary><p>It's a browser app — runs on any modern machine. The heavy 3D-satellite mode wants a real GPU; the 2D dark globe runs anywhere.</p></details>
+        </div>
+      </section>
+
+      <section class="license" id="license">
+        <div class="license-card">
+          <span class="kicker">07 — DATA &amp; COMPLIANCE</span>
+          <h2>What we sell — and what we won't.</h2>
+          <div class="license-cols">
+            <div><h4 class="ok">Cleared feeds · included</h4><p>Open-government and commercially-cleared sources — USGS, NASA, Copernicus / Sentinel, GDELT, IODA and more — are in every plan.</p></div>
+            <div><h4 class="warn">Restricted feeds · BYOK</h4><p>Some feeds are non-commercial (ACLED, adsb.fi, OpenSky). We do <b>not</b> resell them. On Team+ you connect your own licensed access; compliance stays with the key-holder.</p></div>
+            <div><h4 class="teal">The platform · your subscription</h4><p>Hosted console, fusion engine, agent endpoint and support. You get access — not a licence to redistribute.</p></div>
+          </div>
+          <p class="license-foot">SAR damage output is an analyst-validation candidate, not a verified claim. Built for lawful, defensive use.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="foot-brand"><span class="brand-mark" aria-hidden="true"></span> VELOCITY</div>
+      <p>Hosted all-source intelligence platform · managed feeds · agent-ready.</p>
+      <nav><a href="#pricing">Pricing</a><a href="mailto:hello@projectvelocity.org?subject=Velocity%20demo">Book a demo</a><a href="#top">Top ↑</a></nav>
+      <p class="fineprint">© 2026 Velocity. Not affiliated with any data provider; data shown subject to each provider's terms. SAR damage output is a change candidate for analyst validation, not a verified damage claim. Built for lawful, defensive use.</p>
+    </footer>
+
+    <script type="module" src="main.js?v=4"></script>
+  </body>
+</html>

@@ -1,0 +1,35 @@
+{
+  // Velocity gateway Worker — serves the marketing site (ASSETS) AND handles
+  // auth/billing/tier gating (worker.js). Deploy from site/:  npx wrangler@4 deploy
+  "name": "velocity",
+  "main": "worker.js",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": ".", "binding": "ASSETS" },
+
+  // The gateway Worker proxies /api/* (minus its own auth/billing routes),
+  // /tiles/* and /ws/* to the FastAPI backend (apps/api) at BACKEND_URL,
+  // forwarding the caller's Supabase token and stamping the tier header. During
+  // the beta the backend runs on a VPS over HTTP (Worker→origin is server-side;
+  // the browser still gets HTTPS via this Worker). Swap BACKEND_URL to the TLS
+  // domain (https://backend.projectvelocity.org) once DNS + Caddy are up.
+  "vars": {
+    "SUPABASE_URL": "https://dagqceedkxxvvbhmewca.supabase.co",
+    "SUPABASE_ANON_KEY": "sb_publishable_euQn1ATRdL-JpwXWvt1taQ_vI8z0qCG",
+    // Cloudflare Workers refuse fetch() to a bare IP literal (error 1003), so we
+    // address the droplet via a hostname. nip.io wildcard DNS maps <ip>.nip.io →
+    // the IP with zero setup, and Caddy holds a real Let's Encrypt cert for it,
+    // so this hop is HTTPS. Swap to https://backend.projectvelocity.org once that
+    // A record propagates (point Caddy at the new name and update here).
+    "BACKEND_URL": "https://167.99.149.34.nip.io",
+    "STRIPE_PRICE_ANALYST": "",
+    "STRIPE_PRICE_TEAM": "",
+    "APP_URL": "https://projectvelocity.org"
+  },
+
+  "routes": [
+    { "pattern": "projectvelocity.org", "custom_domain": true },
+    { "pattern": "www.projectvelocity.org", "custom_domain": true }
+  ],
+  "observability": { "enabled": true }
+}

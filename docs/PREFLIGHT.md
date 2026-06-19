@@ -67,7 +67,7 @@ Re-reviewed adversarially against the running stack (api :8000 + web :5173).
 | Velocity | ~16 commits/day, peak 41 (06-14) | `git log` cadence |
 | Code | ~24.2k LOC (web 10.4k TS/TSX + api 13.8k Py) | `wc -l` |
 | Backend routes | 31 modules (added export), ~60 endpoints | route grep |
-| Agent API surface | 20 `/api/intel/*` endpoints + 11 MCP tools | route grep + README |
+| Agent API surface | 20 `/api/intel/*` endpoints + 22 MCP tools | route grep + README |
 | Fusion engine | 13 modules, 2.8k LOC | `wc -l app/intel` |
 | Upstream sources | 58 distinct hosts (~45 logical) | host grep |
 | API tests | **210 passed in ~2.2s** (was 199; +11 export/space/sources) | `pytest -q` |
@@ -138,7 +138,7 @@ go-to-market/hardening, not "does the core work."
 - **DEEP (production-grade, multi-source, failover, tested):** ADS-B pipeline
   (1.5k LOC, OpenSky breadth ∪ airplanes.live grid, dedup, failover, ~13k
   aircraft, NACp/NIC jamming); cross-domain incident fusion; intel analytics; MCP
-  (11 tools, e2e-tested).
+  (22 tools, e2e-tested, hosted at /mcp).
 - **SOLID:** AIS (Digitraffic + keyless + AISStream WS), SAR dark-vessels, GPS
   jamming, dossiers, deception detection, emitter geolocation, baselines, LOD1 3D.
 - **MEDIUM:** events (GDELT/ACLED/EONET), news + fact-check, cyber outages,

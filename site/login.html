@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in — Velocity</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Chakra+Petch:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root { --bg:#05070b; --bg1:#0a0e16; --line:rgba(120,160,180,.16); --teal:#2dd4bf; --txt:#e9f0f4; --mut:#66788a; }
+      * { box-sizing:border-box; margin:0; }
+      body { background:var(--bg); color:var(--txt); font-family:"Archivo",system-ui,sans-serif; min-height:100vh; display:grid; place-items:center; padding:24px;
+             background-image:radial-gradient(120% 80% at 50% -10%, rgba(45,212,191,.08), transparent 60%); }
+      a { color:var(--teal); text-decoration:none; }
+      .brand { position:fixed; top:22px; left:26px; font-family:"Chakra Petch"; font-weight:700; letter-spacing:.22em; display:flex; gap:9px; align-items:center; }
+      .mark { width:15px; height:15px; border:1.5px solid var(--teal); border-radius:50%; box-shadow:0 0 12px rgba(45,212,191,.5); position:relative; }
+      .mark::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--teal); }
+      .card { width:100%; max-width:380px; background:var(--bg1); border:1px solid var(--line); border-radius:12px; padding:34px 32px; box-shadow:0 40px 90px -40px #000; }
+      h1 { font-family:"Chakra Petch"; font-size:26px; margin-bottom:6px; }
+      .sub { color:var(--mut); font-size:14px; margin-bottom:24px; font-family:"IBM Plex Mono",monospace; }
+      label { font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--mut); display:block; margin:16px 0 7px; }
+      input { width:100%; background:#04060a; border:1px solid var(--line); border-radius:6px; padding:12px 14px; color:var(--txt); font-family:"IBM Plex Mono",monospace; font-size:14px; }
+      input:focus { outline:none; border-color:var(--teal); }
+      button { width:100%; margin-top:22px; background:var(--teal); color:var(--bg); border:0; border-radius:6px; padding:13px; font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:14px; cursor:pointer; transition:transform .15s; }
+      button:hover { transform:translateY(-1px); }
+      .ghost { background:transparent; color:var(--txt); border:1px solid var(--line); margin-top:10px; }
+      .note { margin-top:18px; font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--mut); min-height:18px; line-height:1.5; }
+      .note.err { color:#f59e0b; }
+      .foot { margin-top:24px; font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--mut); text-align:center; }
+    </style>
+  </head>
+  <body>
+    <a class="brand" href="/"><span class="mark"></span> VELOCITY</a>
+    <div class="card">
+      <h1>Sign in</h1>
+      <p class="sub">Hosted intelligence console</p>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" placeholder="analyst@org.gov" />
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+      <button id="signin">Sign in</button>
+      <button id="signup" class="ghost">Create account · 14-day trial</button>
+      <p class="note" id="note"></p>
+      <p class="foot">← <a href="/">back to velocity</a></p>
+    </div>
+    <script>
+      let CFG = null;
+      const note = (m, err = true) => { const n = document.getElementById("note"); n.textContent = m; n.className = "note" + (err ? " err" : ""); };
+      fetch("/api/config").then((r) => r.json()).then((c) => {
+        CFG = c;
+        if (!c.configured) note("Backend not configured yet — set Supabase keys to enable sign-in.");
+      }).catch(() => note("Cannot reach gateway."));
+
+      async function auth(mode) {
+        if (!CFG?.configured) return note("Backend not configured yet.");
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+        if (!email || !password) return note("Email and password required.");
+        note("…", false);
+        const ep = mode === "signup" ? "signup" : "token?grant_type=password";
+        try {
+          const r = await fetch(`${CFG.supabaseUrl}/auth/v1/${ep}`, {
+            method: "POST",
+            headers: { apikey: CFG.supabaseAnonKey, "content-type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+          const d = await r.json();
+          if (d.access_token) { localStorage.setItem("vel_tok", d.access_token); if (d.refresh_token) localStorage.setItem("vel_refresh", d.refresh_token); location.href = "/app"; return; }
+          if (mode === "signup" && r.ok) { note("Account created — check your email to confirm, then sign in.", false); return; }
+          note(d.error_description || d.msg || d.error || "Sign-in failed.");
+        } catch (e) { note("Network error."); }
+      }
+      document.getElementById("signin").onclick = () => auth("signin");
+      document.getElementById("signup").onclick = () => auth("signup");
+      document.getElementById("password").addEventListener("keydown", (e) => { if (e.key === "Enter") auth("signin"); });
+    </script>
+  </body>
+</html>

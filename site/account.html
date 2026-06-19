@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account — Velocity</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Chakra+Petch:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      :root { --bg:#05070b; --bg1:#0a0e16; --bg2:#0f1724; --line:rgba(120,160,180,.16); --teal:#2dd4bf; --amber:#f59e0b; --ok:#4ade80; --txt:#e9f0f4; --mut:#66788a; }
+      * { box-sizing:border-box; margin:0; }
+      body { background:var(--bg); color:var(--txt); font-family:"Archivo",system-ui,sans-serif; min-height:100vh; padding:0 0 80px;
+             background-image:radial-gradient(120% 60% at 50% -10%, rgba(45,212,191,.06), transparent 55%); }
+      a { color:var(--teal); text-decoration:none; }
+      .mono { font-family:"IBM Plex Mono",monospace; }
+      .nav { display:flex; justify-content:space-between; align-items:center; padding:18px clamp(20px,5vw,48px); border-bottom:1px solid var(--line); }
+      .brand { font-family:"Chakra Petch"; font-weight:700; letter-spacing:.22em; display:flex; gap:9px; align-items:center; }
+      .mark { width:15px; height:15px; border:1.5px solid var(--teal); border-radius:50%; box-shadow:0 0 12px rgba(45,212,191,.5); position:relative; }
+      .mark::after { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--teal); }
+      .signout { font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--mut); cursor:pointer; background:none; border:0; }
+      .wrap { max-width:920px; margin:0 auto; padding:clamp(28px,5vw,52px) clamp(20px,5vw,32px); }
+      h1 { font-family:"Chakra Petch"; font-size:clamp(28px,4vw,40px); margin-bottom:6px; }
+      .email { color:var(--mut); font-family:"IBM Plex Mono",monospace; font-size:14px; margin-bottom:28px; }
+      .row { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+      .panel { background:var(--bg1); border:1px solid var(--line); border-radius:11px; padding:24px 26px; }
+      .k { font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--mut); }
+      .tier { font-family:"Chakra Petch"; font-size:30px; text-transform:capitalize; margin-top:6px; }
+      .badge { display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.08em; padding:4px 10px; border-radius:999px; border:1px solid var(--line); margin-top:10px; }
+      .badge.trialing { color:var(--amber); border-color:var(--amber); }
+      .badge.active { color:var(--ok); border-color:var(--ok); }
+      .badge.none, .badge.canceled { color:#ef4444; border-color:#ef4444; }
+      ul { list-style:none; margin-top:8px; }
+      li { font-family:"IBM Plex Mono",monospace; font-size:13.5px; color:#9db0bd; padding:7px 0; border-top:1px solid var(--line); display:flex; justify-content:space-between; }
+      li b { color:var(--txt); }
+      .cta { display:flex; gap:12px; flex-wrap:wrap; margin-top:26px; }
+      .btn { font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:14px; padding:13px 22px; border-radius:6px; cursor:pointer; border:0; }
+      .btn-p { background:var(--teal); color:var(--bg); }
+      .btn-g { background:transparent; color:var(--txt); border:1px solid var(--line); }
+      .paywall { background:linear-gradient(180deg, rgba(245,158,11,.08), var(--bg1)); border-color:var(--amber); }
+      .loading, .note { font-family:"IBM Plex Mono",monospace; color:var(--mut); padding:60px 0; text-align:center; }
+      @media (max-width:680px){ .row{ grid-template-columns:1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="nav">
+      <a class="brand" href="/"><span class="mark"></span> VELOCITY</a>
+      <button class="signout" id="signout">Sign out</button>
+    </div>
+    <div class="wrap" id="wrap"><p class="loading">Loading account…</p></div>
+
+    <script>
+      const tok = localStorage.getItem("vel_tok");
+      if (!tok) location.href = "/login";
+      const wrap = document.getElementById("wrap");
+      document.getElementById("signout").onclick = () => { localStorage.removeItem("vel_tok"); location.href = "/login"; };
+
+      const yn = (b) => (b ? "✓" : "—");
+      const daysLeft = (iso) => iso ? Math.max(0, Math.ceil((new Date(iso) - new Date()) / 86400000)) : null;
+
+      async function upgrade(tier) {
+        const r = await fetch("/api/checkout", { method: "POST", headers: { authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ tier }) });
+        const d = await r.json();
+        if (d.url) location.href = d.url; else alert(d.error || "Checkout unavailable. Is billing configured?");
+      }
+      window.upgrade = upgrade;
+
+      (async () => {
+        let me;
+        try {
+          const r = await fetch("/api/me", { headers: { authorization: `Bearer ${tok}` } });
+          if (r.status === 401) { localStorage.removeItem("vel_tok"); location.href = "/login"; return; }
+          me = await r.json();
+        } catch { wrap.innerHTML = '<p class="note">Gateway unreachable.</p>'; return; }
+
+        const lim = me.limits || {};
+        const active = me.tier && me.tier !== "none";
+        const trialDays = me.status === "trialing" ? daysLeft(me.trial_ends_at) : null;
+        const statusLine = me.status === "trialing" && trialDays != null ? `trial · ${trialDays} day${trialDays === 1 ? "" : "s"} left` : me.status;
+
+        const entitlements = active ? `
+          <div class="panel">
+            <span class="k">Your plan includes</span>
+            <ul>
+              <li>Warm AOIs <b>${lim.warm_aois ?? "—"}</b></li>
+              <li>Seats <b>${lim.seats ?? "—"}</b></li>
+              <li>Agent API (MCP) <b>${yn(lim.agent)}</b></li>
+              <li>Restricted feeds (BYOK) <b>${yn(lim.byok)}</b></li>
+              <li>History &amp; replay <b>${yn(lim.history)}</b></li>
+            </ul>
+            <div class="cta">
+              <a class="btn btn-p" href="/app">Open the console →</a>
+              ${me.tier === "analyst" ? '<button class="btn btn-g" onclick="upgrade(\'team\')">Upgrade to Team</button>' : ""}
+            </div>
+          </div>` : `
+          <div class="panel paywall">
+            <span class="k">No active plan</span>
+            <div class="tier" style="font-size:22px;margin-top:8px">Your trial has ended</div>
+            <p style="color:#9db0bd;font-size:14px;margin:10px 0 4px">Pick a plan to keep your console, AOIs and agent access.</p>
+            <div class="cta">
+              <button class="btn btn-p" onclick="upgrade('analyst')">Analyst · $99/mo</button>
+              <button class="btn btn-g" onclick="upgrade('team')">Team · $499/mo</button>
+            </div>
+          </div>`;
+
+        wrap.innerHTML = `
+          <h1>Account</h1>
+          <p class="email">${me.email || ""}</p>
+          <div class="row">
+            <div class="panel">
+              <span class="k">Current tier</span>
+              <div class="tier">${me.tier}</div>
+              <span class="badge ${me.status}">${statusLine}</span>
+            </div>
+            ${entitlements}
+          </div>
+          <div class="panel" style="margin-top:18px">
+            <span class="k">Agent token — connect an MCP client</span>
+            <p style="color:#9db0bd;font-size:13.5px;margin:10px 0 12px">Point any MCP client (Claude Code / Desktop, the Agent SDK) at <span class="mono">https://projectvelocity.org/mcp</span> with this token. It is your Velocity access token — treat it like a password; it refreshes when you sign in again.</p>
+            <div class="mono" id="tokbox" style="background:var(--bg2);border:1px solid var(--line);border-radius:7px;padding:12px 14px;font-size:12.5px;word-break:break-all;color:#9db0bd"></div>
+            <div class="cta">
+              <button class="btn btn-p" id="copytok">Copy token</button>
+              <button class="btn btn-g" id="copycmd">Copy connect command</button>
+            </div>
+          </div>`;
+
+        document.getElementById("tokbox").textContent =
+          tok.length > 24 ? `${tok.slice(0, 14)}…${tok.slice(-6)}` : tok;
+        const copy = (text, btn) => {
+          const done = () => { const o = btn.textContent; btn.textContent = "Copied ✓"; setTimeout(() => (btn.textContent = o), 1500); };
+          (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(done, () => window.prompt("Copy:", text));
+        };
+        const cmd = `claude mcp add --transport http velocity https://projectvelocity.org/mcp --header "Authorization: Bearer ${tok}"`;
+        document.getElementById("copytok").onclick = () => copy(tok, document.getElementById("copytok"));
+        document.getElementById("copycmd").onclick = () => copy(cmd, document.getElementById("copycmd"));
+      })();
+    </script>
+  </body>
+</html>
