@@ -10,11 +10,9 @@ const REFRESH_MS = 60_000;
 export function CameraCard({
   camId,
   hlsUrl,
-  attribution,
 }: {
   camId: string;
   hlsUrl: string | null;
-  attribution: string;
 }): JSX.Element {
   const [src, setSrc] = useState<string | null>(null);
 
@@ -63,7 +61,6 @@ export function CameraCard({
           loading snapshot…
         </div>
       )}
-      <div className="mt-1 mono text-[9px] text-txt-3 truncate">{attribution}</div>
     </div>
   );
 }

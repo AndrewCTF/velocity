@@ -18,6 +18,7 @@ from app.correlate import runner as correlate_runner
 from app.mcp_server import build_mcp_mount
 from app.routes import adsb as adsb_routes
 from app.routes import ais as ais_routes
+from app.routes import alert_rules as alert_rules_routes
 from app.routes import alerts as alerts_routes
 from app.routes import aviation as aviation_routes
 from app.routes import cables as cables_routes
@@ -36,6 +37,7 @@ from app.routes import history as history_routes
 from app.routes import imagery as imagery_routes
 from app.routes import intel as intel_routes
 from app.routes import jamming as jamming_routes
+from app.routes import keys as keys_routes
 from app.routes import maritime as maritime_routes
 from app.routes import news as news_routes_mod
 from app.routes import sar as sar_routes
@@ -182,6 +184,8 @@ def create_app() -> FastAPI:
     app.include_router(news_routes_mod.router)
     app.include_router(history_routes.router)
     app.include_router(export_routes.router)
+    app.include_router(keys_routes.router)
+    app.include_router(alert_rules_routes.router)
 
     # Agent-facing MCP endpoint (streamable-HTTP) at /mcp, in-process so its
     # tools share this app's warm snapshot + fusion engine. Gated by

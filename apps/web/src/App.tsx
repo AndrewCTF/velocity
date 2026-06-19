@@ -24,7 +24,6 @@ import { fetchRuntimeConfig } from './transport/config.js';
 import { AlertSubscriber } from './alerts/AlertSubscriber.js';
 import { AlertsPanel } from './alerts/AlertsPanel.js';
 import { AlertsRailList } from './alerts/AlertsRailList.js';
-import { Attribution } from './shell/Attribution.js';
 import { ErrorBoundary } from './shell/ErrorBoundary.js';
 
 export function App(): JSX.Element {
@@ -127,7 +126,6 @@ export function App(): JSX.Element {
         bottom={<ErrorBoundary label="Timeline"><Timeline viewer={viewer} /></ErrorBoundary>}
       />
       <AlertsPanel open={alertsOpen} onClose={() => setAlertsOpen(false)} viewer={viewer} />
-      <Attribution />
     </>
   );
 }
