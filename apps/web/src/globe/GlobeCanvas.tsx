@@ -435,6 +435,9 @@ export function GlobeCanvas({
     viewer.camera.changed.addEventListener(onCameraChanged);
 
     viewerRef.current = viewer;
+    // DEV-only debug handle so motion/clock can be inspected from the console
+    // or an automation harness. Guarded by import.meta.env.DEV so it never ships.
+    if (import.meta.env.DEV) (window as unknown as { __viewer?: Cesium.Viewer }).__viewer = viewer;
     const compositor = new LayerCompositor(registry, viewer);
     compositor.start();
     compositorRef.current = compositor;

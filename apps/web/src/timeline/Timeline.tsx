@@ -3,6 +3,7 @@ import type * as Cesium from 'cesium';
 import { useTime } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
 import { installHistoryPlayback, type PlaybackController, type PlaybackInfo } from '../globe/HistoryPlayback.js';
+import { MicroLabel } from '../shell/instruments.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -41,7 +42,7 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
   );
 
   useEffect(() => {
-    if (!viewer) return;
+    if (!viewer || viewer.isDestroyed()) return;
     const ctrl = installHistoryPlayback(viewer);
     playbackRef.current = ctrl;
     return () => {
@@ -132,133 +133,237 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
   const totalDet = detections.reduce((a, b) => a + b, 0);
   const totalAlert = alerts.reduce((a, b) => a + b, 0);
 
+  // Real scrub position: where the simulation clock sits inside the density
+  // window [from, to]. stamp is the live clock time, so this tracks the actual
+  // playhead — no fabricated animation. Falls back to the right edge ("now")
+  // until a density window is loaded.
+  const clockMs = Date.parse(stamp.replace(' ', 'T'));
+  const playPct =
+    density && Number.isFinite(clockMs) && density.to > density.from
+      ? Math.max(0, Math.min(100, ((clockMs - density.from) / (density.to - density.from)) * 100))
+      : 100;
+
+  // Seek to either edge of the loaded density window, reusing the same
+  // clock-jump math the strip-click already uses (real behaviour, no fakery).
+  const seekTo = (ms: number): void => {
+    if (!viewer) return;
+    jumpClockTo(viewer, ms);
+    setStamp(isoStamp(ms));
+  };
+
   return (
-    <div className="h-full flex flex-col px-3 py-2 gap-1">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={togglePlay}
-          aria-label={playing ? 'Pause' : 'Play'}
-          className="mono text-[11px] px-2 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1"
-        >
-          {playing ? '◼ pause' : '▶ play'}
-        </button>
+    <div className="h-full flex flex-col" style={{ padding: '9px 14px', gap: '7px' }}>
+      {/* ── Row 1 · transport ──────────────────────────────────────────── */}
+      <div className="flex items-center gap-2">
         <div className="flex items-center gap-1">
-          <span className="micro">speed</span>
-          {SPEEDS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setMultiplier(s)}
-              className={`mono text-[10px] px-1.5 py-0.5 border rounded-sm ${
-                multiplier === s
-                  ? 'border-accent-line text-accent'
-                  : 'border-line text-txt-2 hover:border-accent-line'
-              }`}
-              aria-pressed={multiplier === s}
-            >
-              {s}×
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => density && seekTo(density.from)}
+            disabled={!viewer || !density}
+            aria-label="Jump to window start"
+            className="tb w-6 h-6 grid place-items-center mono text-[11px] rounded-sm border border-line bg-bg-2 text-txt-2 hover:border-accent-line hover:text-txt-1 disabled:opacity-40"
+          >
+            ⏮
+          </button>
+          <button
+            type="button"
+            onClick={togglePlay}
+            aria-label={playing ? 'Pause' : 'Play'}
+            aria-pressed={playing}
+            className={`tb w-6 h-6 grid place-items-center mono text-[11px] rounded-sm border ${
+              playing
+                ? 'border-accent-line bg-accent-dim text-accent'
+                : 'border-line bg-bg-2 text-txt-1 hover:border-accent-line'
+            }`}
+          >
+            {playing ? '◼' : '▶'}
+          </button>
+          <button
+            type="button"
+            onClick={() => density && seekTo(density.to)}
+            disabled={!viewer || !density}
+            aria-label="Jump to now"
+            className="tb w-6 h-6 grid place-items-center mono text-[11px] rounded-sm border border-line bg-bg-2 text-txt-2 hover:border-accent-line hover:text-txt-1 disabled:opacity-40"
+          >
+            ⏭
+          </button>
         </div>
-        <div className="flex items-center gap-1" aria-label="Historical replay">
-          <span className="micro">replay</span>
-          {REPLAY_WINDOWS.map((w) => (
-            <button
-              key={w.sec}
-              type="button"
-              onClick={() => setReplayWindow(w.sec)}
-              disabled={replay.active}
-              className={`mono text-[10px] px-1.5 py-0.5 border rounded-sm ${
-                replayWindow === w.sec
-                  ? 'border-accent-line text-accent'
-                  : 'border-line text-txt-2 hover:border-accent-line'
-              } disabled:opacity-40`}
-              aria-pressed={replayWindow === w.sec}
-            >
-              {w.label}
-            </button>
-          ))}
+
+        <span className="w-px h-4 bg-line shrink-0" />
+
+        <div className="flex items-center gap-1.5">
+          <MicroLabel>spd</MicroLabel>
+          <div className="flex items-center rounded-sm border border-line overflow-hidden">
+            {SPEEDS.map((s, i) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setMultiplier(s)}
+                aria-pressed={multiplier === s}
+                aria-label={`${s} times speed`}
+                className={`mono text-[10px] tabular-nums px-1.5 py-1 ${
+                  i > 0 ? 'border-l border-line' : ''
+                } ${
+                  multiplier === s
+                    ? 'bg-accent-dim text-accent'
+                    : 'bg-bg-2 text-txt-2 hover:text-txt-1'
+                }`}
+              >
+                {s}×
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <span className="w-px h-4 bg-line shrink-0" />
+
+        <div className="flex items-center gap-1.5" aria-label="Historical replay">
+          <MicroLabel>rpl</MicroLabel>
+          <div className="flex items-center rounded-sm border border-line overflow-hidden">
+            {REPLAY_WINDOWS.map((w, i) => (
+              <button
+                key={w.sec}
+                type="button"
+                onClick={() => setReplayWindow(w.sec)}
+                disabled={replay.active}
+                aria-pressed={replayWindow === w.sec}
+                className={`mono text-[10px] px-1.5 py-1 disabled:opacity-40 ${
+                  i > 0 ? 'border-l border-line' : ''
+                } ${
+                  replayWindow === w.sec
+                    ? 'bg-accent-dim text-accent'
+                    : 'bg-bg-2 text-txt-2 hover:text-txt-1'
+                }`}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => void toggleReplay()}
             disabled={replay.loading}
-            className={`mono text-[10px] px-2 py-0.5 border rounded-sm ${
-              replay.active ? 'border-accent-line text-accent' : 'border-line text-txt-1 hover:border-accent-line'
-            }`}
             aria-pressed={replay.active}
+            className={`mono text-[10px] tracking-[0.3px] px-2 py-1 rounded-sm border ${
+              replay.active
+                ? 'border-accent-line bg-accent-dim text-accent'
+                : 'border-line bg-bg-2 text-txt-1 hover:border-accent-line'
+            } disabled:opacity-40`}
           >
             {replay.loading ? '…' : replay.active ? '◼ exit' : '▶ replay'}
           </button>
           {replay.active && replay.info && (
-            <span className="mono micro tabular-nums text-txt-2">
+            <span className="mono text-[9px] tabular-nums text-txt-3">
               {replay.info.tracks}t·{replay.info.points}p
             </span>
           )}
         </div>
-        <div className="flex-1 flex items-center gap-3">
-          <span className="micro flex items-center gap-1"><i className="inline-block w-2 h-2 bg-ok" />detections</span>
-          <span className="mono micro tabular-nums text-txt-2">{totalDet.toLocaleString()}</span>
-          <span className="micro flex items-center gap-1 ml-3"><i className="inline-block w-2 h-2 bg-alert" />alerts</span>
-          <span className="mono micro tabular-nums text-txt-2">{totalAlert.toLocaleString()}</span>
-        </div>
-        <div className="mono text-[11px] text-txt-1">{stamp}</div>
+
+        <span className="flex-1" />
+
+        <span className="mono text-[10px] tabular-nums tracking-[0.3px] text-txt-1">
+          {replay.active && (
+            <span className="text-txt-3">
+              replay {fmtClock(Date.now() - replayWindow * 1000)}–now ·{' '}
+            </span>
+          )}
+          {stamp}
+        </span>
       </div>
 
-      <div
-        ref={stripRef}
-        className="flex-1 border border-line rounded-sm bg-bg-2 relative overflow-hidden select-none cursor-crosshair"
-        onMouseDown={onStripMouseDown}
-        onMouseMove={onStripMouseMove}
-        onMouseUp={onStripMouseUp}
-        onMouseLeave={() => setDrag(null)}
-      >
-        <svg width="100%" height="100%" preserveAspectRatio="none" viewBox={`0 0 ${bins} 100`}>
-          {detections.map((det, i) => {
-            const h = (det / maxDet) * 92;
-            const aCount = alerts[i] ?? 0;
-            return (
-              <g key={i}>
-                {h > 0 && (
-                  <rect x={i} y={100 - h} width={1} height={h} fill="var(--ok)" opacity={0.65} />
-                )}
-                {aCount > 0 && (
-                  <rect x={i} y={0} width={1} height={100} fill="var(--alert)" opacity={0.9} />
-                )}
-              </g>
-            );
-          })}
-          {/* hour gridlines every ~3 hours */}
-          {[...Array(7)].map((_, i) => {
-            const x = (bins / 7) * (i + 1);
-            return (
-              <line
-                key={`g${i}`}
-                x1={x}
-                x2={x}
-                y1={92}
-                y2={100}
-                stroke="var(--line-2)"
-                strokeWidth="0.5"
+      {/* ── Row 2 · scrub ──────────────────────────────────────────────── */}
+      <div className="scrub relative h-[6px] bg-bg-3 rounded-sm overflow-visible">
+        <span
+          className="absolute left-0 top-0 bottom-0 bg-accent-dim rounded-sm"
+          style={{ width: `${playPct}%` }}
+        />
+        <span
+          className="absolute top-[-2px] bottom-[-2px] w-[2px] bg-accent rounded-full"
+          style={{ left: `calc(${playPct}% - 1px)` }}
+        />
+      </div>
+
+      {/* ── Row 3 · density strip ──────────────────────────────────────── */}
+      <div className="dens flex-1 flex flex-col gap-1 min-h-0">
+        <div
+          ref={stripRef}
+          className="relative flex-1 min-h-[30px] border border-line rounded-sm bg-bg-2 overflow-hidden select-none cursor-crosshair"
+          onMouseDown={onStripMouseDown}
+          onMouseMove={onStripMouseMove}
+          onMouseUp={onStripMouseUp}
+          onMouseLeave={() => setDrag(null)}
+        >
+          <svg width="100%" height="100%" preserveAspectRatio="none" viewBox={`0 0 ${bins} 100`}>
+            {/* faint vertical gridlines */}
+            {[...Array(11)].map((_, i) => {
+              const x = (bins / 12) * (i + 1);
+              return (
+                <line
+                  key={`v${i}`}
+                  x1={x}
+                  x2={x}
+                  y1={0}
+                  y2={100}
+                  stroke="var(--line)"
+                  strokeWidth="0.5"
+                  opacity={0.5}
+                />
+              );
+            })}
+            {detections.map((det, i) => {
+              const h = (det / maxDet) * 92;
+              const aCount = alerts[i] ?? 0;
+              return (
+                <g key={i}>
+                  {h > 0 && (
+                    <rect x={i} y={100 - h} width={1} height={h} fill="var(--ok)" opacity={0.65} />
+                  )}
+                  {aCount > 0 && (
+                    <rect x={i} y={0} width={1} height={100} fill="var(--alert)" opacity={0.9} />
+                  )}
+                </g>
+              );
+            })}
+            {drag && (
+              <rect
+                x={(Math.min(drag.start, drag.end) / (stripRef.current?.clientWidth ?? 1)) * bins}
+                y={0}
+                width={(Math.abs(drag.end - drag.start) / (stripRef.current?.clientWidth ?? 1)) * bins}
+                height={100}
+                fill="var(--accent)"
+                opacity={0.15}
               />
-            );
-          })}
-          {drag && (
-            <rect
-              x={(Math.min(drag.start, drag.end) / (stripRef.current?.clientWidth ?? 1)) * bins}
-              y={0}
-              width={(Math.abs(drag.end - drag.start) / (stripRef.current?.clientWidth ?? 1)) * bins}
-              height={100}
-              fill="var(--accent)"
-              opacity={0.15}
-            />
-          )}
-        </svg>
-        <span className="micro absolute top-1 left-2 pointer-events-none">−20h</span>
-        <span className="micro absolute top-1 right-2 pointer-events-none">now</span>
+            )}
+          </svg>
+        </div>
+
+        {/* legend + window/total labels */}
+        <div className="flex items-center gap-3 text-txt-3">
+          <span className="mono text-[8.5px] uppercase tracking-[0.5px] flex items-center gap-1">
+            <i className="inline-block w-2 h-[2px] bg-alert" />alert
+            <span className="tabular-nums text-txt-2 ml-0.5">{totalAlert.toLocaleString()}</span>
+          </span>
+          <span className="mono text-[8.5px] uppercase tracking-[0.5px] flex items-center gap-1">
+            <i className="inline-block w-2 h-[2px] bg-ok" />detection
+            <span className="tabular-nums text-txt-2 ml-0.5">{totalDet.toLocaleString()}</span>
+          </span>
+          <span className="mono text-[8.5px] uppercase tracking-[0.5px] flex items-center gap-1">
+            <i className="inline-block w-2 h-2 bg-bg-3 border border-line" />density
+          </span>
+          <span className="flex-1" />
+          <span className="mono text-[8.5px] uppercase tracking-[0.5px] text-txt-4">−20h</span>
+          <span className="mono text-[8.5px] uppercase tracking-[0.5px] text-txt-3">now</span>
+        </div>
       </div>
     </div>
   );
+}
+
+function fmtClock(ms: number): string {
+  const d = new Date(ms);
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 function isoStamp(ms: number): string {

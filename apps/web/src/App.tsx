@@ -6,6 +6,7 @@ import { TabbedPanel, type TabDef } from './shell/TabbedPanel.js';
 import { CommandBar } from './command-bar/CommandBar.js';
 import { useImagery } from './state/stores.js';
 import { LayerRail } from './layer-rail/LayerRail.js';
+import { OpsPanel } from './layer-rail/OpsPanel.js';
 import { ImageryControl } from './imagery/ImageryControl.js';
 import { ChokepointsList } from './layer-rail/ChokepointsList.js';
 import { FeedsPanel } from './layer-rail/FeedsPanel.js';
@@ -14,6 +15,9 @@ import { IntelPanel } from './entity-panel/IntelPanel.js';
 import { NewsPanel } from './news-panel/NewsPanel.js';
 import { Timeline } from './timeline/Timeline.js';
 import { GlobeCanvas } from './globe/GlobeCanvas.js';
+import { GlobeOverlays } from './globe/GlobeOverlays.js';
+import { GlobeTheater } from './globe/GlobeTheater.js';
+import { AgentConsole } from './command-bar/AgentConsole.js';
 import { LayerRegistry } from './registry/LayerRegistry.js';
 import { registerDefaults } from './registry/defaults.js';
 import { fetchRuntimeConfig } from './transport/config.js';
@@ -21,6 +25,7 @@ import { AlertSubscriber } from './alerts/AlertSubscriber.js';
 import { AlertsPanel } from './alerts/AlertsPanel.js';
 import { AlertsRailList } from './alerts/AlertsRailList.js';
 import { Attribution } from './shell/Attribution.js';
+import { ErrorBoundary } from './shell/ErrorBoundary.js';
 
 export function App(): JSX.Element {
   const registry = useMemo(() => {
@@ -54,6 +59,11 @@ export function App(): JSX.Element {
 
   const leftTabs: TabDef[] = useMemo(
     () => [
+      {
+        id: 'ops',
+        label: 'Ops',
+        content: <OpsPanel viewer={viewer} onOpenAlerts={() => setAlertsOpen(true)} />,
+      },
       { id: 'layers', label: 'Layers', content: <LayerRail registry={registry} viewer={viewer} /> },
       { id: 'imagery', label: 'Imagery', content: <ImageryControl /> },
       { id: 'chokepoints', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} /> },
@@ -84,25 +94,37 @@ export function App(): JSX.Element {
             onOpenAlerts={() => setAlertsOpen(true)}
           />
         }
-        left={<TabbedPanel tabs={leftTabs} defaultTab="layers" ariaLabel="Left rail tabs" />}
+        left={<TabbedPanel tabs={leftTabs} defaultTab="ops" ariaLabel="Left rail tabs" />}
+        leftTabs={leftTabs}
         globe={
           error ? (
             <BootError message={error} />
           ) : config ? (
-            <GlobeCanvas
-              ionToken={config.cesiumIonToken}
-              registry={registry}
-              onViewerReady={onViewerReady}
-              imageryMode={imageryMode}
-              enableGoogle3D={config.features.enableGoogle3D}
-              googleApiKey={config.googleApiKey}
-            />
+            <>
+              <ErrorBoundary label="globe">
+                <GlobeCanvas
+                  ionToken={config.cesiumIonToken}
+                  registry={registry}
+                  onViewerReady={onViewerReady}
+                  imageryMode={imageryMode}
+                  enableGoogle3D={config.features.enableGoogle3D}
+                  googleApiKey={config.googleApiKey}
+                />
+              </ErrorBoundary>
+              {/* Instrument overlays + resting command dock float over the globe.
+                  Both are null/viewer-safe and pointer-scoped so they never
+                  block globe interaction. */}
+              <GlobeTheater viewer={viewer} />
+              <GlobeOverlays viewer={viewer} />
+              <AgentConsole viewer={viewer} />
+            </>
           ) : (
             <BootLoading />
           )
         }
         right={<TabbedPanel tabs={rightTabs} defaultTab="selection" ariaLabel="Right rail tabs" />}
-        bottom={<Timeline viewer={viewer} />}
+        rightTabs={rightTabs}
+        bottom={<ErrorBoundary label="Timeline"><Timeline viewer={viewer} /></ErrorBoundary>}
       />
       <AlertsPanel open={alertsOpen} onClose={() => setAlertsOpen(false)} viewer={viewer} />
       <Attribution />

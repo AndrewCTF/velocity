@@ -1,9 +1,13 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useReducedMotion } from './useReducedMotion.js';
+import { ErrorBoundary } from './ErrorBoundary.js';
 
 // Generic tabbed-panel container — used by both rails (frontend.md §4).
-// The tab strip is mono 10px (matches .micro), 28px tall, with the active tab
-// underlined in accent. Hover affordance is a soft text lift.
+// Tab strip (.tabs/.tab) follows the Cobalt/Ink mockup: a flex row on bg-1 with
+// a line-2 bottom hairline; each tab is mono 10px, line-divided, ~30px tall. The
+// active tab lifts to txt-0 on bg-2 with a flush 2px accent underline (an
+// absolutely-positioned bar at bottom -1px spanning the tab). Inactive tabs sit
+// at txt-3 and lift to txt-1 on hover.
 //
 // Motion: a subtle opacity fade animates panel swaps. Honors
 // prefers-reduced-motion — when reduced, the swap is instant (no transition).
@@ -75,8 +79,7 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel }: Props): JSX.Element
       <div
         role="tablist"
         aria-label={ariaLabel ?? 'Panel tabs'}
-        className="flex items-stretch border-b border-line bg-bg-2/60"
-        style={{ height: 28, minHeight: 28 }}
+        className="flex items-stretch flex-none border-b border-line-2 bg-bg-1"
       >
         {tabs.map((t) => {
           const isActive = t.id === active?.id;
@@ -95,15 +98,20 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel }: Props): JSX.Element
               onClick={() => setActiveId(t.id)}
               onKeyDown={onTabKeyDown}
               className={[
-                'micro px-3 flex items-center gap-1.5 border-b-2 -mb-px',
-                isActive
-                  ? 'border-accent text-accent'
-                  : 'border-transparent text-txt-2 hover:text-txt-0',
+                'relative mono text-[10px] tracking-[0.4px] px-3 py-[9px] border-r border-line',
+                'flex items-center gap-1.5 whitespace-nowrap',
+                isActive ? 'text-txt-0 bg-bg-2' : 'text-txt-3 hover:text-txt-1',
               ].join(' ')}
-              style={reduced ? undefined : { transition: 'color 120ms ease, border-color 120ms ease' }}
+              style={reduced ? undefined : { transition: 'color 120ms ease, background-color 120ms ease' }}
             >
               {t.icon}
               <span>{t.label}</span>
+              {isActive && (
+                <span
+                  aria-hidden="true"
+                  className="absolute left-0 right-0 bottom-[-1px] h-[2px] bg-accent"
+                />
+              )}
             </button>
           );
         })}
@@ -127,7 +135,7 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel }: Props): JSX.Element
             className="flex-1 overflow-y-auto"
             style={reduced || !isActive ? undefined : { transition: 'opacity 120ms ease' }}
           >
-            {t.content}
+            <ErrorBoundary label={t.label}>{t.content}</ErrorBoundary>
           </div>
         );
       })}

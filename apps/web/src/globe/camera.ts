@@ -88,6 +88,13 @@ export function followEntity(viewer: Cesium.Viewer, entityId: string): boolean {
 
 export function stopFollow(viewer: Cesium.Viewer): void {
   followId = null;
+  // A destroyed viewer (HMR teardown / globe ErrorBoundary) is non-null but its
+  // setters throw — this runs from EntityPanel's effect cleanup, which fires
+  // exactly when the viewer may already be gone. Clear local state, then bail.
+  if (viewer.isDestroyed()) {
+    followTick = null;
+    return;
+  }
   if (followTick) {
     viewer.clock.onTick.removeEventListener(followTick);
     followTick = null;

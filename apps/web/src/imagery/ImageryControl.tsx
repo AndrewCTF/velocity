@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useImagery } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
+import { SectionLabel, MicroLabel, Btn, Badge } from '../shell/instruments.js';
 
 interface CatalogLayer {
   provider: string;
@@ -30,6 +31,15 @@ interface EventsAllResponse {
   count: number;
   sources: Record<string, { ok: boolean; kept?: number; note?: string; error?: string }>;
 }
+
+// Shared field styling — tokenised mono inputs/selects matching the console.
+const FIELD =
+  'mono text-[11px] bg-bg-1 border border-line rounded-sm px-1.5 py-1 text-txt-1 placeholder:text-txt-3/60 focus:outline-none focus:border-accent-line disabled:opacity-40';
+
+// Square mono step button for the day stepper — matches the Btn neutral look
+// but stays a native <button> so the aria-label is forwarded.
+const STEP_BTN =
+  'mono text-[11px] w-7 py-[5px] rounded-sm border border-line-2 bg-bg-2 text-txt-1 hover:border-accent-line disabled:opacity-40 transition-colors';
 
 function eventLabel(f: EventFeature): string {
   const p = f.properties ?? {};
@@ -153,9 +163,11 @@ export function ImageryControl() {
   useEffect(() => {
     let alive = true;
     apiFetch('/api/imagery/catalog')
-      .then((r) => r.json())
-      .then((b: { layers: CatalogLayer[] }) => {
-        if (alive) setLayers(b.layers);
+      // A non-2xx (e.g. 401 when signed out) still has a JSON body — guard so
+      // `layers` is always an array and the grouping useMemo can't throw.
+      .then((r) => (r.ok ? r.json() : { layers: [] }))
+      .then((b: { layers?: CatalogLayer[] }) => {
+        if (alive) setLayers(Array.isArray(b?.layers) ? b.layers : []);
       })
       .catch(() => {
         if (alive) setLayers([]);
@@ -182,9 +194,10 @@ export function ImageryControl() {
   const isStatic = selectedLayer?.static === true;
 
   return (
-    <div className="imagery-control">
-      <label className="imagery-control__row">
-        <span>Satellite imagery ({layers.length})</span>
+    <div className="px-3 py-2 flex flex-col gap-3">
+      {/* ── Overlay layer picker ──────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1.5">
+        <SectionLabel title="Satellite imagery" count={layers.length} />
         <select
           value={selectedKey}
           onChange={(e) => {
@@ -195,6 +208,7 @@ export function ImageryControl() {
                 : null,
             );
           }}
+          className={`${FIELD} w-full`}
         >
           <option value="">Off</option>
           {grouped.map(([group, ls]) => (
@@ -207,13 +221,13 @@ export function ImageryControl() {
             </optgroup>
           ))}
         </select>
-      </label>
-      <div className="imagery-control__events">
-        <div className="imagery-control__row">
-          <span>Find events at a location</span>
-        </div>
+      </div>
+
+      {/* ── Find events at a location ─────────────────────────────────────── */}
+      <div className="flex flex-col gap-1.5">
+        <SectionLabel title="Find events at a location" />
         <form
-          className="imagery-control__row"
+          className="flex gap-1"
           onSubmit={(e) => {
             e.preventDefault();
             void runGeocode();
@@ -225,15 +239,16 @@ export function ImageryControl() {
             value={cityQuery}
             onChange={(e) => setCityQuery(e.target.value)}
             aria-label="City name"
+            className={`${FIELD} flex-1 min-w-0`}
           />
-          <button type="submit" disabled={geocoding || !cityQuery.trim()}>
+          <Btn tone="accent" disabled={geocoding || !cityQuery.trim()} onClick={() => void runGeocode()}>
             {geocoding ? '…' : 'Search'}
-          </button>
+          </Btn>
         </form>
         {geocodeHits.length > 0 && (
-          <ul className="imagery-control__geocode">
+          <ul className="flex flex-col rounded-sm border border-line bg-bg-2 overflow-hidden">
             {geocodeHits.map((h) => (
-              <li key={`${h.lat},${h.lon},${h.name}`}>
+              <li key={`${h.lat},${h.lon},${h.name}`} className="border-b border-[rgba(255,255,255,0.035)] last:border-b-0">
                 <button
                   type="button"
                   title={`${h.lat.toFixed(4)}, ${h.lon.toFixed(4)} (${h.type})`}
@@ -241,6 +256,7 @@ export function ImageryControl() {
                     setGeocodeHits([]);
                     void applyLocation(h.lat, h.lon, h.name);
                   }}
+                  className="w-full text-left mono text-[11px] text-txt-1 px-2 py-[5px] hover:bg-accent-dim hover:text-accent transition-colors truncate"
                 >
                   {h.name}
                 </button>
@@ -248,7 +264,7 @@ export function ImageryControl() {
             ))}
           </ul>
         )}
-        <div className="imagery-control__row imagery-control__latlon">
+        <div className="flex gap-1">
           <input
             type="number"
             step="any"
@@ -256,6 +272,7 @@ export function ImageryControl() {
             value={latInput}
             onChange={(e) => setLatInput(e.target.value)}
             aria-label="Latitude"
+            className={`${FIELD} flex-1 min-w-0 tabular-nums`}
           />
           <input
             type="number"
@@ -264,55 +281,58 @@ export function ImageryControl() {
             value={lonInput}
             onChange={(e) => setLonInput(e.target.value)}
             aria-label="Longitude"
+            className={`${FIELD} flex-1 min-w-0 tabular-nums`}
           />
-          <button type="button" onClick={applyTypedCoords}>
-            Go
-          </button>
+          <Btn onClick={applyTypedCoords}>Go</Btn>
         </div>
-        <label className="imagery-control__row">
-          <span>Radius {eventsRadiusKm} km</span>
-          <input
-            type="range"
-            min={10}
-            max={3000}
-            step={10}
-            value={eventsRadiusKm}
-            onChange={(e) => setEventsRadiusKm(Number(e.target.value))}
-            onMouseUp={() => {
-              if (eventsLocation)
-                void applyLocation(eventsLocation.lat, eventsLocation.lon, eventsLocation.name);
-            }}
-          />
-        </label>
+        <div className="flex items-center justify-between gap-2">
+          <MicroLabel>Radius</MicroLabel>
+          <span className="mono text-[10px] text-txt-1 tabular-nums">{eventsRadiusKm} km</span>
+        </div>
+        <input
+          type="range"
+          min={10}
+          max={3000}
+          step={10}
+          value={eventsRadiusKm}
+          onChange={(e) => setEventsRadiusKm(Number(e.target.value))}
+          onMouseUp={() => {
+            if (eventsLocation)
+              void applyLocation(eventsLocation.lat, eventsLocation.lon, eventsLocation.name);
+          }}
+          className="w-full accent-accent"
+        />
         {eventsLocation && (
-          <div className="imagery-control__events-result">
+          <div className="flex flex-col gap-1.5 rounded-sm border border-line bg-bg-2 p-2">
             {eventsLoading ? (
-              <span>Loading events…</span>
+              <MicroLabel>Loading events…</MicroLabel>
             ) : eventsError ? (
-              <span className="imagery-control__events-error">Error: {eventsError}</span>
+              <Badge tone="alert">Error: {eventsError}</Badge>
             ) : (
               <>
-                <span>
-                  {events.length} event{events.length === 1 ? '' : 's'} within{' '}
-                  {eventsRadiusKm} km
+                <span className="mono text-[10.5px] text-txt-1 tabular-nums">
+                  {events.length} event{events.length === 1 ? '' : 's'} within {eventsRadiusKm} km
                   {eventsLocation.name ? ` of ${eventsLocation.name.split(',')[0]}` : ''}
                 </span>
                 {eventsSummary && (
-                  <span className="imagery-control__events-sources">
+                  <span className="mono text-[9px] text-txt-3 tabular-nums">
                     {Object.entries(eventsSummary)
                       .map(([k, v]) => `${k}: ${v.ok ? (v.kept ?? 0) : '×'}`)
                       .join('  ·  ')}
                   </span>
                 )}
                 {events.length > 0 && (
-                  <ul className="imagery-control__events-list">
+                  <ul className="flex flex-col">
                     {events.slice(0, 50).map((f, i) => {
                       const c = f.geometry?.coordinates;
                       const flon = c?.[0];
                       const flat = c?.[1];
                       const canFly = typeof flon === 'number' && typeof flat === 'number';
                       return (
-                        <li key={f.id ?? i}>
+                        <li
+                          key={f.id ?? i}
+                          className="border-b border-[rgba(255,255,255,0.035)] last:border-b-0"
+                        >
                           <button
                             type="button"
                             disabled={!canFly}
@@ -320,6 +340,7 @@ export function ImageryControl() {
                               if (typeof flon === 'number' && typeof flat === 'number')
                                 requestFlyTo(flat, flon);
                             }}
+                            className="w-full text-left mono text-[10.5px] text-txt-1 py-[5px] hover:text-accent disabled:opacity-40 disabled:hover:text-txt-1 transition-colors truncate"
                           >
                             {eventLabel(f)}
                           </button>
@@ -333,32 +354,44 @@ export function ImageryControl() {
           </div>
         )}
       </div>
+
+      {/* ── Overlay opacity (only when a layer is active) ─────────────────── */}
       {overlay && (
-        <label className="imagery-control__row">
-          <span>Opacity {Math.round(overlayOpacity * 100)}%</span>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <MicroLabel>Opacity</MicroLabel>
+            <span className="mono text-[10px] text-txt-1 tabular-nums">
+              {Math.round(overlayOpacity * 100)}%
+            </span>
+          </div>
           <input
             type="range"
             min={0}
             max={100}
             value={Math.round(overlayOpacity * 100)}
             onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)}
+            className="w-full accent-accent"
           />
-        </label>
+        </div>
       )}
-      <div className="imagery-control__lod1">
-        <button
-          type="button"
+
+      {/* ── 3D buildings + war-damage AOI ─────────────────────────────────── */}
+      <div className="flex flex-col gap-1.5">
+        <SectionLabel title="3D buildings" />
+        <Btn
           onClick={() => requestLod1Here()}
           title="Extrude real OSM building footprints for whatever the camera is currently looking at"
+          className="w-full"
         >
           Load 3D buildings here
-        </button>
-        <label className="imagery-control__row">
-          <span>War-damage 3D</span>
+        </Btn>
+        <div className="flex flex-col gap-1">
+          <MicroLabel>War-damage 3D</MicroLabel>
           <select
             value={lod1Aoi ?? ''}
             onChange={(e) => setLod1Aoi(e.target.value || null)}
             title="Curated AOI: red = Sentinel-1 SAR collapse candidate"
+            className={`${FIELD} w-full`}
           >
             <option value="">Off</option>
             {DAMAGE_AOIS.map((a) => (
@@ -367,23 +400,29 @@ export function ImageryControl() {
               </option>
             ))}
           </select>
-        </label>
+        </div>
       </div>
+
+      {/* ── Day stepper (time-varying overlays only) ──────────────────────── */}
+      {/* Native buttons here to preserve the aria-label="Previous/Next day" the
+          Btn primitive does not forward. */}
       {overlay && !isStatic && (
-        <div className="imagery-control__date">
+        <div className="flex items-center justify-center gap-2">
           <button
             type="button"
             aria-label="Previous day"
             onClick={() => setOverlay({ ...overlay, date: shiftDate(overlay.date, -1) })}
+            className={STEP_BTN}
           >
             ◀
           </button>
-          <span>{overlay.date}</span>
+          <span className="mono text-[11px] text-txt-0 tabular-nums">{overlay.date}</span>
           <button
             type="button"
             aria-label="Next day"
             disabled={overlay.date >= today()}
             onClick={() => setOverlay({ ...overlay, date: shiftDate(overlay.date, 1) })}
+            className={STEP_BTN}
           >
             ▶
           </button>

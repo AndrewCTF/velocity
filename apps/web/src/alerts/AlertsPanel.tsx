@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { useAlerts } from '../state/stores.js';
 import { flyToPosition } from '../globe/camera.js';
+import { SectionLabel, Badge, Btn, type BadgeTone } from '../shell/instruments.js';
 import type { Alert } from '@osint/shared';
 
 interface Props {
@@ -10,16 +11,26 @@ interface Props {
   viewer: Cesium.Viewer | null;
 }
 
-// "low" severity uses --sev-low (≡ txt-1) so it doesn't collide with the
-// teal selection accent. See tokens.css.
-const SEV_BG: Record<string, string> = {
-  critical: 'border-l-alert bg-alert-bg',
-  high: 'border-l-alert bg-alert-bg',
-  medium: 'border-l-warn bg-warn-bg',
-  low: 'border-l-[var(--sev-low)] bg-bg-2/60',
-  info: 'border-l-txt-3',
+// Severity → <Badge> tone. critical/high read as alert, medium as warn, low and
+// info stay neutral so they don't collide with the teal selection accent.
+const SEV_BADGE: Record<string, BadgeTone> = {
+  critical: 'alert',
+  high: 'alert',
+  medium: 'warn',
+  low: 'neutral',
+  info: 'neutral',
 };
 
+// Severity → left accent bar colour (the 2px rail on each row).
+const SEV_BAR: Record<string, string> = {
+  critical: 'var(--alert)',
+  high: 'var(--alert)',
+  medium: 'var(--warn)',
+  low: 'var(--sev-low)',
+  info: 'var(--txt-2)',
+};
+
+// Severity → header-summary count colour.
 const SEV_LABEL: Record<string, string> = {
   critical: 'text-alert',
   high: 'text-alert',
@@ -126,39 +137,41 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
       />
       <aside
         ref={dialogRef}
-        className="fixed top-[46px] bottom-[170px] right-0 z-[810] w-full max-w-[460px] bg-bg-1 border-l border-line flex flex-col"
+        className="fixed top-[46px] bottom-[170px] right-0 z-[810] w-full max-w-[460px] bg-bg-1 border-l border-line-2 rounded-l-md flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-label="Alerts"
         style={{
-          boxShadow: 'inset 1px 0 0 rgba(0,0,0,0.5), inset -1px 0 0 rgba(255,255,255,0.04)',
+          boxShadow:
+            'inset 1px 0 0 rgba(0,0,0,0.5), inset -1px 0 0 rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)',
         }}
       >
-        <header className="px-4 py-3 border-b border-line flex items-center justify-between">
-          <div>
-            <h2 className="mono text-[13px] text-txt-0">Alerts</h2>
-            <p className="micro mt-0.5">
-              <span className="mono text-txt-1">{alerts.length}</span> total
+        <header className="px-4 py-3 border-b border-line-2 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="mono text-[11px] tracking-[1px] uppercase text-txt-0">Alerts</div>
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5">
+              <span className="mono text-[9px] tracking-[0.4px] uppercase text-txt-3 tabular-nums">
+                {alerts.length} TOTAL
+              </span>
               {Object.entries(sevCounts).map(([sev, n]) => (
-                <span key={sev} className={`ml-2 ${SEV_LABEL[sev] ?? 'text-txt-3'}`}>
+                <span
+                  key={sev}
+                  className={`mono text-[9px] tracking-[0.4px] uppercase tabular-nums ${SEV_LABEL[sev] ?? 'text-txt-3'}`}
+                >
                   {sev} {n}
                 </span>
               ))}
-            </p>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => clear()}
-              className="mono text-[10px] px-2 py-1 border border-line rounded-sm text-txt-2 hover:text-alert hover:border-alert/40"
-            >
+          <div className="flex gap-1.5 shrink-0">
+            <Btn size="sm" onClick={() => clear()} title="Clear alert buffer">
               clear
-            </button>
+            </Btn>
             <button
               ref={closeBtnRef}
               type="button"
               onClick={onClose}
-              className="mono text-[11px] px-2 py-1 border border-line rounded-sm text-txt-1 hover:border-accent-line"
+              className="mono text-[11px] px-2 py-1 border border-line-2 bg-bg-2 rounded-sm text-txt-1 hover:border-accent-line hover:text-accent transition-colors"
               aria-label="Close"
             >
               ✕
@@ -166,33 +179,35 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
           </div>
         </header>
 
-        <div className="px-4 py-2 border-b border-line flex flex-wrap items-center gap-1">
-          <span className="micro mr-1">severity:</span>
+        <div className="px-4 py-2.5 border-b border-line-2 flex flex-wrap items-center gap-1">
+          <span className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3 mr-1">sev</span>
           {['critical', 'high', 'medium', 'low'].map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setFilterSev((cur) => (cur === s ? null : s))}
-              className={`mono text-[10px] px-1.5 py-0.5 border rounded-sm ${
+              className={`mono text-[9px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
                 filterSev === s
-                  ? `border-accent-line text-accent`
-                  : 'border-line text-txt-2 hover:border-accent-line'
+                  ? 'border-accent-line bg-accent-dim text-accent'
+                  : 'border-line text-txt-3 hover:border-accent-line hover:text-txt-1'
               }`}
               aria-pressed={filterSev === s}
             >
-              {s} {sevCounts[s] ?? 0}
+              {s} <span className="tabular-nums text-txt-2">{sevCounts[s] ?? 0}</span>
             </button>
           ))}
-          {ruleKeys.length > 0 && <span className="micro ml-2 mr-1">rule:</span>}
+          {ruleKeys.length > 0 && (
+            <span className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3 ml-2 mr-1">rule</span>
+          )}
           {ruleKeys.map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setFilterRule((cur) => (cur === r ? null : r))}
-              className={`mono text-[10px] px-1.5 py-0.5 border rounded-sm ${
+              className={`mono text-[9px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
                 filterRule === r
-                  ? 'border-accent-line text-accent'
-                  : 'border-line text-txt-2 hover:border-accent-line'
+                  ? 'border-accent-line bg-accent-dim text-accent'
+                  : 'border-line text-txt-3 hover:border-accent-line hover:text-txt-1'
               }`}
               aria-pressed={filterRule === r}
             >
@@ -201,20 +216,26 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
           ))}
         </div>
 
-        <ul className="flex-1 overflow-y-auto p-3 space-y-2">
-          {filtered.length === 0 && (
-            <li className="micro p-4 text-center">
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {filtered.length === 0 ? (
+            <p className="text-[10.5px] leading-snug text-txt-3 px-1 py-3 text-center">
               {alerts.length === 0
                 ? 'No alerts in buffer. Correlation rules fire when criteria match.'
                 : 'No alerts match the current filters.'}
-            </li>
+            </p>
+          ) : (
+            <>
+              <SectionLabel title="Buffer" count={filtered.length} />
+              <ul className="divide-y divide-line border-b border-line">
+                {filtered.map((a) => (
+                  <li key={a.id}>
+                    <AlertCard alert={a} viewer={viewer} />
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
-          {filtered.map((a) => (
-            <li key={a.id}>
-              <AlertCard alert={a} viewer={viewer} />
-            </li>
-          ))}
-        </ul>
+        </div>
       </aside>
     </>
   );
@@ -222,37 +243,38 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
 
 function AlertCard({ alert: a, viewer }: { alert: Alert; viewer: Cesium.Viewer | null }): JSX.Element {
   return (
-    <article
-      className={`border-l-2 ${SEV_BG[a.severity] ?? ''} px-3 py-2 rounded-r-sm`}
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className={`micro ${SEV_LABEL[a.severity] ?? ''}`}>
-          {a.severity.toUpperCase()}
+    <article className="relative pl-3 pr-1 py-2.5">
+      <span
+        className="absolute left-0 top-0 bottom-0 w-[2px]"
+        style={{ background: SEV_BAR[a.severity] ?? 'var(--txt-2)' }}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <Badge tone={SEV_BADGE[a.severity] ?? 'neutral'}>{a.severity}</Badge>
+        <span className="mono text-[9px] tracking-[0.4px] uppercase tabular-nums text-txt-3">
+          {RULE_LABEL[a.ruleId] ?? a.ruleId}
         </span>
-        <span className="mono micro tabular-nums">{RULE_LABEL[a.ruleId] ?? a.ruleId}</span>
       </div>
-      <p className="text-[12px] text-txt-0 leading-snug mt-1">{a.message}</p>
+      <p className="text-[12px] text-txt-0 leading-snug mt-1.5">{a.message}</p>
       <div className="flex items-center gap-2 mt-2">
-        <button
-          type="button"
+        <Btn
+          size="sm"
           onClick={() => {
             if (viewer && a.geom?.type === 'Point') {
               const [lon, lat] = a.geom.coordinates as [number, number];
               flyToPosition(viewer, lon, lat, 300_000, 1.0);
             }
           }}
-          className="mono text-[10px] px-2 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1"
         >
           slew to
-        </button>
-        <span className="mono micro tabular-nums text-txt-3">
+        </Btn>
+        <span className="mono text-[9px] tabular-nums text-txt-3">
           {new Date(a.t).toISOString().slice(11, 19)}Z
         </span>
-        <span className="mono micro tabular-nums text-txt-3">
+        <span className="mono text-[9px] tabular-nums text-txt-3">
           conf {(a.confidence * 100).toFixed(0)}%
         </span>
         {a.contributingObservations?.length > 0 && (
-          <span className="mono micro tabular-nums text-txt-3">
+          <span className="mono text-[9px] tabular-nums text-txt-3">
             · {a.contributingObservations.length} contrib
           </span>
         )}

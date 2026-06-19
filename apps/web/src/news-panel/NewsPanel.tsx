@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
+import { SectionLabel, MicroLabel, Badge, Btn, type BadgeTone } from '../shell/instruments.js';
 
 // News intelligence rail — renders the backend debias / fact-check bundle
 // (/api/news/analysis). A small multi-step agent on the backend (1) clusters
@@ -54,27 +55,29 @@ interface FactCheck {
 
 const REFRESH_MS = 60_000;
 
-function statusClass(status?: string): string {
+// Attributed-claim status → badge tone.
+function statusTone(status?: string): BadgeTone {
   switch ((status ?? '').toLowerCase()) {
     case 'corroborated':
-      return 'text-ok';
+      return 'ok';
     case 'disputed':
-      return 'text-warn';
+      return 'warn';
     default:
-      return 'text-alert';
+      return 'alert';
   }
 }
 
-function verdictClass(verdict?: string): string {
+// Fact-check verdict → badge tone.
+function verdictTone(verdict?: string): BadgeTone {
   switch ((verdict ?? '').toLowerCase()) {
     case 'true':
-      return 'text-ok';
+      return 'ok';
     case 'false':
-      return 'text-alert';
+      return 'alert';
     case 'misleading':
-      return 'text-warn';
+      return 'warn';
     default:
-      return 'text-txt-2';
+      return 'neutral';
   }
 }
 
@@ -92,11 +95,11 @@ function relativeTime(iso?: string | null): string {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
-// A confidence chip whose tint tracks the value — green/amber/grey.
-function confidenceClass(c: number): string {
-  if (c >= 0.66) return 'border-ok/40 text-ok';
-  if (c >= 0.33) return 'border-warn/40 text-warn';
-  return 'border-line text-txt-2';
+// A confidence value → badge tone tracking the magnitude.
+function confidenceTone(c: number): BadgeTone {
+  if (c >= 0.66) return 'ok';
+  if (c >= 0.33) return 'warn';
+  return 'neutral';
 }
 
 // Loading skeleton — three faint event cards while the first analysis lands.
@@ -165,25 +168,21 @@ export function NewsPanel(): JSX.Element {
   const isAgent = (analysis?.method ?? '').startsWith('agent');
 
   return (
-    <div className="h-full flex flex-col gap-2 px-3 py-2 overflow-y-auto">
+    <div className="h-full flex flex-col gap-2.5 px-3 py-2 overflow-y-auto">
       {/* Header — what this is + freshness + how many agent steps produced it */}
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="micro text-txt-2">debias · corroboration · fact-check</span>
-        {analysis && !unavailable && (
-          <span className="micro tabular-nums text-txt-3 shrink-0">
-            {relativeTime(analysis.generated)}
-          </span>
-        )}
-      </div>
+      <SectionLabel
+        title="debias · corroboration · fact-check"
+        {...(analysis && !unavailable ? { count: relativeTime(analysis.generated) } : {})}
+      />
       {analysis && !unavailable && (analysis.agent_steps || analysis.source_count) && (
-        <div className="flex flex-wrap items-center gap-1 -mt-1">
+        <div className="flex flex-wrap items-center gap-1.5 -mt-1">
           {isAgent && analysis.agent_steps != null && (
-            <span className="micro px-1 py-px border border-accent-line text-accent rounded-sm">
+            <Badge tone="accent">
               agent · {analysis.agent_steps} step{analysis.agent_steps === 1 ? '' : 's'}
-            </span>
+            </Badge>
           )}
           {analysis.source_count != null && (
-            <span className="micro text-txt-3">
+            <span className="mono text-[9px] text-txt-3 tabular-nums">
               {analysis.source_count} sources · {analysis.article_count ?? 0} headlines
             </span>
           )}
@@ -193,8 +192,8 @@ export function NewsPanel(): JSX.Element {
       {/* Fact-check one claim */}
       <div className="border border-line rounded-sm bg-bg-2 p-2 flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="micro text-txt-2">fact-check a claim</span>
-          <span className="micro text-txt-3">⏎ to check</span>
+          <MicroLabel>fact-check a claim</MicroLabel>
+          <MicroLabel>⏎ to check</MicroLabel>
         </div>
         <div className="flex gap-1">
           <input
@@ -206,14 +205,13 @@ export function NewsPanel(): JSX.Element {
             placeholder='e.g. "the war will end soon"'
             className="flex-1 min-w-0 mono text-[11px] bg-bg-1 border border-line rounded-sm px-1.5 py-1 text-txt-1 placeholder:text-txt-2/60 focus:outline-none focus:border-accent-line"
           />
-          <button
-            type="button"
+          <Btn
+            tone="accent"
             onClick={() => void runFactCheck()}
             disabled={fcLoading || !claim.trim()}
-            className="mono text-[10px] px-2.5 py-1 border border-line rounded-sm hover:border-accent-line hover:text-accent text-txt-1 disabled:opacity-40 disabled:hover:border-line disabled:hover:text-txt-1 transition-colors"
           >
             {fcLoading ? 'checking…' : 'check'}
-          </button>
+          </Btn>
         </div>
         {fcLoading && (
           <div className="h-2 w-1/2 rounded-sm bg-line/40 animate-pulse" aria-hidden />
@@ -221,24 +219,20 @@ export function NewsPanel(): JSX.Element {
         {fc && !fcLoading && (
           <div className="mono text-[11px] leading-snug border-t border-line/60 pt-1.5">
             <div className="flex items-center gap-1.5">
-              <span className={`uppercase font-bold tracking-wide ${verdictClass(fc.verdict)}`}>
-                {fc.verdict ?? '—'}
-              </span>
+              <Badge tone={verdictTone(fc.verdict)}>{fc.verdict ?? '—'}</Badge>
               {typeof fc.confidence === 'number' && (
-                <span
-                  className={`micro px-1 py-px border rounded-sm tabular-nums ${confidenceClass(fc.confidence)}`}
-                >
+                <Badge tone={confidenceTone(fc.confidence)}>
                   {(fc.confidence * 100).toFixed(0)}% conf
-                </span>
+                </Badge>
               )}
             </div>
-            {fc.reasoning && <p className="text-txt-2 mt-1 leading-snug">{fc.reasoning}</p>}
+            {fc.reasoning && <p className="text-txt-2 mt-1.5 leading-snug">{fc.reasoning}</p>}
             {!!fc.supporting_sources?.length && (
-              <div className="mt-1 flex flex-wrap gap-1">
+              <div className="mt-1.5 flex flex-wrap gap-1">
                 {fc.supporting_sources.map((s, j) => (
-                  <span key={j} className="micro px-1 py-px border border-line text-txt-3 rounded-sm">
+                  <Badge key={j} tone="neutral">
                     {s}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             )}
@@ -248,15 +242,15 @@ export function NewsPanel(): JSX.Element {
 
       {loading && !analysis && <Skeleton />}
       {unavailable && (
-        <div className="border border-warn/40 bg-warn-bg rounded-sm p-2 flex flex-col gap-0.5">
-          <span className="micro text-warn">model unavailable</span>
+        <div className="border border-warn/40 bg-warn-bg rounded-sm p-2 flex flex-col gap-1">
+          <MicroLabel className="text-warn">model unavailable</MicroLabel>
           <span className="mono text-[11px] text-txt-2 leading-snug">
             {analysis?.error ?? 'retrying on the next refresh…'}
           </span>
         </div>
       )}
       {!loading && events.length === 0 && !unavailable && (
-        <span className="micro text-txt-2">no events yet</span>
+        <MicroLabel>no events yet</MicroLabel>
       )}
 
       {events.map((ev, i) => {
@@ -267,27 +261,21 @@ export function NewsPanel(): JSX.Element {
             <div className="flex items-start justify-between gap-2">
               <span className="mono text-[12px] text-txt-0 font-bold leading-snug">{ev.title}</span>
               {typeof ev.confidence === 'number' && (
-                <span
-                  className={`micro px-1 py-px border rounded-sm tabular-nums shrink-0 ${confidenceClass(ev.confidence)}`}
-                >
+                <Badge tone={confidenceTone(ev.confidence)} className="shrink-0">
                   {(ev.confidence * 100).toFixed(0)}%
-                </span>
+                </Badge>
               )}
             </div>
 
             {/* Corroboration up front — the headline trust signal */}
             {ev.corroboration?.source_count != null && (
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span
-                  className={`micro px-1 py-px rounded-sm border ${
-                    corroborated ? 'border-ok/40 text-ok' : 'border-warn/40 text-warn'
-                  }`}
-                >
+                <Badge tone={corroborated ? 'ok' : 'warn'}>
                   {corroborated ? '✓ corroborated' : 'single source'} · {sc} outlet
                   {sc === 1 ? '' : 's'}
-                </span>
+                </Badge>
                 {!!ev.corroboration.sources?.length && (
-                  <span className="micro text-txt-3 truncate">
+                  <span className="mono text-[9px] text-txt-3 truncate">
                     {ev.corroboration.sources.join(' · ')}
                   </span>
                 )}
@@ -300,8 +288,8 @@ export function NewsPanel(): JSX.Element {
 
             {!!ev.verified_facts?.length && (
               <div className="border-l-2 border-ok/50 pl-2">
-                <span className="micro text-ok">verified facts · ≥2 sources</span>
-                <ul className="mt-0.5 flex flex-col gap-0.5">
+                <MicroLabel className="text-ok">verified facts · ≥2 sources</MicroLabel>
+                <ul className="mt-1 flex flex-col gap-0.5">
                   {ev.verified_facts.map((f, j) => (
                     <li key={j} className="mono text-[11px] text-txt-1 leading-snug pl-2 -indent-2">
                       · {f}
@@ -313,12 +301,12 @@ export function NewsPanel(): JSX.Element {
 
             {!!ev.attributed_claims?.length && (
               <div className="border-l-2 border-warn/50 pl-2">
-                <span className="micro text-warn">attributed claims</span>
-                <ul className="mt-0.5 flex flex-col gap-0.5">
+                <MicroLabel className="text-warn">attributed claims</MicroLabel>
+                <ul className="mt-1 flex flex-col gap-1">
                   {ev.attributed_claims.map((c, j) => (
-                    <li key={j} className="mono text-[11px] text-txt-1 leading-snug">
+                    <li key={j} className="mono text-[11px] text-txt-1 leading-snug flex flex-wrap items-baseline gap-1">
                       <span className="text-txt-2">{c.who}:</span> {c.claim}{' '}
-                      <span className={`uppercase ${statusClass(c.status)}`}>[{c.status}]</span>
+                      <Badge tone={statusTone(c.status)}>{c.status}</Badge>
                     </li>
                   ))}
                 </ul>
@@ -327,8 +315,8 @@ export function NewsPanel(): JSX.Element {
 
             {!!ev.rhetoric_flags?.length && (
               <div className="border-l-2 border-alert/50 pl-2">
-                <span className="micro text-alert">rhetoric / unfulfilled</span>
-                <ul className="mt-0.5 flex flex-col gap-0.5">
+                <MicroLabel className="text-alert">rhetoric / unfulfilled</MicroLabel>
+                <ul className="mt-1 flex flex-col gap-0.5">
                   {ev.rhetoric_flags.map((r, j) => (
                     <li key={j} className="mono text-[11px] text-txt-1 leading-snug">
                       <span className="text-txt-2">{r.who}:</span> {r.claim}
@@ -341,8 +329,8 @@ export function NewsPanel(): JSX.Element {
 
             {!!ev.bias_flags?.length && (
               <div>
-                <span className="micro text-txt-2">bias flags</span>
-                <ul className="mt-0.5 flex flex-col gap-0.5">
+                <MicroLabel>bias flags</MicroLabel>
+                <ul className="mt-1 flex flex-col gap-0.5">
                   {ev.bias_flags.map((b, j) => (
                     <li key={j} className="mono text-[10px] text-txt-2 leading-snug">
                       <span className="text-txt-1">{b.source}</span> — {b.technique}
@@ -356,12 +344,9 @@ export function NewsPanel(): JSX.Element {
             {!!ev.propaganda_techniques?.length && (
               <div className="flex flex-wrap gap-1">
                 {ev.propaganda_techniques.map((p, j) => (
-                  <span
-                    key={j}
-                    className="micro px-1 py-px border border-alert/40 text-alert rounded-sm"
-                  >
+                  <Badge key={j} tone="alert">
                     {p}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             )}
@@ -371,7 +356,7 @@ export function NewsPanel(): JSX.Element {
 
       {/* Footer — method line so the operator can see how this was judged */}
       {analysis && !unavailable && analysis.method && (
-        <span className="micro text-txt-3 leading-snug pt-0.5">{analysis.method}</span>
+        <span className="mono text-[9px] text-txt-3 leading-snug pt-0.5">{analysis.method}</span>
       )}
     </div>
   );

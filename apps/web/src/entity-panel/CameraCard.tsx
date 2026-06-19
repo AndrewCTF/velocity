@@ -50,20 +50,20 @@ export function CameraCard({
   }, [camId]);
 
   return (
-    <div className="rounded border border-slate-800 bg-slate-900/60 p-2">
-      <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+    <div className="rounded-sm border border-line bg-bg-2/60 p-2">
+      <div className="mb-1 mono text-[9px] uppercase tracking-[0.7px] text-txt-3">
         live cam
       </div>
       {hlsUrl ? (
         <HlsPlayer url={hlsUrl} />
       ) : src ? (
-        <img src={src} alt="cam snapshot" className="w-full rounded" />
+        <img src={src} alt="cam snapshot" className="w-full rounded-sm" />
       ) : (
-        <div className="flex h-24 items-center justify-center text-xs text-slate-500">
+        <div className="flex h-24 items-center justify-center text-[11px] text-txt-3">
           loading snapshot…
         </div>
       )}
-      <div className="mt-1 text-[10px] text-slate-500">{attribution}</div>
+      <div className="mt-1 mono text-[9px] text-txt-3 truncate">{attribution}</div>
     </div>
   );
 }

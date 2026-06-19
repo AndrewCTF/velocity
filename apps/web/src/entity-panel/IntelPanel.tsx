@@ -7,6 +7,16 @@ import type { DarkVesselCandidate } from '../intel/darkVessel.js';
 import { flyToChokepoint, flyToPosition } from '../globe/camera.js';
 import { useReducedMotion } from '../shell/useReducedMotion.js';
 import { apiFetch } from '../transport/http.js';
+import {
+  SectionLabel,
+  Badge,
+  KV,
+  KVRow,
+  Btn,
+  Hero,
+  Toggle,
+  type BadgeTone,
+} from '../shell/instruments.js';
 import type { Alert } from '@osint/shared';
 
 async function fetchJammingAlerts(): Promise<Alert[]> {
@@ -102,30 +112,34 @@ interface Props {
   viewer: Cesium.Viewer | null;
 }
 
-const SEV_LABEL: Record<string, string> = {
-  critical: 'text-alert',
-  high: 'text-alert',
-  medium: 'text-warn',
-  low: 'text-accent',
-  info: 'text-txt-2',
-};
+// Alert severity → Badge tone (critical/high red, medium amber, low cobalt).
+function sevTone(sev: string): BadgeTone {
+  if (sev === 'critical' || sev === 'high') return 'alert';
+  if (sev === 'medium') return 'warn';
+  if (sev === 'low') return 'accent';
+  return 'neutral';
+}
 
-// Threat-level → colour for the incident brief badges.
-const TL: Record<string, string> = {
-  high: 'text-alert',
-  elevated: 'text-warn',
-  low: 'text-accent',
-};
+// Incident / watch threat-level → Badge tone.
+function threatTone(level: string): BadgeTone {
+  if (level === 'high') return 'alert';
+  if (level === 'elevated') return 'warn';
+  if (level === 'low') return 'accent';
+  return 'neutral';
+}
 
 // Intel rail tab — operator-facing situational summary:
+//  - cross-domain incident brief (fused, cited convergences)
+//  - standing-watch diff (new / escalated since last tick)
 //  - live dark-vessel candidate count (intel/registry.ts darkVessels)
 //  - top recent correlations (alerts in the live buffer, not yet acked)
-//  - current AOI summary, with quick fly-to and clear actions
+//  - GPS jamming clusters + current AOI summary, with fly-to actions
 export function IntelPanel({ viewer }: Props): JSX.Element {
   const alerts = useAlerts((s) => s.alerts);
   const activeAoi = useAoi((s) => s.active);
   const setAoi = useAoi((s) => s.setActive);
   const imageryMode = useImagery((s) => s.mode);
+  const setImageryMode = useImagery((s) => s.setMode);
   const reduced = useReducedMotion();
   const [candidates, setCandidates] = useState<readonly DarkVesselCandidate[]>(() =>
     intel.darkVessels.candidates([]),
@@ -212,278 +226,311 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
   const ch = watch?.changes;
   const changeItems: WatchChange[] = ch ? [...ch.new, ...ch.escalated] : [];
 
+  // Incidents arrive ranked by score; the top one carries the headline threat.
+  // Promote it to a Hero only when its level maps to a Hero-supported tone.
+  const incidents = brief?.incidents ?? [];
+  const heroIncident = incidents[0];
+  const heroTone: 'alert' | 'warn' | null =
+    heroIncident?.threat_level === 'high'
+      ? 'alert'
+      : heroIncident?.threat_level === 'elevated'
+        ? 'warn'
+        : null;
+  const restIncidents = heroTone ? incidents.slice(1, 6) : incidents.slice(0, 6);
+
   const satOn = imageryMode === '3d-sat';
   return (
-    <div className="p-3 space-y-3">
-      <div className="flex items-baseline justify-between">
-        <h2 className="micro">Intel</h2>
-        <span
-          className={`mono text-[10px] tracking-[0.5px] uppercase px-1.5 py-0.5 border rounded-sm ${
-            satOn ? 'border-accent-line text-accent bg-accent-dim' : 'border-line text-txt-3'
-          }`}
-          data-testid="intel-imagery-indicator"
-          title="3D satellite imagery + buildings toggle"
-        >
-          3D sat: {satOn ? 'on' : 'off'}
-        </span>
+    <div className="p-3 space-y-4">
+      <div className="flex items-center justify-between">
+        <SectionLabel title="Intel" className="flex-1" />
+        <div className="flex items-center gap-2 ml-3 shrink-0" data-testid="intel-imagery-indicator">
+          <span className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3">3D sat</span>
+          <Toggle
+            on={satOn}
+            onChange={(next) => setImageryMode(next ? '3d-sat' : '2d-dark')}
+            label="3D satellite imagery + buildings"
+          />
+        </div>
       </div>
 
-      <section>
-        <div className="flex items-baseline justify-between">
-          <h3 className="micro">Incident brief{brief ? ` · ${brief.scope}` : ''}</h3>
-          {brief && (
-            <span className={`micro uppercase ${TL[brief.top_threat_level] ?? 'text-txt-3'}`}>
-              {brief.top_threat_level}
-            </span>
-          )}
-        </div>
-        <p className="micro normal-case tracking-normal text-txt-3 leading-snug mt-1">
+      <section className="space-y-2">
+        <SectionLabel
+          title={brief ? `Incident brief · ${brief.scope}` : 'Incident brief'}
+          count={brief ? brief.incident_count : ''}
+        />
+        <p className="mono text-[9.5px] leading-snug text-txt-3">
           Cross-domain convergences — jamming + dark vessels + military + events fused into cited incidents.
         </p>
+
         {!brief || brief.incident_count === 0 ? (
-          <p className="micro normal-case tracking-normal text-txt-3 mt-1">
+          <p className="mono text-[9.5px] text-txt-3">
             No cross-domain incidents{brief ? '' : ' (loading…)'}.
           </p>
         ) : (
-          <ul className="mt-1 space-y-1">
-            {brief.incidents.slice(0, 6).map((inc) => (
-              <li key={inc.id} className="border border-line rounded-sm p-2 bg-bg-2/50">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className={`micro uppercase ${TL[inc.threat_level] ?? ''}`}>
-                    {inc.threat_level}
+          <div className="space-y-2">
+            {heroIncident && heroTone && (
+              <Hero tone={heroTone} title={`${heroIncident.threat_level} · ${heroIncident.domains.join(' + ')}`}>
+                <p className="text-[11px] text-txt-1 leading-snug">{heroIncident.narrative}</p>
+                {heroIncident.emitter_estimate && (
+                  <p className="mono text-[9.5px] text-warn mt-1.5 tabular-nums">
+                    emitter ≈ {heroIncident.emitter_estimate.lat.toFixed(2)},
+                    {heroIncident.emitter_estimate.lon.toFixed(2)} ±{heroIncident.emitter_estimate.cep_km}km
+                  </p>
+                )}
+                <div className="flex items-center justify-between gap-2 mt-2.5">
+                  <span className="mono text-[9px] tabular-nums text-txt-3">
+                    {heroIncident.signal_count} signal{heroIncident.signal_count === 1 ? '' : 's'} ·{' '}
+                    {heroIncident.span_km}km
                   </span>
-                  <span className="mono micro tabular-nums text-txt-3 truncate" title={inc.domains.join(' + ')}>
+                  <Btn
+                    tone="accent"
+                    size="sm"
+                    onClick={() =>
+                      viewer &&
+                      flyToPosition(
+                        viewer,
+                        heroIncident.centroid.lon,
+                        heroIncident.centroid.lat,
+                        300_000,
+                        reduced ? 0 : 1.0,
+                      )
+                    }
+                  >
+                    slew to
+                  </Btn>
+                </div>
+              </Hero>
+            )}
+
+            {restIncidents.map((inc) => (
+              <div key={inc.id} className="border border-line rounded-sm p-2.5 bg-bg-2/60">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge tone={threatTone(inc.threat_level)}>{inc.threat_level}</Badge>
+                  <span
+                    className="mono text-[9px] tabular-nums text-txt-3 truncate"
+                    title={inc.domains.join(' + ')}
+                  >
                     {inc.domains.join(' + ')}
                   </span>
                 </div>
-                <p className="text-[11px] text-txt-1 leading-tight mt-1">{inc.narrative}</p>
+                <p className="text-[11px] text-txt-1 leading-snug mt-1.5">{inc.narrative}</p>
                 {inc.emitter_estimate && (
-                  <p className="mono micro text-warn mt-1">
+                  <p className="mono text-[9.5px] text-warn mt-1 tabular-nums">
                     emitter ≈ {inc.emitter_estimate.lat.toFixed(2)},{inc.emitter_estimate.lon.toFixed(2)} ±
                     {inc.emitter_estimate.cep_km}km
                   </p>
                 )}
-                <div className="flex items-center gap-2 mt-1">
-                  <button
-                    type="button"
+                <div className="flex items-center justify-between gap-2 mt-2">
+                  <span className="mono text-[9px] tabular-nums text-txt-3">
+                    {inc.signal_count} signal{inc.signal_count === 1 ? '' : 's'} · {inc.span_km}km
+                  </span>
+                  <Btn
+                    size="sm"
                     onClick={() =>
                       viewer &&
                       flyToPosition(viewer, inc.centroid.lon, inc.centroid.lat, 300_000, reduced ? 0 : 1.0)
                     }
-                    className="mono text-[10px] px-1.5 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1"
                   >
                     slew to
-                  </button>
-                  <span className="mono micro tabular-nums text-txt-3">
-                    {inc.signal_count} signal{inc.signal_count === 1 ? '' : 's'} · {inc.span_km}km
-                  </span>
+                  </Btn>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
 
       {ch && (
-        <section>
-          <div className="flex items-baseline justify-between">
-            <h3 className="micro">Changes</h3>
-            <span className="mono micro tabular-nums text-txt-3">
-              +{ch.new.length} ↑{ch.escalated.length} −{ch.resolved.length} · {ch.active} active
-            </span>
-          </div>
+        <section className="space-y-2">
+          <SectionLabel
+            title="Changes"
+            count={`+${ch.new.length} ↑${ch.escalated.length} −${ch.resolved.length} · ${ch.active} active`}
+          />
           {changeItems.length === 0 ? (
-            <p className="micro normal-case tracking-normal text-txt-3 mt-1">
+            <p className="mono text-[9.5px] text-txt-3">
               {ch.had_baseline ? 'No new or escalated incidents since last tick.' : 'Establishing baseline…'}
             </p>
           ) : (
-            <ul className="mt-1 space-y-1">
+            <div className="space-y-2">
               {changeItems.slice(0, 5).map((c) => (
-                <li key={c.key} className="border border-line rounded-sm p-2 bg-bg-2/50">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className={`micro uppercase ${TL[c.threat_level] ?? ''}`}>
+                <div key={c.key} className="border border-line rounded-sm p-2.5 bg-bg-2/60">
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge tone={threatTone(c.threat_level)}>
                       {c.from_level ? `${c.from_level}→${c.threat_level}` : `NEW · ${c.threat_level}`}
-                    </span>
-                    <span className="mono micro tabular-nums text-txt-3 truncate">
+                    </Badge>
+                    <span className="mono text-[9px] tabular-nums text-txt-3 truncate" title={c.domains.join(' + ')}>
                       {c.domains.join(' + ')}
                     </span>
                   </div>
-                  <p className="text-[11px] text-txt-1 leading-tight mt-1">{c.narrative}</p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      viewer &&
-                      flyToPosition(viewer, c.centroid.lon, c.centroid.lat, 300_000, reduced ? 0 : 1.0)
-                    }
-                    className="mono text-[10px] px-1.5 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1 mt-1"
-                  >
-                    slew to
-                  </button>
-                </li>
+                  <p className="text-[11px] text-txt-1 leading-snug mt-1.5">{c.narrative}</p>
+                  <div className="flex justify-end mt-2">
+                    <Btn
+                      size="sm"
+                      onClick={() =>
+                        viewer &&
+                        flyToPosition(viewer, c.centroid.lon, c.centroid.lat, 300_000, reduced ? 0 : 1.0)
+                      }
+                    >
+                      slew to
+                    </Btn>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </section>
       )}
 
-      <section>
-        <h3 className="micro">Dark vessels</h3>
-        <div className="mt-1 border border-line rounded-sm bg-bg-2/50 p-2">
+      <section className="space-y-2">
+        <SectionLabel title="Dark vessels" count={candidates.length} />
+        <div className="border border-line rounded-sm bg-bg-2/60 p-2.5">
           <div className="flex items-baseline gap-2">
-            <span className="mono text-[20px] text-txt-0 tabular-nums">{candidates.length}</span>
-            <span className="micro normal-case tracking-normal text-txt-3">
+            <span className="mono text-[20px] text-txt-0 tabular-nums leading-none">{candidates.length}</span>
+            <span className="mono text-[9.5px] text-txt-3">
               candidate{candidates.length === 1 ? '' : 's'} (AIS-gap, global)
             </span>
           </div>
-          <p className="micro normal-case tracking-normal text-txt-3 leading-snug mt-1">
-            Vessels whose last AIS fix is fresh-stale (gap ≥1h, &lt;90m). Pair with SAR cross-reference for true darkness.
+          <p className="mono text-[9.5px] text-txt-3 leading-snug mt-1.5">
+            Vessels whose last AIS fix is fresh-stale (gap ≥1h, &lt;90m). Pair with SAR cross-reference for true
+            darkness.
           </p>
           {candidates.length > 0 && (
-            <ul className="mt-2 space-y-0.5">
+            <div className="mt-2.5 space-y-1">
               {candidates.slice(0, 4).map((c) => (
-                <li key={c.mmsi} className="flex items-center gap-2 text-[11px]">
+                <div key={c.mmsi} className="flex items-center gap-2 text-[11px]">
+                  <Badge tone="mag">dark</Badge>
                   <span className="mono text-txt-1 truncate" title={c.name ?? c.mmsi}>
                     {c.name ?? c.mmsi}
                   </span>
-                  <span className="mono micro tabular-nums text-txt-3 ml-auto">
+                  <span className="mono text-[9px] tabular-nums text-txt-3 ml-auto">
                     gap {(c.gapMs / 60000).toFixed(0)}m
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => viewer && flyToPosition(viewer, c.lastLon, c.lastLat, 250_000, reduced ? 0 : 0.8)}
-                    className="mono text-[10px] px-1.5 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1"
+                  <Btn
+                    size="sm"
+                    onClick={() =>
+                      viewer && flyToPosition(viewer, c.lastLon, c.lastLat, 250_000, reduced ? 0 : 0.8)
+                    }
                   >
                     slew
-                  </button>
-                </li>
+                  </Btn>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </section>
 
-      <section>
-        <h3 className="micro">Top correlations</h3>
+      <section className="space-y-2">
+        <SectionLabel title="Top correlations" count={topCorrelations.length} />
         {topCorrelations.length === 0 ? (
-          <p className="micro normal-case tracking-normal text-txt-3 mt-1">No live correlations.</p>
+          <p className="mono text-[9.5px] text-txt-3">No live correlations.</p>
         ) : (
-          <ul className="mt-1 space-y-1">
+          <div className="space-y-2">
             {topCorrelations.map((a) => (
-              <li key={a.id} className="border border-line rounded-sm p-2 bg-bg-2/50">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className={`micro ${SEV_LABEL[a.severity] ?? ''}`}>{a.severity}</span>
-                  <span className="mono micro tabular-nums text-txt-3">{a.ruleId}</span>
+              <div key={a.id} className="border border-line rounded-sm p-2.5 bg-bg-2/60">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge tone={sevTone(a.severity)}>{a.severity}</Badge>
+                  <span className="mono text-[9px] tabular-nums text-txt-3 truncate" title={a.ruleId}>
+                    {a.ruleId}
+                  </span>
                 </div>
-                <p className="text-[11px] text-txt-1 leading-tight mt-1 line-clamp-2">{a.message}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <button
-                    type="button"
+                <p className="text-[11px] text-txt-1 leading-snug mt-1.5 line-clamp-2">{a.message}</p>
+                <div className="flex items-center justify-between gap-2 mt-2">
+                  <span className="mono text-[9px] tabular-nums text-txt-3">
+                    conf {(a.confidence * 100).toFixed(0)}%
+                  </span>
+                  <Btn
+                    size="sm"
                     onClick={() => {
                       if (viewer && a.geom?.type === 'Point') {
                         const [lon, lat] = a.geom.coordinates as [number, number];
                         flyToPosition(viewer, lon, lat, 250_000, reduced ? 0 : 1.0);
                       }
                     }}
-                    className="mono text-[10px] px-1.5 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1"
                   >
                     slew to
-                  </button>
-                  <span className="mono micro tabular-nums text-txt-3">
-                    conf {(a.confidence * 100).toFixed(0)}%
-                  </span>
+                  </Btn>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
 
-      <section>
-        <h3 className="micro">GPS jamming clusters</h3>
+      <section className="space-y-2">
+        <SectionLabel title="GPS jamming clusters" count={jammingAlerts.length} />
         {jammingAlerts.length === 0 ? (
-          <p className="micro normal-case tracking-normal text-txt-3 mt-1">No jamming clusters detected.</p>
+          <p className="mono text-[9.5px] text-txt-3">No jamming clusters detected.</p>
         ) : (
-          <ul className="mt-1 space-y-1">
+          <div className="space-y-2">
             {jammingAlerts.slice(0, 8).map((a) => (
-              <li key={a.id} className="border border-line rounded-sm p-2 bg-bg-2/50">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="micro text-warn">JAM</span>
-                  <span className="mono micro tabular-nums text-txt-3">
+              <div key={a.id} className="border border-line rounded-sm p-2.5 bg-bg-2/60">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge tone="warn">jam</Badge>
+                  <span className="mono text-[9px] tabular-nums text-txt-3">
                     conf {(a.confidence * 100).toFixed(0)}%
                   </span>
                 </div>
-                <p className="text-[11px] text-txt-1 leading-tight mt-1 line-clamp-2">{a.message}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (viewer && a.geom?.type === 'Point') {
-                        const [lon, lat] = a.geom.coordinates as [number, number];
-                        flyToPosition(viewer, lon, lat, 250_000, reduced ? 0 : 1.0);
-                      }
-                    }}
-                    className="mono text-[10px] px-1.5 py-0.5 border border-line rounded-sm hover:border-accent-line text-txt-1"
-                  >
-                    slew to
-                  </button>
-                  <span className="mono micro tabular-nums text-txt-3">
+                <p className="text-[11px] text-txt-1 leading-snug mt-1.5 line-clamp-2">{a.message}</p>
+                <div className="flex items-center justify-between gap-2 mt-2">
+                  <span className="mono text-[9px] tabular-nums text-txt-3">
                     {new Date(a.t).toISOString().slice(11, 19)}Z
                   </span>
+                  <Btn
+                    size="sm"
+                    onClick={() => {
+                      if (viewer && a.geom?.type === 'Point') {
+                        const [lon, lat] = a.geom.coordinates as [number, number];
+                        flyToPosition(viewer, lon, lat, 250_000, reduced ? 0 : 1.0);
+                      }
+                    }}
+                  >
+                    slew to
+                  </Btn>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
 
-      <section>
-        <h3 className="micro">Current AOI</h3>
+      <section className="space-y-2">
+        <SectionLabel title="Current AOI" />
         {activeAoi ? (
-          <div className="mt-1 border border-accent-line/60 bg-accent-dim rounded-sm p-2">
-            <div className="mono text-[12px] text-txt-0 truncate" title={activeAoi.name}>{activeAoi.name}</div>
-            <div className="micro mt-0.5 normal-case tracking-normal text-txt-3">{activeAoi.region}</div>
-            <p className="text-[11px] text-txt-2 leading-snug mt-1">{activeAoi.significance}</p>
-            <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
-              <span className="text-txt-3 micro normal-case tracking-normal">category</span>
-              <span className="mono text-right">{activeAoi.category}</span>
-              <span className="text-txt-3 micro normal-case tracking-normal">center</span>
-              <span className="mono text-right tabular-nums">
-                {activeAoi.center[1].toFixed(2)}, {activeAoi.center[0].toFixed(2)}
-              </span>
-              {activeAoi.daily_transits != null && (
-                <>
-                  <span className="text-txt-3 micro normal-case tracking-normal">transits/d</span>
-                  <span className="mono text-right tabular-nums">{activeAoi.daily_transits}</span>
-                </>
-              )}
-              {activeAoi.oil_flow_mbpd != null && (
-                <>
-                  <span className="text-txt-3 micro normal-case tracking-normal">oil mbpd</span>
-                  <span className="mono text-right tabular-nums">{activeAoi.oil_flow_mbpd}</span>
-                </>
-              )}
+          <div className="border border-accent-line/60 bg-accent-dim rounded-sm p-2.5">
+            <div className="mono text-[12px] text-txt-0 truncate" title={activeAoi.name}>
+              {activeAoi.name}
             </div>
-            <div className="flex gap-2 mt-2">
-              <button
-                type="button"
+            <div className="mono text-[9px] tracking-[0.4px] uppercase text-txt-3 mt-0.5">
+              {activeAoi.region}
+            </div>
+            <p className="text-[11px] text-txt-2 leading-snug mt-1.5">{activeAoi.significance}</p>
+            <KV className="mt-2.5">
+              <KVRow k="category" v={activeAoi.category} />
+              <KVRow
+                k="center"
+                v={`${activeAoi.center[1].toFixed(2)}, ${activeAoi.center[0].toFixed(2)}`}
+              />
+              {activeAoi.daily_transits != null && (
+                <KVRow k="transits/d" v={activeAoi.daily_transits} />
+              )}
+              {activeAoi.oil_flow_mbpd != null && <KVRow k="oil mbpd" v={activeAoi.oil_flow_mbpd} />}
+            </KV>
+            <div className="flex gap-2 mt-3">
+              <Btn
+                tone="accent"
+                size="sm"
                 onClick={() => viewer && flyToChokepoint(viewer, activeAoi, reduced ? 0 : 1.4)}
-                className="mono text-[10px] px-2 py-1 border border-line rounded-sm hover:border-accent-line text-txt-1"
               >
                 slew to
-              </button>
-              <button
-                type="button"
-                onClick={() => setAoi(null)}
-                className="mono text-[10px] px-2 py-1 border border-line rounded-sm hover:border-alert/40 hover:text-alert text-txt-2"
-              >
+              </Btn>
+              <Btn size="sm" onClick={() => setAoi(null)}>
                 clear
-              </button>
+              </Btn>
             </div>
           </div>
         ) : (
-          <p className="micro normal-case tracking-normal text-txt-3 mt-1">
-            No AOI active. Pick one from the Chokepoints tab.
-          </p>
+          <p className="mono text-[9.5px] text-txt-3">No AOI active. Pick one from the Chokepoints tab.</p>
         )}
       </section>
     </div>

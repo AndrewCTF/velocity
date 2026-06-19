@@ -11,6 +11,7 @@ export default {
         'bg-1': 'var(--bg-1)',
         'bg-2': 'var(--bg-2)',
         'bg-3': 'var(--bg-3)',
+        'bg-4': 'var(--bg-4)',
         line: 'var(--line)',
         'line-2': 'var(--line-2)',
         'txt-0': 'var(--txt-0)',
@@ -26,6 +27,10 @@ export default {
         alert: 'var(--alert)',
         'alert-bg': 'var(--alert-bg)',
         ok: 'var(--ok)',
+        mag: 'var(--mag)',
+        'mag-dim': 'var(--mag-dim)',
+        'mag-line': 'var(--mag-line)',
+        'sev-low': 'var(--sev-low)',
       },
       fontFamily: {
         mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],

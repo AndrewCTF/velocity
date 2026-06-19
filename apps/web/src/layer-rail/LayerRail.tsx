@@ -4,6 +4,7 @@ import type { LayerDescriptor } from '@osint/shared';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useFeeds } from '../state/stores.js';
 import { tracks } from '../intel/tracks.js';
+import { SectionLabel, Toggle, MeterBar } from '../shell/instruments.js';
 
 interface Props {
   registry: LayerRegistry;
@@ -28,6 +29,9 @@ const GROUP_LABEL: Record<string, string> = {
 
 const GROUP_ORDER = ['maritime', 'aviation', 'hazards', 'news', 'cyber', 'infra', 'space', 'rf', 'env', 'imagery', 'reference'];
 
+// Status → colour class. Shared by the layer-row swatch (the only per-layer
+// colour we honestly have — there is NO per-layer category colour in the
+// registry, so the swatch shows feed HEALTH, not an invented category hue).
 const STATUS_DOT: Record<string, string> = {
   green: 'bg-ok',
   amber: 'bg-warn',
@@ -61,10 +65,12 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
   // to one-shot log the tracks ring size after 5s in dev so future
   // agents can verify PollGeoJsonAdapter.render() is wiring tracks.push.
   useEffect(() => {
-    if (!viewer) return;
+    if (!viewer || viewer.isDestroyed()) return;
     const perDsUnsub = new Map<Cesium.DataSource, () => void>();
 
     const recount = (): void => {
+      // A destroyed viewer (HMR / globe ErrorBoundary) throws on .dataSources.
+      if (viewer.isDestroyed()) return;
       const next: Record<string, number> = {};
       for (let i = 0; i < viewer.dataSources.length; i++) {
         const ds = viewer.dataSources.get(i);
@@ -145,11 +151,8 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
   ];
 
   return (
-    <div className="p-3 space-y-3">
-      <header className="flex items-baseline justify-between">
-        <h2 className="micro">Layers</h2>
-        <span className="micro text-txt-3">{layers.length} registered</span>
-      </header>
+    <div className="p-3 space-y-2.5">
+      <SectionLabel title="Layers" count={`${layers.length} REG`} />
 
       {groupKeys.map((group) => {
         const list = grouped[group] ?? [];
@@ -159,39 +162,51 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
             <button
               type="button"
               onClick={() => setCollapsed((c) => ({ ...c, [group]: !c[group] }))}
-              className="flex items-center justify-between w-full text-left micro hover:text-accent"
+              className="group flex items-center gap-2 w-full text-left text-txt-3 hover:text-accent"
             >
-              <span>{GROUP_LABEL[group] ?? group}</span>
-              <span className="text-txt-3">{isCollapsed ? '+' : '−'} {list.length}</span>
+              <span className="mono text-[9px] tracking-[0.9px] uppercase text-txt-2 group-hover:text-accent">
+                {GROUP_LABEL[group] ?? group}
+              </span>
+              <span className="flex-1 h-px bg-line" />
+              <span className="mono text-[9px] tabular-nums text-txt-3">
+                {isCollapsed ? '+' : '−'} {list.length}
+              </span>
             </button>
             {!isCollapsed && (
-              <ul className="mt-1 space-y-1">
+              <ul className="mt-0.5">
                 {list.map((l) => {
                   const enabled = registry.isEnabled(l.id);
                   const feed = feeds[l.id];
+                  const status = feed?.status ?? 'unknown';
                   const count = counts[l.id] ?? 0;
+                  const opacityPct = Math.round((l.opacity ?? 1) * 100);
                   return (
-                    <li key={l.id} className="border-l-2 border-line pl-2 hover:border-accent-line">
-                      <div className="flex items-center gap-2 text-[11px]">
-                        <input
-                          type="checkbox"
-                          checked={enabled}
-                          onChange={(e) => (e.target.checked ? registry.enable(l.id) : registry.disable(l.id))}
-                          className="accent-accent"
-                          aria-label={`Toggle ${l.title}`}
+                    <li
+                      key={l.id}
+                      className="py-[5px] border-b border-[rgba(255,255,255,0.035)]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`h-[9px] w-[9px] rounded-sm shrink-0 ${STATUS_DOT[status] ?? 'bg-txt-3'}`}
+                          aria-hidden="true"
                         />
-                        <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[feed?.status ?? 'unknown']}`} />
-                        <span className="text-txt-1 flex-1 truncate" title={l.title}>{l.title}</span>
+                        <span className="text-txt-1 text-[11px] flex-1 truncate" title={l.title}>
+                          {l.title}
+                        </span>
                         {enabled && (
-                          <CountBadge
-                            count={count}
-                            at={countsAt}
-                            feedStatus={feed?.status ?? 'unknown'}
-                          />
+                          <CountBadge count={count} at={countsAt} feedStatus={status} />
                         )}
+                        {enabled && (
+                          <MeterBar pct={opacityPct} className="w-[28px] shrink-0" />
+                        )}
+                        <Toggle
+                          on={enabled}
+                          onChange={(v) => (v ? registry.enable(l.id) : registry.disable(l.id))}
+                          label={`Toggle ${l.title}`}
+                        />
                       </div>
                       {enabled && (
-                        <div className="pl-6 mt-1 flex items-center gap-2">
+                        <div className="pl-[17px] mt-1 flex items-center gap-2">
                           <input
                             type="range"
                             min={0}
@@ -202,13 +217,13 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                             className="flex-1 accent-accent h-1"
                             aria-label={`Opacity for ${l.title}`}
                           />
-                          <span className="micro mono w-7 text-right text-txt-3">
-                            {Math.round((l.opacity ?? 1) * 100)}%
+                          <span className="mono text-[9px] tabular-nums w-7 text-right text-txt-3">
+                            {opacityPct}%
                           </span>
                         </div>
                       )}
-                      <div className="pl-6 mt-0.5">
-                        <span className="micro" title={l.license}>
+                      <div className="pl-[17px] mt-0.5">
+                        <span className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3" title={l.license}>
                           {l.auth} · {l.refresh.ttlSec ? `${l.refresh.ttlSec}s` : l.refresh.mode}
                         </span>
                       </div>
