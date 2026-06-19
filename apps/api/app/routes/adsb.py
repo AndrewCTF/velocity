@@ -1224,6 +1224,12 @@ async def global_snapshot() -> dict[str, Any]:
         return dict(_LATEST_SNAPSHOT)
 
 
+def snapshot_age_s() -> float | None:
+    """Seconds since the global snapshot last refreshed (None if never). For the
+    public /api/status page — lets callers see feed freshness, not just a count."""
+    return round(time.monotonic() - _LATEST_SNAPSHOT_AT, 1) if _LATEST_SNAPSHOT_AT else None
+
+
 @router.get("/api/adsb/global")
 async def adsb_global(
     lamin: float | None = Query(None, ge=-90, le=90),

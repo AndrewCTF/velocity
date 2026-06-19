@@ -44,6 +44,7 @@ from app.routes import sar as sar_routes
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
 from app.routes import space as space_routes
+from app.routes import status as status_routes
 from app.routes import tiles as tiles_routes
 from app.routes import timeline as timeline_routes
 from app.routes import weather as weather_routes
@@ -186,6 +187,7 @@ def create_app() -> FastAPI:
     app.include_router(export_routes.router)
     app.include_router(keys_routes.router)
     app.include_router(alert_rules_routes.router)
+    app.include_router(status_routes.router)
 
     # Agent-facing MCP endpoint (streamable-HTTP) at /mcp, in-process so its
     # tools share this app's warm snapshot + fusion engine. Gated by
