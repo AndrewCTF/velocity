@@ -38,15 +38,15 @@ async def status() -> dict[str, Any]:
         aircraft = 0
     age = adsb_routes.snapshot_age_s()
 
-    # Live keyless vessels (in-commission, fix within the stale gate). This is
-    # the real present-and-transmitting count — Northern Europe only without an
-    # AISStream key; global AIS needs one.
+    # Live vessels in the unified store: latest fix per MMSI across ALL AIS
+    # sources (Digitraffic, Kystverket/Kystdatahuset, AISStream) accumulated
+    # within the store retention window. Northern Europe only without an AISStream
+    # key; global AIS needs one.
     vessels = 0
     try:
-        from app.routes import maritime  # noqa: PLC0415
+        from app.correlate.store import store  # noqa: PLC0415
 
-        vfc = await maritime.digitraffic_snapshot()
-        vessels = len(vfc.get("features") or [])
+        vessels = len(store.latest("vessel"))
     except Exception:  # noqa: BLE001 — never let vessels break status
         vessels = 0
 

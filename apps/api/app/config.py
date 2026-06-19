@@ -188,6 +188,10 @@ class Settings(BaseSettings):
     ais_firehose_enabled: bool = True
     ais_firehose_host: str = "153.44.253.27"
     ais_firehose_port: int = 5631
+    # 24/7 background poll cadence for the keyless REST AIS sources (Digitraffic
+    # /locations) into the unified vessel store. Keeps /api/maritime/snapshot warm
+    # without a browser; Digitraffic positions update ~1/min so 30 s is ample.
+    ais_poll_interval_s: float = 30.0
     # Extra keyless regional AIS: Norway Kystdatahuset (REST GeoJSON poll) and
     # Finland Digitraffic (live MQTT-over-WSS). Both feed the same /ws/ais layer.
     ais_kystdatahuset_enabled: bool = True

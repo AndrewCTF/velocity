@@ -100,6 +100,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import ais_keyless  # noqa: PLC0415
 
             ais_keyless.start()
+            # 24/7 background AIS poll: keep the keyless REST sources flowing into
+            # the unified vessel store (/api/maritime/snapshot) without a viewer.
+            # maritime_routes is module-imported — do NOT re-import locally.
+            maritime_routes.start_background_poll()
             # AISStream global firehose (opt-in, keyed): when AISSTREAM_FIREHOSE
             # is set, run the keyed upstream always-on from boot so global
             # vessels stream without needing a browser on /ws/ais. Off by default
@@ -140,6 +144,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
             await ais_firehose.stop()
             await ais_keyless.stop()
+            await maritime_routes.stop_background_poll()
             await history.stop()
             await news_routes.stop_refresher()
 

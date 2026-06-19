@@ -10,6 +10,7 @@ PollGeoJsonAdapter / MapLibre vessel paint reuse without changes.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -244,6 +245,94 @@ async def digitraffic_vessels(
     if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
         return full
     return viewport_filter(full, lamin, lomin, lamax, lomax, limit)
+
+
+# ── unified live vessel snapshot (all sources, accumulated 24/7) ─────────────
+# store.latest("vessel") is the freshest fix per MMSI across EVERY AIS source
+# (Digitraffic, Kystverket/Kystdatahuset, AISStream) within the store's retention
+# window. Because it ACCUMULATES, a rate-limited keyed stream still builds a large
+# deduped set over time — this is the "more data, 24/7" feed. The background
+# poller below keeps the keyless REST sources flowing into the store even with no
+# browser connected, so the snapshot stays warm and grows.
+
+
+def _obs_to_vessel_feature(o: Observation) -> dict[str, Any]:
+    a = o.attrs or {}
+    return {
+        "type": "Feature",
+        "id": o.id,
+        "geometry": {"type": "Point", "coordinates": [o.lon, o.lat]},
+        "properties": {
+            "mmsi": a.get("mmsi"),
+            "name": a.get("name"),
+            "callSign": a.get("callSign"),
+            "imo": a.get("imo"),
+            "sog": a.get("sog"),
+            "cog": a.get("cog"),
+            "heading": a.get("heading"),
+            "shipType": a.get("shipType"),
+            "t": o.t,
+            "kind": "vessel",
+            "source": o.source,
+        },
+    }
+
+
+def vessel_snapshot() -> dict[str, Any]:
+    """Latest fix per MMSI across all AIS sources within the store retention."""
+    feats = [_obs_to_vessel_feature(o) for o in store.latest("vessel")]
+    return {"type": "FeatureCollection", "features": feats}
+
+
+@router.get("/api/maritime/snapshot")
+async def maritime_snapshot(
+    lamin: float | None = Query(None, ge=-90, le=90),
+    lomin: float | None = Query(None, ge=-180, le=180),
+    lamax: float | None = Query(None, ge=-90, le=90),
+    lomax: float | None = Query(None, ge=-180, le=180),
+    limit: int | None = Query(None, ge=1, le=20000),
+) -> dict[str, Any]:
+    full = vessel_snapshot()
+    if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
+        return full
+    return viewport_filter(full, lamin, lomin, lamax, lomax, limit)
+
+
+# ── 24/7 background AIS poller ───────────────────────────────────────────────
+# Continuously poll the keyless REST sources into the store so the unified
+# snapshot stays warm + accumulates even when no browser is on the map. The
+# always-on firehoses (Kystverket NMEA, Kystdatahuset, Digitraffic MQTT) and the
+# optional AISStream upstream feed the same store; this loop adds the Digitraffic
+# REST /locations set on a fixed cadence.
+_POLL_TASK: asyncio.Task[None] | None = None
+
+
+async def _poll_forever() -> None:
+    interval = get_settings().ais_poll_interval_s
+    while True:
+        try:
+            await digitraffic_snapshot()  # store.add_many runs inside load()
+        except Exception:  # noqa: BLE001 — one bad poll must not kill the loop
+            pass
+        await asyncio.sleep(interval)
+
+
+def start_background_poll() -> None:
+    global _POLL_TASK
+    if _POLL_TASK is None or _POLL_TASK.done():
+        _POLL_TASK = asyncio.create_task(_poll_forever())
+
+
+async def stop_background_poll() -> None:
+    global _POLL_TASK
+    t = _POLL_TASK
+    _POLL_TASK = None
+    if t and not t.done():
+        t.cancel()
+        try:
+            await t
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
 
 
 @router.get("/api/maritime/keyless")

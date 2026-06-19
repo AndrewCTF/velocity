@@ -226,10 +226,16 @@ export const defaultLayers: readonly LayerDescriptor[] = [
   {
     id: 'maritime.keyless',
     group: 'maritime',
-    title: 'Vessels — Northern Europe ~4.5k (no key)',
+    title: 'Vessels — live (all AIS sources, 24/7)',
     kind: 'geojson',
     auth: 'none',
-    endpoint: '/api/maritime/keyless',
+    // Unified vessel store: latest fix per MMSI across EVERY AIS source
+    // (Digitraffic ∪ Kystverket/Kystdatahuset ∪ AISStream when keyed), fed 24/7
+    // by background pollers + the always-on firehoses and accumulated within the
+    // store retention window. Keyless = Northern Europe (~few k); with an
+    // AISStream key + AISSTREAM_FIREHOSE the same layer grows global as the
+    // capped stream accumulates over time.
+    endpoint: '/api/maritime/snapshot',
     refresh: { mode: 'pull', ttlSec: 30 },
     time: { temporal: true },
     crs: 'EPSG:4326',
