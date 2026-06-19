@@ -244,6 +244,26 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     visibleByDefault: true,
     emits: ['vessel'],
   },
+  // Parking mode: stationary vessels only (SOG < 0.5 kn — anchored / moored /
+  // drifting), retained up to 12h server-side since a parked ship's old fix is
+  // still accurate. Surfaces port congestion, STS staging and loitering /
+  // shadow-fleet behaviour that the live layer ages out. Vessels render with the
+  // existing anchored (muted) paint. Off by default — toggle for parking mode.
+  {
+    id: 'maritime.parked',
+    group: 'maritime',
+    title: 'Parking mode — parked / anchored ships',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/maritime/snapshot?parked=1',
+    refresh: { mode: 'pull', ttlSec: 60 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'CC BY 4.0 Fintraffic + Kystverket/Kystdatahuset',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['vessel'],
+  },
   {
     id: 'maritime.aisstream',
     group: 'maritime',
