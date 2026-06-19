@@ -343,6 +343,15 @@ _FIREHOSE_URLS: tuple[str, ...] = (
     "https://api.airplanes.live/v2/all-with-pos",
     "https://api.adsb.lol/v2/all-with-pos",
     "https://opendata.adsb.fi/api/v2/snapshot",
+    # adsb.lol full-snapshot quirk: a /v2/point at the globe centre with a
+    # planet-spanning radius returns EVERY aircraft adsb.lol knows (~8-9k),
+    # keyless and — unlike /v2/point grid cells and the /v2/all* verbs — NOT
+    # Cloudflare/451-blocked from a datacenter egress (measured 8,473 from the
+    # droplet while the all-with-pos verbs 404 and the aircraft.json mirrors
+    # ReadError). It's the reliable breadth partner to OpenSky's ~9k; unioned by
+    # icao24 the two push the snapshot back toward ~13k. Tried after the real
+    # firehose verbs so a residential deploy still prefers them.
+    "https://api.adsb.lol/v2/point/0/0/20000",
 )
 
 
@@ -797,6 +806,12 @@ def _feed_interval(url: str) -> float:
         return s.adsb_feed_fast_interval_s  # sidecar — no rate limit, keep fresh
     if "/v2/" in url or "/re-api" in url:
         return s.adsb_feed_slow_interval_s  # rate-limit-sensitive API
+    if "theairtraffic.com" in url:
+        # theairtraffic's 3.6 MB body streams over 4-9 s. Pull it on a SLOW
+        # cadence (a breadth source, not a freshness source) so only ~1 cycle in
+        # N pays that cost; its slice is carried forward 180 s in between, so the
+        # hot 2 s refresh stays fast while theairtraffic's ~8 k still lands.
+        return max(30.0, s.adsb_feed_slow_interval_s)
     return s.adsb_feed_interval_s  # full aircraft.json mirror
 
 
@@ -814,11 +829,13 @@ def _feed_total_s(url: str) -> float:
     # timeout is PER-CHUNK, so theairtraffic.com's 3.6MB aircraft.json — which
     # streams steadily over 4-9s — never trips a 5s read timeout and was pushing
     # the fan-out onto its 10s cap, holding the refresh well above the 5s target.
-    # A hard 5s total aborts a slow cycle instead; its aircraft persist via the
-    # 180s carry-forward merge and hpradar (a fast full mirror) overlaps it, so a
-    # dropped slow pull costs ~nothing. Other feeds keep the generous budget.
+    # The body streams steadily over 4-9 s, so the cap must clear that or the
+    # pull aborts every time and theairtraffic contributes 0 (measured: 8.2 k
+    # aircraft never landing). 9 s clears the body and still fits the 10 s fanout
+    # budget; the slow 30 s cadence (see _feed_interval) means this longer pull
+    # runs rarely and is carried forward 180 s in between.
     if "theairtraffic.com" in url:
-        return 5.0
+        return 9.0
     return 13.0
 
 

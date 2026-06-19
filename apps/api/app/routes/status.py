@@ -38,6 +38,18 @@ async def status() -> dict[str, Any]:
         aircraft = 0
     age = adsb_routes.snapshot_age_s()
 
+    # Live keyless vessels (in-commission, fix within the stale gate). This is
+    # the real present-and-transmitting count — Northern Europe only without an
+    # AISStream key; global AIS needs one.
+    vessels = 0
+    try:
+        from app.routes import maritime  # noqa: PLC0415
+
+        vfc = await maritime.digitraffic_snapshot()
+        vessels = len(vfc.get("features") or [])
+    except Exception:  # noqa: BLE001 — never let vessels break status
+        vessels = 0
+
     keyless_ais_on = bool(
         ais_firehose.stats().get("enabled")
         or ais_keyless.stats().get("kystdatahuset_enabled")
@@ -55,8 +67,10 @@ async def status() -> dict[str, Any]:
         ),
         _feed(
             "AIS vessels — keyless",
-            keyless_ais_on,
-            "Northern Europe only (Norway + Baltic). Global AIS needs a key (BYOK).",
+            keyless_ais_on and vessels > 0,
+            f"{vessels} live vessels — Northern Europe only (Norway + Baltic). "
+            "Global AIS needs an AISStream key (BYOK).",
+            count=vessels,
         ),
         _feed(
             "GPS/GNSS jamming (derived)",
@@ -89,6 +103,7 @@ async def status() -> dict[str, Any]:
         "aircraft_count": aircraft,
         "aircraft_age_s": age,
         "aircraft_floor": _AIRCRAFT_FLOOR,
+        "vessel_count": vessels,
         "feeds": feeds,
         "note": (
             "Live counts from the running snapshot. Coverage is uneven by design — "
