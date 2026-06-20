@@ -19,6 +19,7 @@ Why a snapshot proxy instead of direct image URLs in the browser:
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -95,38 +96,46 @@ async def _load_digitraffic() -> list[Cam]:
     return out
 
 
-async def _load_caltrans() -> list[Cam]:
+async def _load_caltrans_district(n: int) -> list[Cam]:
     out: list[Cam] = []
-    for n in _CALTRANS_DISTRICTS:
-        j = await _get_json(_CALTRANS_URL.format(n=n))
-        if not isinstance(j, dict):
+    j = await _get_json(_CALTRANS_URL.format(n=n))
+    if not isinstance(j, dict):
+        return out
+    for i, row in enumerate(j.get("data") or []):
+        cctv = (row or {}).get("cctv") or {}
+        loc = cctv.get("location") or {}
+        img = ((cctv.get("imageData") or {}).get("static") or {}).get(
+            "currentImageURL"
+        )
+        try:
+            lat = float(loc.get("latitude"))
+            lon = float(loc.get("longitude"))
+        except (TypeError, ValueError):
             continue
-        for i, row in enumerate(j.get("data") or []):
-            cctv = (row or {}).get("cctv") or {}
-            loc = cctv.get("location") or {}
-            img = ((cctv.get("imageData") or {}).get("static") or {}).get(
-                "currentImageURL"
+        if not img:
+            continue
+        key = cctv.get("index") or str(i)
+        out.append(
+            Cam(
+                id=f"caltrans:d{n}-{key}",
+                name=str(loc.get("locationName") or f"Caltrans D{n} #{key}"),
+                lat=lat,
+                lon=lon,
+                snapshot_url=str(img),
+                source="caltrans",
+                attribution="Caltrans (public)",
             )
-            try:
-                lat = float(loc.get("latitude"))
-                lon = float(loc.get("longitude"))
-            except (TypeError, ValueError):
-                continue
-            if not img:
-                continue
-            key = cctv.get("index") or str(i)
-            out.append(
-                Cam(
-                    id=f"caltrans:d{n}-{key}",
-                    name=str(loc.get("locationName") or f"Caltrans D{n} #{key}"),
-                    lat=lat,
-                    lon=lon,
-                    snapshot_url=str(img),
-                    source="caltrans",
-                    attribution="Caltrans (public)",
-                )
-            )
+        )
     return out
+
+
+async def _load_caltrans() -> list[Cam]:
+    # Fetch every district CCTV JSON concurrently — a serial loop over the
+    # district list made a cold catalog wait on each upstream back-to-back.
+    per_district = await asyncio.gather(
+        *(_load_caltrans_district(n) for n in _CALTRANS_DISTRICTS)
+    )
+    return [cam for cams in per_district for cam in cams]
 
 
 def _load_yaml() -> list[Cam]:
@@ -156,9 +165,14 @@ def _load_yaml() -> list[Cam]:
 
 async def _get_catalog() -> dict[str, Cam]:
     async def load() -> dict[str, Cam]:
-        digitraffic = await _load_digitraffic()
-        caltrans = await _load_caltrans()
-        curated = _load_yaml()
+        # The three sources are independent — fan them out concurrently so a
+        # cold catalog is bounded by the slowest source, not their sum. The
+        # YAML read is sync file I/O, so it runs off the event loop thread.
+        digitraffic, caltrans, curated = await asyncio.gather(
+            _load_digitraffic(),
+            _load_caltrans(),
+            asyncio.to_thread(_load_yaml),
+        )
         return {c.id: c for c in (*digitraffic, *caltrans, *curated)}
 
     return await cache.get_or_fetch("cams:catalog", _CATALOG_TTL, load)

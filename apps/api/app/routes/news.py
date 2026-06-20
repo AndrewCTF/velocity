@@ -55,12 +55,23 @@ async def _ensure_articles() -> list[news_sources.Article]:
 
 
 @router.get("/api/news/feed")
-async def news_feed() -> dict[str, Any]:
-    """Latest scraped world headlines (cached, refreshed on staleness)."""
+async def news_feed(
+    topic: str | None = Query(None, max_length=200),
+) -> dict[str, Any]:
+    """Latest scraped world headlines (cached, refreshed on staleness).
+
+    The default corpus already carries the conflict feed (see
+    :data:`app.news.sources.CONFLICT_FEEDS`). An optional ``?topic=`` (preset
+    key like ``mideast`` or free text) fetches a scoped keyword search on demand,
+    bypassing the single-slot cache so it never poisons the default feed.
+    """
     s = get_settings()
     if not s.news_enabled:
         return {"enabled": False}
-    articles = await _ensure_articles()
+    if topic and topic.strip():
+        articles = await news_sources.fetch_for_topic(topic)
+    else:
+        articles = await _ensure_articles()
     return {"count": len(articles), "articles": _articles_payload(articles)}
 
 
@@ -105,13 +116,24 @@ async def news_analysis() -> dict[str, Any]:
 @router.get("/api/news/factcheck")
 async def news_factcheck(
     claim: str = Query(..., min_length=1, max_length=2000),
+    topic: str | None = Query(None, max_length=200),
+    fast: bool = Query(False),
 ) -> dict[str, Any]:
-    """Adjudicate a single free-text claim against current headlines."""
+    """Adjudicate a single free-text claim against current headlines.
+
+    ``?topic=`` pulls a scoped keyword search on demand (so a war claim has
+    matching in-theater headlines to adjudicate against even if the cached feed
+    hasn't surfaced it); otherwise the cached corpus (which carries the conflict
+    feed) is used. ``?fast=true`` uses the cheap LLM tier for a quick verdict.
+    """
     s = get_settings()
     if not s.news_enabled:
         return {"enabled": False}
-    headlines = [a.title for a in store.get_articles()] or None
-    return await news_analyze.factcheck(claim, context_headlines=headlines)
+    if topic and topic.strip():
+        headlines = [a.title for a in await news_sources.fetch_for_topic(topic)] or None
+    else:
+        headlines = [a.title for a in store.get_articles()] or None
+    return await news_analyze.factcheck(claim, context_headlines=headlines, fast=fast)
 
 
 # ── background refresher ────────────────────────────────────────────────────

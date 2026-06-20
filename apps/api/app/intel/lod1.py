@@ -9,13 +9,13 @@ Sentinel-1 backscatter-drop (real but noisy). No invented geometry.
 from __future__ import annotations
 
 import asyncio
-import time
 import urllib.parse
 import urllib.request
 from typing import Any
 
 from app.imagery import cdse
 from app.intel import sar_damage
+from app.upstream import cache
 
 DEFAULT_H = 18.0
 MAXB = 9000
@@ -49,7 +49,10 @@ DAMAGE_DATES = {
     "bakhmut": ("2022-08-01", "2023-05-25"),
 }
 
-_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+# Results are cached (and single-flighted) through the shared upstream TtlCache
+# under "lod1:<key>" — concurrent first-hits for the same bbox/AOI collapse into
+# one slow Overpass call instead of each launching its own. 12h: Overpass is
+# slow and OSM footprints barely move.
 _TTL = 12 * 3600.0
 
 
@@ -84,7 +87,9 @@ def _overpass_query(q: str) -> dict[str, Any]:
             endpoint, data=data, headers={"User-Agent": "osint-research/1.0"}
         )
         try:
-            return json.loads(urllib.request.urlopen(req, timeout=180).read())
+            # 40s per mirror keeps the worst case (all 3 mirrors) within an
+            # interactive budget; 180s × 3 was past any usable click-to-result.
+            return json.loads(urllib.request.urlopen(req, timeout=40).read())
         except Exception as e:  # 429, timeout, transient DNS — try the next mirror
             last_err = e
             if i < len(endpoints) - 1:
@@ -165,87 +170,87 @@ async def build_bbox(bbox: tuple[float, float, float, float]) -> dict[str, Any]:
     general locations there is none, so `damaged` is always False rather than
     invented). For the curated war-damage AOIs use build(aoi) instead.
     """
-    key = "bbox:" + ",".join(f"{c:.4f}" for c in bbox)
-    hit = _cache.get(key)
-    if hit and time.monotonic() - hit[0] < _TTL:
-        return hit[1]
-    blds = await asyncio.to_thread(_fetch_footprints, bbox)
-    blds.sort(key=lambda b: _ring_area_m2(b["ring"], bbox[1]), reverse=True)
-    blds = blds[:MAXB]
-    feats = [
-        {
-            "type": "Feature",
-            "geometry": {"type": "Polygon", "coordinates": [b["ring"]]},
-            "properties": {
-                "height": round(b["height"], 1),
-                "height_src": b["height_src"],
-                "damaged": False,
+    key = "lod1:bbox:" + ",".join(f"{c:.4f}" for c in bbox)
+
+    async def load() -> dict[str, Any]:
+        blds = await asyncio.to_thread(_fetch_footprints, bbox)
+        blds.sort(key=lambda b: _ring_area_m2(b["ring"], bbox[1]), reverse=True)
+        blds = blds[:MAXB]
+        feats = [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Polygon", "coordinates": [b["ring"]]},
+                "properties": {
+                    "height": round(b["height"], 1),
+                    "height_src": b["height_src"],
+                    "damaged": False,
+                },
+            }
+            for b in blds
+        ]
+        return {
+            "type": "FeatureCollection",
+            "features": feats,
+            "summary": {
+                "bbox": list(bbox),
+                "buildings": len(feats),
+                "damaged": 0,
+                "note": "footprints OSM; heights osm-or-estimate; no SAR damage overlay (general AOI)",
             },
         }
-        for b in blds
-    ]
-    fc = {
-        "type": "FeatureCollection",
-        "features": feats,
-        "summary": {
-            "bbox": list(bbox),
-            "buildings": len(feats),
-            "damaged": 0,
-            "note": "footprints OSM; heights osm-or-estimate; no SAR damage overlay (general AOI)",
-        },
-    }
-    _cache[key] = (time.monotonic(), fc)
-    return fc
+
+    return await cache.get_or_fetch(key, _TTL, load)
 
 
 async def build(aoi: str) -> dict[str, Any]:
-    hit = _cache.get(aoi)
-    if hit and time.monotonic() - hit[0] < _TTL:
-        return hit[1]
+    # Validate up front so an unknown AOI raises KeyError (→ 404) without
+    # entering the single-flight loader / touching the cache.
     if aoi not in sar_damage.AOIS:
         raise KeyError(aoi)
     bbox = sar_damage.AOIS[aoi]
     pre, post = DAMAGE_DATES.get(aoi, ("2024-08-20", "2024-11-25"))
-    blds = await asyncio.to_thread(_fetch_footprints, bbox)
-    blds.sort(key=lambda b: _ring_area_m2(b["ring"], bbox[1]), reverse=True)
-    blds = blds[:MAXB]
 
-    dmg = await sar_damage.detect_damage(aoi, pre, post)
-    change, cb = dmg.get("_change"), dmg.get("_bbox")
-    cw, ch = (dmg.get("_size") or [0, 0])
+    async def load() -> dict[str, Any]:
+        blds = await asyncio.to_thread(_fetch_footprints, bbox)
+        blds.sort(key=lambda b: _ring_area_m2(b["ring"], bbox[1]), reverse=True)
+        blds = blds[:MAXB]
 
-    def is_dmg(ring: list[list[float]]) -> bool:
-        if change is None:
-            return False
-        clon = sum(p[0] for p in ring) / len(ring)
-        clat = sum(p[1] for p in ring) / len(ring)
-        x, y = cdse.lonlat_to_3857(clon, clat)
-        minx, miny, maxx, maxy = cb
-        col = int((x - minx) / (maxx - minx) * cw)
-        row = int((maxy - y) / (maxy - miny) * ch)
-        if not (0 <= row < change.shape[0] and 0 <= col < change.shape[1]):
-            return False
-        return bool(change[row, col] < -0.35)
+        dmg = await sar_damage.detect_damage(aoi, pre, post)
+        change, cb = dmg.get("_change"), dmg.get("_bbox")
+        cw, ch = (dmg.get("_size") or [0, 0])
 
-    feats, ndmg = [], 0
-    for b in blds:
-        d = is_dmg(b["ring"])
-        ndmg += int(d)
-        feats.append({
-            "type": "Feature",
-            "geometry": {"type": "Polygon", "coordinates": [b["ring"]]},
-            "properties": {
-                "height": round(b["height"], 1),
-                "height_src": b["height_src"],
-                "damaged": d,
-            },
-        })
-    fc = {
-        "type": "FeatureCollection",
-        "features": feats,
-        "summary": {"aoi": aoi, "buildings": len(feats), "damaged": ndmg,
-                    "pre": pre, "post": post,
-                    "note": "footprints OSM; heights osm-or-estimate; damage S1 amplitude (noisy)"},
-    }
-    _cache[aoi] = (time.monotonic(), fc)
-    return fc
+        def is_dmg(ring: list[list[float]]) -> bool:
+            if change is None:
+                return False
+            clon = sum(p[0] for p in ring) / len(ring)
+            clat = sum(p[1] for p in ring) / len(ring)
+            x, y = cdse.lonlat_to_3857(clon, clat)
+            minx, miny, maxx, maxy = cb
+            col = int((x - minx) / (maxx - minx) * cw)
+            row = int((maxy - y) / (maxy - miny) * ch)
+            if not (0 <= row < change.shape[0] and 0 <= col < change.shape[1]):
+                return False
+            return bool(change[row, col] < -0.35)
+
+        feats, ndmg = [], 0
+        for b in blds:
+            d = is_dmg(b["ring"])
+            ndmg += int(d)
+            feats.append({
+                "type": "Feature",
+                "geometry": {"type": "Polygon", "coordinates": [b["ring"]]},
+                "properties": {
+                    "height": round(b["height"], 1),
+                    "height_src": b["height_src"],
+                    "damaged": d,
+                },
+            })
+        return {
+            "type": "FeatureCollection",
+            "features": feats,
+            "summary": {"aoi": aoi, "buildings": len(feats), "damaged": ndmg,
+                        "pre": pre, "post": post,
+                        "note": "footprints OSM; heights osm-or-estimate; damage S1 amplitude (noisy)"},
+        }
+
+    return await cache.get_or_fetch(f"lod1:{aoi}", _TTL, load)

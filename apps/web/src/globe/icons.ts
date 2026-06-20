@@ -139,6 +139,48 @@ function cameraSvg(color: string): string {
   </svg>`;
 }
 
+// Fixed-wing attack/loitering drone (top-down, nose up) — delta planform with a
+// fuselage spine. Used by the simulation layer for swarm contacts.
+function uavSvg(color: string, outline = '#000'): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
+    <path d="M12 2 L20 19 L12 15 L4 19 Z" fill="${color}" stroke="${outline}" stroke-width="0.6" stroke-linejoin="round"/>
+    <rect x="11" y="3" width="2" height="14" rx="1" fill="${color}" stroke="${outline}" stroke-width="0.4"/>
+  </svg>`;
+}
+
+// Quadcopter (top-down) — central body, four arms, rotor discs. Smaller drones.
+function droneSvg(color: string, outline = '#000'): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
+    <line x1="6" y1="6" x2="18" y2="18" stroke="${color}" stroke-width="1.4"/>
+    <line x1="18" y1="6" x2="6" y2="18" stroke="${color}" stroke-width="1.4"/>
+    <circle cx="6" cy="6" r="3" fill="none" stroke="${color}" stroke-width="1.2"/>
+    <circle cx="18" cy="6" r="3" fill="none" stroke="${color}" stroke-width="1.2"/>
+    <circle cx="6" cy="18" r="3" fill="none" stroke="${color}" stroke-width="1.2"/>
+    <circle cx="18" cy="18" r="3" fill="none" stroke="${color}" stroke-width="1.2"/>
+    <rect x="9.5" y="9.5" width="5" height="5" rx="1" fill="${color}" stroke="${outline}" stroke-width="0.5"/>
+  </svg>`;
+}
+
+// Surface-to-air missile / air-defence site (top-down) — launcher box with a
+// raised radar/mast. Used by the simulation defence layer (Phase C).
+function samSiteSvg(color: string, outline = '#000'): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22">
+    <rect x="5" y="9" width="14" height="9" rx="1.5" fill="${color}" stroke="${outline}" stroke-width="0.6"/>
+    <path d="M8 9 L10 4 L12 9 Z" fill="${color}" stroke="${outline}" stroke-width="0.5"/>
+    <path d="M12 9 L14 4 L16 9 Z" fill="${color}" stroke="${outline}" stroke-width="0.5"/>
+    <circle cx="12" cy="13.5" r="1.6" fill="${outline}" opacity="0.6"/>
+  </svg>`;
+}
+
+// Generic ground unit (top-down) — NATO-style rectangle, for troop formations.
+function groundUnitSvg(color: string, outline = '#000'): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="16">
+    <rect x="3" y="4" width="18" height="12" rx="1" fill="${color}" stroke="${outline}" stroke-width="0.6"/>
+    <line x1="4" y1="5" x2="20" y2="15" stroke="${outline}" stroke-width="0.7" opacity="0.7"/>
+    <line x1="20" y1="5" x2="4" y2="15" stroke="${outline}" stroke-width="0.7" opacity="0.7"/>
+  </svg>`;
+}
+
 // Emergency triangle
 function emergencySvg(color: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22">
@@ -163,6 +205,10 @@ export const icons = {
   darkVessel: (color: string) => dataUri(darkVesselSvg(color)),
   emergency: (color: string) => dataUri(emergencySvg(color)),
   camera: (color: string) => dataUri(cameraSvg(color)),
+  uav: (color: string) => dataUri(uavSvg(color)),
+  drone: (color: string) => dataUri(droneSvg(color)),
+  samSite: (color: string) => dataUri(samSiteSvg(color)),
+  groundUnit: (color: string) => dataUri(groundUnitSvg(color)),
 };
 
 // Cache so we don't reflow data URIs every render.

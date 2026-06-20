@@ -257,6 +257,12 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
               {replay.info.tracks}t·{replay.info.points}p
             </span>
           )}
+          <span
+            className="mono text-[8.5px] uppercase tracking-[0.5px] text-txt-4"
+            title="Position history is a rolling buffer (~24h). Replay older than this is unavailable — no cold storage."
+          >
+            ~24h buffer
+          </span>
         </div>
 
         <span className="flex-1" />

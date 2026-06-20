@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config import Settings, get_settings
@@ -110,6 +111,14 @@ async def _load_gdelt(
     timespan the caller asks for, clamped to that ceiling upstream."""
     key = f"gdelt:{query}:{timespan}:{maxrecords}"
 
+    def _degraded(note: str) -> dict[str, Any]:
+        # GDELT is frequently dead from datacenter egress (the report saw a
+        # 404). Degrade to an empty-but-VALID FeatureCollection flagged
+        # `degraded`, instead of a hard 502 — keeps the /gdelt route and the
+        # events/all + intel_brief fusion paths alive (they tolerate empty
+        # feeds), and the flag tells the operator the layer is offline.
+        return {"type": "FeatureCollection", "features": [], "degraded": True, "note": note}
+
     async def load() -> dict[str, Any]:
         params = {
             "query": query,
@@ -118,15 +127,18 @@ async def _load_gdelt(
             "timespan": timespan,
             "maxrecords": maxrecords,
         }
-        r = await get_client().get(
-            "https://api.gdeltproject.org/api/v2/geo/geo", params=params
-        )
+        try:
+            r = await get_client().get(
+                "https://api.gdeltproject.org/api/v2/geo/geo", params=params
+            )
+        except httpx.HTTPError as e:
+            return _degraded(f"gdelt transport: {e}")
         if r.status_code != 200:
-            raise HTTPException(502, f"gdelt upstream {r.status_code}")
+            return _degraded(f"gdelt upstream {r.status_code}")
         try:
             j = r.json()
-        except Exception:
-            return {"type": "FeatureCollection", "features": []}
+        except ValueError:
+            return _degraded("gdelt non-json body")
         # GDELT returns proper GeoJSON; tag each feature with kind
         feats = j.get("features") or []
         for f in feats:
@@ -134,7 +146,13 @@ async def _load_gdelt(
             f["properties"]["source"] = "gdelt"
         return {"type": "FeatureCollection", "features": feats}
 
-    return await cache.get_or_fetch(key, 900.0, load)
+    out = await cache.get_or_fetch(key, 900.0, load)
+    # Don't pin a degraded result for the full 15-min TTL — retry the dead
+    # upstream within 60s (the empty payload IS cached, so without this a
+    # transient blip would mask a recovered feed for 15 minutes).
+    if out.get("degraded"):
+        cache.shorten(key, 60.0)
+    return out
 
 
 @router.get("/api/events/gdelt")

@@ -73,6 +73,45 @@ FEEDS: list[Source] = [
 ]
 
 
+def google_news_search(query: str, *, when_days: int = 2) -> str:
+    """Build a Google-News RSS keyword-search URL (same host as the wire feeds).
+
+    Boolean ``OR`` and Google's ``when:Nd`` recency operator both work inside
+    ``q`` once URL-encoded. The general "world" front-page feeds above routinely
+    miss a specific conflict (the front page is bird-flu/sports), so a keyword
+    search is what actually puts the war into the corpus the debias/fact-check
+    engine reasons over. Keyless, parsed by the same ``parse_feed_bytes`` path.
+    """
+    from urllib.parse import quote
+
+    q = f"({query}) when:{when_days}d" if when_days else f"({query})"
+    return f"https://news.google.com/rss/search?q={quote(q)}&hl=en-US&gl=US&ceid=US:en"
+
+
+# Conflict-scoped search feeds — folded into the DEFAULT fetch set so the
+# Iran/Israel war is present for /feed, /analysis, and /factcheck alike, not just
+# when the world front page happens to lead with it.
+_MIDEAST_QUERY = (
+    "Iran OR Israel OR Hezbollah OR Hamas OR Gaza OR Lebanon OR "
+    "Hormuz OR IRGC OR Tehran OR IDF"
+)
+
+CONFLICT_FEEDS: list[Source] = [
+    Source(
+        "Google News · Mideast",
+        google_news_search(_MIDEAST_QUERY),
+        "aggregator",
+        "mideast",
+    ),
+]
+
+# Named topic presets the API can request by key (free text also accepted).
+TOPIC_QUERIES: dict[str, str] = {
+    "mideast": _MIDEAST_QUERY,
+    "ukraine": "Ukraine OR Russia OR Kyiv OR Moscow OR Donbas OR Crimea",
+}
+
+
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 
@@ -156,13 +195,20 @@ def _published_sort_key(a: Article) -> str:
     return a.published_iso or ""
 
 
-async def fetch_all(timeout_s: float = 12.0) -> list[Article]:
+async def fetch_all(
+    timeout_s: float = 12.0,
+    *,
+    feeds: list[Source] | None = None,
+) -> list[Article]:
     """Fetch every feed concurrently, normalize, dedupe, newest-first, capped.
 
-    Per-feed failures are swallowed (logged) so a single dead feed never blanks
-    the whole batch. The total is capped at ``settings.news_max_items``.
+    The default feed set is the general world feeds PLUS :data:`CONFLICT_FEEDS`
+    so the war is always in the corpus. Per-feed failures are swallowed (logged)
+    so a single dead feed never blanks the whole batch. The total is capped at
+    ``settings.news_max_items``.
     """
-    results = await asyncio.gather(*(_fetch_one(s, timeout_s) for s in FEEDS))
+    feeds = feeds if feeds is not None else (FEEDS + CONFLICT_FEEDS)
+    results = await asyncio.gather(*(_fetch_one(s, timeout_s) for s in feeds))
 
     seen: set[str] = set()
     articles: list[Article] = []
@@ -177,3 +223,19 @@ async def fetch_all(timeout_s: float = 12.0) -> list[Article]:
     articles.sort(key=_published_sort_key, reverse=True)
     cap = max(1, get_settings().news_max_items)
     return articles[:cap]
+
+
+async def fetch_for_topic(topic: str | None, timeout_s: float = 12.0) -> list[Article]:
+    """Fetch a single ad-hoc/preset keyword search, or the default union.
+
+    ``topic`` may be a preset key (e.g. ``"mideast"``, ``"ukraine"``) or free
+    text; blank/``None`` falls back to the default base+conflict union. Used by
+    the route's optional ``?topic=`` param to scope the corpus on demand without
+    poisoning the single-slot cache.
+    """
+    topic = (topic or "").strip()
+    if not topic:
+        return await fetch_all(timeout_s)
+    query = TOPIC_QUERIES.get(topic.lower(), topic)
+    feeds = [Source(f"Google News · {topic}", google_news_search(query), "aggregator", topic)]
+    return await fetch_all(timeout_s, feeds=feeds)

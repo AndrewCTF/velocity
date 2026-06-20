@@ -539,10 +539,25 @@ async def anomalies(
     elif score >= 4:
         level = "elevated"
 
+    # Additive coverage gauge so callers can tell "blind" from "quiet": a 'low'
+    # threat over a bbox with zero vessels (no AIS coverage) or flagged jamming
+    # cells with no degraded-aircraft sample (null NACp/NIC tier) is unmeasured,
+    # not confirmed calm. Does NOT alter threat_level/score.
+    coverage_confidence = "medium"
+    if bbox is not None:
+        vessel_count = (await query_vessels(bbox))["matched_total"]
+        maritime_blind = vessel_count == 0
+        jam_no_sample = (
+            jam["summary"]["cells_flagged"] > 0 and not jam["affected_aircraft_sample"]
+        )
+        if maritime_blind or jam_no_sample:
+            coverage_confidence = "low"
+
     return {
         "bbox": bbox.as_dict() if bbox else None,
         "threat_level": level,
         "score": score,
+        "coverage_confidence": coverage_confidence,
         "emergency_aircraft": emergencies,
         "jamming_hotspots": jam_hot,
         "jamming_summary": jam["summary"],
@@ -600,9 +615,21 @@ async def area_intel(
     ves = await query_vessels(bbox)
     anom = await anomalies(bbox, features=area_feats)
 
+    degraded = load_mode != "direct"
     return {
         "loaded_primary": set_primary,
         "load_mode": load_mode,  # 'direct' = dedicated fetch, 'snapshot' = degraded
+        "degraded": degraded,
+        **(
+            {
+                "freshness_note": (
+                    "Served from the global ~2s snapshot (no dedicated upstream "
+                    "answered); NACp/NIC may be null so jamming detection is degraded."
+                )
+            }
+            if degraded
+            else {}
+        ),
         "upstream_host": host,
         "aoi": aoi_desc,
         "area": bbox.as_dict(),

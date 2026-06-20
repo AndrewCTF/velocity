@@ -54,6 +54,26 @@ async def aviation_states(
         try:
             raw = await fetch_states(tm, bbox)
         except httpx.HTTPStatusError as e:
+            # Authed creds dead (OAuth "Invalid client" 401) or rate-limited:
+            # don't surface a raw crash. If we WERE authed, degrade to the
+            # anonymous endpoint (still ~400 credits/day, same surface) so the
+            # route keeps serving aircraft instead of 401'ing — mirrors the
+            # authed→anon fallback the global snapshot uses. If anonymous also
+            # fails, surface a clear upstream error (not an unhandled 500).
+            if tm.enabled:
+                anon = OpenSkyTokenManager("", "")
+                try:
+                    raw = await fetch_states(anon, bbox)
+                    return states_to_geojson(raw)
+                except httpx.HTTPStatusError as e2:
+                    raise HTTPException(
+                        status_code=e2.response.status_code,
+                        detail=f"opensky upstream: {e2.response.text[:200]}",
+                    ) from e2
+                except httpx.HTTPError as e2:
+                    raise HTTPException(
+                        status_code=502, detail=f"opensky transport: {e2}"
+                    ) from e2
             raise HTTPException(
                 status_code=e.response.status_code,
                 detail=f"opensky upstream: {e.response.text[:200]}",

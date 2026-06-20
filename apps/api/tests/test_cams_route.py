@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -101,6 +102,49 @@ def test_cams_geojson_merges_sources(
     for f in fc["features"]:
         assert f["properties"]["kind"] == "camera"
         assert f["properties"]["name"]
+
+
+def test_caltrans_districts_fetched_concurrently(
+    mock_upstream: list[str],
+) -> None:
+    # Each district JSON is fetched on its own — both configured districts must
+    # appear, and (post-refactor) they go out concurrently rather than serially.
+    asyncio.run(cams._load_caltrans())
+    fetched = [u for u in mock_upstream if "cwwp2.dot.ca.gov" in u and u.endswith(".json")]
+    for n in cams._CALTRANS_DISTRICTS:
+        assert any(f"/d{n}/" in u or f"D{n:02d}" in u for u in fetched), (
+            f"district {n} not fetched: {fetched}"
+        )
+
+
+def test_catalog_sources_loaded_concurrently(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Instrument each loader so we can prove they overlap in time (concurrent
+    # gather) instead of running back-to-back (the old ~18s serial fan-out).
+    upstream.cache.invalidate("cams:catalog")
+    events: list[tuple[str, str]] = []
+
+    def instrument(name: str, delay: float):
+        async def loader() -> list:
+            events.append((name, "enter"))
+            await asyncio.sleep(delay)
+            events.append((name, "exit"))
+            return []
+
+        return loader
+
+    monkeypatch.setattr(cams, "_load_digitraffic", instrument("digitraffic", 0.05))
+    monkeypatch.setattr(cams, "_load_caltrans", instrument("caltrans", 0.05))
+    monkeypatch.setattr(cams, "_load_yaml", lambda: [])
+
+    catalog = asyncio.run(cams._get_catalog())
+    upstream.cache.invalidate("cams:catalog")
+
+    assert catalog == {}
+    # Both async loaders must have entered before either exited — impossible if
+    # they were awaited serially.
+    first_exit = next(i for i, e in enumerate(events) if e[1] == "exit")
+    entered_before_first_exit = {e[0] for e in events[:first_exit] if e[1] == "enter"}
+    assert entered_before_first_exit == {"digitraffic", "caltrans"}
 
 
 def test_snapshot_proxy_and_unknown_404(client, mock_upstream: list[str]) -> None:

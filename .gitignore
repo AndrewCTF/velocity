@@ -49,4 +49,11 @@ apps/ml/fusion/3dgs_data/
 apps/ml/fusion/3dgs_data.zip
 apps/ml/fusion/drone/
 apps/ml/fusion/output_3dgs/
+# Orphaned 3D reconstruction tree (~566MB) — COLMAP dense, gsplat checkout,
+# render outputs, and large video renders. Never commit these artifacts.
+apps/ml/fusion/langat2_recon/
+*.mp4
+apps/ml/fusion/**/colmap/dense/
+apps/ml/fusion/**/gsplat_repo/
+apps/ml/fusion/**/output/
 tmp/

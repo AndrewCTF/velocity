@@ -172,9 +172,19 @@ async def fetch_area(lat: float, lon: float, radius_nm: float) -> dict[str, Any]
                 "fc": {"type": "FeatureCollection", "features": direct["features"]},
                 "mode": "direct",
                 "host": direct.get("_host"),
+                "degraded": False,
             }
         subset = await _snapshot_subset(bbox)
-        return {"fc": subset, "mode": "snapshot", "host": None}
+        return {
+            "fc": subset,
+            "mode": "snapshot",
+            "host": None,
+            "degraded": True,
+            "freshness_warning": (
+                "Fallback to snapshot (no direct upstream answered); data age "
+                "~2-10s and NACp/NIC may be null (jamming detection degraded)."
+            ),
+        }
 
     result = await cache.get_or_fetch(key, _AOI_TTL, load)
     return result

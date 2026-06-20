@@ -561,6 +561,22 @@ async def intel_sources() -> dict[str, Any]:
     from app import ais_firehose, ais_keyless  # noqa: PLC0415
 
     s = get_settings()
+
+    # opensky_authed honesty: a set key proves nothing (CLAUDE.md: configured !=
+    # working — expired creds 401 with "Invalid client"). `opensky_authed` stays
+    # the CONFIGURED bool (stable contract), and `opensky_authed_working` is
+    # PROVEN by an actual cached OAuth token fetch — None when unconfigured,
+    # False when the authed probe fails, True only when a token was issued.
+    opensky_configured = bool(s.opensky_client_id and s.opensky_client_secret)
+    opensky_working: bool | None = None
+    if opensky_configured:
+        try:
+            from app.routes.aviation import _token_manager  # noqa: PLC0415
+
+            opensky_working = bool(await _token_manager(s).get())
+        except Exception:  # noqa: BLE001 — dead/expired creds → not working
+            opensky_working = False
+
     return {
         "always_on": [
             "adsb (adsb.lol + airplanes.live grid — keyless aircraft firehose)",
@@ -576,15 +592,20 @@ async def intel_sources() -> dict[str, Any]:
         "key_gated": {
             "aisstream": bool(s.aisstream_key),
             "firms_fires": bool(s.firms_map_key),
-            "opensky_authed": bool(s.opensky_client_id and s.opensky_client_secret),
+            "opensky_authed": opensky_configured,
             "gfw_dark_vessels": bool(s.gfw_token),
             "acled_events": bool(s.acled_key),
             "cloudflare_outages": bool(s.cloudflare_token),
             "openaip": bool(s.openaip_key),
         },
+        # Proven-working signal (not just configured) for the authed OpenSky tier:
+        # null = no creds set, false = creds set but the OAuth probe failed
+        # (expired / "Invalid client"), true = a token was actually issued.
+        "opensky_authed_working": opensky_working,
         "key_gated_note": (
             "true = key is CONFIGURED, not proven working — a set key can still "
-            "401 or be expired. Hit the feed to confirm liveness."
+            "401 or be expired. Hit the feed to confirm liveness. See "
+            "opensky_authed_working for a probe-backed signal."
         ),
         "degraded": {
             "adsb_single_shot_firehose": (

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as Cesium from 'cesium';
 import { MapboxTerrainProvider } from '@macrostrat/cesium-martini';
+import { isMobileDevice } from '../shell/device.js';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useTime, useSelection, useImagery } from '../state/stores.js';
 import type { ImageryMode } from '../state/stores.js';
@@ -318,6 +319,8 @@ export function GlobeCanvas({
     };
 
     const viewer = new Cesium.Viewer(containerRef.current, viewerOpts);
+    // DEV-only handle for debugging/introspection (mirrors __useSelection).
+    if (import.meta.env?.DEV) (window as unknown as { __viewer: Cesium.Viewer }).__viewer = viewer;
     const scene = viewer.scene;
 
     // Dark space + globe undertone — globe.baseColor is what shows through
@@ -354,7 +357,9 @@ export function GlobeCanvas({
     //    driver of the tile-cache VRAM blow-up.
     //  - preloadSiblings OFF (was on): stop speculatively loading the ring of
     //    adjacent tiles (~3x tile fetch/upload); the visible set is enough.
-    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
+    // Mobile renders at 1× device pixels (a 3× Samsung panel supersamples to a
+    // brutal fill rate otherwise — the overheating). Desktop keeps up to 1.5×.
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, isMobileDevice() ? 1.0 : 1.5);
     scene.globe.maximumScreenSpaceError = 2.0;
     scene.globe.preloadSiblings = false;
     // Terrain+imagery tile cache. Kept at the Cesium default (100): an earlier

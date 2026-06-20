@@ -238,6 +238,47 @@ export function Hero({
   );
 }
 
+// ── COV widget (.widget) — titled, bordered, elevated section ────────────────
+// Gotham "Custom Object View" idiom: each dossier fact is its own stacked
+// widget with an elevation border. `elevation` mirrors Gotham's section border
+// styles (bordered / outer drop shadow / inner shadow).
+export function Widget({
+  title,
+  count,
+  elevation = 'raised',
+  action,
+  children,
+  className = '',
+}: {
+  title?: string;
+  count?: string | number;
+  elevation?: 'flat' | 'raised' | 'inset';
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}): JSX.Element {
+  const shadow =
+    elevation === 'raised'
+      ? '0 1px 0 rgba(0,0,0,0.35), 0 6px 16px -10px rgba(0,0,0,0.7)'
+      : elevation === 'inset'
+        ? 'inset 0 1px 3px rgba(0,0,0,0.45)'
+        : 'none';
+  return (
+    <section
+      className={`rounded-md border border-line bg-bg-1/70 p-2.5 ${className}`}
+      style={{ boxShadow: shadow }}
+    >
+      {title && (
+        <div className="flex items-center gap-2">
+          <SectionLabel title={title} {...(count !== undefined ? { count } : {})} className="flex-1" />
+          {action}
+        </div>
+      )}
+      <div className={title ? 'mt-1.5' : ''}>{children}</div>
+    </section>
+  );
+}
+
 // ── icon tile (.selhead .ico) — 34×34 framed glyph ──────────────────────────
 export function IconTile({ children, color }: { children: ReactNode; color?: string }): JSX.Element {
   return (

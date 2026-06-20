@@ -560,22 +560,107 @@ async def whats_changed(
     )
 
 
+def _compact_points(points: list[dict[str, Any]], max_points: int) -> list[dict[str, Any]]:
+    """Downsample one incident's observation series to its meaningful shape.
+
+    Keeps the first + last point and every point whose threat ``level`` differs
+    from its predecessor (a flat run of identical (level, score) is noise on a
+    timeline). If transitions alone still exceed ``max_points`` it strides them
+    down. Each kept point is shrunk to ``[t, level, score]`` (a list, not a
+    verbose dict) so the wire form is a fraction of the size."""
+    if not points:
+        return []
+    keep: list[dict[str, Any]] = [points[0]]
+    prev = points[0].get("level")
+    for p in points[1:-1]:
+        if p.get("level") != prev:
+            keep.append(p)
+            prev = p.get("level")
+    if len(points) > 1:
+        keep.append(points[-1])
+    if len(keep) > max_points:
+        # Stride the kept transitions, but always retain the endpoints.
+        step = (len(keep) - 1) / (max_points - 1)
+        idx = sorted({0, *(round(i * step) for i in range(max_points)), len(keep) - 1})
+        keep = [keep[i] for i in idx][:max_points]
+    return [[p.get("t"), p.get("level"), p.get("score")] for p in keep]
+
+
+def _compact_history(data: dict[str, Any], limit: int, max_points: int) -> dict[str, Any]:
+    """Cap + condense the incident-history payload so the default call fits well
+    under the MCP response token cap.
+
+    The backend route returns EVERY incident in the window, each with its full
+    per-snapshot ``points`` series and full ``narrative`` — ~89 KB at the
+    default 6 h, which overflows the cap and hard-errors the tool. We keep the
+    most-active incidents (the route already sorts by point-count desc), compact
+    each one's series, trim the narrative, and report an honest "showing N of M".
+    """
+    incidents = data.get("incidents")
+    if not isinstance(incidents, list):
+        return data  # error payload or unexpected shape — pass through untouched
+    total = len(incidents)
+    kept = incidents[:limit]
+    compact: list[dict[str, Any]] = []
+    for inc in kept:
+        narrative = inc.get("narrative")
+        if isinstance(narrative, str) and len(narrative) > 240:
+            narrative = narrative[:237] + "…"
+        compact.append(
+            {
+                "key": inc.get("key"),
+                "domains": inc.get("domains"),
+                "centroid": inc.get("centroid"),
+                "narrative": narrative,
+                # series is [[t, level, score], …] — compact list form
+                "series": _compact_points(inc.get("points") or [], max_points),
+            }
+        )
+    out = {
+        "scope": data.get("scope"),
+        "window_hours": data.get("window_hours"),
+        "snapshots": data.get("snapshots"),
+        "incident_count": total,
+        "returned": len(compact),
+        "truncated": total > len(compact),
+        "incidents": compact,
+    }
+    if out["truncated"]:
+        out["note"] = (
+            f"showing {len(compact)} of {total} incidents (most-active first); "
+            "raise `limit` or scope with lat/lon/hours for more"
+        )
+    return out
+
+
 @mcp.tool()
 async def incident_history(
     lat: float | None = None,
     lon: float | None = None,
     radius_nm: float = 500.0,
     hours: float = 6.0,
+    limit: int = 25,
+    max_incidents: int | None = None,
 ) -> dict[str, Any]:
     """Timeline of how each incident built up over the recent window — per
-    incident, the series of (time, threat_level, score) observations. Reveals
-    sequence (e.g. jamming first, then dark vessels, then a reported event).
-    Global uses the background watch history; an AOI uses your prior watch calls.
+    incident, a compact ``series`` of ``[time, threat_level, score]`` points.
+    Reveals sequence (e.g. jamming first, then dark vessels, then a reported
+    event). Global uses the background watch history; an AOI uses your prior
+    watch calls.
+
+    The full window can hold many incidents; this returns the ``limit`` most
+    active ones (default 25, alias ``max_incidents``) with each series
+    downsampled to its threat-level transitions, and reports
+    ``incident_count`` / ``returned`` / ``truncated`` so you know if more exist.
+    Raise ``limit`` or narrow with lat/lon/hours to drill in.
     """
-    return await _get(
+    cap = max_incidents if max_incidents is not None else limit
+    cap = max(1, min(int(cap), 200))
+    data = await _get(
         "/api/intel/incident-history",
         {"lat": lat, "lon": lon, "radius_nm": radius_nm, "hours": hours},
     )
+    return _compact_history(data, cap, max_points=12)
 
 
 @mcp.tool()

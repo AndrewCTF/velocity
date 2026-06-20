@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type * as Cesium from 'cesium';
-import { useFeeds, useAlerts, useImagery, useConnection, type WsStatus } from '../state/stores.js';
+import { useFeeds, useAlerts, useImagery, useConnection, useSim, type WsStatus } from '../state/stores.js';
 import { useAoi } from '../state/aoi.js';
 import { AoiSelector } from './AoiSelector.js';
 import { SearchField } from './SearchField.js';
@@ -73,6 +73,11 @@ export function CommandBar({
           mode={imageryMode}
           onToggle={() => setImageryMode(imageryMode === '3d-sat' ? '2d-dark' : '3d-sat')}
         />
+      </div>
+
+      {/* simulation mode toggle — browser-side war-game overlay */}
+      <div className={CELL}>
+        <SimToggle />
       </div>
 
       {/* alert ticker — top alert in newest-first buffer; click opens panel.
@@ -313,6 +318,36 @@ function ImageryToggle({
     >
       <span aria-hidden="true" className="mr-1">{on ? '◆' : '◇'}</span>
       3D sat
+    </button>
+  );
+}
+
+/**
+ * SIM mode pill — toggles the browser-side war-game overlay. When on, the
+ * SimulationOverlay mounts and the live ADS-B/AIS layers dim so scenario
+ * contacts stand out.
+ */
+function SimToggle(): JSX.Element {
+  const active = useSim((s) => s.active);
+  const toggle = useSim((s) => s.toggle);
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={active}
+      title="Toggle browser-side simulation mode (drones, attack scenarios)"
+      data-testid="sim-toggle"
+      className={[
+        'mono text-[9px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
+        active
+          ? 'border-mag-line text-mag bg-mag-dim'
+          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
+      ].join(' ')}
+    >
+      <span aria-hidden="true" className="mr-1">
+        {active ? '◉' : '◎'}
+      </span>
+      SIM
     </button>
   );
 }

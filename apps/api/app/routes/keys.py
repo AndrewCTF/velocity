@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app import keys as byok
+from app.auth import _jwt_claims
 from app.keys import UserCtx, current_user
 
 router = APIRouter(tags=["keys"])
@@ -34,8 +35,35 @@ class KeysResponse(BaseModel):
     keys: list[StoredKey]
 
 
+class MeResponse(BaseModel):
+    user_id: str
+    email: str | None = None
+    tier: str | None = None
+    status: str | None = None
+
+
 class PutKeyBody(BaseModel):
     value: str = Field(..., min_length=1, max_length=8192)
+
+
+@router.get("/api/me", response_model=MeResponse)
+async def get_me(ctx: UserCtx = Depends(current_user)) -> MeResponse:
+    """Signed-in user's profile, derived from the Supabase JWT claims.
+
+    The frontend (SettingsModal) calls this to render the account row. On a
+    keyless local box ``current_user`` returns 401 (same as ``/api/keys``) and
+    the caller's ``r.ok`` guard quietly skips. ``tier``/``status`` are not yet
+    sourced from the subscriptions table, so they are reported as unknown
+    (``None``) rather than fabricated — the UI already renders a fallback.
+    """
+    claims = _jwt_claims(ctx.token) or {}
+    email = claims.get("email")
+    if not email:
+        # Supabase stashes user fields under user_metadata for some grants.
+        meta = claims.get("user_metadata") or {}
+        if isinstance(meta, dict):
+            email = meta.get("email")
+    return MeResponse(user_id=ctx.user_id, email=email, tier=None, status=None)
 
 
 @router.get("/api/keys", response_model=KeysResponse)

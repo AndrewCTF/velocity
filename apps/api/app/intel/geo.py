@@ -21,9 +21,30 @@ EMERGENCY_SQUAWKS: frozenset[str] = frozenset({"7500", "7600", "7700"})
 # styles.ts isMilitaryCallsign — prefixes that don't collide with civil ops.
 _MIL_CALLSIGN = re.compile(
     r"^(RCH|REACH|SAM|DUKE|GORDO|BISON|MAGMA|SCAR|PAT|SLAM|KING|EBONY|CONVOY|"
-    r"NAVY|GAF|ASCOT|CHAOS|TITAN|VOODOO|MAKO|TREK|TANGO|VENOM|VIPER|HOMR|RAPTR)\d",
+    r"NAVY|GAF|ASCOT|CHAOS|TITAN|VOODOO|MAKO|TREK|TANGO|VENOM|VIPER|HOMR|RAPTR|"
+    r"RRR|CFC|CNV|SHUCK|GRZLY|BLKCAT|QID)\d",
     re.IGNORECASE,
 )
+
+# Military callsign prefixes matched by plain startswith (no trailing-digit
+# requirement) — covers e.g. SHUCK51 (E-3 AWACS) and RCH/REACH tail variants.
+_MIL_CALLSIGN_PREFIXES: tuple[str, ...] = (
+    "RCH", "RRR", "CFC", "CNV", "NAVY", "SHUCK", "PAT", "GRZLY", "REACH",
+    "ASCOT", "BLKCAT", "DUKE", "QID",
+)
+
+# Exact uppercase ADS-B TYPE codes (props['type']) that imply a military
+# airframe: AWACS / tankers / heavy lift / MPA / bombers / fighters / rotorcraft.
+_MIL_TYPE_CODES: frozenset[str] = frozenset({
+    "E3TF", "E3CF", "E6", "E8", "K35R", "KC35", "KE3", "KC30", "KC46",
+    "C17", "C130", "C30J", "C5M", "A400", "A124", "P8", "P3", "RC135",
+    "B52", "B1", "B2", "F15", "F16", "F18", "F22", "F35", "EUFI", "TYPH",
+    "H60", "UH60", "V22",
+})
+
+# FAA US-military Mode-S address block: 0xADF7C8–0xAFFFFF (US DoD allocation).
+_US_MIL_HEX_LO = 0xADF7C8
+_US_MIL_HEX_HI = 0xAFFFFF
 
 # adsb sources that imply a military feed (airplanes.live /mil etc.).
 _MIL_SOURCES: frozenset[str] = frozenset({"adsb_mil", "airplanes_live"})
@@ -32,7 +53,22 @@ AircraftCategory = str  # airliner|private|helicopter|glider|military|emergency
 
 
 def is_military_callsign(callsign: str | None) -> bool:
-    return bool(callsign) and bool(_MIL_CALLSIGN.match(callsign or ""))
+    if not callsign:
+        return False
+    if _MIL_CALLSIGN.match(callsign):
+        return True
+    return callsign.strip().upper().startswith(_MIL_CALLSIGN_PREFIXES)
+
+
+def _is_us_mil_hex(icao24: str | None) -> bool:
+    """True if icao24 falls in the FAA US-military Mode-S block."""
+    if not icao24:
+        return False
+    try:
+        addr = int(icao24, 16)
+    except (TypeError, ValueError):
+        return False
+    return _US_MIL_HEX_LO <= addr <= _US_MIL_HEX_HI
 
 
 def aircraft_category(props: dict[str, Any]) -> AircraftCategory:
@@ -50,7 +86,14 @@ def aircraft_category(props: dict[str, Any]) -> AircraftCategory:
 
     callsign = props.get("callsign")
     source = props.get("source")
-    if is_military_callsign(callsign) or source in _MIL_SOURCES:
+    type_code = props.get("type")
+    type_upper = str(type_code).strip().upper() if type_code is not None else ""
+    if (
+        is_military_callsign(callsign)
+        or source in _MIL_SOURCES
+        or _is_us_mil_hex(props.get("icao24"))
+        or type_upper in _MIL_TYPE_CODES
+    ):
         return "military"
 
     category = props.get("category")

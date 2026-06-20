@@ -158,3 +158,49 @@ create policy alert_rules_self_update on public.alert_rules for update using (au
 create policy alert_rules_self_delete on public.alert_rules for delete using (auth.uid() = user_id);
 
 grant select, insert, update, delete on public.alert_rules to authenticated;
+
+-- ---- auto-enable RLS on any new public table (event trigger) --------------
+-- Belt-and-suspenders: if a future table lands in `public` without RLS, this
+-- event trigger turns it on automatically. It must stay SECURITY DEFINER so it
+-- can ALTER tables it doesn't own. As with handle_new_user above, Postgres
+-- grants EXECUTE to PUBLIC by default, which also exposes a SECURITY DEFINER
+-- function as an RPC at /rest/v1/rpc/rls_auto_enable (flagged by the Supabase
+-- security advisor as anon/authenticated-executable). The function is only ever
+-- meaningful when fired by the trigger, so revoke direct EXECUTE.
+create or replace function public.rls_auto_enable()
+returns event_trigger language plpgsql security definer set search_path = pg_catalog as $$
+declare cmd record;
+begin
+  for cmd in
+    select * from pg_event_trigger_ddl_commands()
+    where command_tag in ('CREATE TABLE','CREATE TABLE AS','SELECT INTO')
+      and object_type in ('table','partitioned table')
+  loop
+    if cmd.schema_name = 'public' then
+      begin
+        execute format('alter table if exists %s enable row level security', cmd.object_identity);
+      exception when others then
+        raise log 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;
+      end;
+    end if;
+  end loop;
+end $$;
+
+drop event trigger if exists ensure_rls;
+create event trigger ensure_rls on ddl_command_end
+  when tag in ('CREATE TABLE','CREATE TABLE AS','SELECT INTO')
+  execute function public.rls_auto_enable();
+
+revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+
+-- ---- leaked-password protection (HaveIBeenPwned) --------------------------
+-- The Supabase security advisor also flags `auth_leaked_password_protection`
+-- as disabled. This is GoTrue auth config, NOT a Postgres object, so it cannot
+-- be set from this SQL file or the read-only MCP. Enable it ONE of these ways:
+--   * Dashboard: Authentication -> Sign In / Providers -> Password settings ->
+--     enable "Leaked password protection".
+--   * Management API:
+--       PATCH https://api.supabase.com/v1/projects/<ref>/config/auth
+--       Authorization: Bearer <SUPABASE_PAT>
+--       {"password_hibp_enabled": true}
+--   * Supabase CLI: [auth] enable_password_hibp = true ; then `supabase config push`.
