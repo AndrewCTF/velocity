@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config import Settings, get_settings
@@ -24,17 +25,27 @@ async def ioda_outages(days: int = Query(7, ge=1, le=30)) -> dict[str, Any]:
     key = f"ioda:outages:{days}"
 
     async def load() -> dict[str, Any]:
-        # IODA exposes outage events; we pass through with a stable shape
-        r = await get_client().get(
-            "https://api.ioda.caida.org/v2/outages/events",
-            params={"from": f"-{days}d", "until": "now"},
-        )
+        # IODA exposes outage events; we pass through with a stable shape.
         # RAISE on failure: get_or_fetch only caches loader RETURNS, so an
         # upstream blip stays uncached and retries next call instead of
-        # pinning an "error" payload for the full 30-min TTL.
+        # pinning an "error" payload for the full 30-min TTL. Degrade EVERY
+        # upstream failure mode to 502 (not a raw 500): a transport error
+        # (DNS/connect/reset) before the status check, a non-200, or a 200
+        # with a non-JSON body (HTML/proxy notice) must all surface as 502 —
+        # mirrors the cloudflare_outages handler below.
+        try:
+            r = await get_client().get(
+                "https://api.ioda.caida.org/v2/outages/events",
+                params={"from": f"-{days}d", "until": "now"},
+            )
+        except httpx.HTTPError as e:
+            raise HTTPException(502, f"ioda transport: {e}") from e
         if r.status_code != 200:
             raise HTTPException(502, f"ioda upstream {r.status_code}")
-        j = r.json()
+        try:
+            j = r.json()
+        except ValueError as e:
+            raise HTTPException(502, "ioda non-json body") from e
         return {"items": j.get("data") or j.get("events") or []}
 
     return await cache.get_or_fetch(key, 1800.0, load)

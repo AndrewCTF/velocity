@@ -194,3 +194,18 @@ export const useAlerts = create<AlertsState>((set) => ({
     }),
   clear: () => set({ alerts: [] }),
 }));
+
+// Simulation mode — a browser-side war-game overlay drawn on its own Cesium
+// CustomDataSource over the live globe. `active` gates the SimulationOverlay UI
+// and the live-feed dimming; the SimController owns all sim entities + motion.
+interface SimState {
+  active: boolean;
+  setActive: (b: boolean) => void;
+  toggle: () => void;
+}
+
+export const useSim = create<SimState>((set) => ({
+  active: false,
+  setActive: (b) => set({ active: b }),
+  toggle: () => set((s) => ({ active: !s.active })),
+}));

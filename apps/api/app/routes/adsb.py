@@ -34,14 +34,17 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import gzip
 import hashlib
+import json
 import time
 from math import cos, radians
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 
+from app.auth import require_ws_key
 from app.config import get_settings
 from app.ingest.opensky import OpenSkyTokenManager, fetch_states, states_to_geojson
 from app.routes.aviation import _token_manager
@@ -77,8 +80,30 @@ _UPSTREAM_SEMAPHORE = asyncio.Semaphore(8)
 _CELL_TTL_FULL = 30.0
 _CELL_TTL_EMPTY = 5.0
 
+# Airport ground-infrastructure callsigns/type codes (towers, ground vehicles,
+# follow-me cars) that some feeds emit with an icao24 + position; these are not
+# aircraft and must be filtered out (often nic/nacp=11, on_ground). Exact match.
+_GROUND_INFRA_CALLSIGNS = frozenset(
+    {"TWR", "GND", "GO", "ATIS", "CLR", "RAMP", "APRON", "FOLLOWME"}
+    | {f"GO{n}" for n in range(1, 10)}
+)
+_GROUND_INFRA_TYPES = frozenset({"TWR", "GND", "GO"})
 
-def _aircraft_geojson(items: list[dict[str, Any]]) -> dict[str, Any]:
+# ADS-B emitter category codes (DO-260B "Emitter Category", what airplanes.live /
+# readsb publish verbatim in the `category` field) that are NOT aircraft and must
+# never be rendered as one. Set C is surface + obstruction:
+#   C0 surface emitter (unspecified), C1 surface vehicle — emergency,
+#   C2 surface vehicle — service (sweepers, follow-me, fuel/de-ice trucks: the
+#      observed SWEEPER2/EGR1/AGL08/LDR9 ground objects), C3 fixed obstruction /
+#      tethered balloon.
+# Sets A0-A7 (fixed/rotary-wing aircraft), B0-B7 (glider/balloon/UAV/parachutist/
+# spaceship) and A0/B0 (no category info) are all REAL airborne objects and are
+# kept. This is the root fix; the exact-callsign list above stays as a fallback
+# for feeds that omit `category`.
+_SURFACE_EMITTER_CATEGORIES = frozenset({"C0", "C1", "C2", "C3"})
+
+
+def _aircraft_geojson(items: list[dict[str, Any]], source: str | None = None) -> dict[str, Any]:
     features: list[dict[str, Any]] = []
     for a in items:
         lon = a.get("lon")
@@ -88,6 +113,31 @@ def _aircraft_geojson(items: list[dict[str, Any]]) -> dict[str, Any]:
         icao24 = (a.get("hex") or a.get("icao") or "").lower()
         if not icao24:
             continue
+        # ROOT FIX — skip airport SURFACE VEHICLES / fixed obstructions by their
+        # ADS-B emitter category (the `category` field readsb/airplanes.live carry
+        # verbatim). Set C (C0-C3) = surface vehicle / obstruction; sets A* and B*
+        # are real airborne objects and are kept. This drops the SWEEPER2 / EGR1 /
+        # AGL08 / LDR9 ground trucks at the source regardless of their callsign.
+        flight = (a.get("flight") or "").strip().upper()
+        type_code = (a.get("t") or "").strip().upper()
+        emitter_cat = (a.get("category") or "").strip().upper()
+        if emitter_cat in _SURFACE_EMITTER_CATEGORIES:
+            continue
+        # FALLBACK 1 — feeds that DO carry a category but tag these as ground
+        # infra via callsign/type only. Conservative exact match (never a
+        # substring) so real flights aren't dropped.
+        if flight in _GROUND_INFRA_CALLSIGNS or type_code in _GROUND_INFRA_TYPES:
+            continue
+        # FALLBACK 2 — record lacks an emitter category entirely: drop only the
+        # unmistakable ground object — on the ground AND no usable callsign
+        # (empty / all-'@' / no alphanumeric) AND no type. A real aircraft on the
+        # ground virtually always reports a callsign or a type, so this never
+        # touches legit traffic.
+        if not emitter_cat:
+            on_ground = a.get("alt_baro") == "ground"
+            has_callsign = any(c.isalnum() for c in flight)
+            if on_ground and not has_callsign and not type_code:
+                continue
         callsign = (a.get("flight") or a.get("r") or "").strip() or None
         alt_baro = a.get("alt_baro")
         alt_geom = a.get("alt_geom")
@@ -122,7 +172,7 @@ def _aircraft_geojson(items: list[dict[str, Any]]) -> dict[str, Any]:
             "sil": a.get("sil"),
             "nac_v": a.get("nac_v"),
             "kind": "aircraft",
-            "source": "adsb",
+            "source": source or "adsb",
         }
         # seen_pos from upstream is "seconds since last position update" — pass
         # through so the frontend can tint stale dots.
@@ -487,6 +537,24 @@ _SNAPSHOT_MIN_RETAIN_FRACTION = 0.5
 # guard and accept whatever the next fan-out returns. Prevents the sticky
 # snapshot from permanently locking out a genuine air-traffic decline.
 _SNAPSHOT_STALE_S = 30.0
+
+# Pre-rendered world-view payload. At world view the frontend requests the whole
+# globe (no bbox); the background refresher pre-builds the FULL snapshot (capped at
+# _WORLD_LIMIT = the route ceiling) as a gzipped blob ONCE per cycle, instead of
+# decimating + JSON-serializing + gzipping ~13k features on EVERY poll (variable
+# event-loop CPU → variable latency → the operator's "short long short long"
+# cadence). The hot route serves the bytes verbatim — constant-time, so cadence
+# stays uniform. 20000 is the /api/adsb/global limit ceiling, so a typical ~13k
+# union ships in FULL at world view (no world-view decimation) — it only thins if
+# the union ever exceeds 20k, via the stable md5 subset in viewport_filter.
+_WORLD_LIMIT = 20000
+_HOT_BLOB: bytes | None = None  # gzip-compressed JSON of the decimated world FC
+_HOT_ETAG: str = ""  # md5 of the blob — drives ETag/304 (poll inside a cycle → 304)
+# WebSocket push subscribers. The refresher fans _HOT_BLOB out to these on each new
+# cycle, so the client cadence is server-timed (no request round-trip in the loop) —
+# the same bytes feed the HTTP poll and the /ws/adsb push (one artifact, two
+# transports). The HTTP poll stays as the resilient fallback.
+_WS_SUBSCRIBERS: set[WebSocket] = set()
 
 
 async def _fetch_cell(
@@ -1134,7 +1202,7 @@ async def _refresh_snapshot_forever() -> None:
     REJECTED — UNLESS the live snapshot is already older than
     _SNAPSHOT_STALE_S, in which case we accept unconditionally so a genuine
     drop in air traffic can never permanently lock us out."""
-    global _LATEST_SNAPSHOT, _LATEST_SNAPSHOT_AT
+    global _LATEST_SNAPSHOT, _LATEST_SNAPSHOT_AT, _HOT_BLOB, _HOT_ETAG
     while True:
         t0 = time.monotonic()
         try:
@@ -1167,6 +1235,16 @@ async def _refresh_snapshot_forever() -> None:
                     from app import history  # noqa: PLC0415
 
                     history.ingest_aircraft(fc.get("features") or [])
+                except Exception:  # noqa: BLE001
+                    pass
+                # Rebuild the pre-gzipped world-view blob ONCE per cycle (off the
+                # event loop via a worker thread) and push it to WS subscribers.
+                # This is the decimate/serialize/gzip work that used to run on
+                # EVERY adsb_global request — relocating it here makes the hot route
+                # a constant-time byte copy, which is what makes the cadence uniform.
+                try:
+                    _HOT_BLOB, _HOT_ETAG = await asyncio.to_thread(_build_hot_blob, fc)
+                    await _broadcast_blob(_HOT_BLOB)
                 except Exception:  # noqa: BLE001
                     pass
         except Exception:
@@ -1247,6 +1325,42 @@ def viewport_filter(
     return {"type": "FeatureCollection", "features": feats}
 
 
+def _build_hot_blob(snap: dict[str, Any]) -> tuple[bytes, str]:
+    """Decimate the snapshot to the world-view limit, serialize, and gzip — once.
+
+    Runs in a worker thread (CPU-bound) so the snapshot loop's event loop stays
+    free while it compresses ~1-2 MB. Result is served verbatim to every
+    world-view poll and WS push, moving the decimate/serialize/gzip cost OFF the
+    per-request path. Reuses viewport_filter so the stable md5(id) decimation
+    guardrail (tests/test_adsb_viewport_stable.py) is unchanged — only relocated.
+    """
+    decimated = viewport_filter(snap, None, None, None, None, _WORLD_LIMIT)
+    raw = json.dumps(decimated, separators=(",", ":")).encode()
+    blob = gzip.compress(raw, compresslevel=6)
+    etag = hashlib.md5(blob).hexdigest()  # noqa: S324 — cache validator, not security
+    return blob, etag
+
+
+async def _broadcast_blob(blob: bytes) -> None:
+    """Push the latest world-view blob to every WS subscriber concurrently.
+
+    Per-send timeout + drop-on-error so one slow/dead client can never back-
+    pressure the snapshot loop or wedge the subscriber set. Server work is
+    O(subscribers) syscalls of the SAME shared bytes — zero recompute → steady.
+    """
+    subs = list(_WS_SUBSCRIBERS)
+    if not subs:
+        return
+
+    async def _send(ws: WebSocket) -> None:
+        try:
+            await asyncio.wait_for(ws.send_bytes(blob), timeout=5.0)
+        except Exception:  # noqa: BLE001 — a failed send just drops that socket
+            _WS_SUBSCRIBERS.discard(ws)
+
+    await asyncio.gather(*(_send(ws) for ws in subs))
+
+
 async def global_snapshot() -> dict[str, Any]:
     """The full aircraft snapshot (no viewport filter), bootstrapping the
     background refresher on first call.
@@ -1286,14 +1400,15 @@ def snapshot_age_s() -> float | None:
     return round(time.monotonic() - _LATEST_SNAPSHOT_AT, 1) if _LATEST_SNAPSHOT_AT else None
 
 
-@router.get("/api/adsb/global")
+@router.get("/api/adsb/global", response_model=None)
 async def adsb_global(
+    request: Request,
     lamin: float | None = Query(None, ge=-90, le=90),
     lomin: float | None = Query(None, ge=-180, le=180),
     lamax: float | None = Query(None, ge=-90, le=90),
     lomax: float | None = Query(None, ge=-180, le=180),
     limit: int | None = Query(None, ge=1, le=20000),
-) -> dict[str, Any]:
+) -> Response | dict[str, Any]:
     """Return the latest aircraft snapshot, optionally scoped to a viewport.
 
     With ``lamin/lomin/lamax/lomax`` (+ optional ``limit``) the snapshot is
@@ -1301,13 +1416,75 @@ async def adsb_global(
     only on-screen aircraft are instantiated. With no params the FULL snapshot
     is returned (back-compat for the MCP/intel tools).
 
+    Fast path: the canonical world view (no bbox, ``limit == _WORLD_LIMIT``) is the
+    frontend's dominant poll. It is served from the pre-built gzipped blob verbatim
+    — no per-request decimate/serialize/gzip, so latency is constant and the refresh
+    cadence stays uniform. ``If-None-Match`` → ``304`` lets a poll landing inside the
+    same 2s cycle return ~no bytes. Gated on a gzip-capable client; the bare full
+    snapshot, bbox queries, and other limits fall through to the dict path unchanged.
+
     First call kicks off the background refresher and does one synchronous
     bootstrap fetch so the response isn't empty. Subsequent calls return
     immediately with whatever the background task last accepted."""
+    # Any no-bbox request WITH a limit is a world-view poll (the only such caller
+    # is the frontend; the bare no-param call below stays the full dict for the
+    # MCP/intel tools). Serve the pre-built blob regardless of the exact limit
+    # value, so a frontend asking 4000 or 20000 both get the constant-time bytes —
+    # no version lockstep required between this service and the deployed frontend.
+    world = (
+        lamin is None
+        and lomin is None
+        and lamax is None
+        and lomax is None
+        and limit is not None
+    )
+    if world and _HOT_BLOB is not None and "gzip" in request.headers.get("accept-encoding", ""):
+        headers = {"ETag": _HOT_ETAG, "Cache-Control": "no-cache"}
+        if request.headers.get("if-none-match") == _HOT_ETAG:
+            return Response(status_code=304, headers=headers)
+        return Response(
+            content=_HOT_BLOB,
+            media_type="application/json",
+            headers={**headers, "Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
     snap = await global_snapshot()
     if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
         return snap
     return viewport_filter(snap, lamin, lomin, lamax, lomax, limit)
+
+
+@router.websocket("/ws/adsb")
+async def adsb_ws(ws: WebSocket) -> None:
+    """Push the pre-built world-view aircraft blob to the browser on the server's
+    OWN timer — the PRIMARY live transport.
+
+    The client renders on receipt, so there is no request round-trip in the loop
+    and cadence is set by the 2s snapshot cycle, not per-poll latency (kills the
+    "short long short long" jitter by construction). Sends the current blob
+    immediately on connect (instant first paint), then a fresh blob each cycle via
+    _broadcast_blob. The HTTP poll (/api/adsb/global) stays as the fallback when the
+    socket is unavailable. Same gzipped bytes as the HTTP path — the browser inflates
+    them with DecompressionStream('gzip').
+    """
+    if not await require_ws_key(ws):
+        await ws.close(code=1008)
+        return
+    await ws.accept()
+    # Ensure the refresher is running even if no HTTP poll kicked it off (idempotent).
+    await start_snapshot()
+    _WS_SUBSCRIBERS.add(ws)
+    try:
+        if _HOT_BLOB is not None:
+            await ws.send_bytes(_HOT_BLOB)
+        # We only PUSH; draining the socket is just how we detect disconnect.
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception:  # noqa: BLE001 — any socket error just ends this subscriber
+        pass
+    finally:
+        _WS_SUBSCRIBERS.discard(ws)
 
 
 async def start_snapshot() -> None:
@@ -1426,7 +1603,7 @@ async def adsb_live_mil() -> dict[str, Any]:
                 ac = r.json().get("ac") or []
             except ValueError:
                 continue
-            return _aircraft_geojson(ac)
+            return _aircraft_geojson(ac, source="adsb_mil")
         return {"type": "FeatureCollection", "features": []}
 
     return await cache.get_or_fetch("airplaneslive:mil", 30.0, load)

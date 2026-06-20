@@ -4,7 +4,7 @@ import type { RuntimeConfig } from '@osint/shared';
 import { ConsoleShell } from './shell/ConsoleShell.js';
 import { TabbedPanel, type TabDef } from './shell/TabbedPanel.js';
 import { CommandBar } from './command-bar/CommandBar.js';
-import { useImagery } from './state/stores.js';
+import { useImagery, useFeeds } from './state/stores.js';
 import { LayerRail } from './layer-rail/LayerRail.js';
 import { OpsPanel } from './layer-rail/OpsPanel.js';
 import { ImageryControl } from './imagery/ImageryControl.js';
@@ -24,6 +24,7 @@ import { fetchRuntimeConfig } from './transport/config.js';
 import { AlertSubscriber } from './alerts/AlertSubscriber.js';
 import { AlertsPanel } from './alerts/AlertsPanel.js';
 import { AlertsRailList } from './alerts/AlertsRailList.js';
+import { SimulationOverlay } from './sim/SimulationOverlay.js';
 import { ErrorBoundary } from './shell/ErrorBoundary.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext.js';
@@ -59,6 +60,11 @@ export function App(): JSX.Element {
   }, []);
 
   const onViewerReady = useCallback((v: Cesium.Viewer | null) => setViewer(v), []);
+
+  // DEV-only registry handle for debugging/introspection (mirrors __useSelection).
+  useEffect(() => {
+    if (import.meta.env?.DEV) (window as unknown as { __registry: LayerRegistry }).__registry = registry;
+  }, [registry]);
 
   const leftTabs: TabDef[] = useMemo(
     () => [
@@ -132,6 +138,7 @@ export function App(): JSX.Element {
         bottom={<ErrorBoundary label="Timeline"><Timeline viewer={viewer} /></ErrorBoundary>}
       />
       <AlertsPanel open={alertsOpen} onClose={() => setAlertsOpen(false)} viewer={viewer} />
+      <SimulationOverlay viewer={viewer} registry={registry} />
     </>
   );
 }
@@ -155,14 +162,45 @@ function GlobeControls({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elemen
   );
 }
 
-// Prominent "you're not signed in" notice. On the hosted backend every data
-// endpoint is auth-gated, so a logged-out visitor sees an empty globe and
-// assumes it's broken. This makes the real reason explicit with a one-click
-// path to sign in. Only shows when auth is configured AND the first session
-// check has resolved to "no user".
+// "You're not signed in" affordance. On the hosted backend every data endpoint
+// is auth-gated, so a logged-out visitor sees an empty globe and assumes it's
+// broken — there we show the prominent "globe stays blank" overlay. But in
+// keyless local mode the same logged-out visitor gets a fully-populated globe
+// (ADS-B / AIS / quakes flow without an account), so that copy would be a lie.
+// We distinguish the two by reading the live feeds: if any feed has delivered
+// data recently, data IS present and we drop to a subtle sign-in chip instead
+// of claiming the globe is blank. Only renders when auth is configured AND the
+// first session check has resolved to "no user".
+const FEED_FRESH_MS = 60_000;
+
 function AuthNotice(): JSX.Element | null {
   const { user, loading } = useAuth();
+  const feeds = useFeeds((s) => s.feeds);
   if (loading || user || !isSupabaseConfigured) return null;
+
+  // Live data IS present when at least one feed has reported a recent fix.
+  const now = Date.now();
+  const hasLiveData = Object.values(feeds).some(
+    (f) => f.status === 'green' && f.lastSeen !== undefined && now - f.lastSeen < FEED_FRESH_MS,
+  );
+
+  // Data is flowing — don't claim the globe is blank. Keep a subtle sign-in
+  // chip so the affordance is still there without the misleading copy.
+  if (hasLiveData) {
+    return (
+      <div className="absolute top-10 right-3 z-[1500] flex justify-end pointer-events-none">
+        <Link
+          to="/login"
+          className="pointer-events-auto bg-bg-1/90 border border-accent-line rounded-sm px-2.5 py-1 text-[11px] font-medium text-accent shadow-lg hover:text-txt-0 hover:border-accent"
+        >
+          Sign in →
+        </Link>
+      </div>
+    );
+  }
+
+  // No data reached the globe yet — the auth-gated hosted case. Make the real
+  // reason explicit with a one-click path to sign in.
   return (
     <div className="absolute inset-x-0 top-10 z-[1500] flex justify-center px-3 pointer-events-none">
       <div className="pointer-events-auto bg-bg-1/95 border border-accent-line rounded-md px-4 py-3 shadow-xl max-w-sm text-center">

@@ -16,8 +16,11 @@ import {
   Btn,
   Hero,
   IconTile,
+  Widget,
   type BadgeTone,
 } from '../shell/instruments.js';
+import { ConnectionsCard } from './ConnectionsCard.js';
+import { resolveAircraftFamily, aircraftSilhouette, vesselSilhouette } from './silhouettes.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -119,6 +122,8 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
 
       <Header snap={snap} id={id} enrichment={enrichment} />
 
+      <ProfileCard enrichment={enrichment} snap={snap} />
+
       {snap && <StatsCard snap={snap} />}
 
       {snap && <FlightCard enrichment={enrichment} snap={snap} />}
@@ -162,9 +167,16 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
         />
       )}
 
+      <PatternOfLifeCard id={id} kind={snap?.kind ?? ''} snap={snap} />
+
       <TrackCard kind={snap?.kind ?? ''} points={track} />
 
-      <EntityPhotoCard enrichment={enrichment} />
+      <ConnectionsCard
+        entityId={id}
+        enrichment={enrichment}
+        viewer={viewer ?? null}
+        {...(snap?.position ? { position: snap.position } : {})}
+      />
 
       <EnrichmentCard kind={snap?.kind ?? ''} enrichment={enrichment} loading={enrichLoading} />
 
@@ -428,43 +440,159 @@ function TrackCard({
   );
 }
 
-function EntityPhotoCard({
+// Profile widget — the airframe/hull side-view silhouette (always, when the
+// family is known) plus the live reference photo (Planespotters / Wikipedia)
+// when one exists. The silhouette is the "SVG image for every plane": GA,
+// military and drones rarely have a photo but still get a recognition glyph.
+function ProfileCard({
   enrichment,
+  snap,
 }: {
   enrichment: Enrichment | null;
+  snap: PanelSnapshot | null;
 }): JSX.Element | null {
-  if (!enrichment) return null;
-  const e = enrichment as {
-    photo_thumb_url?: string | null;
-    photo_full_url?: string | null;
-    photo_photographer?: string | null;
-    photo_link?: string | null;
-    photo_license?: string | null;
-    photo_credit?: string | null;
-    description?: string | null;
-  };
-  const thumb = e.photo_thumb_url ?? null;
-  const desc = e.description ?? null;
-  if (!thumb && !desc) return null;
+  const kind = snap?.kind;
+  let silhouette: string | null = null;
+  let famLabel = '';
+
+  if (kind === 'aircraft') {
+    const e = enrichment?.kind === 'aircraft' ? (enrichment as { icao_type?: string | null; type?: string | null }) : null;
+    const typeCode =
+      e?.icao_type ??
+      e?.type ??
+      (typeof snap?.properties?.['type'] === 'string' ? (snap.properties['type'] as string) : null);
+    const catCode = typeof snap?.properties?.['category'] === 'string' ? (snap.properties['category'] as string) : null;
+    const fam = resolveAircraftFamily(typeCode, catCode);
+    if (fam) {
+      silhouette = aircraftSilhouette(fam);
+      famLabel = (typeCode ?? fam).toUpperCase();
+    }
+  } else if (kind === 'vessel') {
+    silhouette = vesselSilhouette();
+    const e = enrichment?.kind === 'vessel' ? (enrichment as { vessel_type?: string | null }) : null;
+    famLabel = (e?.vessel_type ?? 'vessel').toUpperCase();
+  }
+
+  const e2 =
+    enrichment as {
+      photo_thumb_url?: string | null;
+      photo_full_url?: string | null;
+      photo_photographer?: string | null;
+      photo_link?: string | null;
+      photo_license?: string | null;
+      photo_credit?: string | null;
+      description?: string | null;
+    } | null;
+  const photo = e2?.photo_full_url ?? e2?.photo_thumb_url ?? null;
+  const desc = e2?.description ?? null;
+  const credit = e2?.photo_photographer ?? e2?.photo_credit ?? null;
+
+  if (!silhouette && !photo && !desc) return null;
   return (
-    <section>
-      <SectionLabel title="Photo" />
-      {thumb && (
-        <div className="mt-1.5">
-          <img
-            src={thumb}
-            alt="entity reference"
-            loading="lazy"
-            className="block w-full max-w-[280px] rounded-sm border border-line"
-          />
+    <Widget title="Profile">
+      {silhouette && (
+        <div className="flex items-center gap-2.5 mb-2">
+          <img src={silhouette} alt="" className="h-9 w-auto opacity-90" />
+          {famLabel && (
+            <span className="mono text-[10px] text-txt-2 uppercase tracking-[0.5px] truncate">{famLabel}</span>
+          )}
         </div>
       )}
-      {desc && (
-        <p className="text-[11px] text-txt-1 leading-snug mt-2 line-clamp-3">
-          {desc}
-        </p>
+      {photo && (
+        <a href={e2?.photo_link ?? photo} target="_blank" rel="noreferrer" className="block">
+          <img
+            src={photo}
+            alt="entity reference"
+            loading="lazy"
+            className="block w-full rounded-sm border border-line"
+          />
+        </a>
       )}
-    </section>
+      {(credit || e2?.photo_license) && (
+        <div className="mono text-[8.5px] text-txt-3 mt-1 truncate">
+          {credit ? `© ${credit}` : ''}
+          {e2?.photo_license ? `${credit ? ' · ' : ''}${e2.photo_license}` : ''}
+        </div>
+      )}
+      {desc && <p className="text-[11px] text-txt-1 leading-snug mt-2 line-clamp-3">{desc}</p>}
+    </Widget>
+  );
+}
+
+// Pattern-of-life widget — the backend dossier (track profile, duration,
+// distance, ADS-B gaps, assessment) that the live snapshot doesn't carry.
+interface DossierTrack {
+  fixes?: number;
+  track_minutes?: number;
+  distance_km?: number;
+  profile?: string;
+  gap_count?: number;
+}
+interface Dossier {
+  found?: boolean;
+  assessment?: string;
+  gnss_degraded?: boolean;
+  track?: DossierTrack;
+}
+
+function PatternOfLifeCard({
+  id,
+  kind,
+  snap,
+}: {
+  id: string;
+  kind: string;
+  snap: PanelSnapshot | null;
+}): JSX.Element | null {
+  const [dossier, setDossier] = useState<Dossier | null>(null);
+  useEffect(() => {
+    setDossier(null);
+    if (!id || (kind !== 'aircraft' && kind !== 'vessel')) return;
+    const ab = new AbortController();
+    const p = snap?.properties ?? {};
+    const ident =
+      kind === 'aircraft'
+        ? typeof p['icao24'] === 'string'
+          ? (p['icao24'] as string)
+          : id
+        : p['mmsi'] != null
+          ? String(p['mmsi'])
+          : id;
+    const path =
+      kind === 'aircraft'
+        ? `/api/intel/dossier/aircraft/${encodeURIComponent(ident)}`
+        : `/api/intel/dossier/vessel/${encodeURIComponent(ident)}`;
+    apiFetch(path, { signal: ab.signal })
+      .then((r) => (r.ok ? (r.json() as Promise<Dossier>) : null))
+      .then((j) => {
+        if (j && j.found !== false) setDossier(j);
+      })
+      .catch(() => undefined);
+    return () => ab.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, kind]);
+
+  if (!dossier) return null;
+  const t = dossier.track ?? {};
+  const rows: JSX.Element[] = [];
+  if (t.profile) rows.push(<KVRow key="prof" k="Profile" v={t.profile} />);
+  if (t.track_minutes != null) rows.push(<KVRow key="dur" k="Track" v={`${Math.round(t.track_minutes)} min`} />);
+  if (t.distance_km != null)
+    rows.push(<KVRow key="dist" k="Distance" v={`${Math.round(t.distance_km).toLocaleString()} km`} />);
+  if (t.fixes != null) rows.push(<KVRow key="fix" k="Fixes" v={t.fixes} />);
+  if (t.gap_count != null && t.gap_count > 0)
+    rows.push(<KVRow key="gap" k="ADS-B gaps" v={t.gap_count} warn />);
+  if (!dossier.assessment && rows.length === 0) return null;
+  return (
+    <Widget title="Pattern of life">
+      {dossier.assessment && <p className="text-[11px] text-txt-1 leading-snug mb-2">{dossier.assessment}</p>}
+      {rows.length > 0 && <KV>{rows}</KV>}
+      {dossier.gnss_degraded && (
+        <div className="mt-1.5">
+          <Badge tone="warn">GNSS degraded</Badge>
+        </div>
+      )}
+    </Widget>
   );
 }
 

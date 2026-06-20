@@ -43,6 +43,7 @@ from app.routes import news as news_routes_mod
 from app.routes import sar as sar_routes
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
+from app.routes import simulation as simulation_routes
 from app.routes import space as space_routes
 from app.routes import status as status_routes
 from app.routes import tiles as tiles_routes
@@ -87,6 +88,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         if background:
             correlate_runner.start()
+            # ADS-B sticky snapshot: start the background refresher at BOOT so the
+            # snapshot (and the pre-gzipped world-view blob the hot route + /ws/adsb
+            # push serve) is HOT before the first browser poll. Otherwise the first
+            # /api/adsb/global call runs a 1-10s fan-out synchronously under the
+            # bootstrap lock — the "takes seconds to start loading" stall. Torn down
+            # by stop_snapshot() in the finally block.
+            await adsb_routes.start_snapshot()
             # AISStream (keyed) is engaged ON DEMAND — only when a browser opens
             # /ws/ais — and dropped when the last viewer leaves, to conserve its
             # API message cap. It is NOT started at boot. The keyless Kystverket
@@ -117,6 +125,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import history  # noqa: PLC0415
 
             history.start()
+            # Warm the CCTV catalog so the first /api/cams hits a populated
+            # TtlCache instead of a cold serial upstream fan-out (~18s). Same
+            # spirit as the adsb start_snapshot() pre-warm above. Fire-and-
+            # forget: a failed warm just leaves the cache cold for the next
+            # request to fill — it never blocks boot.
+            import asyncio  # noqa: PLC0415
+
+            asyncio.create_task(cams_routes._get_catalog())
             # News debias / fact-check refresher.
             if settings.news_enabled:
                 from app.routes import news as news_routes  # noqa: PLC0415
@@ -202,6 +218,7 @@ def create_app() -> FastAPI:
     app.include_router(keys_routes.router)
     app.include_router(alert_rules_routes.router)
     app.include_router(status_routes.router)
+    app.include_router(simulation_routes.router)
 
     # Agent-facing MCP endpoint (streamable-HTTP) at /mcp, in-process so its
     # tools share this app's warm snapshot + fusion engine. Gated by

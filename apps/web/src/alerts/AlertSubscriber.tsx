@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useAlerts, useConnection } from '../state/stores.js';
 import type { Alert } from '@osint/shared';
-import { withWsKey } from '../transport/http.js';
+import { hasApiKey, withWsKey } from '../transport/http.js';
 
 // Subscribes to /ws/alerts and pushes every incoming alert into useAlerts.
 // Mounted once high in the tree so the connection survives re-renders.
@@ -12,6 +12,15 @@ export function AlertSubscriber(): null {
   const push = useAlerts((s) => s.push);
   const setWs = useConnection((s) => s.setWs);
   useEffect(() => {
+    // Keyless mode: the backend's require_ws_key rejects before the upgrade
+    // completes, so the socket "closed before connection established" and the
+    // onclose/onerror backoff loop spams the console. Skip the WebSocket
+    // entirely when there's no credential — there's nothing to connect to.
+    if (!hasApiKey()) {
+      setWs('closed');
+      return () => {};
+    }
+
     let ws: WebSocket | null = null;
     let backoff = 1000;
     let stopped = false;

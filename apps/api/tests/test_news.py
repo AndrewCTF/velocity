@@ -75,6 +75,67 @@ def test_parse_feed_bytes_tolerates_garbage() -> None:
     assert parse_feed_bytes(b"not xml at all <<<", _SRC) == []
 
 
+# ── conflict-scoped feeds (Bug 3) ────────────────────────────────────────────
+
+
+def test_google_news_search_url_format() -> None:
+    url = news_sources.google_news_search("Iran OR Israel")
+    assert url.startswith("https://news.google.com/rss/search?q=")
+    assert url.endswith("&hl=en-US&gl=US&ceid=US:en")
+    # query is URL-encoded (the space + parens become %xx) and recency is set.
+    assert "Iran" in url and "%20" in url
+    assert "when%3A2d" in url  # `when:2d` URL-encoded
+    # no recency operator when when_days=0
+    assert "when" not in news_sources.google_news_search("X", when_days=0)
+
+
+async def test_fetch_all_includes_conflict_feed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The DEFAULT fetch set must carry a mideast/conflict source."""
+    seen_regions: list[str] = []
+    seen_urls: list[str] = []
+
+    async def _record(source: Source, _timeout: float) -> list[Article]:
+        seen_regions.append(source.region)
+        seen_urls.append(source.url)
+        return []
+
+    monkeypatch.setattr(news_sources, "_fetch_one", _record)
+    await news_sources.fetch_all()
+    assert "mideast" in seen_regions  # conflict feed is in the default union
+    assert any("news.google.com/rss/search" in u for u in seen_urls)
+
+
+async def test_fetch_for_topic_uses_search_feed(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def _record(source: Source, _timeout: float) -> list[Article]:
+        seen["url"] = source.url
+        seen["region"] = source.region
+        return []
+
+    monkeypatch.setattr(news_sources, "_fetch_one", _record)
+    await news_sources.fetch_for_topic("mideast")
+    assert "news.google.com/rss/search" in seen["url"]
+    assert "Hormuz" in seen["url"]  # the preset query is threaded in
+    assert seen["region"] == "mideast"
+
+
+async def test_fetch_for_topic_blank_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    regions: list[str] = []
+
+    async def _record(source: Source, _timeout: float) -> list[Article]:
+        regions.append(source.region)
+        return []
+
+    monkeypatch.setattr(news_sources, "_fetch_one", _record)
+    await news_sources.fetch_for_topic("   ")
+    # blank topic → the full default union (general feeds + conflict overlay)
+    assert "mideast" in regions
+    assert len(regions) > 1
+
+
 def test_cluster_titles_groups_shared_tokens() -> None:
     arts = [
         Article("Ceasefire talks resume in capital", "", "l1", "A", "center", None),
@@ -221,6 +282,31 @@ async def test_factcheck_empty_claim() -> None:
     assert out["reasoning"] == "empty claim"
 
 
+async def test_factcheck_fast_uses_fast_tier(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def _capture(*_a: Any, **k: Any) -> tuple[Any, llm.LlmResult]:
+        seen["tier"] = k.get("tier")
+        return {"verdict": "true"}, llm.LlmResult(text="{...}")
+
+    monkeypatch.setattr(llm, "chat_json", _capture)
+    out = await news_analyze.factcheck("a corroborated claim", fast=True)
+    assert out["verdict"] == "true"
+    assert seen["tier"] == "fast"  # cheap tier when fast=True
+
+
+async def test_factcheck_default_uses_reason_tier(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def _capture(*_a: Any, **k: Any) -> tuple[Any, llm.LlmResult]:
+        seen["tier"] = k.get("tier")
+        return {"verdict": "true"}, llm.LlmResult(text="{...}")
+
+    monkeypatch.setattr(llm, "chat_json", _capture)
+    await news_analyze.factcheck("a corroborated claim")
+    assert seen["tier"] == "reason"  # default stays on the reasoner
+
+
 # ── routes ───────────────────────────────────────────────────────────────────
 
 
@@ -249,6 +335,26 @@ def test_feed_route_returns_cached(monkeypatch: pytest.MonkeyPatch) -> None:
     body = r.json()
     assert body["count"] == 2
     assert body["articles"][0]["source"] == "Test World"
+
+
+def test_feed_route_topic_bypasses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`?topic=` must route through fetch_for_topic, not the cached union."""
+    seen: dict[str, Any] = {}
+
+    async def _topic_fetch(topic: str | None, *_a: Any, **_k: Any) -> list[Article]:
+        seen["topic"] = topic
+        return _arts()
+
+    async def _unexpected(*_a: Any, **_k: Any) -> list[Article]:  # pragma: no cover
+        raise AssertionError("fetch_all should not run when topic is set")
+
+    monkeypatch.setattr(news_sources, "fetch_for_topic", _topic_fetch)
+    monkeypatch.setattr(news_sources, "fetch_all", _unexpected)
+    with _build_client() as client:
+        r = client.get("/api/news/feed", params={"topic": "mideast"})
+    assert r.status_code == 200
+    assert seen["topic"] == "mideast"
+    assert r.json()["count"] == 2
 
 
 def test_factcheck_route(monkeypatch: pytest.MonkeyPatch) -> None:

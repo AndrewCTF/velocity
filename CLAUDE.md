@@ -57,9 +57,11 @@ not regress any of them. If unsure, leave the relevant code path alone.
   saves GPU. Do not set `maximumRenderTimeChange` back to `Infinity`. Follow
   (`camera.ts`) flips `requestRenderMode` off for its duration and restores it.
 - **World-view decimation MUST be STABLE across polls.** At near-global zoom the
-  frontend asks `/api/adsb/global?limit=4000` (no bbox) and `viewport_filter`
-  (`routes/adsb.py`) caps ~9k aircraft to 4000. It keeps a deterministic subset
-  keyed by `md5(feature id)` (live tier — non-`opensky` source — first). It must
+  frontend asks `/api/adsb/global?limit=20000` (no bbox); `viewport_filter`
+  (`routes/adsb.py`) serves the full union (a ~13k snapshot ships WHOLE — the
+  operator wants the real count, not a 4000 sample) and only decimates if the union
+  exceeds 20000. When it does, it keeps a deterministic subset keyed by
+  `md5(feature id)` (live tier — non-`opensky` source — first). It must
   NOT use a positional stride (`feats[int(i*stride)]`): the snapshot's order and
   count shift every refresh, so a stride resampled a DIFFERENT 4000 each poll →
   the upsert-by-id frontend churned ~half its entities every second (measured
@@ -76,6 +78,33 @@ not regress any of them. If unsure, leave the relevant code path alone.
   cheap (the hot route serves the sticky snapshot in microseconds); motion
   between polls is interpolated + rendered every frame. Do not raise the poll
   above 10 s.
+- **Backend is HOT at boot.** `main.py` lifespan calls `adsb_routes.start_snapshot()`
+  so the refresher fills `_LATEST_SNAPSHOT` before the first browser request. Do NOT
+  remove it — without it the first `/api/adsb/global` runs a 1–10 s synchronous
+  fan-out under `_SNAPSHOT_BOOTSTRAP_LOCK` (the "takes seconds to start loading" stall).
+- **World-view payload is pre-rendered, not per-request.** The refresher builds a
+  gzipped blob of the FULL snapshot (capped at `_WORLD_LIMIT` = 20000, the route
+  ceiling — so a ~13k union ships WHOLE) ONCE per cycle (`_build_hot_blob` via
+  `asyncio.to_thread`) and stores `_HOT_BLOB`/`_HOT_ETAG`. `adsb_global` serves those
+  bytes verbatim for any no-bbox request that carries a limit (the world view) with
+  `Content-Encoding: gzip` + ETag/304 — constant-time, so latency is uniform (measured
+  p50 ~4 ms). Do NOT move the md5-sort decimation / JSON serialize / gzip back onto the
+  request path — that per-request CPU (variable, contending with the 2 s fan-out) was
+  the "short long short long" cadence. The fast path is decoupled from the exact limit
+  value, so a frontend asking 4000 or 20000 both get the blob (no version lockstep).
+  Guarded by `tests/test_adsb_hot_blob.py`.
+- **`/ws/adsb` push is the PRIMARY live transport.** The refresher fans `_HOT_BLOB` to
+  all subscribers (`_broadcast_blob`, per-send timeout + drop-on-error) each cycle, so
+  the client cadence is server-timed (~2 s, no request round-trip in the loop — measured
+  steady 1.9–2.1 s vs the old jitter). `require_ws_key` BEFORE `accept`; sends the blob
+  on connect for instant first paint. The browser inflates the binary frame with
+  `DecompressionStream('gzip')` → `render()` (same upsert/glide owner as the poll). The
+  HTTP poll is the FALLBACK (socket down) + the zoomed bbox path; `PollGeoJsonAdapter`
+  suppresses it only while `wsActive && isWorldView()`.
+- **Frontend cadence is an absolute wall-clock grid**, NOT `max(ttl - elapsed, 250)`.
+  `scheduleNext` books each tick against `nextAt += ttl` so a slow poll's `elapsed`
+  (fetch + render of up to 20 k entities) no longer leaks into the gap; re-anchors after
+  an overrun instead of sprinting. Do NOT restore the elapsed-coupled formula.
 - Internal consumers of the snapshot (jamming, intel, analytics, correlate)
   MUST call `global_snapshot()`, never the `adsb_global()` route handler in
   process — the handler's `Query(...)` defaults reach `viewport_filter` and 500
@@ -116,6 +145,29 @@ not regress any of them. If unsure, leave the relevant code path alone.
   `aircraftLabelText`, `vesselLabelText`). Bold IBM Plex Mono 11px, dark pill
   background, fill+outline. Do not duplicate or fork this style.
 
+### Satellites (CelesTrak)
+
+- Curated CelesTrak group layers (`space.celestrak.{stations,starlink,gps,visual}`
+  in `apps/web/src/registry/defaults.ts`), keyless, off by default. `LayerCompositor`
+  dispatch matches `space.celestrak.*` and parses the group from the endpoint query.
+- **Positions are SGP4-propagated client-side** from CelesTrak TLEs by
+  `SatelliteAdapter` (`satellite.js`). SGP4-from-current-TLE IS a satellite's
+  authoritative position — there is NO separate observed-fix feed — so this is
+  REAL physics, NOT the forbidden ADS-B motion synthesis. The no-extrapolate
+  aircraft rule does NOT apply to orbits.
+- **Motion model = `SampledPositionProperty` fed by SGP4-sampled orbit windows**,
+  interpolated by Cesium every frame (rides the same animating clock +
+  `maximumRenderTimeChange:0` as aircraft). Do NOT revert to reassigning a
+  `ConstantPositionProperty` every tick — that teleported each satellite once per
+  tick (the 5 s hop). Propagation + `twoline2satrec` are CHUNKED across frames
+  (per-frame budget + lazy satrec build); never bulk-propagate synchronously (a
+  ~100 ms main-thread hitch at the `MAX_SATS` 4 k cap).
+- Backend `/api/space/gp` MUST request **`FORMAT=tle`**, not `json`: the OMM JSON
+  variant omits `TLE_LINE1/2`, which the client SGP4 parser requires — `json` →
+  ZERO satellites rendered. It sends a browser UA and caches 2 h (CelesTrak
+  403-rate-limits bursts; one pull per group per 2 h stays under the limit).
+  Starlink is truncated to `MAX_SATS`; the title makes no completeness claim.
+
 ### Layers that must always work without any API key
 
 - ADSB.lol + airplanes.live global ADS-B grid (no auth).
@@ -123,6 +175,7 @@ not regress any of them. If unsure, leave the relevant code path alone.
 - NASA FIRMS — needs MAP_KEY for fires (degrade gracefully when missing).
 - USGS quakes (no auth).
 - Carto Dark Matter basemap proxied via `/tiles/basemap` (no auth).
+- CelesTrak satellites via `/api/space/gp?group=…` (no auth, `FORMAT=tle`).
 
 ### Auth
 

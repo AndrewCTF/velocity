@@ -42,6 +42,40 @@ ALLOWED_GROUPS = {
 }
 
 
+def _parse_tle(text: str) -> list[dict[str, Any]]:
+    """Parse CelesTrak FORMAT=tle (name line + 2 element lines per object).
+
+    NORAD_CAT_ID is the catalogue number from line 1 columns 3-7, kept as a
+    STRING so Alpha-5 ids (catalogue numbers > 99999, e.g. newer Starlink)
+    survive instead of overflowing an int parse. A missing name line falls back
+    to the catalogue number.
+    """
+    items: list[dict[str, Any]] = []
+    name = ""
+    line1: str | None = None
+    for raw in text.splitlines():
+        ln = raw.rstrip()
+        if not ln.strip():
+            continue
+        if ln.startswith("1 "):
+            line1 = ln
+        elif ln.startswith("2 ") and line1 is not None:
+            satnum = line1[2:7].strip()
+            items.append(
+                {
+                    "OBJECT_NAME": name or satnum,
+                    "NORAD_CAT_ID": satnum,
+                    "TLE_LINE1": line1,
+                    "TLE_LINE2": ln,
+                }
+            )
+            line1 = None
+            name = ""
+        else:
+            name = ln.strip()
+    return items
+
+
 @router.get("/api/space/gp")
 async def gp(
     group: str = Query("active"),
@@ -53,11 +87,28 @@ async def gp(
 
     async def load() -> dict[str, Any]:
         url = "https://celestrak.org/NORAD/elements/gp.php"
-        r = await get_client().get(url, params={"GROUP": group, "FORMAT": "json"})
+        # FORMAT=tle, not json: the JSON/OMM variant omits the TLE_LINE1/2 line
+        # strings the client's SGP4 parser (satellite.js twoline2satrec) needs.
+        # We pull the 3-line text and parse it into the
+        # {OBJECT_NAME, NORAD_CAT_ID, TLE_LINE1, TLE_LINE2} shape the frontend
+        # consumes.
+        # Browser User-Agent: CelesTrak (like several feeds in this app) is more
+        # willing to serve a browser UA than the default client UA, especially
+        # for large groups under load. Per-request header overrides the shared
+        # client default.
+        r = await get_client().get(
+            url,
+            params={"GROUP": group, "FORMAT": "tle"},
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+                )
+            },
+        )
         if r.status_code != 200:
             raise HTTPException(502, f"celestrak upstream {r.status_code}")
-        # CelesTrak returns a JSON array of OMM-format records — pass through
-        return {"group": group, "items": r.json()}
+        return {"group": group, "items": _parse_tle(r.text)}
 
     # CelesTrak update ceiling is 2h; respect it. The FULL set is cached, but we
     # truncate per request: a default 'active' pull is ~16k sats / ~6.5 MB, and

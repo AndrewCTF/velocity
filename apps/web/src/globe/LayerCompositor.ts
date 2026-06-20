@@ -3,6 +3,7 @@ import type { LayerDescriptor } from '@osint/shared';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useFeeds } from '../state/stores.js';
 import { useAoi } from '../state/aoi.js';
+import { isMobileDevice } from '../shell/device.js';
 import type { LayerAdapter, AdapterCtx, StatusReporter } from './adapters/types.js';
 import { PollGeoJsonAdapter, type StyleKind } from './adapters/PollGeoJsonAdapter.js';
 import { AisWsAdapter } from './adapters/AisWsAdapter.js';
@@ -27,7 +28,13 @@ function viewportQuery(
   viewer: Cesium.Viewer,
   limit: number,
   worldLimit: number = limit,
+  // Mobile: NEVER take the no-bbox world path (the backend serves the full ~13k
+  // pre-built blob there). Always send a bbox + low limit so the backend
+  // decimates server-side and the phone gets a small payload it can actually
+  // render + animate. The (near-)global bbox below routes through viewport_filter.
+  alwaysBbox = false,
 ): () => string | null {
+  const GLOBAL_BBOX = `lamin=-85&lomin=-180&lamax=85&lomax=180&limit=${limit}`;
   return () => {
     const rect = viewer.camera.computeViewRectangle();
     if (rect) {
@@ -41,7 +48,7 @@ function viewportQuery(
       // entity-update loop cheap. Zooming in drops below the threshold and loads
       // the FULL local traffic (up to `limit`) for the viewport — so China/Russia
       // etc. show everything when you actually look at them.
-      if (widthDeg > 170 || n - s > 140) return `limit=${worldLimit}`;
+      if (widthDeg > 170 || n - s > 140) return alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`;
       // Pad ~15% so contacts just outside the frame are loaded before they
       // scroll in; clamp to the backend's accepted ranges.
       const padLat = (n - s) * 0.15;
@@ -62,7 +69,7 @@ function viewportQuery(
     // camera height instead, so a zoomed-in oblique view always loads its own
     // traffic. Only when the screen centre misses the globe (pointed at space)
     // do we keep the world fallback.
-    return cameraCenterBbox(viewer, limit) ?? `limit=${worldLimit}`;
+    return cameraCenterBbox(viewer, limit) ?? (alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`);
   };
 }
 
@@ -222,12 +229,16 @@ export class LayerCompositor {
       configureVesselClustering(adapter.ds);
       return adapter;
     }
-    // satellites (CelesTrak active group)
-    if (d.id === 'space.celestrak.active') {
+    // satellites — any CelesTrak group layer (stations/starlink/gps/visual/…).
+    // The group is encoded in the endpoint query; each enabled layer is its own
+    // adapter instance with the SampledPositionProperty motion model.
+    if (d.group === 'space' && d.id.startsWith('space.celestrak.')) {
+      const group =
+        new URLSearchParams(d.endpoint.split('?')[1] ?? '').get('group') ?? 'active';
       return new SatelliteAdapter({
         ctx,
         endpoint: d.endpoint,
-        group: 'active',
+        group,
         refreshSec: d.refresh.ttlSec ?? 7200,
       });
     }
@@ -247,32 +258,45 @@ export class LayerCompositor {
       const style: StyleKind =
         d.id === 'env.jamming.nacp' ? 'jamming' : styleFromEmits(d.emits);
       const ttl = d.refresh.ttlSec ?? 30;
+      // A phone can't render/upsert the full ~13k world view every ~2 s (it
+      // overheats and the main thread is too busy to interpolate, so planes
+      // freeze). Mobile clients get a small server-decimated payload (always a
+      // bbox + low limit), no WS firehose (it ships the whole blob), and a
+      // slower poll so the main thread has frames left to animate the gliding.
+      const mobile = isMobileDevice();
+      const interval = mobile ? Math.max(ttl, 4) : ttl;
       // Bbox scoping (lamin/lomin/lamax/lomax). The two high-volume layers use a
       // CAMERA-VIEWPORT query + cap so only on-screen contacts are instantiated
       // (the fix for web-UI lag); OpenSky uses the AOI bbox; everything else is
       // global. refreshOnMove re-polls the viewport layers on camera moveEnd.
       let bboxQuery: (() => string | null) | undefined;
       let refreshOnMove = false;
+      let wsEndpoint: string | undefined;
       if (d.id === 'aviation.opensky.states') {
         bboxQuery = aoiBboxQuery;
       } else if (d.id === 'aviation.adsb.global') {
-        // Zoomed in: up to 20000 in the viewport (full local traffic — the China/
-        // Russia coverage that matters when you actually look there). Full-globe
-        // view: capped to 4000 so the entity-update loop stays cheap; 14k
-        // individual dots are indistinguishable at world zoom anyway.
-        bboxQuery = viewportQuery(ctx.viewer, 20000, 4000);
+        // Desktop: up to 20000 (full union, served from the pre-built blob + WS
+        // push). Mobile: always a bbox + 2000 cap so the backend decimates and
+        // the phone gets a payload it can render and animate; no WS firehose.
+        bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 20000, mobile ? 2000 : 20000, mobile);
         refreshOnMove = true;
+        if (!mobile) wsEndpoint = '/ws/adsb';
       } else if (d.id === 'maritime.digitraffic') {
-        bboxQuery = viewportQuery(ctx.viewer, 6000);
+        bboxQuery = viewportQuery(ctx.viewer, mobile ? 1500 : 6000, undefined, mobile);
         refreshOnMove = true;
+      } else if (d.id === 'maritime.keyless' && mobile) {
+        // The default global vessel layer (~5k). The endpoint honours ?limit, so
+        // cap the payload on mobile (the render path also caps as a safety net).
+        bboxQuery = () => 'limit=2000';
       }
       const adapter = new PollGeoJsonAdapter({
         ctx,
         endpoint: d.endpoint,
-        intervalSec: ttl,
+        intervalSec: interval,
         styleKind: style,
         ...(bboxQuery && { bboxQuery }),
         ...(refreshOnMove && { refreshOnMove }),
+        ...(wsEndpoint && { ws: wsEndpoint }),
       });
       // Vessels cluster to declutter shipping lanes at world scale. Aircraft do
       // NOT: Cesium re-clusters over EVERY entity on each camera move, which ran

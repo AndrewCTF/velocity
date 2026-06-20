@@ -132,7 +132,7 @@ async def _gather(bbox: BBox | None, window_s: float) -> list[Signal]:
     dark = await analytics.query_vessels(bbox, dark_only=True, limit=_MAX_PER_DOMAIN)
     dark_sigs = [
         Signal("dark-vessel", "medium", now - (v.get("age_s") or 0), v["lon"], v["lat"],
-               f"dark/AIS-off vessel {v.get('mmsi') or '?'}",
+               f"vessel {v.get('mmsi') or '?'} (AIS identity incomplete)",
                {"mmsi": v.get("mmsi"), "category": v.get("category")})
         for v in dark["vessels"]
     ]
@@ -321,11 +321,12 @@ def _narrate(cluster: list[Signal]) -> str:
     if {"spoofing", "military"} <= d:
         return "Track spoofing co-located with military air activity — likely active deception."
     if {"dark-vessel", "gps-jamming"} <= d:
-        return (f"{cnt('dark-vessel')} dark/AIS-off vessel(s) inside a GPS-jamming footprint "
-                "— possible deliberate AIS concealment under electronic-warfare cover.")
+        return (f"{cnt('dark-vessel')} vessel(s) with incomplete AIS identity inside a "
+                "GPS-jamming footprint — possible deliberate AIS concealment under "
+                "electronic-warfare cover.")
     if {"dark-vessel", "military"} <= d:
-        return (f"{cnt('dark-vessel')} dark/AIS-off vessel(s) with military air interest nearby "
-                "— possible interdiction or shadowing.")
+        return (f"{cnt('dark-vessel')} vessel(s) with incomplete AIS identity with military "
+                "air interest nearby — possible interdiction or shadowing.")
     if {"gps-jamming", "military"} <= d:
         return ("GPS jamming co-located with military air activity — possible active "
                 "electronic warfare.")
@@ -364,7 +365,8 @@ def _follow_up(domains: set[str], lat: float, lon: float) -> list[str]:
 # inference into a stated fact (the journalist/defense provenance requirement).
 _INFERRED: dict[str, str] = {
     "gps-jamming": "inference from ADS-B NACp/NIC degradation — not a direct RF/SIGINT cut",
-    "dark-vessel": "SAR radar contact with no matching AIS — a candidate, not a confirmed vessel",
+    "dark-vessel": "AIS position present but static name/type identity missing — "
+    "incomplete transponder data, NOT a SAR/AIS-off detection",
     "spoofing": "deterministic deception heuristic (duplicate id / impossible "
     "kinematics / spoof cluster)",
 }
@@ -443,6 +445,36 @@ async def brief(
     elif lvl_counts.get("elevated"):
         top = "elevated"
 
+    # Region-aware AIS coverage confidence (additive — does NOT affect scoring).
+    # Keyless AIS is dense only over Northern Europe; SAR dark-vessel runs over a
+    # few curated chokepoints. So a maritime brief outside that box rests on thin
+    # vessel coverage and should be read with low confidence.
+    maritime_relevant = any(
+        ({"dark-vessel", "ais-gap"} & set(i["domains"])) for i in incidents
+    )
+    in_northern_europe = False
+    if bbox is not None:
+        clon, clat = bbox.center
+        in_northern_europe = (53.0 <= clat <= 71.0) and (-5.0 <= clon <= 31.0)
+    if maritime_relevant and not in_northern_europe:
+        coverage_confidence = "low"
+        coverage_note = (
+            "Maritime-relevant incidents fall outside the dense keyless-AIS footprint "
+            "(Northern Europe) — vessel coverage here is sparse; read with low confidence."
+        )
+    elif in_northern_europe:
+        coverage_confidence = "high"
+        coverage_note = (
+            "Scope is inside the dense keyless-AIS footprint (Northern Europe) — vessel "
+            "coverage is comparatively complete."
+        )
+    else:
+        coverage_confidence = "medium"
+        coverage_note = (
+            "No maritime-relevant incidents in scope; air/seismic/event coverage is broad, "
+            "AIS depth not load-bearing here."
+        )
+
     return {
         "generated_at": int(time.time()),
         "bbox": bbox.as_dict() if bbox else None,
@@ -450,6 +482,7 @@ async def brief(
         "window_hours": round(window_s / 3600, 1),
         "link_km": link_km,
         "top_threat_level": top,
+        "coverage_confidence": coverage_confidence,
         "incident_count": len(incidents),
         "by_level": dict(lvl_counts),
         "signals_considered": len(signals),
@@ -464,5 +497,5 @@ async def brief(
         "coverage_caveat": "Coverage is uneven: ADS-B is broad but not total; keyless "
         "AIS is densest in Northern Europe (global AIS needs a key); SAR dark-vessel "
         "detection runs only over curated chokepoint AOIs. Absence of a signal in a "
-        "thin-coverage area is NOT evidence of absence.",
+        "thin-coverage area is NOT evidence of absence. " + coverage_note,
     }

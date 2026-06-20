@@ -614,8 +614,19 @@ async def analyze(articles: list[Article]) -> dict[str, Any]:
     return _finalize(refined, articles, method=method, steps=steps, backend=backend)
 
 
-async def factcheck(claim: str, context_headlines: list[str] | None = None) -> dict[str, Any]:
-    """Adjudicate a single free-text claim. Degrades on LLM failure."""
+async def factcheck(
+    claim: str,
+    context_headlines: list[str] | None = None,
+    *,
+    fast: bool = False,
+) -> dict[str, Any]:
+    """Adjudicate a single free-text claim. Degrades on LLM failure.
+
+    ``fast=True`` routes to the cheap ``"fast"`` tier (``deepseek-chat``) for a
+    quick first-look verdict — the reasoner tier (default) is slow (~tens of
+    seconds) for an interactive operator. Same prompt + same strict-JSON
+    coercion either way; only the model id differs.
+    """
     claim = (claim or "").strip()
     if not claim:
         return {
@@ -637,7 +648,7 @@ async def factcheck(claim: str, context_headlines: list[str] | None = None) -> d
             {"role": "system", "content": _FACTCHECK_SYSTEM},
             {"role": "user", "content": user},
         ],
-        tier="reason",
+        tier="fast" if fast else "reason",
         temperature=0.1,
         max_tokens=1024,
     )

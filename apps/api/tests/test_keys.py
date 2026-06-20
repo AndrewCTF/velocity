@@ -55,6 +55,55 @@ def test_keys_requires_auth(client: TestClient) -> None:
     assert client.get("/api/keys").status_code == 401
 
 
+def test_me_requires_auth(client: TestClient) -> None:
+    # Like /api/keys: no real user token → 401 (the frontend's r.ok guard then
+    # quietly skips rendering the account row — no regression on a keyless box).
+    assert client.get("/api/me").status_code == 401
+
+
+def test_me_returns_profile_from_jwt_claims(client: TestClient) -> None:
+    # current_user is overridden to a fixed ctx; the email is decoded from the
+    # JWT payload by the route. Build a token whose middle segment is a
+    # base64url JSON payload carrying an email claim.
+    import base64
+    import json
+
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"sub": "u1", "email": "analyst@example.com"}).encode()
+    ).decode().rstrip("=")
+    token = f"hdr.{payload}.sig"
+    client.app.dependency_overrides[current_user] = lambda: UserCtx("u1", token)
+    try:
+        r = client.get("/api/me")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["user_id"] == "u1"
+        assert body["email"] == "analyst@example.com"
+        # tier/status are honestly unknown (no subscriptions table read yet),
+        # not fabricated.
+        assert body["tier"] is None
+        assert body["status"] is None
+    finally:
+        client.app.dependency_overrides.pop(current_user, None)
+
+
+def test_me_email_falls_back_to_user_metadata(client: TestClient) -> None:
+    import base64
+    import json
+
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"sub": "u2", "user_metadata": {"email": "meta@example.com"}}).encode()
+    ).decode().rstrip("=")
+    token = f"hdr.{payload}.sig"
+    client.app.dependency_overrides[current_user] = lambda: UserCtx("u2", token)
+    try:
+        r = client.get("/api/me")
+        assert r.status_code == 200
+        assert r.json()["email"] == "meta@example.com"
+    finally:
+        client.app.dependency_overrides.pop(current_user, None)
+
+
 def test_keys_crud_with_fake_user(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

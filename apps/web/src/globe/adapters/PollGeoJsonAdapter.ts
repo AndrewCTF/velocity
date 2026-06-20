@@ -11,8 +11,9 @@ import {
 import { labelFor, aircraftLabelText, vesselLabelText } from './labelStyle.js';
 import { tracks } from '../../intel/tracks.js';
 import { aircraftDedup } from '../../intel/registry.js';
+import { isMobileDevice } from '../../shell/device.js';
 import { useSelection } from '../../state/stores.js';
-import { apiFetch } from '../../transport/http.js';
+import { apiFetch, withWsKey } from '../../transport/http.js';
 
 // Minimum-perceptible deltas for billboard updates. Cesium reloads the
 // underlying GPU resource whenever a billboard property is *reassigned* —
@@ -23,6 +24,18 @@ import { apiFetch } from '../../transport/http.js';
 // noise floor.
 const ROT_EPSILON = 0.01; // ~0.57°
 const SCALE_EPSILON = 0.02;
+
+// Minimum delay the grid scheduler will book between polls. Not a cadence
+// target — only a yield so a re-anchor after an overrun can't fire back-to-back
+// polls and starve the main thread.
+const GRID_MIN_GAP_MS = 100;
+
+// Per-frame upsert budget (ms). A payload of ~8-13k entities is applied in
+// slices of at most this long so no single frame blocks — the cure for the
+// periodic "stop" when a push lands. ~6ms leaves the rest of the 16ms frame for
+// Cesium's own render of the interpolated billboards. A full world payload drains
+// over ~12-22 frames (~200-370ms), comfortably inside the ~2s push interval.
+const DRAIN_BUDGET_MS = 6;
 
 const FAR_FUTURE = Cesium.JulianDate.fromIso8601('2200-01-01T00:00:00Z');
 const EPOCH_START = Cesium.JulianDate.fromIso8601('1970-01-01T00:00:00Z');
@@ -50,6 +63,20 @@ function currentValue<T>(prop: Cesium.Property | undefined): T | undefined {
   }
 }
 
+// Inflate a gzip-compressed WS frame to text. The /ws/adsb push reuses the exact
+// gzipped bytes the HTTP route serves (one artifact, two transports); the browser
+// inflates them with the native DecompressionStream — no library, no main-thread
+// gunzip loop. Supported in all current evergreen browsers.
+async function gunzipToText(buf: ArrayBuffer): Promise<string> {
+  const stream = new Response(buf).body;
+  if (!stream || typeof DecompressionStream === 'undefined') {
+    // ponytail: no DecompressionStream → caller can still handle a text frame.
+    throw new Error('gzip inflate unavailable');
+  }
+  const inflated = stream.pipeThrough(new DecompressionStream('gzip'));
+  return await new Response(inflated).text();
+}
+
 export type StyleKind = 'quake' | 'aircraft' | 'fire' | 'vessel' | 'jamming' | 'camera' | 'generic';
 
 interface Props {
@@ -64,6 +91,12 @@ interface Props {
   // query loads the newly-revealed area immediately instead of after the next
   // timer tick. Used by the high-volume viewport layers (global ADS-B + AIS).
   refreshOnMove?: boolean;
+  // Optional WebSocket endpoint for server-pushed world-view updates (ADS-B).
+  // When set, the adapter renders the push at world view (steady, server-timed
+  // cadence — no request round-trip in the loop) and falls back to the HTTP poll
+  // on disconnect OR when zoomed in (the push carries only the world-view blob;
+  // a bbox view needs the per-viewport poll).
+  ws?: string;
 }
 
 interface PointGeometry {
@@ -113,6 +146,25 @@ function djb2(s: string): string {
   return (h >>> 0).toString(36);
 }
 
+// Per-layer render budget on phones. A phone can't hold 5k vessels + 4k sats +
+// 2k aircraft (12k+ entities = the overheating). Cap EACH layer to a STABLE
+// subset — keyed by a hash of the feature id so the SAME contacts persist across
+// polls (a random per-poll subset would churn the upsert and freeze motion, see
+// CLAUDE.md world-view decimation lesson). Desktop is uncapped (Infinity).
+const MOBILE_LAYER_CAP = isMobileDevice() ? 2000 : Number.POSITIVE_INFINITY;
+
+function stableSubset(feats: Feature[], cap: number): Feature[] {
+  if (feats.length <= cap) return feats;
+  const scored = feats.map((f) => {
+    const p = (f.properties ?? {}) as Record<string, unknown>;
+    const key = String(f.id ?? p['icao24'] ?? p['mmsi'] ?? p['id'] ?? '');
+    return { h: djb2(key), f };
+  });
+  // djb2 returns a base-36 string; lexical sort is deterministic → stable subset.
+  scored.sort((a, b) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0));
+  return scored.slice(0, cap).map((s) => s.f);
+}
+
 // Pull a stable identity key from a feature's properties. We accept anything
 // that uniquely names a contact: callsign + icao24 + source for aircraft,
 // mmsi for vessels, id for everything else. Returns null when nothing
@@ -144,8 +196,6 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   private timer: number | null = null;
   private aborter: AbortController | null = null;
   private detached = false;
-  // Track ids seen on the previous poll so we can prune those that vanished.
-  private seenIds = new Set<string>();
   // entityId → icao24 for aircraft entities currently owned by this layer.
   // Used during the prune phase to release dedup claims when an aircraft
   // disappears from the upstream feed (so a lower-priority layer can take
@@ -162,6 +212,29 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // entityId → last [lon, lat], so we can derive a heading from movement when
   // the feed doesn't carry track/cog (otherwise the icon points north).
   private lastPos = new Map<string, [number, number]>();
+  // Absolute wall-clock target (ms) for the next poll. The grid scheduler books
+  // ticks against this fixed timeline so cadence stays steady regardless of how
+  // long each poll's fetch + render took. 0 = uninitialised (set on first tick).
+  private nextAt = 0;
+  // Last ETag seen on a world-view response — sent back as If-None-Match so a
+  // poll landing inside the same 2s backend cycle gets a 304 and skips the
+  // parse + entity walk entirely (null when zoomed: the bbox path has no ETag).
+  private lastEtag: string | null = null;
+  // WebSocket push (ADS-B world view). wsActive gates the HTTP poll: while the
+  // socket is healthy AND we're at world view, the pushed blob already carries
+  // the data so the poll no-ops; the poll resumes immediately on disconnect or
+  // zoom-in. reconnect delay backs off 1s→30s like AisWsAdapter.
+  private wsConn: WebSocket | null = null;
+  private wsReconnectDelay = 1000;
+  private wsActive = false;
+  // Time-sliced upsert queue. render() enqueues the latest payload; drain()
+  // applies a budgeted slice per animation frame so a big batch never freezes a
+  // frame. A new payload replaces the queue (latest wins); the full-scan prune at
+  // pass end keeps an interrupted pass from leaking entities.
+  private pendingFeats: Feature[] = [];
+  private pendingIds = new Set<string>();
+  private pendingIdx = 0;
+  private drainHandle: number | null = null;
 
   constructor(private readonly props: Props) {
     this.ds = new Cesium.CustomDataSource(props.ctx.descriptor.id);
@@ -190,6 +263,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (!viewer.isDestroyed()) viewer.camera.moveEnd.removeEventListener(onMove);
       };
     }
+    // Server push (ADS-B): connect the socket for steady world-view updates. The
+    // poll loop still starts — it gives instant first paint before the socket
+    // opens and is the fallback while the socket is down / when zoomed in.
+    if (this.props.ws) this.connectWs();
     this.scheduleNext(0);
   }
 
@@ -212,6 +289,17 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       this.timer = null;
     }
     this.aborter?.abort();
+    if (this.drainHandle != null) {
+      window.cancelAnimationFrame(this.drainHandle);
+      this.drainHandle = null;
+    }
+    this.wsActive = false;
+    try {
+      this.wsConn?.close();
+    } catch {
+      /* already closing */
+    }
+    this.wsConn = null;
     // Release every dedup claim this layer was holding so other layers can
     // take over rendering the affected icao24s on their next poll.
     const layerId = this.props.ctx.descriptor.id;
@@ -228,24 +316,25 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     }
   }
 
-  // Chained-setTimeout poller. `setInterval(poll, ttl)` schedules every ttl ms
-  // regardless of how long the previous poll took; under congestion (slow
-  // backend, big response, paused tab catching up) polls stack and the
-  // in-flight aborter cancels them, but the new fetch fires immediately —
-  // producing a tight retry storm against the upstream. We instead measure
-  // the actual elapsed time and book the next tick at max(ttl - elapsed,
-  // 250ms). The floor prevents a busy-loop if upstream is instant (cache
-  // hits) AND keeps a paused-then-resumed tab from issuing a sprint of
-  // catch-up polls.
+  // Fixed-rate poll pinned to an ABSOLUTE wall-clock grid. The old scheduler
+  // booked the next tick at max(ttl - elapsed, 250ms), so `elapsed` — fetch +
+  // the synchronous render of up to 20k entities — leaked straight into the
+  // cadence: a slow poll stretched the gap and the refresh visibly ran
+  // short-long-short-long. Here each tick targets the next ttl boundary on a
+  // fixed timeline (`nextAt += ttl`) independent of how long the poll took, so
+  // the beat stays steady as long as a poll finishes within ttl. If a poll
+  // overruns, or the tab was backgrounded and we fell more than one interval
+  // behind, re-anchor to now (one GRID_MIN_GAP catch-up) instead of a sprint.
   private scheduleNext(delayMs: number): void {
     if (this.detached) return;
     this.timer = window.setTimeout(() => {
-      const started = Date.now();
+      if (this.nextAt === 0) this.nextAt = Date.now();
       void this.poll().finally(() => {
-        const elapsed = Date.now() - started;
         const ttl = this.props.intervalSec * 1000;
-        const next = Math.max(ttl - elapsed, 250);
-        this.scheduleNext(next);
+        const now = Date.now();
+        this.nextAt += ttl;
+        if (this.nextAt < now) this.nextAt = now; // fell behind → re-anchor, no sprint
+        this.scheduleNext(Math.max(this.nextAt - now, GRID_MIN_GAP_MS));
       });
     }, delayMs);
   }
@@ -258,14 +347,33 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   }
 
   private async poll(): Promise<void> {
+    // While the WS push is healthy AND we're at world view, the pushed blob
+    // already carries this data — skip the redundant fetch + render. When zoomed
+    // in the push (world-view subset) is insufficient, so the bbox poll runs even
+    // with the socket open.
+    if (this.wsActive && this.isWorldView()) {
+      this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
+      return;
+    }
     this.aborter?.abort();
     this.aborter = new AbortController();
+    const worldView = this.isWorldView();
     try {
-      const r = await apiFetch(this.buildUrl(), { signal: this.aborter.signal });
+      const headers: Record<string, string> = {};
+      // Conditional request only at world view (the only response carrying an
+      // ETag): an unchanged blob returns 304 and we skip the parse + entity walk
+      // entirely. The bbox path has no ETag, so it always renders.
+      if (worldView && this.lastEtag) headers['If-None-Match'] = this.lastEtag;
+      const r = await apiFetch(this.buildUrl(), { signal: this.aborter.signal, headers });
+      if (r.status === 304) {
+        this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
+        return;
+      }
       if (!r.ok) {
         this.props.ctx.reportStatus({ status: 'red', note: `upstream ${r.status}` });
         return;
       }
+      this.lastEtag = worldView ? r.headers.get('etag') : null;
       const data = (await r.json()) as FeatureCollection;
       this.render(data);
       const note = data.note;
@@ -281,14 +389,107 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     }
   }
 
-  private render(fc: FeatureCollection): void {
-    const entities = this.ds.entities;
-    entities.suspendEvents();
+  // World view = the query the WS push serves (no bbox; just `limit=…`). A
+  // zoomed/bbox query carries `lamin=`, so the push is suppressed and the bbox
+  // poll owns the entities. No coupling to the literal world cap value.
+  private isWorldView(): boolean {
+    const q = this.props.bboxQuery?.();
+    return !q || !q.includes('lamin');
+  }
 
-    const nextIds = new Set<string>();
-    const feats = (fc.features ?? []).slice(0, MAX_PER_LAYER);
-    for (const f of feats) {
-      if (!f.geometry) continue;
+  // Open the server-push socket and route inflated frames into the SAME render()
+  // path as the poll, so the icon/label/glide guardrails keep a single owner.
+  private connectWs(): void {
+    if (this.detached || !this.props.ws) return;
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const base = this.props.ws.startsWith('ws')
+      ? this.props.ws
+      : `${proto}://${window.location.host}${this.props.ws}`;
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(withWsKey(base));
+    } catch {
+      this.scheduleWsReconnect();
+      return;
+    }
+    ws.binaryType = 'arraybuffer';
+    this.wsConn = ws;
+    ws.onopen = () => {
+      this.wsReconnectDelay = 1000;
+      this.wsActive = true;
+    };
+    ws.onmessage = (ev) => {
+      void this.onWsFrame(ev.data);
+    };
+    ws.onclose = () => {
+      // Drop to the poll fallback (its next grid tick fetches) and retry the WS.
+      this.wsActive = false;
+      this.wsConn = null;
+      this.scheduleWsReconnect();
+    };
+    ws.onerror = () => {
+      try {
+        ws.close();
+      } catch {
+        /* already closing */
+      }
+    };
+  }
+
+  private scheduleWsReconnect(): void {
+    if (this.detached) return;
+    window.setTimeout(() => this.connectWs(), this.wsReconnectDelay);
+    this.wsReconnectDelay = Math.min(this.wsReconnectDelay * 2, 30_000);
+  }
+
+  private async onWsFrame(data: unknown): Promise<void> {
+    // Only the world view is pushed; if the user has zoomed in, the bbox poll
+    // owns the entities — dropping the frame avoids the world subset clobbering
+    // the detailed local set.
+    if (!this.isWorldView()) return;
+    try {
+      let text: string;
+      if (data instanceof ArrayBuffer) {
+        text = await gunzipToText(data);
+      } else if (typeof data === 'string') {
+        text = data; // ponytail: text-frame fallback if the push is ever uncompressed
+      } else {
+        return;
+      }
+      const fc = JSON.parse(text) as FeatureCollection;
+      this.render(fc);
+      this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
+    } catch {
+      /* drop a bad/partial frame; the next push or the poll fallback recovers */
+    }
+  }
+
+  private render(fc: FeatureCollection): void {
+    // Time-slice the upsert across animation frames so applying ~8-13k entities
+    // never blocks a single frame — that synchronous batch was the periodic
+    // "stop" felt the moment each push landed. Enqueue this payload (replacing
+    // any still draining; latest wins) and drain a budgeted slice per frame.
+    const incoming = fc.features ?? [];
+    const capped = incoming.length > MOBILE_LAYER_CAP ? stableSubset(incoming, MOBILE_LAYER_CAP) : incoming;
+    this.pendingFeats = capped.slice(0, MAX_PER_LAYER);
+    this.pendingIds = new Set<string>();
+    this.pendingIdx = 0;
+    if (this.drainHandle == null) {
+      this.drainHandle = window.requestAnimationFrame(() => this.drain());
+    }
+  }
+
+  private drain(): void {
+    this.drainHandle = null;
+    if (this.detached) return;
+    const entities = this.ds.entities;
+    const feats = this.pendingFeats;
+    const nextIds = this.pendingIds;
+    const deadline = performance.now() + DRAIN_BUDGET_MS;
+    entities.suspendEvents();
+    while (this.pendingIdx < feats.length && performance.now() < deadline) {
+      const f = feats[this.pendingIdx++];
+      if (!f || !f.geometry) continue;
       const props = f.properties as Record<string, unknown>;
 
       // --- Polygon path (e.g. jamming hexagons) ---
@@ -523,13 +724,26 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         }
       }
     }
+    entities.resumeEvents();
+    this.props.ctx.viewer.scene.requestRender();
 
-    // Prune entities that disappeared from the upstream payload. For aircraft
-    // also release our dedup claim so a lower-priority layer can pick the
-    // icao24 up on its next poll.
+    if (this.pendingIdx < feats.length) {
+      // More of this payload to apply — yield, continue next frame.
+      this.drainHandle = window.requestAnimationFrame(() => this.drain());
+      return;
+    }
+
+    // Payload fully applied: prune entities absent from it and release their
+    // dedup claims. Full scan of the datasource (not a seenIds diff) so a pass
+    // interrupted by a fresh payload can't leak an entity the new payload omits.
     const layerIdForPrune = this.props.ctx.descriptor.id;
-    for (const oldId of this.seenIds) {
-      if (!nextIds.has(oldId)) {
+    const stale: string[] = [];
+    for (const e of entities.values) {
+      if (!nextIds.has(e.id)) stale.push(e.id);
+    }
+    if (stale.length > 0) {
+      entities.suspendEvents();
+      for (const oldId of stale) {
         entities.removeById(oldId);
         this.lastAnchorLL.delete(oldId);
         this.lastPos.delete(oldId);
@@ -539,11 +753,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           this.ownedIcao.delete(oldId);
         }
       }
+      entities.resumeEvents();
+      this.props.ctx.viewer.scene.requestRender();
     }
-    this.seenIds = nextIds;
-
-    entities.resumeEvents();
-    this.props.ctx.viewer.scene.requestRender();
   }
 
   // Aircraft motion model — glide to the newest fix, HOLD, never extrapolate.
