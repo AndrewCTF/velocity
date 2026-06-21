@@ -37,8 +37,13 @@ const GRID_MIN_GAP_MS = 100;
 // over ~12-22 frames (~200-370ms), comfortably inside the ~2s push interval.
 const DRAIN_BUDGET_MS = 6;
 
-const FAR_FUTURE = Cesium.JulianDate.fromIso8601('2200-01-01T00:00:00Z');
-const EPOCH_START = Cesium.JulianDate.fromIso8601('1970-01-01T00:00:00Z');
+// First-payload budget: the very first world snapshot has nothing animating yet,
+// so spend a bigger one-time slice to place all ~13k icons in ~3 frames instead
+// of dribbling them in over ~30 (the "takes a while to load all the planes in"
+// report). Subsequent live pushes revert to DRAIN_BUDGET_MS so a push never
+// blocks a frame mid-animation.
+const FIRST_DRAIN_BUDGET_MS = 50;
+
 
 // Initial great-circle bearing (deg, 0=N) from point 1 to point 2. Used as a
 // heading fallback so an icon whose feed omits track/cog still points the way
@@ -235,6 +240,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   private pendingIds = new Set<string>();
   private pendingIdx = 0;
   private drainHandle: number | null = null;
+  // True until the first full payload is placed; gates FIRST_DRAIN_BUDGET_MS.
+  private firstDrain = true;
 
   constructor(private readonly props: Props) {
     this.ds = new Cesium.CustomDataSource(props.ctx.descriptor.id);
@@ -485,7 +492,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     const entities = this.ds.entities;
     const feats = this.pendingFeats;
     const nextIds = this.pendingIds;
-    const deadline = performance.now() + DRAIN_BUDGET_MS;
+    const deadline =
+      performance.now() + (this.firstDrain ? FIRST_DRAIN_BUDGET_MS : DRAIN_BUDGET_MS);
     entities.suspendEvents();
     while (this.pendingIdx < feats.length && performance.now() < deadline) {
       const f = feats[this.pendingIdx++];
@@ -627,8 +635,13 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       const isTrackable = this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel';
       if (existing) {
         if (this.props.styleKind === 'aircraft') {
-          // Aircraft motion model — time-anchored samples + dead reckoning.
-          this.upsertAircraftSamples(existing, id, lon, lat, alt ?? 0);
+          // TELEPORT mode (operator request 2026-06-21, overriding the prior
+          // glide guardrail): snap the aircraft straight to each new REAL fix —
+          // no interpolation — so the icon shows the latest reported position
+          // instantly, like a raw ADS-B map. Still real-data-only (no synthesis
+          // / dead-reckon). The glide model `upsertAircraftSamples` is kept below
+          // but intentionally UNCALLED so reverting is a one-line swap.
+          existing.position = new Cesium.ConstantPositionProperty(newPos);
         } else if (isTrackable) {
           // Stationary-entity bypass: if the new position is within 100m of
           // the previous one (parked aircraft, anchored vessel), don't churn
@@ -656,8 +669,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
             if (!(sampled instanceof Cesium.SampledPositionProperty)) {
               sampled = new Cesium.SampledPositionProperty();
               // Vessels stay on Linear — slow movers; a higher-order interp
-              // would overshoot into bizarre wakes. (Aircraft are handled by
-              // upsertAircraftSamples above and never reach this branch.)
+              // would overshoot into bizarre wakes. (Aircraft are snapped to each
+              // fix in the teleport branch above and never reach this branch.)
               sampled.setInterpolationOptions({
                 interpolationAlgorithm: Cesium.LinearApproximation,
                 interpolationDegree: 1,
@@ -715,13 +728,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           properties: props,
         };
         this.applyStyle(opts, props);
-        const added = entities.add(opts);
-        // Seed the motion model immediately so a brand-new aircraft starts
-        // flying its dead-reckoned segment instead of sitting frozen until
-        // its next fix arrives.
-        if (this.props.styleKind === 'aircraft') {
-          this.upsertAircraftSamples(added, id, lon, lat, alt ?? 0);
-        }
+        // TELEPORT mode: the entity is created at newPos (a ConstantPosition-
+        // Property), i.e. already snapped to the latest real fix — no glide seed
+        // needed. (Glide model `upsertAircraftSamples` retained, uncalled.)
+        entities.add(opts);
       }
     }
     entities.resumeEvents();
@@ -732,6 +742,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       this.drainHandle = window.requestAnimationFrame(() => this.drain());
       return;
     }
+    // First full payload is placed — drop to the small per-frame budget so
+    // subsequent live pushes never block a frame mid-animation.
+    this.firstDrain = false;
 
     // Payload fully applied: prune entities absent from it and release their
     // dedup claims. Full scan of the datasource (not a seenIds diff) so a pass
@@ -756,117 +769,6 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       entities.resumeEvents();
       this.props.ctx.viewer.scene.requestRender();
     }
-  }
-
-  // Aircraft motion model — glide to the newest fix, HOLD, never extrapolate.
-  //
-  // The feed re-sends an aircraft's LAST fix on every poll until a fresh
-  // upstream fix arrives, and `seen_at` is usually absent, so a timestamp can't
-  // distinguish "new fix" from "same fix re-sent". Earlier attempts dead-reckoned
-  // the anchor forward by `seen_pos_s` and laid a 90 s forward PREDICTION; on
-  // stale, unchanging positions that re-anchored every poll and oscillated
-  // (glide out on the prediction, snap back to the stale anchor) — the "looping"
-  // and "teleporting" the operator saw, made worse by a Lagrange curve through
-  // the three points. The operator does NOT want synthesized/predicted motion:
-  // ONLY real observed positions. So we never project past the last real fix.
-  //
-  // Fix: detect a new fix by POSITION CHANGE, not time. If the position is the
-  // same as last anchored, HOLD (return). When it genuinely moves, glide from
-  // where the icon is rendered RIGHT NOW to the new reported position over ~one
-  // poll interval with LINEAR interpolation, then HOLD. No forward extrapolation
-  // past the real fix, no projecting the anchor ahead — just interpolate between
-  // the last shown point and the new truth. Smooth, and it can never loop or
-  // snap.
-  private upsertAircraftSamples(
-    entity: Cesium.Entity,
-    id: string,
-    lon: number,
-    lat: number,
-    alt: number,
-  ): void {
-    const t0 = this.props.ctx.viewer.clock.currentTime;
-
-    let sampled = entity.position as Cesium.SampledPositionProperty | undefined;
-    const isSampled = sampled instanceof Cesium.SampledPositionProperty;
-
-    // New fix? Decide by POSITION CHANGE, not time (the feed re-sends the same
-    // fix every poll and seen_at is usually absent). If it hasn't moved since we
-    // last anchored, HOLD — re-anchoring an unchanged fix every poll is what made
-    // the icon oscillate (glide out, snap back = the looping).
-    const prev = this.lastAnchorLL.get(id);
-    let moveDist = 0;
-    if (prev) {
-      moveDist = Cesium.Cartesian3.distance(
-        Cesium.Cartesian3.fromDegrees(prev[0], prev[1]),
-        Cesium.Cartesian3.fromDegrees(lon, lat),
-      );
-      if (isSampled && moveDist < 25) return; // same fix re-sent — hold, don't re-anchor
-    }
-    const nowMs = Date.now();
-
-    // Where the icon is rendered RIGHT NOW — the continuity anchor, so motion
-    // departs from where it visually is and never snaps.
-    const renderedNow = isSampled
-      ? (sampled!.getValue(t0) as Cesium.Cartesian3 | undefined)
-      : (entity.position?.getValue(t0) as Cesium.Cartesian3 | undefined);
-
-    if (!isSampled) {
-      sampled = new Cesium.SampledPositionProperty();
-      sampled.setInterpolationOptions({
-        interpolationAlgorithm: Cesium.LinearApproximation,
-        interpolationDegree: 1,
-      });
-      sampled.forwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
-      sampled.backwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
-      entity.position = sampled;
-    }
-
-    // Glide from the current on-screen position to the NEW reported position over
-    // the REAL interval since this aircraft's last fix, then HOLD. Matching the
-    // glide to the true inter-fix gap means the icon moves at the aircraft's
-    // actual speed — no freeze-then-rush (a fixed short glide compressed a 4 s,
-    // multi-km move into ~1.5 s, which read as a jump). No forward extrapolation
-    // past the real fix (that, with noisy headings, swung the icon in loops); no
-    // projecting the anchor ahead by seen_pos_s (that marched it past truth then
-    // snapped back = the teleport). Just linear interpolation between the last
-    // shown point and the new truth, paced to reality.
-    // Pace the glide to the real inter-fix interval, but never let the icon dart
-    // faster than a fast jet: clamp apparent ground speed to ~300 m/s so a large
-    // delta (a stale fix catching up, or a bad jump) SLIDES smoothly instead of
-    // streaking across the map.
-    const sinceLastS = prev ? (nowMs - prev[2]) / 1000 : this.props.intervalSec;
-    // Pace the glide to ~1.15× the last inter-fix gap (not exactly the gap), so
-    // the icon is still moving when the NEXT real fix lands instead of reaching
-    // the fix early and HOLDING — that early-arrival-then-hold is the visible
-    // "refresh pauses for a while". Still pure interpolation between two REAL
-    // fixes (each rendered point is on the line between real observations); it
-    // just renders ~15% behind real-time to stay continuous. No extrapolation.
-    const glideS = Math.min(20, Math.max(1.5, sinceLastS * 1.15, moveDist / 300));
-    const arriveJD = Cesium.JulianDate.addSeconds(t0, glideS, new Cesium.JulianDate());
-    const cutFrom = Cesium.JulianDate.addSeconds(t0, -0.25, new Cesium.JulianDate());
-    sampled!.removeSamples(
-      new Cesium.TimeInterval({
-        start: cutFrom,
-        stop: FAR_FUTURE,
-        isStartIncluded: true,
-        isStopIncluded: true,
-      }),
-    );
-    if (renderedNow) sampled!.addSample(t0.clone(), renderedNow);
-    sampled!.addSample(arriveJD, Cesium.Cartesian3.fromDegrees(lon, lat, alt));
-
-    // Bounded memory: prune samples older than 30 minutes.
-    const pruneCut = Cesium.JulianDate.addSeconds(t0, -1800, new Cesium.JulianDate());
-    sampled!.removeSamples(
-      new Cesium.TimeInterval({
-        start: EPOCH_START,
-        stop: pruneCut,
-        isStartIncluded: true,
-        isStopIncluded: false,
-      }),
-    );
-
-    this.lastAnchorLL.set(id, [lon, lat, nowMs]);
   }
 
   private applyStyle(

@@ -142,6 +142,51 @@ async def basemap_tile(
     )
 
 
+# Low-zoom world tiles to pre-fetch at boot so the FIRST browser load hits warm
+# disk instead of a cold ~70-tile burst to the CDN (the "map takes a while to
+# become clear" report). z0..4 = 341 tiles covers the world view + the first few
+# zooms; cached _TTL_BASEMAP (30 d) so a warm run is a disk read, and an upstream
+# pull happens at most once per ~month of uptime.
+_WARM_MAX_Z = 4
+
+
+async def warm_basemap() -> None:
+    """Pre-fill the basemap tile cache for the low-zoom world view. Fire-and-
+    forget from the lifespan; a failed tile just stays cold for the request to
+    fill. Reuses the route's get_or_fetch + _FETCH_SEMAPHORE path verbatim."""
+    settings = get_settings()
+    cache = _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes)
+    # Warm the source this deployment actually serves: commercial base if
+    # configured, else Carto dark. ponytail: warms one source; add a free+
+    # commercial tier split only if a deployment serves both from cold.
+    tmpl = settings.commercial_basemap_url
+    source = "commercial-base" if tmpl else "carto"
+
+    async def warm_one(z: int, x: int, y: int) -> None:
+        if tmpl:
+            url = tmpl.format(z=z, x=x, y=y)
+        else:
+            host = CARTO_HOSTS[(x + y) % len(CARTO_HOSTS)]
+            url = f"{host}/dark_all/{z}/{x}/{y}@2x.png"
+
+        async def load() -> bytes | None:
+            return await _fetch_bytes(url)
+
+        try:
+            await cache.get(source, z, x, y, "png", _TTL_BASEMAP, load)
+        except Exception:  # noqa: BLE001 — a cold tile is non-fatal
+            pass
+
+    await asyncio.gather(
+        *(
+            warm_one(z, x, y)
+            for z in range(_WARM_MAX_Z + 1)
+            for x in range(2**z)
+            for y in range(2**z)
+        )
+    )
+
+
 @router.get("/tiles/sat/{z}/{x}/{y}.jpg")
 async def sat_tile(
     z: int,

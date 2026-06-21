@@ -881,7 +881,14 @@ def _feed_interval(url: str) -> float:
         # no reason to throttle it to 30 s. Pull it fast so the bulk of aircraft
         # carry genuinely fresh REAL positions (operator wants real data refreshed
         # consistently, NOT synthesized motion between stale fixes).
-        return max(8.0, s.adsb_feed_interval_s)
+        # 8 -> 5 s: a measured 74% of the snapshot (9.7k of 13k) is theairtraffic-
+        # sourced, so its cadence IS how often most aircraft get a distinct fix —
+        # an 8 s pull left them still for up to 8 s after load and glide-then-hold
+        # in 8 s chunks (the "takes much longer to start moving" report). 5 s is
+        # the aggressive end of CLAUDE.md's 5-8 s freshness/bandwidth balance and
+        # matches hpradar's cadence; the 9 s total cap + one-task-per-feed guard
+        # keep a slow pull from piling up. Floor stays >=5 s (never the forbidden ~1 s).
+        return max(5.0, s.adsb_feed_interval_s)
     return s.adsb_feed_interval_s  # full aircraft.json mirror
 
 

@@ -38,16 +38,21 @@ not regress any of them. If unsure, leave the relevant code path alone.
   `PollGeoJsonAdapter` uses upsert-by-id (`getById` → update billboard image /
   rotation / position), NOT `removeAll() + add()`. Any change that re-creates
   entities on every poll is a regression and must be reverted.
-- `SampledPositionProperty` with `LinearApproximation` is used to interpolate
-  between fixes — do not replace it with `ConstantPositionProperty` on
-  existing entities or icons will jump.
-- **NEVER synthesize/predict aircraft motion — real observed fixes only.** The
-  operator wants real data, not fake motion. `upsertAircraftSamples` glides
-  between CONSECUTIVE REAL fixes (linear interp from the icon's current rendered
-  point to the newest reported position) and HOLDs after — it must NOT
-  forward-extrapolate / dead-reckon the anchor ahead by velocity/heading past
-  the last real fix. Smoothness comes from delivering REAL fixes faster +
-  steadier (backend cadence, feed freshness), not from inventing positions.
+- **Aircraft TELEPORT to each fix (operator request 2026-06-21).** Each poll snaps
+  the aircraft straight to its newest REAL reported position via
+  `ConstantPositionProperty` — no interpolation, no glide — so the map shows live
+  ADS-B truth instantly. The operator explicitly chose this over the prior glide,
+  with full knowledge it had been rejected twice before (see memory
+  `adsb-motion-glide-to-fix`). Do NOT "fix the jump" back to a glide.
+- **NEVER synthesize/predict aircraft motion — real observed fixes only.** Teleport
+  shows ONLY real fixes; do NOT add interpolation, forward-extrapolation, or
+  dead-reckoning to "smooth" it — that re-introduces the fake motion the operator
+  rejected. The glide model (`upsertAircraftSamples`) was REMOVED in the teleport
+  change; reverting to glide is a `git` revert, not a rewrite. VESSELS still glide
+  via `SampledPositionProperty` + `LinearApproximation` (slow movers) — do not
+  change that. Aircraft smoothness, if ever wanted again, comes from delivering
+  REAL fixes faster + steadier (backend cadence, feed freshness), never from
+  inventing positions.
 - `requestRenderMode: true` must stay on, BUT `maximumRenderTimeChange: 0`
   (GlobeCanvas viewer opts) so the scene re-renders every frame the simulation
   clock advances — that is what makes `SampledPositionProperty` interpolation

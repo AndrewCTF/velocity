@@ -133,6 +133,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             import asyncio  # noqa: PLC0415
 
             asyncio.create_task(cams_routes._get_catalog())
+            # Pre-warm the low-zoom basemap tiles so the first browser load gets
+            # a legible world map at once instead of a cold ~70-tile CDN burst
+            # (the "map takes a while to become clear" report). Same fire-and-
+            # forget spirit as the cams + adsb warms above.
+            from app.routes import tiles as tiles_routes  # noqa: PLC0415
+
+            asyncio.create_task(tiles_routes.warm_basemap())
             # News debias / fact-check refresher.
             if settings.news_enabled:
                 from app.routes import news as news_routes  # noqa: PLC0415
