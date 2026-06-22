@@ -194,6 +194,9 @@ export const useAlerts = create<AlertsState>((set) => ({
     }),
   clear: () => set({ alerts: [] }),
 }));
+if (typeof window !== 'undefined' && import.meta.env?.DEV) {
+  (window as unknown as { __useAlerts: typeof useAlerts }).__useAlerts = useAlerts;
+}
 
 // Simulation mode — a browser-side war-game overlay drawn on its own Cesium
 // CustomDataSource over the live globe. `active` gates the SimulationOverlay UI
@@ -209,3 +212,136 @@ export const useSim = create<SimState>((set) => ({
   setActive: (b) => set({ active: b }),
   toggle: () => set((s) => ({ active: !s.active })),
 }));
+
+// ── Map-side faceted filter (HistogramPanel ↔ PollGeoJsonAdapter) ───────────
+// The histogram panel aggregates live entities into facet buckets (altitude
+// band, aircraft category, vessel type, flag, squawk) and lets the analyst
+// click a bucket to "filter to" (keep only it) or "filter out" (hide it). The
+// active filter is a flat list of AND-combined clauses; the adapter reads it
+// through the PURE `matchesFilterClauses` evaluator below and de-emphasises any
+// entity that fails — translucent, never removed (the SVG icon and upsert-by-id
+// stay intact; see CLAUDE.md). The store holds ONLY UI state; the side effect
+// (dimming Cesium billboards) lives in the adapter, not here.
+
+// The facets the histogram buckets over. Each maps to a deterministic key the
+// evaluator derives from a feature's properties (the same property shapes the
+// ADS-B / AIS feeds emit). Kept as a string union so a clause is serialisable
+// and cheap to compare.
+export type FilterFacet =
+  | 'altBucket' // altitude band id, e.g. 'fl000_100'
+  | 'aircraftCategory' // airliner | private | helicopter | glider | military | emergency
+  | 'vesselType' // cargo | tanker | fishing | passenger | military | sailing | pleasure | tug | sar | generic
+  | 'flag' // ISO-ish country/flag code derived client-side (ICAO24 block / MMSI MID)
+  | 'squawk'; // 4-digit Mode-A code (or an 'emergency' bucket)
+
+// One filter clause. `mode:'only'` = an entity must match this value to pass;
+// `mode:'not'` = an entity matching this value fails. Multiple clauses combine
+// with AND, but clauses on the SAME facet in `only` mode combine with OR (so
+// "only airliner OR military" is expressible by clicking two category bars).
+export type FilterMode = 'only' | 'not';
+export interface FilterClause {
+  facet: FilterFacet;
+  value: string;
+  mode: FilterMode;
+}
+
+// The bucket id an entity falls into for a given facet, or null when the facet
+// doesn't apply to that entity (e.g. `vesselType` on an aircraft). The adapter
+// passes the entity's bucket ids in; keeping the derivation OUT of the store
+// means the evaluator is pure and unit-testable with plain objects. `facetValue`
+// returns the SET of values an entity carries for a facet (squawk can match both
+// its literal code and the synthetic 'emergency' bucket), so callers should pass
+// a resolver that returns string[] per facet.
+export type FacetResolver = (facet: FilterFacet) => readonly string[];
+
+// PURE predicate: does an entity (described by its per-facet values) satisfy the
+// active clause list? Combination rules:
+//   • `not` clauses: entity fails if it carries the clause value (hard exclude).
+//   • `only` clauses: grouped by facet; within a facet the entity must carry at
+//     least one of the requested values (OR); across facets every group with an
+//     `only` clause must be satisfied (AND). A facet with no `only` clause is
+//     unconstrained. An entity that doesn't apply to a constrained facet (empty
+//     value set) fails that facet — a vessel can't satisfy "only airliner".
+// No clauses → everything passes (returns true). Exported so the adapter and the
+// panel share ONE definition of "matches".
+export function matchesFilterClauses(
+  clauses: readonly FilterClause[],
+  resolve: FacetResolver,
+): boolean {
+  if (clauses.length === 0) return true;
+  // Hard excludes first — cheapest rejection.
+  for (const c of clauses) {
+    if (c.mode !== 'not') continue;
+    if (resolve(c.facet).includes(c.value)) return false;
+  }
+  // Group the `only` clauses by facet, then require each group be satisfied.
+  const onlyByFacet = new Map<FilterFacet, Set<string>>();
+  for (const c of clauses) {
+    if (c.mode !== 'only') continue;
+    const set = onlyByFacet.get(c.facet) ?? new Set<string>();
+    set.add(c.value);
+    onlyByFacet.set(c.facet, set);
+  }
+  for (const [facet, wanted] of onlyByFacet) {
+    const have = resolve(facet);
+    if (!have.some((v) => wanted.has(v))) return false;
+  }
+  return true;
+}
+
+interface FiltersState {
+  clauses: readonly FilterClause[];
+  // `epoch` bumps on every mutation. The adapter watches it (cheap integer
+  // compare) to know a re-evaluation of already-rendered entities is due
+  // WITHOUT subscribing to the array identity from a non-React module.
+  epoch: number;
+  // Toggle a clause: clicking the same facet+value+mode again removes it.
+  // Adding an `only` and a `not` for the same facet+value is contradictory, so
+  // setting one drops the opposite for that exact value.
+  toggleClause: (facet: FilterFacet, value: string, mode: FilterMode) => void;
+  // Remove one specific clause (the chip "✕").
+  removeClause: (facet: FilterFacet, value: string, mode: FilterMode) => void;
+  // Drop every clause for a facet (a column header "clear").
+  clearFacet: (facet: FilterFacet) => void;
+  // Drop everything.
+  clear: () => void;
+  // Convenience: is this exact clause active right now?
+  isActive: (facet: FilterFacet, value: string, mode: FilterMode) => boolean;
+}
+
+function sameClause(a: FilterClause, facet: FilterFacet, value: string, mode: FilterMode): boolean {
+  return a.facet === facet && a.value === value && a.mode === mode;
+}
+
+export const useFilters = create<FiltersState>((set, get) => ({
+  clauses: [],
+  epoch: 0,
+  toggleClause: (facet, value, mode) =>
+    set((s) => {
+      const already = s.clauses.some((c) => sameClause(c, facet, value, mode));
+      let next: FilterClause[];
+      if (already) {
+        // Clicking the active chip toggles it off.
+        next = s.clauses.filter((c) => !sameClause(c, facet, value, mode));
+      } else {
+        // Drop the opposite mode for this exact facet+value (can't be both
+        // "only X" and "not X"), then add the requested clause.
+        const opposite: FilterMode = mode === 'only' ? 'not' : 'only';
+        next = s.clauses.filter((c) => !sameClause(c, facet, value, opposite));
+        next.push({ facet, value, mode });
+      }
+      return { clauses: next, epoch: s.epoch + 1 };
+    }),
+  removeClause: (facet, value, mode) =>
+    set((s) => ({
+      clauses: s.clauses.filter((c) => !sameClause(c, facet, value, mode)),
+      epoch: s.epoch + 1,
+    })),
+  clearFacet: (facet) =>
+    set((s) => ({ clauses: s.clauses.filter((c) => c.facet !== facet), epoch: s.epoch + 1 })),
+  clear: () => set((s) => (s.clauses.length === 0 ? s : { clauses: [], epoch: s.epoch + 1 })),
+  isActive: (facet, value, mode) => get().clauses.some((c) => sameClause(c, facet, value, mode)),
+}));
+if (typeof window !== 'undefined' && import.meta.env?.DEV) {
+  (window as unknown as { __useFilters: typeof useFilters }).__useFilters = useFilters;
+}

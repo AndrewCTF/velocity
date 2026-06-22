@@ -24,6 +24,12 @@ dependencies = [
   "pyais>=2.6.0",
   "feedparser>=6.0.11",
   "cryptography>=42.0",
+  "pyjwt>=2.0",
+  # COG tiler (Track B2): turns Cloud-Optimized GeoTIFFs into XYZ tiles. Pulls
+  # rasterio/GDAL, which do NOT build on every platform — app.imagery.tiler
+  # guards the import so the app still boots if this fails to install. Keep it
+  # graceful; do not make any import path hard-depend on it.
+  "titiler-core>=0.18",
 ]
 
 [project.scripts]

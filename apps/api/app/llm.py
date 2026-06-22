@@ -26,16 +26,22 @@ unavailable → ``LlmResult.text is None`` and callers degrade gracefully.
 
 from __future__ import annotations
 
+import asyncio
+import contextvars
 import json
+import logging
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
 import httpx
 
-from app.config import get_settings
+from app.config import Settings, get_settings
+
+_log = logging.getLogger("app.llm")
 
 # ── tiers ─────────────────────────────────────────────────────────────────────
 
@@ -180,6 +186,159 @@ class LlmResult:
     @property
     def ok(self) -> bool:
         return bool(self.text)
+
+
+# ── observability (Track D3) ──────────────────────────────────────────────────
+# One row per chat() completion → public.llm_calls (model, tokens, latency, tool
+# calls, the user who asked). Best-effort: it MUST NOT block or fail the LLM call.
+#
+# llm.chat() is a plain module-level coroutine with no request context, so the
+# caller's identity is threaded in via a ContextVar that a request dependency /
+# middleware sets with bind_user() (a future, separately-owned hook — keys.py's
+# current_user is the natural place). When nothing has bound a user, the call is
+# simply NOT logged: the backend has no service-role key here and RLS forbids a
+# NULL-owner insert, so logging degrades silently and the chat() result is
+# returned unchanged either way.
+
+# (user_id, supabase_access_token) of the signed-in caller, or None.
+_LLM_USER: contextvars.ContextVar[tuple[str, str] | None] = contextvars.ContextVar(
+    "llm_user", default=None
+)
+
+
+def bind_user(user_id: str | None, token: str | None) -> contextvars.Token[tuple[str, str] | None]:
+    """Bind the calling user so chat() can attribute its observability rows.
+
+    Returns the reset token (pass to :func:`reset_user`) so a request scope can
+    restore the previous binding. A missing id/token clears the binding (anonymous
+    / static-API-key callers are not logged). Never raises.
+    """
+    value = (user_id, token) if (user_id and token) else None
+    return _LLM_USER.set(value)
+
+
+def reset_user(token: contextvars.Token[tuple[str, str] | None]) -> None:
+    """Restore the binding captured by :func:`bind_user`. Never raises."""
+    try:
+        _LLM_USER.reset(token)
+    except (ValueError, LookupError):  # token from another context — ignore
+        pass
+
+
+def _usage_int(usage: dict[str, Any] | None, key: str) -> int:
+    """Coerce one OpenAI-style usage field to a non-negative int (0 on absence)."""
+    try:
+        return max(0, int((usage or {}).get(key, 0) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def call_row(
+    res: LlmResult,
+    *,
+    user_id: str,
+    tier: str,
+    latency_ms: int,
+    tool_calls: int,
+    label: str,
+) -> dict[str, Any]:
+    """Shape one ``llm_calls`` row from a result. Pure (no I/O) so tests assert it.
+
+    ``prompt``/``completion`` tokens come from the OpenAI-compatible ``usage``
+    block; ``total`` falls back to their sum when the backend omits it (e.g.
+    Ollama reports no usage → all zero). ``error`` is truncated.
+    """
+    usage = res.usage or {}
+    prompt = _usage_int(usage, "prompt_tokens")
+    completion = _usage_int(usage, "completion_tokens")
+    total = _usage_int(usage, "total_tokens") or (prompt + completion)
+    return {
+        "user_id": user_id,
+        "backend": res.backend,
+        "model_id": res.model,
+        "tier": (tier or "fast"),
+        "ok": bool(res.ok),
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "total_tokens": total,
+        "latency_ms": max(0, int(latency_ms)),
+        "tool_calls": max(0, int(tool_calls)),
+        "label": (label or "")[:120],
+        "error": (res.error or None) and str(res.error)[:500],
+    }
+
+
+def _llm_calls_url(s: Settings) -> str | None:
+    return s.supabase_url.rstrip("/") + "/rest/v1/llm_calls" if s.supabase_url else None
+
+
+async def _post_call_row(row: dict[str, Any], token: str) -> None:
+    """Best-effort PostgREST insert of one observability row. Swallows everything.
+
+    Uses the caller's OWN Supabase access token so RLS (auth.uid() = user_id)
+    scopes the row to that user — the same BYOK pattern as keys.py. Any failure
+    (Supabase unset, network, 4xx/5xx) is logged at debug and dropped: this is
+    fire-and-forget telemetry and must never surface to the LLM caller.
+    """
+    try:
+        s = get_settings()
+        url = _llm_calls_url(s)
+        if not url:
+            return
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(6.0, connect=4.0),
+            transport=httpx.AsyncHTTPTransport(local_address="0.0.0.0", retries=0),
+        ) as c:
+            await c.post(
+                url,
+                json=row,
+                headers={
+                    "apikey": s.supabase_anon_key,
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal",
+                },
+            )
+    except Exception as exc:  # noqa: BLE001 — telemetry never breaks the call
+        _log.debug("llm_calls insert failed (ignored): %s", exc)
+
+
+def _record_call(
+    res: LlmResult, *, tier: str, latency_ms: int, tool_calls: int, label: str
+) -> None:
+    """Fire-and-forget one observability row for a completed chat() call.
+
+    Reads the bound user from the ContextVar; no user → no row (silent). Schedules
+    the write on the running loop so it never blocks chat()'s return; if there is
+    no running loop (rare — chat() is always awaited) it is dropped. NEVER raises.
+    """
+    try:
+        bound = _LLM_USER.get()
+        if not bound:
+            return
+        user_id, token = bound
+        row = call_row(
+            res,
+            user_id=user_id,
+            tier=tier,
+            latency_ms=latency_ms,
+            tool_calls=tool_calls,
+            label=label,
+        )
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        task = loop.create_task(_post_call_row(row, token))
+        # Keep a reference so the task isn't GC'd mid-flight, and absorb its result.
+        _PENDING_LOGS.add(task)
+        task.add_done_callback(_PENDING_LOGS.discard)
+    except Exception as exc:  # noqa: BLE001 — observability must not break chat()
+        _log.debug("llm observability skipped (ignored): %s", exc)
+
+
+# Strong refs to in-flight log writes (asyncio only weakly refs tasks).
+_PENDING_LOGS: set[asyncio.Task[None]] = set()
 
 
 # ── http ──────────────────────────────────────────────────────────────────────
@@ -391,6 +550,8 @@ async def chat(
     json_mode: bool = False,
     ollama_model: str = "",
     fast: bool = False,
+    label: str = "",
+    tool_calls: int = 0,
 ) -> LlmResult:
     """Run a chat completion. DeepSeek first, Ollama fallback.
 
@@ -399,7 +560,48 @@ async def chat(
         tier: ``fast`` / ``reason`` (aliases: haiku/sonnet→fast, opus→reason).
         json_mode: ask the model for a JSON object (fast tier only).
         ollama_model: preferred local model when falling back.
+        label: optional caller tag for observability (e.g. ``"agent.gather"``);
+            does not affect the call.
+        tool_calls: number of tool calls this turn carried, for observability.
+
+    Every completion (success or failure) is logged best-effort to
+    ``public.llm_calls`` for the bound user (see :func:`bind_user`); logging never
+    blocks or fails this call.
     """
+    started = time.monotonic()
+    res = await _run_chat(
+        messages,
+        tier=tier,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        timeout_s=timeout_s,
+        json_mode=json_mode,
+        ollama_model=ollama_model,
+        fast=fast,
+    )
+    _record_call(
+        res,
+        tier="fast" if fast else tier,
+        latency_ms=round((time.monotonic() - started) * 1000),
+        tool_calls=tool_calls,
+        label=label,
+    )
+    return res
+
+
+async def _run_chat(
+    messages: list[dict[str, str]],
+    *,
+    tier: str,
+    temperature: float,
+    max_tokens: int,
+    timeout_s: float | None,
+    json_mode: bool,
+    ollama_model: str,
+    fast: bool,
+) -> LlmResult:
+    """The backend ladder (MiniMax → DeepSeek → Ollama). No observability here so
+    :func:`chat` records exactly one row per public call."""
     # `fast=True` forces the quick chat model (DeepSeek-chat / Ollama) and skips
     # the slow MiniMax-M3 reasoner entirely — used for the agent's tool-routing
     # turns, where many cheap round-trips matter more than deep reasoning. The
@@ -418,14 +620,16 @@ async def chat(
     # fallbacks below if it is unconfigured or fails. `fast` skips it.
     mm_key, _mm_base, _mm_model = minimax_config()
     if mm_key and not fast:
-        # M3's NVIDIA endpoint carries large fixed reasoning/queue latency
-        # (~50-100s even for short replies), so give it a wide floor; DeepSeek/
-        # Ollama below answer fast if it errors or overruns.
+        # Cap MiniMax at 90 s so a hung M3 can't eat the WHOLE caller budget
+        # before DeepSeek is even tried. Backends run sequentially, each with its
+        # own timeout (DeepSeek below gets the full eff_timeout, not a remainder),
+        # so worst-case wall time is the SUM — the calling route bounds the total
+        # (e.g. news/* wrap in asyncio.wait_for < Cloudflare's 100 s edge limit).
         mm = await _minimax_chat(
             messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            timeout_s=max(eff_timeout, 150.0),
+            timeout_s=min(eff_timeout, 90.0),
         )
         if mm.ok:
             return mm
@@ -506,8 +710,14 @@ async def chat_json(
     timeout_s: float | None = None,
     ollama_model: str = "",
     fast: bool = False,
+    label: str = "",
+    tool_calls: int = 0,
 ) -> tuple[Any | None, LlmResult]:
-    """Run ``chat`` and parse the reply as JSON. Returns ``(parsed_or_None, result)``."""
+    """Run ``chat`` and parse the reply as JSON. Returns ``(parsed_or_None, result)``.
+
+    ``label``/``tool_calls`` are forwarded to ``chat`` for observability; the
+    single underlying ``chat`` call logs exactly one ``llm_calls`` row.
+    """
     res = await chat(
         messages,
         tier=tier,
@@ -517,6 +727,8 @@ async def chat_json(
         json_mode=(fast or _resolve_tier(tier) == "fast"),
         ollama_model=ollama_model,
         fast=fast,
+        label=label,
+        tool_calls=tool_calls,
     )
     if not res.ok:
         return None, res

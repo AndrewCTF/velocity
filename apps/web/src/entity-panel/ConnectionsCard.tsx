@@ -138,6 +138,7 @@ export function ConnectionsCard({
       return;
     }
     setContacts(nearestContacts(viewer, entityId, position.lon, position.lat, 4));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- track primitive lon/lat, not the recreated object ref
   }, [viewer, entityId, position?.lon, position?.lat]);
 
   const nodes = useMemo<GraphNode[]>(() => {

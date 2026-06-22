@@ -20,7 +20,12 @@ import {
   type BadgeTone,
 } from '../shell/instruments.js';
 import { ConnectionsCard } from './ConnectionsCard.js';
+import { ImageryCard } from './ImageryCard.js';
+import { PatternOfLifeCard } from './PatternOfLifeCard.js';
 import { resolveAircraftFamily, aircraftSilhouette, vesselSilhouette } from './silhouettes.js';
+import { useChip } from '../imagery/chipStore.js';
+import { useInvestigation } from '../graph/investigationStore.js';
+import { usePolReplay } from '../state/polReplayStore.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -117,9 +122,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   }
 
   return (
-    <div className="p-3 space-y-3">
-      <SectionLabel title="Selection" />
-
+    <div className="p-4 space-y-5">
       <Header snap={snap} id={id} enrichment={enrichment} />
 
       <ProfileCard enrichment={enrichment} snap={snap} />
@@ -157,8 +160,45 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
           >
             Copy lat,lon
           </Btn>
+          <Btn
+            tone="accent"
+            size="sm"
+            title="Drape a dated satellite chip around this entity (4 km AOI)"
+            onClick={() =>
+              useChip.getState().setFocus({
+                entityId: id,
+                lat: snap.position!.lat,
+                lon: snap.position!.lon,
+                radiusKm: 4,
+              })
+            }
+          >
+            ⊞ Load imagery here
+          </Btn>
         </div>
       )}
+
+      {/* Investigation graph (Track C4) — open the multi-hop link graph centred
+          on this entity. Works off the id alone (the ontology is id-keyed), so
+          unlike the position buttons above it renders for any selection. */}
+      <div className="flex flex-wrap gap-2">
+        <Btn
+          size="sm"
+          title="Open a multi-hop link-analysis graph centred on this entity (saved ontology)"
+          onClick={() => useInvestigation.getState().searchAround(id)}
+        >
+          ⊹ Search around
+        </Btn>
+        <Btn
+          size="sm"
+          title="Replay this entity's recorded track on the timeline (pattern of life + dwell clusters)"
+          onClick={() => usePolReplay.getState().play(id)}
+        >
+          ⟲ Pattern of life
+        </Btn>
+      </div>
+
+      <ActionsCard id={id} snap={snap} />
 
       {snap?.kind === 'camera' && typeof snap.properties['cam_id'] === 'string' && (
         <CameraCard
@@ -167,7 +207,9 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
         />
       )}
 
-      <PatternOfLifeCard id={id} kind={snap?.kind ?? ''} snap={snap} />
+      <PatternOfLifeCard id={id} kind={snap?.kind ?? ''} viewer={viewer ?? null} />
+
+      <ImageryCard id={id} kind={snap?.kind ?? ''} />
 
       <TrackCard kind={snap?.kind ?? ''} points={track} />
 
@@ -204,6 +246,161 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
       />
     </div>
   );
+}
+
+// ── governed write-back actions (Track C1) ───────────────────────────────────
+// Three operator verbs over the selected entity, each POSTing to /api/actions/{name}
+// via the shared apiFetch wrapper (Supabase Bearer / X-API-Key). The backend
+// validates the params (Pydantic), mutates the ontology + side effect, and writes
+// an audit row; we surface the receipt or the error inline (no global toast system
+// exists, so feedback is local per-button — mirrors KeysPanel's busy/err idiom).
+//
+//   flag_entity     — {target_id, note, severity}        (ontology only)
+//   nominate_target — {target_id, priority, note}        (→ target_board)
+//   add_watch       — {target_id, label, lat, lon, …}    (→ alert_rules; needs lat/lon)
+//
+// add_watch's param model REQUIRES lat/lon/label, so that button only renders when
+// the live snapshot has a position; the other two work off the entity id alone.
+type ActionPhase = 'idle' | 'running' | 'ok' | 'error';
+
+function ActionsCard({
+  id,
+  snap,
+}: {
+  id: string;
+  snap: PanelSnapshot | null;
+}): JSX.Element {
+  // The display label the watch rule is filed under: entity name → kind+id → id.
+  const watchLabel = (snap?.name as string | undefined) || (snap?.kind ? `${snap.kind} ${id}` : id);
+  const pos = snap?.position;
+
+  return (
+    <section>
+      <SectionLabel title="Actions" />
+      <p className="mono text-[9px] text-txt-3 mt-1 leading-snug">
+        governed write-back · audited to your account
+      </p>
+      <div className="flex flex-wrap gap-2 mt-1.5">
+        <ActionButton
+          label="⚑ Flag"
+          action="flag_entity"
+          params={{ target_id: id, note: '', severity: 3 }}
+          doneLabel="Flagged"
+        />
+        <ActionButton
+          label="◎ Nominate target"
+          action="nominate_target"
+          params={{ target_id: id, priority: 3, note: '' }}
+          doneLabel="Nominated"
+        />
+        {pos && (
+          <ActionButton
+            label="⌂ Add watch"
+            action="add_watch"
+            params={{
+              target_id: id,
+              label: String(watchLabel).slice(0, 120),
+              lat: pos.lat,
+              lon: pos.lon,
+              radius_nm: 50,
+            }}
+            doneLabel="Watching"
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+// One write-back verb. Owns its own busy/result state so each action reports
+// independently. On 4xx/5xx we read the backend `detail` for a useful message
+// (400 = Pydantic errors array; 502/503 = store unavailable text).
+function ActionButton({
+  label,
+  action,
+  params,
+  doneLabel,
+}: {
+  label: string;
+  action: 'flag_entity' | 'nominate_target' | 'add_watch';
+  params: Record<string, unknown>;
+  doneLabel: string;
+}): JSX.Element {
+  const [phase, setPhase] = useState<ActionPhase>('idle');
+  const [msg, setMsg] = useState<string | null>(null);
+
+  // Reset the per-button result whenever the target changes (a new entity → a
+  // fresh action), keyed on the action's target_id.
+  const targetKey = String(params['target_id'] ?? '');
+  useEffect(() => {
+    setPhase('idle');
+    setMsg(null);
+  }, [targetKey]);
+
+  const run = async (): Promise<void> => {
+    setPhase('running');
+    setMsg(null);
+    try {
+      const r = await apiFetch(`/api/actions/${action}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      if (!r.ok) {
+        setPhase('error');
+        setMsg(await actionErrorText(r));
+        return;
+      }
+      setPhase('ok');
+    } catch {
+      setPhase('error');
+      setMsg('network error');
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <Btn
+        size="sm"
+        disabled={phase === 'running'}
+        onClick={() => void run()}
+        className={
+          phase === 'ok'
+            ? 'border-[rgba(54,211,153,0.5)] text-ok'
+            : phase === 'error'
+              ? 'border-[rgba(255,90,82,0.5)] text-alert'
+              : ''
+        }
+        {...(msg ? { title: msg } : {})}
+      >
+        {phase === 'running' ? '…' : phase === 'ok' ? `✓ ${doneLabel}` : label}
+      </Btn>
+      {phase === 'error' && msg && (
+        <span className="mono text-[8px] text-alert leading-tight max-w-[140px] truncate" title={msg}>
+          {msg}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Pull a human message out of a failed /api/actions response. The backend uses
+// FastAPI's {detail: …}: a 400 carries a Pydantic errors array, 502/503 a string.
+async function actionErrorText(r: Response): Promise<string> {
+  try {
+    const j = (await r.json()) as { detail?: unknown };
+    const d = j.detail;
+    if (typeof d === 'string') return d;
+    if (Array.isArray(d) && d.length > 0) {
+      const first = d[0] as { msg?: string };
+      if (first?.msg) return first.msg;
+    }
+  } catch {
+    /* non-JSON body */
+  }
+  if (r.status === 401 || r.status === 403) return 'sign-in required';
+  if (r.status === 503) return 'backend store not configured';
+  return `failed (${r.status})`;
 }
 
 // ── entity kind → category glyph + threat colour ────────────────────────────
@@ -281,22 +478,27 @@ function Header({
   const tileColor = dark ? 'var(--alert)' : 'var(--txt-1)';
 
   return (
-    <header className="flex items-start gap-2.5">
+    <header className="flex items-start gap-3">
       <IconTile color={tileColor}>{glyphFor(snap)}</IconTile>
       <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-medium text-txt-0 truncate" title={String(display)}>
-          {display}
-        </div>
-        <div className="mono text-[9.5px] text-txt-2 mt-0.5 truncate" title={idParts.join(' · ')}>
+        <div className="mono text-[10px] tracking-[0.03em] text-txt-3 truncate" title={idParts.join(' · ')}>
           {idParts.join(' · ')}
         </div>
-        {operator && <div className="mono text-[9.5px] text-txt-3 mt-0.5 truncate">{operator}</div>}
+        <h2
+          className="text-[18px] font-semibold text-txt-0 leading-tight tracking-[-0.01em] truncate mt-1"
+          title={String(display)}
+        >
+          {display}
+        </h2>
+        <div className="flex flex-wrap items-center gap-2 mt-2.5">
+          {dark ? (
+            <Badge tone="alert">dark candidate</Badge>
+          ) : snap?.kind ? (
+            <Badge tone={kindBadgeTone(snap.kind)}>{snap.kind}</Badge>
+          ) : null}
+          {operator && <span className="mono text-[10.5px] text-txt-2 truncate">{operator}</span>}
+        </div>
       </div>
-      {dark ? (
-        <Badge tone="alert">dark candidate</Badge>
-      ) : snap?.kind ? (
-        <Badge tone={kindBadgeTone(snap.kind)}>{snap.kind}</Badge>
-      ) : null}
     </header>
   );
 }
@@ -515,83 +717,6 @@ function ProfileCard({
         </div>
       )}
       {desc && <p className="text-[11px] text-txt-1 leading-snug mt-2 line-clamp-3">{desc}</p>}
-    </Widget>
-  );
-}
-
-// Pattern-of-life widget — the backend dossier (track profile, duration,
-// distance, ADS-B gaps, assessment) that the live snapshot doesn't carry.
-interface DossierTrack {
-  fixes?: number;
-  track_minutes?: number;
-  distance_km?: number;
-  profile?: string;
-  gap_count?: number;
-}
-interface Dossier {
-  found?: boolean;
-  assessment?: string;
-  gnss_degraded?: boolean;
-  track?: DossierTrack;
-}
-
-function PatternOfLifeCard({
-  id,
-  kind,
-  snap,
-}: {
-  id: string;
-  kind: string;
-  snap: PanelSnapshot | null;
-}): JSX.Element | null {
-  const [dossier, setDossier] = useState<Dossier | null>(null);
-  useEffect(() => {
-    setDossier(null);
-    if (!id || (kind !== 'aircraft' && kind !== 'vessel')) return;
-    const ab = new AbortController();
-    const p = snap?.properties ?? {};
-    const ident =
-      kind === 'aircraft'
-        ? typeof p['icao24'] === 'string'
-          ? (p['icao24'] as string)
-          : id
-        : p['mmsi'] != null
-          ? String(p['mmsi'])
-          : id;
-    const path =
-      kind === 'aircraft'
-        ? `/api/intel/dossier/aircraft/${encodeURIComponent(ident)}`
-        : `/api/intel/dossier/vessel/${encodeURIComponent(ident)}`;
-    apiFetch(path, { signal: ab.signal })
-      .then((r) => (r.ok ? (r.json() as Promise<Dossier>) : null))
-      .then((j) => {
-        if (j && j.found !== false) setDossier(j);
-      })
-      .catch(() => undefined);
-    return () => ab.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, kind]);
-
-  if (!dossier) return null;
-  const t = dossier.track ?? {};
-  const rows: JSX.Element[] = [];
-  if (t.profile) rows.push(<KVRow key="prof" k="Profile" v={t.profile} />);
-  if (t.track_minutes != null) rows.push(<KVRow key="dur" k="Track" v={`${Math.round(t.track_minutes)} min`} />);
-  if (t.distance_km != null)
-    rows.push(<KVRow key="dist" k="Distance" v={`${Math.round(t.distance_km).toLocaleString()} km`} />);
-  if (t.fixes != null) rows.push(<KVRow key="fix" k="Fixes" v={t.fixes} />);
-  if (t.gap_count != null && t.gap_count > 0)
-    rows.push(<KVRow key="gap" k="ADS-B gaps" v={t.gap_count} warn />);
-  if (!dossier.assessment && rows.length === 0) return null;
-  return (
-    <Widget title="Pattern of life">
-      {dossier.assessment && <p className="text-[11px] text-txt-1 leading-snug mb-2">{dossier.assessment}</p>}
-      {rows.length > 0 && <KV>{rows}</KV>}
-      {dossier.gnss_degraded && (
-        <div className="mt-1.5">
-          <Badge tone="warn">GNSS degraded</Badge>
-        </div>
-      )}
     </Widget>
   );
 }

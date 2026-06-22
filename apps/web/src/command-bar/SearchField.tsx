@@ -98,6 +98,21 @@ export function SearchField({ viewer }: Props): JSX.Element {
       setActive((a) => Math.max(a - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
+      const LATLON_RE = /^\s*(-?\d+(?:\.\d+)?)\s*[,/\s]\s*(-?\d+(?:\.\d+)?)\s*$/;
+      const m = q.match(LATLON_RE);
+      if (m && m[1] && m[2]) {
+        const lat = parseFloat(m[1]);
+        const lon = parseFloat(m[2]);
+        if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+          // A valid coordinate is fully handled here — fly if we have a viewer,
+          // and ALWAYS return so it never falls through to pick a coincidental
+          // result for a coordinate-looking string.
+          if (viewer) flyToPosition(viewer, lon, lat, 200_000, 1.2);
+          setOpen(false);
+          setQ('');
+          return;
+        }
+      }
       const r = results[active];
       if (r) pick(r);
     } else if (e.key === 'Escape') {

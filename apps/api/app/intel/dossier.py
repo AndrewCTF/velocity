@@ -27,8 +27,8 @@ from app.intel.geo import bbox_from_radius, haversine_km, vessel_category
 _RETENTION_S = 3600.0
 _GAP_S = 600.0          # >10 min between fixes counts as a track gap
 _MIN_DT_FOR_SPEED = 30.0  # ignore sub-30s deltas for the displacement avg
-_MIN_SEG_DT_S = 5.0     # peak floor: shorter deltas divide dist by ~0 → absurd kn
-_MAX_PLAUSIBLE_KN = 1200.0  # drop spoof/jump artifacts above any real aircraft
+_MIN_SEG_DT_S = 30.0    # peak floor + PRIMARY desync guard: a <30s cross-source position desync (~3km) computes to a bogus >1000kn; a real 30s segment does not
+_MAX_PLAUSIBLE_KN = 1000.0  # teleport/desync ceiling — above any real ground speed (incl supersonic mil dash ~700-900kn) but below cross-continent jumps; kept high so genuine fast-jet peaks (the high-interest contacts) are NOT clipped to ~600
 _KM_S_TO_KN = 1943.84
 
 # How far back the dossier reaches into the SQLite positions DB (history.py).
@@ -164,12 +164,12 @@ def _track_stats(pts: list[Observation]) -> dict[str, Any]:
                 "lon": round(a.lon, 4), "lat": round(a.lat, 4),
             })
         # Per-segment instantaneous speed (for the max / dash detection): the
-        # peak over time-ordered consecutive pairs. Gate on _MIN_SEG_DT_S (NOT
-        # the stricter 30s avg guard, which is too coarse for a real peak): a
-        # near-zero dt (duplicate/near-simultaneous fixes, or a spoofed position
-        # jump on a GNSS-degraded aircraft) divides distance by ~0 and reports
-        # absurd 6-figure kn. Also drop physically impossible speeds so a single
-        # spoof jump can't define the max.
+        # peak over time-ordered consecutive pairs. Gate on _MIN_SEG_DT_S=30s:
+        # a cross-source position desync of ~3 km over a 5s boundary computes
+        # to >1000 kn even though both fixes are valid. 30s is the same floor
+        # as the displacement avg, so a real fast-jet peak still surfaces. Also
+        # drop physically impossible speeds so a single spoof jump can't define
+        # the max.
         if dt >= _MIN_SEG_DT_S:
             spd = (d / dt) * _KM_S_TO_KN
             if spd <= _MAX_PLAUSIBLE_KN:

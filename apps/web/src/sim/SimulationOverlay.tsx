@@ -253,7 +253,7 @@ export function SimulationOverlay({
   const ready = ptA != null && ptB != null;
 
   return (
-    <div className="absolute top-12 left-3 md:left-[304px] z-[1400] w-[300px] max-h-[calc(100%-6rem)] overflow-y-auto pointer-events-auto space-y-2.5">
+    <div className="absolute top-12 left-3 md:left-[304px] z-[1400] w-[300px] max-h-[calc(100%-6rem)] overflow-y-auto pointer-events-auto space-y-2.5 rounded-md border border-line bg-bg-0/90 backdrop-blur-sm p-2 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]">
       <Widget
         title="Simulation"
         action={
@@ -406,7 +406,7 @@ export function SimulationOverlay({
       {clock.stats && (
         <Widget title="Link / EW status">
           <KV>
-            <KVRow k="Airborne" v={clock.stats.airborne} />
+            <KVRow k={isSwarm && count > RENDER_AGENT_CAP ? 'Airborne (rendered / total)' : 'Airborne'} v={isSwarm && count > RENDER_AGENT_CAP ? `${clock.stats.airborne} / ${count}` : clock.stats.airborne} />
             <KVRow k="Struck target" v={clock.stats.struck} warn />
             <KVRow k="Intercepted (SAM)" v={clock.stats.intercepted} />
             <KVRow k="Link lost / EW" v={clock.stats.linkLost} />

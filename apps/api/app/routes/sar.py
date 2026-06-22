@@ -53,8 +53,11 @@ async def lod1_buildings(
                 raise ValueError("need 4 comma-separated numbers")
             box = lod1.normalize_bbox(parts)
         except ValueError as e:
-            raise HTTPException(400, f"bad bbox: {e}") from None
-        return await lod1.build_bbox(box)
+            raise HTTPException(422, f"bad bbox: {e}") from None
+        try:
+            return await lod1.build_bbox(box)
+        except RuntimeError as e:
+            raise HTTPException(503, f"upstream unavailable: {e}") from None
 
     if not cdse.available():
         raise HTTPException(503, "cdse credentials not configured")

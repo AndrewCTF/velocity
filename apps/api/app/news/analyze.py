@@ -39,8 +39,8 @@ _SUMMARY_TRUNC = 200
 _MAX_EVENTS = 8
 _MAX_REFINED_EVENTS = 5  # how many top events get a dedicated per-event pass
 _EVENT_CTX_HEADLINES = 40  # headlines handed to a per-event refine step
-_AGENT_BUDGET_S = 150.0  # total wall-clock for the whole multi-step loop
-_STEP_TIMEOUT_S = 60.0  # per per-event LLM step
+_AGENT_BUDGET_S = 80.0  # total wall-clock for the whole multi-step loop
+_STEP_TIMEOUT_S = 25.0  # per per-event LLM step
 _VERIFIED_MIN_SOURCES = 2  # a verified fact needs >=2 distinct outlets
 
 # Words that signal a statement is a promise / prediction / opinion rather than
@@ -585,7 +585,10 @@ async def analyze(articles: list[Article]) -> dict[str, Any]:
         return _degraded(res.error or "model returned non-JSON")
     if not candidate_events:
         # Model reachable but gave no usable clustering — fall back to one shot.
-        single = await _single_shot(payload, articles)
+        try:
+            single = await asyncio.wait_for(_single_shot(payload, articles), timeout=70.0)
+        except TimeoutError:
+            single = None
         return single if single is not None else _degraded(res.error or "no events")
 
     # ── Step 2: per-event debias + corroborate (bounded, time-boxed) ───────
@@ -619,6 +622,8 @@ async def factcheck(
     context_headlines: list[str] | None = None,
     *,
     fast: bool = False,
+    as_of: str | None = None,
+    bbox: tuple[float, float, float, float] | None = None,
 ) -> dict[str, Any]:
     """Adjudicate a single free-text claim. Degrades on LLM failure.
 
@@ -626,6 +631,11 @@ async def factcheck(
     quick first-look verdict — the reasoner tier (default) is slow (~tens of
     seconds) for an interactive operator. Same prompt + same strict-JSON
     coercion either way; only the model id differs.
+
+    ``as_of`` — optional ISO-8601 / human timestamp string; when given, prepended
+    to the user prompt so the model scopes its reasoning to that time.
+    ``bbox`` — optional ``(west, south, east, north)`` bounding box; when given,
+    prepended so the model scopes its geographic reasoning.
     """
     claim = (claim or "").strip()
     if not claim:
@@ -637,11 +647,18 @@ async def factcheck(
             "confidence": 0.0,
         }
 
+    scope_lines: list[str] = []
+    if as_of:
+        scope_lines.append(f"As of: {as_of}")
+    if bbox is not None:
+        scope_lines.append(f"Geographic scope: bbox={bbox}")
+    scope_prefix = ("\n".join(scope_lines) + "\n\n") if scope_lines else ""
+
     ctx = ""
     if context_headlines:
         joined = "\n".join(f"- {h}" for h in context_headlines[:_MAX_HEADLINES])
         ctx = f"\n\nContext headlines:\n{joined}"
-    user = f"Claim: {claim}{ctx}\n\nReturn the strict JSON verdict object."
+    user = f"{scope_prefix}Claim: {claim}{ctx}\n\nReturn the strict JSON verdict object."
 
     parsed, res = await llm.chat_json(
         [

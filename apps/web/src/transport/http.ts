@@ -5,7 +5,7 @@
 //   2. A static VITE_API_KEY (X-API-Key) — legacy/dev fallback.
 // When neither is present it behaves like plain fetch (keyless local dev).
 
-import { getAccessToken, supabase } from './supabase.js';
+import { getAccessToken, getAccessTokenAsync, supabase } from './supabase.js';
 
 function readKey(): string | null {
   // Vite exposes import.meta.env at runtime via the bundler.
@@ -20,13 +20,16 @@ function readKey(): string | null {
 
 const API_KEY = readKey();
 
-// The cached token may be null for the first few calls right after load (the
-// session resolves asynchronously). Fall back to an awaited getSession() so the
-// very first authed request doesn't 401 before the cache warms.
+// The cached token is null for the first few calls right after load (the
+// session resolves asynchronously) — six authed boot calls otherwise raced the
+// bridge and 401'd on first paint. Await getAccessTokenAsync(), which blocks on
+// the initial getSession() settling, so EVERY apiFetch carries the Bearer once
+// it exists. Logged-out resolves null and the request proceeds keyless.
 async function bearerToken(): Promise<string | null> {
-  const cached = getAccessToken();
-  if (cached) return cached;
+  const settled = await getAccessTokenAsync();
+  if (settled) return settled;
   if (!supabase) return null;
+  // Secondary net: a refresh in flight may have cleared the cache momentarily.
   try {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token ?? null;
@@ -58,4 +61,11 @@ export function withWsKey(url: string): string {
 
 export function hasApiKey(): boolean {
   return API_KEY != null || getAccessToken() != null;
+}
+
+// Whether a static VITE_API_KEY is present (independent of any Supabase
+// session). AlertSubscriber uses this to decide, once auth has settled, whether
+// there's *any* credential to attempt a /ws/alerts upgrade with.
+export function hasStaticApiKey(): boolean {
+  return API_KEY != null;
 }

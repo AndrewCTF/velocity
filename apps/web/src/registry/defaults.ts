@@ -426,6 +426,24 @@ export const defaultLayers: readonly LayerDescriptor[] = [
   // because the route default is only 2000. Starlink is capped at MAX_SATS
   // (4000) in the adapter — the title makes no completeness claim.
   {
+    // Notional MIL-STD-2525 Common Operational Picture — illustrative ground
+    // laydown (units + FLOT lines + AO ring). Rendered by MilSymbolAdapter in
+    // its own CustomDataSource; off by default. Data is notional, not a feed.
+    id: 'mil.cop.notional',
+    group: 'reference',
+    title: 'COP — Notional units (MIL-STD-2525)',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: 'notional://cop',
+    refresh: { mode: 'static' },
+    time: { temporal: false },
+    crs: 'EPSG:4326',
+    license: 'Notional / illustrative',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['event'],
+  },
+  {
     id: 'space.celestrak.stations',
     group: 'space',
     title: 'Satellites — Space stations (ISS)',

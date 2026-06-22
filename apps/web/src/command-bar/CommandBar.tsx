@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { useFeeds, useAlerts, useImagery, useConnection, useSim, type WsStatus } from '../state/stores.js';
 import { useAoi } from '../state/aoi.js';
+import { useUiMode, type UiMode } from '../state/uiMode.js';
 import { AoiSelector } from './AoiSelector.js';
 import { SearchField } from './SearchField.js';
 import { flyToChokepoint, flyToGlobal } from '../globe/camera.js';
 import type { Chokepoint } from '../registry/chokepoints.js';
-import { Brand, StatusDot } from '../shell/instruments.js';
+import { Brand, StatusDot, Caveat } from '../shell/instruments.js';
 import { useAgent } from '../state/agent.js';
 import { apiFetch } from '../transport/http.js';
 
@@ -23,7 +24,9 @@ interface Props {
 }
 
 // Each top-level cell: full height, hairline right divider, tight padding.
-const CELL = 'h-full flex items-center gap-2 px-3 border-r border-line';
+// px-2 (not px-3) so the full control row fits common laptop widths without the
+// bar overflowing → no horizontal scrollbar on the top nav.
+const CELL = 'h-full flex items-center gap-2 px-2 border-r border-line';
 
 export function CommandBar({
   viewer,
@@ -80,6 +83,13 @@ export function CommandBar({
         <SimToggle />
       </div>
 
+      {/* workspace modes — Tasking / Targeting / FMV open as large surfaces over
+          the globe (not crammed peer tabs). Condensed-label voice marks them as
+          MODE switches, distinct from the context tabs in the right rail. */}
+      <div className={CELL}>
+        <ModeToggles />
+      </div>
+
       {/* alert ticker — top alert in newest-first buffer; click opens panel.
           flex-1 so it spans the gap between the controls and the right cluster. */}
       <div className={`${CELL} flex-1 min-w-0`}>
@@ -104,26 +114,25 @@ export function CommandBar({
         </span>
       </div>
 
-      {/* classification banner */}
+      {/* data-posture caveat — classification marking + the live data posture.
+          When SIM mode is on the globe mixes in notional contacts, so the strip
+          flips to a SIMULATED warning; otherwise it marks the keyless open-source
+          feed posture. Reads only client-observable state (no fabricated tier). */}
       <div className={CELL}>
-        <span className="mono text-[10px] tracking-[0.5px] uppercase px-2 py-0.5 border border-line rounded-sm text-txt-1">
-          {classification}
-        </span>
+        <PostureCaveat classification={classification} />
       </div>
 
-      {/* feed-health cluster */}
-      <div className={CELL} role="status" aria-label="Feed health">
+      {/* feed-health cluster — dots only (labels live in the Map-health strip +
+          the hover title); kept compact so the bar never overflows the viewport. */}
+      <div className={`${CELL} gap-1.5 min-w-0`} role="status" aria-label="Feed health">
         {feedList.length === 0 && <span className="micro">no feeds</span>}
         {feedList.map((f) => (
           <span
             key={f.id}
-            className="flex items-center gap-1.5"
+            className="flex items-center"
             title={`${f.label}\nstatus: ${f.status}${f.lastSeen ? `\nlast: ${new Date(f.lastSeen).toISOString().slice(11, 19)}Z` : ''}`}
           >
             <StatusDot tone={f.status} />
-            <span className="mono text-[9px] tracking-[0.4px] uppercase text-txt-2 hidden xl:inline">
-              {shortLabel(f.label)}
-            </span>
           </span>
         ))}
       </div>
@@ -137,8 +146,21 @@ export function CommandBar({
   );
 }
 
-function shortLabel(s: string): string {
-  return s.split(' ')[0] ?? s;
+/**
+ * Data-posture caveat strip. Replaces the bare classification pill with the
+ * shared <Caveat/> primitive, surfacing not just the marking but the live data
+ * posture. Both signals are client-observable — no fabricated commercial tier:
+ *  - SIM active → the globe carries NOTIONAL sim contacts, so mark the whole
+ *    picture "// SIMULATED" in warn tone with a "notional contacts" note.
+ *  - SIM off    → live open-source feeds (ADS-B/AIS/quakes are keyless here),
+ *    marked neutral with a "keyless OSINT" posture note.
+ */
+function PostureCaveat({ classification }: { classification: string }): JSX.Element {
+  const simActive = useSim((s) => s.active);
+  if (simActive) {
+    return <Caveat level={`${classification} // SIMULATED`} note="notional contacts" tone="warn" />;
+  }
+  return <Caveat level={classification} note="keyless OSINT" tone="neutral" />;
 }
 
 /**
@@ -179,7 +201,7 @@ function AgentIndicator(): JSX.Element {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      title="Open the Velocity analyst console (⌘K)"
+      title="Open the Velocity analyst console (⌘J)"
       aria-label="Open analyst console"
       className="flex items-center gap-2 mono text-[9px] tracking-[0.5px] text-accent hover:text-txt-0"
     >
@@ -319,6 +341,46 @@ function ImageryToggle({
       <span aria-hidden="true" className="mr-1">{on ? '◆' : '◇'}</span>
       3D sat
     </button>
+  );
+}
+
+/**
+ * Workspace mode switches — Tasking / Targeting / FMV. Each opens a large
+ * surface over the globe (bottom dock / left dock / centered sensor window) via
+ * the useUiMode store; clicking the active one closes it. Condensed-label voice.
+ */
+function ModeToggles(): JSX.Element {
+  const mode = useUiMode((s) => s.mode);
+  const toggle = useUiMode((s) => s.toggle);
+  const items: Array<[NonNullable<UiMode>, string]> = [
+    ['tasking', 'Tasking'],
+    ['targeting', 'Targets'],
+    ['fmv', 'FMV'],
+    ['cop', 'COP'],
+  ];
+  return (
+    <div className="flex items-center gap-1">
+      {items.map(([m, label]) => {
+        const on = mode === m;
+        return (
+          <button
+            key={m}
+            type="button"
+            onClick={() => toggle(m)}
+            aria-pressed={on}
+            title={`Open the ${label} workspace`}
+            className={[
+              'font-label text-[10px] tracking-[0.7px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
+              on
+                ? 'border-accent-line text-accent bg-accent-dim'
+                : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
+            ].join(' ')}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

@@ -60,6 +60,31 @@ def _resolved_db_path() -> str:
     return get_settings().history_db_path
 
 
+def _clamped_retention_hours() -> int:
+    """Effective time-prune window, clamped so retention stays bounded.
+
+    Retention is operator-tunable (``history_retention_hours``) to lift replay
+    beyond the old ~24 h live window — multi-day scrub — but it must stay
+    bounded: a fat-fingered env var (e.g. 1_000_000) would otherwise let the DB
+    grow until only the byte cap reins it in, much later. We clamp into
+    ``[1, history_retention_max_hours]``. A ceiling of 0 disables the upper
+    bound (the byte cap is then the only limit), but the floor of 1 always
+    holds so the prune cutoff is never in the future / non-positive.
+
+    NOTE: this is a *time* bound only. The byte cap (``enforce_size_cap`` +
+    ``_vacuum``) is the binding storage limit and is unchanged; raising the
+    hour window never removes the cap.
+    """
+    settings = get_settings()
+    hours = int(settings.history_retention_hours)
+    ceiling = int(settings.history_retention_max_hours)
+    if hours < 1:
+        hours = 1
+    if ceiling > 0 and hours > ceiling:
+        hours = ceiling
+    return hours
+
+
 def _connect() -> sqlite3.Connection:
     path = _resolved_db_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -201,7 +226,7 @@ async def _flush_loop() -> None:
         if time.time() >= next_prune:
             next_prune = time.time() + _PRUNE_INTERVAL_S
             settings = get_settings()
-            hours = settings.history_retention_hours
+            hours = _clamped_retention_hours()
             deleted = await loop.run_in_executor(None, prune, hours)
             deleted += await loop.run_in_executor(
                 None, enforce_size_cap, settings.history_max_bytes
@@ -396,7 +421,12 @@ async def stop() -> None:
 
 
 def stats() -> dict[str, Any]:
-    """Return diagnostics dict."""
+    """Return diagnostics dict.
+
+    ``retention_hours`` is the *effective* (clamped) time-prune window, so the
+    frontend can bound the replay date-picker to what's actually retained
+    rather than the raw, possibly-out-of-range setting.
+    """
     settings = get_settings()
     return {
         "enabled": settings.history_enabled,
@@ -404,4 +434,7 @@ def stats() -> dict[str, Any]:
         "buffered": len(_buffer),
         "rows_written": _rows_written,
         "task_running": _flush_task is not None and not _flush_task.done(),
+        "retention_hours": _clamped_retention_hours(),
+        "retention_max_hours": int(settings.history_retention_max_hours),
+        "max_bytes": int(settings.history_max_bytes),
     }

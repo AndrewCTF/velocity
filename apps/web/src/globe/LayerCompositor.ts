@@ -9,6 +9,7 @@ import { PollGeoJsonAdapter, type StyleKind } from './adapters/PollGeoJsonAdapte
 import { AisWsAdapter } from './adapters/AisWsAdapter.js';
 import { CablesAdapter } from './adapters/CablesAdapter.js';
 import { SatelliteAdapter } from './adapters/SatelliteAdapter.js';
+import { MilSymbolAdapter } from './adapters/MilSymbolAdapter.js';
 
 // AOI-aware bbox helper used by all adapters that accept a bbox query.
 function aoiBboxQuery(): string | null {
@@ -219,6 +220,11 @@ export class LayerCompositor {
   }
 
   private makeAdapter(d: LayerDescriptor, ctx: AdapterCtx): LayerAdapter | null {
+    // MIL-STD-2525 COP overlay — self-contained CustomDataSource, dispatched by
+    // id so it never reaches the geojson/aircraft styling path (icon guardrail).
+    if (d.id.startsWith('mil.cop.')) {
+      return new MilSymbolAdapter({ ctx });
+    }
     // websocket layers
     if (d.kind === 'websocket' && d.id === 'maritime.aisstream') {
       const adapter = new AisWsAdapter({ ctx, url: d.endpoint });

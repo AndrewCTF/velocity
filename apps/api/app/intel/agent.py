@@ -21,9 +21,10 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from app import llm
-from app.intel import analytics, baseline, deception, dossier, emitter, incidents
+from app.intel import actions, analytics, baseline, deception, dossier, emitter, incidents
 from app.intel.geo import BBox, bbox_from_radius
 from app.intel.incident_store import incident_store
+from app.keys import UserCtx
 
 # ── tool registry — each maps to a REAL live-intel function ──────────────────
 
@@ -268,13 +269,141 @@ TOOLS: dict[str, tuple[str, ToolFn]] = {
     ),
 }
 
+# ── write-back actions + app control (Track C6) ──────────────────────────────
+# Two ADDITIVE tool families on top of the read-only TOOLS above:
+#
+#   • ACTION tools — governed write-back. Each dispatches through
+#     ``intel/actions.dispatch`` (validate params → mutate the ontology → fire a
+#     side effect → append an ``action_log`` audit row). The agent NEVER mutates
+#     state any other way: every write is the SAME audited path the /api/actions
+#     route uses. Requires a signed-in user (a UserCtx); keyless runs see the
+#     tools but get a "sign-in required" observation instead of a mutation.
+#
+#   • CONTROL tools — drive the operator's client (camera / filter / selection)
+#     by emitting a NEW ``app_var`` SSE event the loop forwards verbatim. These
+#     do NOT touch the backend or the ontology — purely a view nudge.
+#
+# Both are surfaced to the model in the tool catalog, but they are dispatched on
+# a separate path in the loop (not the read-only ``ToolFn`` signature), because
+# an action needs the UserCtx + emits extra events (action / app_var).
+
+# Action name → the one-line description the model sees. The param schema is the
+# action's own Pydantic model (intel/actions.py), advertised via list_actions().
+_ACTION_DESCRIPTIONS: dict[str, str] = {
+    "flag_entity": (
+        "Flag a specific object (an aircraft:<icao24>, vessel:<mmsi>, or "
+        "incident:<id>) with an analyst note + severity 1-5. Args: target_id(str), "
+        "note(str), severity(int 1-5). AUDITED write-back."
+    ),
+    "promote_incident": (
+        "Promote an object to a tracked incident node in the ontology. Args: "
+        "target_id(str), title(str), note(str). AUDITED write-back."
+    ),
+    "nominate_target": (
+        "Add an object to the F2T2EA target board for tracking. Args: target_id(str), "
+        "priority(int 1-5), note(str). AUDITED write-back."
+    ),
+    "add_watch": (
+        "Create a standing geofence watch (alert rule) over an area. Args: "
+        "target_id(str), label(str), lat, lon, radius_nm, kinds(list[str]), "
+        "min_severity(int 1-5). AUDITED write-back."
+    ),
+}
+
+# The action names the agent may invoke — exactly the registered ActionSpecs.
+ACTION_TOOLS: frozenset[str] = frozenset(_ACTION_DESCRIPTIONS)
+
+# Control tools — drive the client via an app_var event (no backend mutation).
+CONTROL_TOOLS: dict[str, str] = {
+    "control_view": (
+        "Drive the operator's MAP to show what you found — no data change, just a "
+        "view nudge. Args (all optional, send what's relevant): "
+        'fly_to({"lat":..,"lon":..,"alt_m":..}) to slew the camera; '
+        'select(object_id) to select+highlight one entity (an aircraft:/vessel:/'
+        'incident: id); filter({"facet":"aircraftCategory|vesselType|altBucket|'
+        'flag|squawk","value":"<bucket>","mode":"only|not"}) to focus the layer on '
+        'a category, or filter({"clear":true}) to drop all filters. Use this to '
+        "POINT the operator at the asset/area your analysis is about."
+    ),
+    "request_clarification": (
+        "Ask the operator ONE focused question when the request is ambiguous and you "
+        "cannot proceed safely (e.g. which of two flights, or confirm before a "
+        "write-back). Args: question(str), options(list[str], optional). This STOPS "
+        "the loop and hands control back to the operator — use sparingly."
+    ),
+}
+
+
 _MAX_STEPS = 6
 _WALL_BUDGET_S = 240.0
 _OBS_CHARS = 1800
 
 
-def _tool_catalog() -> str:
-    return "\n".join(f"- {name}: {desc}" for name, (desc, _) in TOOLS.items())
+def _tool_catalog(*, with_actions: bool) -> str:
+    """The tool menu shown to the model. Read-only tools always; the write-back
+    actions + control tools are appended only when an authenticated user is
+    present (``with_actions``) so a keyless run is never told it can mutate."""
+    lines = [f"- {name}: {desc}" for name, (desc, _) in TOOLS.items()]
+    lines += [f"- {name}: {desc}" for name, desc in CONTROL_TOOLS.items()]
+    if with_actions:
+        lines += [f"- {name}: {desc}" for name, desc in _ACTION_DESCRIPTIONS.items()]
+    return "\n".join(lines)
+
+
+def _app_var_from_control(args: dict[str, Any]) -> dict[str, Any] | None:
+    """Translate a ``control_view`` tool call into the payload of an ``app_var``
+    SSE event the client consumes. Returns None if nothing actionable was asked.
+
+    Shape (all keys optional): ``fly_to {lat,lon,alt_m?}`` · ``select <id>`` ·
+    ``filter {facet,value,mode}`` | ``filter {clear:true}``. Everything is
+    validated/clamped here so a hallucinated field can never reach the client as
+    a crash — bad pieces are dropped, not raised.
+    """
+    out: dict[str, Any] = {}
+
+    ft = args.get("fly_to")
+    if isinstance(ft, dict):
+        lat, lon = ft.get("lat"), ft.get("lon")
+        try:
+            if lat is not None and lon is not None:
+                la, lo = float(lat), float(lon)
+                if -90.0 <= la <= 90.0 and -180.0 <= lo <= 180.0:
+                    fly: dict[str, Any] = {"lat": la, "lon": lo}
+                    alt = ft.get("alt_m")
+                    if alt is not None:
+                        fly["alt_m"] = max(1000.0, min(float(alt), 40_000_000.0))
+                    out["fly_to"] = fly
+        except (TypeError, ValueError):
+            pass
+
+    sel = args.get("select")
+    if isinstance(sel, str) and sel.strip():
+        out["select"] = sel.strip()[:200]
+
+    flt = args.get("filter")
+    if isinstance(flt, dict):
+        if flt.get("clear"):
+            out["filter"] = {"clear": True}
+        else:
+            facet = flt.get("facet")
+            value = flt.get("value")
+            mode = flt.get("mode", "only")
+            valid_facets = {
+                "altBucket", "aircraftCategory", "vesselType", "flag", "squawk",
+            }
+            if (
+                isinstance(facet, str)
+                and facet in valid_facets
+                and isinstance(value, str)
+                and value.strip()
+            ):
+                out["filter"] = {
+                    "facet": facet,
+                    "value": value.strip()[:60],
+                    "mode": "not" if mode == "not" else "only",
+                }
+
+    return out or None
 
 
 _SYS = (
@@ -297,6 +426,17 @@ _SYS = (
     "- Drill into incidents (use a relevant incident centroid for lat/lon), locate emitters, or "
     "cross-check news ONLY when the question is about threats/incidents — not about one named "
     "asset.\n\n"
+    "BESIDES the read-only tools you also have CONTROL + WRITE-BACK tools:\n"
+    "- control_view — POINT the operator's map at what you found: fly the camera, select an "
+    "entity, or filter the layer to a category. Call it once you know WHERE the answer is, so "
+    "the operator sees it. This changes the VIEW only, never the data.\n"
+    "- request_clarification — when the request is genuinely ambiguous (two matching flights, a "
+    "destructive write-back you should confirm), ask ONE question and stop.\n"
+    "- flag_entity / promote_incident / nominate_target / add_watch — AUDITED write-backs that "
+    "change tracked state. Call these ONLY when the operator explicitly asks to flag / promote / "
+    "nominate / watch something (verbs like 'flag', 'add to the target board', 'watch', "
+    "'promote'). NEVER write back on a read-only question. Every write is logged with your "
+    "user id. If the operator did not ask for a change, do NOT call them.\n\n"
     "On each turn reply with ONE JSON object, nothing else:\n"
     '  call a tool:    {{"action":"tool","thought":"<one line: why this tool now>",'
     '"say":"<1-2 plain sentences telling the operator what you see and what you are checking>",'
@@ -374,10 +514,21 @@ def _scope_label(bbox: BBox | None) -> str:
     return "global" if bbox is None else "scoped AOI"
 
 
-async def run_agent(q: str, bbox: BBox | None) -> AsyncIterator[dict[str, Any]]:
+async def run_agent(
+    q: str, bbox: BBox | None, ctx: UserCtx | None = None
+) -> AsyncIterator[dict[str, Any]]:
     """Yield the live agent trace as events: thinking | tool_call | tool_result |
-    final | error | done. The route serialises each as an SSE frame."""
+    action | app_var | clarification | final | error | done. The route serialises
+    each as an SSE frame.
+
+    ``ctx`` is the signed-in user (``keys.UserCtx``) when one resolved. It gates the
+    AUDITED write-back tools: with a user, ``flag_entity`` & co. dispatch through
+    ``intel/actions.dispatch`` (mutate + ``action_log`` row); without one the tools
+    are hidden from the catalog and a stray call gets a "sign-in required"
+    observation. The read-only tools + the control tools work either way.
+    """
     t0 = time.monotonic()
+    can_act = ctx is not None
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     backend: str | None = None
     model: str | None = None
@@ -448,7 +599,7 @@ async def run_agent(q: str, bbox: BBox | None) -> AsyncIterator[dict[str, Any]]:
            "text": _narrate_brief(brief, changes, news_compact, _scope_label(bbox))}
 
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": _SYS.format(catalog=_tool_catalog())},
+        {"role": "system", "content": _SYS.format(catalog=_tool_catalog(with_actions=can_act))},
         {
             "role": "user",
             "content": json.dumps(
@@ -513,9 +664,118 @@ async def run_agent(q: str, bbox: BBox | None) -> AsyncIterator[dict[str, Any]]:
             name = str(parsed.get("tool") or "")
             args = parsed.get("args") if isinstance(parsed.get("args"), dict) else {}
             thought = str(parsed.get("thought") or "")
+
+            # ── control tools: drive the client, no backend mutation ──────────
+            if name == "request_clarification":
+                question = str(args.get("question") or "").strip()
+                opts = args.get("options")
+                options = [str(o) for o in opts][:6] if isinstance(opts, list) else []
+                yield {
+                    "type": "tool_call", "step": step, "tool": name,
+                    "args": args, "thought": thought,
+                }
+                yield {
+                    "type": "clarification", "step": step,
+                    "question": question or "Could you clarify the request?",
+                    "options": options,
+                }
+                # A clarification hands control back to the operator — end the run
+                # here (no synthesis): the next message is the operator's answer.
+                yield {
+                    "type": "done", "backend": backend, "model": model, "usage": usage,
+                    "latency_ms": round((time.monotonic() - t0) * 1000),
+                    "incident_count": brief.get("incident_count"),
+                    "signals_considered": brief.get("signals_considered"),
+                    "scope": _scope_label(bbox), "awaiting_clarification": True,
+                }
+                return
+
+            if name == "control_view":
+                yield {
+                    "type": "tool_call", "step": step, "tool": name,
+                    "args": args, "thought": thought,
+                }
+                payload = _app_var_from_control(args)
+                if payload is not None:
+                    yield {"type": "app_var", "step": step, **payload}
+                drove = [k for k in ("fly_to", "select", "filter") if payload and k in payload]
+                summary = " · ".join(drove) if drove else "no-op (nothing to drive)"
+                yield {
+                    "type": "tool_result", "step": step, "tool": name,
+                    "ms": 0, "summary": f"view → {summary}",
+                }
+                obs = {"applied": payload or {}}
+                messages.append(
+                    {"role": "user", "content": f"OBSERVATION ({name}): {json.dumps(obs)}"}
+                )
+                continue
+
+            # ── write-back actions: dispatch through the AUDITED path ─────────
+            if name in ACTION_TOOLS:
+                yield {
+                    "type": "tool_call", "step": step, "tool": name,
+                    "args": args, "thought": thought,
+                }
+                if not can_act:
+                    obs = {
+                        "error": "sign-in required: write-back actions need an "
+                        "authenticated user (the audit log records who acted)."
+                    }
+                    yield {
+                        "type": "tool_result", "step": step, "tool": name,
+                        "ms": 0, "summary": obs["error"],
+                    }
+                    messages.append(
+                        {"role": "user", "content": f"OBSERVATION ({name}): {json.dumps(obs)}"}
+                    )
+                    continue
+                tt = time.monotonic()
+                try:
+                    # ctx is non-None here (can_act); dispatch validates params,
+                    # mutates the ontology, fires the side effect, and appends the
+                    # action_log audit row — the SAME path /api/actions uses.
+                    receipt = await actions.dispatch(name, args, ctx)  # type: ignore[arg-type]
+                    ms = round((time.monotonic() - tt) * 1000)
+                    yield {
+                        "type": "action", "step": step, "action": name,
+                        "target_id": receipt.target_id, "ok": True,
+                        "audit": receipt.audit, "detail": receipt.detail,
+                    }
+                    yield {
+                        "type": "tool_result", "step": step, "tool": name,
+                        "ms": ms, "summary": f"{name} ✓ {receipt.target_id}",
+                    }
+                    obs = {"ok": True, "action": name, "target_id": receipt.target_id}
+                    messages.append(
+                        {"role": "user", "content": f"OBSERVATION ({name}): {json.dumps(obs)}"}
+                    )
+                    evidence.append(f"{name}({json.dumps(args)}) → {json.dumps(obs)}")
+                except Exception as exc:  # noqa: BLE001
+                    # A 400/404/502/503 (bad params / store down) is reported back to
+                    # the model as an observation; never crash the stream.
+                    detail = getattr(exc, "detail", None)
+                    msg = str(detail) if detail is not None else f"{type(exc).__name__}: {exc}"
+                    yield {
+                        "type": "action", "step": step, "action": name, "ok": False,
+                        "error": msg,
+                    }
+                    yield {
+                        "type": "tool_result", "step": step, "tool": name,
+                        "ms": round((time.monotonic() - tt) * 1000),
+                        "summary": f"{name} failed: {msg}"[:160],
+                    }
+                    err_obs = json.dumps({"error": msg})
+                    messages.append(
+                        {"role": "user", "content": f"OBSERVATION ({name}): {err_obs}"}
+                    )
+                continue
+
             tool = TOOLS.get(name)
             if tool is None:
-                obs = {"error": f"unknown tool '{name}'. Valid: {list(TOOLS)}"}
+                valid = list(TOOLS) + list(CONTROL_TOOLS) + (
+                    list(ACTION_TOOLS) if can_act else []
+                )
+                obs = {"error": f"unknown tool '{name}'. Valid: {valid}"}
                 yield {
                     "type": "tool_call", "step": step, "tool": name,
                     "args": args, "thought": thought,
@@ -573,7 +833,7 @@ async def run_agent(q: str, bbox: BBox | None) -> AsyncIterator[dict[str, Any]]:
         [{"role": "system", "content": _SYNTH_SYS}, {"role": "user", "content": synth_user}],
         tier="reason",
         max_tokens=1600,
-        timeout_s=160.0,
+        timeout_s=90.0,
     )
     backend = res_f.backend or backend
     model = res_f.model or model

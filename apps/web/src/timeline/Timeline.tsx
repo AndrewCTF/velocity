@@ -3,6 +3,7 @@ import type * as Cesium from 'cesium';
 import { useTime } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
 import { installHistoryPlayback, type PlaybackController, type PlaybackInfo } from '../globe/HistoryPlayback.js';
+import { usePolReplay } from '../state/polReplayStore.js';
 import { MicroLabel } from '../shell/instruments.js';
 
 interface Props {
@@ -14,8 +15,25 @@ const REPLAY_WINDOWS = [
   { label: '1h', sec: 3600 },
   { label: '6h', sec: 21_600 },
   { label: '24h', sec: 86_400 },
+  { label: '3d', sec: 259_200 },
+  { label: '7d', sec: 604_800 },
 ] as const;
 const POLL_MS = 5_000;
+const DAY_SEC = 86_400;
+const HOUR_SEC = 3_600;
+// Fallback retention until /api/history/stats answers — matches the config
+// default (history_retention_hours = 168 → 7 days). The real value (clamped
+// server-side) replaces this so the day-picker only offers retained days.
+const DEFAULT_RETENTION_HOURS = 168;
+
+// "YYYY-MM-DD" in UTC for an epoch-ms instant (the store + globe are UTC).
+function isoDay(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+// Midnight UTC (epoch seconds) at the start of a "YYYY-MM-DD" day string.
+function dayStartSec(day: string): number {
+  return Date.parse(`${day}T00:00:00Z`) / 1000;
+}
 
 interface Density {
   from: number;
@@ -37,6 +55,12 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
   // Historical playback (replay recorded tracks for the current view).
   const playbackRef = useRef<PlaybackController | null>(null);
   const [replayWindow, setReplayWindow] = useState<number>(3600);
+  // Multi-day scrub: when a past day is picked we replay THAT day (00:00→24h,
+  // or 00:00→now for today). Empty string = use the rolling-window presets.
+  const [replayDay, setReplayDay] = useState<string>('');
+  // Effective (clamped) retention from /api/history/stats — bounds how far the
+  // day-picker can reach so we never offer to replay already-pruned days.
+  const [retentionHours, setRetentionHours] = useState<number>(DEFAULT_RETENTION_HOURS);
   const [replay, setReplay] = useState<{ active: boolean; loading: boolean; info: PlaybackInfo | null }>(
     { active: false, loading: false, info: null },
   );
@@ -52,6 +76,53 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
     };
   }, [viewer]);
 
+  // Learn the effective retention window so the day-picker only offers days
+  // that are actually retained (history.py clamps + self-caps; stats() reports
+  // the clamped value). Degrades silently to the config default on error.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await apiFetch('/api/history/stats');
+        if (!r.ok) return;
+        const s = (await r.json()) as { retention_hours?: number };
+        if (!cancelled && typeof s.retention_hours === 'number' && s.retention_hours > 0) {
+          setRetentionHours(s.retention_hours);
+        }
+      } catch {
+        /* keep the default */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Earliest retained day (UTC) and today — bounds for the <input type="date">.
+  const nowMs = Date.now();
+  const minDay = isoDay(nowMs - retentionHours * HOUR_SEC * 1000);
+  const maxDay = isoDay(nowMs);
+
+  // Pattern-of-life: EntityPanel's "Pattern of life" button bumps polSeq → replay
+  // just that entity's recorded track (+ dwell clusters) on the timeline clock.
+  const polSeq = usePolReplay((s) => s.seq);
+  useEffect(() => {
+    if (polSeq === 0) return;
+    const ctrl = playbackRef.current;
+    if (!ctrl) return;
+    const { targetId, windowSec } = usePolReplay.getState();
+    void (async () => {
+      if (!targetId) {
+        ctrl.clear();
+        setReplay({ active: false, loading: false, info: null });
+        return;
+      }
+      setReplay((r) => ({ ...r, loading: true }));
+      const info = await ctrl.load(windowSec, targetId);
+      setReplay({ active: ctrl.isActive(), loading: false, info });
+    })();
+  }, [polSeq]);
+
   const toggleReplay = async (): Promise<void> => {
     const ctrl = playbackRef.current;
     if (!ctrl) return;
@@ -61,6 +132,31 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
       return;
     }
     setReplay((r) => ({ ...r, loading: true }));
+
+    // Day-scrub: replay the SELECTED day. The controller only exposes
+    // load(windowSec) = [now − windowSec, now], so to reach an older day we
+    // size the window back to that day's 00:00 UTC, load it, then jump the
+    // clock to the day's start (and stop the auto-advance at the day's end so
+    // the operator scrubs that day, not all of it → now). For "today" this is
+    // just 00:00→now, identical to the live window.
+    if (replayDay) {
+      const startSec = dayStartSec(replayDay);
+      const nowSec = Date.now() / 1000;
+      const windowSec = Math.max(60, Math.ceil(nowSec - startSec));
+      const info = await ctrl.load(windowSec);
+      // Position the playhead at the chosen day's 00:00 (real clock jump, same
+      // math the strip-click uses — no fabricated motion).
+      if (viewer && info) {
+        const dayEndMs = Math.min(nowMs, (startSec + DAY_SEC) * 1000);
+        jumpClockTo(viewer, startSec * 1000);
+        setStamp(isoStamp(startSec * 1000));
+        // Bound the loop to the single day so it doesn't run off into newer data.
+        viewer.clock.stopTime = msToJulian(dayEndMs);
+      }
+      setReplay({ active: ctrl.isActive(), loading: false, info });
+      return;
+    }
+
     const info = await ctrl.load(replayWindow);
     setReplay({ active: ctrl.isActive(), loading: false, info });
   };
@@ -224,13 +320,17 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
               <button
                 key={w.sec}
                 type="button"
-                onClick={() => setReplayWindow(w.sec)}
+                onClick={() => {
+                  setReplayDay('');
+                  setReplayWindow(w.sec);
+                }}
                 disabled={replay.active}
-                aria-pressed={replayWindow === w.sec}
+                aria-pressed={!replayDay && replayWindow === w.sec}
+                title={`Replay the last ${w.label} ending now`}
                 className={`mono text-[10px] px-1.5 py-1 disabled:opacity-40 ${
                   i > 0 ? 'border-l border-line' : ''
                 } ${
-                  replayWindow === w.sec
+                  !replayDay && replayWindow === w.sec
                     ? 'bg-accent-dim text-accent'
                     : 'bg-bg-2 text-txt-2 hover:text-txt-1'
                 }`}
@@ -239,6 +339,31 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
               </button>
             ))}
           </div>
+          {/* Day picker — scrub a specific past day (multi-day, not just the
+              live window). Bounded to the retained range so we never offer a
+              pruned day. Empty = use the rolling-window presets above. */}
+          <input
+            type="date"
+            value={replayDay}
+            min={minDay}
+            max={maxDay}
+            disabled={replay.active}
+            onChange={(e) => setReplayDay(e.target.value)}
+            aria-label="Replay a specific day"
+            title={`Replay a specific UTC day (retained back to ${minDay})`}
+            className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-none focus:border-accent-line disabled:opacity-40 [color-scheme:dark]"
+          />
+          {replayDay && !replay.active && (
+            <button
+              type="button"
+              onClick={() => setReplayDay('')}
+              aria-label="Clear day selection"
+              title="Back to rolling-window replay"
+              className="mono text-[10px] px-1 py-1 rounded-sm border border-line bg-bg-2 text-txt-3 hover:text-txt-1 hover:border-accent-line"
+            >
+              ✕
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void toggleReplay()}
@@ -259,9 +384,9 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
           )}
           <span
             className="mono text-[8.5px] uppercase tracking-[0.5px] text-txt-4"
-            title="Position history is a rolling buffer (~24h). Replay older than this is unavailable — no cold storage."
+            title={`Position history is a rolling, size-capped buffer (~${retentionDays(retentionHours)} retained, then oldest fixes drop). Replay older than this is unavailable — no cold storage.`}
           >
-            ~24h buffer
+            {retentionDays(retentionHours)} buffer
           </span>
         </div>
 
@@ -365,6 +490,12 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
   );
 }
 
+// Human label for the retained buffer depth (e.g. "~7d", "~36h").
+function retentionDays(hours: number): string {
+  if (hours >= 48) return `~${Math.round(hours / 24)}d`;
+  return `~${Math.round(hours)}h`;
+}
+
 function fmtClock(ms: number): string {
   const d = new Date(ms);
   const hh = String(d.getUTCHours()).padStart(2, '0');
@@ -380,10 +511,14 @@ function jdToMs(jd: Cesium.JulianDate): number {
   return (jd.dayNumber - 2440587) * 86400_000 + jd.secondsOfDay * 1000 - 0.5 * 86400_000;
 }
 
-function jumpClockTo(viewer: Cesium.Viewer, ms: number): void {
+function msToJulian(ms: number): Cesium.JulianDate {
   const seconds = ms / 1000;
   const dayNumber = 2440587 + Math.floor(seconds / 86400);
   const secondsOfDay = seconds - (dayNumber - 2440587) * 86400 + 0.5 * 86400;
-  viewer.clock.currentTime = { dayNumber, secondsOfDay } as Cesium.JulianDate;
+  return { dayNumber, secondsOfDay } as Cesium.JulianDate;
+}
+
+function jumpClockTo(viewer: Cesium.Viewer, ms: number): void {
+  viewer.clock.currentTime = msToJulian(ms);
   viewer.scene.requestRender();
 }

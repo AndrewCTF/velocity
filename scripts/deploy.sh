@@ -84,14 +84,17 @@ deploy_api() {
     systemctl restart velocity-api
     sleep 4
     printf "active:"; systemctl is-active velocity-api
-    for i in 1 2 3 4 5 6; do
-      c=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 http://127.0.0.1:8000/health || echo 000)
-      echo "health:$c"
-      [ "$c" != "000" ] && break
+    # Boot now BLOCKS on the airplanes+maritime pre-warm (lifespan await), so the
+    # socket can stay unborn ~15-25s after restart — poll patiently (~50s) before
+    # calling it down, else a healthy hot-boot reports a false 000.
+    for i in $(seq 1 25); do
+      c=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 http://127.0.0.1:8000/api/health || echo 000)
+      [ "$c" != "000" ] && { echo "health:$c"; break; }
       sleep 2
     done
+    [ "$c" = "000" ] && echo "health:000 (still warming or down — check journalctl -u velocity-api)"
   '
-  # health 401 == up (auth gate); 000 == not listening.
+  # health 200/401 == up (auth gate); 000 == not listening.
   echo "==> [api] done"
 }
 

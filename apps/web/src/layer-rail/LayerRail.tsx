@@ -11,23 +11,40 @@ interface Props {
   viewer: Cesium.Viewer | null;
 }
 
+// Gotham-style numbered folder labels. Each group maps to a display name;
+// the sequence number is derived from GROUP_ORDER position at render time.
 const GROUP_LABEL: Record<string, string> = {
-  maritime: 'Maritime',
-  aviation: 'Aviation',
-  hazards: 'Hazards',
-  news: 'Events & News',
-  infra: 'Infrastructure',
-  cyber: 'Cyber',
-  space: 'Space',
-  rf: 'RF / Signals',
-  env: 'Environment',
-  imagery: 'Imagery',
+  aviation:  'Aviation',
+  maritime:  'Maritime',
+  space:     'Space',
+  hazards:   'Hazards',
+  env:       'Environment',
+  news:      'OSINT / Events',
+  cyber:     'Cyber / Intel',
+  infra:     'Infrastructure',
+  rf:        'RF / Signals',
+  signals:   'Signals',
+  imagery:   'Imagery',
   reference: 'Reference',
-  seismic: 'Seismic',
-  signals: 'Signals',
+  seismic:   'Seismic',
 };
 
-const GROUP_ORDER = ['maritime', 'aviation', 'hazards', 'news', 'cyber', 'infra', 'space', 'rf', 'env', 'imagery', 'reference'];
+// Ordered as Gotham numbered groups: primary mission layers first.
+const GROUP_ORDER = [
+  'aviation',
+  'maritime',
+  'space',
+  'hazards',
+  'env',
+  'news',
+  'cyber',
+  'infra',
+  'rf',
+  'signals',
+  'imagery',
+  'reference',
+  'seismic',
+];
 
 // Status → colour class. Shared by the layer-row swatch (the only per-layer
 // colour we honestly have — there is NO per-layer category colour in the
@@ -145,6 +162,9 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
     return acc;
   }, {});
 
+  // Ordered group keys: GROUP_ORDER first (only those present), then any
+  // unrecognised groups appended at the end. This means a newly registered
+  // group with no explicit position still appears rather than being lost.
   const groupKeys = [
     ...GROUP_ORDER.filter((g) => grouped[g]),
     ...Object.keys(grouped).filter((g) => !GROUP_ORDER.includes(g)),
@@ -154,22 +174,43 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
     <div className="p-3 space-y-2.5">
       <SectionLabel title="Layers" count={`${layers.length} REG`} />
 
-      {groupKeys.map((group) => {
+      {groupKeys.map((group, groupIdx) => {
         const list = grouped[group] ?? [];
         const isCollapsed = collapsed[group];
+        // Sequence number for Gotham-style "01 Aviation" folder header.
+        const seq = String(groupIdx + 1).padStart(2, '0');
+        // Count of enabled layers in this folder — shown in the header badge
+        // so the operator knows at a glance how many are active without expanding.
+        const enabledCount = list.filter((l) => registry.isEnabled(l.id)).length;
         return (
           <section key={group}>
             <button
               type="button"
               onClick={() => setCollapsed((c) => ({ ...c, [group]: !c[group] }))}
-              className="group flex items-center gap-2 w-full text-left text-txt-3 hover:text-accent"
+              className="group flex items-center gap-1.5 w-full text-left border-t border-[rgba(255,255,255,0.06)] pt-1.5 hover:border-accent-line/40"
             >
+              {/* Sequence number — Gotham numbered-group idiom */}
+              <span className="mono text-[8px] tabular-nums text-txt-4 group-hover:text-accent shrink-0 w-[14px]">
+                {seq}
+              </span>
               <span className="mono text-[9px] tracking-[0.9px] uppercase text-txt-2 group-hover:text-accent">
                 {GROUP_LABEL[group] ?? group}
               </span>
               <span className="flex-1 h-px bg-line" />
-              <span className="mono text-[9px] tabular-nums text-txt-3">
-                {isCollapsed ? '+' : '−'} {list.length}
+              {/* Active / total badge */}
+              <span className="mono text-[8.5px] tabular-nums text-txt-4 group-hover:text-txt-3 shrink-0">
+                {enabledCount > 0 ? (
+                  <span>
+                    <span className="text-accent">{enabledCount}</span>
+                    <span>/{list.length}</span>
+                  </span>
+                ) : (
+                  list.length
+                )}
+              </span>
+              {/* Collapse chevron */}
+              <span className="mono text-[9px] text-txt-4 group-hover:text-accent shrink-0 ml-0.5">
+                {isCollapsed ? '▸' : '▾'}
               </span>
             </button>
             {!isCollapsed && (

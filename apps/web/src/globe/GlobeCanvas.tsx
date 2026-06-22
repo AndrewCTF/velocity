@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
 import { MapboxTerrainProvider } from '@macrostrat/cesium-martini';
 import { isMobileDevice } from '../shell/device.js';
@@ -10,7 +10,13 @@ import { loadLod1, loadLod1Bbox, clearLod1 } from '../lod1/lod1Layer.js';
 import { LayerCompositor } from './LayerCompositor.js';
 import { installSelectionReticle } from './selectionReticle.js';
 import { installSelectionTrack } from './selectionTrack.js';
+import { installSpotlight } from './SpotlightLayer.js';
+import { createDrawController, setDrawController } from './draw.js';
+import { installAnnotations } from './AnnotationLayer.js';
+import { installWatchboxes } from './WatchboxLayer.js';
+import { useInvestigation } from '../graph/investigationStore.js';
 import { prewarmIcons } from './icons.js';
+import { ChipLayer } from '../imagery/ChipLayer.js';
 
 interface Props {
   ionToken: string;
@@ -143,6 +149,10 @@ export function GlobeCanvas({
 }: Props): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
+  // Reactive copy of the viewer so globe-side React layers (ChipLayer) mount
+  // once the imperative Cesium viewer exists. Set on construction, cleared on
+  // teardown — a ref alone wouldn't re-render this component to mount them.
+  const [viewerState, setViewerState] = useState<Cesium.Viewer | null>(null);
   const compositorRef = useRef<LayerCompositor | null>(null);
   // Track ion-stack primitives we add so we can tear them down on toggle
   // without disturbing other primitives in the scene.
@@ -421,10 +431,34 @@ export function GlobeCanvas({
       useSelection.getState().select(id ?? null);
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+    // Right-click an entity → "Search around" (expand its 2-hop links in the
+    // Investigation graph), mirroring the EntityPanel button. The draw toolbox's
+    // own right-click only fires while a polyline draw is in progress, so the
+    // two coexist.
+    handler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
+      const picked = scene.pick(click.position);
+      const pid = (picked as { id?: unknown } | undefined)?.id;
+      const ent = Array.isArray(pid) ? pid[0] : pid;
+      const id = (ent as { id?: string } | undefined)?.id;
+      if (id && /^(aircraft|vessel|sim|incident):/.test(id)) {
+        useSelection.getState().select(id);
+        useInvestigation.getState().searchAround(id);
+      }
+    }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+
     // Pulsing reticle around the currently-selected entity.
     const detachReticle = installSelectionReticle(viewer);
     // Magenta polyline through the selected entity's last ~60 positions.
     const detachTrack = installSelectionTrack(viewer);
+    // Sensor fog-of-war spotlight that follows the selected sim drone (FMV toggle).
+    const detachSpotlight = installSpotlight(viewer);
+    // Shared map-draw toolbox (COP placement, watchbox AOIs, annotations).
+    const drawCtl = createDrawController(viewer);
+    setDrawController(drawCtl);
+    // Free-hand annotations / graphics layer (renders the annotation store).
+    const detachAnnotations = installAnnotations(viewer);
+    // Geofence/watchbox AOIs + client-side enter/exit/loiter evaluator.
+    const detachWatchbox = installWatchboxes(viewer);
 
     // Height gate for Google photogrammetry — applyGoogleGate no-ops when
     // nothing changed, so this listener stays requestRenderMode-friendly.
@@ -441,12 +475,18 @@ export function GlobeCanvas({
     compositor.start();
     compositorRef.current = compositor;
     onViewerReady?.(viewer);
+    setViewerState(viewer);
 
     return () => {
       handler.destroy();
       viewer.camera.changed.removeEventListener(onCameraChanged);
       detachReticle();
       detachTrack();
+      detachSpotlight();
+      drawCtl.dispose();
+      setDrawController(null);
+      detachAnnotations();
+      detachWatchbox();
       compositorRef.current?.stop();
       compositorRef.current = null;
       onViewerReady?.(null);
@@ -457,6 +497,7 @@ export function GlobeCanvas({
       googleTilesetRef.current = null;
       viewer.destroy();
       viewerRef.current = null;
+      setViewerState(null);
     };
     // Intentionally exclude imageryMode/enableGoogle3D/googleApiKey — the stack
     // is handled by the swap effect below and the Google key is read once at
@@ -613,5 +654,13 @@ export function GlobeCanvas({
     else v.scene.morphTo3D(0.8);
   }, [sceneMode]);
 
-  return <div ref={containerRef} className="h-full w-full" data-testid="globe-container" />;
+  return (
+    <>
+      <div ref={containerRef} className="h-full w-full" data-testid="globe-container" />
+      {/* Focused satellite-imagery chip draped around the selected entity/swarm.
+          Driven by the shared useChip focus the EntityPanel sets; renders its own
+          control card. Mounts only once the Cesium viewer exists. */}
+      <ChipLayer viewer={viewerState} />
+    </>
+  );
 }

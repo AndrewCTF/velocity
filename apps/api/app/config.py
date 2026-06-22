@@ -218,13 +218,23 @@ class Settings(BaseSettings):
     # delete (refills as live data flows). Disable to run fully stateless.
     history_enabled: bool = True
     history_db_path: str = "./data/history.db"
-    history_retention_hours: int = 48
+    # Default look-back window for replay. 7 days lets the operator scrub
+    # multi-day, not just the live ~24 h window. This is a TIME bound only —
+    # the byte cap below is what actually limits storage; the hour window just
+    # decides how far back fixes are *kept* once there's disk room.
+    history_retention_hours: int = 168  # 7 days
+    # Hard ceiling on retention so the time bound can never be set unboundedly
+    # large (a fat-fingered env var of e.g. 1_000_000 would otherwise let the
+    # DB grow until only the byte cap reins it in, much later). history.py
+    # clamps history_retention_hours into [1, history_retention_max_hours].
+    # 30 days is a generous multi-day replay horizon. 0 disables the ceiling.
+    history_retention_max_hours: int = 720  # 30 days
     # Hard upper bound on the replay store. The hourly maintenance pass time-
-    # prunes to history_retention_hours, then if the file is still larger than
-    # history_max_bytes it drops the oldest rows until under the cap and
-    # VACUUMs to actually return the pages to the filesystem. 48 h of global
-    # ADS-B + AIS is ~8 GB, so the byte cap — not the hour window — is the
-    # binding limit. 0 disables the byte cap (hour window only).
+    # prunes to the (clamped) history_retention_hours, then if the file is
+    # still larger than history_max_bytes it drops the oldest rows until under
+    # the cap and VACUUMs to actually return the pages to the filesystem. Days
+    # of global ADS-B + AIS run into many GB, so the byte cap — not the hour
+    # window — is the binding limit. 0 disables the byte cap (hour window only).
     history_max_bytes: int = 2_000_000_000  # ~2 GB
 
 

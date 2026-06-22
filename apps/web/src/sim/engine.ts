@@ -97,6 +97,7 @@ function buildAgents(
   spreadKm: number,
   seed: number,
   color: string,
+  swarmId: string,
 ): { agents: AgentSpec[]; routes: RouteLine[]; durationSec: number } {
   // Render-only bound: draw at most RENDER_AGENT_CAP real agents. The saturation
   // math (resolveRaid in buildAttack) runs on the caller's TRUE count, not n.
@@ -124,6 +125,7 @@ function buildAgents(
       cruiseAltM,
       profile,
       startDelaySec,
+      swarmId,
     });
     if (n <= 40) routes.push({ id: `sim:agent:${i}:route`, color, points: [from, to] });
     maxEnd = Math.max(maxEnd, startDelaySec + legSec);
@@ -146,6 +148,7 @@ function buildSwarm(p: SwarmParams, jammers: Jammer[], napOfEarth: boolean): Sim
     p.spreadKm,
     seedFrom(p),
     '#ef4444',
+    'sim:swarm:0',
   );
   return {
     scenario: 'drone-swarm',
@@ -216,6 +219,7 @@ export function buildAttack(p: AttackParams, jammers: Jammer[], napOfEarth: bool
     6,
     seed,
     '#ef4444',
+    'sim:strike:0',
   );
 
   // Defence sites ringed around the target; the controller draws range rings.

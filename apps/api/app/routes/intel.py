@@ -19,15 +19,16 @@ import json
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app import llm
 from app.config import get_settings
-from app.intel import agent, analytics, aoi, baseline, deception, dossier, emitter, incidents
+from app.intel import agent, analytics, aoi, baseline, deception, dossier, emitter, incidents, pol
 from app.intel.baseline import baseline_store
 from app.intel.geo import BBox, bbox_from_radius
 from app.intel.incident_store import incident_store
+from app.keys import UserCtx, current_user
 
 router = APIRouter(tags=["intel"])
 
@@ -123,7 +124,7 @@ async def intel_aircraft(
     emergency: bool | None = Query(None),
     gnss_degraded: bool | None = Query(None),
     on_ground: bool | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(200, ge=1, le=500),
 ) -> dict[str, Any]:
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
     return await analytics.query_aircraft(
@@ -281,7 +282,7 @@ async def intel_investigate(
         ],
         tier="fast",
         max_tokens=1400,
-        timeout_s=160.0,  # MiniMax-M3 reasoning is slow; degrade to DeepSeek if it overruns
+        timeout_s=90.0,  # cap at 90 s; MiniMax-M3 reasoning → DeepSeek fallback on overrun
     )
     latency_ms = round((time.monotonic() - t0) * 1000)
 
@@ -383,6 +384,7 @@ def _first_follow_up(top: list[dict[str, Any]]) -> list[str]:
 
 @router.get("/api/intel/agent")
 async def intel_agent(
+    request: Request,
     q: str = Query(..., min_length=2, max_length=400, description="natural-language prompt"),
     min_lon: float | None = Query(None),
     min_lat: float | None = Query(None),
@@ -396,15 +398,32 @@ async def intel_agent(
 
     Seeds with the fused incident brief, then MiniMax-M3 reasons and calls the
     live intel tools (query_vessels, gps_jamming, locate_emitter, …) step by
-    step until it returns a final assessment. Each step is streamed as an SSE
+    step until it returns a final assessment. With a signed-in user it can ALSO
+    invoke the audited write-back actions (flag_entity / promote_incident /
+    nominate_target / add_watch) and drive the operator's map (camera / filter /
+    selection) via an ``app_var`` event. Each step is streamed as an SSE
     ``data:`` frame so the UI renders the loop live. Events:
-    start | tool_call | tool_result | thinking | note | error | final | done.
+    start | tool_call | tool_result | thinking | note | narration | action |
+    app_var | clarification | error | final | done.
     """
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
 
+    # Resolve the signed-in user best-effort. The global ApiKeyMiddleware already
+    # authorised the request, but a static-API-key dev caller has no user
+    # identity — and write-back actions need one (the audit log records WHO). A
+    # token-less/keyless run gets ctx=None: the agent keeps every read-only tool
+    # and the control tools, and simply hides the audited write-back verbs.
+    try:
+        ctx: UserCtx | None = await current_user(request)
+    except HTTPException:
+        ctx = None
+
     async def gen() -> Any:
         try:
-            async for ev in agent.run_agent(q, bbox):
+            # The serializer forwards EVERY event verbatim (no event-type
+            # whitelist), so the new action/app_var/clarification frames reach
+            # the client with no extra plumbing.
+            async for ev in agent.run_agent(q, bbox, ctx):
                 yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
         except Exception as exc:  # noqa: BLE001
             err = {"type": "error", "text": f"{type(exc).__name__}: {exc}"}
@@ -513,6 +532,11 @@ async def intel_emitter(
     """Estimate a GPS jammer/spoofer location from the degraded-ADS-B footprint
     (severity-weighted centroid + CEP). Footprint estimate, not RF DF."""
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+    if bbox is None:
+        raise HTTPException(
+            status_code=422,
+            detail="lat+lon (or min_lon/min_lat/max_lon/max_lat) required; a global emitter estimate is not meaningful",
+        )
     return await emitter.estimate(bbox)
 
 
@@ -547,6 +571,20 @@ async def intel_vessel_dossier(mmsi: str) -> dict[str, Any]:
 async def intel_aircraft_dossier(ident: str) -> dict[str, Any]:
     """Pattern-of-life dossier for one aircraft (ICAO24 hex or callsign)."""
     return await dossier.aircraft_dossier(ident)
+
+
+@router.get("/api/intel/pol/{entity_id:path}")
+async def intel_pattern_of_life(entity_id: str) -> dict[str, Any]:
+    """Pattern-of-life baseline for ONE entity, from its own positions-DB track.
+
+    ``entity_id`` is the canonical id (``aircraft:<icao24>`` or
+    ``vessel:<mmsi>``) — the colon is captured via a ``:path`` converter. Returns
+    the recurring places it keeps returning to (a small self-contained DBSCAN
+    over its fixes), dwell/transit + speed-variance stats, a movement profile,
+    and an anomaly-vs-baseline score. Honest about short tracks: returns
+    ``sufficient: false`` rather than a synthesised norm when the DB holds too
+    few fixes."""
+    return await pol.pattern_of_life(entity_id)
 
 
 @router.get("/api/intel/aois")

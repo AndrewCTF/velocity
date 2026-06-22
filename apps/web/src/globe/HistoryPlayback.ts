@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { aircraftStyle, vesselStyle } from './adapters/styles.js';
 import { labelFor } from './adapters/labelStyle.js';
 import { apiFetch } from '../transport/http.js';
+import { haversineKm } from './draw.js';
 
 // Historical playback — scrub/replay recorded aircraft + vessel tracks in 3D.
 //
@@ -35,7 +36,7 @@ export interface PlaybackInfo {
 }
 
 export interface PlaybackController {
-  load(windowSec: number): Promise<PlaybackInfo | null>;
+  load(windowSec: number, onlyId?: string): Promise<PlaybackInfo | null>;
   clear(): void;
   isActive(): boolean;
   destroy(): void;
@@ -43,6 +44,9 @@ export interface PlaybackController {
 
 const AIR_TRAIL = Cesium.Color.fromCssColorString('#facc15').withAlpha(0.55);
 const SEA_TRAIL = Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.55);
+const DWELL = Cesium.Color.fromCssColorString('#d946ef'); // pattern-of-life dwell highlight
+const DWELL_KM = 0.6; // cluster radius
+const DWELL_S = 240; // min seconds stationary to count as a dwell
 
 function julian(seconds: number): Cesium.JulianDate {
   return Cesium.JulianDate.fromDate(new Date(seconds * 1000));
@@ -118,7 +122,57 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     return added;
   }
 
-  async function load(windowSec: number): Promise<PlaybackInfo | null> {
+  // Pattern-of-life dwell clusters: stretches where the entity stayed within
+  // DWELL_KM for ≥ DWELL_S get a magenta ring + duration label.
+  function addDwellMarkers(tr: Track): void {
+    const pts = tr.points;
+    let i = 0;
+    while (i < pts.length) {
+      const [lon0, lat0, t0] = pts[i]!;
+      let j = i + 1;
+      let sumLon = lon0;
+      let sumLat = lat0;
+      let cnt = 1;
+      while (j < pts.length) {
+        const [lon, lat] = pts[j]!;
+        if (haversineKm({ lat: lat0, lon: lon0 }, { lat, lon }) > DWELL_KM) break;
+        sumLon += lon;
+        sumLat += lat;
+        cnt++;
+        j++;
+      }
+      const dur = (pts[j - 1]?.[2] ?? t0) - t0;
+      if (dur >= DWELL_S && cnt >= 3) {
+        ds.entities.add({
+          id: `dwell:${tr.id}:${i}`,
+          position: Cesium.Cartesian3.fromDegrees(sumLon / cnt, sumLat / cnt),
+          ellipse: {
+            semiMajorAxis: 700,
+            semiMinorAxis: 700,
+            material: DWELL.withAlpha(0.18),
+            outline: true,
+            outlineColor: DWELL,
+            outlineWidth: 2,
+            height: 0,
+          },
+          label: {
+            text: `dwell ${Math.round(dur / 60)}m`,
+            font: '600 10px "IBM Plex Mono", monospace',
+            fillColor: DWELL,
+            showBackground: true,
+            backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.78),
+            backgroundPadding: new Cesium.Cartesian2(5, 3),
+            pixelOffset: new Cesium.Cartesian2(0, -10),
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        });
+      }
+      i = Math.max(j, i + 1);
+    }
+  }
+
+  async function load(windowSec: number, onlyId?: string): Promise<PlaybackInfo | null> {
     const now = Date.now() / 1000;
     const from = now - windowSec;
     const to = now;
@@ -146,9 +200,12 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
 
     ds.entities.removeAll();
     let pts = 0;
-    for (const tr of data.tracks ?? []) {
+    let tracks = data.tracks ?? [];
+    if (onlyId) tracks = tracks.filter((t) => t.id === onlyId);
+    for (const tr of tracks) {
       pts += buildTrackEntity(tr, windowSec);
     }
+    if (onlyId && tracks[0]) addDwellMarkers(tracks[0]);
 
     // Drive the clock across the window. The Timeline's existing play/speed
     // controls keep working (they set shouldAnimate + multiplier).
@@ -164,7 +221,7 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     hideLive();
     active = true;
     viewer.scene.requestRender();
-    return { tracks: (data.tracks ?? []).length, points: pts, from, to };
+    return { tracks: tracks.length, points: pts, from, to };
   }
 
   function clear(): void {

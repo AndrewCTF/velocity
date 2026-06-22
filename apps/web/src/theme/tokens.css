@@ -2,27 +2,29 @@
    Variable NAMES are stable (Tailwind utilities + every component reference
    them); only the VALUES shift to the cooler, denser console look. */
 :root {
-  /* substrate — cool ink, faint blue, richer than neutral charcoal */
-  --bg-0: #080a0f;
-  --bg-1: #0c1017;
-  --bg-2: #121826;
-  --bg-3: #1a2130;
-  --bg-4: #232d40;
-  /* hairlines — cool-tinted, not pure white → more refined */
-  --line: rgba(150, 175, 210, 0.08);
-  --line-2: rgba(150, 175, 210, 0.17);
+  /* substrate — NEUTRAL dark grey (Palantir Gotham product chrome is near-neutral,
+     barely-blue, not cobalt). Restraint over tint. */
+  --bg-0: #0c0e11;
+  --bg-1: #14171c;
+  --bg-2: #1b1f25;
+  --bg-3: #242931;
+  --bg-4: #2f353e;
+  /* hairlines — faint neutral; separation comes from SPACE, not lines */
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.13);
 
-  /* text — slightly cool */
-  --txt-0: #eef2f8;
-  --txt-1: #c3cee0;
-  --txt-2: #8493a8;
-  --txt-3: #566377;
-  --txt-4: #36404f;
+  /* text — neutral greys, a real contrast ramp */
+  --txt-0: #f1f3f6;
+  --txt-1: #aeb6c0;
+  --txt-2: #79818d;
+  --txt-3: #545b66;
+  --txt-4: #383e47;
 
-  /* accent — cobalt azure (interactive / selection-ui / AI) */
-  --accent: #4d8dff;
-  --accent-dim: rgba(77, 141, 255, 0.13);
-  --accent-line: rgba(77, 141, 255, 0.42);
+  /* accent — steel signal blue (interactive / focus / active). Institutional,
+     not a trendy acid accent: boldness is spent on the sensor frame, not color */
+  --accent: #4fa0d8;
+  --accent-dim: rgba(79, 160, 216, 0.13);
+  --accent-line: rgba(79, 160, 216, 0.42);
 
   /* SEMANTIC — threat state ONLY */
   --warn: #f5a524;
@@ -39,13 +41,16 @@
      "low" alert badge doesn't read as "selected". Mirrors --txt-1. */
   --sev-low: #c3cee0;
 
-  /* radii — tighter, instrument-grade */
-  --r-sm: 3px;
-  --r-md: 5px;
-  --r-lg: 8px;
+  /* radii — hard-cornered, instrument-grade */
+  --r-sm: 2px;
+  --r-md: 3px;
+  --r-lg: 5px;
 
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+  /* Labels use the SAME neutral grotesque (small + tracked caps), not a condensed
+     mil-cosplay face — Palantir uses one refined grotesque throughout. */
+  --font-label: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
 }
 
 html,
@@ -62,6 +67,33 @@ body,
   font-variant-numeric: tabular-nums; /* numerics don't jitter */
 }
 
+/* Quiet, thin scrollbars everywhere — the chunky default browser bars read as
+   un-finished. Subtle dark thumb, transparent track; never a visual focal point. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.13);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Mono utility for machine values */
 .mono {
   font-family: var(--font-mono);
@@ -76,4 +108,14 @@ body,
   letter-spacing: 0.5px;
   color: var(--txt-3);
   text-transform: uppercase;
+}
+
+/* instrument label — condensed grotesque, uppercase, tracked. The structural /
+   eyebrow / classification voice. Carries the panel's "labeled instrument" feel. */
+.label {
+  font-family: var(--font-label);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 600;
+  line-height: 1.1;
 }

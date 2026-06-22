@@ -34,6 +34,7 @@ import atexit
 import os
 import subprocess
 import sys
+import time
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -124,9 +125,61 @@ def _api_base() -> str:
     return (os.environ.get("API_BASE") or get_settings().api_base).rstrip("/")
 
 
+# Cache one minted internal token per secret until ~60 s before it expires, so a
+# burst of tool calls re-signs at most once a minute instead of per request.
+_INTERNAL_JWT_TTL_S = 600  # 10 min token lifetime
+_minted_jwt: tuple[str, float] | None = None  # (token, wall-clock expiry)
+
+
+def _mint_internal_jwt(secret: str) -> str | None:
+    """Mint a short-lived HS256 token the backend's ``app.auth`` accepts.
+
+    In prod the gate is Supabase-JWT-only (no static ``API_KEY``); a server-to-
+    server hop carries no browser session, so we sign our own. ``_verify_hs256``
+    requires an HS256 signature over the JWT secret, ``role=="authenticated"``,
+    and an unexpired ``exp`` — we also set the standard Supabase ``aud``/``sub``/
+    ``iat`` so the token is well-formed. Cached until ~60 s before ``exp``.
+    """
+    global _minted_jwt
+    now = time.time()
+    if _minted_jwt is not None:
+        token, expiry = _minted_jwt
+        if expiry - 60 > now:
+            return token
+    try:
+        import jwt  # noqa: PLC0415 — pyjwt, the lib app.auth's HS256 check mirrors
+    except Exception:  # noqa: BLE001 — pyjwt missing → no Authorization header
+        return None
+    exp = int(now) + _INTERNAL_JWT_TTL_S
+    claims = {
+        "role": "authenticated",  # the claim app.auth._verify_hs256 demands
+        "aud": "authenticated",
+        "sub": "osint-mcp-internal",
+        "iat": int(now),
+        "exp": exp,
+    }
+    try:
+        token = jwt.encode(claims, secret, algorithm="HS256")
+    except Exception:  # noqa: BLE001 — encode failure → degrade to no auth header
+        return None
+    _minted_jwt = (token, float(exp))
+    return token
+
+
 def _headers() -> dict[str, str]:
-    key = os.environ.get("API_KEY") or get_settings().api_key
-    return {"X-API-Key": key} if key else {}
+    s = get_settings()
+    key = os.environ.get("API_KEY") or s.api_key
+    if key:
+        return {"X-API-Key": key}
+    # No static key (prod): if a Supabase JWT secret is configured, mint an
+    # internal token so the self-hop to /api/intel/* authenticates. Otherwise
+    # (fully open local box) send nothing, as before.
+    secret = s.supabase_jwt_secret
+    if secret:
+        token = _mint_internal_jwt(secret)
+        if token:
+            return {"Authorization": f"Bearer {token}"}
+    return {}
 
 
 # ── backend auto-start ────────────────────────────────────────────────────────
@@ -664,12 +717,13 @@ async def incident_history(
 
 
 @mcp.tool()
-async def vessel_dossier(mmsi: str) -> dict[str, Any]:
+async def vessel_dossier(mmsi: int | str) -> dict[str, Any]:
     """Pattern-of-life dossier for one vessel (MMSI): recent track, AIS gaps,
     derived speed profile (loiter / transit / loiter-then-dash), area covered,
     which live incidents it appears in, and a behaviour assessment. The track is
     the store's ~1h retention window."""
-    return await _get(f"/api/intel/dossier/vessel/{quote(mmsi, safe='')}")
+    # MMSI is numeric; agents pass it as an int or a string — accept both.
+    return await _get(f"/api/intel/dossier/vessel/{quote(str(mmsi), safe='')}")
 
 
 @mcp.tool()
@@ -754,7 +808,10 @@ async def deep_analyze(
     if lat is not None and lon is not None:
         context["focus_area"] = await focus_area(lat, lon, radius_nm)
 
-    # 2) reason off-context (DeepSeek → Ollama → raw data)
+    # 2) reason off-context (DeepSeek → Ollama → raw data). Cap the wait so a
+    #    slow upstream can't hang the tool for the 180 s default — the fast tier
+    #    should answer well under 60 s, the deeper reason tier under 90 s.
+    timeout_s = 60.0 if (tier or "").lower() == "fast" else 90.0
     res = await llm.complete(
         _SYS_PROMPT,
         f"QUESTION: {question}\n\nLIVE INTEL JSON:\n"
@@ -762,6 +819,7 @@ async def deep_analyze(
         tier=tier,
         temperature=0.2,
         max_tokens=2048,
+        timeout_s=timeout_s,
         ollama_model=model or "",
     )
     if not res.ok:

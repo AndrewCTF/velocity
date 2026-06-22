@@ -12,7 +12,8 @@ import { labelFor, aircraftLabelText, vesselLabelText } from './labelStyle.js';
 import { tracks } from '../../intel/tracks.js';
 import { aircraftDedup } from '../../intel/registry.js';
 import { isMobileDevice } from '../../shell/device.js';
-import { useSelection } from '../../state/stores.js';
+import { useSelection, useFilters } from '../../state/stores.js';
+import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
 import { apiFetch, withWsKey } from '../../transport/http.js';
 
 // Minimum-perceptible deltas for billboard updates. Cesium reloads the
@@ -24,6 +25,13 @@ import { apiFetch, withWsKey } from '../../transport/http.js';
 // noise floor.
 const ROT_EPSILON = 0.01; // ~0.57°
 const SCALE_EPSILON = 0.02;
+
+// Alpha applied to a billboard the active map-side filter (useFilters /
+// HistogramPanel) excludes. The icon stays DRAWN (same SVG image, same
+// rotation/scale, still upserted by id — never removed, never swapped to a
+// point) but fades to near-invisible so the matching contacts pop. 1.0 =
+// full opacity for matching/unfiltered entities.
+const FILTER_DIM_ALPHA = 0.1;
 
 // Minimum delay the grid scheduler will book between polls. Not a cadence
 // target — only a yield so a re-anchor after an overrun can't fire back-to-back
@@ -891,6 +899,37 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       default:
         opts.point = { color: Cesium.Color.WHITE, pixelSize: 4 };
     }
+
+    // Map-side filter (HistogramPanel ↔ useFilters): a contact the active filter
+    // excludes is born dimmed. Only aircraft/vessel billboards are facet-able;
+    // everything else (and the no-filter case) is created at full opacity. This
+    // sets the INITIAL color on the constructor billboard — the icon image is
+    // untouched, so the entity still renders its SVG, just translucent.
+    if (
+      opts.billboard &&
+      (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel')
+    ) {
+      const clauses = activeFilterClauses();
+      if (clauses.length > 0 && !entityPassesFilter(props, clauses)) {
+        const base =
+          opts.billboard.color instanceof Cesium.Color
+            ? opts.billboard.color
+            : Cesium.Color.WHITE;
+        opts.billboard.color = Cesium.Color.fromAlpha(base, FILTER_DIM_ALPHA);
+      }
+    }
+  }
+
+  // Apply (or clear) the active map-side filter dim on an already-rendered
+  // entity. Called from refreshStyle so a filter toggle propagates to the
+  // ~13k entities already on the globe on the next poll/push — translucent for
+  // excluded, full opacity for matching/unfiltered. Never removes the entity,
+  // never swaps the SVG icon for a point (CLAUDE.md invariants).
+  private applyFilterToEntity(e: Cesium.Entity, props: Record<string, unknown>): void {
+    if (!e.billboard) return;
+    const clauses = activeFilterClauses();
+    const dimmed = clauses.length > 0 && !entityPassesFilter(props, clauses);
+    applyFilterVisibility(e.billboard, dimmed);
   }
 
   private refreshStyle(e: Cesium.Entity, props: Record<string, unknown>): void {
@@ -906,6 +945,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           updateRotation(e.billboard, s.rotationRad);
           updateScale(e.billboard, s.scale);
         }
+        this.applyFilterToEntity(e, props);
         // Late-arriving callsigns are common — the first hit from many feeds
         // is ICAO24 only, then the callsign fills in a few seconds later.
         // Keep the on-screen label in sync so the user sees the upgrade.
@@ -926,6 +966,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           updateRotation(e.billboard, s.rotationRad);
           updateScale(e.billboard, s.scale);
         }
+        this.applyFilterToEntity(e, props);
         const labelText = vesselLabelText(props);
         if (labelText && e.label) {
           const current = currentValue<string>(e.label.text);
@@ -983,6 +1024,57 @@ function updateScale(bb: Cesium.BillboardGraphics, nextScale: number): void {
   const current = currentValue<number>(bb.scale);
   if (current != null && Math.abs(current - nextScale) < SCALE_EPSILON) return;
   bb.scale = new Cesium.ConstantProperty(nextScale);
+}
+
+// Apply (or clear) the map-side filter dim on a billboard. `dimmed` true → the
+// active filter excludes this contact: fade the icon to FILTER_DIM_ALPHA. false
+// → matching/unfiltered: restore full opacity. We mutate ONLY the color alpha,
+// never the image/rotation/scale (the SVG icon + heading are sacred). The
+// emergency-squawk pulse is a CallbackProperty (see aircraftBillboard) — when an
+// excluded aircraft is pulsing we wrap that callback so it keeps pulsing at the
+// dimmed alpha instead of replacing it with a flat colour (mirrors
+// LayerCompositor.applyEntityOpacity). Idempotent: a stable ConstantProperty at
+// the target alpha is left in place so repeated calls don't churn the GPU
+// resource (same discipline as updateBillboardImage).
+const DIM_EPSILON = 0.02;
+function applyFilterVisibility(bb: Cesium.BillboardGraphics, dimmed: boolean): void {
+  const targetAlpha = dimmed ? FILTER_DIM_ALPHA : 1.0;
+  const cur = bb.color;
+  if (cur instanceof Cesium.CallbackProperty) {
+    // Pulsing emergency icon. Re-wrap the pulse so its alpha is scaled by the
+    // dim factor; when not dimmed (factor 1) we still wrap once so the dimmed
+    // state is reversible, but only if it isn't already our wrapper.
+    const wrapped = (cur as unknown as { __dimWrapped?: boolean }).__dimWrapped === true;
+    const wrappedAlpha = (cur as unknown as { __dimAlpha?: number }).__dimAlpha;
+    if (wrapped && wrappedAlpha != null && Math.abs(wrappedAlpha - targetAlpha) < DIM_EPSILON) {
+      return; // already at the right dim level
+    }
+    if (!dimmed && !wrapped) return; // unwrapped pulse, nothing to dim — leave it
+    const inner = wrapped
+      ? (cur as unknown as { __dimInner: Cesium.CallbackProperty }).__dimInner
+      : cur;
+    const cb = new Cesium.CallbackProperty((time, result) => {
+      const base = inner.getValue(time, result) as Cesium.Color | undefined;
+      const c = base ?? Cesium.Color.WHITE;
+      return Cesium.Color.fromAlpha(c, c.alpha * targetAlpha, result as Cesium.Color | undefined);
+    }, false);
+    (cb as unknown as { __dimWrapped: boolean }).__dimWrapped = true;
+    (cb as unknown as { __dimAlpha: number }).__dimAlpha = targetAlpha;
+    (cb as unknown as { __dimInner: Cesium.CallbackProperty }).__dimInner = inner;
+    bb.color = cb as unknown as Cesium.Property;
+    return;
+  }
+  // Static colour: read the current tint, only rewrite when the alpha actually
+  // moved past the noise floor.
+  const orig = (currentValue<Cesium.Color>(cur) ?? Cesium.Color.WHITE).clone();
+  if (Math.abs(orig.alpha - targetAlpha) < DIM_EPSILON) return;
+  bb.color = new Cesium.ConstantProperty(Cesium.Color.fromAlpha(orig, targetAlpha));
+}
+
+// Read the active filter clause list once per drain pass. Pulled out so the
+// hot per-entity loop calls a plain function (no zustand subscription churn).
+function activeFilterClauses(): readonly import('../../state/stores.js').FilterClause[] {
+  return useFilters.getState().clauses;
 }
 
 // Map a jamming-cell feature to its (color, pixelSize). Severity gates the

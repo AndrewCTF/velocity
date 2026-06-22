@@ -1,0 +1,399 @@
+- generic [ref=e2]:
+  - generic [ref=e16]:
+    - button "⚙ Keys" [ref=e17] [cursor=pointer]
+    - generic [ref=e18]:
+      - generic "andrew@andrewyong.dev" [ref=e19]
+      - button "Sign out" [ref=e20] [cursor=pointer]
+    - generic [ref=e21]:
+      - link "3D" [ref=e22] [cursor=pointer]:
+        - /url: /
+      - link "2D" [ref=e23] [cursor=pointer]:
+        - /url: /2d
+  - generic [ref=e24]:
+    - banner [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e28]:
+          - text: VELOCITY
+          - generic [ref=e30]: v0.9.2
+        - textbox "Unified search" [ref=e33]:
+          - /placeholder: search MMSI / ICAO24 / callsign / lat,lon  (press /)
+        - button "AOI · global ▾" [ref=e36] [cursor=pointer]:
+          - generic [ref=e37]: AOI · global
+          - generic [ref=e38]: ▾
+        - button "Toggle 3D satellite imagery and buildings" [ref=e40] [cursor=pointer]: ◇3D sat
+        - button "SIM" [pressed] [ref=e42] [cursor=pointer]: ◉SIM
+        - button "Open alerts panel (37 alerts)" [ref=e2745] [cursor=pointer]:
+          - generic [ref=e46]: alert
+          - generic [ref=e47]: "37"
+          - generic: "[high] Vessel(s) went silent / dark near reported activity."
+        - button "Open analyst console" [ref=e49] [cursor=pointer]:
+          - generic [ref=e51]: AGENT ▸
+          - generic [ref=e52]: 25 incidents · brief ready
+        - status "WebSocket connection to /ws/alerts is live" [ref=e54]: WS · live
+        - generic "UTC" [ref=e57]: 14:05:11Z
+        - generic [ref=e59]: UNCLAS
+        - status "Feed health" [ref=e60]:
+          - 'generic "Quakes — USGS (24h) status: green last: 14:03:53Z" [ref=e2746]':
+            - generic [ref=e116]: Quakes
+          - 'generic "Aircraft — Global (multi-source ADS-B) status: green last: 14:05:00Z" [ref=e2828]':
+            - generic [ref=e118]: Aircraft
+          - 'generic "Aircraft — Military (airplanes.live) status: green last: 14:05:00Z" [ref=e2829]':
+            - generic [ref=e119]: Aircraft
+          - 'generic "Aircraft — Emergency squawks (7500/7600/7700) status: green last: 14:04:59Z" [ref=e2830]':
+            - generic [ref=e121]: Aircraft
+          - 'generic "Vessels — live (all AIS sources, 24/7) status: green last: 14:05:00Z" [ref=e2831]':
+            - generic [ref=e122]: Vessels
+        - generic [ref=e72]:
+          - generic "Total entities across all globe data sources" [ref=e73]: ent 3,657
+          - generic "Render rate (measured from animation-frame deltas)" [ref=e91]: 44fps
+    - main [ref=e74]:
+      - generic [ref=e75]:
+        - generic:
+          - generic:
+            - generic: aircraft
+            - generic: vessels
+            - generic: dark candidate
+            - generic: GPS jamming
+          - generic "heading 360°":
+            - generic: "N"
+          - generic:
+            - generic: 50 km
+          - generic:
+            - generic: cursor 49.17°N 9.67°E
+            - generic: sel —
+          - generic:
+            - generic: center 8.00°E 49.00°N
+            - generic: alt 700 km
+        - button "⊕ Top-down" [ref=e82] [cursor=pointer]
+        - generic [ref=e123]:
+          - generic [ref=e124]:
+            - generic [ref=e125]: Standing
+            - generic [ref=e126]:
+              - text: alerts
+              - generic [ref=e128]: "37"
+            - generic [ref=e129]:
+              - text: AOI
+              - generic [ref=e130]: global
+            - generic [ref=e131]:
+              - text: feeds
+              - generic [ref=e133]: 5/5
+          - generic [ref=e134]:
+            - generic [ref=e135]: ▸
+            - textbox "Analyst console prompt" [ref=e136]:
+              - /placeholder: investigate · query the snapshot · correlate · locate the emitter
+            - button "↵ run" [ref=e137] [cursor=pointer]
+            - generic [ref=e138]: ⌘K
+          - generic [ref=e139]:
+            - button "/investigate" [ref=e140] [cursor=pointer]
+            - button "/correlate" [ref=e141] [cursor=pointer]
+            - button "/detect" [ref=e142] [cursor=pointer]
+            - button "/factcheck" [ref=e143] [cursor=pointer]
+            - button "/scene" [ref=e144] [cursor=pointer]
+            - generic [ref=e145]: nl · ⌘K palette
+      - complementary "Layers" [ref=e146]:
+        - region "Left rail tabs" [ref=e147]:
+          - tablist "Left rail tabs" [ref=e148]:
+            - tab "Ops" [selected] [ref=e149] [cursor=pointer]:
+              - generic [ref=e150]: Ops
+            - tab "Layers" [ref=e152] [cursor=pointer]:
+              - generic [ref=e153]: Layers
+            - tab "Imagery" [ref=e154] [cursor=pointer]:
+              - generic [ref=e155]: Imagery
+            - tab "Chokepoints" [ref=e156] [cursor=pointer]:
+              - generic [ref=e157]: Chokepoints
+            - tab "Feeds" [ref=e158] [cursor=pointer]:
+              - generic [ref=e159]: Feeds
+          - tabpanel "Ops" [ref=e160]:
+            - generic [ref=e161]:
+              - generic [ref=e162]:
+                - generic [ref=e163]:
+                  - generic [ref=e164]: AOI watch
+                  - generic [ref=e166]: "17"
+                - generic [ref=e167]:
+                  - button "Strait of Hormuz 1 60/d Persian Gulf" [ref=e2832] [cursor=pointer]:
+                    - generic [ref=e170]: Strait of Hormuz
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e325]: "1"
+                    - generic "typical daily transits" [ref=e171]: 60/d
+                    - generic [ref=e172]: Persian Gulf
+                  - button "Bab-el-Mandeb 1 50/d Red Sea / Gulf of Aden" [ref=e326] [cursor=pointer]:
+                    - generic [ref=e175]: Bab-el-Mandeb
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e327]: "1"
+                    - generic "typical daily transits" [ref=e176]: 50/d
+                    - generic [ref=e177]: Red Sea / Gulf of Aden
+                  - button "Suez Canal 1 50/d Egypt" [ref=e328] [cursor=pointer]:
+                    - generic [ref=e180]: Suez Canal
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e329]: "1"
+                    - generic "typical daily transits" [ref=e181]: 50/d
+                    - generic [ref=e182]: Egypt
+                  - button "Panama Canal 1 35/d Central America" [ref=e330] [cursor=pointer]:
+                    - generic [ref=e185]: Panama Canal
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e331]: "1"
+                    - generic "typical daily transits" [ref=e186]: 35/d
+                    - generic [ref=e187]: Central America
+                  - button "Strait of Malacca 1 220/d SE Asia" [ref=e332] [cursor=pointer]:
+                    - generic [ref=e190]: Strait of Malacca
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e333]: "1"
+                    - generic "typical daily transits" [ref=e191]: 220/d
+                    - generic [ref=e192]: SE Asia
+                  - button "Taiwan Strait 1 150/d East Asia" [ref=e334] [cursor=pointer]:
+                    - generic [ref=e195]: Taiwan Strait
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e335]: "1"
+                    - generic "typical daily transits" [ref=e196]: 150/d
+                    - generic [ref=e197]: East Asia
+                  - button "Korea Strait 1 100/d East Asia" [ref=e336] [cursor=pointer]:
+                    - generic [ref=e200]: Korea Strait
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e337]: "1"
+                    - generic "typical daily transits" [ref=e201]: 100/d
+                    - generic [ref=e202]: East Asia
+                  - button "Strait of Gibraltar 1 90/d Atlantic / Mediterranean" [ref=e338] [cursor=pointer]:
+                    - generic [ref=e205]: Strait of Gibraltar
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e339]: "1"
+                    - generic "typical daily transits" [ref=e206]: 90/d
+                    - generic [ref=e207]: Atlantic / Mediterranean
+                  - button "Bosphorus / Dardanelles 1 130/d Turkish Straits" [ref=e340] [cursor=pointer]:
+                    - generic [ref=e210]: Bosphorus / Dardanelles
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e341]: "1"
+                    - generic "typical daily transits" [ref=e211]: 130/d
+                    - generic [ref=e212]: Turkish Straits
+                  - button "Strait of Dover 12 500/d English Channel" [ref=e1325] [cursor=pointer]:
+                    - generic [ref=e215]: Strait of Dover
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e343]: "12"
+                    - generic "typical daily transits" [ref=e216]: 500/d
+                    - generic [ref=e217]: English Channel
+                  - button "Skagerrak / Kattegat 72 200/d Baltic exit" [ref=e2833] [cursor=pointer]:
+                    - generic [ref=e220]: Skagerrak / Kattegat
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e345]: "72"
+                    - generic "typical daily transits" [ref=e221]: 200/d
+                    - generic [ref=e222]: Baltic exit
+                  - button "Sunda Strait 1 Indonesia" [ref=e346] [cursor=pointer]:
+                    - generic [ref=e225]: Sunda Strait
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e347]: "1"
+                    - generic [ref=e226]: Indonesia
+                  - button "Lombok Strait 0 Indonesia" [ref=e348] [cursor=pointer]:
+                    - generic [ref=e229]: Lombok Strait
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e349]: "0"
+                    - generic [ref=e230]: Indonesia
+                  - button "Bering Strait 1 Arctic" [ref=e350] [cursor=pointer]:
+                    - generic [ref=e233]: Bering Strait
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e351]: "1"
+                    - generic [ref=e234]: Arctic
+                  - button "Cape of Good Hope 1 Southern Africa" [ref=e352] [cursor=pointer]:
+                    - generic [ref=e237]: Cape of Good Hope
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e353]: "1"
+                    - generic [ref=e238]: Southern Africa
+                  - button "Baltic submarine-cable belt 116 Baltic Sea" [ref=e2834] [cursor=pointer]:
+                    - generic [ref=e241]: Baltic submarine-cable belt
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e355]: "116"
+                    - generic [ref=e242]: Baltic Sea
+                  - button "Red Sea cable corridor 2 Red Sea" [ref=e356] [cursor=pointer]:
+                    - generic [ref=e245]: Red Sea cable corridor
+                    - generic "live in-AOI contacts (sampled every 2s)" [ref=e357]: "2"
+                    - generic [ref=e246]: Red Sea
+              - generic [ref=e247]:
+                - generic [ref=e248]:
+                  - generic [ref=e249]: Standing detections
+                  - generic [ref=e251]: "37"
+                - generic [ref=e252]:
+                  - button "high 28" [ref=e2751] [cursor=pointer]:
+                    - generic [ref=e254]: high
+                    - generic [ref=e255]: "28"
+                  - button "low 9" [ref=e256] [cursor=pointer]:
+                    - generic [ref=e257]: low
+                    - generic [ref=e258]: "9"
+      - complementary "Selection" [ref=e259]:
+        - region "Right rail tabs" [ref=e260]:
+          - tablist "Right rail tabs" [ref=e261]:
+            - tab "Selection" [selected] [ref=e262] [cursor=pointer]:
+              - generic [ref=e263]: Selection
+            - tab "Alerts" [ref=e265] [cursor=pointer]:
+              - generic [ref=e266]: Alerts
+            - tab "Intel" [ref=e267] [cursor=pointer]:
+              - generic [ref=e268]: Intel
+            - tab "News" [ref=e269] [cursor=pointer]:
+              - generic [ref=e270]: News
+          - tabpanel "Selection" [ref=e271]:
+            - generic [ref=e272]:
+              - generic [ref=e274]: Selection
+              - paragraph [ref=e2735]: No entity selected. Click an object on the globe.
+    - contentinfo [ref=e277]:
+      - generic [ref=e278]:
+        - generic [ref=e279]:
+          - generic [ref=e280]:
+            - button "Jump to window start" [ref=e281] [cursor=pointer]: ⏮
+            - button "Pause" [pressed] [ref=e282] [cursor=pointer]: ◼
+            - button "Jump to now" [ref=e283] [cursor=pointer]: ⏭
+          - generic [ref=e285]:
+            - generic [ref=e286]: spd
+            - generic [ref=e287]:
+              - button "1 times speed" [pressed] [ref=e288] [cursor=pointer]: 1×
+              - button "10 times speed" [ref=e289] [cursor=pointer]: 10×
+              - button "60 times speed" [ref=e290] [cursor=pointer]: 60×
+              - button "600 times speed" [ref=e291] [cursor=pointer]: 600×
+              - button "3600 times speed" [ref=e292] [cursor=pointer]: 3600×
+          - generic "Historical replay" [ref=e294]:
+            - generic [ref=e295]: rpl
+            - generic [ref=e296]:
+              - button "1h" [pressed] [ref=e297] [cursor=pointer]
+              - button "6h" [ref=e298] [cursor=pointer]
+              - button "24h" [ref=e299] [cursor=pointer]
+            - button "▶ replay" [ref=e300] [cursor=pointer]
+          - generic [ref=e301]: 2026-06-20 14:03:02Z
+        - generic [ref=e305]:
+          - img [ref=e307]
+          - generic [ref=e308]:
+            - generic [ref=e309]:
+              - text: alert
+              - generic [ref=e311]: "494"
+            - generic [ref=e312]:
+              - text: detection
+              - generic [ref=e314]: 199,974
+            - generic [ref=e315]: density
+            - generic [ref=e317]: −20h
+            - generic [ref=e318]: now
+  - generic [ref=e1898]:
+    - generic [ref=e1899]:
+      - generic [ref=e1900]:
+        - generic [ref=e1902]: Simulation
+        - button "✕" [ref=e1904] [cursor=pointer]
+      - generic [ref=e1905]:
+        - generic [ref=e1906]:
+          - button "Swarm" [ref=e1907] [cursor=pointer]
+          - button "Landing" [ref=e1908] [cursor=pointer]
+          - button "Attack" [ref=e1909] [cursor=pointer]
+        - generic [ref=e1910]:
+          - generic [ref=e1911]: Launch
+          - button "49.17, 9.67" [ref=e2736] [cursor=pointer]
+          - generic [ref=e1914]: Target
+          - button "49.00, 11.40" [ref=e2752] [cursor=pointer]
+    - generic [ref=e1917]:
+      - generic [ref=e1920]: Force / parameters
+      - generic [ref=e1922]:
+        - generic [ref=e1923]:
+          - generic [ref=e2177]:
+            - generic [ref=e2179]: Strike system
+            - combobox "Strike system" [ref=e2181]:
+              - option "FPV (RF command)" [selected]
+              - option "FPV (fiber-optic)"
+              - option "IAI Harop"
+              - option "Shahed-136 / Geran-2"
+              - option "Switchblade 300"
+              - option "Switchblade 600"
+              - option "WB Group Warmate"
+              - option "ZALA Lancet-3"
+              - option "Bayraktar TB2"
+              - option "Boeing Insitu ScanEagle"
+              - option "IAI Heron TP"
+              - option "MQ-9 Reaper"
+              - option "Orlan-10"
+              - option "Wing Loong II"
+              - option "Dassault Rafale"
+              - option "Eurofighter Typhoon"
+              - option "F-15E Strike Eagle"
+              - option "F-16 Fighting Falcon"
+              - option "F-35A Lightning II"
+              - option "MiG-29"
+              - option "Su-34"
+              - option "Su-35"
+          - generic [ref=e1930]:
+            - generic [ref=e1931]:
+              - generic [ref=e1933]: Strikers
+              - generic [ref=e1934]: "80"
+            - slider "Strikers 80" [ref=e2374]: "80"
+          - generic [ref=e2183]:
+            - generic [ref=e2185]: Air defence
+            - combobox "Air defence" [ref=e2187]:
+              - option "AN/TWQ-1 Avenger"
+              - option "Buk-M3"
+              - option "FIM-92 Stinger (MANPADS)"
+              - option "IRIS-T SLM"
+              - option "Iron Dome" [selected]
+              - option "MIM-104 Patriot PAC-3"
+              - option "NASAMS"
+              - option "Pantsir-S1"
+              - option "S-300"
+              - option "S-400 Triumf"
+              - option "SAMP/T"
+              - option "THAAD"
+          - generic [ref=e1942]:
+            - generic [ref=e1943]:
+              - generic [ref=e1945]: Defence sites
+              - generic [ref=e1946]: "8"
+            - slider "Defence sites 8" [ref=e2375]: "8"
+        - button "▶ Run scenario" [ref=e1949] [cursor=pointer]
+    - generic [ref=e1951]:
+      - generic [ref=e1954]: EW & terrain
+      - generic [ref=e1957]:
+        - text: LinkFPV · RF command
+        - generic [ref=e1963]:
+          - generic [ref=e1965]: Nap-of-earth
+          - switch "nap of earth" [ref=e1966] [cursor=pointer]
+        - generic [ref=e1968]: terrain-follow + LOS masking (needs 3D terrain)
+        - generic [ref=e1969]:
+          - generic [ref=e1970]:
+            - generic [ref=e1972]: Jammer radius
+            - generic [ref=e1973]: 25 km
+          - slider "Jammer radius 25 km" [ref=e1974]: "25"
+        - generic [ref=e1975]:
+          - button "+ comms jam" [ref=e1976] [cursor=pointer]
+          - button "+ GNSS jam" [ref=e1977] [cursor=pointer]
+          - button "live GPS jam" [ref=e1978] [cursor=pointer]
+        - generic [ref=e1980]: 0 jammers placed
+    - generic [ref=e2754]:
+      - generic [ref=e2757]: Link / EW status
+      - generic [ref=e2760]:
+        - generic [ref=e2761]: Airborne
+        - generic [ref=e2762]: "0"
+        - generic [ref=e2763]: Struck target
+        - generic [ref=e2764]: "0"
+        - generic [ref=e2765]: Intercepted (SAM)
+        - generic [ref=e2766]: "0"
+        - generic [ref=e2767]: Link lost / EW
+        - generic [ref=e2768]: "80"
+        - generic [ref=e2769]: GPS-degraded
+        - generic [ref=e2770]: "0"
+    - generic [ref=e2771]:
+      - generic [ref=e2773]:
+        - generic [ref=e2774]: Playback
+        - generic [ref=e2776]: 16:54 / 110:49
+      - generic [ref=e2777]:
+        - slider [ref=e2778]: "1015"
+        - generic [ref=e2779]:
+          - button "❚❚ Pause" [ref=e2780] [cursor=pointer]
+          - button "↺ Reset" [ref=e2781] [cursor=pointer]
+          - generic [ref=e2782]: 20×
+        - generic [ref=e2783]:
+          - generic [ref=e2784]:
+            - generic [ref=e2786]: Sim speed
+            - generic [ref=e2787]: 20×
+          - slider "Sim speed 20×" [ref=e2788]: "20"
+    - generic [ref=e2789]:
+      - generic [ref=e2791]:
+        - generic [ref=e2792]: Battle damage
+        - generic [ref=e2794]: 64% leak
+      - generic [ref=e2796]:
+        - generic [ref=e2797]: Strikers
+        - generic [ref=e2798]: "80"
+        - generic [ref=e2799]: Intercepted
+        - generic [ref=e2800]: "28.8"
+        - generic [ref=e2801]: Leakers
+        - generic [ref=e2802]: "51.2"
+        - generic [ref=e2803]: Est. hits on target
+        - generic [ref=e2804]: "25.6"
+        - generic [ref=e2805]: Defence capacity
+        - generic [ref=e2806]: "32"
+    - generic [ref=e2807]:
+      - generic [ref=e2810]: Economic impact
+      - generic [ref=e2812]:
+        - generic [ref=e2813]:
+          - generic [ref=e2814]: Chokepoint
+          - generic [ref=e2815]: Turkish Straits
+          - generic [ref=e2816]: Oil price
+          - generic [ref=e2817]: +1.5%
+          - generic [ref=e2818]: Trade disrupted
+          - generic [ref=e2819]: $2.0B/day
+        - paragraph [ref=e2820]: No major chokepoint within range — impact is regional. Est. oil +1.5%.
+    - generic [ref=e2821]:
+      - generic [ref=e2823]:
+        - generic [ref=e2824]: Analyst assessment
+        - generic [ref=e2826]: …
+      - generic [ref=e2827]: reasoning over the outcome…

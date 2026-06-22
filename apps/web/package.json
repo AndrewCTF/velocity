@@ -20,6 +20,7 @@
     "cesium": "^1.123.0",
     "hls.js": "^1.6.16",
     "maplibre-gl": "^5.0.0",
+    "milsymbol": "^3.0.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.27.0",

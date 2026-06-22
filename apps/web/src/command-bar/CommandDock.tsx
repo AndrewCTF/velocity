@@ -60,10 +60,10 @@ export function CommandDock({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
   const feedTone = worstFeedTone(feedList.map((f) => f.status));
   const aoiName = aoi ? aoi.name : 'global';
 
-  // ⌘K / Ctrl+K focuses the prompt — the standard command-palette gesture.
+  // ⌘J / Ctrl+J focuses the prompt (⌘K is the global Omnibar palette).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'j' || e.key === 'J')) {
         e.preventDefault();
         inputRef.current?.focus();
         inputRef.current?.select();
@@ -151,7 +151,7 @@ export function CommandDock({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
           className="mono flex-1 bg-transparent text-[11px] text-txt-0 placeholder:text-txt-3 focus:outline-none"
         />
         <kbd className="mono text-[9px] tracking-[0.5px] text-txt-3 border border-line rounded-sm px-[6px] py-[2px] bg-bg-2 select-none">
-          ⌘K
+          ⌘J
         </kbd>
       </div>
     </div>

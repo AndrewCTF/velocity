@@ -77,6 +77,9 @@ export class SimController {
   private agents: RtAgent[] = [];
   private siteEngaged = new Map<string, number>();
   private groundProfile: number[] | null = null;
+  // swarmId → indices into this.agents. One bucket per SwarmParams/strike force;
+  // drives the per-swarm roll-up entity + AOI circle and swarmAoi().
+  private swarms = new Map<string, number[]>();
 
   constructor(private readonly viewer: Cesium.Viewer) {
     this.ds = new Cesium.CustomDataSource('simulation');
@@ -114,6 +117,7 @@ export class SimController {
     this.ds.entities.removeAll();
     this.agents = [];
     this.siteEngaged.clear();
+    this.swarms.clear();
     this.groundProfile = null;
 
     this.drawRoutes(plan);
@@ -184,7 +188,12 @@ export class SimController {
         roll: rollFor(i),
         samChecked: false,
       };
-      this.agents.push(rt);
+      const idx = this.agents.push(rt) - 1;
+      if (spec.swarmId) {
+        const bucket = this.swarms.get(spec.swarmId);
+        if (bucket) bucket.push(idx);
+        else this.swarms.set(spec.swarmId, [idx]);
+      }
       const color = new Cesium.CallbackProperty(() => this.agentColor(rt), false);
       const position = new Cesium.CallbackPositionProperty(
         () => Cesium.Cartesian3.fromDegrees(rt.lon, rt.lat, rt.alt),
@@ -206,7 +215,7 @@ export class SimController {
         },
         label: labelFor(spec.label),
         name: spec.label,
-        properties: { kind: 'sim-uav', sim: true },
+        properties: { kind: 'sim-uav', sim: true, ...(spec.swarmId ? { swarmId: spec.swarmId } : {}) },
       });
       // Fiber-optic tether: a line from the control station to the drone while
       // the link is alive (the physical spooled fiber).
@@ -231,6 +240,106 @@ export class SimController {
         });
       }
     });
+    this.drawSwarms();
+  }
+
+  // ── swarm roll-up (one selectable entity + AOI circle per swarmId) ─────────
+  // The centroid/radius/label are CallbackPropertys evaluated each render, so a
+  // single entity tracks the moving cloud without per-tick recreation (the
+  // upsert-by-id discipline). The roll-up stays visible even when the swarm has
+  // more members than RENDER_AGENT_CAP renders as individual icons.
+  private drawSwarms(): void {
+    for (const [swarmId, indices] of this.swarms) {
+      if (indices.length === 0) continue;
+      const color = Cesium.Color.fromCssColorString('#ef4444');
+      this.ds.entities.add({
+        id: swarmId,
+        position: new Cesium.CallbackPositionProperty(() => {
+          const aoi = this.swarmAoi(swarmId);
+          if (!aoi) return undefined;
+          return Cesium.Cartesian3.fromDegrees(aoi.lon, aoi.lat, 0);
+        }, false),
+        ellipse: {
+          semiMajorAxis: new Cesium.CallbackProperty(() => (this.swarmAoi(swarmId)?.radiusKm ?? 0) * 1000, false),
+          semiMinorAxis: new Cesium.CallbackProperty(() => (this.swarmAoi(swarmId)?.radiusKm ?? 0) * 1000, false),
+          material: new Cesium.ColorMaterialProperty(color.withAlpha(0.07)),
+          outline: true,
+          outlineColor: color.withAlpha(0.5),
+          height: 0,
+        },
+        label: {
+          ...labelFor(''),
+          text: new Cesium.CallbackProperty(() => this.swarmLabel(swarmId), false),
+        },
+        name: 'Swarm',
+        properties: { kind: 'sim-swarm', sim: true, swarmId },
+      });
+    }
+  }
+
+  // Tallies for a swarm's rendered members (matches the SimStats fate buckets).
+  private swarmTally(indices: number[]): {
+    total: number;
+    live: number;
+    struck: number;
+    intercepted: number;
+    linkLost: number;
+  } {
+    let live = 0;
+    let struck = 0;
+    let intercepted = 0;
+    let linkLost = 0;
+    for (const i of indices) {
+      const rt = this.agents[i];
+      if (!rt) continue;
+      if (rt.fate === 'struck') struck++;
+      else if (rt.fate === 'intercepted') intercepted++;
+      else if (rt.fate === 'ew_lost') linkLost++;
+      else live++;
+    }
+    return { total: indices.length, live, struck, intercepted, linkLost };
+  }
+
+  private swarmLabel(swarmId: string): string {
+    const indices = this.swarms.get(swarmId);
+    if (!indices) return 'Swarm';
+    const t = this.swarmTally(indices);
+    return `Swarm: ${t.total} UAV, ${t.struck} struck, ${t.intercepted} intercepted`;
+  }
+
+  // Centroid (mean lat/lon) + bounding CIRCLE (max member distance from the
+  // centroid + a margin) over the swarm's LIVE members; falls back to all
+  // members once the swarm is fully resolved. Bounding circle, NOT a hull —
+  // the dispersion model produces near-circular clouds. Returns null for an
+  // unknown/empty swarm.
+  swarmAoi(swarmId: string): { lat: number; lon: number; radiusKm: number } | null {
+    const indices = this.swarms.get(swarmId);
+    if (!indices || indices.length === 0) return null;
+    const isLive = (rt: RtAgent): boolean =>
+      rt.fate === 'flying' && rt.mode !== 'crashed' && rt.mode !== 'arrived';
+    let members = indices.map((i) => this.agents[i]).filter((rt): rt is RtAgent => !!rt && isLive(rt));
+    if (members.length === 0) {
+      members = indices.map((i) => this.agents[i]).filter((rt): rt is RtAgent => !!rt);
+    }
+    if (members.length === 0) return null;
+    let sumLat = 0;
+    let sumLon = 0;
+    for (const rt of members) {
+      sumLat += rt.lat;
+      sumLon += rt.lon;
+    }
+    const lat = sumLat / members.length;
+    const lon = sumLon / members.length;
+    const center = { lat, lon };
+    let maxKm = 0;
+    for (const rt of members) {
+      const d = haversineKm(center, { lat: rt.lat, lon: rt.lon });
+      if (d > maxKm) maxKm = d;
+    }
+    // Margin: 20% of the spread plus a 0.5 km floor so a tight/single-member
+    // cloud still draws a visible ring.
+    const radiusKm = maxKm * 1.2 + 0.5;
+    return { lat, lon, radiusKm };
   }
 
   private agentColor(rt: RtAgent): Cesium.Color {
@@ -582,6 +691,7 @@ export class SimController {
     this.plan = null;
     this.pause();
     this.agents = [];
+    this.swarms.clear();
     this.ds.entities.removeAll();
     this.viewer.scene.requestRender();
     this.emit();

@@ -1414,6 +1414,13 @@ async def adsb_global(
     lomin: float | None = Query(None, ge=-180, le=180),
     lamax: float | None = Query(None, ge=-90, le=90),
     lomax: float | None = Query(None, ge=-180, le=180),
+    # lat/lon-spelled aliases for the same bbox (API/curl callers, e.g. ?min_lat=).
+    # The live Cesium/MapLibre globe sends the OpenSky-style lamin/lomin/lamax/lomax
+    # names above; accept BOTH so a supplied bbox is never silently dropped.
+    min_lat: float | None = Query(None, ge=-90, le=90),
+    min_lon: float | None = Query(None, ge=-180, le=180),
+    max_lat: float | None = Query(None, ge=-90, le=90),
+    max_lon: float | None = Query(None, ge=-180, le=180),
     limit: int | None = Query(None, ge=1, le=20000),
 ) -> Response | dict[str, Any]:
     """Return the latest aircraft snapshot, optionally scoped to a viewport.
@@ -1433,6 +1440,18 @@ async def adsb_global(
     First call kicks off the background refresher and does one synchronous
     bootstrap fetch so the response isn't empty. Subsequent calls return
     immediately with whatever the background task last accepted."""
+    # Coalesce the two accepted bbox vocabularies into the canonical lamin/... used
+    # everywhere below. lamin/... (the live globe) wins; min_lat/... (API/curl) fills
+    # in only when its lamin counterpart is absent. Keeps the world gate + viewport_filter
+    # downstream untouched while making a supplied bbox in EITHER spelling take effect.
+    if lamin is None:
+        lamin = min_lat
+    if lomin is None:
+        lomin = min_lon
+    if lamax is None:
+        lamax = max_lat
+    if lomax is None:
+        lomax = max_lon
     # Any no-bbox request WITH a limit is a world-view poll (the only such caller
     # is the frontend; the bare no-param call below stays the full dict for the
     # MCP/intel tools). Serve the pre-built blob regardless of the exact limit
@@ -1513,6 +1532,22 @@ async def start_snapshot() -> None:
             return
         _SNAPSHOT_TASK = asyncio.create_task(_refresh_snapshot_forever())
         _SNAPSHOT_STARTED = True
+
+
+async def await_hot(timeout: float = 25.0) -> int:
+    """Block until the background refresher has filled the snapshot with aircraft
+    (or ``timeout`` s elapse), so the FIRST request is HOT rather than a cold
+    warm-up. Returns the aircraft count reached. Call AFTER start_snapshot();
+    the cap means a slow/down upstream degrades to background-fill, never hangs.
+    """
+    waited = 0.0
+    while waited < timeout:
+        n = len(_LATEST_SNAPSHOT.get("features", []))
+        if n > 0:
+            return n
+        await asyncio.sleep(0.5)
+        waited += 0.5
+    return len(_LATEST_SNAPSHOT.get("features", []))
 
 
 async def stop_snapshot() -> None:

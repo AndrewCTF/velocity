@@ -18,8 +18,10 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Query
 
+from app.config import get_settings
 from app.correlate.store import store
 from app.correlate.types import Observation
+from app.upstream import cache, get_client
 
 router = APIRouter(tags=["search"])
 
@@ -150,5 +152,54 @@ async def search(
     for cid, name, lon, lat in _CHOKEPOINTS:
         if qlower in cid or qlower in name.lower():
             results.append(_result("chokepoint", f"chokepoint:{cid}", name, lon, lat))
+
+    # 6. Nominatim forward-geocode — only if no results so far.
+    if not results:
+        s = get_settings()
+        base = s.nominatim_url or ("" if s.commercial_mode else "https://nominatim.openstreetmap.org")
+        if base:
+            norm = q.lower()
+            cache_key = f"nominatim:fwd:{norm}:{limit}"
+
+            async def _nominatim_load() -> list[dict[str, Any]]:
+                try:
+                    r = await get_client().get(
+                        f"{base.rstrip('/')}/search",
+                        params={
+                            "q": q,
+                            "format": "jsonv2",
+                            "limit": limit,
+                            "addressdetails": "0",
+                        },
+                        headers={"User-Agent": "osint-console/0.1"},
+                    )
+                except Exception:  # noqa: BLE001
+                    return []
+                if r.status_code != 200:
+                    return []
+                try:
+                    rows = r.json()
+                except Exception:
+                    return []
+                out: list[dict[str, Any]] = []
+                for row in rows if isinstance(rows, list) else []:
+                    try:
+                        rlat = float(row["lat"])
+                        rlon = float(row["lon"])
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    label = row.get("display_name") or row.get("name") or q
+                    out.append(
+                        _result("place", f"poi:{rlat},{rlon}", str(label), rlon, rlat)
+                    )
+                return out
+
+            cached = await cache.get_or_fetch(cache_key, 24 * 3600.0, _nominatim_load)
+            # cache.get_or_fetch wraps the loader return in whatever the loader
+            # returns, so cached is a list[dict] here.
+            if isinstance(cached, list):
+                results.extend(cached)
+            elif isinstance(cached, dict) and "results" in cached:
+                results.extend(cached["results"])
 
     return {"results": results[:limit]}

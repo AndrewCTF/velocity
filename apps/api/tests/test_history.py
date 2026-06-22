@@ -3,11 +3,36 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
+from collections.abc import Iterator
 
 import pytest
 
 import app.history as H
+from app.config import get_settings
+
+
+@contextlib.contextmanager
+def _retention_env(
+    monkeypatch: pytest.MonkeyPatch, *, hours: int, max_hours: int
+) -> Iterator[None]:
+    """Override the retention settings via env + clear the cached singleton.
+
+    Mirrors the test_adsb_feeds.py pattern (setenv + get_settings.cache_clear);
+    history.py reads the cached module-level get_settings(), so we must clear it
+    so the new values take effect, and clear again on exit to not leak into the
+    next test's settings.
+    """
+    monkeypatch.setenv("HISTORY_RETENTION_HOURS", str(hours))
+    monkeypatch.setenv("HISTORY_RETENTION_MAX_HOURS", str(max_hours))
+    get_settings.cache_clear()
+    try:
+        yield
+    finally:
+        monkeypatch.delenv("HISTORY_RETENTION_HOURS", raising=False)
+        monkeypatch.delenv("HISTORY_RETENTION_MAX_HOURS", raising=False)
+        get_settings.cache_clear()
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -233,3 +258,94 @@ async def test_vessel_ingest(tmp_path: pytest.TempPathFactory) -> None:
     assert len(tracks) == 1
     assert tracks[0]["id"] == "vessel:123456789"
     assert tracks[0]["kind"] == "vessel"
+
+
+# ── retention bound (D4: multi-day replay, still self-capped) ────────────────
+
+
+def test_retention_default_is_multiday() -> None:
+    """The default retention window must exceed the old ~24 h live window so the
+    operator can scrub multi-day, while staying within the configured ceiling."""
+    get_settings.cache_clear()
+    try:
+        hours = H._clamped_retention_hours()
+    finally:
+        get_settings.cache_clear()
+    assert hours > 24, "default retention must lift past the ~24h live window"
+    assert hours <= get_settings().history_retention_max_hours
+    get_settings.cache_clear()
+
+
+def test_retention_clamped_to_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fat-fingered huge retention is clamped down to history_retention_max_hours
+    so the time bound can never grow unboundedly large."""
+    with _retention_env(monkeypatch, hours=1_000_000, max_hours=720):
+        assert H._clamped_retention_hours() == 720
+
+
+def test_retention_floored_at_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A zero/negative retention floors at 1 h so the prune cutoff is never in
+    the future / non-positive (which would delete everything or nothing sanely)."""
+    with _retention_env(monkeypatch, hours=0, max_hours=720):
+        assert H._clamped_retention_hours() == 1
+    with _retention_env(monkeypatch, hours=-5, max_hours=720):
+        assert H._clamped_retention_hours() == 1
+
+
+def test_retention_ceiling_zero_disables_upper_bound(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A ceiling of 0 disables the upper clamp (byte cap is then the only limit),
+    but the floor of 1 still holds."""
+    with _retention_env(monkeypatch, hours=5_000, max_hours=0):
+        assert H._clamped_retention_hours() == 5_000
+    with _retention_env(monkeypatch, hours=0, max_hours=0):
+        assert H._clamped_retention_hours() == 1
+
+
+def test_retention_within_range_passes_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A normal multi-day value inside the range is used verbatim."""
+    with _retention_env(monkeypatch, hours=168, max_hours=720):
+        assert H._clamped_retention_hours() == 168
+
+
+@pytest.mark.asyncio
+async def test_prune_honours_clamped_retention(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory
+) -> None:
+    """End-to-end: with a multi-day window, a fix from 3 days ago is KEPT (the old
+    48 h window would have pruned it); a fix past the window is still dropped.
+
+    This is the operator-visible win — replay reaches back multiple days — proven
+    against the same prune() the background maintenance loop calls.
+    """
+    db = str(tmp_path / "retain.db")
+    _reset_module(db)
+
+    now = time.time()
+    three_days_ago = now - 3 * 24 * 3600  # inside a 7-day window, outside 48h
+    ten_days_ago = now - 10 * 24 * 3600  # outside a 7-day window
+    H._buffer.append(("aircraft", "aircraft:d3", three_days_ago, 5.0, 50.0, 0.0, "{}"))
+    H._buffer.append(("aircraft", "aircraft:d10", ten_days_ago, 6.0, 51.0, 0.0, "{}"))
+
+    rows, H._buffer = H._buffer, []
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, H._flush_sync, rows)
+
+    with _retention_env(monkeypatch, hours=168, max_hours=720):  # 7 days
+        await loop.run_in_executor(None, H.prune, H._clamped_retention_hours())
+
+    res = await H.query_tracks(
+        kind="aircraft", bbox=None, t_from=ten_days_ago - 10, t_to=now + 10, limit_ids=1000
+    )
+    ids = {t["id"] for t in res["tracks"]}
+    assert "aircraft:d3" in ids, "a 3-day-old fix must survive a 7-day window"
+    assert "aircraft:d10" not in ids, "a 10-day-old fix is past the window → pruned"
+
+
+def test_stats_reports_effective_retention(monkeypatch: pytest.MonkeyPatch) -> None:
+    """stats() exposes the *clamped* retention so the frontend date-picker can
+    bound itself to what's actually retained, not the raw setting."""
+    with _retention_env(monkeypatch, hours=1_000_000, max_hours=720):
+        st = H.stats()
+        assert st["retention_hours"] == 720, "stats must report the clamped value"
+        assert st["retention_max_hours"] == 720
+        assert "max_bytes" in st

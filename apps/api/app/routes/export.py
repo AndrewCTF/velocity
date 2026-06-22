@@ -143,10 +143,13 @@ _MEDIA = {
 async def export(
     fmt: str = Query("geojson", pattern="^(geojson|csv|kml)$"),
     kinds: str = Query("aircraft"),
+    layer: str | None = Query(None),
     bbox: str | None = Query(None),
     limit: int = Query(0, ge=0, le=50000),
 ) -> Response:
-    kind_set = {k.strip() for k in kinds.split(",") if k.strip()} or {"aircraft"}
+    # `layer` is the canonical param callers send; `kinds` is the legacy alias.
+    # layer wins when present.
+    kind_set = {k.strip() for k in (layer or kinds).split(",") if k.strip()} or {"aircraft"}
     feats = await _collect(kind_set, _parse_bbox(bbox))
     if limit:
         feats = feats[:limit]

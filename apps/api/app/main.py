@@ -16,6 +16,7 @@ from app.auth import ApiKeyMiddleware
 from app.config import get_settings
 from app.correlate import runner as correlate_runner
 from app.mcp_server import build_mcp_mount
+from app.routes import actions as actions_routes
 from app.routes import adsb as adsb_routes
 from app.routes import ais as ais_routes
 from app.routes import alert_rules as alert_rules_routes
@@ -38,14 +39,17 @@ from app.routes import imagery as imagery_routes
 from app.routes import intel as intel_routes
 from app.routes import jamming as jamming_routes
 from app.routes import keys as keys_routes
+from app.routes import maps as maps_routes
 from app.routes import maritime as maritime_routes
 from app.routes import news as news_routes_mod
+from app.routes import ontology as ontology_routes
 from app.routes import sar as sar_routes
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
 from app.routes import simulation as simulation_routes
 from app.routes import space as space_routes
 from app.routes import status as status_routes
+from app.routes import targets as targets_routes
 from app.routes import tiles as tiles_routes
 from app.routes import timeline as timeline_routes
 from app.routes import weather as weather_routes
@@ -125,6 +129,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import history  # noqa: PLC0415
 
             history.start()
+            # Standing-watchlist / geofence evaluator: sweeps each active session's
+            # alert_rules against the warm snapshot + brief and fires persistent
+            # Alert objects. Idles cheaply with no registered sessions, so starting
+            # it at boot is free (same spirit as adsb start_snapshot above). Torn
+            # down by watch.stop() in the finally block.
+            from app.intel import watch as watch_eval  # noqa: PLC0415
+
+            await watch_eval.start()
             # Warm the CCTV catalog so the first /api/cams hits a populated
             # TtlCache instead of a cold serial upstream fan-out (~18s). Same
             # spirit as the adsb start_snapshot() pre-warm above. Fire-and-
@@ -145,6 +157,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 from app.routes import news as news_routes  # noqa: PLC0415
 
                 news_routes.start_refresher()
+
+            # Pre-warm so AIRPLANES + MARITIME are HOT at boot — block (capped)
+            # until both have data so the FIRST request is instant, not a cold
+            # warm-up. Runs the two warms concurrently; each is wrapped in a hard
+            # timeout so a slow/down upstream degrades to the background-fill
+            # behaviour above instead of hanging startup. The refresher loops
+            # started above keep them hot continuously thereafter.
+            async def _warm_aircraft() -> None:
+                try:
+                    await asyncio.wait_for(adsb_routes.await_hot(22.0), timeout=24.0)
+                except Exception:  # noqa: BLE001 — warm is best-effort
+                    pass
+
+            async def _warm_maritime() -> None:
+                try:
+                    await asyncio.wait_for(maritime_routes.digitraffic_snapshot(), timeout=15.0)
+                except Exception:  # noqa: BLE001 — warm is best-effort
+                    pass
+
+            await asyncio.gather(_warm_aircraft(), _warm_maritime())
         yield
     finally:
         await mcp_cm.__aexit__(None, None, None)
@@ -165,10 +197,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
             from app.routes import news as news_routes  # noqa: PLC0415
 
+            from app.intel import watch as watch_eval  # noqa: PLC0415
+
             await ais_firehose.stop()
             await ais_keyless.stop()
             await maritime_routes.stop_background_poll()
             await history.stop()
+            await watch_eval.stop()
             await news_routes.stop_refresher()
 
 
@@ -224,8 +259,31 @@ def create_app() -> FastAPI:
     app.include_router(export_routes.router)
     app.include_router(keys_routes.router)
     app.include_router(alert_rules_routes.router)
+    app.include_router(targets_routes.router)
     app.include_router(status_routes.router)
     app.include_router(simulation_routes.router)
+    # Typed ontology spine (read) + governed write-back actions — the semantic
+    # layer the kanban, alerts, and agent compose on (Track A1/C1).
+    app.include_router(ontology_routes.router)
+    app.include_router(actions_routes.router)
+    # Shared named COP (save/load a viewport+layers+filters picture as a map:
+    # ontology object) + the /ws/cop follow-along delta channel (Track D2).
+    app.include_router(maps_routes.router)
+
+    # TiTiler COG sub-app (Track B2): XYZ tiles for any Cloud-Optimized GeoTIFF
+    # (Maxar Open Data S3, future SAR delivery), so B3/B4/B5 have a universal
+    # chip server. OPTIONAL — titiler-core pulls rasterio/GDAL, which may not be
+    # installed; build_tiler_app() returns None on ImportError so the app still
+    # boots. Inherits ApiKeyMiddleware gating (a BaseHTTPMiddleware sees mounted
+    # paths), so the mount preserves the auth invariant; see tiler.py for the
+    # keyless-vs-gated note (a /tiler/ entry in auth.PUBLIC_PREFIXES is what a
+    # browser-direct keyless drape needs — owned by the auth module, not added
+    # here).
+    from app.imagery.tiler import build_tiler_app  # noqa: PLC0415
+
+    tiler_app = build_tiler_app()
+    if tiler_app is not None:
+        app.mount("/tiler", tiler_app)
 
     # Agent-facing MCP endpoint (streamable-HTTP) at /mcp, in-process so its
     # tools share this app's warm snapshot + fusion engine. Gated by

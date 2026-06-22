@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Velocity COP — design target</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#0f141c; --panel-2:#141b25; --raised:#19212d;
+    --line:rgba(255,255,255,.055); --line-2:rgba(255,255,255,.10);
+    --t0:#eef2f7; --t1:#aab4c2; --t2:#737e8d; --t3:#4d5664;
+    --accent:#5aa2e8; --accent-dim:rgba(90,162,232,.14);
+    --red:#ff6b61; --amber:#f5b13d; --green:#43d6a0; --cyan:#52d2e0; --mag:#c77dff;
+    --sans:'Inter',system-ui,sans-serif; --mono:'IBM Plex Mono',monospace;
+    --r:6px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--t0);font-family:var(--sans);font-size:13px;line-height:1.5;
+       -webkit-font-smoothing:antialiased;height:100vh;overflow:hidden}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .app{display:grid;grid-template-rows:52px 1fr;height:100vh}
+
+  /* ── command bar ── */
+  .cmd{display:flex;align-items:center;gap:0;padding:0 16px;border-bottom:1px solid var(--line-2);
+       background:linear-gradient(180deg,#10161f,#0d121a)}
+  .brand{display:flex;align-items:baseline;gap:9px;padding-right:18px;margin-right:18px;border-right:1px solid var(--line)}
+  .brand b{font-weight:700;letter-spacing:.14em;font-size:13px}
+  .brand span{font-family:var(--mono);font-size:11px;color:var(--t3)}
+  .search{flex:0 0 300px;display:flex;align-items:center;gap:9px;height:32px;padding:0 12px;
+          background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);color:var(--t2);font-size:12px}
+  .search svg{opacity:.5}
+  .seg{display:flex;margin-left:14px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .seg button{background:none;border:0;color:var(--t2);font-family:var(--sans);font-size:12px;font-weight:500;
+              padding:7px 13px;cursor:pointer;border-right:1px solid var(--line)}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--accent-dim);color:var(--accent)}
+  .spacer{flex:1}
+  .cls{display:flex;align-items:center;gap:8px;padding:6px 12px;margin-right:14px;border:1px solid var(--line);
+       border-radius:var(--r);background:var(--panel-2)}
+  .cls .dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .cls span{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--t1)}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--t1);letter-spacing:.04em}
+  .stat{display:flex;flex-direction:column;align-items:flex-end;margin-left:18px;line-height:1.25}
+  .stat b{font-family:var(--mono);font-size:13px;font-weight:600}
+  .stat small{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.1em}
+
+  /* ── body grid ── */
+  .body{display:grid;grid-template-columns:300px 1fr 360px;height:100%;overflow:hidden}
+  .rail{background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+  .rail.l{border-right:1px solid var(--line-2)}
+  .rail.r{border-left:1px solid var(--line-2)}
+  .railhead{display:flex;align-items:center;gap:14px;height:44px;padding:0 18px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .railhead .tab{font-size:12px;font-weight:600;color:var(--t3);cursor:pointer;letter-spacing:.01em}
+  .railhead .tab.on{color:var(--t0)}
+  .railbody{flex:1;overflow:auto;padding:18px}
+
+  /* section */
+  .sec{margin-bottom:26px}
+  .sec-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .sec-h h3{font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--t2)}
+  .sec-h .ct{font-family:var(--mono);font-size:11px;color:var(--t3)}
+
+  /* order-of-battle list */
+  .ob{display:flex;flex-direction:column;gap:2px}
+  .ob .grp{font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.1em;margin:14px 0 7px;display:flex;justify-content:space-between}
+  .ob .grp:first-child{margin-top:0}
+  .ob .row{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:5px;cursor:pointer}
+  .ob .row:hover{background:var(--panel-2)}
+  .ob .row .sw{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
+  .ob .row .nm{flex:1;font-size:12.5px;color:var(--t1)}
+  .ob .row .n{font-family:var(--mono);font-size:11.5px;color:var(--t2)}
+  .ob .row .tg{width:26px;height:15px;border-radius:8px;background:var(--accent-dim);position:relative;flex:0 0 auto}
+  .ob .row .tg::after{content:"";position:absolute;top:2px;right:2px;width:11px;height:11px;border-radius:50%;background:var(--accent)}
+  .ob .row.off .tg{background:var(--raised)}
+  .ob .row.off .tg::after{left:2px;right:auto;background:var(--t3)}
+
+  /* center / map */
+  .map{position:relative;overflow:hidden;background:radial-gradient(120% 120% at 50% 30%,#0e1620,#070a0f 70%)}
+  .globe{position:absolute;left:50%;top:54%;transform:translate(-50%,-50%);width:560px;height:560px;border-radius:50%;
+         background:radial-gradient(130% 130% at 38% 30%,#1d2b3a,#101a26 55%,#0a1019 100%);
+         box-shadow:inset -40px -30px 80px rgba(0,0,0,.6),0 0 120px rgba(40,90,150,.10)}
+  .globe::after{content:"";position:absolute;inset:0;border-radius:50%;
+         background:repeating-linear-gradient(0deg,transparent 0 38px,rgba(120,160,210,.05) 38px 39px),
+                    repeating-linear-gradient(90deg,transparent 0 38px,rgba(120,160,210,.05) 38px 39px);
+         -webkit-mask:radial-gradient(circle at 38% 30%,#000 60%,transparent);mask:radial-gradient(circle at 38% 30%,#000 60%,transparent)}
+  .blip{position:absolute;width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 6px var(--amber)}
+  .map-osd{position:absolute;left:18px;bottom:16px;display:flex;gap:22px;font-family:var(--mono);font-size:11px;color:var(--t2)}
+  .map-osd b{color:var(--t1);font-weight:500}
+  .map-top{position:absolute;left:50%;top:14px;transform:translateX(-50%);display:flex;gap:18px;align-items:center;
+           padding:7px 16px;background:rgba(13,18,26,.82);border:1px solid var(--line);border-radius:var(--r);backdrop-filter:blur(8px)}
+  .map-top .it{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--t1)}
+  .map-top .it i{width:7px;height:7px;border-radius:50%;display:inline-block}
+
+  /* selection card */
+  .selhead{padding:18px 18px 16px;border-bottom:1px solid var(--line)}
+  .selhead .id{font-family:var(--mono);font-size:11px;color:var(--t3);letter-spacing:.06em}
+  .selhead h2{font-size:19px;font-weight:600;margin-top:5px;letter-spacing:-.01em}
+  .selhead .sub{display:flex;align-items:center;gap:9px;margin-top:8px}
+  .chip{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:20px;letter-spacing:.05em;text-transform:uppercase}
+  .chip.mil{background:rgba(245,177,61,.14);color:var(--amber)}
+  .chip.live{background:rgba(67,214,160,.14);color:var(--green)}
+  .attr{display:grid;grid-template-columns:1fr 1fr;gap:18px 16px;padding:18px}
+  .attr .k{font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.09em;margin-bottom:4px}
+  .attr .v{font-family:var(--mono);font-size:14px;color:var(--t0);font-weight:500}
+  .attr .v.s{font-family:var(--sans)}
+
+  /* pattern of life sparkline */
+  .pol{padding:0 18px 18px}
+  .spark{height:54px;width:100%;display:block;margin-top:10px}
+
+  /* bottom kanban dock */
+  .dock{position:absolute;left:0;right:0;bottom:0;height:300px;background:rgba(11,15,21,.97);border-top:1px solid var(--line-2);
+        backdrop-filter:blur(10px);display:flex;flex-direction:column}
+  .dockhead{display:flex;align-items:center;justify-content:space-between;height:46px;padding:0 20px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .dockhead h3{font-size:13px;font-weight:600;letter-spacing:.02em}
+  .dockhead h3 span{color:var(--t3);font-weight:500;margin-left:8px}
+  .cols{flex:1;display:flex;gap:0;overflow-x:auto}
+  .col{flex:0 0 240px;border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .col-h{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;flex:0 0 auto}
+  .col-h .t{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--t2)}
+  .col-h .t b{color:var(--t3);font-weight:600;margin-right:7px}
+  .col-h .c{font-family:var(--mono);font-size:11px;color:var(--t3);background:var(--raised);padding:1px 7px;border-radius:10px}
+  .col-b{flex:1;overflow:auto;padding:0 12px 12px;display:flex;flex-direction:column;gap:9px}
+  .card{background:var(--panel-2);border:1px solid var(--line);border-left:2px solid var(--red);border-radius:5px;padding:11px 13px}
+  .card.g{border-left-color:var(--green)}.card.a{border-left-color:var(--amber)}
+  .card .ct{display:flex;align-items:center;gap:9px}
+  .card .ic{width:18px;height:18px;border-radius:3px;background:var(--raised);display:grid;place-items:center;font-size:10px;color:var(--t2);flex:0 0 auto}
+  .card .nm{font-size:13px;font-weight:500}
+  .card .meta{font-family:var(--mono);font-size:10.5px;color:var(--t3);margin-top:7px;display:flex;justify-content:space-between}
+  .pips{display:flex;gap:3px;margin-top:9px}
+  .pips i{height:3px;flex:1;border-radius:2px;background:var(--raised)}
+  .pips i.on{background:var(--accent)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- command bar -->
+  <div class="cmd">
+    <div class="brand"><b>VELOCITY</b><span>v0.9</span></div>
+    <div class="search"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>Search callsign, MMSI, place…</div>
+    <div class="seg">
+      <button>Map</button><button class="on">Tasking</button><button>Targets</button><button>FMV</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="cls"><i class="dot"></i><span>UNCLASSIFIED · OPEN-SOURCE</span></div>
+    <div class="clock">06:14:29Z</div>
+    <div class="stat"><b>11,548</b><small>Aircraft</small></div>
+    <div class="stat"><b>4,761</b><small>Vessels</small></div>
+  </div>
+
+  <div class="body">
+    <!-- left: order of battle -->
+    <div class="rail l">
+      <div class="railhead"><span class="tab on">Layers</span><span class="tab">Feeds</span><span class="tab">Imagery</span></div>
+      <div class="railbody">
+        <div class="ob">
+          <div class="grp"><span>Aviation</span><span style="color:var(--t3)">3 / 5</span></div>
+          <div class="row"><span class="sw" style="background:var(--amber)"></span><span class="nm">ADS-B · Global union</span><span class="n">7,636</span><span class="tg"></span></div>
+          <div class="row"><span class="sw" style="background:var(--amber)"></span><span class="nm">Military aircraft</span><span class="n">38</span><span class="tg"></span></div>
+          <div class="row off"><span class="sw" style="background:var(--t3)"></span><span class="nm">OpenSky (authed)</span><span class="n">—</span><span class="tg"></span></div>
+          <div class="grp"><span>Maritime</span><span style="color:var(--t3)">2 / 9</span></div>
+          <div class="row"><span class="sw" style="background:var(--cyan)"></span><span class="nm">AIS · live vessels</span><span class="n">4,761</span><span class="tg"></span></div>
+          <div class="row off"><span class="sw" style="background:var(--t3)"></span><span class="nm">SAR dark-vessels</span><span class="n">—</span><span class="tg"></span></div>
+          <div class="grp"><span>Space · Cyber</span><span style="color:var(--t3)">1 / 6</span></div>
+          <div class="row"><span class="sw" style="background:var(--mag)"></span><span class="nm">CelesTrak · active</span><span class="n">15.8k</span><span class="tg"></span></div>
+          <div class="row off"><span class="sw" style="background:var(--t3)"></span><span class="nm">GPS jamming (NACp)</span><span class="n">167</span><span class="tg"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- center: map -->
+    <div class="map">
+      <div class="map-top">
+        <span class="it"><i style="background:var(--amber)"></i>Aircraft</span>
+        <span class="it"><i style="background:var(--cyan)"></i>Vessels</span>
+        <span class="it"><i style="background:var(--red)"></i>Jamming</span>
+        <span class="it" style="color:var(--green)">● Feeds 5 / 5 live</span>
+      </div>
+      <div class="globe">
+        <span class="blip" style="left:42%;top:30%"></span><span class="blip" style="left:55%;top:38%"></span>
+        <span class="blip" style="left:48%;top:46%;background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span>
+        <span class="blip" style="left:60%;top:52%"></span><span class="blip" style="left:38%;top:55%"></span>
+        <span class="blip" style="left:52%;top:34%;background:var(--red);box-shadow:0 0 8px var(--red)"></span>
+      </div>
+      <div class="map-osd"><span>CTR <b>31.4°N 030.0°E</b></span><span>BRG <b>000</b></span><span>SCALE <b>1:42M</b></span></div>
+
+      <!-- targeting dock -->
+      <div class="dock">
+        <div class="dockhead"><h3>Targeting<span>F2T2EA · OP GOLDEN WARRIOR</span></h3><span class="mono" style="font-size:11px;color:var(--t3)">UNCLAS // FOUO</span></div>
+        <div class="cols">
+          <div class="col"><div class="col-h"><span class="t"><b>1</b>Confirm</span><span class="c">3</span></div><div class="col-b">
+            <div class="card"><div class="ct"><span class="ic">✈</span><span class="nm">AFR1149 · A359</span></div><div class="meta"><span>HPT · Marina.1</span><span>P2</span></div><div class="pips"><i class="on"></i><i></i><i></i><i></i></div></div>
+            <div class="card a"><div class="ct"><span class="ic">▲</span><span class="nm">Battery · S-400</span></div><div class="meta"><span>HPT · Presidio.2</span><span>P1</span></div><div class="pips"><i class="on"></i><i></i><i></i><i></i></div></div>
+          </div></div>
+          <div class="col"><div class="col-h"><span class="t"><b>2</b>Attach Intel</span><span class="c">2</span></div><div class="col-b">
+            <div class="card a"><div class="ct"><span class="ic">⛴</span><span class="nm">Tanker · 422…</span></div><div class="meta"><span>HPT · Sausalito</span><span>P2</span></div><div class="pips"><i class="on"></i><i class="on"></i><i></i><i></i></div></div>
+          </div></div>
+          <div class="col"><div class="col-h"><span class="t"><b>3</b>Approvals</span><span class="c">1</span></div><div class="col-b">
+            <div class="card"><div class="ct"><span class="ic">✈</span><span class="nm">CNV3190 · C130</span></div><div class="meta"><span>HPT · Pacific.1</span><span>P1</span></div><div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div></div>
+          </div></div>
+          <div class="col"><div class="col-h"><span class="t"><b>4</b>Weaponeer</span><span class="c">2</span></div><div class="col-b">
+            <div class="card g"><div class="ct"><span class="ic">▲</span><span class="nm">Pantsir-S1</span></div><div class="meta"><span>HPT · Marina.2</span><span>P1</span></div><div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div></div>
+          </div></div>
+          <div class="col"><div class="col-h"><span class="t"><b>5</b>Assess</span><span class="c">1</span></div><div class="col-b"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- right: selection -->
+    <div class="rail r">
+      <div class="railhead"><span class="tab on">Selection</span><span class="tab">Alerts</span><span class="tab">Intel</span><span class="tab">News</span></div>
+      <div class="selhead">
+        <div class="id">ICAO24 · 4CA1A1 · ADS-B</div>
+        <h2>RCH4192</h2>
+        <div class="sub"><span class="chip mil">Military</span><span class="chip live">Live · 0.4s</span><span class="mono" style="font-size:11px;color:var(--t2)">C-17A</span></div>
+      </div>
+      <div class="attr">
+        <div><div class="k">Altitude</div><div class="v">34,000<span style="color:var(--t3);font-size:11px"> ft</span></div></div>
+        <div><div class="k">Ground speed</div><div class="v">472<span style="color:var(--t3);font-size:11px"> kn</span></div></div>
+        <div><div class="k">Heading</div><div class="v">068°</div></div>
+        <div><div class="k">Vert rate</div><div class="v">+1,200</div></div>
+        <div><div class="k">Squawk</div><div class="v">1200</div></div>
+        <div><div class="k">Origin</div><div class="v s">Ramstein AB</div></div>
+      </div>
+      <div class="pol">
+        <div class="sec-h"><h3>Pattern of life · 24h</h3><span class="ct">altitude</span></div>
+        <svg class="spark" viewBox="0 0 320 54" preserveAspectRatio="none">
+          <polyline fill="none" stroke="var(--accent)" stroke-width="1.5" points="0,40 30,38 60,20 90,14 120,15 150,12 180,28 210,30 240,10 270,8 300,22 320,24"/>
+          <polyline fill="var(--accent-dim)" stroke="none" points="0,40 30,38 60,20 90,14 120,15 150,12 180,28 210,30 240,10 270,8 300,22 320,24 320,54 0,54"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

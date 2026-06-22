@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useImagery } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
-import { SectionLabel, MicroLabel, Btn, Badge } from '../shell/instruments.js';
+import { SectionLabel, MicroLabel, Btn, Badge, Caveat } from '../shell/instruments.js';
 
 interface CatalogLayer {
   provider: string;
@@ -63,6 +63,32 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+// ── Multi-temporal change detection (A/B) ──────────────────────────────────
+// The honest metadata the backend reports for a change chip (X-Chip header).
+interface ChangeMeta {
+  provider: string; // 'sentinel' | 'sentinel-sar'
+  mode?: string;
+  before: string;
+  after: string;
+  gsd_m: number | null;
+  legend?: { red?: string; green?: string };
+  note?: string | null;
+}
+
+type ChangeMode = 'optical' | 'radar';
+
+function changeProviderLabel(provider: string): string {
+  if (provider === 'sentinel') return 'SENTINEL-2 Δ';
+  if (provider === 'sentinel-sar') return 'SENTINEL-1 Δ';
+  return provider.toUpperCase();
+}
+
 // Curated war-damage AOIs (Sentinel-1 SAR collapse candidates, red). Each maps
 // to a backend AOI key in app/intel/sar_damage.py.
 const DAMAGE_AOIS: { id: string; label: string }[] = [
@@ -104,6 +130,85 @@ export function ImageryControl() {
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [events, setEvents] = useState<EventFeature[]>([]);
   const [eventsSummary, setEventsSummary] = useState<EventsAllResponse['sources'] | null>(null);
+
+  // ── Change detection (A/B) local state. Drapes a Sentinel before/after diff
+  // for the active location; previews it inline with honest labels.
+  const [changeBefore, setChangeBefore] = useState(() => daysAgo(30));
+  const [changeAfter, setChangeAfter] = useState(() => daysAgo(1));
+  const [changeMode, setChangeMode] = useState<ChangeMode>('optical');
+  const [changeLoading, setChangeLoading] = useState(false);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [changeImg, setChangeImg] = useState<string | null>(null);
+  const [changeMeta, setChangeMeta] = useState<ChangeMeta | null>(null);
+
+  // Fetch the change chip for the active events location between the two dates.
+  // Keyless route, but a plain XHR (apiFetch) is fine for an inline <img> blob;
+  // the SingleTileImageryProvider keyless constraint is only for Cesium-side
+  // drapes. Reads the honest X-Chip header so the preview is labeled, never
+  // implying live collection. Revokes the prior object URL to avoid leaks.
+  async function runChange(): Promise<void> {
+    const loc = eventsLocation;
+    if (!loc) {
+      setChangeError('set a location first (search above)');
+      return;
+    }
+    if (changeBefore >= changeAfter) {
+      setChangeError('before date must be earlier than after');
+      return;
+    }
+    setChangeLoading(true);
+    setChangeError(null);
+    try {
+      const p = new URLSearchParams({
+        lat: loc.lat.toFixed(5),
+        lon: loc.lon.toFixed(5),
+        radius_km: '4',
+        before: changeBefore,
+        after: changeAfter,
+        mode: changeMode,
+      });
+      const r = await apiFetch(`/api/imagery/change?${p.toString()}`);
+      if (!r.ok) {
+        // Honest upstream states: 503 = needs CDSE creds, 502 = no pair found.
+        const reason =
+          r.status === 503
+            ? 'needs Sentinel/CDSE credentials'
+            : r.status === 502
+              ? 'no Sentinel pair for this AOI/dates'
+              : `change ${r.status}`;
+        throw new Error(reason);
+      }
+      let meta: ChangeMeta | null = null;
+      try {
+        meta = JSON.parse(r.headers.get('X-Chip') ?? 'null') as ChangeMeta;
+      } catch {
+        meta = null;
+      }
+      const blob = await r.blob();
+      setChangeImg((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+      setChangeMeta(meta);
+    } catch (e) {
+      setChangeImg((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setChangeMeta(null);
+      setChangeError(e instanceof Error ? e.message : 'failed');
+    } finally {
+      setChangeLoading(false);
+    }
+  }
+
+  // Revoke the change object URL on unmount (avoid leaking the blob).
+  useEffect(() => {
+    return () => {
+      if (changeImg) URL.revokeObjectURL(changeImg);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function runGeocode(): Promise<void> {
     const q = cityQuery.trim();
@@ -351,6 +456,95 @@ export function ImageryControl() {
                 )}
               </>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Change detection (A/B) ────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1.5">
+        <SectionLabel title="Change detection (A/B)" />
+        <MicroLabel className="block text-txt-3">
+          Sentinel before/after diff at the active location · red = loss · green = gain
+        </MicroLabel>
+        <div className="flex items-center gap-1">
+          <span className="mono text-[9px] text-txt-3 w-3 shrink-0">A</span>
+          <input
+            type="date"
+            value={changeBefore}
+            max={today()}
+            onChange={(e) => setChangeBefore(e.target.value)}
+            aria-label="Before date"
+            className={`${FIELD} flex-1 min-w-0 tabular-nums`}
+          />
+          <span className="mono text-[9px] text-txt-3 w-3 shrink-0">B</span>
+          <input
+            type="date"
+            value={changeAfter}
+            max={today()}
+            onChange={(e) => setChangeAfter(e.target.value)}
+            aria-label="After date"
+            className={`${FIELD} flex-1 min-w-0 tabular-nums`}
+          />
+        </div>
+        <div className="flex gap-1">
+          <select
+            value={changeMode}
+            onChange={(e) => setChangeMode(e.target.value as ChangeMode)}
+            aria-label="Change mode"
+            className={`${FIELD} flex-1 min-w-0`}
+          >
+            <option value="optical">Optical (S2 · NDVI/NDWI)</option>
+            <option value="radar">Radar (S1 · VV ratio)</option>
+          </select>
+          <Btn
+            tone="accent"
+            disabled={changeLoading || !eventsLocation}
+            onClick={() => void runChange()}
+            title={
+              eventsLocation
+                ? 'Compute the Sentinel change between dates A and B at the active location'
+                : 'Set a location above first'
+            }
+          >
+            {changeLoading ? '…' : 'Compute'}
+          </Btn>
+        </div>
+        {!eventsLocation && (
+          <MicroLabel className="block text-txt-3">
+            Set a location above to enable change detection.
+          </MicroLabel>
+        )}
+        {changeError && <Badge tone="alert">Error: {changeError}</Badge>}
+        {changeImg && changeMeta && (
+          <div className="flex flex-col gap-1.5 rounded-sm border border-line bg-bg-2 p-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Caveat
+                level={changeProviderLabel(changeMeta.provider)}
+                note={changeMeta.gsd_m != null ? `${Math.round(changeMeta.gsd_m)} m` : '— m'}
+                tone="warn"
+              />
+              <Caveat level={`A ${changeMeta.before}`} />
+              <Caveat level={`B ${changeMeta.after}`} />
+            </div>
+            {/* The diverging change render. Honesty: archived passes, not live. */}
+            <img
+              src={changeImg}
+              alt={`Sentinel change ${changeMeta.before} → ${changeMeta.after}`}
+              className="w-full rounded-sm border border-line"
+            />
+            <div className="flex items-center gap-2 mono text-[9px] text-txt-3">
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded-sm bg-[#cc2828]" />
+                {changeMeta.legend?.red ?? 'loss'}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded-sm bg-[#28cc46]" />
+                {changeMeta.legend?.green ?? 'gain'}
+              </span>
+            </div>
+            <MicroLabel className="block text-txt-3">
+              archived satellite passes · not live · each window mosaics nearby passes
+            </MicroLabel>
           </div>
         )}
       </div>

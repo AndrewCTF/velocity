@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as Cesium from 'cesium';
-import { useAlerts, useFeeds } from '../state/stores.js';
+import {
+  useAlerts,
+  useFeeds,
+  useFilters,
+  useSelection,
+  type FilterFacet,
+  type FilterMode,
+} from '../state/stores.js';
 import { useAoi } from '../state/aoi.js';
 import { useAgent } from '../state/agent.js';
 import { apiFetch } from '../transport/http.js';
@@ -56,6 +63,18 @@ interface TraceRow {
   status: 'run' | 'ok';
   note?: string;
   narration?: string;
+  // An audited write-back the agent performed (flag/promote/nominate/watch).
+  action?: { name: string; targetId?: string; ok: boolean; error?: string };
+  // A focused question the agent asked back; the loop pauses for the operator.
+  clarification?: { question: string; options: string[] };
+}
+
+// Payload of an `app_var` SSE event — the agent driving the operator's map.
+// Every field is optional; the backend validates/clamps before emitting.
+interface AppVar {
+  fly_to?: { lat: number; lon: number; alt_m?: number };
+  select?: string;
+  filter?: { clear?: boolean; facet?: FilterFacet; value?: string; mode?: FilterMode };
 }
 
 type Phase = 'idle' | 'gathering' | 'synthesizing' | 'done' | 'error';
@@ -110,6 +129,37 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [trace, result, phase]);
 
+  // Apply an `app_var` event: the agent driving the operator's map. Reads the
+  // stores via their vanilla getState() (this runs from a stream callback, not
+  // React render) and reuses the SAME mechanisms the UI already uses —
+  // flyToPosition (camera.ts), useFilters (HistogramPanel's filter), and
+  // useSelection (the click-select store). Pure view nudges; no data mutation.
+  const applyAppVar = useCallback(
+    (v: AppVar): void => {
+      if (v.fly_to && viewer && !viewer.isDestroyed()) {
+        flyToPosition(viewer, v.fly_to.lon, v.fly_to.lat, v.fly_to.alt_m ?? 350_000, 1.2);
+      }
+      if (typeof v.select === 'string' && v.select) {
+        useSelection.getState().select(v.select);
+      }
+      if (v.filter) {
+        const f = useFilters.getState();
+        if (v.filter.clear) {
+          f.clear();
+        } else if (v.filter.facet && v.filter.value) {
+          const mode: FilterMode = v.filter.mode === 'not' ? 'not' : 'only';
+          // toggleClause flips; guard with isActive so an agent "set filter" is
+          // idempotent (it never accidentally toggles an existing clause off).
+          if (!f.isActive(v.filter.facet, v.filter.value, mode)) {
+            f.toggleClause(v.filter.facet, v.filter.value, mode);
+          }
+        }
+      }
+      if (isMobile) setOpen(false);
+    },
+    [viewer, isMobile, setOpen],
+  );
+
   const handleEvent = (ev: Record<string, unknown>): void => {
     const type = ev['type'] as string;
     switch (type) {
@@ -139,6 +189,40 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
         break;
       case 'narration':
         setTrace((t) => [...t, { id: 2000 + t.length, status: 'ok', narration: String(ev['text'] ?? '') }]);
+        break;
+      case 'app_var': {
+        // Drive the map (camera / selection / filter). Strip the SSE envelope
+        // keys, then apply whatever fields the agent sent.
+        const { type: _t, step: _s, ...rest } = ev;
+        void _t;
+        void _s;
+        applyAppVar(rest as AppVar);
+        break;
+      }
+      case 'action': {
+        // An audited write-back landed (or failed). Record it as a distinct row.
+        // Build the action object without undefined keys (exactOptionalPropertyTypes).
+        const action: NonNullable<TraceRow['action']> = {
+          name: String(ev['action'] ?? ''),
+          ok: Boolean(ev['ok']),
+        };
+        if (ev['target_id'] != null) action.targetId = String(ev['target_id']);
+        if (ev['error'] != null) action.error = String(ev['error']);
+        setTrace((t) => [...t, { id: 3000 + t.length, status: 'ok', action }]);
+        break;
+      }
+      case 'clarification':
+        setTrace((t) => [
+          ...t,
+          {
+            id: 4000 + t.length,
+            status: 'ok',
+            clarification: {
+              question: String(ev['question'] ?? ''),
+              options: Array.isArray(ev['options']) ? (ev['options'] as string[]).map(String) : [],
+            },
+          },
+        ]);
         break;
       case 'synthesizing':
         setPhase('synthesizing');
@@ -246,10 +330,10 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending]);
 
-  // ⌘K / Ctrl+K focuses the prompt; Esc collapses (and aborts a run).
+  // ⌘J / Ctrl+J focuses the prompt (⌘K is the global Omnibar); Esc collapses.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
+      if ((e.key === 'j' || e.key === 'J') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setOpen(true);
         requestAnimationFrame(() => inputRef.current?.focus());
@@ -374,6 +458,61 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                 ) : r.note !== undefined ? (
                   <div key={r.id} className="flex gap-2 text-[10px] text-txt-3 leading-[1.4] pl-[22px]">
                     <span>{r.note}</span>
+                  </div>
+                ) : r.action !== undefined ? (
+                  // An AUDITED write-back the agent performed — set apart with a
+                  // distinct rule + verb so it never reads like a read-only tool.
+                  <div
+                    key={r.id}
+                    className="rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-[1.5]"
+                    style={{
+                      border: r.action.ok
+                        ? '1px solid rgba(245,165,36,0.35)'
+                        : '1px solid rgba(255,90,82,0.32)',
+                      background: r.action.ok
+                        ? 'linear-gradient(180deg, rgba(245,165,36,0.06), transparent)'
+                        : 'rgba(255,90,82,0.06)',
+                    }}
+                  >
+                    <span className={`mono ${r.action.ok ? 'text-[#fcd9a0]' : 'text-[#ffc9c5]'}`}>
+                      {r.action.ok ? '✎ action' : '✕ action'} · {r.action.name}
+                    </span>
+                    {r.action.targetId && (
+                      <span className="mono text-txt-3"> → {r.action.targetId}</span>
+                    )}
+                    {r.action.error && (
+                      <div className="text-[9.5px] text-[#ffc9c5] mt-0.5">{r.action.error}</div>
+                    )}
+                    {r.action.ok && (
+                      <span className="mono text-[8.5px] text-txt-4 ml-1.5">audited · logged</span>
+                    )}
+                  </div>
+                ) : r.clarification !== undefined ? (
+                  // The agent asked a focused question and paused; clicking an
+                  // option (or typing) re-runs with the answer.
+                  <div
+                    key={r.id}
+                    className="rounded-sm my-1 px-3 py-2 text-[11px] leading-[1.5]"
+                    style={{ border: '1px solid var(--accent-line)', background: 'var(--accent-dim)' }}
+                  >
+                    <div className="mono text-[8.5px] tracking-[0.7px] uppercase text-[#9cc2ff] mb-1">
+                      ? clarification needed
+                    </div>
+                    <div className="text-txt-1">{r.clarification.question}</div>
+                    {r.clarification.options.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {r.clarification.options.map((opt, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => void run(`${ranQuery} — ${opt}`)}
+                            className="mono text-[10px] text-txt-1 border border-accent-line rounded-sm px-2 py-1 hover:text-accent hover:border-accent"
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div key={`${r.id}-${r.tool}`} className="text-[10.5px] leading-[1.5]">
@@ -547,7 +686,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
         ) : (
           <Btn size="sm" tone="accent" onClick={() => void run(q)}>↵ run</Btn>
         )}
-        <span className="mono text-[9px] text-txt-3 border border-line-2 rounded-sm px-1.5 py-px">⌘K</span>
+        <span className="mono text-[9px] text-txt-3 border border-line-2 rounded-sm px-1.5 py-px">⌘J</span>
       </div>
 
       {/* ── slash hints (resting desktop only) ── */}
@@ -566,7 +705,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
               {s}
             </button>
           ))}
-          <span className="ml-auto text-txt-4">nl · ⌘K palette</span>
+          <span className="ml-auto text-txt-4">nl · ⌘J console</span>
         </div>
       )}
     </div>

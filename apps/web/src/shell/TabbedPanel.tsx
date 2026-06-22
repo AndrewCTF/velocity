@@ -79,7 +79,9 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel }: Props): JSX.Element
       <div
         role="tablist"
         aria-label={ariaLabel ?? 'Panel tabs'}
-        className="flex items-stretch flex-none border-b border-line-2 bg-bg-1"
+        // overflow-x-auto + hidden scrollbar: with 7 tabs the strip can exceed the
+        // rail width, so it scrolls horizontally instead of CLIPPING the last tabs.
+        className="flex items-stretch flex-none border-b border-line-2 bg-bg-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((t) => {
           const isActive = t.id === active?.id;
@@ -95,10 +97,14 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel }: Props): JSX.Element
               aria-controls={`tabpanel-${t.id}`}
               id={`tab-${t.id}`}
               tabIndex={isActive ? 0 : -1}
-              onClick={() => setActiveId(t.id)}
+              onClick={(e) => {
+                setActiveId(t.id);
+                // Bring a partially-offscreen tab fully into the scrollable strip.
+                e.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+              }}
               onKeyDown={onTabKeyDown}
               className={[
-                'relative mono text-[10px] tracking-[0.4px] px-3 py-[9px] border-r border-line',
+                'relative mono text-[10px] tracking-[0.4px] px-2 py-[9px] border-r border-line',
                 'flex items-center gap-1.5 whitespace-nowrap',
                 isActive ? 'text-txt-0 bg-bg-2' : 'text-txt-3 hover:text-txt-1',
               ].join(' ')}

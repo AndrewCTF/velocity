@@ -22,11 +22,10 @@ export function SectionLabel({
   style?: CSSProperties;
 }): JSX.Element {
   return (
-    <div className={`flex items-center gap-2 text-txt-3 ${className}`} style={style}>
-      <span className="mono text-[9px] tracking-[0.9px] uppercase text-txt-2">{title}</span>
-      <span className="flex-1 h-px bg-line" />
+    <div className={`flex items-center justify-between gap-2 ${className}`} style={style}>
+      <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">{title}</span>
       {count !== undefined && count !== '' && (
-        <span className="mono text-[9px] text-txt-3 tabular-nums">{count}</span>
+        <span className="mono text-[11px] text-txt-3 tabular-nums">{count}</span>
       )}
     </div>
   );
@@ -35,7 +34,7 @@ export function SectionLabel({
 // ── micro caps label (.lbl) ─────────────────────────────────────────────────
 export function MicroLabel({ children, className = '' }: { children: ReactNode; className?: string }): JSX.Element {
   return (
-    <span className={`mono text-[9px] tracking-[0.7px] uppercase text-txt-3 ${className}`}>{children}</span>
+    <span className={`text-[10px] font-medium tracking-[0.08em] uppercase text-txt-3 ${className}`}>{children}</span>
   );
 }
 
@@ -312,5 +311,39 @@ export function Brand({ name = 'VELOCITY', version }: { name?: string; version?:
       {name}
       {version && <span className="font-normal tracking-[0.5px] text-[9px] text-txt-3">{version}</span>}
     </div>
+  );
+}
+
+// ── classification caveat strip (.caveat) ────────────────────────────────────
+// Dense uppercase mono strip for classification markings (e.g. "UNCLAS//FOUO",
+// "NOTIONAL // SIMULATED"). Rendered as a hairline-bordered pill — always tiny,
+// never decorative. tone drives the colour family; neutral is default (most data
+// is unclassified); warn = exercise/notional; alert = handling warning.
+const CAVEAT_TONE: Record<'neutral' | 'warn' | 'alert', string> = {
+  neutral: 'text-txt-2 border-line-2',
+  warn:    'text-[#fcd9a0] border-[rgba(245,165,36,0.38)] bg-warn-bg',
+  alert:   'text-[#ffc9c5] border-[rgba(255,90,82,0.38)] bg-alert-bg',
+};
+export function Caveat({
+  level = 'UNCLAS//FOUO',
+  note,
+  tone = 'neutral',
+}: {
+  level?: string;
+  note?: string;
+  tone?: 'neutral' | 'warn' | 'alert';
+}): JSX.Element {
+  return (
+    <span
+      className={`inline-flex items-center gap-[5px] mono text-[8px] tracking-[0.7px] uppercase px-[6px] py-[2px] rounded-sm border whitespace-nowrap ${CAVEAT_TONE[tone]}`}
+    >
+      {level}
+      {note && (
+        <>
+          <span className="opacity-40">·</span>
+          <span className="opacity-70">{note}</span>
+        </>
+      )}
+    </span>
   );
 }
