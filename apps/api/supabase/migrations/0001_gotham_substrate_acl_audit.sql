@@ -104,7 +104,7 @@ create table if not exists public.collab_docs (
   classification smallint not null default 0,
   compartments text[] not null default '{}',
   owner_uid uuid references auth.users(id),
-  state bytea,
+  state text,                          -- base64-encoded Yjs doc state (PostgREST-friendly)
   updated_at timestamptz not null default now()
 );
 alter table public.collab_docs enable row level security;

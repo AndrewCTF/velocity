@@ -25,6 +25,7 @@ from app.routes import audit as audit_routes
 from app.routes import aviation as aviation_routes
 from app.routes import cables as cables_routes
 from app.routes import cams as cams_routes
+from app.routes import collab as collab_routes
 from app.routes import config as config_routes
 from app.routes import correlations as correlations_routes
 from app.routes import cyber as cyber_routes
@@ -288,6 +289,7 @@ def create_app() -> FastAPI:
     app.include_router(situations_routes.router)
     app.include_router(audit_routes.router)
     app.include_router(extract_routes.router)
+    app.include_router(collab_routes.router)
 
     # TiTiler COG sub-app (Track B2): XYZ tiles for any Cloud-Optimized GeoTIFF
     # (Maxar Open Data S3, future SAR delivery), so B3/B4/B5 have a universal
