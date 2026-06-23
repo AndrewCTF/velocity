@@ -21,6 +21,8 @@ import { EntityPanel } from './entity-panel/EntityPanel.js';
 import { IntelPanel } from './entity-panel/IntelPanel.js';
 import { InvestigationCanvas } from './graph/InvestigationCanvas.js';
 import { useInvestigation } from './graph/investigationStore.js';
+import { ExtractPanel } from './extract/ExtractPanel.js';
+import { CollabPanel } from './collab/CollabPanel.js';
 import { HistogramPanel } from './explorer/HistogramPanel.js';
 import { NewsPanel } from './news-panel/NewsPanel.js';
 import { TaskingPanel } from './tasking/TaskingPanel.js';
@@ -37,6 +39,9 @@ import { CopEditor } from './cop/CopEditor.js';
 import { Omnibar } from './command-bar/Omnibar.js';
 import { AnnotationPanel } from './annotations/AnnotationPanel.js';
 import { WatchboxPanel } from './watchbox/WatchboxPanel.js';
+import { SituationsPanel } from './situations/SituationsPanel.js';
+import { ContextMenu } from './globe/ContextMenu.js';
+import { ImageryDiffPopup } from './imagery/ImageryDiff.js';
 import { fetchRuntimeConfig } from './transport/config.js';
 import { AlertSubscriber } from './alerts/AlertSubscriber.js';
 import { AlertsPanel } from './alerts/AlertsPanel.js';
@@ -103,7 +108,9 @@ export function App(): JSX.Element {
       { id: 'chokepoints', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} /> },
       { id: 'feeds', label: 'Feeds', content: <FeedsPanel /> },
       { id: 'annotate', label: 'Annotate', content: <AnnotationPanel /> },
+      { id: 'extract', label: 'Extract', content: <ExtractPanel /> },
       { id: 'watch', label: 'Watch', content: <WatchboxPanel /> },
+      { id: 'situations', label: 'Situations', content: <SituationsPanel viewer={viewer} /> },
     ],
     [registry, viewer],
   );
@@ -115,6 +122,7 @@ export function App(): JSX.Element {
     () => [
       { id: 'selection', label: 'Selection', content: <EntityPanel viewer={viewer} /> },
       { id: 'investigation', label: 'Investigation', content: <InvestigationCanvas /> },
+      { id: 'collab', label: 'Collab', content: <CollabPanel /> },
       { id: 'filters', label: 'Filters', content: <HistogramPanel viewer={viewer} /> },
       { id: 'alerts', label: 'Alerts', content: <AlertsRailList viewer={viewer} /> },
       { id: 'intel', label: 'Intel', content: <IntelPanel viewer={viewer} /> },
@@ -167,6 +175,8 @@ export function App(): JSX.Element {
               <AuthNotice />
               <AgentConsole viewer={viewer} />
               <Omnibar viewer={viewer} registry={registry} />
+              <ContextMenu />
+              <ImageryDiffPopup />
               <ModeSurface viewer={viewer} registry={registry} />
             </>
           ) : (
