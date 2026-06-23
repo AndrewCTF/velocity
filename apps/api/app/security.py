@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, Request
 
-from app.auth import _jwt_claims
+from app.auth import _jwt_claims, _valid_supabase_token
 from app.config import Settings, get_settings
 from app.keys import UserCtx, _client, _headers, current_user
 
@@ -85,6 +85,32 @@ async def current_principal(
     return Principal(
         user_id=ctx.user_id,
         token=ctx.token,
+        email=str(prof.get("email") or claims.get("email") or ""),
+        clearance=int(prof.get("clearance") or 0),
+        compartments=tuple(str(c) for c in (prof.get("compartments") or ())),
+        roles=tuple(str(r) for r in roles),
+    )
+
+
+async def principal_for_token(token: str) -> Principal | None:
+    """Resolve a Principal from a raw bearer token (no Request) — for WS handlers.
+
+    Returns None when the token is missing/invalid, so a caller can reject the
+    upgrade. Same least-privilege profile read as ``current_principal``.
+    """
+    s = get_settings()
+    if not token or not await _valid_supabase_token(token, s):
+        return None
+    claims = _jwt_claims(token) or {}
+    sub = claims.get("sub")
+    if not sub:
+        return None
+    ctx = UserCtx(user_id=str(sub), token=token)
+    prof = await _fetch_profile(ctx, s)
+    roles = prof.get("roles") or ["analyst"]
+    return Principal(
+        user_id=str(sub),
+        token=token,
         email=str(prof.get("email") or claims.get("email") or ""),
         clearance=int(prof.get("clearance") or 0),
         compartments=tuple(str(c) for c in (prof.get("compartments") or ())),

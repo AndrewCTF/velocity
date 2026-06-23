@@ -30,6 +30,13 @@ def test_can_read() -> None:
     assert clf.can_read(4, ["FVEY", "NOFORN"], 3, ["fvey"]) is True  # superset ok
 
 
+def test_holds_compartments() -> None:
+    assert clf.holds(["FVEY", "NOFORN"], ["fvey"]) is True  # subset, case-insensitive
+    assert clf.holds([], ["FVEY"]) is False  # user holds none
+    assert clf.holds(["FVEY"], []) is True  # nothing requested
+    assert clf.holds(["FVEY"], ["FVEY", "NOFORN"]) is False  # missing NOFORN
+
+
 def test_redact_for() -> None:
     rows = [{"classification": 3, "x": 1}, {"classification": 1, "x": 2}]
     kept = clf.redact_for(2, [], rows)

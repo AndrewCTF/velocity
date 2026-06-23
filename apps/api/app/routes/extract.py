@@ -158,6 +158,8 @@ async def extract(
     level = clf.clamp(req.classification)
     if level > p.clearance:
         raise HTTPException(status_code=403, detail="cannot classify above your clearance")
+    if not clf.holds(p.compartments, req.compartments):
+        raise HTTPException(status_code=403, detail="cannot use compartments you do not hold")
 
     parsed = await _run_llm(req.text, p.token, p.user_id)
     entities, links = _normalise(parsed)

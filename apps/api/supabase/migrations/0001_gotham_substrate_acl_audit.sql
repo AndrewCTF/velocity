@@ -58,22 +58,28 @@ create policy target_board_clearance_select on public.target_board for select
 -- ── restrictive: cannot create/raise a row above your own clearance ──
 drop policy if exists objects_clf_ceiling on public.objects;
 create policy objects_clf_ceiling on public.objects as restrictive for insert
-  with check (classification <= public.current_clearance());
+  with check (classification <= public.current_clearance()
+              and compartments <@ public.current_compartments());
 drop policy if exists objects_clf_ceiling_upd on public.objects;
 create policy objects_clf_ceiling_upd on public.objects as restrictive for update
-  with check (classification <= public.current_clearance());
+  with check (classification <= public.current_clearance()
+              and compartments <@ public.current_compartments());
 drop policy if exists links_clf_ceiling on public.links;
 create policy links_clf_ceiling on public.links as restrictive for insert
-  with check (classification <= public.current_clearance());
+  with check (classification <= public.current_clearance()
+              and compartments <@ public.current_compartments());
 drop policy if exists links_clf_ceiling_upd on public.links;
 create policy links_clf_ceiling_upd on public.links as restrictive for update
-  with check (classification <= public.current_clearance());
+  with check (classification <= public.current_clearance()
+              and compartments <@ public.current_compartments());
 drop policy if exists target_board_clf_ceiling on public.target_board;
 create policy target_board_clf_ceiling on public.target_board as restrictive for insert
-  with check (classification <= public.current_clearance());
+  with check (classification <= public.current_clearance()
+              and compartments <@ public.current_compartments());
 drop policy if exists target_board_clf_ceiling_upd on public.target_board;
 create policy target_board_clf_ceiling_upd on public.target_board as restrictive for update
-  with check (classification <= public.current_clearance());
+  with check (classification <= public.current_clearance()
+              and compartments <@ public.current_compartments());
 
 -- ── action_log: audit columns (reuse user_id=actor, target_id=resource_id, params=detail) ──
 alter table public.action_log
@@ -116,4 +122,15 @@ create policy collab_docs_read on public.collab_docs for select
 drop policy if exists collab_docs_write on public.collab_docs;
 create policy collab_docs_write on public.collab_docs for all
   using (owner_uid = auth.uid() or 'admin' = any(public.current_roles()))
-  with check (classification <= public.current_clearance());
+  with check (classification <= public.current_clearance()
+              and compartments <@ public.current_compartments());
+
+-- ── collab live-channel join gate: definer RPC returns a doc's ACL regardless ──
+-- of RLS, so /ws/collab can reject an under-cleared joiner without a service key.
+-- Returns no rows when the doc does not exist yet (a new doc — join allowed).
+create or replace function public.collab_doc_acl(p_doc text)
+  returns table(classification smallint, compartments text[])
+  language sql stable security definer set search_path = public as
+$$ select classification, compartments from public.collab_docs where doc_id = p_doc $$;
+revoke all on function public.collab_doc_acl(text) from public, anon;
+grant execute on function public.collab_doc_acl(text) to authenticated;

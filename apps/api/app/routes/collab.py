@@ -10,9 +10,12 @@ Two surfaces for one shared document (an investigation graph / annotation set):
 
 * ``GET /api/collab/{doc}`` / ``POST /api/collab/{doc}/snapshot`` — persistence,
   RLS-gated. A user can only load/save a doc's state if their clearance covers the
-  doc's classification (``collab_docs`` RLS). This is the real classification
-  boundary for collab; the ephemeral live relay is the v1 soft edge (hardening the
-  live gate to clearance needs a service-role read or a clearance JWT claim — TODO).
+  doc's classification (``collab_docs`` RLS), and may not tag a snapshot above
+  their own clearance/compartments. The LIVE channel join is also clearance-gated
+  (the bearer is resolved to a Principal and the doc ACL read via the
+  ``collab_doc_acl`` SECURITY DEFINER RPC) so an under-cleared user is rejected
+  before ``accept``. Residual: a doc reclassified UPWARD mid-session is re-checked
+  only on the next join, not per frame.
 """
 
 from __future__ import annotations
@@ -24,11 +27,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from app.auth import require_ws_key
+from app.auth import _auth_enabled, _bearer, require_ws_key
 from app.config import get_settings
 from app.intel import classification as clf
 from app.keys import _client, _headers
-from app.security import Principal, current_principal
+from app.security import Principal, current_principal, principal_for_token
 
 router = APIRouter(tags=["collab"])
 
@@ -78,13 +81,69 @@ class _CollabHub:
 collab_hub = _CollabHub()
 
 
+def _ws_token(ws: WebSocket) -> str:
+    return (
+        _bearer(ws.headers)
+        or ws.query_params.get("key")
+        or ws.headers.get("x-api-key")
+        or ""
+    )
+
+
+async def _doc_acl(token: str, doc: str) -> tuple[int, list[str]] | None:
+    """A doc's (classification, compartments) via the definer RPC, or None if the
+    doc does not exist yet (new doc) / the store is unreachable."""
+    s = get_settings()
+    if not s.supabase_url:
+        return None
+    url = s.supabase_url.rstrip("/") + "/rest/v1/rpc/collab_doc_acl"
+    headers = {
+        "apikey": s.supabase_anon_key,
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    try:
+        async with _client() as c:
+            r = await c.post(url, json={"p_doc": doc}, headers=headers)
+    except Exception:  # noqa: BLE001 — store down → fail closed below
+        return None
+    if r.status_code != 200:
+        return None
+    rows = r.json()
+    if not rows:
+        return None
+    row = rows[0]
+    return int(row.get("classification") or 0), list(row.get("compartments") or [])
+
+
+async def _collab_join_allowed(ws: WebSocket, doc: str) -> bool:
+    """Clearance gate for the LIVE channel. On an auth-enabled deployment, an
+    under-cleared user must not receive a classified doc's live updates even if
+    they know the id. On a keyless dev box (auth disabled) the gate is a no-op."""
+    s = get_settings()
+    if not _auth_enabled(s):
+        return True
+    p = await principal_for_token(_ws_token(ws))
+    if p is None:
+        return False
+    acl = await _doc_acl(p.token, doc)
+    if acl is None:
+        return True  # new doc (or store unreachable) — creating, allow
+    level, comps = acl
+    return clf.can_read(p.clearance, list(p.compartments), level, comps)
+
+
 @router.websocket("/ws/collab")
 async def collab_ws(ws: WebSocket, doc: str | None = None) -> None:
+    # Gate fully BEFORE accept (the WS invariant) — key, doc id, then clearance.
     if not await require_ws_key(ws):
         await ws.close(code=1008)
         return
     if not doc:
-        await ws.accept()
+        await ws.close(code=1008)
+        return
+    if not await _collab_join_allowed(ws, doc):
         await ws.close(code=1008)
         return
     await ws.accept()
@@ -170,6 +229,8 @@ async def save_snapshot(
     level = clf.clamp(body.classification)
     if level > p.clearance:
         raise HTTPException(status_code=403, detail="cannot classify above your clearance")
+    if not clf.holds(p.compartments, body.compartments):
+        raise HTTPException(status_code=403, detail="cannot use compartments you do not hold")
     s = get_settings()
     row = {
         "doc_id": doc_id,

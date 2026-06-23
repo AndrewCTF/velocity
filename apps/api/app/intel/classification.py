@@ -112,6 +112,17 @@ def can_read(
     return need.issubset(have)
 
 
+def holds(user_compartments: object, want_compartments: object) -> bool:
+    """True iff the user holds every compartment in ``want`` (case-insensitive).
+
+    The compartment half of the create-ceiling check: a user may only tag a row
+    with compartments they themselves hold (mirrors the RLS ``compartments <@
+    current_compartments()`` restrictive policy).
+    """
+    have = set(_norm_comps(user_compartments))
+    return set(_norm_comps(want_compartments)).issubset(have)
+
+
 def redact_for(
     user_clearance: object,
     user_compartments: object,
