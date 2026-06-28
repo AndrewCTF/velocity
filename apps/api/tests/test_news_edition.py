@@ -49,8 +49,15 @@ async def _fake_chat_json(messages, **kw):
     }, _FakeRes())
 
 
+async def _no_brief():
+    return {}
+
+
 def test_analyze_edition_shape(monkeypatch):
     monkeypatch.setattr(analyze.llm, "chat_json", _fake_chat_json)
+    # Isolate from the live intel brief (network/snapshot) — Task 4 wired
+    # attach_supporting_docs into the success path; the fixture story is Conflict.
+    monkeypatch.setattr(analyze, "_incident_brief", _no_brief)
     ed = asyncio.run(analyze_edition(_arts()))
     assert ed["stories"], "expected stories"
     s = ed["stories"][0]
@@ -67,3 +74,6 @@ def test_analyze_edition_shape(monkeypatch):
 def test_analyze_edition_empty():
     ed = asyncio.run(analyze_edition([]))
     assert ed["stories"] == [] and ed["method"]
+    # Empty path must still carry the full edition shape (route/frontend rely on it).
+    for k in ("generated", "categories", "lead", "article_count", "source_count", "backend"):
+        assert k in ed
