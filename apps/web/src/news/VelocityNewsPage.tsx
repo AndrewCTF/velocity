@@ -5,16 +5,42 @@ import { apiFetch } from '../transport/http.js';
 import type { Edition, Story } from './types.js';
 import './news.css';
 
-function Card({ s }: { s: Story }): JSX.Element {
+function Media({ src, title }: { src: string; title: string }): JSX.Element {
   return (
-    <Link to={`/news/${s.id}`} className="vn-card">
-      {s.image ? <img src={s.image} alt="" loading="lazy" /> : <div className="vn-card-ph" style={{ aspectRatio: '16/9', background: '#e2e2dd', borderRadius: 3 }} />}
-      <h3>{s.title}</h3>
-      <p>{s.neutral_summary}</p>
-      <div className="vn-byline">
-        {s.category} · {s.corroboration?.source_count ?? 0} sources
-        {s.whats_wrong?.length ? ` · ${s.whats_wrong.length} bias flags` : ''}
-      </div>
+    <div className="vn-media">
+      {src
+        ? <img src={src} alt="" loading="lazy" />
+        : <div className="vn-media-ph">{(title[0] || 'V').toUpperCase()}</div>}
+    </div>
+  );
+}
+
+function TrustRow({ s }: { s: Story }): JSX.Element {
+  const n = s.corroboration?.source_count ?? 0;
+  const filled = Math.min(n, 5);
+  return (
+    <div className="vn-trust">
+      <span className="vn-dots" title={`${n} corroborating sources`}>
+        {Array.from({ length: 5 }, (_, i) => (
+          <span key={i} className={`vn-dot${i < filled ? '' : ' off'}`} />
+        ))}
+      </span>
+      <span className="vn-corr">{n} {n === 1 ? 'source' : 'sources'}</span>
+      {s.whats_wrong?.length > 0 && (
+        <span className="vn-flag">{s.whats_wrong.length} bias {s.whats_wrong.length === 1 ? 'flag' : 'flags'}</span>
+      )}
+    </div>
+  );
+}
+
+function Card({ s, lead = false }: { s: Story; lead?: boolean }): JSX.Element {
+  return (
+    <Link to={`/news/${s.id}`} className={`vn-card${lead ? ' lead' : ''}`}>
+      <Media src={s.image} title={s.title} />
+      <div className="vn-kicker">{s.category}</div>
+      <h3 className="vn-h">{s.title}</h3>
+      {(lead || s.neutral_summary) && <p className="vn-dek">{s.neutral_summary}</p>}
+      <TrustRow s={s} />
     </Link>
   );
 }
@@ -26,63 +52,100 @@ export function VelocityNewsPage(): JSX.Element {
   useEffect(() => {
     let alive = true;
     apiFetch('/api/news/edition')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad status'))))
       .then((j: Edition) => { if (alive) setEd(j); })
       .catch(() => { if (alive) setErr(true); });
     return () => { alive = false; };
   }, []);
 
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
+  const stories = ed?.stories ?? [];
+  const lead = ed?.lead ?? stories[0] ?? null;
+  const side = stories.filter((s) => s.id !== lead?.id).slice(0, 3);
+  const heroIds = new Set([lead?.id, ...side.map((s) => s.id)].filter(Boolean));
   const cats = ed?.categories ?? [];
-  const lead = ed?.lead ?? null;
-  const rest = (ed?.stories ?? []).filter((s) => s.id !== lead?.id);
 
   return (
     <div className="vnews">
       <div className="vn-wrap">
-        <div className="vn-masthead">
-          <Link to="/news" className="vn-brand">VELOCITY <b>NEWS</b></Link>
+        <div className="vn-strip">
+          <span className="vn-live">Live</span>
+          <span>Debiased · fact-checked</span>
+          <span className="vn-grow">{today}</span>
+          {ed && <span>{ed.source_count} sources</span>}
         </div>
+
+        <div className="vn-masthead">
+          <Link to="/news" className="vn-brand">VELOCITY <mark>NEWS</mark></Link>
+          <div className="vn-tagline">Every story, de-spun — bias &amp; propaganda flagged, sources shown</div>
+        </div>
+
         <nav className="vn-nav">
-          {cats.map((c) => <a key={c} href={`#${c}`}>{c}</a>)}
+          {cats.map((c) => <a key={c} href={`#cat-${c}`}>{c}</a>)}
         </nav>
 
-        {!ed && !err && <p style={{ padding: '40px 0' }}>Loading the edition…</p>}
-        {err && <p style={{ padding: '40px 0' }}>News is unavailable right now.</p>}
-        {ed && ed.stories.length === 0 && (
-          <p style={{ padding: '40px 0' }}>The edition is being assembled — check back shortly.</p>
+        {!ed && !err && (
+          <>
+            <div className="vn-hero">
+              <div><div className="vn-media vn-skel" style={{ aspectRatio: '16/9' }} /></div>
+              <div className="vn-hero-side">
+                {[0, 1, 2].map((i) => <div key={i} className="vn-skel" style={{ height: 88 }} />)}
+              </div>
+            </div>
+          </>
         )}
+        {err && <div className="vn-state">News is unavailable right now. Please try again shortly.</div>}
+        {ed && stories.length === 0 && <div className="vn-state">Today’s edition is being assembled — check back in a moment.</div>}
 
         {lead && (
-          <Link to={`/news/${lead.id}`} className="vn-hero">
-            <div>
-              {lead.image && <img src={lead.image} alt="" />}
+          <section className="vn-hero">
+            <Link to={`/news/${lead.id}`} className="vn-hero-lead">
+              <Media src={lead.image} title={lead.title} />
+              <div className="vn-kicker">{lead.category}</div>
+              <h1 className="vn-h">{lead.title}</h1>
+              <p className="vn-dek">{lead.neutral_summary}</p>
+              <TrustRow s={lead} />
+            </Link>
+            <div className="vn-hero-side">
+              {side.map((s) => (
+                <Link key={s.id} to={`/news/${s.id}`} className="vn-side-item">
+                  <div>
+                    <div className="vn-kicker">{s.category}</div>
+                    <h3 className="vn-h">{s.title}</h3>
+                    <TrustRow s={s} />
+                  </div>
+                  <Media src={s.image} title={s.title} />
+                </Link>
+              ))}
             </div>
-            <div>
-              <span className="vn-chip">{lead.category}</span>
-              <h1>{lead.title}</h1>
-              <p>{lead.neutral_summary}</p>
-              <div className="vn-byline">{lead.corroboration?.source_count ?? 0} sources corroborating</div>
-            </div>
-          </Link>
+          </section>
         )}
 
         {cats.map((c) => {
-          const inCat = rest.filter((s) => s.category === c);
+          const inCat = stories.filter((s) => s.category === c && !heroIds.has(s.id));
           if (inCat.length === 0) return null;
           return (
-            <section key={c} id={c}>
-              <div className="vn-sec-title">{c}</div>
+            <section key={c} id={`cat-${c}`} className="vn-section">
+              <div className="vn-section-head">
+                <span className="vn-section-title"><span>/</span> {c}</span>
+                <span className="vn-section-count">{inCat.length} stories</span>
+              </div>
               <div className="vn-grid">
-                {inCat.map((s) => <Card key={s.id} s={s} />)}
+                {inCat.map((s, i) => <Card key={s.id} s={s} lead={i === 0 && inCat.length > 2} />)}
               </div>
             </section>
           );
         })}
 
-        {ed && (
-          <p className="vn-byline" style={{ marginTop: 40 }}>
-            {ed.article_count} articles · {ed.source_count} sources · model {ed.backend ?? 'n/a'}
-          </p>
+        {ed && stories.length > 0 && (
+          <div className="vn-foot">
+            <span>{stories.length} stories</span>
+            <span>{ed.article_count} articles · {ed.source_count} sources</span>
+            <span>Analysis: {ed.backend ?? 'pending'}</span>
+          </div>
         )}
       </div>
     </div>

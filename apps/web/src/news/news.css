@@ -1,33 +1,178 @@
-/* apps/web/src/news/news.css — editorial light theme, scoped under .vnews */
-.vnews { background:#f6f6f4; color:#16181c; min-height:100vh; }
-.vnews a { color:inherit; text-decoration:none; }
-.vnews .vn-wrap { max-width:1100px; margin:0 auto; padding:0 20px 64px; }
-.vnews .vn-masthead { border-bottom:3px solid #16181c; padding:18px 0 10px; margin-bottom:8px; }
-.vnews .vn-brand { font-family:Inter,system-ui,sans-serif; font-weight:800; font-size:30px; letter-spacing:-0.02em; }
-.vnews .vn-brand b { color:#4fa0d8; }
-.vnews .vn-nav { display:flex; gap:18px; flex-wrap:wrap; border-bottom:1px solid #d8d8d4; padding:8px 0; position:sticky; top:0; background:#f6f6f4; z-index:5; }
-.vnews .vn-nav a { font-family:"IBM Plex Mono",monospace; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; color:#55585e; }
-.vnews .vn-nav a.active, .vnews .vn-nav a:hover { color:#16181c; }
-.vnews h1,.vnews h2,.vnews h3 { font-family:Inter,system-ui,sans-serif; letter-spacing:-0.01em; }
-.vnews .vn-sec-title { font-size:14px; text-transform:uppercase; letter-spacing:0.08em; color:#4fa0d8; border-bottom:2px solid #4fa0d8; display:inline-block; margin:28px 0 12px; padding-bottom:2px; }
-.vnews .vn-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
-@media (max-width:820px){ .vnews .vn-grid{ grid-template-columns:1fr; } }
-.vnews .vn-card { cursor:pointer; }
-.vnews .vn-card img,.vnews .vn-hero img { width:100%; aspect-ratio:16/9; object-fit:cover; background:#e2e2dd; border-radius:3px; }
-.vnews .vn-card h3 { font-size:17px; margin:8px 0 4px; }
-.vnews .vn-card p { font-size:13px; color:#44474d; margin:0; }
-.vnews .vn-byline { font-family:"IBM Plex Mono",monospace; font-size:11px; color:#80838a; margin-top:6px; }
-.vnews .vn-hero { display:grid; grid-template-columns:1.4fr 1fr; gap:24px; margin:14px 0; }
-.vnews .vn-hero h1 { font-size:34px; line-height:1.1; margin:10px 0; }
-@media (max-width:820px){ .vnews .vn-hero{ grid-template-columns:1fr; } }
-.vnews .vn-chip { font-family:"IBM Plex Mono",monospace; font-size:10px; text-transform:uppercase; padding:2px 6px; border-radius:2px; background:#16181c; color:#fff; }
-/* story view */
-.vnews .vn-article { max-width:760px; margin:0 auto; }
-.vnews .vn-article p { font-size:18px; line-height:1.7; margin:0 0 18px; }
-.vnews .vn-callout { background:#fff4f0; border-left:4px solid #d9480f; padding:14px 16px; border-radius:3px; margin:20px 0; }
-.vnews .vn-callout h4 { margin:0 0 8px; color:#d9480f; font-size:13px; text-transform:uppercase; letter-spacing:0.06em; }
-.vnews .vn-quote { background:#ffe3d6; padding:1px 4px; border-radius:2px; }
-.vnews .vn-actions { background:#eef6fb; border-left:4px solid #4fa0d8; padding:14px 16px; border-radius:3px; margin:20px 0; }
-.vnews .vn-proofs a { display:block; font-family:"IBM Plex Mono",monospace; font-size:12px; color:#1c6aa8; padding:3px 0; }
-.vnews .vn-support img { width:100%; border-radius:3px; margin-top:8px; }
-.vnews .vn-tag { font-family:"IBM Plex Mono",monospace; font-size:11px; background:#16181c; color:#fff; padding:2px 6px; border-radius:2px; margin:0 6px 6px 0; display:inline-block; }
+/* Velocity News — editorial newsroom theme, scoped under .vnews.
+   Serif headlines (Georgia, no new deps) + Inter body + IBM Plex Mono data.
+   Signature: the Trust Row (corroboration + bias flags) on every story. */
+
+.vnews {
+  --ink: #111418;        /* headlines */
+  --ink-2: #2b313a;      /* body */
+  --muted: #5b6470;      /* meta */
+  --paper: #ffffff;
+  --wash: #f4f5f7;       /* section bands / placeholders */
+  --rule: #e3e6ea;
+  --brand: #d11a2a;      /* wordmark + breaking kicker */
+  --verify: #1a7f5a;     /* corroboration / verified */
+  --flag: #c2410c;       /* bias / propaganda */
+  --serif: Georgia, 'Times New Roman', serif;
+  --sans: Inter, system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  background: var(--paper);
+  color: var(--ink-2);
+  min-height: 100vh;
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+.vnews *, .vnews *::before, .vnews *::after { box-sizing: border-box; }
+.vnews a { color: inherit; text-decoration: none; }
+.vnews img { display: block; }
+
+.vn-wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 80px; }
+
+/* ── utility strip + masthead ───────────────────────────────────────────── */
+.vn-strip {
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.04em; color: var(--muted);
+  display: flex; gap: 16px; align-items: center;
+  padding: 7px 0; text-transform: uppercase;
+}
+.vn-live { color: var(--brand); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.vn-live::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--brand); animation: vn-pulse 1.6s ease-in-out infinite;
+}
+@keyframes vn-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+.vn-strip .vn-grow { margin-left: auto; }
+
+.vn-masthead { text-align: center; padding: 22px 0 14px; border-bottom: 3px solid var(--ink); }
+.vn-brand {
+  font-family: var(--sans); font-weight: 800; font-size: clamp(34px, 6vw, 58px);
+  letter-spacing: -0.03em; color: var(--ink); display: inline-flex; align-items: center; gap: 10px;
+}
+.vn-brand mark { background: var(--brand); color: #fff; padding: 0 12px; border-radius: 3px; }
+.vn-tagline { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 6px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* ── category nav ───────────────────────────────────────────────────────── */
+.vn-nav {
+  position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(6px); border-bottom: 1px solid var(--rule);
+  display: flex; gap: 22px; flex-wrap: wrap; padding: 11px 0; margin-bottom: 26px;
+}
+.vn-nav a {
+  font-family: var(--mono); font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); padding-bottom: 2px;
+  border-bottom: 2px solid transparent; transition: color .12s, border-color .12s;
+}
+.vn-nav a:hover, .vn-nav a.active { color: var(--ink); border-color: var(--brand); }
+
+/* ── kicker / headlines / trust row (shared) ───────────────────────────────*/
+.vn-kicker {
+  font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--brand); font-weight: 600; margin-bottom: 7px;
+}
+.vn-h { font-family: var(--serif); color: var(--ink); line-height: 1.12; letter-spacing: -0.01em; font-weight: 700; }
+.vn-dek { color: var(--muted); line-height: 1.5; }
+
+.vn-trust {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 10px;
+}
+.vn-dots { display: inline-flex; gap: 3px; }
+.vn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--verify); opacity: 0.9; }
+.vn-dot.off { background: var(--rule); }
+.vn-corr { color: var(--verify); font-weight: 600; }
+.vn-flag {
+  color: var(--flag); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;
+}
+.vn-flag::before { content: "\26A0"; } /* warning sign */
+
+/* ── hero ──────────────────────────────────────────────────────────────── */
+.vn-hero {
+  display: grid; grid-template-columns: 1.55fr 1fr; gap: 34px;
+  padding-bottom: 30px; margin-bottom: 30px; border-bottom: 1px solid var(--rule);
+}
+.vn-hero-lead { cursor: pointer; }
+.vn-hero-lead .vn-media { aspect-ratio: 16/9; margin-bottom: 16px; }
+.vn-hero-lead .vn-h { font-size: clamp(28px, 3.6vw, 44px); }
+.vn-hero-lead .vn-dek { font-size: 17px; margin-top: 12px; max-width: 56ch; }
+.vn-hero-side { display: flex; flex-direction: column; gap: 18px; }
+.vn-side-item { display: grid; grid-template-columns: 1fr 96px; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.vn-side-item:last-child { border-bottom: 0; }
+.vn-side-item .vn-h { font-size: 17px; }
+.vn-side-item .vn-media { aspect-ratio: 1/1; }
+
+/* ── media (image + placeholder) ───────────────────────────────────────── */
+.vn-media { position: relative; overflow: hidden; background: var(--wash); border-radius: 3px; }
+.vn-media img { width: 100%; height: 100%; object-fit: cover; transition: transform .4s ease; }
+.vn-card:hover .vn-media img, .vn-hero-lead:hover .vn-media img { transform: scale(1.04); }
+.vn-media-ph { display: grid; place-items: center; width: 100%; height: 100%; color: #c4cad2; font-family: var(--serif); font-size: 26px; font-weight: 700; }
+
+/* ── category bands + grid ─────────────────────────────────────────────── */
+.vn-section { margin-bottom: 40px; scroll-margin-top: 64px; }
+.vn-section-head { display: flex; align-items: baseline; gap: 12px; border-bottom: 2px solid var(--ink); padding-bottom: 6px; margin-bottom: 20px; }
+.vn-section-title { font-family: var(--sans); font-weight: 800; font-size: 19px; letter-spacing: -0.01em; color: var(--ink); text-transform: uppercase; }
+.vn-section-title span { color: var(--brand); }
+.vn-section-count { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+
+.vn-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px 22px; }
+.vn-card { cursor: pointer; display: flex; flex-direction: column; }
+.vn-card .vn-media { aspect-ratio: 16/10; margin-bottom: 11px; }
+.vn-card .vn-h { font-size: 18px; margin-bottom: 6px; }
+.vn-card .vn-dek { font-size: 13.5px; }
+/* first card in a section reads larger */
+.vn-grid .vn-card.lead { grid-column: span 2; grid-row: span 2; }
+.vn-grid .vn-card.lead .vn-media { aspect-ratio: 16/9; }
+.vn-grid .vn-card.lead .vn-h { font-size: 26px; }
+.vn-grid .vn-card.lead .vn-dek { font-size: 15px; }
+
+/* ── states ────────────────────────────────────────────────────────────── */
+.vn-state { padding: 80px 0; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+.vn-skel { background: linear-gradient(90deg,#eef0f3 25%,#f6f7f9 50%,#eef0f3 75%); background-size: 200% 100%; animation: vn-shimmer 1.3s infinite; border-radius: 3px; }
+@keyframes vn-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.vn-foot { margin-top: 52px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
+
+/* ── story view ────────────────────────────────────────────────────────── */
+.vn-article { max-width: 720px; margin: 8px auto 0; }
+.vn-back { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.vn-back:hover { color: var(--brand); }
+.vn-article h1 { font-family: var(--serif); font-size: clamp(30px, 4.4vw, 46px); line-height: 1.1; color: var(--ink); letter-spacing: -0.015em; margin: 14px 0 12px; }
+.vn-article .vn-lead-media { aspect-ratio: 16/9; margin: 18px 0 8px; }
+.vn-cap { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 24px; }
+.vn-body p { font-family: var(--serif); font-size: 19px; line-height: 1.72; color: var(--ink-2); margin: 0 0 20px; }
+.vn-body p:first-of-type::first-letter { float: left; font-size: 58px; line-height: 0.84; font-weight: 700; padding: 4px 10px 0 0; color: var(--ink); }
+.vn-quote { background: #ffe9df; box-shadow: inset 0 -2px 0 var(--flag); padding: 0 2px; }
+
+/* truth-layer callouts */
+.vn-box { border: 1px solid var(--rule); border-radius: 4px; padding: 16px 18px; margin: 26px 0; }
+.vn-box h4 { font-family: var(--sans); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 12px; }
+.vn-box.wrong { border-left: 3px solid var(--flag); }
+.vn-box.wrong h4 { color: var(--flag); }
+.vn-box.act { border-left: 3px solid var(--verify); }
+.vn-box.act h4 { color: var(--verify); }
+.vn-box.facts { border-left: 3px solid var(--ink); }
+.vn-wrong-item { padding: 9px 0; border-top: 1px solid var(--rule); font-size: 14px; line-height: 1.5; }
+.vn-wrong-item:first-of-type { border-top: 0; }
+.vn-tech { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--flag); color: #fff; padding: 2px 7px; border-radius: 2px; margin-right: 8px; }
+.vn-src { font-weight: 700; color: var(--ink); }
+.vn-box.act ul, .vn-box.facts ul { margin: 0; padding-left: 18px; }
+.vn-box.act li, .vn-box.facts li { font-size: 15px; line-height: 1.55; margin-bottom: 7px; }
+.vn-proofs a { display: flex; gap: 8px; align-items: baseline; font-family: var(--mono); font-size: 12.5px; color: #1c5fa8; padding: 5px 0; border-top: 1px solid var(--rule); }
+.vn-proofs a:first-of-type { border-top: 0; }
+.vn-proofs .vn-when { color: var(--muted); margin-left: auto; }
+.vn-support img { width: 100%; border-radius: 4px; margin: 10px 0 4px; }
+
+/* ── responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .vn-hero { grid-template-columns: 1fr; gap: 22px; }
+  .vn-grid { grid-template-columns: repeat(2, 1fr); }
+  .vn-grid .vn-card.lead { grid-column: span 2; grid-row: auto; }
+}
+@media (max-width: 560px) {
+  .vn-grid { grid-template-columns: 1fr; }
+  .vn-grid .vn-card.lead { grid-column: span 1; }
+  .vn-side-item { grid-template-columns: 1fr 72px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vn-media img, .vn-skel, .vn-live::before { transition: none; animation: none; }
+}

@@ -41,95 +41,113 @@ export function StoryView(): JSX.Element {
     return () => { alive = false; };
   }, [id]);
 
-  const allQuotes = story ? story.whats_wrong.map((w) => w.quote) : [];
+  const quotes = story ? story.whats_wrong.map((w) => w.quote) : [];
+  const n = story?.corroboration?.source_count ?? 0;
 
   return (
     <div className="vnews">
       <div className="vn-wrap">
         <div className="vn-masthead">
-          <Link to="/news" className="vn-brand">VELOCITY <b>NEWS</b></Link>
+          <Link to="/news" className="vn-brand">VELOCITY <mark>NEWS</mark></Link>
         </div>
 
-        {missing && <p style={{ padding: '40px 0' }}><Link to="/news">← Back</Link> · Story not found.</p>}
-        {!story && !missing && <p style={{ padding: '40px 0' }}>Loading…</p>}
+        {missing && (
+          <div className="vn-state"><Link to="/news" className="vn-back">← Back to the edition</Link><br /><br />Story not found.</div>
+        )}
+        {!story && !missing && <div className="vn-state">Loading…</div>}
 
         {story && (
           <article className="vn-article">
-            <Link to="/news" className="vn-byline">← All stories</Link>
-            <span className="vn-chip" style={{ marginLeft: 8 }}>{story.category}</span>
-            <h1 style={{ fontSize: 32, margin: '12px 0' }}>{story.title}</h1>
-            <div className="vn-byline">
-              {story.corroboration?.source_count ?? 0} sources · confidence {(story.confidence ?? 0).toFixed(2)}
+            <Link to="/news" className="vn-back">← All stories</Link>
+            <div className="vn-kicker" style={{ marginTop: 14 }}>{story.category}</div>
+            <h1>{story.title}</h1>
+            <div className="vn-trust" style={{ marginBottom: 4 }}>
+              <span className="vn-dots">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <span key={i} className={`vn-dot${i < Math.min(n, 5) ? '' : ' off'}`} />
+                ))}
+              </span>
+              <span className="vn-corr">{n} {n === 1 ? 'source corroborating' : 'sources corroborating'}</span>
+              {story.confidence > 0 && <span>confidence {story.confidence.toFixed(2)}</span>}
             </div>
-            {story.image && <img src={story.image} alt="" style={{ width: '100%', borderRadius: 3, margin: '14px 0' }} />}
 
-            {story.neutral_rewrite.split(/\n{2,}/).map((para, i) => (
-              <p key={i}>{highlight(para, allQuotes)}</p>
-            ))}
+            {story.image && (
+              <div className="vn-media vn-lead-media"><img src={story.image} alt="" /></div>
+            )}
+            {story.image && <div className="vn-cap">Lead image via source outlet</div>}
+
+            <div className="vn-body">
+              {(story.neutral_rewrite || story.neutral_summary).split(/\n{2,}/).map((para, i) => (
+                <p key={i}>{highlight(para, quotes)}</p>
+              ))}
+              {!story.neutral_rewrite && (
+                <p className="vn-cap" style={{ fontFamily: 'var(--mono)' }}>
+                  Full neutral rewrite + bias analysis pending for this story.
+                </p>
+              )}
+            </div>
 
             {story.whats_wrong.length > 0 && (
-              <div className="vn-callout">
-                <h4>What's wrong with the coverage</h4>
+              <div className="vn-box wrong">
+                <h4>⚠ What’s wrong with the coverage</h4>
                 {story.whats_wrong.map((w, i) => (
-                  <div key={i} style={{ marginBottom: 8 }}>
-                    <span className="vn-tag">{w.technique || 'bias'}</span>
-                    <strong>{w.source}</strong>: <span className="vn-quote">{w.quote}</span>
+                  <div key={i} className="vn-wrong-item">
+                    {w.technique && <span className="vn-tech">{w.technique}</span>}
+                    <span className="vn-src">{w.source}</span>
+                    {w.quote && <> — <span className="vn-quote">{w.quote}</span></>}
                   </div>
                 ))}
                 {story.propaganda_techniques.length > 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    {story.propaganda_techniques.map((t) => <span key={t} className="vn-tag">{t}</span>)}
+                  <div style={{ marginTop: 10 }}>
+                    {story.propaganda_techniques.map((t) => <span key={t} className="vn-tech">{t}</span>)}
                   </div>
                 )}
               </div>
             )}
 
             {story.recommended_actions.length > 0 && (
-              <div className="vn-actions">
-                <h4 style={{ margin: '0 0 8px', color: '#1c6aa8', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.06em' }}>What you should do</h4>
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                  {story.recommended_actions.map((a, i) => <li key={i} style={{ marginBottom: 4 }}>{a}</li>)}
-                </ul>
+              <div className="vn-box act">
+                <h4>What you should do</h4>
+                <ul>{story.recommended_actions.map((a, i) => <li key={i}>{a}</li>)}</ul>
               </div>
             )}
 
             {story.verified_facts.length > 0 && (
-              <>
-                <h3 style={{ marginTop: 24 }}>Verified facts</h3>
+              <div className="vn-box facts">
+                <h4>Corroborated facts</h4>
                 <ul>{story.verified_facts.map((f, i) => <li key={i}>{f}</li>)}</ul>
-              </>
+              </div>
             )}
 
             {story.proofs.length > 0 && (
-              <div className="vn-proofs">
-                <h3 style={{ marginTop: 24 }}>Proof &amp; sources</h3>
+              <div className="vn-box facts vn-proofs">
+                <h4>Proof &amp; sources ({story.proofs.length})</h4>
                 {story.proofs.map((p, i) => (
                   <a key={i} href={p.url} target="_blank" rel="noreferrer">
-                    {p.source} ↗ {p.published ? `(${p.published.slice(0, 10)})` : ''}
+                    <span>{p.source} ↗</span>
+                    {p.published && <span className="vn-when">{p.published.slice(0, 10)}</span>}
                   </a>
                 ))}
               </div>
             )}
 
             {story.supporting_docs.length > 0 && (
-              <div className="vn-support">
-                <h3 style={{ marginTop: 24 }}>Supporting documents (live dashboard signals)</h3>
-                {story.supporting_docs.map((d, i) => {
-                  if (d.kind === 'satellite' && d.url) {
-                    return (
-                      <figure key={i} style={{ margin: '12px 0' }}>
-                        <img src={backendUrl(d.url)} alt={d.caption ?? ''} />
-                        <figcaption className="vn-byline">{d.caption}</figcaption>
-                      </figure>
-                    );
-                  }
-                  return (
-                    <div key={i} style={{ margin: '10px 0' }}>
-                      <span className="vn-tag">{d.threat_level || 'signal'}</span> {d.narrative}
+              <div className="vn-box facts vn-support">
+                <h4>Supporting documents — live dashboard signals</h4>
+                {story.supporting_docs.map((d, i) => (
+                  d.kind === 'satellite' && d.url ? (
+                    <figure key={i} style={{ margin: '8px 0' }}>
+                      <img src={backendUrl(d.url)} alt={d.caption ?? ''} />
+                      <figcaption className="vn-cap">{d.caption}</figcaption>
+                    </figure>
+                  ) : (
+                    <div key={i} className="vn-wrong-item">
+                      {d.threat_level && <span className="vn-tech" style={{ background: 'var(--ink)' }}>{d.threat_level}</span>}
+                      {d.narrative}
                     </div>
-                  );
-                })}
-                <Link to="/" className="vn-byline">Open the live dashboard →</Link>
+                  )
+                ))}
+                <Link to="/" className="vn-back" style={{ display: 'inline-block', marginTop: 8 }}>Open the live dashboard →</Link>
               </div>
             )}
           </article>
