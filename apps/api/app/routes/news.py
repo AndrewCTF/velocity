@@ -164,10 +164,13 @@ async def news_edition() -> Any:
     cached = store.get_edition()
     if cached is not None:
         return cached
-    # No edition yet: try a short build, else empty-state (never 500/hang the page).
+    # No edition yet: try a short build, else empty-state. ANY failure (timeout,
+    # upstream RSS error, LLM raise) must degrade to a 200 empty edition — the
+    # public page must never see a 500 or hang.
     try:
         return await asyncio.wait_for(_refresh_edition(), timeout=88.0)
-    except TimeoutError:
+    except Exception as exc:  # noqa: BLE001 — never 500 the public page
+        log.warning("news edition on-demand build failed: %s", exc)
         return _empty_edition()
 
 

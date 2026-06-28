@@ -22,6 +22,22 @@ def test_edition_endpoint_empty_state(monkeypatch):
     assert "stories" in body and isinstance(body["stories"], list)
 
 
+async def _boom():
+    raise RuntimeError("upstream RSS exploded")
+
+
+def test_edition_endpoint_never_500_on_build_error(monkeypatch):
+    # Any failure in the on-demand build must degrade to HTTP 200 empty edition,
+    # not a 500 — the public page must never error or hang.
+    store.reset()
+    monkeypatch.setattr(news_routes, "_ensure_articles", _boom)
+    app = create_app()
+    with TestClient(app) as c:
+        r = c.get("/api/news/edition")
+    assert r.status_code == 200
+    assert r.json()["stories"] == []
+
+
 def test_edition_served_from_cache(monkeypatch):
     store.reset()
     store.set_edition({"stories": [{"id": "x", "category": "World", "title": "t"}],
