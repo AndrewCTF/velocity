@@ -820,6 +820,48 @@ async def _refine_event_edition(
     return parsed
 
 
+async def _incident_brief() -> dict[str, Any]:
+    """In-process intel brief (function, NOT the route handler). Empty on failure."""
+    try:
+        from app.intel import incidents as _inc  # noqa: PLC0415
+        res = _inc.brief()
+        if asyncio.iscoroutine(res):
+            res = await res
+        return res if isinstance(res, dict) else {}
+    except Exception:  # noqa: BLE001 — supporting docs are best-effort
+        return {}
+
+
+async def attach_supporting_docs(stories: list[dict[str, Any]]) -> None:
+    """Attach live intel incidents + satellite chip URLs to Conflict stories."""
+    conflict = [s for s in stories if s.get("category") == "Conflict"]
+    if not conflict:
+        return
+    brief = await _incident_brief()
+    incidents = [i for i in (brief.get("incidents") or []) if isinstance(i, dict)][:2]
+    if not incidents:
+        return
+    docs: list[dict[str, Any]] = []
+    for inc in incidents:
+        c = inc.get("centroid") if isinstance(inc.get("centroid"), dict) else {}
+        docs.append({
+            "kind": "incident",
+            "incident_id": str(inc.get("id") or ""),
+            "threat_level": str(inc.get("threat_level") or ""),
+            "narrative": str(inc.get("narrative") or ""),
+            "centroid": c,
+        })
+        lat, lon = c.get("lat"), c.get("lon")
+        if isinstance(lat, int | float) and isinstance(lon, int | float):
+            docs.append({
+                "kind": "satellite",
+                "url": f"/api/imagery/chip?lat={lat}&lon={lon}&radius_km=8",
+                "caption": "Satellite chip near live signal (not the exact story location)",
+            })
+    for s in conflict:
+        s["supporting_docs"] = docs
+
+
 async def analyze_edition(articles: list[Article]) -> dict[str, Any]:
     """Build the public Velocity News edition: many categorized, enriched stories.
 
@@ -890,6 +932,7 @@ async def analyze_edition(articles: list[Article]) -> dict[str, Any]:
             "source_count": len({a.source for a in articles}),
         }
 
+    await attach_supporting_docs(stories)
     return {
         "generated": _now_iso(),
         "categories": EDITION_CATEGORIES,
