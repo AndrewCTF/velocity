@@ -36,6 +36,7 @@ class Article:
     source: str
     leaning: str
     published_iso: str | None
+    image: str = ""
 
 
 # Verified-working RSS feeds (HTTP 200 with items). Diverse leanings on
@@ -149,6 +150,23 @@ def _entry_published_iso(entry: object) -> str | None:
     return str(raw) if raw else None
 
 
+def _entry_image(entry: object) -> str:
+    """Best-effort image URL from an RSS/Atom entry's media tags."""
+    # media:thumbnail / media:content (Yahoo MRSS — feedparser normalizes both)
+    for attr in ("media_thumbnail", "media_content"):
+        items = getattr(entry, attr, None) or []
+        for it in items:
+            url = (it.get("url") if isinstance(it, dict) else "") or ""
+            if url:
+                return url.strip()
+    # <enclosure type="image/*"> shows up under links with rel="enclosure"
+    for lk in getattr(entry, "links", None) or []:
+        if isinstance(lk, dict) and lk.get("rel") == "enclosure":
+            if str(lk.get("type", "")).startswith("image") and lk.get("href"):
+                return str(lk["href"]).strip()
+    return ""
+
+
 def parse_feed_bytes(raw: bytes, source: Source) -> list[Article]:
     """Parse RSS/Atom bytes into normalized :class:`Article` records.
 
@@ -171,6 +189,7 @@ def parse_feed_bytes(raw: bytes, source: Source) -> list[Article]:
                 source=source.name,
                 leaning=source.leaning,
                 published_iso=_entry_published_iso(entry),
+                image=_entry_image(entry),
             )
         )
     return out
