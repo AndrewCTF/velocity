@@ -83,6 +83,9 @@ async def news_feed(
 # made one of them fail and cache an "llm unavailable" result as if fresh.
 _analysis_lock = asyncio.Lock()
 
+_EDITION_REFRESH_SEC = 1200  # ~20 min — ~40 reason-tier rewrites is expensive
+_edition_lock = asyncio.Lock()
+
 
 async def _refresh_analysis() -> dict[str, Any]:
     """Refresh the cached analysis under a lock, double-checking staleness.
@@ -124,6 +127,48 @@ async def news_analysis() -> Any:
         return result
     cached = store.get_analysis()
     return cached if cached is not None else {"events": [], "method": "not yet analyzed"}
+
+
+def _empty_edition() -> dict[str, Any]:
+    return {
+        "generated": None, "categories": news_analyze.EDITION_CATEGORIES,
+        "lead": None, "stories": [], "method": "not yet built",
+        "backend": None, "article_count": 0, "source_count": 0,
+    }
+
+
+async def _refresh_edition() -> dict[str, Any]:
+    """Build + cache the edition under a lock; never cache an LLM-down result."""
+    async with _edition_lock:
+        if not store.is_edition_stale(_EDITION_REFRESH_SEC):
+            cached = store.get_edition()
+            if cached is not None:
+                return cached
+        articles = await _ensure_articles()
+        edition = await news_analyze.analyze_edition(articles)
+        if edition.get("stories"):
+            store.set_edition(edition)
+        return edition
+
+
+@router.get("/api/news/edition")
+async def news_edition() -> Any:
+    """Public Velocity News edition (cached; refreshed by the background loop).
+
+    Public + keyless. Serves the cached edition; if none exists yet it kicks a
+    build but returns a well-formed empty edition rather than blocking the page.
+    """
+    s = get_settings()
+    if not s.news_enabled:
+        return {"enabled": False, **_empty_edition()}
+    cached = store.get_edition()
+    if cached is not None:
+        return cached
+    # No edition yet: try a short build, else empty-state (never 500/hang the page).
+    try:
+        return await asyncio.wait_for(_refresh_edition(), timeout=88.0)
+    except TimeoutError:
+        return _empty_edition()
 
 
 @router.get("/api/news/factcheck")
@@ -187,8 +232,13 @@ async def news_factcheck(
 
 
 async def refresh_once() -> dict[str, Any]:
-    """Fetch → analyze → cache, once (shares the analysis lock). Returns the dict."""
-    return await _refresh_analysis()
+    """Fetch → analyze → cache (analysis), then best-effort build the edition."""
+    result = await _refresh_analysis()
+    try:
+        await _refresh_edition()
+    except Exception as exc:  # noqa: BLE001 — edition failure must not kill the loop
+        log.warning("news edition build failed: %s", exc)
+    return result
 
 
 async def _refresh_loop(stop: asyncio.Event) -> None:

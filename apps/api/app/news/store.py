@@ -67,10 +67,38 @@ def is_analysis_stale(max_age_s: float) -> bool:
     return age is None or age > max_age_s
 
 
+# ── edition (public news page) ──────────────────────────────────────────────
+_edition: dict[str, Any] | None = None
+_edition_ts: float = 0.0
+
+
+def set_edition(edition: dict[str, Any]) -> None:
+    global _edition, _edition_ts
+    _edition = edition
+    _edition_ts = time.monotonic()
+
+
+def get_edition() -> dict[str, Any] | None:
+    return _edition
+
+
+def edition_age_s() -> float | None:
+    if _edition_ts == 0.0:
+        return None
+    return time.monotonic() - _edition_ts
+
+
+def is_edition_stale(max_age_s: float) -> bool:
+    age = edition_age_s()
+    return age is None or age > max_age_s
+
+
 def reset() -> None:
     """Clear all cached state — used by tests for isolation."""
-    global _articles, _articles_ts, _analysis, _analysis_ts
+    global _articles, _articles_ts, _analysis, _analysis_ts, _edition, _edition_ts
     _articles = []
     _articles_ts = 0.0
     _analysis = None
     _analysis_ts = 0.0
+    _edition = None
+    _edition_ts = 0.0
