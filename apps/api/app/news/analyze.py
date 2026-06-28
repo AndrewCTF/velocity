@@ -45,11 +45,44 @@ _STEP_TIMEOUT_S = 25.0  # per per-event LLM step
 _VERIFIED_MIN_SOURCES = 2  # a verified fact needs >=2 distinct outlets
 
 # ── edition (Velocity News public page) bounds ──────────────────────────────
-_MAX_EDITION_EVENTS = 40      # how many stories the public edition publishes
-_EDITION_REFINE_S = 30.0      # per-event LLM step for the richer edition pass
-_EDITION_BUDGET_S = 240.0     # total wall-clock for the edition build
+_MAX_EDITION_EVENTS = 60      # how many stories the wall publishes (deterministic, no LLM)
+_ENRICH_TOP = 18             # how many top stories get LLM depth (rewrite/debias/actions)
+_BATCH_SIZE = 6             # events per LLM enrichment call (few calls dodge rate limits)
+_EDITION_BATCH_S = 60.0      # per-batch LLM step
+_OG_IMAGE_LEADS = 16         # how many top imageless stories get an og:image fetch
 EDITION_CATEGORIES = ["World", "Conflict", "Politics", "Economy", "Tech", "Science"]
 _CATEGORY_SET = {c.lower(): c for c in EDITION_CATEGORIES}
+
+# Keyword → category. Deterministic classifier so EVERY story gets a section
+# without an LLM call (the wall must be full even when the model is throttled).
+_CATEGORY_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "Conflict": (
+        "war", "strike", "missile", "troop", "military", "gaza", "israel", "israeli",
+        "iran", "iranian", "ukraine", "russia", "russian", "hamas", "hezbollah", "idf",
+        "airstrike", "ceasefire", "killed", "attack", "drone", "nato", "irgc", "tehran",
+        "kyiv", "moscow", "rocket", "soldier", "militant", "offensive", "bombing", "siege",
+    ),
+    "Politics": (
+        "election", "president", "parliament", "vote", "minister", "senate", "congress",
+        "government", "policy", "party", "diplomat", "sanction", "summit", "campaign",
+        "lawmaker", "coalition", "referendum", "cabinet", "impeach", "governor",
+    ),
+    "Economy": (
+        "market", "stock", "inflation", "economy", "economic", "trade", "tariff", "oil",
+        "gdp", "bank", "fed", "interest rate", "dollar", "jobs", "recession", "earnings",
+        "shares", "currency", "budget", "growth", "investor", "prices",
+    ),
+    "Tech": (
+        "ai", "artificial intelligence", "tech", "software", "chip", "google", "apple",
+        "microsoft", "openai", "cyber", "hack", "data", "startup", "semiconductor",
+        "robot", "app", "smartphone", "internet", "algorithm", "crypto", "nvidia",
+    ),
+    "Science": (
+        "study", "climate", "space", "nasa", "earthquake", "health", "disease", "vaccine",
+        "research", "scientist", "virus", "weather", "storm", "hurricane", "wildfire",
+        "flood", "outbreak", "patients", "telescope", "emissions", "species",
+    ),
+}
 
 # Words that signal a statement is a promise / prediction / opinion rather than
 # an established fact — used by the deterministic self-critique to refuse to
@@ -198,13 +231,14 @@ Output STRICT JSON ONLY, no prose, no markdown fences, matching exactly:
 }
 """
 
-_EDITION_REFINE_SYSTEM = """\
-You are a rigorous, non-partisan news editor writing ONE story for a public \
-news site. You are given an event title plus the headlines/summaries that \
-mention it, each tagged with source + leaning. Reason ONLY over the provided \
-text — never invent facts, sources, quotes, numbers, places, or dates.
+_EDITION_BATCH_SYSTEM = """\
+You are a rigorous, non-partisan news editor preparing several stories for a \
+public news site IN ONE PASS. You are given a JSON list of events; each event \
+has an "idx", a "title", and the "headlines" (source + leaning + title + \
+summary) that mention it. Reason ONLY over the provided text for each event — \
+never invent facts, sources, quotes, numbers, places, or dates.
 
-Apply the same fact discipline as a fact-checker:
+For EACH event apply this fact discipline:
 - A VERIFIED FACT needs >=2 INDEPENDENT outlets (wires + differing leanings \
 count as independent). A statement BY a politician/official/state outlet is an \
 ATTRIBUTED CLAIM, never a fact. A promise/prediction is rhetoric.
@@ -212,32 +246,31 @@ ATTRIBUTED CLAIM, never a fact. A promise/prediction is rhetoric.
 to the specific source with the quoted evidence, and name propaganda_techniques \
 explicitly (name-calling, card-stacking, appeal-to-fear, false-balance, \
 whataboutism, bandwagon, glittering-generalities, manufactured-consensus).
-
-Additionally:
-- Classify the story into EXACTLY ONE category from: World, Conflict, Politics, \
-Economy, Tech, Science.
-- Write neutral_rewrite: a calm, de-spun retelling of the event in 2-4 short \
-paragraphs (plain language, no loaded words), separated by blank lines.
+- Classify into EXACTLY ONE category: World, Conflict, Politics, Economy, Tech, Science.
+- neutral_rewrite: a calm, de-spun retelling in 2-4 short paragraphs (plain \
+language, no loaded words), paragraphs separated by a blank line.
 - recommended_actions: 1-3 concrete things a reader should do to verify or \
-follow the story (e.g. "cross-check the casualty figure against a primary \
-source"). No calls to political action.
+follow the story. No calls to political action.
 
+Return the SAME "idx" you were given for each event so results can be matched.
 Output STRICT JSON ONLY, no prose, no markdown fences, matching exactly:
 {
-  "title": "<short neutral event title>",
-  "category": "<one of World|Conflict|Politics|Economy|Tech|Science>",
-  "neutral_summary": "<one-line dek>",
-  "neutral_rewrite": "<2-4 paragraph de-spun body>",
-  "recommended_actions": ["<action>", ...],
-  "corroboration": {"source_count": <int>, "sources": ["<name>", ...]},
-  "verified_facts": ["<fact corroborated by >=2 independent outlets>", ...],
-  "attributed_claims": [
-    {"who": "<speaker>", "claim": "<claim>", "status": "unverified|disputed|corroborated"}
-  ],
-  "bias_flags": [{"source": "<name>", "technique": "<name>", "evidence": "<quote>"}],
-  "propaganda_techniques": ["<name>", ...],
-  "rhetoric_flags": [{"who": "<speaker>", "claim": "<claim>", "note": "<why not a fact>"}],
-  "confidence": <0..1>
+  "stories": [
+    {
+      "idx": <int>,
+      "category": "<World|Conflict|Politics|Economy|Tech|Science>",
+      "neutral_rewrite": "<2-4 paragraph de-spun body>",
+      "recommended_actions": ["<action>", ...],
+      "verified_facts": ["<fact corroborated by >=2 independent outlets>", ...],
+      "attributed_claims": [
+        {"who": "<speaker>", "claim": "<claim>", "status": "unverified|disputed|corroborated"}
+      ],
+      "bias_flags": [{"source": "<name>", "technique": "<name>", "evidence": "<quote>"}],
+      "propaganda_techniques": ["<name>", ...],
+      "rhetoric_flags": [{"who": "<speaker>", "claim": "<claim>", "note": "<why not a fact>"}],
+      "confidence": <0..1>
+    }
+  ]
 }
 """
 
@@ -750,6 +783,28 @@ def _normalize_category(raw: Any) -> str:
     return _CATEGORY_SET.get(str(raw or "").strip().lower(), "World")
 
 
+def _kw_hit(low: str, kw: str) -> bool:
+    """Match a keyword: phrases as substrings, single words on boundaries.
+
+    Word boundaries stop 'war' matching 'award' / 'ai' matching 'said'.
+    """
+    kw = kw.strip()
+    if " " in kw:
+        return kw in low
+    return re.search(rf"\b{re.escape(kw)}\b", low) is not None
+
+
+def _classify_category(text: str) -> str:
+    """Deterministic keyword classifier — every story gets a section, no LLM."""
+    low = text.lower()
+    best, best_n = "World", 0
+    for cat, kws in _CATEGORY_KEYWORDS.items():
+        n = sum(1 for kw in kws if _kw_hit(low, kw))
+        if n > best_n:
+            best, best_n = cat, n
+    return best
+
+
 def _whats_wrong(ev: dict[str, Any]) -> list[dict[str, str]]:
     """Deterministic: surface bias_flags as {source, technique, quote} for the UI."""
     out: list[dict[str, str]] = []
@@ -783,41 +838,128 @@ def _lead_image(cluster: list[Article]) -> str:
     return ""
 
 
-async def _refine_event_edition(
-    event: dict[str, Any], articles: list[Article]
-) -> dict[str, Any] | None:
-    """Edition per-event pass: debias + category + rewrite + actions in one call."""
-    ctx = _headlines_for_event(event, articles)
+def _build_wall(articles: list[Article]) -> list[dict[str, Any]]:
+    """Deterministic full wall — one story per cluster, NO LLM.
+
+    Every story gets title/summary/image/category/proofs/corroboration so the
+    page is always full (categorized, with art). Depth fields (neutral_rewrite,
+    whats_wrong, recommended_actions, verified_facts...) start empty and are
+    filled best-effort by :func:`_enrich_batch`. The cluster is stashed under
+    ``_cluster`` for the enrichment context and stripped before returning.
+    """
+    clusters = cluster_titles(articles, max_clusters=_MAX_EDITION_EVENTS)
+    stories: list[dict[str, Any]] = []
+    for cl in clusters:
+        if not cl:
+            continue
+        lead = cl[0]
+        sources: list[str] = []
+        for a in cl:
+            if a.source and a.source not in sources:
+                sources.append(a.source)
+        stories.append({
+            "id": _story_id(lead.title, lead.link),
+            "category": _classify_category(f"{lead.title} {lead.summary}"),
+            "title": lead.title,
+            "neutral_summary": (lead.summary or lead.title)[:240],
+            "neutral_rewrite": "",
+            "recommended_actions": [],
+            "whats_wrong": [],
+            "propaganda_techniques": [],
+            "verified_facts": [],
+            "attributed_claims": [],
+            "rhetoric_flags": [],
+            "corroboration": {"source_count": len(sources), "sources": sources},
+            "proofs": _proofs_for(cl),
+            "image": _lead_image(cl),
+            "supporting_docs": [],
+            "confidence": 0.0,
+            "_cluster": cl,
+        })
+    # Biggest stories (most independent outlets) lead.
+    stories.sort(key=lambda s: s["corroboration"]["source_count"], reverse=True)
+    return stories
+
+
+def _apply_enrichment(story: dict[str, Any], item: dict[str, Any]) -> None:
+    """Merge one LLM enrichment item into a wall story (in place)."""
+    ev = _self_critique_event(_coerce_event({
+        "title": story["title"],
+        "neutral_summary": story["neutral_summary"],
+        "corroboration": story["corroboration"],
+        "verified_facts": item.get("verified_facts"),
+        "attributed_claims": item.get("attributed_claims"),
+        "rhetoric_flags": item.get("rhetoric_flags"),
+        "bias_flags": item.get("bias_flags"),
+        "propaganda_techniques": item.get("propaganda_techniques"),
+        "confidence": item.get("confidence"),
+    }))
+    story["verified_facts"] = ev["verified_facts"]
+    story["attributed_claims"] = ev["attributed_claims"]
+    story["rhetoric_flags"] = ev["rhetoric_flags"]
+    story["propaganda_techniques"] = ev["propaganda_techniques"]
+    story["whats_wrong"] = _whats_wrong(ev)
+    story["confidence"] = ev["confidence"]
+    story["neutral_rewrite"] = str(item.get("neutral_rewrite") or story["neutral_summary"]).strip()
+    story["recommended_actions"] = [
+        str(a).strip() for a in (item.get("recommended_actions") or []) if str(a).strip()
+    ]
+    if item.get("category"):
+        story["category"] = _normalize_category(item["category"])
+
+
+async def _enrich_batch(batch: list[dict[str, Any]]) -> str | None:
+    """Enrich a batch of wall stories with ONE LLM call (best-effort, in place).
+
+    Returns the backend that answered, or None on failure. Far fewer calls than
+    one-per-story, so the NVIDIA dev tier's rate limit thins DEPTH, not COUNT.
+    """
+    payload = []
+    for i, s in enumerate(batch):
+        cl = s.get("_cluster") or []
+        payload.append({
+            "idx": i,
+            "title": s["title"],
+            "headlines": [
+                {"source": a.source, "leaning": a.leaning, "title": a.title,
+                 "summary": (a.summary or "")[:160]}
+                for a in cl[:6]
+            ],
+        })
     user = (
-        f"Event: {event.get('title') or '(untitled)'}\n\n"
-        "Headlines mentioning this event (JSON):\n"
-        + _json_dumps(ctx)
-        + "\n\nReturn the strict JSON story object described in the system prompt."
+        "Events (JSON):\n" + _json_dumps(payload)
+        + "\n\nReturn the strict JSON {\"stories\": [...]} described in the system prompt, "
+        "one entry per event, echoing each idx."
     )
     try:
         parsed, res = await asyncio.wait_for(
             llm.chat_json(
                 [
-                    {"role": "system", "content": _EDITION_REFINE_SYSTEM},
+                    {"role": "system", "content": _EDITION_BATCH_SYSTEM},
                     {"role": "user", "content": user},
                 ],
                 tier="reason",
                 temperature=0.2,
-                max_tokens=4096,
+                max_tokens=8192,
             ),
-            timeout=_EDITION_REFINE_S,
+            timeout=_EDITION_BATCH_S,
         )
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 — a slow/failed batch leaves the cards intact
         return None
     if not res.ok or not isinstance(parsed, dict):
         return None
-    if isinstance(parsed.get("events"), list) and parsed["events"]:
-        first = parsed["events"][0]
-        if isinstance(first, dict):
-            parsed = first
-    parsed.setdefault("title", event.get("title"))
-    parsed["_backend"] = res.backend
-    return parsed
+    arr = parsed.get("stories")
+    if not isinstance(arr, list):
+        return res.backend
+    by_idx: dict[int, dict[str, Any]] = {}
+    for it in arr:
+        if isinstance(it, dict) and isinstance(it.get("idx"), int):
+            by_idx[it["idx"]] = it
+    for i, s in enumerate(batch):
+        it = by_idx.get(i)
+        if it:
+            _apply_enrichment(s, it)
+    return res.backend
 
 
 async def _incident_brief() -> dict[str, Any]:
@@ -863,13 +1005,15 @@ async def attach_supporting_docs(stories: list[dict[str, Any]]) -> None:
 
 
 async def analyze_edition(articles: list[Article]) -> dict[str, Any]:
-    """Build the public Velocity News edition: many categorized, enriched stories.
+    """Build the public Velocity News edition: a FULL wall of categorized stories.
 
-    Reuses the cheap offline clustering, then runs the richer per-event edition
-    pass (debias + category + full rewrite + actions in ONE call per event),
-    bounded by event count + wall-clock. whats_wrong / proofs / image are
-    deterministic post-processing. supporting_docs is attached in a later step
-    (see attach_supporting_docs). Degrades to an empty edition on LLM failure.
+    Two layers, so the page is full even when the model is throttled:
+      1. :func:`_build_wall` — deterministic, NO LLM: every cluster becomes a
+         story with title/summary/image/category/proofs/corroboration.
+      2. Best-effort LLM enrichment of the top stories in BATCHES (~6 events per
+         call), adding neutral_rewrite + bias/propaganda/name-calling callouts +
+         recommended actions. A throttled/failed batch only thins depth, never
+         the story count.
     """
     if not articles:
         return {
@@ -878,8 +1022,8 @@ async def analyze_edition(articles: list[Article]) -> dict[str, Any]:
             "backend": None, "article_count": 0, "source_count": 0,
         }
 
-    clusters = cluster_titles(articles, max_clusters=_MAX_EDITION_EVENTS)
-    if not clusters:
+    stories = _build_wall(articles)
+    if not stories:
         return {
             "generated": _now_iso(), "categories": EDITION_CATEGORIES,
             "lead": None, "stories": [], "method": "no clusters",
@@ -887,58 +1031,38 @@ async def analyze_edition(articles: list[Article]) -> dict[str, Any]:
             "source_count": len({a.source for a in articles}),
         }
 
-    loop = asyncio.get_event_loop()
-    deadline = loop.time() + _EDITION_BUDGET_S
-    stories: list[dict[str, Any]] = []
-    backend: str | None = None
-
-    for cluster in clusters:
-        if loop.time() >= deadline:
+    # og:image for the top imageless stories (bounded — never the whole wall).
+    og_budget = _OG_IMAGE_LEADS
+    for s in stories:
+        if og_budget <= 0:
             break
-        seed = {
-            "title": cluster[0].title,
-            "sources": [a.source for a in cluster],
-            "neutral_summary": cluster[0].summary[:200],
-        }
-        out = await _refine_event_edition(seed, articles)
-        if out is None:
-            continue
-        backend = out.pop("_backend", None) or backend
-        ev = _self_critique_event(_coerce_event(out))
-        ev["category"] = _normalize_category(out.get("category"))
-        ev["neutral_rewrite"] = str(out.get("neutral_rewrite") or ev["neutral_summary"]).strip()
-        ev["recommended_actions"] = [
-            str(a).strip() for a in (out.get("recommended_actions") or []) if str(a).strip()
-        ]
-        ev["whats_wrong"] = _whats_wrong(ev)
-        ev["proofs"] = _proofs_for(cluster)
-        ev["image"] = _lead_image(cluster)
-        if not ev["image"]:
-            for a in cluster:
+        if not s["image"]:
+            og_budget -= 1
+            for a in s.get("_cluster") or []:
                 if a.link:
                     img = await fetch_og_image(a.link)
                     if img:
-                        ev["image"] = img
+                        s["image"] = img
                         break
-        ev["supporting_docs"] = []
-        ev["id"] = _story_id(ev["title"], cluster[0].link)
-        stories.append(ev)
 
-    if not stories:
-        return {
-            "generated": _now_iso(), "categories": EDITION_CATEGORIES,
-            "lead": None, "stories": [], "method": "llm unavailable",
-            "backend": backend, "article_count": len(articles),
-            "source_count": len({a.source for a in articles}),
-        }
+    # Batched LLM enrichment of the top stories (few calls dodge the rate limit).
+    backend: str | None = None
+    to_enrich = stories[:_ENRICH_TOP]
+    for start in range(0, len(to_enrich), _BATCH_SIZE):
+        bk = await _enrich_batch(to_enrich[start:start + _BATCH_SIZE])
+        backend = bk or backend
+
+    for s in stories:
+        s.pop("_cluster", None)
 
     await attach_supporting_docs(stories)
+    enriched = sum(1 for s in stories if s["neutral_rewrite"])
     return {
         "generated": _now_iso(),
         "categories": EDITION_CATEGORIES,
         "lead": stories[0],
         "stories": stories,
-        "method": "edition: cluster -> per-event (category+rewrite+debias+actions) -> deterministic proofs/whats-wrong",
+        "method": f"wall: {len(stories)} stories ({enriched} LLM-enriched, batched reason-tier)",
         "backend": backend,
         "article_count": len(articles),
         "source_count": len({a.source for a in articles}),
