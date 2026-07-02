@@ -101,11 +101,16 @@ function TopBar(): JSX.Element | null {
 // on the live map routes ("/" and "/2d"), only when the setting is ON.
 function PredictedMotionBadge(): JSX.Element | null {
   const loc = useLocation();
+  const mode = useDashboardMode((s) => s.mode);
   const on = useSettings((s) => s.aircraftDeadReckon);
   if (!on) return null;
   if (loc.pathname !== '/' && !loc.pathname.startsWith('/2d')) return null;
+  // The badge is window-anchored, but on the Normal dashboard the bottom ~160px
+  // is the timeline footer — sit above it there instead of overlapping the lane
+  // labels. Elsewhere (Professional / 2D) the window bottom is clear.
+  const bottomClass = loc.pathname === '/' && mode === 'normal' ? 'bottom-[172px]' : 'bottom-2';
   return (
-    <div className="absolute bottom-2 left-2 z-[1000] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5">
+    <div className={`absolute ${bottomClass} left-2 z-[1000] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5`}>
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
       Predicted motion — aircraft positions estimated between ADS-B fixes
     </div>

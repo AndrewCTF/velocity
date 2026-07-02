@@ -91,6 +91,122 @@ _CHOKEPOINTS = [
 ]
 
 
+# ── Faceted object search (the Gotham "Search for Palantir Objects" panel) ────
+# Unlike the single-field resolver above, this searches the shared observation
+# store by TYPE + KEYWORD + drawn-AOI bbox + time window, and returns per-type
+# facet counts so the UI can populate its object-type dropdown with live counts.
+
+# Keyword-searchable attribute fields (same identifiers the resolver matches on).
+_SEARCH_FIELDS = ("callsign", "icao24", "registration", "name", "mmsi", "operator", "flag")
+
+
+def _label_for(o: Observation) -> str:
+    a = o.attrs
+    if o.emits_kind == "aircraft":
+        return str(a.get("callsign") or a.get("registration") or a.get("icao24") or o.id)
+    if o.emits_kind == "vessel":
+        return str(a.get("name") or (f"MMSI {a['mmsi']}" if a.get("mmsi") else o.id))
+    return str(a.get("name") or a.get("label") or o.id)
+
+
+def filter_objects(
+    observations: list[Observation],
+    *,
+    type_: str | None,
+    q: str | None,
+    bbox: tuple[float, float, float, float] | None,  # (min_lon, min_lat, max_lon, max_lat)
+    since_s: float | None,
+    now: float,
+    limit: int,
+) -> dict[str, Any]:
+    """Filter latest-per-entity observations by facets → results + type counts.
+
+    Pure (no store / no clock) so it unit-tests without network. Type counts are
+    computed over the geo+time+keyword-matched set BEFORE the type filter, so the
+    UI's object-type dropdown shows how many of each type match the current AOI /
+    window (Gotham shows live counts per object type). Newest-first, then limited.
+    """
+    qlower = q.lower().strip() if q else None
+
+    def geo_ok(o: Observation) -> bool:
+        if bbox is None:
+            return True
+        min_lon, min_lat, max_lon, max_lat = bbox
+        if not (min_lat <= o.lat <= max_lat):
+            return False
+        if min_lon <= max_lon:  # normal box
+            return min_lon <= o.lon <= max_lon
+        return o.lon >= min_lon or o.lon <= max_lon  # antimeridian wrap
+
+    def time_ok(o: Observation) -> bool:
+        return since_s is None or o.t >= now - since_s
+
+    def kw_ok(o: Observation) -> bool:
+        if qlower is None:
+            return True
+        for k in _SEARCH_FIELDS:
+            v = o.attrs.get(k)
+            if v is not None and qlower in str(v).lower():
+                return True
+        return qlower in o.id.lower()
+
+    # Pre-type match set → drives facet counts.
+    matched = [o for o in observations if geo_ok(o) and time_ok(o) and kw_ok(o)]
+    by_type: dict[str, int] = {}
+    for o in matched:
+        by_type[o.emits_kind] = by_type.get(o.emits_kind, 0) + 1
+
+    typed = matched if (not type_ or type_ == "all") else [o for o in matched if o.emits_kind == type_]
+    typed.sort(key=lambda o: o.t, reverse=True)
+
+    results = [
+        {
+            "kind": o.emits_kind,
+            "id": o.id,
+            "label": _label_for(o),
+            "lon": o.lon,
+            "lat": o.lat,
+            "t": o.t,
+            "source": o.source,
+        }
+        for o in typed[:limit]
+    ]
+    return {"results": results, "count": len(typed), "by_type": by_type}
+
+
+@router.get("/api/search/objects")
+async def search_objects(
+    type: str = Query("all", max_length=24),
+    q: str | None = Query(None, max_length=64),
+    min_lon: float | None = Query(None, ge=-180, le=180),
+    min_lat: float | None = Query(None, ge=-90, le=90),
+    max_lon: float | None = Query(None, ge=-180, le=180),
+    max_lat: float | None = Query(None, ge=-90, le=90),
+    since_s: float | None = Query(None, ge=0, le=7 * 24 * 3600),
+    limit: int = Query(200, ge=1, le=2000),
+) -> dict[str, Any]:
+    """Faceted search over the live object store (aircraft/vessels/quakes/…).
+
+    All facets optional: type (or 'all'), keyword q, drawn-AOI bbox, rolling
+    window since_s. Returns matched results + per-type counts for the facet UI.
+    """
+    import time as _time
+
+    bbox: tuple[float, float, float, float] | None = None
+    if None not in (min_lon, min_lat, max_lon, max_lat):
+        bbox = (float(min_lon), float(min_lat), float(max_lon), float(max_lat))  # type: ignore[arg-type]
+
+    return filter_objects(
+        store.latest(),
+        type_=type,
+        q=q,
+        bbox=bbox,
+        since_s=since_s,
+        now=_time.time(),
+        limit=limit,
+    )
+
+
 @router.get("/api/search")
 async def search(
     q: str = Query(..., min_length=1, max_length=64),
