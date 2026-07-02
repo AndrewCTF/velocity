@@ -12,6 +12,7 @@ self-hosted regional extract.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import httpx
@@ -21,6 +22,85 @@ from app.intel import offroad
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["route"])
+
+# ── Threat-aware routing (Gotham "Asset EMI Resistance" / least-risk, image 24) ─
+# Score a candidate route by how much of it passes through the live GPS-jamming
+# heat cells. Higher risk = more exposure to a jammer; EMI resistance = 100-risk.
+_SEV_WEIGHT = {"low": 1, "medium": 2, "high": 3}
+_SEV_BY_WEIGHT = {0: "none", 1: "low", 2: "medium", 3: "high"}
+
+
+def _haversine_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+
+
+def score_route_risk(
+    route: list[list[float]],
+    threats: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Score one route [[lon,lat],…] against jamming threats.
+
+    Pure (no I/O) so it unit-tests. For each route vertex, take the worst-severity
+    threat whose ring it falls inside; risk is the severity-weighted average
+    exposure across all vertices, normalised to 0-100 (a route entirely inside a
+    HIGH cell = 100). emi_resistance = 100 - risk. Empty route or no threats → 0.
+    """
+    if not route:
+        return {"risk": 0.0, "emi_resistance": 100.0, "exposed_pts": 0, "total_pts": 0, "worst_severity": "none"}
+    tot_w = 0
+    exposed = 0
+    worst_w = 0
+    for pt in route:
+        lon, lat = float(pt[0]), float(pt[1])
+        best = 0
+        for t in threats:
+            if _haversine_km(lon, lat, t["lon"], t["lat"]) <= t["radius_km"]:
+                best = max(best, _SEV_WEIGHT.get(t["severity"], 0))
+        if best:
+            exposed += 1
+            tot_w += best
+            worst_w = max(worst_w, best)
+    risk = round(100.0 * tot_w / (len(route) * 3), 1)
+    return {
+        "risk": risk,
+        "emi_resistance": round(100.0 - risk, 1),
+        "exposed_pts": exposed,
+        "total_pts": len(route),
+        "worst_severity": _SEV_BY_WEIGHT[worst_w],
+    }
+
+
+async def _jamming_threats() -> list[dict[str, Any]]:
+    """Live GPS-jamming cells as scoring threats: centroid + severity + radius_km.
+
+    Reuses the jamming aggregation over the plain snapshot (never the adsb_global
+    route handler — its Query defaults 500 in-process). Keeps only medium/high
+    cells (low is too noisy to route around) so the threat rings stay meaningful.
+    """
+    from app.routes.adsb import global_snapshot  # noqa: PLC0415
+    from app.routes.jamming import HEX_SIZE, _aggregate_jamming  # noqa: PLC0415
+
+    fc = await global_snapshot()
+    cells = _aggregate_jamming(list(fc.get("features") or []))
+    radius_km = HEX_SIZE * 111.0  # hex circumradius° → km
+    out: list[dict[str, Any]] = []
+    for f in cells.get("features") or []:
+        props = f.get("properties") or {}
+        sev = props.get("severity")
+        if sev not in ("medium", "high"):
+            continue
+        ring = ((f.get("geometry") or {}).get("coordinates") or [[]])[0]
+        if not ring:
+            continue
+        clon = sum(p[0] for p in ring) / len(ring)
+        clat = sum(p[1] for p in ring) / len(ring)
+        out.append({"lon": clon, "lat": clat, "severity": sev, "radius_km": radius_km})
+    return out
 
 # Public OSRM demo. Overridable for a self-hosted/offline extract.
 _OSRM_BASE = "https://router.project-osrm.org"
@@ -120,3 +200,50 @@ async def route_fastest(
         )}
     except ValueError as e:
         return {"reachable": False, "note": f"road unavailable; off-road: {e}"}
+
+
+@router.get("/api/route/candidates")
+async def route_candidates(
+    from_lat: float = Query(...),
+    from_lon: float = Query(...),
+    to_lat: float = Query(...),
+    to_lon: float = Query(...),
+) -> dict[str, Any]:
+    """Generate route options + score each against live GPS-jamming (image 24).
+
+    Returns reachable road + off-road candidates, each carrying risk /
+    emi_resistance from score_route_risk, tagged least-risk / shortest / fastest,
+    plus the threat cells so the client can draw threat rings on the map.
+    """
+    threats = await _jamming_threats()
+
+    async def _one(label: str, coro: Any) -> dict[str, Any] | None:
+        try:
+            res = await coro
+        except (ValueError, httpx.HTTPError):
+            return None
+        route = res.get("route") or []
+        if not res.get("reachable") or not route:
+            return None
+        return {"key": label, "label": label, **res, **score_route_risk(route, threats)}
+
+    generated = [
+        await _one("On-road", _osrm_route(from_lat, from_lon, to_lat, to_lon, "driving")),
+        await _one("Off-road", offroad.plan_offroad(from_lat, from_lon, to_lat, to_lon)),
+    ]
+    cands = [c for c in generated if c]
+
+    # Tag least-risk / shortest / fastest across the reachable set.
+    def _tag(pred_key: str, values: list[tuple[str, float]]) -> None:
+        if not values:
+            return
+        best = min(values, key=lambda kv: kv[1])[0]
+        for c in cands:
+            if c["key"] == best and "tag" not in c:
+                c["tag"] = pred_key
+
+    _tag("Least risk", [(c["key"], c["risk"]) for c in cands])
+    _tag("Shortest distance", [(c["key"], c["distance_km"]) for c in cands if c.get("distance_km") is not None])
+    _tag("Fastest", [(c["key"], c["duration_min"]) for c in cands if c.get("duration_min") is not None])
+
+    return {"candidates": cands, "threats": threats}
