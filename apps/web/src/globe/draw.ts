@@ -9,7 +9,7 @@ import * as Cesium from 'cesium';
 
 export type LatLon = { lat: number; lon: number };
 
-type Mode = 'idle' | 'point' | 'polyline' | 'circle';
+type Mode = 'idle' | 'point' | 'polyline' | 'circle' | 'polygon';
 
 const DRAFT = Cesium.Color.fromCssColorString('#4fa0d8'); // --accent
 
@@ -25,6 +25,21 @@ export function haversineKm(a: LatLon, b: LatLon): number {
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+// Ray-casting point-in-polygon on lon/lat (exported for unit test + AOI refine).
+// Ring is an ordered list of vertices (open or closed); treats it as closed.
+export function pointInRing(p: LatLon, ring: readonly LatLon[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i]!;
+    const b = ring[j]!;
+    const intersect =
+      a.lat > p.lat !== b.lat > p.lat &&
+      p.lon < ((b.lon - a.lon) * (p.lat - a.lat)) / (b.lat - a.lat) + a.lon;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
 export interface DrawController {
   /** Arm a one-shot click → returns the picked ground point. */
   placePoint(cb: (p: LatLon) => void): void;
@@ -32,6 +47,8 @@ export interface DrawController {
   drawPolyline(onDone: (verts: LatLon[]) => void): void;
   /** Click a centre, move to size, click again to commit (center + radius km). */
   drawCircle(onDone: (center: LatLon, radiusKm: number) => void): void;
+  /** Multi-click closed polygon (≥3 verts); finish()/right-click commits the ring. */
+  drawPolygon(onDone: (ring: LatLon[]) => void): void;
   /** Commit an in-progress polyline (≥2 vertices) — for a UI "Finish" button. */
   finish(): void;
   /** Abort any in-progress op and clear the draft. */
@@ -64,6 +81,7 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
   let pointCb: ((p: LatLon) => void) | null = null;
   let polyCb: ((v: LatLon[]) => void) | null = null;
   let circleCb: ((c: LatLon, r: number) => void) | null = null;
+  let polygonCb: ((ring: LatLon[]) => void) | null = null;
   const verts: LatLon[] = [];
   let center: LatLon | null = null;
   let cursor: LatLon | null = null;
@@ -88,6 +106,7 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
     pointCb = null;
     polyCb = null;
     circleCb = null;
+    polygonCb = null;
     clearDraft();
   };
 
@@ -105,6 +124,22 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
         material: new Cesium.PolylineDashMaterialProperty({ color: DRAFT }),
         arcType: Cesium.ArcType.GEODESIC,
         clampToGround: true,
+      },
+    });
+  };
+
+  const addPolygonDraft = (): void => {
+    draftDs.entities.add({
+      id: '__draw_polygon',
+      polygon: {
+        hierarchy: new Cesium.CallbackProperty(
+          () => new Cesium.PolygonHierarchy(polyPositions()),
+          false,
+        ),
+        material: DRAFT.withAlpha(0.1),
+        outline: true,
+        outlineColor: DRAFT,
+        height: 0,
       },
     });
   };
@@ -139,7 +174,7 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
       const cb = pointCb;
       reset();
       cb?.(p);
-    } else if (mode === 'polyline') {
+    } else if (mode === 'polyline' || mode === 'polygon') {
       verts.push(p);
       viewer.scene.requestRender();
     } else if (mode === 'circle') {
@@ -158,16 +193,16 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   handler.setInputAction((e: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
-    if (mode !== 'polyline' && mode !== 'circle') return;
+    if (mode !== 'polyline' && mode !== 'circle' && mode !== 'polygon') return;
     const p = pick(e.endPosition);
     if (!p) return;
     cursor = p;
     viewer.scene.requestRender();
   }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
-  // Right-click commits a polyline (mirror of a UI "Finish").
+  // Right-click commits a polyline/polygon (mirror of a UI "Finish").
   handler.setInputAction(() => {
-    if (mode === 'polyline') finish();
+    if (mode === 'polyline' || mode === 'polygon') finish();
   }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
 
   function finish(): void {
@@ -176,7 +211,12 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
       const cb = polyCb;
       reset();
       cb(out);
-    } else if (mode === 'polyline') {
+    } else if (mode === 'polygon' && polygonCb && verts.length >= 3) {
+      const out = [...verts];
+      const cb = polygonCb;
+      reset();
+      cb(out);
+    } else if (mode === 'polyline' || mode === 'polygon') {
       reset(); // not enough points → abort
     }
   }
@@ -198,6 +238,12 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
       mode = 'circle';
       circleCb = onDone;
       addCircleDraft();
+    },
+    drawPolygon(onDone) {
+      reset();
+      mode = 'polygon';
+      polygonCb = onDone;
+      addPolygonDraft();
     },
     finish,
     cancel() {

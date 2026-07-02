@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { searchObjects, type ObjectResult } from '../transport/search.js';
-import { getDrawController, haversineKm } from '../globe/draw.js';
+import { getDrawController, haversineKm, pointInRing, type LatLon } from '../globe/draw.js';
 import { flyToPosition } from '../globe/camera.js';
 import { useSelection } from '../state/stores.js';
 import { Icon } from './Icon.js';
@@ -33,20 +33,29 @@ const KINDS: { id: Kind; label: string }[] = [
   { id: 'outage', label: 'Outages' },
 ];
 
-interface Aoi {
-  lat: number;
-  lon: number;
-  radiusKm: number;
-}
+type Aoi =
+  | { kind: 'circle'; lat: number; lon: number; radiusKm: number }
+  | { kind: 'poly'; ring: LatLon[] };
 
 const KM_PER_DEG_LAT = 111.32;
 
-// Circle AOI → bounding box the backend can filter on (it takes a bbox); the
-// exact circle is re-applied client-side below so the radius stays honest.
+// AOI → bounding box the backend filters on (it takes a bbox); the exact circle
+// radius / polygon ring is re-applied client-side below so the shape stays honest.
 function aoiBbox(aoi: Aoi): [number, number, number, number] {
-  const dLat = aoi.radiusKm / KM_PER_DEG_LAT;
-  const dLon = aoi.radiusKm / (KM_PER_DEG_LAT * Math.max(0.05, Math.cos((aoi.lat * Math.PI) / 180)));
-  return [aoi.lon - dLon, aoi.lat - dLat, aoi.lon + dLon, aoi.lat + dLat];
+  if (aoi.kind === 'circle') {
+    const dLat = aoi.radiusKm / KM_PER_DEG_LAT;
+    const dLon = aoi.radiusKm / (KM_PER_DEG_LAT * Math.max(0.05, Math.cos((aoi.lat * Math.PI) / 180)));
+    return [aoi.lon - dLon, aoi.lat - dLat, aoi.lon + dLon, aoi.lat + dLat];
+  }
+  const lons = aoi.ring.map((p) => p.lon);
+  const lats = aoi.ring.map((p) => p.lat);
+  return [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)];
+}
+
+function inAoi(aoi: Aoi, lon: number, lat: number): boolean {
+  return aoi.kind === 'circle'
+    ? haversineKm({ lat, lon }, { lat: aoi.lat, lon: aoi.lon }) <= aoi.radiusKm
+    : pointInRing({ lat, lon }, aoi.ring);
 }
 
 export function NormalSearchPanel({ viewer, onClose }: NormalSearchPanelProps): JSX.Element {
@@ -75,10 +84,8 @@ export function NormalSearchPanel({ viewer, onClose }: NormalSearchPanelProps): 
       if (aoi) facets.bbox = aoiBbox(aoi);
       if (dateMode === 'rolling') facets.sinceS = rollingH * 3600;
       const res = await searchObjects(facets, ab.signal);
-      // Re-apply the exact circle client-side (the server filtered a bbox).
-      const within = aoi
-        ? res.results.filter((r) => haversineKm({ lat: r.lat, lon: r.lon }, { lat: aoi.lat, lon: aoi.lon }) <= aoi.radiusKm)
-        : res.results;
+      // Re-apply the exact circle/polygon client-side (the server filtered a bbox).
+      const within = aoi ? res.results.filter((r) => inAoi(aoi, r.lon, r.lat)) : res.results;
       setResults(within);
       setByType(res.by_type);
       setCount(aoi ? within.length : res.count);
@@ -96,8 +103,13 @@ export function NormalSearchPanel({ viewer, onClose }: NormalSearchPanelProps): 
     return () => clearInterval(t);
   }, [live, run]);
 
-  const drawAoi = (): void => {
-    getDrawController()?.drawCircle((center, radiusKm) => setAoi({ lat: center.lat, lon: center.lon, radiusKm }));
+  const drawCircleAoi = (): void => {
+    getDrawController()?.drawCircle((center, radiusKm) =>
+      setAoi({ kind: 'circle', lat: center.lat, lon: center.lon, radiusKm }),
+    );
+  };
+  const drawPolyAoi = (): void => {
+    getDrawController()?.drawPolygon((ring) => setAoi({ kind: 'poly', ring }));
   };
 
   const pick = (r: ObjectResult): void => {
@@ -167,11 +179,18 @@ export function NormalSearchPanel({ viewer, onClose }: NormalSearchPanelProps): 
         <label className="nrm-lbl">Area of interest</label>
         {aoi ? (
           <div className="nrm-aoi">
-            <span>{aoi.lat.toFixed(3)}, {aoi.lon.toFixed(3)} · r {aoi.radiusKm.toFixed(0)} km</span>
+            <span>
+              {aoi.kind === 'circle'
+                ? `${aoi.lat.toFixed(3)}, ${aoi.lon.toFixed(3)} · r ${aoi.radiusKm.toFixed(0)} km`
+                : `polygon · ${aoi.ring.length} pts`}
+            </span>
             <button type="button" onClick={() => setAoi(null)}>clear</button>
           </div>
         ) : (
-          <button type="button" className="nrm-btn" onClick={drawAoi}>◯ Draw circle on map</button>
+          <div className="nrm-row2">
+            <button type="button" className="nrm-btn" onClick={drawCircleAoi}>◯ Circle</button>
+            <button type="button" className="nrm-btn" onClick={drawPolyAoi}>⬠ Polygon</button>
+          </div>
         )}
 
         <label className="nrm-check">
