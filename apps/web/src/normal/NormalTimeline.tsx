@@ -102,6 +102,14 @@ export function NormalTimeline(props: NormalTimelineProps): JSX.Element {
   const setMultiplier = useTime((s) => s.setMultiplier);
   const currentTime = useTime((s) => s.currentTime);
 
+  // Live-edge cursor position: where the playback clock falls in the trailing
+  // 24h window (100% = now/live, moves left as the operator scrubs/steps back).
+  // Real, not the old hardcoded 62%. Recompute `now` per render (the store ticks
+  // currentTime, re-rendering this footer).
+  const WINDOW_MS = 24 * 3600 * 1000;
+  const windowStart = Date.now() - WINDOW_MS;
+  const cursorPct = Math.max(0, Math.min(100, ((currentTime - windowStart) / WINDOW_MS) * 100));
+
   return (
     <footer className="timeline" aria-label="Timeline playback">
       <div className="tl-head">
@@ -160,8 +168,8 @@ export function NormalTimeline(props: NormalTimelineProps): JSX.Element {
       </div>
 
       <div className="tl-body" style={{ position: 'relative' }}>
-        {/* Live-edge cursor — illustrative of the playback head near the present. */}
-        <div className="tl-cursor" style={{ left: '62%' }} aria-hidden="true" />
+        {/* Live-edge cursor — REAL playback head: currentTime within the 24h window. */}
+        <div className="tl-cursor" style={{ left: `${cursorPct}%` }} aria-hidden="true" />
         {LANES.map((lane) => (
           <div className="lane" key={lane.key}>
             <span className="lname">
