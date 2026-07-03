@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInvestigation } from './investigationStore.js';
+import { GraphHistory } from './GraphHistory.js';
 import { useSelection } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
 import { SectionLabel, Btn, MicroLabel, Badge } from '../shell/instruments.js';
@@ -192,12 +193,20 @@ export function InvestigationCanvas(): JSX.Element {
   const rootId = useInvestigation((s) => s.rootId);
   const setRoot = useInvestigation((s) => s.setRoot);
   const clear = useInvestigation((s) => s.clear);
+  const revisions = useInvestigation((s) => s.revisions);
+  const viewRev = useInvestigation((s) => s.viewRev);
   const select = useSelection((s) => s.select);
 
   // The accumulated graph (objects keyed by id + the edge set). Expansion MERGES
   // into this — the analyst builds the picture up hop by hop.
   const [objects, setObjects] = useState<Map<string, OntObject>>(new Map());
   const [edges, setEdges] = useState<OntLink[]>([]);
+  // Mirror of `objects` so the async fetch callbacks (root seed / expand resolve
+  // later, remove fires from a memoised handler) can read the latest committed
+  // id-set for the history revision — a plain state read there would be stale.
+  // Kept fresh by an effect and, for back-to-back mutations, synchronously at
+  // each commit below.
+  const objectsRef = useRef(objects);
   const [status, setStatus] = useState<LoadState>('idle');
   const [expanding, setExpanding] = useState<string | null>(null);
 
@@ -210,6 +219,11 @@ export function InvestigationCanvas(): JSX.Element {
   const [saveName, setSaveName] = useState('');
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Keep the mirror ref fresh after every committed object-set change.
+  useEffect(() => {
+    objectsRef.current = objects;
+  }, [objects]);
 
   // Reset everything when the root changes (a new "Search around").
   useEffect(() => {
@@ -231,9 +245,16 @@ export function InvestigationCanvas(): JSX.Element {
           setStatus(res === 503 ? 'unconfigured' : 'error');
           return;
         }
-        setObjects(indexObjects(res.objects));
+        const seeded = indexObjects(res.objects);
+        objectsRef.current = seeded;
+        setObjects(seeded);
         setEdges(res.links);
         setStatus('idle');
+        useInvestigation.getState().record({
+          kind: 'root',
+          label: `seed ${rootId}`,
+          nodeIds: [...seeded.keys()],
+        });
       })
       .catch((e: unknown) => {
         if ((e as { name?: string }).name !== 'AbortError') setStatus('error');
@@ -252,20 +273,26 @@ export function InvestigationCanvas(): JSX.Element {
             if (res === 503) setStatus('unconfigured');
             return;
           }
-          setObjects((prev) => {
-            const next = new Map(prev);
-            for (const o of res.objects) {
-              // Prefer a persisted row over a derived stub already present.
-              const cur = next.get(o.id);
-              if (!cur || (Object.keys(o.props ?? {}).length > 0 && Object.keys(cur.props ?? {}).length === 0)) {
-                next.set(o.id, o);
-              } else if (!next.has(o.id)) {
-                next.set(o.id, o);
-              }
+          const prev = objectsRef.current;
+          const next = new Map(prev);
+          const before = next.size;
+          for (const o of res.objects) {
+            // Prefer a persisted row over a derived stub already present.
+            const cur = next.get(o.id);
+            if (!cur || (Object.keys(o.props ?? {}).length > 0 && Object.keys(cur.props ?? {}).length === 0)) {
+              next.set(o.id, o);
+            } else if (!next.has(o.id)) {
+              next.set(o.id, o);
             }
-            return next;
+          }
+          objectsRef.current = next;
+          setObjects(next);
+          setEdges((prevEdges) => mergeEdges(prevEdges, res.links));
+          useInvestigation.getState().record({
+            kind: 'expand',
+            label: `expanded ${id} (+${next.size - before} nodes)`,
+            nodeIds: [...next.keys()],
           });
-          setEdges((prev) => mergeEdges(prev, res.links));
         })
         .catch(() => undefined)
         .finally(() => setExpanding((cur) => (cur === id ? null : cur)));
@@ -282,6 +309,21 @@ export function InvestigationCanvas(): JSX.Element {
     },
     [expand, select],
   );
+
+  // Remove a node from the canvas (alt-click): drop it + any incident edges and
+  // forget it as a path endpoint. Declutters an over-expanded graph; the node is
+  // only hidden from THIS canvas — search-around can surface it again.
+  const removeNode = useCallback((id: string) => {
+    const pruned = new Map(objectsRef.current);
+    pruned.delete(id);
+    objectsRef.current = pruned;
+    setObjects(pruned);
+    setEdges((prev) => prev.filter((e) => e.src !== id && e.dst !== id));
+    setPathFrom((p) => (p === id ? null : p));
+    setPathTo((p) => (p === id ? null : p));
+    setPath(null);
+    useInvestigation.getState().record({ kind: 'remove', label: `removed ${id}`, nodeIds: [...pruned.keys()] });
+  }, []);
 
   // Run path-finding between the two chosen endpoints.
   const runPath = useCallback(() => {
@@ -353,6 +395,24 @@ export function InvestigationCanvas(): JSX.Element {
     return s;
   }, [path]);
 
+  // History scrubber: when a past revision is selected (viewRev !== null) render
+  // read-only that revision's node set — filter objects to its ids and drop any
+  // edge touching a hidden id. Live (null) renders the full accumulated graph.
+  const scrubIds = useMemo(
+    () => (viewRev !== null && revisions[viewRev] ? new Set(revisions[viewRev]!.nodeIds) : null),
+    [viewRev, revisions],
+  );
+  const viewObjects = useMemo(() => {
+    if (!scrubIds) return objects;
+    const m = new Map<string, OntObject>();
+    for (const [id, o] of objects) if (scrubIds.has(id)) m.set(id, o);
+    return m;
+  }, [objects, scrubIds]);
+  const viewEdges = useMemo(() => {
+    if (!scrubIds) return edges;
+    return edges.filter((e) => scrubIds.has(e.src) && scrubIds.has(e.dst));
+  }, [edges, scrubIds]);
+
   if (!rootId) {
     return (
       <div className="p-4">
@@ -380,19 +440,27 @@ export function InvestigationCanvas(): JSX.Element {
         </button>
       </div>
 
-      <div className="mono text-[9px] text-txt-3 leading-snug">
-        root <span className="text-txt-1">{rootId}</span> · click a node to expand + select
+      <div className="mono text-[10px] text-txt-3 leading-snug">
+        root <span className="text-txt-1">{rootId}</span> · click expands · alt-click removes
       </div>
 
+      {viewRev !== null && revisions[viewRev] && (
+        <div className="mono text-[10px] text-warn leading-snug">
+          viewing revision {viewRev + 1}/{revisions.length} — click{' '}
+          <span className="text-accent">live</span> to return
+        </div>
+      )}
+
       <GraphView
-        objects={objects}
-        edges={edges}
+        objects={viewObjects}
+        edges={viewEdges}
         rootId={rootId}
         pathIds={pathIds}
         pathEdgeKeys={pathEdgeKeys}
         expanding={expanding}
         status={status}
         onNodeClick={onNodeClick}
+        onNodeRemove={removeNode}
         onSetRoot={setRoot}
         onPick={(id) => {
           // Cycle the two path endpoints: first pick = from, second = to.
@@ -412,7 +480,7 @@ export function InvestigationCanvas(): JSX.Element {
           <MicroLabel>Path between</MicroLabel>
           <button
             type="button"
-            className="mono text-[9px] text-txt-3 hover:text-txt-1"
+            className="mono text-[10px] text-txt-3 hover:text-txt-1"
             onClick={() => {
               setPathFrom(null);
               setPathTo(null);
@@ -426,14 +494,14 @@ export function InvestigationCanvas(): JSX.Element {
           <EndpointSlot label="A" id={pathFrom} color="var(--accent)" />
           <EndpointSlot label="B" id={pathTo} color="var(--mag)" />
         </div>
-        <p className="mono text-[8.5px] text-txt-3 leading-tight">
+        <p className="mono text-[10px] text-txt-3 leading-tight">
           shift-click two nodes to set A and B
         </p>
         <Btn size="sm" tone="accent" disabled={!pathFrom || !pathTo} onClick={runPath}>
           ⇆ Find path
         </Btn>
         {path && (
-          <div className="mono text-[9px] leading-snug mt-1">
+          <div className="mono text-[10px] leading-snug mt-1">
             {path.found ? (
               <span className="text-ok">
                 connected · {path.hops} hop{path.hops === 1 ? '' : 's'}
@@ -463,16 +531,19 @@ export function InvestigationCanvas(): JSX.Element {
         </div>
         {saveMsg && (
           <span
-            className={`mono text-[9px] ${saveMsg.startsWith('saved') ? 'text-ok' : 'text-alert'}`}
+            className={`mono text-[10px] ${saveMsg.startsWith('saved') ? 'text-ok' : 'text-alert'}`}
           >
             {saveMsg}
           </span>
         )}
-        <p className="mono text-[8.5px] text-txt-3 leading-tight">
+        <p className="mono text-[10px] text-txt-3 leading-tight">
           persists the {objects.size} node id{objects.size === 1 ? '' : 's'} as an{' '}
           <span className="text-txt-2">investigation:</span> object on your account
         </p>
       </section>
+
+      {/* Change-over-time: revision log + read-only scrubber. */}
+      <GraphHistory />
     </div>
   );
 }
@@ -481,9 +552,9 @@ export function InvestigationCanvas(): JSX.Element {
 function EndpointSlot({ label, id, color }: { label: string; id: string | null; color: string }): JSX.Element {
   return (
     <div className="flex items-center gap-1.5 border border-line-2 rounded-sm px-1.5 py-1 bg-bg-2 min-w-0">
-      <span className="mono text-[9px] text-txt-3 flex-none">{label}</span>
+      <span className="mono text-[10px] text-txt-3 flex-none">{label}</span>
       <span className="h-2 w-2 rounded-full flex-none" style={{ background: id ? color : 'var(--line-2)' }} />
-      <span className="mono text-[9px] text-txt-1 truncate" title={id ?? ''}>
+      <span className="mono text-[10px] text-txt-1 truncate" title={id ?? ''}>
         {id ?? '—'}
       </span>
     </div>
@@ -501,6 +572,7 @@ function GraphView({
   expanding,
   status,
   onNodeClick,
+  onNodeRemove,
   onSetRoot,
   onPick,
 }: {
@@ -512,6 +584,7 @@ function GraphView({
   expanding: string | null;
   status: LoadState;
   onNodeClick: (id: string) => void;
+  onNodeRemove: (id: string) => void;
   onSetRoot: (id: string) => void;
   onPick: (id: string) => void;
 }): JSX.Element {
@@ -686,8 +759,10 @@ function GraphView({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  // shift-click picks a path endpoint; plain click expands+selects.
-                  if (e.shiftKey) onPick(n.id);
+                  // alt-click removes; shift-click picks a path endpoint; plain
+                  // click expands+selects.
+                  if (e.altKey) onNodeRemove(n.id);
+                  else if (e.shiftKey) onPick(n.id);
                   else onNodeClick(n.id);
                 }}
                 onDoubleClick={(e) => {
@@ -754,7 +829,7 @@ function GraphView({
         {Array.from(new Set(nodes.map((n) => n.kind))).slice(0, 6).map((k) => (
           <span key={k} className="inline-flex items-center gap-1">
             <span className="h-2 w-2 rounded-full" style={{ background: kindColor(k) }} />
-            <span className="mono text-[8px] text-txt-3">{k}</span>
+            <span className="mono text-[10px] text-txt-3">{k}</span>
           </span>
         ))}
         {nodes.length > 0 && <Badge tone="neutral">dbl-click = re-root</Badge>}

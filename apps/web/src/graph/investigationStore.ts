@@ -16,24 +16,56 @@
 
 import { create } from 'zustand';
 
+// A single point-in-time snapshot of the investigation canvas: who changed it,
+// when, what kind of mutation, a human line, and the node-id set AFTER the
+// change. The GraphHistory scrubber replays these read-only (filtering the
+// rendered node set to a chosen revision); any live mutation returns to live.
+export interface GraphRevision {
+  ts: number; // epoch ms
+  author: string; // 'operator' for now (single-operator console)
+  kind: 'root' | 'expand' | 'remove' | 'clear' | 'path';
+  label: string; // human line, e.g. 'expanded vessel:123 (+6 nodes)'
+  nodeIds: string[]; // node-id set AFTER the change
+}
+
+// Keep the history bounded — old revisions drop off the front.
+const MAX_REVISIONS = 200;
+
 interface InvestigationState {
   rootId: string | null;
   openSeq: number;
+  // Append-only revision log of the canvas node set over time.
+  revisions: GraphRevision[];
+  // Which revision the canvas is scrubbed to (null = live/newest).
+  viewRev: number | null;
   // Centre the graph on `id` AND request the Investigation tab be brought
   // forward (bumps openSeq). Called by the EntityPanel button.
   searchAround: (id: string) => void;
   // Centre the graph on `id` WITHOUT requesting a tab switch — used by in-canvas
   // navigation (e.g. "make this node the new root") so it doesn't fight the tab.
   setRoot: (id: string) => void;
+  // Record a revision (author + timestamp are stamped here); any live mutation
+  // returns the view to live.
+  record: (r: Omit<GraphRevision, 'ts' | 'author'>) => void;
+  // Move the read-only scrubber (null = back to live).
+  setViewRev: (i: number | null) => void;
   clear: () => void;
 }
 
 export const useInvestigation = create<InvestigationState>((set) => ({
   rootId: null,
   openSeq: 0,
+  revisions: [],
+  viewRev: null,
   searchAround: (id) => set((s) => ({ rootId: id, openSeq: s.openSeq + 1 })),
   setRoot: (id) => set({ rootId: id }),
-  clear: () => set({ rootId: null }),
+  record: (r) =>
+    set((s) => ({
+      revisions: [...s.revisions, { ...r, ts: Date.now(), author: 'operator' }].slice(-MAX_REVISIONS),
+      viewRev: null, // any live mutation returns the view to live
+    })),
+  setViewRev: (i) => set({ viewRev: i }),
+  clear: () => set({ rootId: null, revisions: [], viewRev: null }),
 }));
 
 // DEV-only handle for debugging/introspection (mirrors __useSelection / __useChip).
