@@ -3,3 +3,29 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* App-wide keyboard focus ring for the dense "Professional" console. Until now
+     only the `.nrm` dashboard styled focus, so keyboard users had no visible
+     focus in the main app. Accent outline, offset so it reads on dark chrome.
+     Only on :focus-visible so a mouse click never rings; a component that opts a
+     control out with a `focus-visible:outline-none` utility still wins (utilities
+     layer is applied after base). */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* Respect prefers-reduced-motion globally — collapse non-essential CSS
+     transitions/animations for vestibular safety. JS-driven motion separately
+     honours the `useReducedMotion` hook. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

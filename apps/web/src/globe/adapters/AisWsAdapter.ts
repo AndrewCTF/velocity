@@ -87,11 +87,7 @@ export class AisWsAdapter implements LayerAdapter {
 
   private connect(): void {
     if (this.destroyed) return;
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const baseUrl = this.props.url.startsWith('ws')
-      ? this.props.url
-      : `${proto}://${window.location.host}${this.props.url}`;
-    const ws = new WebSocket(withWsKey(baseUrl));
+    const ws = new WebSocket(withWsKey(this.props.url));
     this.ws = ws;
     this.props.ctx.reportStatus({ status: 'amber', note: 'connecting' });
 

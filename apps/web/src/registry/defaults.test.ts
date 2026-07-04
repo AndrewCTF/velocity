@@ -41,9 +41,13 @@ describe('default layers', () => {
 
   it('points every default at a same-origin backend route', () => {
     // Per plan §locked-decisions #3, no third-party host should leak into the
-    // browser. All endpoints must be relative paths against our own proxy.
+    // browser. Endpoints are either a relative path against our own proxy, or a
+    // client-rendered sentinel (e.g. `notional://` for the MIL-STD-2525 COP,
+    // which is drawn from a local store and never fetched) — neither leaks a
+    // third-party host.
     for (const l of defaultLayers) {
-      expect(l.endpoint.startsWith('/')).toBe(true);
+      const ok = l.endpoint.startsWith('/') || l.endpoint.startsWith('notional://');
+      expect(ok, `${l.id} endpoint=${l.endpoint}`).toBe(true);
     }
   });
 });

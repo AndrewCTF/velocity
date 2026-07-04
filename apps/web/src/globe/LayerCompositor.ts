@@ -9,6 +9,8 @@ import { PollGeoJsonAdapter, type StyleKind } from './adapters/PollGeoJsonAdapte
 import { AisWsAdapter } from './adapters/AisWsAdapter.js';
 import { CablesAdapter } from './adapters/CablesAdapter.js';
 import { SatelliteAdapter } from './adapters/SatelliteAdapter.js';
+import { MilSymbolAdapter } from './adapters/MilSymbolAdapter.js';
+import { AreaAdapter } from './adapters/AreaAdapter.js';
 
 // AOI-aware bbox helper used by all adapters that accept a bbox query.
 function aoiBboxQuery(): string | null {
@@ -36,6 +38,10 @@ function viewportQuery(
 ): () => string | null {
   const GLOBAL_BBOX = `lamin=-85&lomin=-180&lamax=85&lomax=180&limit=${limit}`;
   return () => {
+    // Viewer torn down (HMR / dashboard switch) while a poll timer is still
+    // pending: its camera/scene getters throw "_cesiumWidget is undefined".
+    // Bail so the stale poll no-ops instead of erroring.
+    if (viewer.isDestroyed()) return null;
     const rect = viewer.camera.computeViewRectangle();
     if (rect) {
       const s = Cesium.Math.toDegrees(rect.south);
@@ -99,6 +105,45 @@ function cameraCenterBbox(viewer: Cesium.Viewer, limit: number): string | null {
   const W = clamp(lon - padLon, -180, 180).toFixed(3);
   const E = clamp(lon + padLon, -180, 180).toFixed(3);
   return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
+}
+
+// Zoom-gate for the airport/port reference layers. Emits a
+// `bbox=minLon,minLat,maxLon,maxLat` (comma-joined — exactly the vocab the
+// /api/places endpoints accept, distinct from the ADS-B/AIS lamin/lomin viewport
+// query) ONLY when the camera is closer than PLACES_LOD_ALT_M. Above that
+// altitude it returns null → the adapter fetches the BARE endpoint → the backend
+// returns an empty FeatureCollection (no bbox = nothing) → the markers stay
+// hidden at world/continental view. That is the LOD lever the operator asked for:
+// airports + ports appear only when zoomed into a country / metro.
+const PLACES_LOD_ALT_M = 1_500_000;
+function placesBboxQuery(viewer: Cesium.Viewer): () => string | null {
+  return () => {
+    // Viewer torn down (HMR / dashboard switch) while a poll timer is pending.
+    if (viewer.isDestroyed()) return null;
+    // Camera altitude above the ellipsoid. Above the LOD threshold → no data.
+    // `!(h < T)` also short-circuits NaN (a degenerate camera) to hidden.
+    const height = viewer.camera.positionCartographic.height;
+    if (!(height < PLACES_LOD_ALT_M)) return null;
+    // computeViewRectangle() is undefined at an oblique/tilted view where the
+    // horizon/sky shows — treat that as "can't scope" and hide (belt with the
+    // per-billboard DDC in applyStyle).
+    const rect = viewer.camera.computeViewRectangle();
+    if (!rect) return null;
+    const s = Cesium.Math.toDegrees(rect.south);
+    const n = Cesium.Math.toDegrees(rect.north);
+    const w = Cesium.Math.toDegrees(rect.west);
+    const e = Cesium.Math.toDegrees(rect.east);
+    // Pad ~10% so markers just outside the frame load before they scroll in.
+    const padLat = (n - s) * 0.1;
+    const widthDeg = (((e - w) % 360) + 360) % 360;
+    const padLon = widthDeg * 0.1;
+    const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+    const minLon = clamp(w - padLon, -180, 180).toFixed(3);
+    const minLat = clamp(s - padLat, -90, 90).toFixed(3);
+    const maxLon = clamp(e + padLon, -180, 180).toFixed(3);
+    const maxLat = clamp(n + padLat, -90, 90).toFixed(3);
+    return `bbox=${minLon},${minLat},${maxLon},${maxLat}`;
+  };
 }
 
 // Bridges LayerRegistry → Cesium. One adapter per enabled layer.
@@ -210,6 +255,10 @@ export class LayerCompositor {
     this.desiredOpacity.set(id, opacity);
     const a = this.adapters.get(id);
     if (!a) return;
+    // Aircraft icons render as batched primitives off graphics-less entities, so
+    // the entity walk below can't dim them — the adapter exposes setLayerOpacity
+    // to re-tint the primitive collection. No-op for adapters without it.
+    (a as { setLayerOpacity?: (n: number) => void }).setLayerOpacity?.(opacity);
     const ds = (a as { ds?: Cesium.CustomDataSource | Cesium.GeoJsonDataSource }).ds;
     if (!ds) return;
     for (const e of ds.entities.values) {
@@ -219,6 +268,25 @@ export class LayerCompositor {
   }
 
   private makeAdapter(d: LayerDescriptor, ctx: AdapterCtx): LayerAdapter | null {
+    // MIL-STD-2525 COP overlay — self-contained CustomDataSource, dispatched by
+    // id so it never reaches the geojson/aircraft styling path (icon guardrail).
+    if (d.id.startsWith('mil.cop.')) {
+      return new MilSymbolAdapter({ ctx });
+    }
+    // Conflict-incident areas (fusion brief) and internet-outage areas (IODA) —
+    // translucent severity-coloured ellipses + labels, NOT point icons.
+    if (
+      d.id.startsWith('intel.incidents') ||
+      d.id.startsWith('cyber.ioda') ||
+      d.id.startsWith('conflict.')
+    ) {
+      const kind = d.id.startsWith('cyber.ioda')
+        ? 'ioda'
+        : d.id.startsWith('conflict.')
+          ? 'conflict'
+          : 'incidents';
+      return new AreaAdapter({ ctx, endpoint: d.endpoint, kind, intervalSec: d.refresh.ttlSec ?? 60 });
+    }
     // websocket layers
     if (d.kind === 'websocket' && d.id === 'maritime.aisstream') {
       const adapter = new AisWsAdapter({ ctx, url: d.endpoint });
@@ -256,7 +324,13 @@ export class LayerCompositor {
       // semantically (it's a GNSS service degradation) but renders as a
       // sized translucent point, not the generic outage icon.
       const style: StyleKind =
-        d.id === 'env.jamming.nacp' ? 'jamming' : styleFromEmits(d.emits);
+        d.id === 'env.jamming.nacp'
+          ? 'jamming'
+          : d.id === 'places.airports'
+            ? 'airport'
+            : d.id === 'places.ports'
+              ? 'port'
+              : styleFromEmits(d.emits);
       const ttl = d.refresh.ttlSec ?? 30;
       // A phone can't render/upsert the full ~13k world view every ~2 s (it
       // overheats and the main thread is too busy to interpolate, so planes
@@ -284,10 +358,21 @@ export class LayerCompositor {
       } else if (d.id === 'maritime.digitraffic') {
         bboxQuery = viewportQuery(ctx.viewer, mobile ? 1500 : 6000, undefined, mobile);
         refreshOnMove = true;
-      } else if (d.id === 'maritime.keyless' && mobile) {
-        // The default global vessel layer (~5k). The endpoint honours ?limit, so
-        // cap the payload on mobile (the render path also caps as a safety net).
-        bboxQuery = () => 'limit=2000';
+      } else if (d.id === 'maritime.keyless') {
+        // §5.4 fetch-side LOD: the endpoint honours bbox (viewport_filter) AND
+        // returns the FULL union when no bbox+limit is sent. Desktop: full union at
+        // world view (operator count-truth), a local bbox when zoomed in below the
+        // glide altitude so we parse/upsert only on-screen vessels. worldLimit
+        // 20000 covers the ~4.5k union whole. Mobile: always a small bbox + cap.
+        bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 6000, mobile ? 2000 : 20000, mobile);
+        refreshOnMove = true;
+      } else if (d.id === 'places.airports' || d.id === 'places.ports') {
+        // Zoom-gated reference markers: the bbox (and therefore any data) is sent
+        // ONLY below the LOD altitude; above it placesBboxQuery returns null → the
+        // bare endpoint → an empty FeatureCollection → nothing renders at world /
+        // continental view. refreshOnMove re-fetches the new viewport on zoom/pan.
+        bboxQuery = placesBboxQuery(ctx.viewer);
+        refreshOnMove = true;
       }
       const adapter = new PollGeoJsonAdapter({
         ctx,
@@ -298,16 +383,11 @@ export class LayerCompositor {
         ...(refreshOnMove && { refreshOnMove }),
         ...(wsEndpoint && { ws: wsEndpoint }),
       });
-      // Vessels cluster to declutter shipping lanes at world scale. Aircraft do
-      // NOT: Cesium re-clusters over EVERY entity on each camera move, which ran
-      // on the main thread and was the source of the drag-lag (the GPU sits ~0%
-      // — the wall was JS, not raster). The world-view aircraft count is already
-      // capped (viewportQuery worldLimit), so individual billboards draw cheaply
-      // and the per-move re-cluster cost is gone.
-      if (style === 'vessel') {
-        const ds = (adapter as unknown as { ds?: Cesium.CustomDataSource }).ds;
-        if (ds) configureVesselClustering(ds);
-      }
+      // Poll vessels (digitraffic/keyless) render as batched primitives off
+      // graphics-less entities now, so Cesium EntityCluster has nothing to cluster
+      // — the world-view count bubbles come from VesselClusterPrimitive inside the
+      // adapter instead. (AISStream above still uses EntityCluster: its WS adapter
+      // has not been moved to primitives yet.) Aircraft never clustered.
       return adapter;
     }
     return null;

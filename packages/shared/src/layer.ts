@@ -3,6 +3,7 @@
 // Both Cesium and MapLibre adapters consume the same descriptor.
 
 export type LayerGroup =
+  | 'conflict'
   | 'maritime'
   | 'aviation'
   | 'space'

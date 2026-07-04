@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl, { type Map as MapLibreMap, type LngLatBoundsLike } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { Protocol } from 'pmtiles';
+import { layers as pmLayers, namedFlavor } from '@protomaps/basemaps';
 import type { LayerDescriptor } from '@osint/shared';
+
+// Register the pmtiles:// protocol ONCE so MapLibre can range-read a local
+// PMTiles archive (no tile server, no per-tile request). BSD-3, fully offline.
+maplibregl.addProtocol('pmtiles', new Protocol().tile);
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useFeeds, useSelection } from '../state/stores.js';
 import { useAoi } from '../state/aoi.js';
@@ -24,22 +30,31 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
   const [ready, setReady] = useState(false);
   const activeAoi = useAoi((s) => s.active);
 
-  const styleDef = useMemo(
-    () =>
-      ({
-        version: 8,
-        sources: {
-          basemap: {
-            type: 'raster',
-            tiles: ['/tiles/basemap/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© OpenStreetMap · © CARTO',
-          },
+  // High-fidelity dark VECTOR basemap from a LOCAL PMTiles file (Protomaps planet
+  // region, ODbL/OSM) rendered client-side with the Protomaps dark style (BSD-3).
+  // Crisp at every zoom from one local file; zero external/tile-server requests.
+  // ponytail: label (symbol) layers dropped — they need local glyph PBFs to stay
+  // offline; geometry (land/water/roads/buildings) renders crisp without glyphs.
+  // Add bundled glyphs later to restore labels.
+  const styleDef = useMemo(() => {
+    const all = pmLayers('protomaps', namedFlavor('dark'), { lang: 'en' });
+    return {
+      version: 8,
+      // Local glyph PBFs (Noto Sans, OFL) → labels render fully offline.
+      glyphs: '/fonts/{fontstack}/{range}.pbf',
+      sources: {
+        protomaps: {
+          type: 'vector',
+          url: 'pmtiles:///basemap/region.pmtiles',
+          attribution: '© OpenStreetMap',
         },
-        layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
-      }) as unknown as maplibregl.StyleSpecification,
-    [],
-  );
+      },
+      layers: [
+        { id: 'bg', type: 'background', paint: { 'background-color': '#0a0e14' } },
+        ...all,
+      ],
+    } as unknown as maplibregl.StyleSpecification;
+  }, []);
 
   // Boot once
   useEffect(() => {
@@ -47,8 +62,8 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: styleDef,
-      center: [15, 30],
-      zoom: 1.4,
+      center: [-0.118, 51.509],
+      zoom: 10.5,
       attributionControl: false,
       hash: false,
     });

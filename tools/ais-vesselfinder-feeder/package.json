@@ -1,0 +1,10 @@
+{
+  "name": "ais-vesselfinder-feeder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Headless-browser bridge that exposes VesselFinder's Cloudflare-gated /api/pub/mp2 vessel tiles as a plain vessels.json the OSINT backend ingests via app/ais_keyless.py. The AIS twin of adsb-globe-feeder.",
+  "type": "commonjs",
+  "bin": { "ais-vesselfinder-feeder": "index.js" },
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "playwright": "^1.47.0" }
+}

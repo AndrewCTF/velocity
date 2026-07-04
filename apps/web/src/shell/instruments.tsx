@@ -22,11 +22,10 @@ export function SectionLabel({
   style?: CSSProperties;
 }): JSX.Element {
   return (
-    <div className={`flex items-center gap-2 text-txt-3 ${className}`} style={style}>
-      <span className="mono text-[9px] tracking-[0.9px] uppercase text-txt-2">{title}</span>
-      <span className="flex-1 h-px bg-line" />
+    <div className={`flex items-center justify-between gap-2 ${className}`} style={style}>
+      <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">{title}</span>
       {count !== undefined && count !== '' && (
-        <span className="mono text-[9px] text-txt-3 tabular-nums">{count}</span>
+        <span className="mono text-[11px] text-txt-3 tabular-nums">{count}</span>
       )}
     </div>
   );
@@ -35,7 +34,7 @@ export function SectionLabel({
 // ── micro caps label (.lbl) ─────────────────────────────────────────────────
 export function MicroLabel({ children, className = '' }: { children: ReactNode; className?: string }): JSX.Element {
   return (
-    <span className={`mono text-[9px] tracking-[0.7px] uppercase text-txt-3 ${className}`}>{children}</span>
+    <span className={`text-[10px] font-medium tracking-[0.08em] uppercase text-txt-2 ${className}`}>{children}</span>
   );
 }
 
@@ -136,7 +135,7 @@ export function Badge({
 }): JSX.Element {
   return (
     <span
-      className={`mono text-[8.5px] tracking-[0.6px] uppercase px-[7px] py-[3px] rounded-sm whitespace-nowrap ${BADGE_TONE[tone]} ${className}`}
+      className={`mono text-[10px] tracking-[0.6px] uppercase px-[7px] py-[3px] rounded-sm whitespace-nowrap ${BADGE_TONE[tone]} ${className}`}
     >
       {children}
     </span>
@@ -157,8 +156,8 @@ export function KV({ children, className = '' }: { children: ReactNode; classNam
 export function KVRow({ k, v, warn = false }: { k: string; v: ReactNode; warn?: boolean }): JSX.Element {
   return (
     <>
-      <span className="mono text-[9px] tracking-[0.4px] uppercase text-txt-3">{k}</span>
-      <span className={`mono text-right ${warn ? 'text-[#ffb3ae]' : 'text-txt-1'}`}>{v}</span>
+      <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-2">{k}</span>
+      <span className={`mono text-right ${warn ? 'text-[#ffb3ae]' : 'text-txt-0'}`}>{v}</span>
     </>
   );
 }
@@ -171,6 +170,7 @@ export function Btn({
   size = 'md',
   disabled = false,
   title,
+  ariaLabel,
   className = '',
 }: {
   children: ReactNode;
@@ -179,6 +179,9 @@ export function Btn({
   size?: 'sm' | 'md';
   disabled?: boolean;
   title?: string;
+  // Accessible name for icon-only buttons (where `children` is a bare glyph).
+  // Falls back to `title` so existing call sites that pass a title get a name too.
+  ariaLabel?: string;
   className?: string;
 }): JSX.Element {
   return (
@@ -187,9 +190,10 @@ export function Btn({
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-label={ariaLabel ?? title}
       className={[
         'mono tracking-[0.3px] rounded-sm border transition-colors disabled:opacity-40',
-        size === 'sm' ? 'text-[9px] px-2 py-1' : 'text-[10px] px-[10px] py-[6px]',
+        size === 'sm' ? 'text-[10px] px-2 py-1' : 'text-[10px] px-[10px] py-[6px]',
         tone === 'accent'
           ? 'border-accent-line bg-accent-dim text-[#9cc2ff] hover:text-accent'
           : 'border-line-2 bg-bg-2 text-txt-1 hover:border-accent-line',
@@ -229,7 +233,7 @@ export function Hero({
     >
       <span className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: c.bar }} />
       <div className="flex items-center gap-2 mb-2">
-        <span className="mono text-[9px] tracking-[0.8px] uppercase" style={{ color: c.t }}>
+        <span className="mono text-[10px] tracking-[0.8px] uppercase" style={{ color: c.t }}>
           {title}
         </span>
       </div>
@@ -265,7 +269,7 @@ export function Widget({
         : 'none';
   return (
     <section
-      className={`rounded-md border border-line bg-bg-1/70 p-2.5 ${className}`}
+      className={`rounded-md border border-line-2 bg-bg-1/90 p-2.5 ${className}`}
       style={{ boxShadow: shadow }}
     >
       {title && (
@@ -283,6 +287,9 @@ export function Widget({
 export function IconTile({ children, color }: { children: ReactNode; color?: string }): JSX.Element {
   return (
     <div
+      // Decorative: the glyph is always paired with an adjacent text label, so
+      // hide it from the a11y tree rather than have SRs read emoji gibberish.
+      aria-hidden="true"
       className="w-[34px] h-[34px] border border-line-2 bg-bg-2 flex items-center justify-center text-[15px] rounded-sm shrink-0"
       style={color ? { color } : undefined}
     >
@@ -310,7 +317,41 @@ export function Brand({ name = 'VELOCITY', version }: { name?: string; version?:
     <div className="flex items-center gap-2 mono font-semibold tracking-[1.5px] text-[12px] text-txt-0">
       <span className="w-2 h-2 bg-accent rotate-45 shrink-0" />
       {name}
-      {version && <span className="font-normal tracking-[0.5px] text-[9px] text-txt-3">{version}</span>}
+      {version && <span className="font-normal tracking-[0.5px] text-[10px] text-txt-3">{version}</span>}
     </div>
+  );
+}
+
+// ── classification caveat strip (.caveat) ────────────────────────────────────
+// Dense uppercase mono strip for classification markings (e.g. "UNCLAS//FOUO",
+// "NOTIONAL // SIMULATED"). Rendered as a hairline-bordered pill — always tiny,
+// never decorative. tone drives the colour family; neutral is default (most data
+// is unclassified); warn = exercise/notional; alert = handling warning.
+const CAVEAT_TONE: Record<'neutral' | 'warn' | 'alert', string> = {
+  neutral: 'text-txt-2 border-line-2',
+  warn:    'text-[#fcd9a0] border-[rgba(245,165,36,0.38)] bg-warn-bg',
+  alert:   'text-[#ffc9c5] border-[rgba(255,90,82,0.38)] bg-alert-bg',
+};
+export function Caveat({
+  level = 'UNCLAS//FOUO',
+  note,
+  tone = 'neutral',
+}: {
+  level?: string;
+  note?: string;
+  tone?: 'neutral' | 'warn' | 'alert';
+}): JSX.Element {
+  return (
+    <span
+      className={`inline-flex items-center gap-[5px] mono text-[10px] tracking-[0.7px] uppercase px-[6px] py-[2px] rounded-sm border whitespace-nowrap ${CAVEAT_TONE[tone]}`}
+    >
+      {level}
+      {note && (
+        <>
+          <span className="opacity-40">·</span>
+          <span className="opacity-70">{note}</span>
+        </>
+      )}
+    </span>
   );
 }

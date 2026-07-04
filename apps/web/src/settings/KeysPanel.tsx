@@ -124,7 +124,7 @@ function KeyRow({
       <div className="flex items-center justify-between gap-2">
         <span className="mono text-[11px] text-txt-1">{provider.label}</span>
         <span
-          className={`mono text-[8px] uppercase tracking-[0.6px] px-1.5 py-0.5 rounded-sm border ${
+          className={`mono text-[10px] uppercase tracking-[0.6px] px-1.5 py-0.5 rounded-sm border ${
             provider.wired
               ? 'text-emerald-400 border-emerald-700/60'
               : 'text-txt-3 border-line'
@@ -134,7 +134,7 @@ function KeyRow({
           {provider.wired ? 'active' : 'stored'}
         </span>
       </div>
-      <p className="mono text-[9px] text-txt-3 mt-0.5 leading-snug">{provider.help}</p>
+      <p className="mono text-[10px] text-txt-3 mt-0.5 leading-snug">{provider.help}</p>
 
       {stored ? (
         <div className="flex items-center justify-between gap-2 mt-1.5">
@@ -171,7 +171,7 @@ function KeyRow({
           </button>
         </div>
       )}
-      {err && <p className="mono text-[9px] text-rose-400 mt-1">{err}</p>}
+      {err && <p className="mono text-[10px] text-rose-400 mt-1">{err}</p>}
     </div>
   );
 }

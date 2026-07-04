@@ -1,10 +1,12 @@
 """Tests for /api/jamming/nacp — GPS jamming heat layer.
 
 Verifies:
-- Bucketing into 1° cells with the GPSJam.org bad-fix definition.
+- Binning into a pointy-top hex lattice with the GPSJam.org bad-fix definition.
 - Cells below the high-severity floor still surface at lower severity.
 - Aircraft without integrity fields are excluded entirely.
 - The route hands back GeoJSON the frontend adapter can consume directly.
+
+Hex-lattice tessellation itself is covered by test_jamming_hexgrid.py.
 """
 
 from __future__ import annotations
@@ -16,7 +18,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import upstream
-from app.routes.jamming import _aggregate_jamming, _bucket_key, _severity
+from app.routes.jamming import (
+    _aggregate_jamming,
+    _hex_cell,
+    _hex_center,
+    _severity,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -36,16 +43,19 @@ def _f(
     }
 
 
-def test_bucket_key_uses_floor_not_truncation() -> None:
-    # int() of -0.5 is 0 (truncates toward zero), floor is -1. We need floor.
-    assert _bucket_key(-0.5, -0.5) == (-1, -1)
-    assert _bucket_key(0.5, 0.5) == (0, 0)
+def test_hex_cell_partitions_uniquely() -> None:
+    # A point and its own cell centre classify to the same cell — the lattice
+    # is a partition (every point in exactly one hex).
+    cell = _hex_cell(56.5, 26.5)
+    cx, cy = _hex_center(*cell)
+    assert _hex_cell(cx, cy) == cell
 
 
-def test_bucket_key_handles_antimeridian() -> None:
-    # +179.9 stays in (179, …), -179.9 stays in (-180, …) — no collision.
-    assert _bucket_key(179.9, 0.0) == (179, 0)
-    assert _bucket_key(-179.9, 0.0) == (-180, 0)
+def test_hex_cell_handles_antimeridian() -> None:
+    # No crash / collision when an upstream emits a longitude at the seam.
+    a = _hex_cell(179.9, 0.0)
+    b = _hex_cell(-179.9, 0.0)
+    assert a != b
 
 
 def test_severity_thresholds() -> None:
@@ -61,10 +71,13 @@ def test_severity_thresholds() -> None:
 
 
 def test_aggregate_emits_high_severity_for_all_bad_cluster() -> None:
+    # Cluster all three fixes inside one hex (centre ± a fraction of the
+    # inradius) so they aggregate into a single cell.
+    cx0, cy0 = _hex_center(*_hex_cell(56.5, 26.5))
     feats = [
-        _f(56.1, 26.2, nac_p=0, nic=0),
-        _f(56.5, 26.5, nac_p=4, nic=2),
-        _f(56.9, 26.9, nac_p=6, nic=5),
+        _f(cx0, cy0, nac_p=0, nic=0),
+        _f(cx0 + 0.1, cy0 + 0.05, nac_p=4, nic=2),
+        _f(cx0 - 0.1, cy0 - 0.05, nac_p=6, nic=5),
     ]
     fc = _aggregate_jamming(feats)
     assert fc["type"] == "FeatureCollection"
@@ -74,17 +87,16 @@ def test_aggregate_emits_high_severity_for_all_bad_cluster() -> None:
     assert f["properties"]["total"] == 3
     assert f["properties"]["bad"] == 3
     assert f["properties"]["percent_bad"] == 100.0
-    # Geometry is now a Polygon hexagon centred on (56.5, 26.5).
+    # Geometry is a closed hexagon polygon centred on the hex cell centre.
     assert f["geometry"]["type"] == "Polygon"
     ring = f["geometry"]["coordinates"][0]
-    # 7 points (6 vertices + closing repeat).
-    assert len(ring) == 7
+    assert len(ring) == 7  # 6 vertices + closing repeat
     assert ring[0] == ring[-1], "ring must be closed"
-    # Centre of the bounding box of the hexagon should be ~(56.5, 26.5).
+    # Centroid of a regular hexagon's vertices is its centre.
     lons = [p[0] for p in ring[:-1]]
     lats = [p[1] for p in ring[:-1]]
-    assert abs(sum(lons) / 6 - 56.5) < 1e-9
-    assert abs(sum(lats) / 6 - 26.5) < 1e-9
+    assert abs(sum(lons) / 6 - cx0) < 1e-9
+    assert abs(sum(lats) / 6 - cy0) < 1e-9
 
 
 def test_aggregate_skips_aircraft_without_integrity() -> None:
@@ -112,15 +124,22 @@ def test_aggregate_omits_clean_cells() -> None:
     assert fc["features"] == []
 
 
-def test_route_returns_aggregated_cells(client: TestClient) -> None:
+def test_route_returns_aggregated_cells(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Stay hermetic: a dev .env (api_key / supabase) would otherwise make the
+    # ApiKeyMiddleware 401 every route test locally. Disable the auth predicate.
+    monkeypatch.setattr("app.auth._auth_enabled", lambda _s: False)
     # Mock the snapshot by patching global_snapshot (the seam jamming reads).
+    cx0, cy0 = _hex_center(*_hex_cell(56.5, 26.5))
+
     async def fake_global() -> dict[str, Any]:
         return {
             "type": "FeatureCollection",
             "features": [
-                _f(56.1, 26.2, nac_p=0, nic=0),
-                _f(56.5, 26.5, nac_p=4, nic=2),
-                _f(56.9, 26.9, nac_p=6, nic=5),
+                _f(cx0, cy0, nac_p=0, nic=0),
+                _f(cx0 + 0.1, cy0 + 0.05, nac_p=4, nic=2),
+                _f(cx0 - 0.1, cy0 - 0.05, nac_p=6, nic=5),
             ],
         }
 

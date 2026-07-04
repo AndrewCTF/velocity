@@ -59,7 +59,9 @@ export function GlobeTheater({ viewer }: Props): null {
           // box is reasonably large on screen (zoomed toward a region).
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 6_000_000),
           translucencyByDistance: new Cesium.NearFarScalar(1.5e6, 1.0, 6e6, 0.0),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          // Depth-tested (no disableDepthTestDistance) so the globe OCCLUDES a
+          // chokepoint label on the far side instead of it bleeding through to
+          // the opposite hemisphere.
         },
       });
     }

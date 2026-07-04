@@ -63,9 +63,15 @@ class ObservationStore:
             if current is popped:
                 del self._latest[popped.id]
         # Periodic full sweep catches stale latest entries whose buffer
-        # observation already fell off via maxlen (not popleft), and also
-        # bounds worst-case _latest size irrespective of the 50k threshold.
-        if self._evict_count % _LATEST_SWEEP_INTERVAL == 0 or len(self._latest) > 50_000:
+        # observation already fell off via maxlen (not popleft). Runs on a
+        # FIXED CADENCE only — never per-call. A global high-cardinality feed
+        # (AISStream whole-world firehose) keeps _latest well above any size
+        # threshold permanently, so a `len(...) > N` trigger here turned EVERY
+        # add() into an O(n) dict rebuild on the event loop and wedged the whole
+        # backend (all routes, incl the /tiles/basemap globe texture, timed out).
+        # _latest is naturally bounded by distinct ids seen within retention, so
+        # the cadence sweep is enough. ponytail: amortized O(n / interval).
+        if self._evict_count % _LATEST_SWEEP_INTERVAL == 0:
             cutoff2 = time.time() - self._retention
             self._latest = {k: v for k, v in self._latest.items() if v.t >= cutoff2}
 

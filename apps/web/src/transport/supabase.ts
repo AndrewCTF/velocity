@@ -49,10 +49,35 @@ export function getAccessToken(): string | null {
   return _accessToken;
 }
 
+// Resolves once the initial getSession() bridge below has settled, so callers
+// can await a populated `_accessToken` instead of racing the async boot (the
+// first apiFetch / WS upgrade otherwise fired before the Bearer was attached →
+// a 401 on first paint). Resolves immediately when auth is unconfigured.
+let _resolveTokenReady: () => void = () => {};
+export const tokenReady: Promise<void> = new Promise((resolve) => {
+  _resolveTokenReady = resolve;
+});
+
+// Await the initial session, then read the current token (kept fresh by
+// onAuthStateChange). Logged-out / unconfigured resolves null and the caller
+// proceeds keyless.
+export async function getAccessTokenAsync(): Promise<string | null> {
+  await tokenReady;
+  return _accessToken;
+}
+
 if (supabase) {
   supabase.auth.onAuthStateChange((_event, session) => {
     _accessToken = session?.access_token ?? null;
   });
+  // Watchdog: a hung getSession()/setSession() — possible under a dead/slow
+  // network when stale vel_tok/vel_refresh sit in localStorage, since auth-js
+  // serializes these behind navigator.locks with no timeout — must never leave
+  // tokenReady unresolved. That would hang EVERY apiFetch, including the keyless
+  // globe poll (violating "core layers work without a key"). try/finally can't
+  // bound a hang, so resolve after 4 s regardless; onAuthStateChange still
+  // populates _accessToken if the session settles afterwards.
+  const watchdog = setTimeout(() => _resolveTokenReady(), 4000);
   void (async () => {
     // Bridge a session created by the marketing /login page (which stores raw
     // tokens in localStorage) into this supabase-js client, so a user who
@@ -75,6 +100,13 @@ if (supabase) {
       _accessToken = data.session?.access_token ?? null;
     } catch {
       /* ignore */
+    } finally {
+      clearTimeout(watchdog);
+      _resolveTokenReady();
     }
   })();
+} else {
+  // Auth unconfigured: nothing to settle — unblock awaiters immediately so
+  // keyless calls don't hang on tokenReady.
+  _resolveTokenReady();
 }

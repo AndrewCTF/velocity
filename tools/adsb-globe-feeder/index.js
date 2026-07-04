@@ -80,7 +80,45 @@ const pages = new Map(); // url -> { page, aircraft:[], lastGood:0 }
 
 function log(...a) { console.log(new Date().toISOString(), ...a); }
 
+function launchOpts() {
+  const o = {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      // Headless/background tabs throttle their JS timers — which slows
+      // tar1090's OWN fetch loop, so g.planesOrdered refreshed only ~every 10 s
+      // (measured) instead of tar1090's native ~1-7 s. These keep the tab
+      // "foreground" so tar1090 polls the aggregator at full rate.
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-features=CalculateNativeWinOcclusion',
+    ],
+  };
+  if (process.env.CHROME_PATH) o.executablePath = process.env.CHROME_PATH;
+  else o.channel = 'chrome';
+  return o;
+}
+
+// Relaunch Chromium if it has crashed/disconnected. WITHOUT this, a browser
+// crash (OOM, Cloudflare nuking the tab) left `browser` pointing at a dead
+// process and every newContext() threw "Target page, context or browser has
+// been closed" forever — the feeder served 0 aircraft until restarted. Now any
+// page-open first heals the browser. The last-served aircraft per source are
+// carried forward (slots aren't cleared) so recovery is a brief dip, not a
+// blackout. A `disconnected` handler nulls `browser` so the next call relaunches.
+async function ensureBrowser() {
+  if (browser && browser.isConnected()) return;
+  if (browser) { try { await browser.close(); } catch (e) {} }
+  browser = null;
+  browser = await chromium.launch(launchOpts());
+  browser.on('disconnected', () => { browser = null; log('browser disconnected — will relaunch on next read'); });
+  log('browser launched');
+}
+
 async function openPage(url) {
+  await ensureBrowser();
   const context = await browser.newContext({ userAgent: UA, viewport: { width: 1366, height: 900 } });
   const page = await context.newPage();
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -154,22 +192,31 @@ async function nudgeAll() {
 }
 
 function unioned() {
-  const merged = new Map();
+  // Freshest-wins per hex: keep the aircraft from whichever aggregator reported
+  // the NEWEST position (smallest seen_pos). This is what exploits phase
+  // diversity across multiple out-of-phase aggregators — a shared aircraft
+  // updates whenever ANY source refreshes it, so the effective refresh is
+  // ~(globe-regen / N sources) instead of one source's full ~10s cycle.
+  // (Last-wins pinned every shared aircraft to a single source's cadence, which
+  // wasted the extra feeds — they added coverage but not refresh rate.)
+  const merged = new Map(); // hex -> { sp, a }
   for (const slot of pages.values()) {
-    for (const a of slot.aircraft) merged.set(a.hex, a);
+    for (const a of slot.aircraft) {
+      const sp = typeof a.seen_pos === 'number' ? a.seen_pos : 1e9;
+      const prev = merged.get(a.hex);
+      if (!prev || sp < prev.sp) merged.set(a.hex, { sp, a });
+    }
   }
-  return { now: Date.now() / 1000, aircraft: [...merged.values()] };
+  return { now: Date.now() / 1000, aircraft: [...merged.values()].map((v) => v.a) };
 }
 
 async function main() {
-  // No bundled Playwright Chromium on this distro — use system Google Chrome.
-  // Override with CHROME_PATH=/path/to/chrome if needed.
-  const launchOpts = { headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] };
-  if (process.env.CHROME_PATH) launchOpts.executablePath = process.env.CHROME_PATH;
-  else launchOpts.channel = 'chrome';
-  browser = await chromium.launch(launchOpts);
-  for (const url of GLOBE_URLS) await initPage(url);
-
+  // Serve the HTTP endpoint IMMEDIATELY — BEFORE any browser init — so a slow or
+  // dead aggregator (Cloudflare challenge, a globe that won't populate) can never
+  // block the port. With N sources unioned for phase diversity, sequential
+  // init-before-serve hung :8090 for >70s on one bad tab. The union is just empty
+  // until tabs populate; the backend's sidecar-only path backfills with OpenSky
+  // below its floor in the meantime.
   http.createServer((req, res) => {
     if (req.url.startsWith('/aircraft.json')) {
       const body = JSON.stringify(unioned());
@@ -187,6 +234,12 @@ async function main() {
   // Slow keep-alive: nudge the map every NUDGE_MS so tar1090 keeps refreshing
   // the global extent (headless tabs can otherwise be throttled as "hidden").
   setInterval(() => { nudgeAll().catch(() => {}); }, NUDGE_MS);
+
+  // Launch (or relaunch) Chrome, then init every source CONCURRENTLY so one slow
+  // tab can't gate the others (the boot hang). Each source self-heals in the read
+  // loop regardless of how its init went.
+  await ensureBrowser();
+  await Promise.allSettled(GLOBE_URLS.map((url) => initPage(url)));
 
   // Read loop — just read each page's store on a cadence (no map moves here).
   for (;;) {

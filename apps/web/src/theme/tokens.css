@@ -2,27 +2,29 @@
    Variable NAMES are stable (Tailwind utilities + every component reference
    them); only the VALUES shift to the cooler, denser console look. */
 :root {
-  /* substrate — cool ink, faint blue, richer than neutral charcoal */
-  --bg-0: #080a0f;
-  --bg-1: #0c1017;
-  --bg-2: #121826;
-  --bg-3: #1a2130;
-  --bg-4: #232d40;
-  /* hairlines — cool-tinted, not pure white → more refined */
-  --line: rgba(150, 175, 210, 0.08);
-  --line-2: rgba(150, 175, 210, 0.17);
+  /* substrate — NEUTRAL dark grey (Palantir Gotham product chrome is near-neutral,
+     barely-blue, not cobalt). Restraint over tint. */
+  --bg-0: #0c0e11;
+  --bg-1: #14171c;
+  --bg-2: #1b1f25;
+  --bg-3: #242931;
+  --bg-4: #2f353e;
+  /* hairlines — faint neutral; separation comes from SPACE, not lines */
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.13);
 
-  /* text — slightly cool */
-  --txt-0: #eef2f8;
-  --txt-1: #c3cee0;
-  --txt-2: #8493a8;
-  --txt-3: #566377;
-  --txt-4: #36404f;
+  /* text — neutral greys, a real contrast ramp */
+  --txt-0: #f1f3f6;
+  --txt-1: #aeb6c0;
+  --txt-2: #79818d;
+  --txt-3: #545b66;
+  --txt-4: #383e47;
 
-  /* accent — cobalt azure (interactive / selection-ui / AI) */
-  --accent: #4d8dff;
-  --accent-dim: rgba(77, 141, 255, 0.13);
-  --accent-line: rgba(77, 141, 255, 0.42);
+  /* accent — steel signal blue (interactive / focus / active). Institutional,
+     not a trendy acid accent: boldness is spent on the sensor frame, not color */
+  --accent: #4fa0d8;
+  --accent-dim: rgba(79, 160, 216, 0.13);
+  --accent-line: rgba(79, 160, 216, 0.42);
 
   /* SEMANTIC — threat state ONLY */
   --warn: #f5a524;
@@ -39,13 +41,82 @@
      "low" alert badge doesn't read as "selected". Mirrors --txt-1. */
   --sev-low: #c3cee0;
 
-  /* radii — tighter, instrument-grade */
-  --r-sm: 3px;
-  --r-md: 5px;
-  --r-lg: 8px;
+  /* radii — hard-cornered, instrument-grade */
+  --r-sm: 2px;
+  --r-md: 3px;
+  --r-lg: 5px;
+
+  /* ── spacing scale (design §6.2 — promoted out of normal/.nrm so BOTH shells
+     share one rhythm). px here (global chrome isn't --ui-scale'd like .nrm). */
+  --sp-1: 3px; /* hairline gap (icon↔text) */
+  --sp-2: 4px; /* tight row gap */
+  --sp-3: 6px; /* default row padding */
+  --sp-4: 8px; /* group padding */
+  --sp-5: 12px; /* section spacing */
+  --sp-6: 16px; /* panel padding */
+
+  /* ── shadow scale (promoted from .nrm) — flat, Blueprint-like; used sparingly */
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 6px 22px rgba(0, 0, 0, 0.5);
+  --sh-pop: 0 18px 50px rgba(0, 0, 0, 0.6);
+
+  /* ── z-scale (design §6.2) — exactly SIX named layers replacing 19 ad-hoc
+     values across two scales. Chrome must reference these, never a bare z-[NNN].
+     Ordering IS the contract: a slide-over triage surface (--z-modal) sits ABOVE
+     a full-screen workspace (--z-overlay), which fixes the AlertsPanel-buried-
+     under-SimulationOverlay bug by construction. */
+  --z-map: 0; /* the Cesium canvas + on-map overlays anchored to it */
+  --z-rail: 100; /* docked edge rails + their flyouts */
+  --z-dock: 200; /* docked helpers floating over the map */
+  --z-overlay: 400; /* full-screen mode/workspace surfaces, sim overlay */
+  --z-modal: 600; /* slide-overs, dialogs, alerts triage, command palette */
+  --z-toast: 800; /* transient toasts — always on top */
+
+  /* ── type scale with a FLOOR (design §6.2 — nothing below 10px). Migrate the
+     205 sub-10px literals onto these; captions are the smallest allowed. */
+  --fs-body: 12px; /* default body / row text */
+  --fs-dense: 11px; /* dense tabular rows */
+  --fs-caption: 10px; /* captions, eyebrows, section labels — the FLOOR */
+
+  /* classification banner (§6.2 hex amnesty) — the marking chrome, tokenized so
+     it's no longer hardcoded green literals scattered in ConsoleShell. */
+  --cls-unclas-bg: #0c3b1f;
+  --cls-unclas-fg: #86e0a6;
+  --cls-exercise-bg: #3a2a05;
+  --cls-exercise-fg: #f5c451;
 
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+  /* Labels use the SAME neutral grotesque (small + tracked caps), not a condensed
+     mil-cosplay face — Palantir uses one refined grotesque throughout. */
+  --font-label: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+}
+
+/* ── Light theme ───────────────────────────────────────────────────────────
+   Standard global token override, toggled by state/theme.ts (data-theme on
+   <html>). Every component reads var(--bg-*) / var(--txt-*) so the whole chrome
+   flips; the Cesium globe canvas is not token-coloured, so the map itself stays
+   dark (a light basemap would be a separate change). */
+:root[data-theme='light'] {
+  --bg-0: #eef1f5;
+  --bg-1: #ffffff;
+  --bg-2: #f3f5f8;
+  --bg-3: #e7ebf0;
+  --bg-4: #d9dfe6;
+  --line: rgba(15, 22, 32, 0.1);
+  --line-2: rgba(15, 22, 32, 0.16);
+  --txt-0: #10151c;
+  --txt-1: #33414f;
+  --txt-2: #5d6776;
+  --txt-3: #8b95a2;
+  --txt-4: #aab2bd;
+  --accent: #2575c0;
+  --accent-dim: rgba(37, 117, 192, 0.12);
+  --accent-line: rgba(37, 117, 192, 0.4);
+  --warn: #b7791f;
+  --alert: #d8392f;
+  --ok: #1f9d6b;
+  --mag: #b13fc4;
 }
 
 html,
@@ -62,6 +133,33 @@ body,
   font-variant-numeric: tabular-nums; /* numerics don't jitter */
 }
 
+/* Quiet, thin scrollbars everywhere — the chunky default browser bars read as
+   un-finished. Subtle dark thumb, transparent track; never a visual focal point. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.13);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Mono utility for machine values */
 .mono {
   font-family: var(--font-mono);
@@ -76,4 +174,14 @@ body,
   letter-spacing: 0.5px;
   color: var(--txt-3);
   text-transform: uppercase;
+}
+
+/* instrument label — condensed grotesque, uppercase, tracked. The structural /
+   eyebrow / classification voice. Carries the panel's "labeled instrument" feel. */
+.label {
+  font-family: var(--font-label);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 600;
+  line-height: 1.1;
 }

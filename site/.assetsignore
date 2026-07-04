@@ -8,3 +8,6 @@ node_modules
 package.json
 package-lock.json
 .wrangler
+# Cloudflare Workers assets cap at 25 MiB; the 2D MapLibre offline basemap is
+# ~53 MiB so it can't ship as a Worker asset (served elsewhere / degrades on prod).
+app/basemap/region.pmtiles

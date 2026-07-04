@@ -1,0 +1,9 @@
+# Dev-watcher excludes. The running app writes its history store + tile cache
+# under src-tauri/data/, which sits inside the crate dir Tauri's `tauri dev`
+# watches — every write triggered a full app restart (infinite rebuild loop).
+# These are runtime data, never source, so exclude them from the watcher.
+data/
+*.db
+*.db-wal
+*.db-shm
+tilecache/

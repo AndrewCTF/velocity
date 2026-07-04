@@ -1,8 +1,27 @@
 import * as Cesium from 'cesium';
 import type { Chokepoint } from '../registry/chokepoints.js';
+import { useSelection } from '../state/stores.js';
 
 // Camera helpers. All slews respect prefers-reduced-motion via the duration arg
 // passed by the caller (0 = instant set).
+
+// Slew to a specific ENTITY: SELECT it (so the shared selection machinery opens
+// the panel + draws the reticle/track) AND fly the camera to its position.
+// `flyToPosition` alone only moves the camera and leaves the contact unselected
+// — the "slew to an aircraft/vessel doesn't select it" report. entityId may be
+// null/undefined for a purely positional slew (an incident centroid, a dwell
+// waypoint, a raw coordinate) → camera-only, no selection change.
+export function slewToEntity(
+  viewer: Cesium.Viewer,
+  entityId: string | null | undefined,
+  lon: number,
+  lat: number,
+  altMeters = 300_000,
+  durationSec = 0.8,
+): void {
+  if (entityId) useSelection.getState().select(entityId);
+  flyToPosition(viewer, lon, lat, altMeters, durationSec);
+}
 
 export function flyToChokepoint(viewer: Cesium.Viewer, c: Chokepoint, durationSec = 1.4): void {
   const [west, south, east, north] = c.bbox;

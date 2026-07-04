@@ -19,15 +19,17 @@ import json
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app import llm
 from app.config import get_settings
-from app.intel import agent, analytics, aoi, baseline, deception, dossier, emitter, incidents
+from app.intel import agent, analytics, aoi, baseline, deception, dossier, emitter, incidents, pol
 from app.intel.baseline import baseline_store
 from app.intel.geo import BBox, bbox_from_radius
 from app.intel.incident_store import incident_store
+from app.keys import UserCtx, current_user
+from app.security import current_principal
 
 router = APIRouter(tags=["intel"])
 
@@ -123,7 +125,7 @@ async def intel_aircraft(
     emergency: bool | None = Query(None),
     gnss_degraded: bool | None = Query(None),
     on_ground: bool | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(200, ge=1, le=500),
 ) -> dict[str, Any]:
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
     return await analytics.query_aircraft(
@@ -281,7 +283,7 @@ async def intel_investigate(
         ],
         tier="fast",
         max_tokens=1400,
-        timeout_s=160.0,  # MiniMax-M3 reasoning is slow; degrade to DeepSeek if it overruns
+        timeout_s=90.0,  # cap at 90 s; MiniMax-M3 reasoning → DeepSeek fallback on overrun
     )
     latency_ms = round((time.monotonic() - t0) * 1000)
 
@@ -383,6 +385,7 @@ def _first_follow_up(top: list[dict[str, Any]]) -> list[str]:
 
 @router.get("/api/intel/agent")
 async def intel_agent(
+    request: Request,
     q: str = Query(..., min_length=2, max_length=400, description="natural-language prompt"),
     min_lon: float | None = Query(None),
     min_lat: float | None = Query(None),
@@ -396,15 +399,42 @@ async def intel_agent(
 
     Seeds with the fused incident brief, then MiniMax-M3 reasons and calls the
     live intel tools (query_vessels, gps_jamming, locate_emitter, …) step by
-    step until it returns a final assessment. Each step is streamed as an SSE
+    step until it returns a final assessment. With a signed-in user it can ALSO
+    invoke the audited write-back actions (flag_entity / promote_incident /
+    nominate_target / add_watch) and drive the operator's map (camera / filter /
+    selection) via an ``app_var`` event. Each step is streamed as an SSE
     ``data:`` frame so the UI renders the loop live. Events:
-    start | tool_call | tool_result | thinking | note | error | final | done.
+    start | tool_call | tool_result | thinking | note | narration | action |
+    app_var | clarification | error | final | done.
     """
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
 
+    # Resolve the signed-in user best-effort. The global ApiKeyMiddleware already
+    # authorised the request, but a static-API-key dev caller has no user
+    # identity — and write-back actions need one (the audit log records WHO). A
+    # token-less/keyless run gets ctx=None: the agent keeps every read-only tool
+    # and the control tools, and simply hides the audited write-back verbs.
+    try:
+        ctx: UserCtx | None = await current_user(request)
+    except HTTPException:
+        ctx = None
+
+    # Need-to-know: the agent redacts every read-tool result to the reader's
+    # clearance/compartments. Resolve them least-privilege — a keyless/token-less
+    # run (ctx is None) is pinned at clearance 0 / no compartments, NOT full read.
+    # No try/except that elevates: current_principal already degrades to clearance
+    # 0 when the profile is unreachable.
+    clearance, compartments = 0, ()
+    if ctx is not None:
+        principal = await current_principal(request, ctx)
+        clearance, compartments = principal.clearance, principal.compartments
+
     async def gen() -> Any:
         try:
-            async for ev in agent.run_agent(q, bbox):
+            # The serializer forwards EVERY event verbatim (no event-type
+            # whitelist), so the new action/app_var/clarification frames reach
+            # the client with no extra plumbing.
+            async for ev in agent.run_agent(q, bbox, ctx, clearance, compartments):
                 yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
         except Exception as exc:  # noqa: BLE001
             err = {"type": "error", "text": f"{type(exc).__name__}: {exc}"}
@@ -513,6 +543,11 @@ async def intel_emitter(
     """Estimate a GPS jammer/spoofer location from the degraded-ADS-B footprint
     (severity-weighted centroid + CEP). Footprint estimate, not RF DF."""
     bbox = _resolve_bbox(min_lon, min_lat, max_lon, max_lat, lat, lon, radius_nm)
+    if bbox is None:
+        raise HTTPException(
+            status_code=422,
+            detail="lat+lon (or min_lon/min_lat/max_lon/max_lat) required; a global emitter estimate is not meaningful",
+        )
     return await emitter.estimate(bbox)
 
 
@@ -547,6 +582,101 @@ async def intel_vessel_dossier(mmsi: str) -> dict[str, Any]:
 async def intel_aircraft_dossier(ident: str) -> dict[str, Any]:
     """Pattern-of-life dossier for one aircraft (ICAO24 hex or callsign)."""
     return await dossier.aircraft_dossier(ident)
+
+
+# ── grounded dossier narrative (the Gotham "Dossier" prose) ──────────────────────
+# Turns the DETERMINISTIC dossier dict into a short analytic narrative via the
+# reasoning model. Hard anti-hallucination contract: the model reasons ONLY over
+# the facts handed in, every claim cites the field it came from, and the output is
+# labelled an ASSESSMENT (never asserted fact). Degrades to ok:false when no model
+# is wired — it never invents a story.
+
+_NARRATIVE_SYSTEM = (
+    "You are an intelligence analyst writing a SHORT pattern-of-life assessment. "
+    "You are given a deterministic dossier (observed track stats, AIS/ADS-B gaps, "
+    "speed profile, coverage, recent incident ids, identity attributes, source "
+    "freshness) for one tracked entity. Reason ONLY over the facts provided. Every "
+    "claim MUST reference a field from the input. Do NOT invent vessel/aircraft "
+    "names, ports, destinations, dates, counts, intentions, or events not present "
+    "in the data. This is an ANALYTIC ASSESSMENT, not a stated fact; hedge "
+    "accordingly and produce no operational detail.\n\n"
+    "Return STRICT JSON and nothing else:\n"
+    "{\n"
+    '  "assessment": "2-4 sentence analytic narrative",\n'
+    '  "observations": [{"claim": str, "grounded_in": "<the exact input field>"}],\n'
+    '  "confidence": "low|medium|high",\n'
+    '  "caveats": [str]\n'
+    "}\n"
+    "If the dossier is too thin to assess (almost no track), say so in one sentence "
+    "and return an empty observations list — do NOT fill the gap with a story."
+)
+
+# (entity_id) → (expires_epoch, payload). The dossier moves slowly; a ~10 min TTL
+# keeps the reason-tier cost off repeat selections without staleness mattering.
+_NARRATIVE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_NARRATIVE_TTL_S = 600.0
+
+
+@router.post("/api/intel/dossier/narrative")
+async def intel_dossier_narrative(entity_id: str = Query(...)) -> dict[str, Any]:
+    """Grounded analytic narrative for one entity (``vessel:<mmsi>``/``aircraft:<id>``).
+
+    Builds the deterministic dossier, then asks the reasoning model to narrate it
+    under a strict grounding prompt. On-demand only (the frontend gates it behind a
+    button), cached ~10 min. ``ok:false`` when no model is configured — never a fake.
+    """
+    now = time.time()
+    cached = _NARRATIVE_CACHE.get(entity_id)
+    if cached and cached[0] > now:
+        return cached[1]
+
+    prefix, _, raw_id = entity_id.partition(":")
+    bare = raw_id or entity_id
+    if prefix == "aircraft":
+        doss = await dossier.aircraft_dossier(bare)
+    elif prefix == "vessel":
+        doss = await dossier.vessel_dossier(bare)
+    else:
+        return {"ok": False, "error": "entity_id must be vessel:<mmsi> or aircraft:<id>"}
+
+    # Trim the full track array out of the prompt (keep its size, not 1000s of fixes)
+    # — the stats already summarise it and a long array just burns tokens.
+    facts = {k: v for k, v in doss.items() if k != "track"}
+    facts["track_points"] = len(doss.get("track") or [])
+    user = "Dossier:\n" + json.dumps(facts, default=str)[:6000]
+
+    parsed, res = await llm.chat_json(
+        [
+            {"role": "system", "content": _NARRATIVE_SYSTEM},
+            {"role": "user", "content": user},
+        ],
+        tier="reason",
+        temperature=0.2,
+        max_tokens=900,
+    )
+    if not res.ok or not isinstance(parsed, dict):
+        return {
+            "ok": False,
+            "error": res.error or "model unavailable",
+            "model": res.model,
+        }
+    payload = {"ok": True, "model": res.model, "backend": res.backend, **parsed}
+    _NARRATIVE_CACHE[entity_id] = (now + _NARRATIVE_TTL_S, payload)
+    return payload
+
+
+@router.get("/api/intel/pol/{entity_id:path}")
+async def intel_pattern_of_life(entity_id: str) -> dict[str, Any]:
+    """Pattern-of-life baseline for ONE entity, from its own positions-DB track.
+
+    ``entity_id`` is the canonical id (``aircraft:<icao24>`` or
+    ``vessel:<mmsi>``) — the colon is captured via a ``:path`` converter. Returns
+    the recurring places it keeps returning to (a small self-contained DBSCAN
+    over its fixes), dwell/transit + speed-variance stats, a movement profile,
+    and an anomaly-vs-baseline score. Honest about short tracks: returns
+    ``sufficient: false`` rather than a synthesised norm when the DB holds too
+    few fixes."""
+    return await pol.pattern_of_life(entity_id)
 
 
 @router.get("/api/intel/aois")
@@ -613,6 +743,21 @@ async def intel_sources() -> dict[str, Any]:
                 "egress IPs; used opportunistically. OpenSky /states/all is the "
                 "breadth source."
             ),
+        },
+        "osint_lookup": {
+            "note": (
+                "keyless on-demand infra/domain OSINT (not a streaming feed): "
+                "GET /api/osint/{dns,whois,ip,certs,shodan,threat}?target= and "
+                "POST /api/osint/investigate. Hit a source to confirm liveness."
+            ),
+            "sources": [
+                "dns (dns.google DoH)",
+                "whois (rdap.org)",
+                "certs (crt.sh — flaky from datacenter egress)",
+                "ip (ip-api.com, 45/min free)",
+                "shodan (internetdb.shodan.io)",
+                "threat (otx.alienvault.com)",
+            ],
         },
         "ais_firehose": ais_firehose.stats(),
         "ais_keyless": ais_keyless.stats(),

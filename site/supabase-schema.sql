@@ -159,6 +159,179 @@ create policy alert_rules_self_delete on public.alert_rules for delete using (au
 
 grant select, insert, update, delete on public.alert_rules to authenticated;
 
+-- ---- per-user target lifecycle board (F2T2EA Kanban) ----------------------
+-- One row per (user, entity) tracked through the kill chain. Moving an entity
+-- across stages PATCHes `stage`; re-adding the same entity upserts on the
+-- unique(user_id, entity_id) constraint, so a track is never duplicated.
+create table if not exists public.target_board (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references auth.users(id) on delete cascade,
+  entity_id      text not null,
+  stage          text not null default 'confirm',
+  priority       int not null default 3,
+  note           text not null default '',
+  requirements   jsonb not null default '{}'::jsonb,   -- F2T2EA confirmation checklist
+  classification text not null default 'UNCLAS//FOUO', -- per-target caveat
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now(),
+  unique (user_id, entity_id)
+);
+alter table public.target_board add column if not exists requirements jsonb not null default '{}'::jsonb;
+alter table public.target_board add column if not exists classification text not null default 'UNCLAS//FOUO';
+
+-- Keep updated_at fresh on every stage move / re-prioritise (the backend PATCH
+-- only sends the changed columns; the column advances here instead).
+create or replace function public.target_board_touch()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end $$;
+
+drop trigger if exists target_board_set_updated on public.target_board;
+create trigger target_board_set_updated before update on public.target_board
+  for each row execute function public.target_board_touch();
+
+alter table public.target_board enable row level security;
+
+drop policy if exists target_board_self_select on public.target_board;
+drop policy if exists target_board_self_insert on public.target_board;
+drop policy if exists target_board_self_update on public.target_board;
+drop policy if exists target_board_self_delete on public.target_board;
+
+create policy target_board_self_select on public.target_board for select using (auth.uid() = user_id);
+create policy target_board_self_insert on public.target_board for insert with check (auth.uid() = user_id);
+create policy target_board_self_update on public.target_board for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy target_board_self_delete on public.target_board for delete using (auth.uid() = user_id);
+
+grant select, insert, update, delete on public.target_board to authenticated;
+
+-- ---- ontology spine: objects / links / action_log (Track A1 + C1) ----------
+-- The typed semantic layer the kanban, alerts, and agent compose on. Per-user,
+-- RLS-scoped exactly like the tables above. (Standalone copy: infra/db/10_ontology.sql.)
+--
+-- objects: typed nodes keyed by the canonical ids already used across the repo
+--   (aircraft:<icao24> | vessel:<mmsi> | incident:<uuid> | sim:<id>, plus
+--   target:<uuid> / watch:<uuid> derived nodes the action layer mints). props
+--   holds distilled attributes, NOT a feature dump. One row per (user, id).
+create table if not exists public.objects (
+  id          text not null,
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  kind        text not null default 'object',
+  props       jsonb not null default '{}'::jsonb,
+  created_at  timestamptz not null default now(),
+  primary key (user_id, id)
+);
+
+create index if not exists objects_user_kind_idx on public.objects (user_id, kind);
+
+alter table public.objects enable row level security;
+
+drop policy if exists objects_self_select on public.objects;
+drop policy if exists objects_self_insert on public.objects;
+drop policy if exists objects_self_update on public.objects;
+drop policy if exists objects_self_delete on public.objects;
+
+create policy objects_self_select on public.objects for select using (auth.uid() = user_id);
+create policy objects_self_insert on public.objects for insert with check (auth.uid() = user_id);
+create policy objects_self_update on public.objects for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy objects_self_delete on public.objects for delete using (auth.uid() = user_id);
+
+grant select, insert, update, delete on public.objects to authenticated;
+
+-- links: typed directed edges src --rel--> dst, idempotent per (user, src, dst, rel).
+create table if not exists public.links (
+  id          uuid not null default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  src         text not null,
+  dst         text not null,
+  rel         text not null,
+  props       jsonb not null default '{}'::jsonb,
+  created_at  timestamptz not null default now(),
+  primary key (id),
+  unique (user_id, src, dst, rel)
+);
+
+create index if not exists links_user_src_idx on public.links (user_id, src);
+create index if not exists links_user_dst_idx on public.links (user_id, dst);
+
+alter table public.links enable row level security;
+
+drop policy if exists links_self_select on public.links;
+drop policy if exists links_self_insert on public.links;
+drop policy if exists links_self_update on public.links;
+drop policy if exists links_self_delete on public.links;
+
+create policy links_self_select on public.links for select using (auth.uid() = user_id);
+create policy links_self_insert on public.links for insert with check (auth.uid() = user_id);
+create policy links_self_update on public.links for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy links_self_delete on public.links for delete using (auth.uid() = user_id);
+
+grant select, insert, update, delete on public.links to authenticated;
+
+-- action_log: who did what (audit-of-who, NOT RBAC — no role column by design).
+-- Append-only from the app: grant insert + select, NOT update/delete.
+create table if not exists public.action_log (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  action      text not null,
+  target_id   text not null,
+  params      jsonb not null default '{}'::jsonb,
+  ts          timestamptz not null default now()
+);
+
+create index if not exists action_log_user_ts_idx on public.action_log (user_id, ts desc);
+
+alter table public.action_log enable row level security;
+
+drop policy if exists action_log_self_select on public.action_log;
+drop policy if exists action_log_self_insert on public.action_log;
+
+create policy action_log_self_select on public.action_log for select using (auth.uid() = user_id);
+create policy action_log_self_insert on public.action_log for insert with check (auth.uid() = user_id);
+
+grant select, insert on public.action_log to authenticated;
+
+-- ---- llm_calls: LLM observability log (Track D3) ----------------------------
+-- One row per app/llm.py chat() completion, written best-effort with the
+-- caller's OWN Supabase token so RLS (auth.uid() = user_id) scopes every row to
+-- the user who made the call. A call with no bound user token is simply NOT
+-- logged (the backend has no service-role key here and RLS forbids a NULL-owner
+-- insert) — logging degrades silently and NEVER blocks or fails the LLM call.
+-- Columns: backend (deepseek|minimax|ollama|NULL), model_id, tier (fast|reason),
+-- ok, prompt/completion/total tokens (from LlmResult.usage; 0 when omitted),
+-- latency_ms, tool_calls, label (caller tag), error (truncated). Append-only.
+create table if not exists public.llm_calls (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users(id) on delete cascade,
+  backend           text,
+  model_id          text,
+  tier              text,
+  ok                boolean not null default false,
+  prompt_tokens     int not null default 0,
+  completion_tokens int not null default 0,
+  total_tokens      int not null default 0,
+  latency_ms        int not null default 0,
+  tool_calls        int not null default 0,
+  label             text not null default '',
+  error             text,
+  ts                timestamptz not null default now()
+);
+
+create index if not exists llm_calls_user_ts_idx on public.llm_calls (user_id, ts desc);
+create index if not exists llm_calls_user_model_idx on public.llm_calls (user_id, model_id);
+
+alter table public.llm_calls enable row level security;
+
+drop policy if exists llm_calls_self_select on public.llm_calls;
+drop policy if exists llm_calls_self_insert on public.llm_calls;
+
+create policy llm_calls_self_select on public.llm_calls for select using (auth.uid() = user_id);
+create policy llm_calls_self_insert on public.llm_calls for insert with check (auth.uid() = user_id);
+
+-- Append-only from the app: grant insert + select, NOT update/delete.
+grant select, insert on public.llm_calls to authenticated;
+
 -- ---- auto-enable RLS on any new public table (event trigger) --------------
 -- Belt-and-suspenders: if a future table lands in `public` without RLS, this
 -- event trigger turns it on automatically. It must stay SECURITY DEFINER so it
@@ -204,3 +377,14 @@ revoke execute on function public.rls_auto_enable() from public, anon, authentic
 --       Authorization: Bearer <SUPABASE_PAT>
 --       {"password_hibp_enabled": true}
 --   * Supabase CLI: [auth] enable_password_hibp = true ; then `supabase config push`.
+
+-- ---- saved maps (shared named COP, Track D2) --------------------------------
+-- A saved COP is NOT a new table: it is a public.objects row (kind 'object',
+-- props->>kind = 'map') written via the ontology registry, so it inherits the
+-- objects RLS (auth.uid() = user_id) above. This partial index just keeps the
+-- "list my maps" query (props->>kind = 'map', newest first) off a full per-user
+-- scan as the ontology accumulates alerts / investigations / flagged entities.
+-- The /ws/cop follow-along channel is in-process only and persists nothing.
+create index if not exists objects_user_map_idx
+  on public.objects (user_id, created_at desc)
+  where (props->>'kind') = 'map';

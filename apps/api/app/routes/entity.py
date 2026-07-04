@@ -20,11 +20,12 @@ import re
 from typing import Any
 
 import httpx
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config import Settings, get_settings
 from app.correlate.store import store
+from app.intel import imagery_index
+from app.tier import commercial_request
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["entity"])
@@ -187,6 +188,39 @@ AIRLINE_ICAO: dict[str, tuple[str, str]] = {
     "WJA": ("WestJet", "WS"),
     "WZZ": ("Wizz Air", "W6"),
 }
+
+
+# NOTE: declared BEFORE the catch-all `/api/entity/{eid:path}` below so it wins
+# route matching — the bare `{eid:path}` convertor is greedy and would otherwise
+# swallow the trailing `/imagery` into `eid`. The `{eid:path}` here is anchored
+# by the literal `/imagery` suffix, so `aircraft:abc123/imagery` → eid is the id.
+@router.get("/api/entity/{eid:path}/imagery")
+async def entity_imagery(
+    eid: str,
+    lookback_hours: float | None = Query(
+        None, ge=0.1, le=720.0, description="how far back to read the track (capped at retention)"
+    ),
+    commercial: bool = Depends(commercial_request),
+) -> dict[str, Any]:
+    """Satellite imagery overlapping WHERE + WHEN this entity was.
+
+    Intersects the entity's recent position track (``history`` — the SQLite
+    store, ~24-48 h retention) against the on-demand imagery catalog (Maxar Open
+    Data VHR, event-gated, + Sentinel-2/1 via CDSE) and lists the scenes that
+    cover the path. Downloads NO pixels (use ``/api/imagery/chip`` for that).
+
+    Honest scope: the track only reaches as far as ``history`` retains. For an
+    entity last seen before that window the store has nothing, so the response
+    carries an explicit ``note`` saying so (``available`` may be True with an
+    empty ``matches`` + a retention caveat) rather than implying no imagery
+    exists. Degrades gracefully when history is disabled or CDSE creds are unset.
+    Only ``aircraft:<icao24>`` and ``vessel:<mmsi>`` ids carry a track.
+    """
+    if ":" not in eid:
+        raise HTTPException(400, "expect <kind>:<id>")
+    return await imagery_index.entity_imagery(
+        eid, lookback_hours=lookback_hours, commercial=commercial
+    )
 
 
 @router.get("/api/entity/{eid:path}")

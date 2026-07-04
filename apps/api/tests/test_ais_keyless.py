@@ -117,6 +117,27 @@ async def test_publish_kystdatahuset_features(monkeypatch: pytest.MonkeyPatch) -
     assert seen[1][0] == 258
 
 
+def test_publish_vesselfinder_bulk_loads_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list = []
+    # Bulk path writes the store ONCE via add_many (not per-vessel publish_vessel).
+    monkeypatch.setattr(ais_firehose.store, "add_many", lambda batch: captured.extend(batch))
+    vessels = [
+        {"mmsi": 367654321, "lat": 37.8, "lon": -122.4, "name": "TEST BAY"},
+        {"mmsi": "bad", "lat": 0.0, "lon": 0.0},  # non-int mmsi → skipped
+        {"mmsi": 211222333, "lat": 99.0, "lon": 0.0},  # lat out of range → skipped
+        {"mmsi": 244777888, "lat": 54.3, "lon": 10.1},  # no name → name resolves None
+    ]
+    n = K._publish_vesselfinder(vessels)
+    assert n == 2  # two valid vessels batched; bad-mmsi + bad-lat dropped
+    assert [o.id for o in captured] == ["vessel:367654321", "vessel:244777888"]
+    o0 = captured[0]
+    assert o0.source == "vesselfinder" and o0.emits_kind == "vessel"
+    assert o0.lon == -122.4 and o0.lat == 37.8
+    # Sidecar carries only position + name; sog/cog/heading stay unset.
+    assert o0.attrs["name"] == "TEST BAY"
+    assert o0.attrs["sog"] is None and o0.attrs["cog"] is None and o0.attrs["heading"] is None
+
+
 @pytest.mark.asyncio
 async def test_publish_vessel_sentinels_and_validation(monkeypatch: pytest.MonkeyPatch) -> None:
     frames = []

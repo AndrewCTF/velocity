@@ -19,7 +19,12 @@ from app.keys import UserCtx, _client, _headers, current_user
 
 router = APIRouter(tags=["alerts"])
 
-KINDS = {"jamming", "dark_vessel", "military_air", "incident", "quake", "fire"}
+# Phase-2 behavioral kinds (ais_gap/rendezvous/loiter) are computed by the watch
+# evaluator from the position-history store (intel/detectors.py), not the brief.
+KINDS = {
+    "jamming", "dark_vessel", "military_air", "military_vessel", "incident",
+    "quake", "fire", "ais_gap", "rendezvous", "loiter",
+}
 CHANNELS = {"inapp", "email"}
 
 

@@ -60,3 +60,20 @@ export function vesselLabelText(props: Record<string, unknown>): string | null {
   if (mmsi != null && String(mmsi).trim() !== '') return `MMSI ${mmsi}`;
   return null;
 }
+
+// Resolve the label for an airport marker. Preference order: IATA code
+// (compact, what operators scan for — "LHR") → full name. Returns null only
+// when neither is available.
+export function airportLabelText(props: Record<string, unknown>): string | null {
+  const iata = (props['iata'] as string | null | undefined)?.toString().trim() ?? null;
+  if (iata) return iata.toUpperCase();
+  const name = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
+  if (name) return name;
+  return null;
+}
+
+// Resolve the label for a port marker: its name. Returns null when unnamed.
+export function portLabelText(props: Record<string, unknown>): string | null {
+  const name = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
+  return name || null;
+}

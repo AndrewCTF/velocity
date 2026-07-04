@@ -42,6 +42,10 @@ _rows_written: int = 0
 _flush_task: asyncio.Task[None] | None = None
 _db_path: str | None = None          # resolved at start(); overridable in tests
 _db_path_override: str | None = None  # set by tests via override_db_path()
+# Phase 1: vessels we've already run through entity resolution this process, so
+# the resolver fires once per distinct vessel (on first sight) — not every poll.
+_resolved_seen: set[str] = set()
+_RESOLVE_SEEN_MAX: int = 200_000
 
 
 # ── DB path injection (for tests) ─────────────────────────────────────────────
@@ -58,6 +62,31 @@ def _resolved_db_path() -> str:
     if _db_path_override is not None:
         return _db_path_override
     return get_settings().history_db_path
+
+
+def _clamped_retention_hours() -> int:
+    """Effective time-prune window, clamped so retention stays bounded.
+
+    Retention is operator-tunable (``history_retention_hours``) to lift replay
+    beyond the old ~24 h live window — multi-day scrub — but it must stay
+    bounded: a fat-fingered env var (e.g. 1_000_000) would otherwise let the DB
+    grow until only the byte cap reins it in, much later. We clamp into
+    ``[1, history_retention_max_hours]``. A ceiling of 0 disables the upper
+    bound (the byte cap is then the only limit), but the floor of 1 always
+    holds so the prune cutoff is never in the future / non-positive.
+
+    NOTE: this is a *time* bound only. The byte cap (``enforce_size_cap`` +
+    ``_vacuum``) is the binding storage limit and is unchanged; raising the
+    hour window never removes the cap.
+    """
+    settings = get_settings()
+    hours = int(settings.history_retention_hours)
+    ceiling = int(settings.history_retention_max_hours)
+    if hours < 1:
+        hours = 1
+    if ceiling > 0 and hours > ceiling:
+        hours = ceiling
+    return hours
 
 
 def _connect() -> sqlite3.Connection:
@@ -160,8 +189,35 @@ def ingest_vessels(rows: list[dict[str, Any]]) -> None:
             }
             t = float(row.get("timestamp") or now)
             _buffer_point("vessel", entity_id, t, lon, lat, track, extra)
+            _resolve_vessel(entity_id, row)
         except Exception:  # noqa: BLE001
             continue
+
+
+def _resolve_vessel(entity_id: str, row: dict[str, Any]) -> None:
+    """Best-effort entity resolution on first sight of a vessel (Phase 1).
+
+    Builds the alias graph (mmsi/imo/name/callsign → one canonical identity) so a
+    vessel observed under multiple MMSIs becomes ONE object. Throttled by a
+    process-lifetime seen-set so steady-state cost is ~0, and never raises — a
+    resolver hiccup must not drop a position fix.
+    """
+    if entity_id in _resolved_seen:
+        return
+    try:
+        from app.intel import resolve  # lazy: avoid import cost at module load
+
+        ids: dict[str, Any] = {"mmsi": row.get("mmsi") or entity_id.split(":", 1)[-1]}
+        for src_key, dst_key in (("imo", "imo"), ("name", "name"),
+                                 ("ship_name", "name"), ("callsign", "callsign")):
+            val = row.get(src_key)
+            if val:
+                ids.setdefault(dst_key, val)
+        resolve.resolve("vessel", ids)
+        if len(_resolved_seen) < _RESOLVE_SEEN_MAX:
+            _resolved_seen.add(entity_id)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 # ── flush (runs in executor so it doesn't block the event loop) ───────────────
@@ -201,7 +257,7 @@ async def _flush_loop() -> None:
         if time.time() >= next_prune:
             next_prune = time.time() + _PRUNE_INTERVAL_S
             settings = get_settings()
-            hours = settings.history_retention_hours
+            hours = _clamped_retention_hours()
             deleted = await loop.run_in_executor(None, prune, hours)
             deleted += await loop.run_in_executor(
                 None, enforce_size_cap, settings.history_max_bytes
@@ -283,6 +339,37 @@ async def query_tracks(
     return await loop.run_in_executor(
         None, _query_sync, kind, bbox, t_from, t_to, limit_ids, max_points_per_id
     )
+
+
+# ── metrics-over-time (§8) ──────────────────────────────────────────────────
+
+def _timeseries_sync(bucket_sec: int, t_from: float, t_to: float) -> dict[str, Any]:
+    """Distinct contact counts per time bucket, split by kind. Real observed data
+    from the position store — the source of the Metrics 'over time' trend."""
+    try:
+        con = _connect()
+        rows = con.execute(
+            "SELECT CAST(t / ? AS INTEGER) * ? AS bkt, kind, COUNT(DISTINCT id) AS n "
+            "FROM positions WHERE t >= ? AND t <= ? GROUP BY bkt, kind ORDER BY bkt",
+            [bucket_sec, bucket_sec, t_from, t_to],
+        ).fetchall()
+        con.close()
+    except Exception:  # noqa: BLE001
+        log.exception("history: timeseries error")
+        return {"bucket_sec": bucket_sec, "buckets": []}
+
+    by_bucket: dict[int, dict[str, Any]] = {}
+    for bkt, kind, n in rows:
+        b = by_bucket.setdefault(int(bkt), {"t": int(bkt), "aircraft": 0, "vessel": 0, "total": 0})
+        if kind in ("aircraft", "vessel"):
+            b[kind] = int(n)
+        b["total"] += int(n)
+    return {"bucket_sec": bucket_sec, "buckets": [by_bucket[k] for k in sorted(by_bucket)]}
+
+
+async def count_timeseries(bucket_sec: int, t_from: float, t_to: float) -> dict[str, Any]:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _timeseries_sync, bucket_sec, t_from, t_to)
 
 
 # ── prune ─────────────────────────────────────────────────────────────────────
@@ -396,7 +483,12 @@ async def stop() -> None:
 
 
 def stats() -> dict[str, Any]:
-    """Return diagnostics dict."""
+    """Return diagnostics dict.
+
+    ``retention_hours`` is the *effective* (clamped) time-prune window, so the
+    frontend can bound the replay date-picker to what's actually retained
+    rather than the raw, possibly-out-of-range setting.
+    """
     settings = get_settings()
     return {
         "enabled": settings.history_enabled,
@@ -404,4 +496,7 @@ def stats() -> dict[str, Any]:
         "buffered": len(_buffer),
         "rows_written": _rows_written,
         "task_running": _flush_task is not None and not _flush_task.done(),
+        "retention_hours": _clamped_retention_hours(),
+        "retention_max_hours": int(settings.history_retention_max_hours),
+        "max_bytes": int(settings.history_max_bytes),
     }

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import type * as Cesium from 'cesium';
-import { useFeeds, useAlerts, useImagery, useConnection, useSim, type WsStatus } from '../state/stores.js';
+import { useAlerts, useImagery, useSim } from '../state/stores.js';
 import { useAoi } from '../state/aoi.js';
+import { AppSwitcher } from '../shell/AppSwitcher.js';
 import { AoiSelector } from './AoiSelector.js';
 import { SearchField } from './SearchField.js';
 import { flyToChokepoint, flyToGlobal } from '../globe/camera.js';
+import { perfSnapshot } from '../globe/perf.js';
 import type { Chokepoint } from '../registry/chokepoints.js';
-import { Brand, StatusDot } from '../shell/instruments.js';
+import { Brand, StatusDot, Caveat } from '../shell/instruments.js';
 import { useAgent } from '../state/agent.js';
 import { apiFetch } from '../transport/http.js';
 
@@ -23,15 +25,17 @@ interface Props {
 }
 
 // Each top-level cell: full height, hairline right divider, tight padding.
-const CELL = 'h-full flex items-center gap-2 px-3 border-r border-line';
+// px-1 (not px-2/px-3) so the full control row fits 1280px laptops without the
+// bar overflowing → no horizontal scrollbar on the top nav. Measured live at 1280:
+// px-2 → 41px over; px-1.5 → 14px over; px-1 (+ the SysStats trim below) → fits
+// with ~26px margin. Keep it tight if you add a cell.
+const CELL = 'h-full flex items-center gap-2 px-1 border-r border-line';
 
 export function CommandBar({
   viewer,
   classification = 'UNCLAS',
   onOpenAlerts,
 }: Props): JSX.Element {
-  const feeds = useFeeds((s) => s.feeds);
-  const feedList = Object.values(feeds);
   const setActiveAoi = useAoi((s) => s.setActive);
   const imageryMode = useImagery((s) => s.mode);
   const setImageryMode = useImagery((s) => s.setMode);
@@ -80,6 +84,12 @@ export function CommandBar({
         <SimToggle />
       </div>
 
+      {/* App switcher (design §6.1) — the primary top-level navigation. Map is the
+          globe; Explorer/Graph/Targeting/Video/Sim/Reports take the main surface. */}
+      <div className="h-full flex items-stretch border-l border-line-2">
+        <AppSwitcher />
+      </div>
+
       {/* alert ticker — top alert in newest-first buffer; click opens panel.
           flex-1 so it spans the gap between the controls and the right cluster. */}
       <div className={`${CELL} flex-1 min-w-0`}>
@@ -92,11 +102,6 @@ export function CommandBar({
         <AgentIndicator />
       </div>
 
-      {/* WS connection state — live/down pill so silence is unambiguous */}
-      <div className={CELL}>
-        <WsPill />
-      </div>
-
       {/* UTC clock — operator orientation */}
       <div className={CELL}>
         <span className="mono text-[11px] text-txt-2 tabular-nums" title="UTC">
@@ -104,41 +109,38 @@ export function CommandBar({
         </span>
       </div>
 
-      {/* classification banner */}
+      {/* data-posture caveat — classification marking + the live data posture.
+          When SIM mode is on the globe mixes in notional contacts, so the strip
+          flips to a SIMULATED warning; otherwise it marks the keyless open-source
+          feed posture. Reads only client-observable state (no fabricated tier). */}
       <div className={CELL}>
-        <span className="mono text-[10px] tracking-[0.5px] uppercase px-2 py-0.5 border border-line rounded-sm text-txt-1">
-          {classification}
-        </span>
-      </div>
-
-      {/* feed-health cluster */}
-      <div className={CELL} role="status" aria-label="Feed health">
-        {feedList.length === 0 && <span className="micro">no feeds</span>}
-        {feedList.map((f) => (
-          <span
-            key={f.id}
-            className="flex items-center gap-1.5"
-            title={`${f.label}\nstatus: ${f.status}${f.lastSeen ? `\nlast: ${new Date(f.lastSeen).toISOString().slice(11, 19)}Z` : ''}`}
-          >
-            <StatusDot tone={f.status} />
-            <span className="mono text-[9px] tracking-[0.4px] uppercase text-txt-2 hidden xl:inline">
-              {shortLabel(f.label)}
-            </span>
-          </span>
-        ))}
+        <PostureCaveat classification={classification} />
       </div>
 
       {/* system stats — live entity total (real, from the viewer) + UTC tick
           source FPS, both genuinely measured. Last cell: no right divider. */}
-      <div className="h-full flex items-center gap-3 px-3">
+      <div className="h-full flex items-center gap-2 px-2">
         <SysStats viewer={viewer} />
       </div>
     </div>
   );
 }
 
-function shortLabel(s: string): string {
-  return s.split(' ')[0] ?? s;
+/**
+ * Data-posture caveat strip. Replaces the bare classification pill with the
+ * shared <Caveat/> primitive, surfacing not just the marking but the live data
+ * posture. Both signals are client-observable — no fabricated commercial tier:
+ *  - SIM active → the globe carries NOTIONAL sim contacts, so mark the whole
+ *    picture "// SIMULATED" in warn tone with a "notional contacts" note.
+ *  - SIM off    → live open-source feeds (ADS-B/AIS/quakes are keyless here),
+ *    marked neutral with a "keyless OSINT" posture note.
+ */
+function PostureCaveat({ classification }: { classification: string }): JSX.Element {
+  const simActive = useSim((s) => s.active);
+  if (simActive) {
+    return <Caveat level={`${classification} // SIMULATED`} note="notional contacts" tone="warn" />;
+  }
+  return <Caveat level={classification} note="keyless OSINT" tone="neutral" />;
 }
 
 /**
@@ -179,9 +181,9 @@ function AgentIndicator(): JSX.Element {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      title="Open the Velocity analyst console (⌘K)"
+      title="Open the Velocity analyst console (⌘J)"
       aria-label="Open analyst console"
-      className="flex items-center gap-2 mono text-[9px] tracking-[0.5px] text-accent hover:text-txt-0"
+      className="flex items-center gap-2 mono text-[10px] tracking-[0.5px] text-accent hover:text-txt-0"
     >
       <StatusDot tone={dotTone} />
       <span>AGENT ▸</span>
@@ -208,11 +210,15 @@ function AgentIndicator(): JSX.Element {
 function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | null {
   const [entCount, setEntCount] = useState<number | null>(null);
   const [fps, setFps] = useState<number | null>(null);
+  // Governor/drain readout straight from window.__perf (§5.7). rr = real renders/s
+  // (distinct from fps rAF frames), dr = last push-application ms.
+  const [perf, setPerf] = useState<{ rr: number; dr: number } | null>(null);
 
   // Entity total — recomputed once a second from the live data sources.
   useEffect(() => {
     if (!viewer) {
       setEntCount(null);
+      setPerf(null);
       return;
     }
     const recount = (): void => {
@@ -224,6 +230,8 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
         total += viewer.dataSources.get(i).entities.values.length;
       }
       setEntCount(total);
+      const p = perfSnapshot();
+      setPerf({ rr: p.rendersPerSec, dr: p.drainMsLast });
     };
     recount();
     const t = window.setInterval(recount, 1000);
@@ -261,7 +269,7 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
   if (entCount === null && fps === null) return null;
 
   return (
-    <span className="mono text-[9px] tracking-[0.4px] uppercase text-txt-3 flex items-center gap-3 tabular-nums">
+    <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-3 flex items-center gap-3 tabular-nums">
       {entCount !== null && (
         <span title="Total entities across all globe data sources">
           ent <b className="text-txt-1 font-semibold">{entCount.toLocaleString()}</b>
@@ -270,6 +278,16 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
       {fps !== null && (
         <span title="Render rate (measured from animation-frame deltas)">
           <b className="text-txt-1 font-semibold">{fps}</b>fps
+        </span>
+      )}
+      {perf !== null && perf.rr > 0 && (
+        <span title="Real Cesium scene renders per second (governor metric)">
+          <b className="text-txt-1 font-semibold">{perf.rr}</b>rr
+        </span>
+      )}
+      {perf !== null && perf.dr > 0 && (
+        <span title="Last aircraft push-application (drain) cost, ms">
+          <b className="text-txt-1 font-semibold">{perf.dr}</b>ms
         </span>
       )}
     </span>
@@ -308,7 +326,7 @@ function ImageryToggle({
       aria-label="Toggle 3D satellite imagery and buildings"
       data-testid="imagery-toggle"
       className={[
-        'mono text-[9px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
+        'mono text-[10px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
         on
           ? 'border-accent-line text-accent bg-accent-dim'
           : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
@@ -322,6 +340,11 @@ function ImageryToggle({
   );
 }
 
+/**
+ * Workspace mode switches — Tasking / Targeting / FMV. Each opens a large
+ * surface over the globe (bottom dock / left dock / centered sensor window) via
+ * the useUiMode store; clicking the active one closes it. Condensed-label voice.
+ */
 /**
  * SIM mode pill — toggles the browser-side war-game overlay. When on, the
  * SimulationOverlay mounts and the live ADS-B/AIS layers dim so scenario
@@ -338,7 +361,7 @@ function SimToggle(): JSX.Element {
       title="Toggle browser-side simulation mode (drones, attack scenarios)"
       data-testid="sim-toggle"
       className={[
-        'mono text-[9px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
+        'mono text-[10px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
         active
           ? 'border-mag-line text-mag bg-mag-dim'
           : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
@@ -350,70 +373,6 @@ function SimToggle(): JSX.Element {
       SIM
     </button>
   );
-}
-
-/**
- * Compact mono pill that reflects the /ws/alerts socket state. Operators
- * need to distinguish "no alerts firing" (live + quiet) from "we lost the
- * stream" (down). Reads from useConnection, written by AlertSubscriber.
- */
-function WsPill(): JSX.Element {
-  const ws = useConnection((s) => s.ws);
-  const label = wsLabel(ws);
-  const cls = wsClass(ws);
-  const dot = wsDot(ws);
-  const title =
-    ws === 'open'
-      ? 'WebSocket connection to /ws/alerts is live'
-      : ws === 'connecting'
-        ? 'Connecting to /ws/alerts…'
-        : 'WebSocket to /ws/alerts is down — alerts may be stale';
-  return (
-    <span
-      role="status"
-      aria-live="polite"
-      title={title}
-      data-testid="ws-pill"
-      data-ws={ws}
-      className={`mono text-[9px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm flex items-center gap-1.5 ${cls}`}
-    >
-      <StatusDot tone={dot} />
-      WS · {label}
-    </span>
-  );
-}
-
-function wsLabel(s: WsStatus): string {
-  switch (s) {
-    case 'open':
-      return 'live';
-    case 'connecting':
-      return '…';
-    case 'closed':
-      return 'down';
-  }
-}
-
-function wsClass(s: WsStatus): string {
-  switch (s) {
-    case 'open':
-      return 'border-line text-ok';
-    case 'connecting':
-      return 'border-line text-txt-2';
-    case 'closed':
-      return 'border-alert/40 text-alert';
-  }
-}
-
-function wsDot(s: WsStatus): string {
-  switch (s) {
-    case 'open':
-      return 'ok';
-    case 'connecting':
-      return 'neutral';
-    case 'closed':
-      return 'alert';
-  }
 }
 
 /**
@@ -438,10 +397,10 @@ function AlertTicker({ onOpen }: { onOpen?: () => void }): JSX.Element {
       <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-alert" aria-hidden="true" />
       {top ? (
         <>
-          <span className="mono text-[9px] tracking-[0.7px] uppercase text-alert shrink-0 group-hover:text-accent transition-colors">
+          <span className="mono text-[10px] tracking-[0.7px] uppercase text-alert shrink-0 group-hover:text-accent transition-colors">
             alert
           </span>
-          <span className="mono text-[9px] text-txt-4 tabular-nums shrink-0">{total}</span>
+          <span className="mono text-[10px] text-txt-4 tabular-nums shrink-0">{total}</span>
           <span className={`mono text-[11px] truncate ${SEV_COLOR[top.severity] ?? 'text-[#ffc9c5]'}`}>
             [{top.severity}] {top.message}
           </span>
