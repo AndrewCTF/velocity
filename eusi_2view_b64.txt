@@ -1,1 +1,0 @@
-"{\"nadir\":{\"bytes\":122,\"ctype\":\"application/json; charset=utf-8\",\"err\":true,\"tries\":3},\"oblique\":{\"bytes\":122,\"ctype\":\"application/json; charset=utf-8\",\"err\":true,\"tries\":3}}"
