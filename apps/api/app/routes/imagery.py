@@ -18,6 +18,7 @@ import asyncio
 import json
 import math
 import re
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
@@ -444,7 +445,7 @@ async def imagery_chip(
     lat: float = Query(..., ge=-85.0, le=85.0),
     lon: float = Query(..., ge=-180.0, le=180.0),
     radius_km: float = Query(4.0, ge=0.1, le=100.0),
-    date: str = Query(..., description="YYYY-MM-DD"),
+    date: str = Query("", description="YYYY-MM-DD; omit for today (UTC)"),
     source: str = Query("auto"),
     settings: Settings = Depends(get_settings),
 ) -> Response:
@@ -462,6 +463,8 @@ async def imagery_chip(
     GIBS VIIRS true-color mosaic (375 m, keyless). Degrades gracefully with no
     CDSE creds (falls to GIBS) — never 500s, never fakes resolution.
     """
+    if not date:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if not _DATE_RE.match(date):
         raise HTTPException(400, "date must be YYYY-MM-DD")
     if source not in _CHIP_SOURCES:

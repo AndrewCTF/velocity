@@ -182,7 +182,7 @@ export function NewsPanel(): JSX.Element {
             </Badge>
           )}
           {analysis.source_count != null && (
-            <span className="mono text-[9px] text-txt-3 tabular-nums">
+            <span className="mono text-[10px] text-txt-3 tabular-nums">
               {analysis.source_count} sources · {analysis.article_count ?? 0} headlines
             </span>
           )}
@@ -275,7 +275,7 @@ export function NewsPanel(): JSX.Element {
                   {sc === 1 ? '' : 's'}
                 </Badge>
                 {!!ev.corroboration.sources?.length && (
-                  <span className="mono text-[9px] text-txt-3 truncate">
+                  <span className="mono text-[10px] text-txt-3 truncate">
                     {ev.corroboration.sources.join(' · ')}
                   </span>
                 )}
@@ -356,7 +356,7 @@ export function NewsPanel(): JSX.Element {
 
       {/* Footer — method line so the operator can see how this was judged */}
       {analysis && !unavailable && analysis.method && (
-        <span className="mono text-[9px] text-txt-3 leading-snug pt-0.5">{analysis.method}</span>
+        <span className="mono text-[10px] text-txt-3 leading-snug pt-0.5">{analysis.method}</span>
       )}
     </div>
   );

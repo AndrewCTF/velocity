@@ -10,10 +10,12 @@ import {
 } from 'satellite.js';
 import type { LayerAdapter, AdapterCtx } from './types.js';
 import { satelliteStyle } from './styles.js';
+import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { labelFor } from './labelStyle.js';
 import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
 import { apiFetch } from '../../transport/http.js';
 import { isMobileDevice } from '../../shell/device.js';
+import { setRenderNeed } from '../renderNeeds.js';
 
 interface Props {
   ctx: AdapterCtx;
@@ -51,6 +53,9 @@ const SCAN_INTERVAL_MS = 30_000; // how often we look for windows running low
 // keeps re-sampling 4 k satellites off the hot path (no 60 ms hitch). Bump the
 // work to a Web Worker only if MAX_SATS is later raised past ~10 k.
 const SAMPLE_BUDGET_MS = 5;
+// Floor for the SGP4 pump's slice when the shared per-frame budget is nearly
+// spent, so a busy frame can't stall orbit propagation entirely.
+const SAT_MIN_SLICE_MS = 2;
 
 const EPOCH_START = Cesium.JulianDate.fromIso8601('1970-01-01T00:00:00Z');
 
@@ -161,6 +166,7 @@ export class SatelliteAdapter implements LayerAdapter {
 
   detach(): void {
     this.detached = true;
+    setRenderNeed(`sat:${this.props.ctx.descriptor.id}`, false);
     if (this.fetchTimer != null) window.clearInterval(this.fetchTimer);
     if (this.scanTimer != null) window.clearInterval(this.scanTimer);
     if (this.retryTimer != null) window.clearTimeout(this.retryTimer);
@@ -217,6 +223,9 @@ export class SatelliteAdapter implements LayerAdapter {
       }
 
       this.satrecs = next;
+      // §5.1: orbits are SGP4-animated (SampledPositionProperty) — tell the render
+      // governor to keep rendering every frame while this layer has satellites.
+      setRenderNeed(`sat:${this.props.ctx.descriptor.id}`, next.size > 0);
       // Fresh elements → drop cached satrecs + re-seed every window from now.
       this.recCache.clear();
       this.lastSampleMs.clear();
@@ -260,25 +269,30 @@ export class SatelliteAdapter implements LayerAdapter {
   private schedulePump(): void {
     if (this.pumpScheduled || this.detached) return;
     this.pumpScheduled = true;
-    window.requestAnimationFrame(() => this.pump());
+    window.requestAnimationFrame((ts) => this.pump(ts));
   }
 
   // Process queued satellites within a per-frame time budget, yielding to the
-  // next frame when the budget is spent so the main thread never stalls.
-  private pump(): void {
+  // next frame when the budget is spent so the main thread never stalls. The
+  // budget is SHARED with the ADS-B / vessel drains (frameBudget.ts): when one
+  // already drained this frame the pump shrinks its slice so their combined work
+  // doesn't overrun the frame (the world-view pan stutter).
+  private pump(ts = performance.now()): void {
     this.pumpScheduled = false;
     if (this.detached) return;
     const start = performance.now();
+    const budget = Math.max(SAT_MIN_SLICE_MS, Math.min(SAMPLE_BUDGET_MS, frameBudgetRemaining(ts)));
     const entities = this.ds.entities;
     entities.suspendEvents();
     let processed = 0;
-    while (this.queue.length > 0 && performance.now() - start < SAMPLE_BUDGET_MS) {
+    while (this.queue.length > 0 && performance.now() - start < budget) {
       const id = this.queue.shift() as string;
       this.queued.delete(id);
       this.applySat(id);
       processed++;
     }
     entities.resumeEvents();
+    recordFrameSpend(ts, performance.now() - start);
     if (processed > 0) this.props.ctx.viewer.scene.requestRender();
     if (this.queue.length > 0) this.schedulePump();
   }

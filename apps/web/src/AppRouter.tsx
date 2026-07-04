@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { App } from './App.js';
 import { App2D } from './App2D.js';
-import { NormalApp } from './normal/NormalApp.js';
-import { useDashboardMode } from './state/dashboardMode.js';
 import { StudioPage } from './studio/StudioPage.js';
 import { AuthProvider, useAuth } from './auth/AuthContext.js';
 import { AuthForm } from './auth/AuthForm.js';
@@ -13,6 +11,7 @@ import { SettingsModal } from './settings/SettingsModal.js';
 import { useSettings } from './state/settings.js';
 import { VelocityNewsPage } from './news/VelocityNewsPage.js';
 import { StoryView } from './news/StoryView.js';
+import { Onboarding, hasOnboarded } from './onboarding/Onboarding.js';
 
 // Served under the Vite base path (e.g. "/app" in production, "/" in dev), so
 // the router's basename tracks it — keeps client routes correct behind /app.
@@ -24,6 +23,7 @@ export function AppRouter(): JSX.Element {
       <AuthProvider>
         <TopBar />
         <PredictedMotionBadge />
+        <OnboardingGate />
         <Routes>
           <Route path="/" element={<DashboardRoute />} />
           <Route path="/2d" element={<App2D />} />
@@ -40,24 +40,20 @@ export function AppRouter(): JSX.Element {
   );
 }
 
-// The "/" route renders either the new Normal dashboard (default) or the dense
-// Professional dashboard (the original App), per the persisted dashboardMode.
-// Both mount the identical globe stack — only the chrome differs.
+// The "/" route now renders the SINGLE Gotham console shell (App) for every mode
+// (design §6.0 — the parallel "Normal" shell is retired). dashboardMode selects a
+// view PRESET of that one shell: 'professional' = Command (dense, all apps),
+// 'normal' = Field (a lighter landing). App reads the mode and adapts.
 function DashboardRoute(): JSX.Element {
-  const mode = useDashboardMode((s) => s.mode);
-  return mode === 'professional' ? <App /> : <NormalApp />;
+  return <App />;
 }
 
 function TopBar(): JSX.Element | null {
   const loc = useLocation();
-  const mode = useDashboardMode((s) => s.mode);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The auth pages are full-screen cards — no overlay chrome on them.
   if (['/login', '/signup', '/forgot', '/reset'].includes(loc.pathname)) return null;
   if (loc.pathname.startsWith('/news')) return null;
-  // On the Normal dashboard home the new top bar owns the account/settings/nav
-  // chrome (its user menu), so the floating chip would collide — hide it there.
-  if (loc.pathname === '/' && mode === 'normal') return null;
   const is2D = loc.pathname.startsWith('/2d');
   const isStudio = loc.pathname.startsWith('/studio');
   return (
@@ -101,20 +97,28 @@ function TopBar(): JSX.Element | null {
 // on the live map routes ("/" and "/2d"), only when the setting is ON.
 function PredictedMotionBadge(): JSX.Element | null {
   const loc = useLocation();
-  const mode = useDashboardMode((s) => s.mode);
   const on = useSettings((s) => s.aircraftDeadReckon);
   if (!on) return null;
   if (loc.pathname !== '/' && !loc.pathname.startsWith('/2d')) return null;
-  // The badge is window-anchored, but on the Normal dashboard the bottom ~160px
-  // is the timeline footer — sit above it there instead of overlapping the lane
-  // labels. Elsewhere (Professional / 2D) the window bottom is clear.
-  const bottomClass = loc.pathname === '/' && mode === 'normal' ? 'bottom-[172px]' : 'bottom-2';
+  // The console home ("/") has a ~158px timeline footer; sit above it so the badge
+  // never overlaps the lane labels. The 2D route has a clear bottom.
+  const bottomClass = loc.pathname === '/' ? 'bottom-[172px]' : 'bottom-2';
   return (
     <div className={`absolute ${bottomClass} left-2 z-[1000] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5`}>
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
       Predicted motion — aircraft positions estimated between ADS-B fixes
     </div>
   );
+}
+
+// First-run tour. Only on the live map routes ("/" and "/2d") — auth, news and
+// studio pages get no overlay. Shows once, then localStorage remembers it.
+function OnboardingGate(): JSX.Element | null {
+  const loc = useLocation();
+  const [show, setShow] = useState(() => !hasOnboarded());
+  const onMap = loc.pathname === '/' || loc.pathname.startsWith('/2d');
+  if (!show || !onMap) return null;
+  return <Onboarding onClose={() => setShow(false)} />;
 }
 
 function AccountChip(): JSX.Element | null {

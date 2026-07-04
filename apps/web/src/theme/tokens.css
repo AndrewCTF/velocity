@@ -46,6 +46,45 @@
   --r-md: 3px;
   --r-lg: 5px;
 
+  /* ── spacing scale (design §6.2 — promoted out of normal/.nrm so BOTH shells
+     share one rhythm). px here (global chrome isn't --ui-scale'd like .nrm). */
+  --sp-1: 3px; /* hairline gap (icon↔text) */
+  --sp-2: 4px; /* tight row gap */
+  --sp-3: 6px; /* default row padding */
+  --sp-4: 8px; /* group padding */
+  --sp-5: 12px; /* section spacing */
+  --sp-6: 16px; /* panel padding */
+
+  /* ── shadow scale (promoted from .nrm) — flat, Blueprint-like; used sparingly */
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 6px 22px rgba(0, 0, 0, 0.5);
+  --sh-pop: 0 18px 50px rgba(0, 0, 0, 0.6);
+
+  /* ── z-scale (design §6.2) — exactly SIX named layers replacing 19 ad-hoc
+     values across two scales. Chrome must reference these, never a bare z-[NNN].
+     Ordering IS the contract: a slide-over triage surface (--z-modal) sits ABOVE
+     a full-screen workspace (--z-overlay), which fixes the AlertsPanel-buried-
+     under-SimulationOverlay bug by construction. */
+  --z-map: 0; /* the Cesium canvas + on-map overlays anchored to it */
+  --z-rail: 100; /* docked edge rails + their flyouts */
+  --z-dock: 200; /* docked helpers floating over the map */
+  --z-overlay: 400; /* full-screen mode/workspace surfaces, sim overlay */
+  --z-modal: 600; /* slide-overs, dialogs, alerts triage, command palette */
+  --z-toast: 800; /* transient toasts — always on top */
+
+  /* ── type scale with a FLOOR (design §6.2 — nothing below 10px). Migrate the
+     205 sub-10px literals onto these; captions are the smallest allowed. */
+  --fs-body: 12px; /* default body / row text */
+  --fs-dense: 11px; /* dense tabular rows */
+  --fs-caption: 10px; /* captions, eyebrows, section labels — the FLOOR */
+
+  /* classification banner (§6.2 hex amnesty) — the marking chrome, tokenized so
+     it's no longer hardcoded green literals scattered in ConsoleShell. */
+  --cls-unclas-bg: #0c3b1f;
+  --cls-unclas-fg: #86e0a6;
+  --cls-exercise-bg: #3a2a05;
+  --cls-exercise-fg: #f5c451;
+
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-sans: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
   /* Labels use the SAME neutral grotesque (small + tracked caps), not a condensed

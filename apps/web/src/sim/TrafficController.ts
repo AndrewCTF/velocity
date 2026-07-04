@@ -11,6 +11,7 @@
 import * as Cesium from 'cesium';
 import { bearingDeg, destPoint, haversineKm } from './engine.js';
 import type { GroundDetection } from '../ground/types.js';
+import type { Capture } from '../state/captures.js';
 
 export interface CamInfo {
   cam_id: string;
@@ -26,7 +27,15 @@ interface Vehicle {
   heading: number;
   speedMps: number;
   s: number; // arc-length travelled along the way (m)
+  way: Way; // the road this vehicle drives (real-data mode spans many roads)
 }
+
+const VEHICLE_CLASSES = new Set(['car', 'truck', 'bus', 'motorcycle']);
+function vehCount(dets: GroundDetection[]): number {
+  return dets.filter((d) => VEHICLE_CLASSES.has(d.cls)).length;
+}
+
+const GLOBAL_VEHICLE_CAP = 200; // real-data mode spans many captures
 
 interface Way {
   nodes: { lat: number; lon: number }[];
@@ -143,7 +152,6 @@ export class TrafficController {
   private lastMs = 0;
   private vehicles: Vehicle[] = [];
   private disposed = false;
-  private way: Way | null = null;
 
   constructor(private readonly viewer: Cesium.Viewer) {
     this.ds = new Cesium.CustomDataSource('sim:traffic');
@@ -153,49 +161,134 @@ export class TrafficController {
   /** Seed vehicles from a cam + its detections. Replaces any previous sim. */
   async seed(cam: CamInfo, dets: GroundDetection[]): Promise<{ count: number; road: boolean }> {
     const roads = await fetchRoads(cam.lat, cam.lon, ROAD_RADIUS_M);
-    this.way = nearestWay(roads, cam.lat, cam.lon);
-    if (!this.way) return { count: 0, road: false };
+    const way = nearestWay(roads, cam.lat, cam.lon);
+    if (!way) return { count: 0, road: false };
 
     // Vehicle count from detections: COCO vehicle classes, capped.
-    const vehicleClasses = new Set(['car', 'truck', 'bus', 'motorcycle']);
-    let count = dets.filter((d) => vehicleClasses.has(d.cls)).length;
+    let count = vehCount(dets);
     if (count === 0) count = Math.max(3, Math.min(8, dets.length || 4)); // no vehicles detected → light traffic
     count = Math.min(count, VEHICLE_CAP);
 
     this.clearEntities();
     this.vehicles = [];
-    const total = this.way.total;
     for (let i = 0; i < count; i++) {
       const id = `sim:traffic:${cam.cam_id}:${i}`;
-      const s = (total * i) / Math.max(1, count);
-      const p = posAtArc(this.way, s);
+      const s = (way.total * i) / Math.max(1, count);
+      const p = posAtArc(way, s);
       // ponytail: per-vehicle speed varies deterministically around the default;
       // bbox-displacement flow tracking is a future upgrade (needs cross-poll track).
       const speed = DEFAULT_SPEED_MPS * (0.8 + ((i * 37) % 7) / 10);
-      const v: Vehicle = { id, lat: p.lat, lon: p.lon, heading: p.heading, speedMps: speed, s };
+      const v: Vehicle = { id, lat: p.lat, lon: p.lon, heading: p.heading, speedMps: speed, s, way };
       this.vehicles.push(v);
-      const isTruck = i % 5 === 0;
-      this.ds.entities.add({
-        id: v.id,
-        position: new Cesium.CallbackPositionProperty(
-          () => Cesium.Cartesian3.fromDegrees(v.lon, v.lat, 0),
-          false,
-        ),
-        billboard: {
-          image: isTruck ? TRUCK_ICON : CAR_ICON,
-          scale: 0.9,
-          rotation: new Cesium.CallbackProperty(() => -Cesium.Math.toRadians(v.heading), false),
-          alignedAxis: Cesium.Cartesian3.ZERO,
-          color: Cesium.Color.WHITE,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2_000_000),
-        },
-        properties: { kind: 'sim-vehicle', sim: true },
-      });
+      this.addVehicleEntity(v, i % 5 === 0);
     }
     this.start();
     return { count, road: true };
+  }
+
+  /**
+   * Real-data mode: seed the sim from the CAPTURES store — each cam capture is a
+   * real detected car-count at a real location. Spawn that many vehicles on the
+   * nearest OSM road per capture (multi-road), then overlay a density-based
+   * traffic-jam prediction. Not desktop-gated: captures already carry detections,
+   * so this replays real data on the website too.
+   */
+  async seedFromCaptures(caps: Capture[]): Promise<{ count: number; roads: number; jams: number }> {
+    this.clearEntities();
+    this.vehicles = [];
+    let total = 0;
+    const roadStats: { id: string; way: Way; count: number; lat: number; lon: number }[] = [];
+    for (const cap of caps) {
+      if (total >= GLOBAL_VEHICLE_CAP) break;
+      const want = vehCount(cap.dets);
+      if (want === 0) continue;
+      const roads = await fetchRoads(cap.lat, cap.lon, ROAD_RADIUS_M);
+      const way = nearestWay(roads, cap.lat, cap.lon);
+      if (!way) continue;
+      const n = Math.min(want, GLOBAL_VEHICLE_CAP - total);
+      for (let i = 0; i < n; i++) {
+        const id = `sim:traffic:${cap.srcId}:${i}`;
+        const s = (way.total * i) / Math.max(1, n);
+        const p = posAtArc(way, s);
+        const speed = DEFAULT_SPEED_MPS * (0.7 + ((i * 37) % 7) / 10);
+        const v: Vehicle = { id, lat: p.lat, lon: p.lon, heading: p.heading, speedMps: speed, s, way };
+        this.vehicles.push(v);
+        this.addVehicleEntity(v, i % 5 === 0);
+      }
+      total += n;
+      roadStats.push({ id: cap.srcId, way, count: n, lat: cap.lat, lon: cap.lon });
+    }
+    const jams = this.renderJams(roadStats);
+    this.start();
+    return { count: total, roads: roadStats.length, jams };
+  }
+
+  private addVehicleEntity(v: Vehicle, isTruck: boolean): void {
+    this.ds.entities.add({
+      id: v.id,
+      position: new Cesium.CallbackPositionProperty(
+        () => Cesium.Cartesian3.fromDegrees(v.lon, v.lat, 0),
+        false,
+      ),
+      billboard: {
+        image: isTruck ? TRUCK_ICON : CAR_ICON,
+        scale: 0.9,
+        rotation: new Cesium.CallbackProperty(() => -Cesium.Math.toRadians(v.heading), false),
+        alignedAxis: Cesium.Cartesian3.ZERO,
+        color: Cesium.Color.WHITE,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2_000_000),
+      },
+      properties: { kind: 'sim-vehicle', sim: true },
+    });
+  }
+
+  /**
+   * Traffic-jam prediction: classify each seeded road by the cars-in-frame count
+   * (a cam snapshot count, a congestion proxy — NOT a flow rate) and draw a
+   * coloured polyline + a JAM/HEAVY label. Heuristic thresholds; a single frame
+   * rarely exceeds ~15 vehicles, so a production model would use flow over time.
+   * Returns #congested roads.
+   */
+  private renderJams(
+    roads: { id: string; way: Way; count: number; lat: number; lon: number }[],
+  ): number {
+    let jamCount = 0;
+    for (const r of roads) {
+      const level = r.count >= 10 ? 'JAM' : r.count >= 5 ? 'HEAVY' : 'FLOW';
+      const hex = level === 'JAM' ? '#ef4444' : level === 'HEAVY' ? '#f59e0b' : '#4ade80';
+      if (level !== 'FLOW') jamCount++;
+      this.ds.entities.add({
+        id: `sim:traffic:road:${r.id}`,
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray(r.way.nodes.flatMap((n) => [n.lon, n.lat])),
+          width: 6,
+          material: Cesium.Color.fromCssColorString(hex).withAlpha(0.65),
+          clampToGround: true,
+        },
+        properties: { kind: 'sim-road', sim: true },
+      });
+      if (level !== 'FLOW') {
+        this.ds.entities.add({
+          id: `sim:traffic:jamlbl:${r.id}`,
+          position: Cesium.Cartesian3.fromDegrees(r.lon, r.lat, 0),
+          label: {
+            text: `${level} · ${r.count} veh`,
+            font: '600 11px "IBM Plex Mono", monospace',
+            fillColor: Cesium.Color.fromCssColorString(hex),
+            showBackground: true,
+            backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.8),
+            backgroundPadding: new Cesium.Cartesian2(6, 3),
+            pixelOffset: new Cesium.Cartesian2(0, -22),
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
+          },
+          properties: { kind: 'sim-jam', sim: true },
+        });
+      }
+    }
+    return jamCount;
   }
 
   private start(): void {
@@ -212,10 +305,9 @@ export class TrafficController {
   }
 
   private tick(dt: number): void {
-    if (!this.way) return;
     for (const v of this.vehicles) {
       v.s += v.speedMps * dt;
-      const p = posAtArc(this.way, v.s);
+      const p = posAtArc(v.way, v.s);
       v.lat = p.lat;
       v.lon = p.lon;
       v.heading = p.heading;
@@ -237,7 +329,6 @@ export class TrafficController {
     }
     this.clearEntities();
     this.vehicles = [];
-    this.way = null;
   }
 
   dispose(): void {

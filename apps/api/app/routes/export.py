@@ -19,10 +19,12 @@ from __future__ import annotations
 import csv
 import io
 import json
+import time
 from typing import Any
 from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, Query, Response
+from pydantic import BaseModel
 
 router = APIRouter(tags=["export"])
 
@@ -165,4 +167,93 @@ async def export(
         content=body,
         media_type=media,
         headers={"Content-Disposition": f'attachment; filename="velocity-export.{ext}"'},
+    )
+
+
+# ── PPTX situation brief (design §8 Slides/Stencil) ─────────────────────────
+
+class _BriefKpi(BaseModel):
+    contacts: int = 0
+    feeds_live: int = 0
+    feeds_total: int = 0
+    alerts: int = 0
+
+
+class _BriefPayload(BaseModel):
+    title: str = "Situation brief"
+    classification: str = "Unclassified // Open-source intelligence"
+    kpis: _BriefKpi = _BriefKpi()
+    severity: dict[str, int] = {}
+    alerts: list[str] = []
+    sources: list[str] = []
+
+
+_PPTX_MEDIA = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+
+@router.post("/api/report/pptx")
+def report_pptx(payload: _BriefPayload) -> Response:
+    """Generate a live-data situation brief as a real PPTX deck (design §8). The
+    frontend posts the current picture (KPIs/severity/alerts/sources) — the same
+    live picture the Brief panel renders — and gets back a .pptx. python-pptx is
+    a Phase-1 dep; if the import ever fails we degrade with a 503 rather than 500."""
+    try:
+        from pptx import Presentation
+        from pptx.util import Pt
+    except Exception:  # noqa: BLE001 — graceful degrade if the optional lib is missing
+        return Response(content="pptx unavailable", status_code=503)
+
+    stamp = time.strftime("%Y-%m-%d %H:%M:%SZ", time.gmtime())
+    prs = Presentation()
+
+    # Title slide
+    s = prs.slides.add_slide(prs.slide_layouts[0])
+    s.shapes.title.text = payload.title
+    s.placeholders[1].text = f"{payload.classification}\nGenerated {stamp} · keyless OSINT"
+
+    # Current-picture slide
+    s2 = prs.slides.add_slide(prs.slide_layouts[1])
+    s2.shapes.title.text = "Current picture"
+    tf = s2.placeholders[1].text_frame
+    tf.text = f"{payload.kpis.contacts:,} tracked contacts"
+    for line in (
+        f"{payload.kpis.feeds_live}/{payload.kpis.feeds_total} feeds live",
+        f"{payload.kpis.alerts:,} alerts in buffer",
+        "Alerts by severity: "
+        + " · ".join(f"{k} {v}" for k, v in payload.severity.items())
+        if payload.severity
+        else "",
+    ):
+        if not line:
+            continue
+        p = tf.add_paragraph()
+        p.text = line
+        p.font.size = Pt(16)
+
+    # Recent-alerts slide
+    if payload.alerts:
+        s3 = prs.slides.add_slide(prs.slide_layouts[1])
+        s3.shapes.title.text = "Recent alerts"
+        atf = s3.placeholders[1].text_frame
+        atf.text = payload.alerts[0]
+        for a in payload.alerts[1:12]:
+            p = atf.add_paragraph()
+            p.text = a
+
+    # Sources slide
+    if payload.sources:
+        s4 = prs.slides.add_slide(prs.slide_layouts[1])
+        s4.shapes.title.text = "Sources"
+        stf = s4.placeholders[1].text_frame
+        stf.text = payload.sources[0]
+        for src in payload.sources[1:20]:
+            p = stf.add_paragraph()
+            p.text = src
+
+    buf = io.BytesIO()
+    prs.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type=_PPTX_MEDIA,
+        headers={"Content-Disposition": 'attachment; filename="situation-brief.pptx"'},
     )

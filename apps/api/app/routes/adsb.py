@@ -806,6 +806,8 @@ async def _opensky_cached() -> dict[str, Any] | None:
     Stays `async` (the fan-out awaits it) but holds no network await; the
     awaited coroutine resolves in microseconds."""
     global _OPENSKY_AT, _OPENSKY_REFRESH_TASK
+    if not get_settings().opensky_enabled:
+        return None  # kill switch — no serve, no pull
     gated = bool(_OPENSKY_DISABLED_UNTIL) and time.time() < _OPENSKY_DISABLED_UNTIL
     refreshing = _OPENSKY_REFRESH_TASK is not None and not _OPENSKY_REFRESH_TASK.done()
     age = time.monotonic() - _OPENSKY_AT if _OPENSKY_AT else float("inf")
@@ -930,7 +932,11 @@ def _feed_timeout(url: str) -> httpx.Timeout:
         # loopback transfer; the only reason it's ever slow is the loop being busy.
         return httpx.Timeout(60.0, connect=5.0)
     if "theairtraffic.com" in url:
-        return httpx.Timeout(5.0, connect=3.0)
+        # Read bumped 5 -> 12s: its ~5.7 MB body downloads in ~2.4s bare but can
+        # exceed a 5s per-read under egress contention, aborting the pull → an
+        # EMPTY slice → the union collapses to hpradar-only (~8k instead of ~12k).
+        # Connect stays tight (3s) so a stalled handshake still bails fast.
+        return httpx.Timeout(12.0, connect=3.0)
     return httpx.Timeout(12.0, connect=5.0)
 
 
@@ -1066,6 +1072,17 @@ async def _pull_one_feed(url: str) -> None:
     finally:
         _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
     if ac:
+        # Stamp receipt time so these mirror aircraft carry a `seen_at` like the
+        # grid + firehose tiers do (_aircraft_geojson reads `_seen_at`). Without
+        # it a mirror aircraft has seen_at=None → the frontend "Last seen" falls
+        # back to the STALE OpenSky-cache clock (frozen at the once/day pull, so it
+        # climbs to >20m), AND _merge_with_previous can't carry the contact forward
+        # (its 180s age gate needs a numeric seen_at) so it blinks between pulls.
+        # theairtraffic/hpradar are the freshness PRIMARY (~11k @ ~1s here); their
+        # own receipt time is the honest, advancing "Last seen".
+        now_wall = time.time()
+        for a in ac:
+            a["_seen_at"] = now_wall
         _FEED_SLICES[url] = (ts, ac)
 
 
@@ -1513,6 +1530,20 @@ async def _broadcast_blob(blob: bytes) -> None:
             await asyncio.wait_for(ws.send_bytes(blob), timeout=5.0)
         except Exception:  # noqa: BLE001 — a failed send just drops that socket
             _WS_SUBSCRIBERS.discard(ws)
+            # ...and CLOSE it. A client that dropped via the dev proxy without a
+            # clean WS close frame leaves the handler blocked in receive_text()
+            # forever and the socket stuck in CLOSE-WAIT — 1000s of leaked fds +
+            # coroutines (measured 1391 in 14 min → multi-GB RSS). Closing here
+            # unblocks receive_text() so the handler's finally runs and the fd is
+            # freed. Discard-without-close was the leak.
+            try:
+                # Bounded: _broadcast_blob is awaited by the 1s snapshot loop, so
+                # an unbounded close on a zombie proxied socket (client gone but no
+                # FIN through the dev proxy) would stall the gather → the WHOLE
+                # refresh/rebuild/push halts for every client. 2s cap self-heals.
+                await asyncio.wait_for(ws.close(), timeout=2.0)
+            except Exception:  # noqa: BLE001 — already gone / close timed out
+                pass
 
     await asyncio.gather(*(_send(ws) for ws in subs))
 

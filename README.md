@@ -20,16 +20,46 @@ can ask it for live data instead of guessing from its training cut-off.
 > (restart = gone), AIS coverage is mostly Northern Europe, and the 3D satellite
 > mode is a VRAM hog. Full caveats in [What it is, and what it isn't](#what-it-is-and-what-it-isnt).
 
+## Prerequisites
+
+You need **one** of these two setups — Docker is the shortest path.
+
+**A) Docker (recommended — one command).**
+
+| Tool | Version | Notes |
+| --- | --- | --- |
+| Docker Engine | 24+ | with the `docker compose` v2 plugin |
+| A WebGL2 browser | Chrome/Edge 110+, Firefox 110+ | the globe is client-side WebGL2 |
+
+**B) Local dev (no Docker).**
+
+| Tool | Version | Notes |
+| --- | --- | --- |
+| Node.js | 20 LTS+ | |
+| pnpm | 9+ | `corepack enable` gives you the pinned version |
+| Python | 3.12 | backend runtime |
+| uv *(or) venv* | latest | `uv` resolves the API deps cross-platform; a plain venv works too |
+| A WebGL2 browser | Chrome/Edge 110+, Firefox 110+ | discrete GPU recommended for 3D-sat |
+
+No API keys are required for either path — the core feeds (aircraft, vessels,
+quakes, satellites, basemap) run keyless. Keys only add reach; see
+[What it pulls in](#what-it-pulls-in).
+
 ## Quick start
 
+The fastest way is Docker — it boots the API, web app and nginx together:
+
 ```bash
+git clone https://github.com/AndrewCTF/ProjectVelocity.git
+cd ProjectVelocity
 cp .env.example .env       # optional — every key is optional, empty works
-pnpm install
 docker compose up          # boots api, web, nginx on :8080
 ```
 
 Open <http://localhost:8080>. No API keys required — it comes up with live
-aircraft, vessels, quakes and the rest straight away.
+aircraft, vessels, quakes and the rest straight away. **On first load a short
+in-app tour** walks you through the map, the inspector and the analysis tools;
+you can re-open it any time from **⚙ Settings**.
 
 <details>
 <summary><b>Local dev without Docker</b></summary>

@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import ssl
 import time
 from typing import Any
@@ -240,6 +241,7 @@ async def _handle_publish(topic: str, payload: bytes) -> None:
 async def _run_digitraffic_mqtt() -> None:
     backoff = 1.0
     while True:
+        session_up_at: float | None = None  # set on SUBACK; gates the backoff reset
         try:
             ctx = ssl.create_default_context()
             async with websockets.connect(
@@ -263,7 +265,11 @@ async def _run_digitraffic_mqtt() -> None:
                                     _stats["digitraffic_connected"] = True
                             elif ptype == 9:  # SUBACK
                                 subscribed = True
-                                backoff = 1.0
+                                # Do NOT reset backoff here. Digitraffic SUBACKs
+                                # then 429-drops us seconds later; resetting on
+                                # every micro-session was the 1/2/4s reconnect
+                                # spam. Only a session that SURVIVES clears it.
+                                session_up_at = time.monotonic()
                             elif ptype == 3:  # PUBLISH
                                 pub = _decode_publish(b0, body)
                                 if pub is not None:
@@ -279,9 +285,15 @@ async def _run_digitraffic_mqtt() -> None:
             raise
         except Exception as e:  # noqa: BLE001
             _stats["digitraffic_connected"] = False
-            log.warning("digitraffic mqtt error, reconnecting in %.0fs: %s", backoff, e)
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 60.0)
+            # Reset to fast retry only after a session that stayed up long enough
+            # to be real (>60s); otherwise keep doubling so a 429-storm backs off
+            # to minutes instead of hammering once a second.
+            if session_up_at is not None and time.monotonic() - session_up_at > 60.0:
+                backoff = 1.0
+            delay = backoff * (0.5 + random.random())  # jitter: avoid lockstep retry
+            log.warning("digitraffic mqtt error, reconnecting in %.0fs: %s", delay, e)
+            await asyncio.sleep(delay)
+            backoff = min(backoff * 2, 300.0)
 
 
 # ── VesselFinder headless sidecar (keyless GLOBAL) — poll vessels.json ─────────

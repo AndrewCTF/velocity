@@ -21,6 +21,7 @@ const uid = (): string => `wb-${Date.now().toString(36)}-${(_seq++).toString(36)
 interface WatchboxState {
   watchboxes: Watchbox[];
   add: (w: Omit<Watchbox, 'id'>) => string;
+  update: (id: string, patch: Partial<Omit<Watchbox, 'id'>>) => void;
   remove: (id: string) => void;
   clear: () => void;
 }
@@ -32,6 +33,8 @@ export const useWatchboxes = create<WatchboxState>((set) => ({
     set((s) => ({ watchboxes: [...s.watchboxes, { ...w, id }] }));
     return id;
   },
+  update: (id, patch) =>
+    set((s) => ({ watchboxes: s.watchboxes.map((w) => (w.id === id ? { ...w, ...patch } : w)) })),
   remove: (id) => set((s) => ({ watchboxes: s.watchboxes.filter((w) => w.id !== id) })),
   clear: () => set({ watchboxes: [] }),
 }));

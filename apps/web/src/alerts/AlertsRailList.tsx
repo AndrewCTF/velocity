@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type * as Cesium from 'cesium';
 import { useAlerts } from '../state/stores.js';
-import { flyToPosition } from '../globe/camera.js';
+import { slewToEntity } from '../globe/camera.js';
 import { useReducedMotion } from '../shell/useReducedMotion.js';
 import { SectionLabel, Badge, Btn, type BadgeTone } from '../shell/instruments.js';
 import type { Alert, AlertSeverity } from '@osint/shared';
@@ -55,7 +55,7 @@ export function AlertsRailList({ viewer }: Props): JSX.Element {
             type="button"
             onClick={() => setFilterSev((cur) => (cur === s ? null : s))}
             className={[
-              'mono text-[9px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors',
+              'mono text-[10px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors',
               filterSev === s
                 ? 'border-accent-line bg-accent-dim text-accent'
                 : 'border-line text-txt-3 hover:border-accent-line hover:text-txt-1',
@@ -103,7 +103,7 @@ function AlertRow({
       />
       <div className="flex items-center justify-between gap-2">
         <Badge tone={SEV_BADGE[a.severity] ?? 'neutral'}>{a.severity}</Badge>
-        <span className="mono text-[9px] tracking-[0.4px] uppercase tabular-nums text-txt-3">
+        <span className="mono text-[10px] tracking-[0.4px] uppercase tabular-nums text-txt-3">
           {a.ruleId}
         </span>
       </div>
@@ -114,16 +114,16 @@ function AlertRow({
           onClick={() => {
             if (viewer && a.geom?.type === 'Point') {
               const [lon, lat] = a.geom.coordinates as [number, number];
-              flyToPosition(viewer, lon, lat, 250_000, reduced ? 0 : 1.0);
+              slewToEntity(viewer, a.contributingObservations?.[0], lon, lat, 250_000, reduced ? 0 : 1.0);
             }
           }}
         >
           slew to
         </Btn>
-        <span className="mono text-[9px] tabular-nums text-txt-3">
+        <span className="mono text-[10px] tabular-nums text-txt-3">
           {new Date(a.t).toISOString().slice(11, 19)}Z
         </span>
-        <span className="mono text-[9px] tabular-nums text-txt-3">
+        <span className="mono text-[10px] tabular-nums text-txt-3">
           conf {(a.confidence * 100).toFixed(0)}%
         </span>
       </div>

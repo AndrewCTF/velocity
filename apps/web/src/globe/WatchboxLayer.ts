@@ -3,6 +3,7 @@ import type { Alert } from '@osint/shared';
 import { useWatchboxes, type Watchbox } from '../watchbox/watchboxStore.js';
 import { useAlerts } from '../state/stores.js';
 import { haversineKm } from './draw.js';
+import { isCameraMoving } from './cameraMotion.js';
 
 // Renders watchbox AOIs (amber rings) and runs a client-side enter/exit/loiter
 // evaluator every 2 s against live aircraft/vessel/sim entities, pushing a real
@@ -88,6 +89,10 @@ export function installWatchboxes(viewer: Cesium.Viewer): () => void {
   const evaluate = (): void => {
     const wbs = useWatchboxes.getState().watchboxes;
     if (wbs.length === 0) return;
+    // §5.2.3: skip the O(entities) candidate walk while the camera moves — the
+    // 2 s cadence resumes at settle, so enter/exit detection is only briefly
+    // delayed, never dropped (level-triggered evaluator).
+    if (isCameraMoving()) return;
     const now = Date.now();
     // Gather candidate entities once per tick.
     const ents: Array<{ id: string; label: string; lat: number; lon: number }> = [];

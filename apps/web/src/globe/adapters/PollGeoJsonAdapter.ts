@@ -47,6 +47,15 @@ const FILTER_DIM_ALPHA = 0.1;
 // polls and starve the main thread.
 const GRID_MIN_GAP_MS = 100;
 
+// Hard ceiling on a single poll's fetch. scheduleNext re-arms the loop ONLY in
+// poll()'s .finally, and the previous request is aborted only at the START of
+// the NEXT poll — so a fetch that never settles (dev proxy out of sockets,
+// upstream stalled) leaves .finally unreached and the whole layer's poll loop
+// dead until a camera move / tab refocus manually calls refresh(). This
+// watchdog aborts a hung fetch so poll() always settles and the grid re-arms.
+// 15s is far above the hot route p50 (~4ms) and bbox p99 (seconds).
+const POLL_WATCHDOG_MS = 15_000;
+
 // A WS push older than this (6× the 1s cadence) means the socket has gone quiet
 // — the tab was backgrounded (browsers freeze rAF + throttle timers, so frames
 // stop applying and reconnects stall) or the socket went zombie (onclose never
@@ -108,16 +117,31 @@ const AIRCRAFT_POS_EPSILON_M = 8; // ≈ ADS-B position noise floor; below this 
 // no new sample = the glide simply continues), and only add a sample when the
 // reported position actually moved (`drLastReal` gate in drain()). Positions
 // while ON are ESTIMATED, not observed; a map badge says so.
-// Glide tuning. The icon EASES from its current rendered position TO each new
-// real fix over ~the last inter-fix gap, so motion is continuous AND always
-// converges on truth. The first cut force-EXTRAPOLATED past the last fix and so
-// overshot, then snapped back when the real fix landed (the jump/reverse the
-// operator saw on this irregular multi-second feed). Easing toward the fix can't
-// overshoot, so it can't snap back. See deadReckonSample().
+// Glide tuning. Two segments per fix: (1) EASE from the current rendered position
+// TO the new real fix over ~the last inter-fix gap (converges on truth, no snap),
+// then (2) FORWARD-PROJECT past it along the contact's OWN reported track_deg at
+// velocity_ms for DR_PROJECT_HORIZON_S, then HOLD — so the icon keeps moving
+// through a signal gap instead of freezing at the last fix. The FIRST cut
+// extrapolated a velocity DERIVED from consecutive noisy fixes and overshot, then
+// snapped back; projecting along the REPORTED heading/speed stays close to truth,
+// so the next fix only nudges it (segment 1 absorbs the small correction). A
+// later cut dropped projection entirely (HOLD only) — that fixed the snap but
+// froze contacts with no fresh fix, the "keep planes moving doesn't" report. See
+// deadReckonSample().
 const DR_MIN_GLIDE_S = 1.5;
 const DR_MAX_GLIDE_S = 30;
 const DR_MAX_SPEED_MS = 600; // clamp apparent glide speed so a big gap can't streak
 const DR_FUTURE_ISO = '2100-01-01T00:00:00Z';
+// Forward-projection horizon (s): past the newest REAL fix the icon keeps gliding
+// along the reported track_deg at velocity_ms for this long, THEN holds. This is
+// what makes "keep planes moving" actually keep a contact moving during a signal
+// gap (the previous HOLD-only glide converged on the last fix and froze). 120 s
+// comfortably spans the observed <=20 s inter-fix gaps, so a live contact is
+// always mid-projection when its next fix lands — continuous motion — while a
+// contact that TRULY lost signal coasts for ~2 min then holds instead of flying
+// off forever. Positions here are ESTIMATED (the PredictedMotionBadge says so).
+const DR_PROJECT_HORIZON_S = 120;
+const DR_MIN_PROJECT_SPEED_MS = 5; // below this a contact is parked → don't project
 
 // Camera altitude (m) above which vessel glide is FROZEN. WHY: vessels glide via
 // SampledPositionProperty, which Cesium re-evaluates every frame the clock
@@ -371,6 +395,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     id: string,
     t0: Cesium.JulianDate,
     newPos: Cesium.Cartesian3,
+    trackDeg: number | null,
+    velocityMs: number | null,
   ): Cesium.SampledPositionProperty {
     let sampled =
       existing && existing.position instanceof Cesium.SampledPositionProperty
@@ -416,7 +442,26 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       glideS = Math.max(glideS, Cesium.Cartesian3.distance(cur, newPos) / DR_MAX_SPEED_MS);
       sampled.addSample(t0, cur); // bridge: start from where the icon is now
     }
-    sampled.addSample(Cesium.JulianDate.addSeconds(t0, glideS, new Cesium.JulianDate()), newPos);
+    const arrive = Cesium.JulianDate.addSeconds(t0, glideS, new Cesium.JulianDate());
+    sampled.addSample(arrive, newPos);
+    // FR24 forward projection: continue PAST the real fix along the reported
+    // heading at the reported ground speed for DR_PROJECT_HORIZON_S, then HOLD
+    // (forwardExtrapolationType). This is what keeps a contact MOVING through a
+    // signal gap — without it the glide converged on the last fix and froze.
+    // Using the contact's OWN track+speed (not a fit) keeps the estimate close to
+    // truth, so the next real fix only nudges it (no overshoot/snap-back). A new
+    // fix clears this sample via removeSamples above and re-projects from truth.
+    if (trackDeg != null && velocityMs != null && velocityMs > DR_MIN_PROJECT_SPEED_MS) {
+      const dist = velocityMs * DR_PROJECT_HORIZON_S;
+      const brg = Cesium.Math.toRadians(trackDeg);
+      const enu = Cesium.Transforms.eastNorthUpToFixedFrame(newPos);
+      const local = new Cesium.Cartesian3(Math.sin(brg) * dist, Math.cos(brg) * dist, 0);
+      const projected = Cesium.Matrix4.multiplyByPoint(enu, local, new Cesium.Cartesian3());
+      sampled.addSample(
+        Cesium.JulianDate.addSeconds(arrive, DR_PROJECT_HORIZON_S, new Cesium.JulianDate()),
+        projected,
+      );
+    }
     this.drLastT.set(id, t0.clone());
     // Bound memory: keep only the last 5 min.
     const cutoff = Cesium.JulianDate.addSeconds(t0, -300, new Cesium.JulianDate());
@@ -735,6 +780,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     }
     this.aborter?.abort();
     this.aborter = new AbortController();
+    const ac = this.aborter; // local capture: a stale watchdog must not abort a newer controller
+    const watchdog = window.setTimeout(() => ac.abort(), POLL_WATCHDOG_MS);
     const worldView = this.isWorldView();
     try {
       const headers: Record<string, string> = {};
@@ -764,6 +811,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     } catch (e) {
       if ((e as DOMException)?.name === 'AbortError') return;
       this.props.ctx.reportStatus({ status: 'red', note: 'transport error' });
+    } finally {
+      clearTimeout(watchdog);
     }
   }
 
@@ -1132,6 +1181,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
                 id,
                 this.props.ctx.viewer.clock.currentTime.clone(),
                 newPos,
+                typeof props['track_deg'] === 'number' ? props['track_deg'] : null,
+                typeof props['velocity_ms'] === 'number' ? props['velocity_ms'] : null,
               );
               this.drLastReal.set(id, newPos.clone());
             }
@@ -1252,6 +1303,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
                 id,
                 this.props.ctx.viewer.clock.currentTime.clone(),
                 newPos,
+                typeof props['track_deg'] === 'number' ? props['track_deg'] : null,
+                typeof props['velocity_ms'] === 'number' ? props['velocity_ms'] : null,
               )
             : newPos,
           properties: props,

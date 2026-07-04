@@ -69,6 +69,15 @@ const KIND_COLOR: Record<string, string> = {
   target: 'var(--warn)',
   watch: 'var(--warn)',
   investigation: 'var(--txt-1)',
+  // digital-OSINT infra kinds (minted by app/osint)
+  domain: 'var(--accent)',
+  ip: 'var(--ok)',
+  cert: 'var(--txt-1)',
+  asn: 'var(--warn)',
+  service: 'var(--mag)',
+  threat: 'var(--alert)',
+  org: 'var(--txt-1)',
+  email: 'var(--txt-2)',
   object: 'var(--txt-2)',
 };
 function kindColor(kind: string): string {

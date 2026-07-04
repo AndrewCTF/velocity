@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { useAlerts, useImagery, useSim } from '../state/stores.js';
 import { useAoi } from '../state/aoi.js';
-import { useUiMode, type UiMode } from '../state/uiMode.js';
+import { AppSwitcher } from '../shell/AppSwitcher.js';
 import { AoiSelector } from './AoiSelector.js';
 import { SearchField } from './SearchField.js';
 import { flyToChokepoint, flyToGlobal } from '../globe/camera.js';
+import { perfSnapshot } from '../globe/perf.js';
 import type { Chokepoint } from '../registry/chokepoints.js';
 import { Brand, StatusDot, Caveat } from '../shell/instruments.js';
 import { useAgent } from '../state/agent.js';
@@ -83,11 +84,10 @@ export function CommandBar({
         <SimToggle />
       </div>
 
-      {/* workspace modes — Tasking / Targeting / FMV open as large surfaces over
-          the globe (not crammed peer tabs). Condensed-label voice marks them as
-          MODE switches, distinct from the context tabs in the right rail. */}
-      <div className={CELL}>
-        <ModeToggles />
+      {/* App switcher (design §6.1) — the primary top-level navigation. Map is the
+          globe; Explorer/Graph/Targeting/Video/Sim/Reports take the main surface. */}
+      <div className="h-full flex items-stretch border-l border-line-2">
+        <AppSwitcher />
       </div>
 
       {/* alert ticker — top alert in newest-first buffer; click opens panel.
@@ -183,7 +183,7 @@ function AgentIndicator(): JSX.Element {
       onClick={() => setOpen(true)}
       title="Open the Velocity analyst console (⌘J)"
       aria-label="Open analyst console"
-      className="flex items-center gap-2 mono text-[9px] tracking-[0.5px] text-accent hover:text-txt-0"
+      className="flex items-center gap-2 mono text-[10px] tracking-[0.5px] text-accent hover:text-txt-0"
     >
       <StatusDot tone={dotTone} />
       <span>AGENT ▸</span>
@@ -210,11 +210,15 @@ function AgentIndicator(): JSX.Element {
 function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | null {
   const [entCount, setEntCount] = useState<number | null>(null);
   const [fps, setFps] = useState<number | null>(null);
+  // Governor/drain readout straight from window.__perf (§5.7). rr = real renders/s
+  // (distinct from fps rAF frames), dr = last push-application ms.
+  const [perf, setPerf] = useState<{ rr: number; dr: number } | null>(null);
 
   // Entity total — recomputed once a second from the live data sources.
   useEffect(() => {
     if (!viewer) {
       setEntCount(null);
+      setPerf(null);
       return;
     }
     const recount = (): void => {
@@ -226,6 +230,8 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
         total += viewer.dataSources.get(i).entities.values.length;
       }
       setEntCount(total);
+      const p = perfSnapshot();
+      setPerf({ rr: p.rendersPerSec, dr: p.drainMsLast });
     };
     recount();
     const t = window.setInterval(recount, 1000);
@@ -263,7 +269,7 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
   if (entCount === null && fps === null) return null;
 
   return (
-    <span className="mono text-[9px] tracking-[0.4px] uppercase text-txt-3 flex items-center gap-3 tabular-nums">
+    <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-3 flex items-center gap-3 tabular-nums">
       {entCount !== null && (
         <span title="Total entities across all globe data sources">
           ent <b className="text-txt-1 font-semibold">{entCount.toLocaleString()}</b>
@@ -272,6 +278,16 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
       {fps !== null && (
         <span title="Render rate (measured from animation-frame deltas)">
           <b className="text-txt-1 font-semibold">{fps}</b>fps
+        </span>
+      )}
+      {perf !== null && perf.rr > 0 && (
+        <span title="Real Cesium scene renders per second (governor metric)">
+          <b className="text-txt-1 font-semibold">{perf.rr}</b>rr
+        </span>
+      )}
+      {perf !== null && perf.dr > 0 && (
+        <span title="Last aircraft push-application (drain) cost, ms">
+          <b className="text-txt-1 font-semibold">{perf.dr}</b>ms
         </span>
       )}
     </span>
@@ -310,7 +326,7 @@ function ImageryToggle({
       aria-label="Toggle 3D satellite imagery and buildings"
       data-testid="imagery-toggle"
       className={[
-        'mono text-[9px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
+        'mono text-[10px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
         on
           ? 'border-accent-line text-accent bg-accent-dim'
           : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
@@ -329,41 +345,6 @@ function ImageryToggle({
  * surface over the globe (bottom dock / left dock / centered sensor window) via
  * the useUiMode store; clicking the active one closes it. Condensed-label voice.
  */
-function ModeToggles(): JSX.Element {
-  const mode = useUiMode((s) => s.mode);
-  const toggle = useUiMode((s) => s.toggle);
-  const items: Array<[NonNullable<UiMode>, string]> = [
-    ['tasking', 'Tasking'],
-    ['targeting', 'Targets'],
-    ['fmv', 'FMV'],
-    ['cop', 'COP'],
-  ];
-  return (
-    <div className="flex items-center gap-1">
-      {items.map(([m, label]) => {
-        const on = mode === m;
-        return (
-          <button
-            key={m}
-            type="button"
-            onClick={() => toggle(m)}
-            aria-pressed={on}
-            title={`Open the ${label} workspace`}
-            className={[
-              'font-label text-[10px] tracking-[0.7px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
-              on
-                ? 'border-accent-line text-accent bg-accent-dim'
-                : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
-            ].join(' ')}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /**
  * SIM mode pill — toggles the browser-side war-game overlay. When on, the
  * SimulationOverlay mounts and the live ADS-B/AIS layers dim so scenario
@@ -380,7 +361,7 @@ function SimToggle(): JSX.Element {
       title="Toggle browser-side simulation mode (drones, attack scenarios)"
       data-testid="sim-toggle"
       className={[
-        'mono text-[9px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
+        'mono text-[10px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
         active
           ? 'border-mag-line text-mag bg-mag-dim'
           : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
@@ -416,10 +397,10 @@ function AlertTicker({ onOpen }: { onOpen?: () => void }): JSX.Element {
       <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-alert" aria-hidden="true" />
       {top ? (
         <>
-          <span className="mono text-[9px] tracking-[0.7px] uppercase text-alert shrink-0 group-hover:text-accent transition-colors">
+          <span className="mono text-[10px] tracking-[0.7px] uppercase text-alert shrink-0 group-hover:text-accent transition-colors">
             alert
           </span>
-          <span className="mono text-[9px] text-txt-4 tabular-nums shrink-0">{total}</span>
+          <span className="mono text-[10px] text-txt-4 tabular-nums shrink-0">{total}</span>
           <span className={`mono text-[11px] truncate ${SEV_COLOR[top.severity] ?? 'text-[#ffc9c5]'}`}>
             [{top.severity}] {top.message}
           </span>

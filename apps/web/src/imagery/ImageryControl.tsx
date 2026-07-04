@@ -420,7 +420,7 @@ export function ImageryControl() {
                   {eventsLocation.name ? ` of ${eventsLocation.name.split(',')[0]}` : ''}
                 </span>
                 {eventsSummary && (
-                  <span className="mono text-[9px] text-txt-3 tabular-nums">
+                  <span className="mono text-[10px] text-txt-3 tabular-nums">
                     {Object.entries(eventsSummary)
                       .map(([k, v]) => `${k}: ${v.ok ? (v.kept ?? 0) : '×'}`)
                       .join('  ·  ')}
@@ -467,7 +467,7 @@ export function ImageryControl() {
           Sentinel before/after diff at the active location · red = loss · green = gain
         </MicroLabel>
         <div className="flex items-center gap-1">
-          <span className="mono text-[9px] text-txt-3 w-3 shrink-0">A</span>
+          <span className="mono text-[10px] text-txt-3 w-3 shrink-0">A</span>
           <input
             type="date"
             value={changeBefore}
@@ -476,7 +476,7 @@ export function ImageryControl() {
             aria-label="Before date"
             className={`${FIELD} flex-1 min-w-0 tabular-nums`}
           />
-          <span className="mono text-[9px] text-txt-3 w-3 shrink-0">B</span>
+          <span className="mono text-[10px] text-txt-3 w-3 shrink-0">B</span>
           <input
             type="date"
             value={changeAfter}
@@ -532,7 +532,7 @@ export function ImageryControl() {
               alt={`Sentinel change ${changeMeta.before} → ${changeMeta.after}`}
               className="w-full rounded-sm border border-line"
             />
-            <div className="flex items-center gap-2 mono text-[9px] text-txt-3">
+            <div className="flex items-center gap-2 mono text-[10px] text-txt-3">
               <span className="inline-flex items-center gap-1">
                 <span className="inline-block w-2 h-2 rounded-sm bg-[#cc2828]" />
                 {changeMeta.legend?.red ?? 'loss'}

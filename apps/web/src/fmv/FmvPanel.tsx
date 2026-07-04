@@ -14,7 +14,7 @@
 //
 // When no sim drone is selected, it shows an empty-state message.
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as Cesium from 'cesium';
 import { Widget, KV, KVRow, Caveat, Btn, MicroLabel, SectionLabel, Toggle } from '../shell/instruments.js';
 import { useSelection } from '../state/stores.js';
@@ -22,6 +22,7 @@ import { useSpotlight } from '../globe/SpotlightLayer.js';
 import { followEntity, stopFollow, isFollowing } from '../globe/camera.js';
 import { projectDetections, classCounts } from './detections.js';
 import type { FocalDrone, DetectionCandidate, Detection, DetectionClass } from './detections.js';
+import { useDetectionTriage, SOAK_GRID } from './detectionTriage.js';
 
 // ── types pulled from SimController internals via duck-typing ─────────────────
 // SimController stores RtAgent state privately; we read back from the Cesium
@@ -53,9 +54,14 @@ const CLS_COLOR: Record<string, string> = {
 // ── Bbox overlay ──────────────────────────────────────────────────────────────
 
 function BboxOverlay({ dets }: { dets: Detection[] }): JSX.Element {
+  const statusOf = useDetectionTriage((s) => s.status);
   return (
     <>
-      {dets.map((d) => (
+      {dets.map((d) => {
+        const st = statusOf(d.id);
+        if (st === 'dismissed') return null; // dismissed detections leave the frame
+        const color = st === 'confirmed' ? '#36d399' : CLS_COLOR[d.cls] ?? '#ffffff';
+        return (
         <div
           key={d.id}
           style={{
@@ -64,7 +70,7 @@ function BboxOverlay({ dets }: { dets: Detection[] }): JSX.Element {
             top: `${d.bbox.y * 100}%`,
             width: `${d.bbox.w * 100}%`,
             height: `${d.bbox.h * 100}%`,
-            border: `1px solid ${CLS_COLOR[d.cls] ?? '#ffffff'}`,
+            border: `${st === 'confirmed' ? 2 : 1}px solid ${color}`,
             boxShadow: `0 0 0 1px rgba(0,0,0,0.5)`,
             pointerEvents: 'none',
           }}
@@ -89,6 +95,44 @@ function BboxOverlay({ dets }: { dets: Detection[] }): JSX.Element {
             {d.cls} {Math.round(d.conf * 100)}%
           </span>
         </div>
+        );
+      })}
+    </>
+  );
+}
+
+// Soak Tool heatmap (§8) — density of CONFIRMED detections accumulated across the
+// frame, drawn as translucent cells. Overlays the sensor frame when toggled on.
+function SoakOverlay(): JSX.Element | null {
+  // Select the STABLE soak Map (not soakCells() — that returns a fresh array each
+  // call → Zustand sees a new ref every render → infinite update loop). Derive the
+  // cell list here with useMemo, keyed on the map.
+  const soak = useDetectionTriage((s) => s.soak);
+  const cells = useMemo(
+    () =>
+      [...soak.entries()].map(([k, n]) => {
+        const [cx, cy] = k.split(',').map(Number);
+        return { cx: cx ?? 0, cy: cy ?? 0, n };
+      }),
+    [soak],
+  );
+  if (cells.length === 0) return null;
+  const max = Math.max(1, ...cells.map((c) => c.n));
+  return (
+    <>
+      {cells.map((c) => (
+        <div
+          key={`${c.cx},${c.cy}`}
+          style={{
+            position: 'absolute',
+            left: `${(c.cx / SOAK_GRID) * 100}%`,
+            top: `${(c.cy / SOAK_GRID) * 100}%`,
+            width: `${100 / SOAK_GRID}%`,
+            height: `${100 / SOAK_GRID}%`,
+            background: `rgba(245,165,36,${0.15 + 0.55 * (c.n / max)})`,
+            pointerEvents: 'none',
+          }}
+        />
       ))}
     </>
   );
@@ -112,7 +156,7 @@ function latToTileY(lat: number, z: number): number {
   return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z;
 }
 
-function FrameArea({ dets, snap }: { dets: Detection[]; snap: DroneSnapshot | null }): JSX.Element {
+function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapshot | null; soak: boolean }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const [loadTick, setLoadTick] = useState(0);
@@ -205,6 +249,52 @@ function FrameArea({ dets, snap }: { dets: Detection[]; snap: DroneSnapshot | nu
     ctx.beginPath(); ctx.moveTo(W / 2, H / 2 - 9); ctx.lineTo(W / 2, H / 2 + 9); ctx.stroke();
   }, [lat, lon, heading, radiusKm, loadTick]);
 
+  const statusOf = useDetectionTriage((s) => s.status);
+
+  // §8 burned-in export — composite the frame + detection boxes (+ soak) into one
+  // PNG. Same-origin /tiles proxy, so the canvas isn't tainted → toDataURL works.
+  const exportBurned = (): void => {
+    const src = canvasRef.current;
+    if (!src) return;
+    const out = document.createElement('canvas');
+    out.width = src.width;
+    out.height = src.height;
+    const c = out.getContext('2d');
+    if (!c) return;
+    c.drawImage(src, 0, 0);
+    const soakCells = useDetectionTriage.getState().soakCells();
+    if (soak && soakCells.length) {
+      const max = Math.max(1, ...soakCells.map((x) => x.n));
+      for (const cell of soakCells) {
+        c.fillStyle = `rgba(245,165,36,${0.15 + 0.55 * (cell.n / max)})`;
+        c.fillRect((cell.cx / SOAK_GRID) * out.width, (cell.cy / SOAK_GRID) * out.height, out.width / SOAK_GRID, out.height / SOAK_GRID);
+      }
+    }
+    c.font = '9px "IBM Plex Mono", monospace';
+    for (const d of dets) {
+      const st = statusOf(d.id);
+      if (st === 'dismissed') continue;
+      const color = st === 'confirmed' ? '#36d399' : CLS_COLOR[d.cls] ?? '#ffffff';
+      c.strokeStyle = color;
+      c.lineWidth = st === 'confirmed' ? 2 : 1;
+      const x = d.bbox.x * out.width;
+      const y = d.bbox.y * out.height;
+      c.strokeRect(x, y, d.bbox.w * out.width, d.bbox.h * out.height);
+      c.fillStyle = color;
+      c.fillText(`${d.cls} ${Math.round(d.conf * 100)}%`, x, Math.max(9, y - 2));
+    }
+    c.fillStyle = 'rgba(255,200,100,0.8)';
+    c.fillText('ARCHIVE EO · NOT LIVE', out.width - 118, 12);
+    try {
+      const a = document.createElement('a');
+      a.href = out.toDataURL('image/png');
+      a.download = `fmv-frame-${snap ? `${snap.lat.toFixed(2)}_${snap.lon.toFixed(2)}` : 'frame'}.png`;
+      a.click();
+    } catch {
+      /* tainted canvas (shouldn't happen with same-origin tiles) */
+    }
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%', paddingTop: '62%', background: '#05070b', borderRadius: 3, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
       <canvas
@@ -213,6 +303,25 @@ function FrameArea({ dets, snap }: { dets: Detection[]; snap: DroneSnapshot | nu
         height={318}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
       />
+      <button
+        type="button"
+        onClick={exportBurned}
+        title="Export this frame with detections burned in (PNG)"
+        style={{
+          position: 'absolute', top: 4, left: 4, zIndex: 2,
+          fontFamily: '"IBM Plex Mono", monospace', fontSize: '9px', textTransform: 'uppercase',
+          letterSpacing: '0.4px', padding: '2px 6px', color: '#cdd6e2',
+          background: 'rgba(8,10,15,0.7)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 2, cursor: 'pointer',
+        }}
+      >
+        ⤓ Frame
+      </button>
+      {/* Soak heatmap (confirmed-detection density) beneath the boxes */}
+      {soak && (
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <SoakOverlay />
+        </div>
+      )}
       {/* Bbox overlay — absolute divs over the imagery */}
       <div style={{ position: 'absolute', inset: 0 }}>
         <BboxOverlay dets={dets} />
@@ -248,6 +357,7 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
   const [dets, setDets] = useState<Detection[]>([]);
   const [tick, setTick] = useState(0);
   const [following, setFollowing] = useState(false);
+  const [soak, setSoak] = useState(false);
   // Sensor footprint spotlight (fog-of-war on the globe) — shared with SpotlightLayer.
   const sensorOn = useSpotlight((s) => s.enabled);
   const setSensor = useSpotlight((s) => s.setEnabled);
@@ -406,26 +516,37 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
           <Caveat level="NOTIONAL // SIMULATED" tone="warn" />
         </div>
 
-        <FrameArea dets={dets} snap={snap} />
+        <FrameArea dets={dets} snap={snap} soak={soak} />
 
-        {/* Detection class-count badges */}
-        <div className="flex flex-wrap gap-1 mt-2">
+        {/* Detection class-count badges + soak toggle */}
+        <div className="flex flex-wrap items-center gap-1 mt-2">
           {(Object.entries(counts) as [string, number][])
             .filter(([, n]) => n > 0)
             .map(([cls, n]) => (
               <span
                 key={cls}
-                className="mono text-[8.5px] tracking-[0.6px] uppercase px-[7px] py-[3px] rounded-sm whitespace-nowrap border border-line text-txt-3"
+                className="mono text-[10px] tracking-[0.6px] uppercase px-[7px] py-[3px] rounded-sm whitespace-nowrap border border-line text-txt-3"
                 style={{ color: CLS_COLOR[cls] ?? 'var(--txt-3)' }}
               >
                 {n} {cls}
               </span>
             ))}
-          {dets.length === 0 && (
-            <MicroLabel>no contacts in footprint</MicroLabel>
-          )}
+          {dets.length === 0 && <MicroLabel>no contacts in footprint</MicroLabel>}
+          <button
+            type="button"
+            onClick={() => setSoak((v) => !v)}
+            className={`ml-auto mono text-[10px] uppercase tracking-[0.5px] px-[7px] py-[3px] rounded-sm border ${
+              soak ? 'border-warn text-warn' : 'border-line text-txt-3 hover:text-txt-1'
+            }`}
+          >
+            Soak
+          </button>
         </div>
       </Widget>
+
+      {/* Detection triage (§8) — confirm/dismiss AI detections; confirmed ones
+          feed the Soak heatmap. Detections are NOTIONAL (exercise), like the sim. */}
+      <DetectionTriageWidget dets={dets} />
 
       {/* Telemetry */}
       <Widget title="Telemetry" count={snap ? `${Math.round(snap.altM)} m` : '—'}>
@@ -517,4 +638,67 @@ function buildSyntheticCandidates(focal: FocalDrone, tick: number): DetectionCan
     lon: focal.lon + dlonFactor * DEG_PER_100M * 3,
     cls,
   }));
+}
+
+// Detection triage (§8) — confirm/dismiss AI detections; confirmed ones feed the
+// Soak heatmap. Detections are NOTIONAL (exercise), like the war-game sim.
+function DetectionTriageWidget({ dets }: { dets: Detection[] }): JSX.Element {
+  const statusOf = useDetectionTriage((s) => s.status);
+  const confirm = useDetectionTriage((s) => s.confirm);
+  const dismiss = useDetectionTriage((s) => s.dismiss);
+  const soakCount = useDetectionTriage((s) => s.soak.size);
+  const clearSoak = useDetectionTriage((s) => s.clearSoak);
+  const pending = dets.filter((d) => statusOf(d.id) === 'pending');
+  return (
+    <Widget title="Detection triage" count={`${pending.length} pending`}>
+      {dets.length === 0 ? (
+        <MicroLabel>no detections to review</MicroLabel>
+      ) : (
+        <ul className="divide-y divide-line border-y border-line">
+          {dets.slice(0, 12).map((d) => {
+            const st = statusOf(d.id);
+            return (
+              <li key={d.id} className="flex items-center gap-2 py-1.5">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CLS_COLOR[d.cls] ?? '#fff' }} />
+                <span className="mono text-[11px] text-txt-1 flex-1 uppercase tracking-[0.4px]">
+                  {d.cls} <span className="text-txt-3">{Math.round(d.conf * 100)}%</span>
+                </span>
+                {st === 'confirmed' && <span className="mono text-[10px] text-ok uppercase">confirmed</span>}
+                {st === 'dismissed' && <span className="mono text-[10px] text-txt-4 uppercase">dismissed</span>}
+                {st === 'pending' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => confirm(d.id, d.bbox.x + d.bbox.w / 2, d.bbox.y + d.bbox.h / 2)}
+                      className="mono text-[10px] uppercase px-1.5 py-0.5 rounded-sm border border-line text-ok hover:border-ok"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => dismiss(d.id)}
+                      className="mono text-[10px] uppercase px-1.5 py-0.5 rounded-sm border border-line text-alert hover:border-alert"
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="flex items-center justify-between mt-2">
+        <MicroLabel>soak cells: {soakCount}</MicroLabel>
+        <button
+          type="button"
+          onClick={clearSoak}
+          disabled={soakCount === 0}
+          className="mono text-[10px] uppercase tracking-[0.4px] text-txt-3 hover:text-txt-1 disabled:opacity-40"
+        >
+          Clear soak
+        </button>
+      </div>
+    </Widget>
+  );
 }

@@ -124,6 +124,15 @@ async def start() -> None:
             "CHROME_PATH", "/usr/bin/google-chrome-stable"
         ),
     }
+    # The backend runs under jemalloc (scripts/run-api.sh exports LD_PRELOAD +
+    # MALLOC_CONF with background_thread:true). Chrome inherits them through this
+    # env and its zygote fork dies at spawn ("GPU process launch failed:
+    # error_code=1002" → FATAL), leaving the sidecar serving 0 aircraft forever.
+    # Bisected 2026-07-04: the LD_PRELOAD+MALLOC_CONF pair is the minimal failing
+    # combination; either alone is fine. jemalloc is for the Python process only —
+    # never let it leak into the node/Chrome tree.
+    env.pop("LD_PRELOAD", None)
+    env.pop("MALLOC_CONF", None)
     log_path = "/tmp/adsb-sidecar.log"
     try:
         log_file = open(log_path, "ab", buffering=0)  # noqa: SIM115 — append child log

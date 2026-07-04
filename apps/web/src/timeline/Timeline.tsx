@@ -184,7 +184,14 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
     const clock = viewer.clock;
     clock.multiplier = multiplier;
     clock.shouldAnimate = playing;
+    // §5.2.5: throttle to 4 Hz. onTick fires every animated frame; a per-frame
+    // setStamp re-renders the whole Timeline every frame. The clock LABEL doesn't
+    // need more than 4 Hz.
+    let lastStamp = 0;
     const off = clock.onTick.addEventListener(() => {
+      const now = performance.now();
+      if (now - lastStamp < 250) return;
+      lastStamp = now;
       setStamp(isoStamp(jdToMs(clock.currentTime)));
     });
     return () => off();
@@ -428,12 +435,12 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
             {replay.loading ? '…' : replay.active ? '◼ exit' : '▶ replay'}
           </button>
           {replay.active && replay.info && (
-            <span className="mono text-[9px] tabular-nums text-txt-3">
+            <span className="mono text-[10px] tabular-nums text-txt-3">
               {replay.info.tracks}t·{replay.info.points}p
             </span>
           )}
           <span
-            className="mono text-[8.5px] uppercase tracking-[0.5px] text-txt-4"
+            className="mono text-[10px] uppercase tracking-[0.5px] text-txt-4"
             title={`Position history is a rolling, size-capped buffer (~${retentionDays(retentionHours)} retained, then oldest fixes drop). Replay older than this is unavailable — no cold storage.`}
           >
             {retentionDays(retentionHours)} buffer
@@ -470,7 +477,7 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
           {lanes.map((lane) => (
             <div key={lane.id} className="flex items-center gap-2">
               <span
-                className="mono text-[8.5px] uppercase tracking-[0.4px] text-txt-3 w-[84px] shrink-0 truncate flex items-center gap-1"
+                className="mono text-[10px] uppercase tracking-[0.4px] text-txt-3 w-[84px] shrink-0 truncate flex items-center gap-1"
                 title={`${lane.label} · ${lane.events.length}`}
               >
                 <span className="h-[6px] w-[6px] rounded-full shrink-0" style={{ background: lane.color }} />
@@ -554,20 +561,20 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
 
         {/* legend + window/total labels */}
         <div className="flex items-center gap-3 text-txt-3">
-          <span className="mono text-[8.5px] uppercase tracking-[0.5px] flex items-center gap-1">
+          <span className="mono text-[10px] uppercase tracking-[0.5px] flex items-center gap-1">
             <i className="inline-block w-2 h-[2px] bg-alert" />alert
             <span className="tabular-nums text-txt-2 ml-0.5">{totalAlert.toLocaleString()}</span>
           </span>
-          <span className="mono text-[8.5px] uppercase tracking-[0.5px] flex items-center gap-1">
+          <span className="mono text-[10px] uppercase tracking-[0.5px] flex items-center gap-1">
             <i className="inline-block w-2 h-[2px] bg-ok" />detection
             <span className="tabular-nums text-txt-2 ml-0.5">{totalDet.toLocaleString()}</span>
           </span>
-          <span className="mono text-[8.5px] uppercase tracking-[0.5px] flex items-center gap-1">
+          <span className="mono text-[10px] uppercase tracking-[0.5px] flex items-center gap-1">
             <i className="inline-block w-2 h-2 bg-bg-3 border border-line" />density
           </span>
           <span className="flex-1" />
-          <span className="mono text-[8.5px] uppercase tracking-[0.5px] text-txt-4">−20h</span>
-          <span className="mono text-[8.5px] uppercase tracking-[0.5px] text-txt-3">now</span>
+          <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-4">−20h</span>
+          <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3">now</span>
         </div>
       </div>
     </div>

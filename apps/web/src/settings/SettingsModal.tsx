@@ -6,6 +6,7 @@ import { apiFetch } from '../transport/http.js';
 import { KeysPanel } from './KeysPanel.js';
 import { useDashboardMode, type DashboardMode } from '../state/dashboardMode.js';
 import { useSettings } from '../state/settings.js';
+import { resetOnboarding } from '../onboarding/Onboarding.js';
 
 interface Me {
   email?: string;
@@ -69,7 +70,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
             <div className="flex items-center justify-between mb-3 pb-3 border-b border-line">
               <div className="flex flex-col">
                 <span className="mono text-[11px] text-txt-1">{me.email ?? 'signed in'}</span>
-                <span className="mono text-[9px] text-txt-3 uppercase tracking-[0.6px]">
+                <span className="mono text-[10px] text-txt-3 uppercase tracking-[0.6px]">
                   {me.tier ?? 'none'} · {me.status ?? '—'}
                 </span>
               </div>
@@ -82,29 +83,48 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
             </div>
           )}
 
-          <div className="mono text-[9px] uppercase tracking-[0.7px] text-txt-3 mb-2">
+          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2">
             Dashboard
           </div>
           <DashboardToggle />
 
-          <div className="mono text-[9px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
+          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
             Aircraft motion
           </div>
           <DeadReckonToggle />
 
-          <div className="mono text-[9px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
+          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
             Display
           </div>
           <RenderQualitySlider />
+          <div className="mt-2">
+            <GovernorToggle />
+          </div>
 
-          <div className="mono text-[9px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
+          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
+            Local AI inference
+          </div>
+          <LocalAiToggle />
+
+          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
             API keys · bring your own
           </div>
           <KeysPanel />
 
+          <button
+            type="button"
+            onClick={() => {
+              resetOnboarding();
+              window.location.reload();
+            }}
+            className="block w-full text-center mt-3.5 mono text-[10px] px-2 py-1.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
+          >
+            Replay welcome tour ↻
+          </button>
+
           <a
             href={ACCOUNT_URL}
-            className="block text-center mt-3.5 mono text-[10px] px-2 py-1.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
+            className="block text-center mt-2 mono text-[10px] px-2 py-1.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
           >
             Open full dashboard — limits, billing & alerts →
           </a>
@@ -142,7 +162,7 @@ function DashboardToggle(): JSX.Element {
             }`}
           >
             <div className="mono text-[11px] font-medium">{o.label}</div>
-            <div className="mono text-[9px] text-txt-3 mt-0.5">{o.hint}</div>
+            <div className="mono text-[10px] text-txt-3 mt-0.5">{o.hint}</div>
           </button>
         );
       })}
@@ -179,10 +199,144 @@ function DeadReckonToggle(): JSX.Element {
           {on ? 'ON' : 'OFF'}
         </span>
       </div>
-      <div className="mono text-[9px] text-txt-3 mt-1 leading-snug">
+      <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
         FlightRadar24-style: glide aircraft along their last heading &amp; speed between
         ADS-B fixes. Positions shown are <span className="text-accent">estimated</span>, not
         observed. Off by default.
+      </div>
+    </button>
+  );
+}
+
+// Render-on-demand governor (design §5.1). OFF by default. When ON, the globe
+// stops re-rendering every frame in the genuinely-idle case (world view, teleport
+// aircraft, frozen vessels, nothing selected/simulating/orbiting) to cut GPU burn,
+// while still rendering every frame whenever anything actually animates.
+function GovernorToggle(): JSX.Element {
+  const on = useSettings((s) => s.continuousRenderGovernor);
+  const set = useSettings((s) => s.set);
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => set('continuousRenderGovernor', !on)}
+      className={`w-full text-left rounded-sm border px-2.5 py-2 transition-colors ${
+        on
+          ? 'border-accent-line bg-accent-dim text-txt-0'
+          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="mono text-[11px] font-medium">Idle render governor</span>
+        <span
+          className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
+            on ? 'border-accent-line text-accent' : 'border-line text-txt-3'
+          }`}
+        >
+          {on ? 'ON' : 'OFF'}
+        </span>
+      </div>
+      <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
+        Stop re-rendering the globe every frame when nothing is moving (world view,
+        teleport aircraft). Cuts idle GPU burn; motion stays smooth. Off by default —
+        confirm glide/pulse look right on your hardware before relying on it.
+      </div>
+    </button>
+  );
+}
+
+// Local-inference toggle (Part 4). Routes the app's text-LLM tier (narrative,
+// agent, sim reasoning) to the on-GPU Ollama model AHEAD of the cloud backends,
+// so heavy use doesn't hit cloud rate limits. The backend owns the flag
+// (POST /api/ai/local); this reads /api/ai/local for the current state + the
+// hardware gate — the switch is disabled when Ollama is down or no tool-capable
+// model is installed ("requires some level of hardware").
+interface LocalAiState {
+  enabled: boolean;
+  ollama_up: boolean;
+  tool_capable: boolean;
+  models: string[];
+  model_fast: string;
+  model_reason: string;
+}
+
+function LocalAiToggle(): JSX.Element {
+  const [st, setSt] = useState<LocalAiState | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const r = await apiFetch('/api/ai/local');
+        if (live && r.ok) setSt((await r.json()) as LocalAiState);
+      } catch {
+        /* non-fatal */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const gated = !st || !st.ollama_up || !st.tool_capable;
+  const on = !!st?.enabled;
+
+  const toggle = async (): Promise<void> => {
+    if (gated || busy) return;
+    setBusy(true);
+    try {
+      const r = await apiFetch('/api/ai/local', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ enabled: !on }),
+      });
+      if (r.ok) setSt((await r.json()) as LocalAiState);
+    } catch {
+      /* non-fatal */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reason = !st
+    ? 'checking local engine…'
+    : !st.ollama_up
+      ? 'Ollama not running on this machine'
+      : !st.tool_capable
+        ? 'no tool-capable model installed'
+        : on
+          ? `local — ${st.model_reason}`
+          : 'using cloud';
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={gated || busy}
+      onClick={() => void toggle()}
+      className={`w-full text-left rounded-sm border px-2.5 py-2 transition-colors ${
+        on
+          ? 'border-accent-line bg-accent-dim text-txt-0'
+          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+      } ${gated ? 'opacity-50 cursor-not-allowed' : ''}`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="mono text-[11px] font-medium">Run AI locally (GPU)</span>
+        <span
+          className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
+            on ? 'border-accent-line text-accent' : 'border-line text-txt-3'
+          }`}
+        >
+          {on ? 'ON' : 'OFF'}
+        </span>
+      </div>
+      <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
+        Route narrative, agent &amp; sim reasoning to a local Ollama model instead of the
+        cloud — no API rate limits. Needs a capable GPU + Ollama running.{' '}
+        <span className="text-accent">{reason}</span>.
       </div>
     </button>
   );
@@ -214,7 +368,7 @@ function RenderQualitySlider(): JSX.Element {
         onChange={(e) => set('renderPixelCap', Number(e.target.value))}
         className="w-full mt-2 accent-accent"
       />
-      <div className="mono text-[9px] text-txt-3 mt-1 leading-snug">
+      <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
         Higher = sharper (renders at native device pixels); lower = higher FPS (fewer
         pixels). Resolution and frame rate trade off directly. Default 2.0×.
       </div>

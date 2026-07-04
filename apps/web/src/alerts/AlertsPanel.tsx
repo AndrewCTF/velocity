@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, memo } from 'react';
 import type * as Cesium from 'cesium';
 import { useAlerts } from '../state/stores.js';
-import { flyToPosition } from '../globe/camera.js';
+import { slewToEntity } from '../globe/camera.js';
 import { SectionLabel, Badge, Btn, type BadgeTone } from '../shell/instruments.js';
 import type { Alert } from '@osint/shared';
 
@@ -116,28 +116,40 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
     };
   }, [open]);
 
-  if (!open) return null;
+  // Derive off the buffer once per buffer/filter change — not on every render
+  // (e.g. toggling a filter chip no longer re-walks all 500 alerts five times).
+  const filtered = useMemo(
+    () =>
+      alerts.filter((a) => {
+        if (filterSev && a.severity !== filterSev) return false;
+        if (filterRule && a.ruleId !== filterRule) return false;
+        return true;
+      }),
+    [alerts, filterSev, filterRule],
+  );
+  const ruleKeys = useMemo(() => Array.from(new Set(alerts.map((a) => a.ruleId))), [alerts]);
+  const sevCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const a of alerts) c[a.severity] = (c[a.severity] ?? 0) + 1;
+    return c;
+  }, [alerts]);
 
-  const filtered = alerts.filter((a) => {
-    if (filterSev && a.severity !== filterSev) return false;
-    if (filterRule && a.ruleId !== filterRule) return false;
-    return true;
-  });
-  const ruleKeys = Array.from(new Set(alerts.map((a) => a.ruleId)));
-  const sevCounts: Record<string, number> = {};
-  for (const a of alerts) sevCounts[a.severity] = (sevCounts[a.severity] ?? 0) + 1;
+  // All hooks above run every render; only the visual tree is gated on `open`
+  // (a conditional return placed ABOVE the useMemos changed the hook count on
+  // open/close → "rendered more hooks than during the previous render" crash).
+  if (!open) return null;
 
   return (
     <>
       <button
         type="button"
-        className="fixed inset-0 z-[800] bg-black/40 backdrop-blur-[1px] cursor-default"
+        className="fixed inset-0 z-[1450] bg-black/40 backdrop-blur-[1px] cursor-default"
         onClick={onClose}
         aria-label="Close alerts"
       />
       <aside
         ref={dialogRef}
-        className="fixed top-[46px] bottom-[170px] right-0 z-[810] w-full max-w-[460px] bg-bg-1 border-l border-line-2 rounded-l-md flex flex-col"
+        className="fixed top-[46px] bottom-[170px] right-0 z-[1460] w-full max-w-[460px] bg-bg-1 border-l border-line-2 rounded-l-md flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-label="Alerts"
@@ -150,13 +162,13 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
           <div className="min-w-0">
             <div className="mono text-[11px] tracking-[1px] uppercase text-txt-0">Alerts</div>
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5">
-              <span className="mono text-[9px] tracking-[0.4px] uppercase text-txt-3 tabular-nums">
+              <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-3 tabular-nums">
                 {alerts.length} TOTAL
               </span>
               {Object.entries(sevCounts).map(([sev, n]) => (
                 <span
                   key={sev}
-                  className={`mono text-[9px] tracking-[0.4px] uppercase tabular-nums ${SEV_LABEL[sev] ?? 'text-txt-3'}`}
+                  className={`mono text-[10px] tracking-[0.4px] uppercase tabular-nums ${SEV_LABEL[sev] ?? 'text-txt-3'}`}
                 >
                   {sev} {n}
                 </span>
@@ -180,13 +192,13 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
         </header>
 
         <div className="px-4 py-2.5 border-b border-line-2 flex flex-wrap items-center gap-1">
-          <span className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3 mr-1">sev</span>
+          <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mr-1">sev</span>
           {['critical', 'high', 'medium', 'low'].map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setFilterSev((cur) => (cur === s ? null : s))}
-              className={`mono text-[9px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
+              className={`mono text-[10px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
                 filterSev === s
                   ? 'border-accent-line bg-accent-dim text-accent'
                   : 'border-line text-txt-3 hover:border-accent-line hover:text-txt-1'
@@ -197,14 +209,14 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
             </button>
           ))}
           {ruleKeys.length > 0 && (
-            <span className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3 ml-2 mr-1">rule</span>
+            <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 ml-2 mr-1">rule</span>
           )}
           {ruleKeys.map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setFilterRule((cur) => (cur === r ? null : r))}
-              className={`mono text-[9px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
+              className={`mono text-[10px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
                 filterRule === r
                   ? 'border-accent-line bg-accent-dim text-accent'
                   : 'border-line text-txt-3 hover:border-accent-line hover:text-txt-1'
@@ -226,7 +238,14 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
           ) : (
             <>
               <SectionLabel title="Buffer" count={filtered.length} />
-              <ul className="divide-y divide-line border-b border-line">
+              {/* Polite live region — announce newly-arrived alerts to assistive
+                  tech without re-reading the whole buffer (additions only). */}
+              <ul
+                className="divide-y divide-line border-b border-line"
+                aria-live="polite"
+                aria-relevant="additions"
+                aria-label="Alert buffer"
+              >
                 {filtered.map((a) => (
                   <li key={a.id}>
                     <AlertCard alert={a} viewer={viewer} />
@@ -241,7 +260,18 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
   );
 }
 
-function AlertCard({ alert: a, viewer }: { alert: Alert; viewer: Cesium.Viewer | null }): JSX.Element {
+// Memoized so a new alert push (or a filter toggle) re-renders only the rows
+// that actually changed, not all ≤500 buffered cards. Alert objects are stable
+// by id in the buffer, so referential equality holds for untouched rows.
+// ponytail: memo is enough at 500 rows; add windowing only if a bigger buffer
+// measurably janks the initial render.
+const AlertCard = memo(function AlertCard({
+  alert: a,
+  viewer,
+}: {
+  alert: Alert;
+  viewer: Cesium.Viewer | null;
+}): JSX.Element {
   return (
     <article className="relative pl-3 pr-1 py-2.5">
       <span
@@ -250,7 +280,7 @@ function AlertCard({ alert: a, viewer }: { alert: Alert; viewer: Cesium.Viewer |
       />
       <div className="flex items-center justify-between gap-2">
         <Badge tone={SEV_BADGE[a.severity] ?? 'neutral'}>{a.severity}</Badge>
-        <span className="mono text-[9px] tracking-[0.4px] uppercase tabular-nums text-txt-3">
+        <span className="mono text-[10px] tracking-[0.4px] uppercase tabular-nums text-txt-3">
           {RULE_LABEL[a.ruleId] ?? a.ruleId}
         </span>
       </div>
@@ -261,24 +291,24 @@ function AlertCard({ alert: a, viewer }: { alert: Alert; viewer: Cesium.Viewer |
           onClick={() => {
             if (viewer && a.geom?.type === 'Point') {
               const [lon, lat] = a.geom.coordinates as [number, number];
-              flyToPosition(viewer, lon, lat, 300_000, 1.0);
+              slewToEntity(viewer, a.contributingObservations?.[0], lon, lat, 300_000, 1.0);
             }
           }}
         >
           slew to
         </Btn>
-        <span className="mono text-[9px] tabular-nums text-txt-3">
+        <span className="mono text-[10px] tabular-nums text-txt-3">
           {new Date(a.t).toISOString().slice(11, 19)}Z
         </span>
-        <span className="mono text-[9px] tabular-nums text-txt-3">
+        <span className="mono text-[10px] tabular-nums text-txt-3">
           conf {(a.confidence * 100).toFixed(0)}%
         </span>
         {a.contributingObservations?.length > 0 && (
-          <span className="mono text-[9px] tabular-nums text-txt-3">
+          <span className="mono text-[10px] tabular-nums text-txt-3">
             · {a.contributingObservations.length} contrib
           </span>
         )}
       </div>
     </article>
   );
-}
+});

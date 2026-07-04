@@ -241,6 +241,35 @@ async def test_size_cap_drops_oldest_keeps_newest(tmp_path: pytest.TempPathFacto
 
 
 @pytest.mark.asyncio
+async def test_timeseries_distinct_counts_and_buckets(tmp_path: pytest.TempPathFactory) -> None:
+    """count_timeseries buckets by time and counts DISTINCT ids per kind — the
+    metrics-over-time (§8) source. A duplicate id in the same bucket collapses to 1."""
+    db = str(tmp_path / "ts.db")
+    _reset_module(db)
+
+    now = time.time()
+    bucket = 300  # 5-min buckets
+    # Bucket A (current): two distinct aircraft, one repeated → distinct == 2.
+    H._buffer.append(("aircraft", "aircraft:a1", now, 5.0, 50.0, 0.0, "{}"))
+    H._buffer.append(("aircraft", "aircraft:a2", now, 6.0, 51.0, 0.0, "{}"))
+    H._buffer.append(("aircraft", "aircraft:a1", now + 1, 5.1, 50.0, 0.0, "{}"))
+    # Earlier bucket: one vessel.
+    H._buffer.append(("vessel", "vessel:v1", now - 400, 7.0, 52.0, 0.0, "{}"))
+
+    rows, H._buffer = H._buffer, []
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, H._flush_sync, rows)
+
+    res = await H.count_timeseries(bucket, now - 700, now + 10)
+    buckets = res["buckets"]
+    assert res["bucket_sec"] == bucket
+    cur = int(now // bucket) * bucket
+    cur_b = next(b for b in buckets if b["t"] == cur)
+    assert cur_b["aircraft"] == 2, "distinct aircraft in current bucket (dup id collapses)"
+    assert sum(b["vessel"] for b in buckets) == 1, "one vessel across the window"
+
+
+@pytest.mark.asyncio
 async def test_vessel_ingest(tmp_path: pytest.TempPathFactory) -> None:
     """Vessel rows are buffered and queryable."""
     db = str(tmp_path / "hist6.db")

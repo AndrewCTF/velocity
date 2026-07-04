@@ -34,6 +34,7 @@ describe('settings store', () => {
     expect(JSON.parse(localStorage.getItem('velocity.settings')!)).toEqual({
       aircraftDeadReckon: true,
       renderPixelCap: 2,
+      continuousRenderGovernor: false,
     });
   });
 

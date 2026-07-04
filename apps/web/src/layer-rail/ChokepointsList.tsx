@@ -67,7 +67,7 @@ export function ChokepointsList({ viewer }: Props): JSX.Element {
                   </span>
                   <Badge tone={isActive ? 'accent' : 'neutral'}>{CATEGORY_LABEL[c.category]}</Badge>
                 </div>
-                <div className="mono text-[9.5px] text-txt-3 truncate mt-0.5" title={c.region}>
+                <div className="mono text-[10px] text-txt-3 truncate mt-0.5" title={c.region}>
                   {c.region}
                 </div>
                 <div

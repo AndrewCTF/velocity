@@ -31,6 +31,7 @@ const uid = (): string => `an-${Date.now().toString(36)}-${(_seq++).toString(36)
 interface AnnoState {
   annotations: Annotation[];
   add: (a: Omit<Annotation, 'id'>) => string;
+  update: (id: string, patch: Partial<Omit<Annotation, 'id'>>) => void;
   remove: (id: string) => void;
   clear: () => void;
   replaceAll: (a: Annotation[]) => void;
@@ -43,6 +44,8 @@ export const useAnnotations = create<AnnoState>((set) => ({
     set((s) => ({ annotations: [...s.annotations, { ...a, id }] }));
     return id;
   },
+  update: (id, patch) =>
+    set((s) => ({ annotations: s.annotations.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),
   remove: (id) => set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })),
   clear: () => set({ annotations: [] }),
   replaceAll: (a) => set({ annotations: a }),

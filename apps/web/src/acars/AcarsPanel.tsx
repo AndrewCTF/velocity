@@ -79,7 +79,7 @@ export function AcarsPanel(): JSX.Element {
   return (
     <div className="p-4 space-y-4">
       <SectionLabel title="ACARS / datalink" count={resp ? `${filtered.length}/${all.length}` : ''} />
-      <p className="mono text-[9px] text-txt-3 leading-snug -mt-2">
+      <p className="mono text-[10px] text-txt-3 leading-snug -mt-2">
         airframes.io keyless firehose · last {all.length} msgs · community coverage (dense NA/EU/oceanic)
       </p>
 
@@ -103,11 +103,11 @@ export function AcarsPanel(): JSX.Element {
           }
         />
       </div>
-      <p className="mono text-[8.5px] text-txt-3 -mt-1">origin (pilot vs system) inferred from ACARS label + payload</p>
+      <p className="mono text-[10px] text-txt-3 -mt-1">origin (pilot vs system) inferred from ACARS label + payload</p>
 
       {err && <p className="text-[11px] text-alert">{err}</p>}
       {!resp && !err && (
-        <p className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3">resolving…</p>
+        <p className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3">resolving…</p>
       )}
       {resp && filtered.length === 0 && !err && (
         <p className="text-[11px] text-txt-3">no messages match this filter in the recent feed</p>
@@ -137,7 +137,7 @@ function FacetRow({
 }): JSX.Element {
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="mono text-[9px] uppercase tracking-[0.08em] text-txt-3 w-12 shrink-0">{label}</span>
+      <span className="mono text-[10px] uppercase tracking-[0.08em] text-txt-3 w-12 shrink-0">{label}</span>
       {options.map((o) => {
         const active = o === value;
         return (
@@ -145,7 +145,7 @@ function FacetRow({
             key={o}
             type="button"
             onClick={() => onChange(o)}
-            className={`mono text-[9px] uppercase px-1.5 py-0.5 rounded-sm border ${
+            className={`mono text-[10px] uppercase px-1.5 py-0.5 rounded-sm border ${
               active
                 ? 'border-accent-line text-accent bg-bg-2'
                 : 'border-line text-txt-3 hover:text-txt-1'
@@ -166,21 +166,21 @@ function AcarsRow({ m }: { m: AcarsMsg }): JSX.Element {
     <li className="border border-line rounded-sm p-2 bg-bg-2/60">
       <div className="flex items-baseline justify-between gap-2">
         <span className="flex items-center gap-1.5 min-w-0">
-          <span className="mono text-[9px] uppercase tracking-[0.5px] text-accent shrink-0">{systemOf(m)}</span>
+          <span className="mono text-[10px] uppercase tracking-[0.5px] text-accent shrink-0">{systemOf(m)}</span>
           <span
-            className={`mono text-[8px] uppercase px-1 rounded-sm shrink-0 ${
+            className={`mono text-[10px] uppercase px-1 rounded-sm shrink-0 ${
               isPilot ? 'text-warn border border-[rgba(245,158,11,0.4)]' : 'text-txt-3 border border-line'
             }`}
           >
             {isPilot ? 'pilot' : 'system'}
           </span>
-          {m.label && <span className="mono text-[8.5px] text-txt-3 shrink-0">{m.label}</span>}
+          {m.label && <span className="mono text-[10px] text-txt-3 shrink-0">{m.label}</span>}
         </span>
-        <span className="mono text-[9px] text-txt-3 tabular-nums shrink-0">
+        <span className="mono text-[10px] text-txt-3 tabular-nums shrink-0">
           {m.t ? new Date(m.t).toISOString().slice(11, 19) + 'Z' : '—'}
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-2 mt-1 mono text-[9px] text-txt-2 tabular-nums">
+      <div className="flex flex-wrap items-center gap-2 mt-1 mono text-[10px] text-txt-2 tabular-nums">
         {m.flight && <span className="text-txt-1">{m.flight}</span>}
         {m.tail && <span>{m.tail}</span>}
         {m.icao && <span className="text-txt-3">{m.icao.toUpperCase()}</span>}

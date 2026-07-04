@@ -4,7 +4,7 @@ import { MapboxTerrainProvider } from '@macrostrat/cesium-martini';
 import { isMobileDevice } from '../shell/device.js';
 import { useSettings } from '../state/settings.js';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
-import { useTime, useSelection, useImagery } from '../state/stores.js';
+import { useTime, useSelection, useImagery, useSim } from '../state/stores.js';
 import type { ImageryMode } from '../state/stores.js';
 import { imageryOverlayUrl } from '../imagery/gibsUrl.js';
 import { loadLod1, loadLod1Bbox, clearLod1 } from '../lod1/lod1Layer.js';
@@ -17,9 +17,14 @@ import { installProjection } from './ProjectionLayer.js';
 import { createDrawController, setDrawController, getDrawController } from './draw.js';
 import { useContextMenu } from './contextMenuStore.js';
 import { installAnnotations } from './AnnotationLayer.js';
+import { installControl } from './ControlLayer.js';
 import { installWatchboxes } from './WatchboxLayer.js';
+import { installCaptures } from './CaptureLayer.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { prewarmIcons } from './icons.js';
+import { perfOnRender } from './perf.js';
+import { setCameraMoving } from './cameraMotion.js';
+import { hasRenderNeed } from './renderNeeds.js';
 import { ChipLayer } from '../imagery/ChipLayer.js';
 import { backendUrl } from '../transport/http.js';
 
@@ -403,17 +408,35 @@ export function GlobeCanvas({
     const toIdle = (): void => setScale(idleCap());
     const toMotion = (): void => setScale(Math.min(idleCap(), MOTION_PIXEL_CAP));
     toIdle();
+    // §5.2.4 during-motion degrade: coarsen terrain/imagery + drop FXAA while the
+    // camera moves (invisible mid-pan), restore at settle. Cheap fill-rate win on
+    // top of the resolutionScale drop.
+    const MOTION_SSE = 3.2;
+    const IDLE_SSE = 2.0;
+    const setMotionQuality = (motion: boolean): void => {
+      if (viewer.isDestroyed()) return;
+      scene.globe.maximumScreenSpaceError = motion ? MOTION_SSE : IDLE_SSE;
+      const fx = scene.postProcessStages?.fxaa;
+      if (fx) fx.enabled = !motion;
+    };
     const onMoveStart = (): void => {
       if (restoreTimer != null) {
         window.clearTimeout(restoreTimer);
         restoreTimer = null;
       }
+      setCameraMoving(true);
       toMotion();
+      setMotionQuality(true);
     };
     const onMoveEnd = (): void => {
+      setCameraMoving(false);
       // Debounce so an inertial settle doesn't snap to sharp then re-drop.
       if (restoreTimer != null) window.clearTimeout(restoreTimer);
-      restoreTimer = window.setTimeout(toIdle, 180);
+      restoreTimer = window.setTimeout(() => {
+        toIdle();
+        setMotionQuality(false);
+        evalGovernor(); // re-decide continuous vs idle after a zoom settles
+      }, 180);
     };
     viewer.camera.moveStart.addEventListener(onMoveStart);
     viewer.camera.moveEnd.addEventListener(onMoveEnd);
@@ -444,6 +467,45 @@ export function GlobeCanvas({
 
     // Strip the default credit logo so the dark chrome is clean.
     (viewer.cesiumWidget.creditContainer as HTMLElement).style.display = 'none';
+
+    // Perf instrument (design §5.7): count REAL renders (not rAF frames) so the
+    // render-governor work can be measured. postRender fires once per painted
+    // frame; window.__perf.rendersPerSec is the governor's headline metric.
+    const onPostRender = (_s: Cesium.Scene, time: Cesium.JulianDate): void => {
+      perfOnRender(performance.now());
+      void time;
+    };
+    scene.postRender.addEventListener(onPostRender);
+
+    // P0d render-on-demand governor (design §5.1). DEFAULT OFF (settings) — while
+    // off, maximumRenderTimeChange stays 0 exactly as the CLAUDE.md guardrail
+    // requires (render every animated frame → smooth interpolation). When the
+    // operator opts in, we relax to Infinity (no clock-driven renders) ONLY in the
+    // genuinely-idle case: world view, teleport aircraft, frozen vessels, nothing
+    // selected, no sim, no registered render-need (satellites / emergency pulse).
+    // Any doubt → 0 (continuous). Camera moves + explicit requestRender() calls
+    // (selection, layers, scrub) still paint under requestRenderMode either way.
+    const WORLD_VIEW_ALT_M = 2_000_000;
+    const evalGovernor = (): void => {
+      if (viewer.isDestroyed()) return;
+      if (!useSettings.getState().continuousRenderGovernor) {
+        if (scene.maximumRenderTimeChange !== 0) scene.maximumRenderTimeChange = 0;
+        return;
+      }
+      const worldView = viewer.camera.positionCartographic.height > WORLD_VIEW_ALT_M;
+      const deadReckon = useSettings.getState().aircraftDeadReckon;
+      const simActive = useSim.getState().active;
+      const hasSel = !!useSelection.getState().selectedEntityId;
+      const idle = worldView && !deadReckon && !simActive && !hasSel && !hasRenderNeed();
+      const next = idle ? Infinity : 0;
+      if (scene.maximumRenderTimeChange !== next) {
+        scene.maximumRenderTimeChange = next;
+        // Paint one fresh frame as we stop clock-driven rendering.
+        if (next === Infinity) scene.requestRender();
+      }
+    };
+    const govTimer = window.setInterval(evalGovernor, 250);
+    evalGovernor();
 
     if (import.meta.env.DEV) {
       (window as unknown as { __viewer: Cesium.Viewer; __Cesium: typeof Cesium }).__viewer = viewer;
@@ -530,8 +592,12 @@ export function GlobeCanvas({
     setDrawController(drawCtl);
     // Free-hand annotations / graphics layer (renders the annotation store).
     const detachAnnotations = installAnnotations(viewer);
+    // Territorial-control layer: hatched controlled/contested areas + front lines.
+    const detachControl = installControl(viewer);
     // Geofence/watchbox AOIs + client-side enter/exit/loiter evaluator.
     const detachWatchbox = installWatchboxes(viewer);
+    // Captured observations (YOLO detections pinned from cams/panos).
+    const detachCaptures = installCaptures(viewer);
 
     // Height gate for Google photogrammetry — applyGoogleGate no-ops when
     // nothing changed, so this listener stays requestRenderMode-friendly.
@@ -552,6 +618,8 @@ export function GlobeCanvas({
 
     return () => {
       handler.destroy();
+      scene.postRender.removeEventListener(onPostRender);
+      window.clearInterval(govTimer);
       viewer.camera.changed.removeEventListener(onCameraChanged);
       unsubRenderScale();
       window.removeEventListener('resize', toIdle);
@@ -566,7 +634,9 @@ export function GlobeCanvas({
       drawCtl.dispose();
       setDrawController(null);
       detachAnnotations();
+      detachControl();
       detachWatchbox();
+      detachCaptures();
       compositorRef.current?.stop();
       compositorRef.current = null;
       onViewerReady?.(null);

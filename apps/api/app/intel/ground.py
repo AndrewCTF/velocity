@@ -45,9 +45,9 @@ class GroundPhoto:
     photo_url: str  # HD / full
 
 
-# Canonical asset URL templates.
+# Canonical endpoints. Panoramax photo URLs come from each STAC item's `assets`
+# (OVH S3, hashed path) — not a guessable template — so only the search URL is here.
 _PANORAMAX_SEARCH = "https://api.panoramax.xyz/api/search"
-_PANORAMAX_PHOTO = "https://api.panoramax.xyz/api/photos/{id}/{size}.jpg"  # size: hd|sd|thumb
 _KARTAVIEW_NEARBY = "https://kartaview.org/1.0/map/list/nearby"
 
 # Populated by nearby(); read by the photo proxy to resolve (source,id) → URL without
@@ -114,6 +114,17 @@ async def load_panoramax(lat: float, lon: float, radius_km: float) -> list[Groun
             props = f.get("properties") or {}
             heading = props.get("camera:heading", props.get("heading"))
             captured = props.get("datetime") or props.get("capture_date")
+            # Use the asset hrefs the STAC item already carries. Panoramax serves
+            # pixels from an OVH S3 bucket under a hashed path, NOT a guessable
+            # /api/photos/{id}/{size}.jpg template (that 404s → proxy 502).
+            assets = f.get("assets") or {}
+            hd_a = assets.get("hd") if isinstance(assets.get("hd"), dict) else None
+            sd_a = assets.get("sd") if isinstance(assets.get("sd"), dict) else None
+            th_a = assets.get("thumb") if isinstance(assets.get("thumb"), dict) else None
+            hd_href = str((hd_a or sd_a or {}).get("href") or "")
+            thumb_href = str((sd_a or th_a or {}).get("href") or "")
+            if not hd_href:
+                continue  # no usable asset → nothing to proxy
             out.append(
                 GroundPhoto(
                     id=pid,
@@ -122,8 +133,8 @@ async def load_panoramax(lat: float, lon: float, radius_km: float) -> list[Groun
                     lon=float(lon_f),
                     heading=float(heading) if heading is not None else None,
                     captured_at=str(captured) if captured else None,
-                    thumb_url=_PANORAMAX_PHOTO.format(id=pid, size="sd"),
-                    photo_url=_PANORAMAX_PHOTO.format(id=pid, size="hd"),
+                    thumb_url=thumb_href or hd_href,
+                    photo_url=hd_href,
                 )
             )
         except (KeyError, TypeError, ValueError):

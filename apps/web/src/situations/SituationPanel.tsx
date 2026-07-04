@@ -191,7 +191,7 @@ function SummaryTab({
           <p className="text-[11px] text-txt-1 leading-snug">
             {sit.summary || 'No summary yet — describe what is happening and why it matters.'}
           </p>
-          <div className="flex items-center gap-3 mt-2.5 mono text-[9px] tabular-nums text-txt-3">
+          <div className="flex items-center gap-3 mt-2.5 mono text-[10px] tabular-nums text-txt-3">
             <span>{childTotal} linked</span>
             {Object.entries(childCounts).map(([k, n]) => (
               <span key={k}>

@@ -341,6 +341,37 @@ async def query_tracks(
     )
 
 
+# ── metrics-over-time (§8) ──────────────────────────────────────────────────
+
+def _timeseries_sync(bucket_sec: int, t_from: float, t_to: float) -> dict[str, Any]:
+    """Distinct contact counts per time bucket, split by kind. Real observed data
+    from the position store — the source of the Metrics 'over time' trend."""
+    try:
+        con = _connect()
+        rows = con.execute(
+            "SELECT CAST(t / ? AS INTEGER) * ? AS bkt, kind, COUNT(DISTINCT id) AS n "
+            "FROM positions WHERE t >= ? AND t <= ? GROUP BY bkt, kind ORDER BY bkt",
+            [bucket_sec, bucket_sec, t_from, t_to],
+        ).fetchall()
+        con.close()
+    except Exception:  # noqa: BLE001
+        log.exception("history: timeseries error")
+        return {"bucket_sec": bucket_sec, "buckets": []}
+
+    by_bucket: dict[int, dict[str, Any]] = {}
+    for bkt, kind, n in rows:
+        b = by_bucket.setdefault(int(bkt), {"t": int(bkt), "aircraft": 0, "vessel": 0, "total": 0})
+        if kind in ("aircraft", "vessel"):
+            b[kind] = int(n)
+        b["total"] += int(n)
+    return {"bucket_sec": bucket_sec, "buckets": [by_bucket[k] for k in sorted(by_bucket)]}
+
+
+async def count_timeseries(bucket_sec: int, t_from: float, t_to: float) -> dict[str, Any]:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _timeseries_sync, bucket_sec, t_from, t_to)
+
+
 # ── prune ─────────────────────────────────────────────────────────────────────
 
 def prune(retention_hours: int) -> int:

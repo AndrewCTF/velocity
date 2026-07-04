@@ -179,8 +179,21 @@ def test_load_panoramax_parses_stubbed_json(monkeypatch):
                 "id": "p1",
                 "geometry": {"type": "Point", "coordinates": [2.34, 48.86]},
                 "properties": {"camera:heading": 12, "datetime": "2024-01-01"},
+                # Panoramax serves pixels from S3 via per-item STAC assets — the
+                # parser reads these hrefs (there is no guessable URL template).
+                "assets": {
+                    "hd": {"href": "https://pano.example/main-pictures/p1.jpg"},
+                    "sd": {"href": "https://pano.example/derivates/p1/sd.jpg"},
+                    "thumb": {"href": "https://pano.example/derivates/p1/thumb.jpg"},
+                },
             },
             {"type": "Feature", "id": "bad", "geometry": {"type": "LineString"}},  # skipped
+            {  # Point but no assets → nothing to proxy → skipped
+                "type": "Feature",
+                "id": "noassets",
+                "geometry": {"type": "Point", "coordinates": [2.35, 48.87]},
+                "properties": {},
+            },
         ],
     }
 
@@ -198,7 +211,8 @@ def test_load_panoramax_parses_stubbed_json(monkeypatch):
     import asyncio
 
     out = asyncio.run(gl.load_panoramax(48.86, 2.34, 2.0))
-    assert len(out) == 1
+    assert len(out) == 1  # 'bad' (LineString) + 'noassets' both skipped
     assert out[0].source == "panoramax"
     assert out[0].heading == 12
-    assert "hd.jpg" in out[0].photo_url
+    assert out[0].photo_url == "https://pano.example/main-pictures/p1.jpg"
+    assert out[0].thumb_url == "https://pano.example/derivates/p1/sd.jpg"

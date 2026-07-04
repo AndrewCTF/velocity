@@ -5,7 +5,7 @@ import { useAoi } from '../state/aoi.js';
 import { useSituations, type Severity } from '../situations/situationStore.js';
 import { intel } from '../intel/registry.js';
 import type { DarkVesselCandidate } from '../intel/darkVessel.js';
-import { flyToChokepoint, flyToPosition } from '../globe/camera.js';
+import { flyToChokepoint, flyToPosition, slewToEntity } from '../globe/camera.js';
 import { useReducedMotion } from '../shell/useReducedMotion.js';
 import { apiFetch } from '../transport/http.js';
 import {
@@ -266,7 +266,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
       <div className="flex items-center justify-between">
         <SectionLabel title="Intel" className="flex-1" />
         <div className="flex items-center gap-2 ml-3 shrink-0" data-testid="intel-imagery-indicator">
-          <span className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3">3D sat</span>
+          <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3">3D sat</span>
           <Toggle
             on={satOn}
             onChange={(next) => setImageryMode(next ? '3d-sat' : '2d-dark')}
@@ -280,12 +280,12 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
           title={brief ? `Incident brief · ${brief.scope}` : 'Incident brief'}
           count={brief ? brief.incident_count : ''}
         />
-        <p className="mono text-[9.5px] leading-snug text-txt-3">
+        <p className="mono text-[10px] leading-snug text-txt-3">
           Cross-domain convergences — jamming + dark vessels + military + events fused into cited incidents.
         </p>
 
         {!brief || brief.incident_count === 0 ? (
-          <p className="mono text-[9.5px] text-txt-3">
+          <p className="mono text-[10px] text-txt-3">
             No cross-domain incidents{brief ? '' : ' (loading…)'}.
           </p>
         ) : (
@@ -294,13 +294,13 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
               <Hero tone={heroTone} title={`${heroIncident.threat_level} · ${heroIncident.domains.join(' + ')}`}>
                 <p className="text-[11px] text-txt-1 leading-snug">{heroIncident.narrative}</p>
                 {heroIncident.emitter_estimate && (
-                  <p className="mono text-[9.5px] text-warn mt-1.5 tabular-nums">
+                  <p className="mono text-[10px] text-warn mt-1.5 tabular-nums">
                     emitter ≈ {heroIncident.emitter_estimate.lat.toFixed(2)},
                     {heroIncident.emitter_estimate.lon.toFixed(2)} ±{heroIncident.emitter_estimate.cep_km}km
                   </p>
                 )}
                 <div className="flex items-center justify-between gap-2 mt-2.5">
-                  <span className="mono text-[9px] tabular-nums text-txt-3">
+                  <span className="mono text-[10px] tabular-nums text-txt-3">
                     {heroIncident.signal_count} signal{heroIncident.signal_count === 1 ? '' : 's'} ·{' '}
                     {heroIncident.span_km}km
                   </span>
@@ -329,7 +329,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
                 <div className="flex items-center justify-between gap-2">
                   <Badge tone={threatTone(inc.threat_level)}>{inc.threat_level}</Badge>
                   <span
-                    className="mono text-[9px] tabular-nums text-txt-3 truncate"
+                    className="mono text-[10px] tabular-nums text-txt-3 truncate"
                     title={inc.domains.join(' + ')}
                   >
                     {inc.domains.join(' + ')}
@@ -337,13 +337,13 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
                 </div>
                 <p className="text-[11px] text-txt-1 leading-snug mt-1.5">{inc.narrative}</p>
                 {inc.emitter_estimate && (
-                  <p className="mono text-[9.5px] text-warn mt-1 tabular-nums">
+                  <p className="mono text-[10px] text-warn mt-1 tabular-nums">
                     emitter ≈ {inc.emitter_estimate.lat.toFixed(2)},{inc.emitter_estimate.lon.toFixed(2)} ±
                     {inc.emitter_estimate.cep_km}km
                   </p>
                 )}
                 <div className="flex items-center justify-between gap-2 mt-2">
-                  <span className="mono text-[9px] tabular-nums text-txt-3">
+                  <span className="mono text-[10px] tabular-nums text-txt-3">
                     {inc.signal_count} signal{inc.signal_count === 1 ? '' : 's'} · {inc.span_km}km
                   </span>
                   <div className="flex gap-1.5">
@@ -379,7 +379,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
             count={`+${ch.new.length} ↑${ch.escalated.length} −${ch.resolved.length} · ${ch.active} active`}
           />
           {changeItems.length === 0 ? (
-            <p className="mono text-[9.5px] text-txt-3">
+            <p className="mono text-[10px] text-txt-3">
               {ch.had_baseline ? 'No new or escalated incidents since last tick.' : 'Establishing baseline…'}
             </p>
           ) : (
@@ -390,7 +390,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
                     <Badge tone={threatTone(c.threat_level)}>
                       {c.from_level ? `${c.from_level}→${c.threat_level}` : `NEW · ${c.threat_level}`}
                     </Badge>
-                    <span className="mono text-[9px] tabular-nums text-txt-3 truncate" title={c.domains.join(' + ')}>
+                    <span className="mono text-[10px] tabular-nums text-txt-3 truncate" title={c.domains.join(' + ')}>
                       {c.domains.join(' + ')}
                     </span>
                   </div>
@@ -418,11 +418,11 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
         <div className="border border-line rounded-sm bg-bg-2/60 p-2.5">
           <div className="flex items-baseline gap-2">
             <span className="mono text-[20px] text-txt-0 tabular-nums leading-none">{candidates.length}</span>
-            <span className="mono text-[9.5px] text-txt-3">
+            <span className="mono text-[10px] text-txt-3">
               candidate{candidates.length === 1 ? '' : 's'} (AIS-gap, global)
             </span>
           </div>
-          <p className="mono text-[9.5px] text-txt-3 leading-snug mt-1.5">
+          <p className="mono text-[10px] text-txt-3 leading-snug mt-1.5">
             Vessels whose last AIS fix is fresh-stale (gap ≥1h, &lt;90m). Pair with SAR cross-reference for true
             darkness.
           </p>
@@ -434,13 +434,14 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
                   <span className="mono text-txt-1 truncate" title={c.name ?? c.mmsi}>
                     {c.name ?? c.mmsi}
                   </span>
-                  <span className="mono text-[9px] tabular-nums text-txt-3 ml-auto">
+                  <span className="mono text-[10px] tabular-nums text-txt-3 ml-auto">
                     gap {(c.gapMs / 60000).toFixed(0)}m
                   </span>
                   <Btn
                     size="sm"
                     onClick={() =>
-                      viewer && flyToPosition(viewer, c.lastLon, c.lastLat, 250_000, reduced ? 0 : 0.8)
+                      viewer &&
+                      slewToEntity(viewer, `vessel:${c.mmsi}`, c.lastLon, c.lastLat, 250_000, reduced ? 0 : 0.8)
                     }
                   >
                     slew
@@ -455,20 +456,20 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
       <section className="space-y-2">
         <SectionLabel title="Top correlations" count={topCorrelations.length} />
         {topCorrelations.length === 0 ? (
-          <p className="mono text-[9.5px] text-txt-3">No live correlations.</p>
+          <p className="mono text-[10px] text-txt-3">No live correlations.</p>
         ) : (
           <div className="space-y-2">
             {topCorrelations.map((a) => (
               <div key={a.id} className="border border-line rounded-sm p-2.5 bg-bg-2/60">
                 <div className="flex items-center justify-between gap-2">
                   <Badge tone={sevTone(a.severity)}>{a.severity}</Badge>
-                  <span className="mono text-[9px] tabular-nums text-txt-3 truncate" title={a.ruleId}>
+                  <span className="mono text-[10px] tabular-nums text-txt-3 truncate" title={a.ruleId}>
                     {a.ruleId}
                   </span>
                 </div>
                 <p className="text-[11px] text-txt-1 leading-snug mt-1.5 line-clamp-2">{a.message}</p>
                 <div className="flex items-center justify-between gap-2 mt-2">
-                  <span className="mono text-[9px] tabular-nums text-txt-3">
+                  <span className="mono text-[10px] tabular-nums text-txt-3">
                     conf {(a.confidence * 100).toFixed(0)}%
                   </span>
                   <Btn
@@ -476,7 +477,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
                     onClick={() => {
                       if (viewer && a.geom?.type === 'Point') {
                         const [lon, lat] = a.geom.coordinates as [number, number];
-                        flyToPosition(viewer, lon, lat, 250_000, reduced ? 0 : 1.0);
+                        slewToEntity(viewer, a.contributingObservations?.[0], lon, lat, 250_000, reduced ? 0 : 1.0);
                       }
                     }}
                   >
@@ -492,20 +493,20 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
       <section className="space-y-2">
         <SectionLabel title="GPS jamming clusters" count={jammingAlerts.length} />
         {jammingAlerts.length === 0 ? (
-          <p className="mono text-[9.5px] text-txt-3">No jamming clusters detected.</p>
+          <p className="mono text-[10px] text-txt-3">No jamming clusters detected.</p>
         ) : (
           <div className="space-y-2">
             {jammingAlerts.slice(0, 8).map((a) => (
               <div key={a.id} className="border border-line rounded-sm p-2.5 bg-bg-2/60">
                 <div className="flex items-center justify-between gap-2">
                   <Badge tone="warn">jam</Badge>
-                  <span className="mono text-[9px] tabular-nums text-txt-3">
+                  <span className="mono text-[10px] tabular-nums text-txt-3">
                     conf {(a.confidence * 100).toFixed(0)}%
                   </span>
                 </div>
                 <p className="text-[11px] text-txt-1 leading-snug mt-1.5 line-clamp-2">{a.message}</p>
                 <div className="flex items-center justify-between gap-2 mt-2">
-                  <span className="mono text-[9px] tabular-nums text-txt-3">
+                  <span className="mono text-[10px] tabular-nums text-txt-3">
                     {new Date(a.t).toISOString().slice(11, 19)}Z
                   </span>
                   <Btn
@@ -513,7 +514,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
                     onClick={() => {
                       if (viewer && a.geom?.type === 'Point') {
                         const [lon, lat] = a.geom.coordinates as [number, number];
-                        flyToPosition(viewer, lon, lat, 250_000, reduced ? 0 : 1.0);
+                        slewToEntity(viewer, a.contributingObservations?.[0], lon, lat, 250_000, reduced ? 0 : 1.0);
                       }
                     }}
                   >
@@ -533,7 +534,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
             <div className="mono text-[12px] text-txt-0 truncate" title={activeAoi.name}>
               {activeAoi.name}
             </div>
-            <div className="mono text-[9px] tracking-[0.4px] uppercase text-txt-3 mt-0.5">
+            <div className="mono text-[10px] tracking-[0.4px] uppercase text-txt-3 mt-0.5">
               {activeAoi.region}
             </div>
             <p className="text-[11px] text-txt-2 leading-snug mt-1.5">{activeAoi.significance}</p>
@@ -562,7 +563,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
             </div>
           </div>
         ) : (
-          <p className="mono text-[9.5px] text-txt-3">No AOI active. Pick one from the Chokepoints tab.</p>
+          <p className="mono text-[10px] text-txt-3">No AOI active. Pick one from the Chokepoints tab.</p>
         )}
       </section>
     </div>

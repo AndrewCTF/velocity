@@ -61,7 +61,7 @@ export function AcarsCard({
     <section>
       <SectionLabel title="ACARS / datalink" {...(msgs && msgs.length ? { count: msgs.length } : {})} />
       {msgs === null && !err && (
-        <p className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">resolving…</p>
+        <p className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">resolving…</p>
       )}
       {err && <p className="text-[11px] text-txt-3 mt-1.5">datalink feed unavailable</p>}
       {msgs && msgs.length === 0 && (
@@ -76,11 +76,11 @@ export function AcarsCard({
             <li key={m.id ?? i} className="border border-line rounded-sm p-2 bg-bg-2/60">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="flex items-center gap-1.5 min-w-0">
-                  <span className="mono text-[9px] tracking-[0.5px] uppercase text-accent shrink-0">
+                  <span className="mono text-[10px] tracking-[0.5px] uppercase text-accent shrink-0">
                     {systemOf(m)}
                   </span>
                   <span
-                    className={`mono text-[8px] uppercase px-1 rounded-sm shrink-0 ${
+                    className={`mono text-[10px] uppercase px-1 rounded-sm shrink-0 ${
                       originOf(m) === 'pilot'
                         ? 'text-warn border border-[rgba(245,158,11,0.4)]'
                         : 'text-txt-3 border border-line'
@@ -88,9 +88,9 @@ export function AcarsCard({
                   >
                     {originOf(m) === 'pilot' ? 'pilot' : 'system'}
                   </span>
-                  {m.label && <span className="mono text-[8.5px] text-txt-3 shrink-0">{m.label}</span>}
+                  {m.label && <span className="mono text-[10px] text-txt-3 shrink-0">{m.label}</span>}
                 </span>
-                <span className="mono text-[9px] text-txt-3 tabular-nums shrink-0">
+                <span className="mono text-[10px] text-txt-3 tabular-nums shrink-0">
                   {m.t ? new Date(m.t).toISOString().slice(11, 19) + 'Z' : '—'}
                 </span>
               </div>
@@ -99,9 +99,9 @@ export function AcarsCard({
                   {m.text}
                 </pre>
               ) : (
-                <p className="mono text-[9px] text-txt-3 mt-1">no free-text payload (control/position frame)</p>
+                <p className="mono text-[10px] text-txt-3 mt-1">no free-text payload (control/position frame)</p>
               )}
-              <div className="flex flex-wrap items-center gap-2 mt-1.5 mono text-[9px] text-txt-3 tabular-nums">
+              <div className="flex flex-wrap items-center gap-2 mt-1.5 mono text-[10px] text-txt-3 tabular-nums">
                 {m.flight && <span>{m.flight}</span>}
                 {m.tail && <span>{m.tail}</span>}
                 {m.station && <span>rx {m.station}</span>}

@@ -157,7 +157,7 @@ function OverviewTab({
                 >
                   <span className={`mono text-[12px] leading-none ${met ? 'text-ok' : 'text-txt-4'}`}>{met ? '☑' : '☐'}</span>
                   <span className={`text-[10.5px] flex-1 ${met ? 'text-txt-1' : 'text-txt-2'}`}>{REQUIREMENT_LABEL[k]}</span>
-                  {blocks && !met ? <span className="mono text-[8px] uppercase tracking-[0.5px] text-warn">gates next</span> : null}
+                  {blocks && !met ? <span className="mono text-[10px] uppercase tracking-[0.5px] text-warn">gates next</span> : null}
                 </button>
               </li>
             );
@@ -273,7 +273,7 @@ function IntelTab({ entry }: { entry: TargetEntry }): JSX.Element {
       <Btn size="sm" tone="accent" disabled={phase === 'running'} onClick={generate}>
         {phase === 'running' ? 'Generating…' : coa ? '↻ Regenerate COA' : '✎ Generate COA'}
       </Btn>
-      {phase === 'error' ? <p className="mono text-[8px] text-alert mt-1">COA model unavailable</p> : null}
+      {phase === 'error' ? <p className="mono text-[10px] text-alert mt-1">COA model unavailable</p> : null}
       {coa ? <p className="text-[10px] leading-snug text-txt-2 mt-1.5 whitespace-pre-wrap">{coa}</p> : <MicroLabel className="block mt-1.5">no assessment yet</MicroLabel>}
     </Widget>
   );
@@ -321,10 +321,10 @@ function WeaponeerTab({ entry }: { entry: TargetEntry }): JSX.Element {
                   {sel ? <Badge tone="ok">selected</Badge> : null}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="mono text-[9px] text-txt-3 shrink-0">Pk {Math.round(s.pk * 100)}%</span>
+                  <span className="mono text-[10px] text-txt-3 shrink-0">Pk {Math.round(s.pk * 100)}%</span>
                   <MeterBar pct={s.pk * 100} tone={s.pk >= 0.75 ? 'ok' : s.pk >= 0.5 ? 'warn' : 'alert'} className="flex-1" />
-                  <span className="mono text-[9px] text-txt-2 shrink-0">×{s.count}</span>
-                  <span className="mono text-[9px] text-txt-3 shrink-0">{fmtUsd(s.costUsd)}</span>
+                  <span className="mono text-[10px] text-txt-2 shrink-0">×{s.count}</span>
+                  <span className="mono text-[10px] text-txt-3 shrink-0">{fmtUsd(s.costUsd)}</span>
                 </div>
               </button>
             </li>

@@ -252,7 +252,7 @@ export function TargetKanbanPanel({ viewer }: Props = {}): JSX.Element {
       {blocked ? (
         <p
           role="alert"
-          className="mono text-[9px] uppercase tracking-[0.4px] text-alert border border-alert/40 bg-alert/10 rounded-sm px-2 py-1"
+          className="mono text-[10px] uppercase tracking-[0.4px] text-alert border border-alert/40 bg-alert/10 rounded-sm px-2 py-1"
         >
           {blocked}
         </p>
@@ -375,7 +375,7 @@ function StageColumn({
           />
         ))}
         {cards.length === 0 && (
-          <p className="mono text-[8.5px] uppercase tracking-[0.6px] text-txt-4 py-1">
+          <p className="mono text-[10px] uppercase tracking-[0.6px] text-txt-4 py-1">
             {dragging ? 'drop here' : 'empty'}
           </p>
         )}
@@ -567,20 +567,20 @@ function TargetCard({
       {/* Priority meter + label */}
       <div className="flex items-center gap-1.5 mt-1.5">
         <MeterBar pct={priorityPct} tone={priorityTone} className="flex-1" />
-        <span className="mono text-[8px] uppercase tracking-[0.5px] text-txt-3 shrink-0">
+        <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 shrink-0">
           P{entry.priority}
         </span>
       </div>
 
       {/* Per-target classification caveat (image 4). */}
-      <div className="mono text-[7.5px] uppercase tracking-[0.5px] text-txt-4 mt-1 truncate" title={entry.classification}>
+      <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-4 mt-1 truncate" title={entry.classification}>
         {entry.classification}
       </div>
 
       {/* Last stage move: WHO + WHEN, from the audit log (focused card only). */}
       {selected && audit ? (
         <p
-          className="mono text-[8px] text-txt-3 mt-1.5 truncate"
+          className="mono text-[10px] text-txt-3 mt-1.5 truncate"
           title={`${audit.params.from ?? '?'} → ${audit.params.to ?? '?'} by ${audit.target_id}`}
         >
           moved {audit.params.from ?? '?'}→{audit.params.to ?? '?'} ·{' '}
@@ -601,10 +601,10 @@ function TargetCard({
             {coaPhase === 'running' ? 'Generating COA…' : coa ? '↻ Regenerate COA' : '✎ Generate COA'}
           </Btn>
           {coaPhase === 'error' ? (
-            <p className="mono text-[8px] text-alert mt-1">COA model unavailable</p>
+            <p className="mono text-[10px] text-alert mt-1">COA model unavailable</p>
           ) : null}
           {coa ? (
-            <p className="text-[9px] leading-snug text-txt-2 mt-1 whitespace-pre-wrap">{coa}</p>
+            <p className="text-[10px] leading-snug text-txt-2 mt-1 whitespace-pre-wrap">{coa}</p>
           ) : null}
         </div>
       ) : null}

@@ -1,6 +1,9 @@
 import * as Cesium from 'cesium';
 import { useFilters } from '../../state/stores.js';
 import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
+import { setRenderNeed } from '../renderNeeds.js';
+import { useSelection } from '../../state/stores.js';
+import { perfSetAnimated } from '../perf.js';
 
 // Generic batched-primitive renderer for high-count map layers. Renders icons +
 // labels as ONE Cesium.BillboardCollection + ONE Cesium.LabelCollection
@@ -48,6 +51,20 @@ const STANDUP_PITCH = -Cesium.Math.PI_OVER_FOUR; // −45°
 // altitude an oblique tilt packs thousands of side profiles into a smear, so
 // keep the clean top-down icons up there.
 const STANDUP_MAX_HEIGHT_M = 2_500_000; // ~2500 km
+// §5.5 lazy labels: only materialize a Cesium Label when the camera is within the
+// label ddc DRAW window (labelStyle.ts uses DistanceDisplayCondition(0, 400 km)),
+// so world view maintains ~0 labels instead of 13k invisible ones. Threshold ==
+// the ddc far bound → the visible set is pixel-identical to today. Selected +
+// emergency contacts are always materialized regardless of zoom.
+const LABEL_MATERIALIZE_ALT_M = 400_000;
+// §5.4 animated-mirror LOD: rebuild the frustum-visible set at 2 Hz; between
+// rebuilds, mirror only visible prims each frame. Off-screen prims refresh at 2 Hz
+// (a vessel at ≤15 m/s moves ≤7.5 m in 500 ms — invisible when it scrolls in).
+const VISIBLE_RECOMPUTE_MS = 500;
+// Hard cap on prims mirrored per frame — a backstop for a pathological
+// everything-on-screen case; capped by stable Map insertion order (no churn).
+const MAX_ANIMATED = 4000;
+const _cullSphere = new Cesium.BoundingSphere();
 const _upScratch = new Cesium.Cartesian3();
 
 export interface PrimitiveStyle {
@@ -90,6 +107,10 @@ interface Prim {
   bb: Cesium.Billboard;
   lbl: Cesium.Label | null;
   entity: Cesium.Entity;
+  // Last props synced for this icon — kept so a filter toggle can recompute the
+  // dim of EVERY icon once (reapplyDim) without re-reading the PropertyBag, and
+  // without the adapter having to re-sync stationary contacts every poll.
+  props: Record<string, unknown>;
   emergency: boolean;
   dimFactor: number;
   labelText: string | null;
@@ -104,13 +125,23 @@ interface Prim {
 }
 
 export class PrimitiveEntityLayer {
+  private static seq = 0;
   private readonly bbColl: Cesium.BillboardCollection;
   private readonly lblColl: Cesium.LabelCollection;
   private readonly prims = new Map<string, Prim>();
   private readonly emergencyIds = new Set<string>();
+  // §5.1 render-governor need: unique per instance so multiple aircraft tiers
+  // don't clobber each other's pulse flag. Only re-registered on transition.
+  private readonly pulseNeedKey = `pulse:${PrimitiveEntityLayer.seq++}`;
+  private lastPulseNeed = false;
+  // §5.4 animated-mirror LOD state.
+  private readonly visibleIds = new Set<string>();
+  private lastVisibleMs = 0;
+  private wasAnimating = false;
   private layerOpacity = 1;
   private removePreUpdate: (() => void) | null = null;
   private removeCameraChanged: (() => void) | null = null;
+  private removeFilterSub: (() => void) | null = null;
   // Camera tilted toward the horizon → icons stand up as side silhouettes.
   private tiltActive = false;
 
@@ -124,8 +155,11 @@ export class PrimitiveEntityLayer {
     scene.primitives.add(this.lblColl);
     if (opts.sideStyleFn) {
       // Re-evaluate stand-up mode whenever the camera moves (ctrl-drag tilt).
-      // percentageChanged low so a small tilt past the threshold registers.
-      scene.camera.percentageChanged = 0.05;
+      // §5.2.2: 0.15 (was 0.05) — 0.05 fired camera.changed every ~5% viewport
+      // shift, storming EVERY listener (tilt check, google-gate, GlobeOverlays)
+      // through a drag. 0.15 still catches a tilt-threshold crossing but cuts the
+      // event rate ~3×. Only raise it; never below the Cesium 0.5 default's intent.
+      if (scene.camera.percentageChanged > 0.15) scene.camera.percentageChanged = 0.15;
       this.tiltActive = this.computeTilt();
       const onCam = (): void => {
         const next = this.computeTilt();
@@ -145,6 +179,36 @@ export class PrimitiveEntityLayer {
     if (opts.shouldAnimate || opts.pulse) {
       this.removePreUpdate = scene.preUpdate.addEventListener(() => this.onPreUpdate());
     }
+    // Re-dim every icon ONCE when the map filter changes, instead of the adapter
+    // re-styling all ~13k contacts on every poll while a filter is active (the
+    // "filter toggle freezes the map" spike). With this, the adapter's
+    // unchanged-position skip can run filter-independently — a stationary contact
+    // is never re-synced just to keep its dim correct; the dim is corrected here.
+    if (opts.filter) {
+      this.removeFilterSub = useFilters.subscribe((st, prev) => {
+        if (st.clauses !== prev.clauses) this.reapplyDim();
+      });
+    }
+  }
+
+  // Recompute the filter dim of every icon from its last-synced props and update
+  // only the billboards whose dim actually changed. O(n) but runs once per filter
+  // toggle, not once per poll. (Cesium's color setter no-ops an unchanged value,
+  // so the guard is mostly to skip the allocation + requestRender when nothing
+  // flipped.)
+  private reapplyDim(): void {
+    if (!this.opts.filter) return;
+    const clauses = useFilters.getState().clauses;
+    const active = clauses.length > 0;
+    let changed = false;
+    for (const p of this.prims.values()) {
+      const dim = active && !entityPassesFilter(p.props, clauses) ? FILTER_DIM_ALPHA : 1;
+      if (dim === p.dimFactor) continue;
+      p.dimFactor = dim;
+      changed = true;
+      if (!(this.opts.pulse && p.emergency)) p.bb.color = p.tint.withAlpha(this.layerOpacity * dim);
+    }
+    if (changed) this.scene.requestRender();
   }
 
   private posOf(entity: Cesium.Entity): Cesium.Cartesian3 | undefined {
@@ -161,6 +225,15 @@ export class PrimitiveEntityLayer {
     return clauses.length > 0 && !entityPassesFilter(props, clauses) ? FILTER_DIM_ALPHA : 1;
   }
 
+  // §5.5: should this contact's label be materialized right now? Inside the ddc
+  // draw window (< 400 km) always; selected + emergency contacts always (cheap
+  // insurance — the label spec is preserved for every contact via labelFn).
+  private wantLabel(id: string, emergency: boolean): boolean {
+    if (emergency) return true;
+    if (useSelection.getState().selectedEntityId === id) return true;
+    return this.scene.camera.positionCartographic.height < LABEL_MATERIALIZE_ALT_M;
+  }
+
   // Upsert the icon + label for one contact entity. Position is read from the
   // entity, so teleport / glide / orbit all Just Work.
   sync(entity: Cesium.Entity, props: Record<string, unknown>): void {
@@ -172,7 +245,11 @@ export class PrimitiveEntityLayer {
     const rot = s.rotationRad ?? 0;
     const dimFactor = this.dimFactorFor(props);
     const labelText = this.opts.labelFn(props);
-    const side = this.opts.sideStyleFn ? this.opts.sideStyleFn(props) : null;
+    // §5.3.3: only run sideStyleFn when tilt (stand-up) mode is actually active —
+    // the default top-down view never shows the side sprite, so computing it every
+    // sync for ~13k moved contacts was wasted. applyTiltToAll() lazily computes +
+    // caches the side sprite the moment tilt engages.
+    const side = this.opts.sideStyleFn && this.tiltActive ? this.opts.sideStyleFn(props) : null;
 
     let p = this.prims.get(id);
     if (!p) {
@@ -188,9 +265,10 @@ export class PrimitiveEntityLayer {
         id: { id },
       });
       let lbl: Cesium.Label | null = null;
-      if (labelText) lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
+      if (labelText && this.wantLabel(id, !!s.emergency))
+        lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
       p = {
-        bb, lbl, entity, emergency: !!s.emergency, dimFactor, labelText, tint,
+        bb, lbl, entity, props, emergency: !!s.emergency, dimFactor, labelText, tint,
         topImage: s.imageUri, topRot: rot, topScale: s.scale,
         sideImage: side?.imageUri ?? null, sideScale: side?.scale ?? s.scale,
       };
@@ -198,6 +276,7 @@ export class PrimitiveEntityLayer {
       if (side) this.orient(p, pos); // apply current tilt mode to the new icon
     } else {
       p.entity = entity;
+      p.props = props;
       p.tint = tint;
       p.bb.position = pos;
       p.topImage = s.imageUri;
@@ -216,7 +295,10 @@ export class PrimitiveEntityLayer {
       // Non-emergency colour is static here; emergency colour is owned by the
       // pulse rAF so we don't fight it every sync.
       if (!(this.opts.pulse && s.emergency)) p.bb.color = tint.withAlpha(this.layerOpacity * dimFactor);
-      if (labelText) {
+      // §5.5: materialize the Cesium Label only inside the ddc draw window (or for
+      // selected/emergency). Beyond it, destroy the label so world view holds ~0
+      // labels. Recreated lazily on zoom-in — same visible set as today.
+      if (labelText && this.wantLabel(id, !!s.emergency)) {
         if (!p.lbl) p.lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
         else {
           p.lbl.position = pos;
@@ -231,6 +313,17 @@ export class PrimitiveEntityLayer {
     }
     if (this.opts.pulse && s.emergency) this.emergencyIds.add(id);
     else this.emergencyIds.delete(id);
+    this.syncPulseNeed();
+  }
+
+  // Keep the render governor rendering every frame while any emergency pulse is
+  // live on this layer. Only touches the registry on a transition (not per sync).
+  private syncPulseNeed(): void {
+    const need = this.opts.pulse === true && this.emergencyIds.size > 0;
+    if (need !== this.lastPulseNeed) {
+      this.lastPulseNeed = need;
+      setRenderNeed(this.pulseNeedKey, need);
+    }
   }
 
   remove(id: string): void {
@@ -240,6 +333,7 @@ export class PrimitiveEntityLayer {
     if (p.lbl) this.lblColl.remove(p.lbl);
     this.prims.delete(id);
     this.emergencyIds.delete(id);
+    this.syncPulseNeed();
   }
 
   setLayerOpacity(a: number): void {
@@ -281,9 +375,19 @@ export class PrimitiveEntityLayer {
   }
 
   private applyTiltToAll(): void {
-    if (!this.opts.sideStyleFn) return;
+    const sideFn = this.opts.sideStyleFn;
+    if (!sideFn) return;
     const t = this.opts.getClock();
     for (const p of this.prims.values()) {
+      // §5.3.3: sync() skips sideStyleFn while tilt is off, so a prim first seen
+      // in top-down view has no cached side sprite. Compute + cache it now that
+      // tilt has engaged (recompute always so a category change since the last
+      // stand-up is reflected).
+      if (this.tiltActive) {
+        const side = sideFn(p.props);
+        p.sideImage = side.imageUri;
+        p.sideScale = side.scale;
+      }
       let pos: Cesium.Cartesian3 | undefined;
       try { pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined; } catch { pos = undefined; }
       if (pos) this.orient(p, pos);
@@ -295,10 +399,14 @@ export class PrimitiveEntityLayer {
     this.removePreUpdate = null;
     this.removeCameraChanged?.();
     this.removeCameraChanged = null;
+    this.removeFilterSub?.();
+    this.removeFilterSub = null;
     try { this.scene.primitives.remove(this.bbColl); } catch { /* viewer gone */ }
     try { this.scene.primitives.remove(this.lblColl); } catch { /* viewer gone */ }
     this.prims.clear();
     this.emergencyIds.clear();
+    this.lastPulseNeed = false;
+    setRenderNeed(this.pulseNeedKey, false);
   }
 
   // Runs once per render frame (only while the scene is actually rendering — i.e.
@@ -307,13 +415,49 @@ export class PrimitiveEntityLayer {
   private onPreUpdate(): void {
     const animate = this.opts.shouldAnimate?.() ?? false;
     const pulsing = this.opts.pulse === true && this.emergencyIds.size > 0;
+    if (!animate) this.wasAnimating = false;
     if (!animate && !pulsing) return;
     if (animate) {
       const t = this.opts.getClock();
-      for (const p of this.prims.values()) {
-        let pos: Cesium.Cartesian3 | undefined;
-        try { pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined; } catch { pos = undefined; }
-        if (pos) { p.bb.position = pos; if (p.lbl) p.lbl.position = pos; }
+      const now = performance.now();
+      // Motion just started (zoom crossed the glide altitude / deadReckon toggled
+      // on): force a full pass NOW so the visible set isn't empty for up to 500 ms.
+      if (!this.wasAnimating) { this.wasAnimating = true; this.lastVisibleMs = 0; }
+      // §5.4 animated-mirror LOD: the expensive part is getValue() on each prim's
+      // SampledPositionProperty (interpolation) + the position writes. Every ~500 ms
+      // do a FULL pass — refresh every prim (so off-screen ones stay ≤2 Hz fresh) and
+      // rebuild the frustum-visible set. Between passes, mirror ONLY the visible set
+      // each frame. On-screen motion is pixel-identical; off-screen (invisible) prims
+      // just update at 2 Hz instead of 60 Hz. Cap the visible set at MAX_ANIMATED via
+      // a djb2-stable order so a pathological "everything visible" case can't blow the
+      // per-frame budget (stable = no churn, honouring the decimation-stability lesson).
+      const fullPass = now - this.lastVisibleMs >= VISIBLE_RECOMPUTE_MS;
+      if (fullPass) {
+        this.lastVisibleMs = now;
+        this.visibleIds.clear();
+        const cam = this.scene.camera;
+        const cv = cam.frustum.computeCullingVolume(cam.positionWC, cam.directionWC, cam.upWC);
+        for (const [id, p] of this.prims) {
+          let pos: Cesium.Cartesian3 | undefined;
+          try { pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined; } catch { pos = undefined; }
+          if (!pos) continue;
+          p.bb.position = pos;
+          if (p.lbl) p.lbl.position = pos;
+          _cullSphere.center = pos;
+          _cullSphere.radius = 6000; // icon envelope so edge prims aren't culled early
+          if (cv.computeVisibility(_cullSphere) !== Cesium.Intersect.OUTSIDE) {
+            if (this.visibleIds.size < MAX_ANIMATED) this.visibleIds.add(id);
+          }
+        }
+        perfSetAnimated(this.visibleIds.size);
+      } else {
+        for (const id of this.visibleIds) {
+          const p = this.prims.get(id);
+          if (!p) continue;
+          let pos: Cesium.Cartesian3 | undefined;
+          try { pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined; } catch { pos = undefined; }
+          if (pos) { p.bb.position = pos; if (p.lbl) p.lbl.position = pos; }
+        }
       }
     }
     if (pulsing) {

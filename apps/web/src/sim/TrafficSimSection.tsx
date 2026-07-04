@@ -11,6 +11,7 @@ import { detectImage, detectStatus, isDesktop } from '../transport/desktop.js';
 import { TrafficController, type CamInfo } from './TrafficController.js';
 import type { DetectStatus } from '../ground/types.js';
 import type { LatLon } from '../globe/center.js';
+import { useCaptures } from '../state/captures.js';
 
 export function TrafficSimSection({
   viewer,
@@ -26,7 +27,17 @@ export function TrafficSimSection({
   const [msg, setMsg] = useState<string | null>(null);
   const tcRef = useRef<TrafficController | null>(null);
   const loopRef = useRef<number | null>(null);
+  const capUnsubRef = useRef<(() => void) | null>(null);
   const desktop = isDesktop();
+  // Real-data mode: drive the sim from the captures store (real detected car
+  // counts at real cam locations) instead of one live cam. Works on the website
+  // too — captures already carry their detections.
+  const [realData, setRealData] = useState(false);
+  const [jamInfo, setJamInfo] = useState<{ roads: number; jams: number } | null>(null);
+  // Select the STABLE array ref (a filtering selector returns a new array each
+  // render → useSyncExternalStore infinite-loop). Filter in render (cheap).
+  const allCaptures = useCaptures((s) => s.captures);
+  const camCaptures = allCaptures.filter((c) => c.source === 'cam');
 
   // Find the nearest cam to the point whenever it changes.
   useEffect(() => {
@@ -70,6 +81,7 @@ export function TrafficSimSection({
   useEffect(() => {
     return () => {
       if (loopRef.current) window.clearInterval(loopRef.current);
+      capUnsubRef.current?.();
       tcRef.current?.dispose();
       tcRef.current = null;
     };
@@ -104,44 +116,139 @@ export function TrafficSimSection({
     setBusy(false);
   };
 
+  // Real-data mode: seed the sim from all cam captures + jam prediction, and
+  // re-seed whenever a new capture is pinned (live detections auto-pin).
+  const seedReal = async (): Promise<void> => {
+    const tc = tcRef.current;
+    if (!tc) return;
+    const caps = useCaptures.getState().captures.filter((c) => c.source === 'cam');
+    const res = await tc.seedFromCaptures(caps);
+    setSimCount(res.count);
+    setJamInfo({ roads: res.roads, jams: res.jams });
+    setMsg(res.count === 0 ? 'no cam captures with vehicles yet — detect on some cams first' : null);
+  };
+
+  const onSimulateReal = async (): Promise<void> => {
+    if (!viewer || busy) return;
+    setBusy(true);
+    if (!tcRef.current) tcRef.current = new TrafficController(viewer);
+    if (loopRef.current) {
+      window.clearInterval(loopRef.current);
+      loopRef.current = null;
+    }
+    await seedReal();
+    capUnsubRef.current?.();
+    capUnsubRef.current = useCaptures.subscribe(() => void seedReal());
+    setBusy(false);
+  };
+
   const onStop = (): void => {
     if (loopRef.current) {
       window.clearInterval(loopRef.current);
       loopRef.current = null;
     }
+    capUnsubRef.current?.();
+    capUnsubRef.current = null;
     tcRef.current?.stop();
     setSimCount(null);
+    setJamInfo(null);
   };
 
-  if (!desktop) {
+  const modeToggle = (
+    <div className="flex gap-1 mb-2" role="radiogroup" aria-label="Traffic source">
+      {(
+        [
+          ['live', 'Live cam'],
+          ['real', 'Real data'],
+        ] as const
+      ).map(([mid, label]) => {
+        const on = (mid === 'real') === realData;
+        return (
+          <button
+            key={mid}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => {
+              onStop();
+              setRealData(mid === 'real');
+            }}
+            className={`flex-1 mono text-[10px] px-2 py-1 rounded-sm border transition-colors ${
+              on
+                ? 'border-accent-line text-accent bg-accent-dim'
+                : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  if (realData) {
     return (
-      <div className="border border-line rounded-sm bg-bg-1/60 p-2">
-        <Caveat level="DESKTOP-ONLY" tone="warn" />
-        <MicroLabel>cam → CUDA detect → animated traffic runs in the desktop app</MicroLabel>
-      </div>
+      <Widget
+        title="Traffic sim · real data"
+        count={simCount != null ? `${simCount} veh` : `${camCaptures.length} caps`}
+      >
+        {modeToggle}
+        <KV>
+          <KVRow k="Captures" v={`${camCaptures.length} cam`} />
+          <KVRow k="Sim" v={simCount != null ? `${simCount} vehicles` : 'idle'} />
+          {jamInfo && <KVRow k="Roads" v={`${jamInfo.roads} · ${jamInfo.jams} jam`} />}
+        </KV>
+        {msg && <span className="mono text-[10px] text-alert">{msg}</span>}
+        <div className="mt-2 flex gap-1.5">
+          <Btn
+            size="sm"
+            tone="accent"
+            onClick={() => void onSimulateReal()}
+            disabled={busy || !viewer || camCaptures.length === 0}
+          >
+            {busy ? 'starting…' : '▶ simulate'}
+          </Btn>
+          <Btn size="sm" onClick={onStop} disabled={simCount == null}>
+            stop
+          </Btn>
+        </div>
+        <MicroLabel>
+          real car-counts from pinned cam captures → vehicles on OSM roads + traffic-jam prediction
+        </MicroLabel>
+      </Widget>
     );
   }
 
   return (
     <Widget title="Traffic sim" count={simCount != null ? `${simCount} veh` : status ? status.device : '—'}>
-      {cam ? (
-        <KV>
-          <KVRow k="Cam" v={cam.name} />
-          <KVRow k="Detect" v={status ? `${status.device}${status.ready ? '' : ' (warming)'}` : '—'} />
-          <KVRow k="Sim" v={simCount != null ? `${simCount} vehicles` : 'idle'} />
-        </KV>
+      {modeToggle}
+      {!desktop ? (
+        <>
+          <Caveat level="DESKTOP-ONLY" tone="warn" />
+          <MicroLabel>live cam → CUDA detect runs in the desktop app; use Real data mode here</MicroLabel>
+        </>
       ) : (
-        <MicroLabel>{center ? 'no public cam near this point' : 'set a location'}</MicroLabel>
+        <>
+          {cam ? (
+            <KV>
+              <KVRow k="Cam" v={cam.name} />
+              <KVRow k="Detect" v={status ? `${status.device}${status.ready ? '' : ' (warming)'}` : '—'} />
+              <KVRow k="Sim" v={simCount != null ? `${simCount} vehicles` : 'idle'} />
+            </KV>
+          ) : (
+            <MicroLabel>{center ? 'no public cam near this point' : 'set a location'}</MicroLabel>
+          )}
+          {msg && <span className="mono text-[10px] text-alert">{msg}</span>}
+          <div className="mt-2 flex gap-1.5">
+            <Btn size="sm" tone="accent" onClick={() => void onSimulate()} disabled={!cam || busy || !viewer}>
+              {busy ? 'starting…' : '▶ simulate'}
+            </Btn>
+            <Btn size="sm" onClick={onStop} disabled={simCount == null}>
+              stop
+            </Btn>
+          </div>
+        </>
       )}
-      {msg && <span className="mono text-[9px] text-alert">{msg}</span>}
-      <div className="mt-2 flex gap-1.5">
-        <Btn size="sm" tone="accent" onClick={() => void onSimulate()} disabled={!cam || busy || !viewer}>
-          {busy ? 'starting…' : '▶ simulate'}
-        </Btn>
-        <Btn size="sm" onClick={onStop} disabled={simCount == null}>
-          stop
-        </Btn>
-      </div>
     </Widget>
   );
 }

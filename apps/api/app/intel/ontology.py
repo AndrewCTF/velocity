@@ -38,10 +38,22 @@ from app.keys import UserCtx, _client, _headers
 # don't recognise (we never reject — the ontology should be able to hold any node
 # an action wants to create), but the known kinds are first-class.
 
-ObjectKind = Literal["aircraft", "vessel", "incident", "sim", "object"]
+# Infra/digital-OSINT kinds (domain … email) are minted by app/osint into this
+# same graph; listing their prefixes here makes them first-class (own colour /
+# facet) instead of the catch-all "object". The DB `kind` column is free text,
+# so no migration is needed to add a prefix.
+ObjectKind = Literal[
+    "aircraft", "vessel", "incident", "sim",
+    "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
+    "object",
+]
 
 _KNOWN_KINDS: frozenset[str] = frozenset(
-    ("aircraft", "vessel", "incident", "sim", "object")
+    (
+        "aircraft", "vessel", "incident", "sim",
+        "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
+        "object",
+    )
 )
 
 # Link relations seeded by the first write-back actions + the fusion engine.

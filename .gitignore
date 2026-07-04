@@ -66,3 +66,6 @@ apps/native/target/
 apps/web/public/darktiles/
 apps/web/public/basemap/*.pmtiles
 .perf-backup/
+
+# Generated knowledge-graph artifact (regenerate with /graphify).
+graphify-out/

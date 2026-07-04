@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { useAoi } from '../state/aoi.js';
+import { useTaskingQuestions } from '../state/taskingQuestions.js';
 import { AoiSelector } from '../command-bar/AoiSelector.js';
 import { flyToPosition } from '../globe/camera.js';
 import {
@@ -122,6 +123,11 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<RunResult | null>(null);
+
+  // §8 question queue.
+  const questions = useTaskingQuestions((s) => s.questions);
+  const addQuestion = useTaskingQuestions((s) => s.add);
+  const removeQuestion = useTaskingQuestions((s) => s.remove);
 
   const catalogueTotal = useMemo(
     () => new Set(SENSOR_SATS.map((s) => s.match)).size,
@@ -297,6 +303,59 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
         <Caveat level="PREDICTED" note="SGP4 forecast — not live track" tone="warn" />
       </div>
 
+      {/* ── Question queue (§8 MetaConstellation) — standing "can a sensor answer
+             at place X" questions; load one back into the planner. ─────────── */}
+      <Widget title="Question queue" className="mt-2.5">
+        <div className="flex items-center justify-between mb-1.5">
+          <MicroLabel>ask a place, load it to run</MicroLabel>
+          <button
+            type="button"
+            onClick={() => {
+              const latN = Number(lat);
+              const lonN = Number(lon);
+              if (!isFinite(latN) || !isFinite(lonN)) return;
+              const label = aoi?.name ?? `${latN.toFixed(2)}, ${lonN.toFixed(2)}`;
+              addQuestion({ label, lat: latN, lon: lonN, hours: Math.max(0.25, Number(hours) || 24) });
+            }}
+            className="mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-sm border border-accent-line text-accent bg-accent-dim"
+          >
+            + Save
+          </button>
+        </div>
+        {questions.length === 0 ? (
+          <MicroLabel>no standing questions</MicroLabel>
+        ) : (
+          <ul className="divide-y divide-line border-y border-line">
+            {questions.map((q) => (
+              <li key={q.id} className="flex items-center gap-2 py-1.5">
+                <span className="text-[11px] text-txt-1 flex-1 truncate">
+                  {q.label} <span className="mono text-[10px] text-txt-3">· {q.hours}h</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLat(String(q.lat));
+                    setLon(String(q.lon));
+                    setHours(String(q.hours));
+                  }}
+                  className="mono text-[10px] uppercase px-1.5 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line"
+                >
+                  Load
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeQuestion(q.id)}
+                  aria-label="Remove question"
+                  className="mono text-[10px] text-txt-3 hover:text-alert"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Widget>
+
       {/* ── AOI ─────────────────────────────────────────────────────────── */}
       <Widget title="Target AOI" className="mt-2.5">
         <div className="mb-2">
@@ -378,7 +437,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
             <div key={k} className="flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Badge tone={SENSOR_TONE[k]}>{k}</Badge>
-                <span className="mono text-[9.5px] text-txt-3">
+                <span className="mono text-[10px] text-txt-3">
                   {k === 'EO'
                     ? 'electro-optical'
                     : k === 'MSI'
@@ -429,12 +488,12 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
               <KVRow k="sats w/ passes" v={result.perSat.length} />
             </KV>
             {revisitWarn && (
-              <p className="mono text-[9.5px] text-[#fcd9a0] mt-2 leading-snug">
+              <p className="mono text-[10px] text-[#fcd9a0] mt-2 leading-snug">
                 avg revisit {stats.avgRevisitMin.toFixed(0)} min exceeds target{' '}
                 {minRevisitN} min — add sensors or widen the window.
               </p>
             )}
-            <p className="mono text-[9px] text-txt-3 mt-2 leading-snug">
+            <p className="mono text-[10px] text-txt-3 mt-2 leading-snug">
               From the curated commercial-sensor catalogue ({catalogueTotal} constellations).
               Not a complete catalogue of all imaging satellites.
             </p>
@@ -444,7 +503,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
             <div className="flex justify-center py-1">
               <SkyViewPlot samples={result.sky} size={220} />
             </div>
-            <p className="mono text-[9px] text-txt-3 leading-snug text-center">
+            <p className="mono text-[10px] text-txt-3 leading-snug text-center">
               {topSatName
                 ? `az/el track of ${topSatName} (most passes) over the AOI`
                 : 'no satellite rises above the horizon in this window'}
@@ -470,11 +529,11 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
                       >
                         {p.satName ?? '—'}
                       </span>
-                      <span className="mono text-[9px] tabular-nums text-txt-3 shrink-0">
+                      <span className="mono text-[10px] tabular-nums text-txt-3 shrink-0">
                         {fmtClock(p.startMs)}
                       </span>
                     </div>
-                    <div className="mono text-[9px] text-txt-3 mt-0.5 flex gap-3">
+                    <div className="mono text-[10px] text-txt-3 mt-0.5 flex gap-3">
                       <span>
                         el<span className="text-txt-1"> {p.maxElevDeg.toFixed(0)}°</span>
                       </span>

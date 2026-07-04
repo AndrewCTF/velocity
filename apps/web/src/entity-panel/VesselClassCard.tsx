@@ -71,7 +71,7 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
           tone="warn"
         />
         {lengthM ? (
-          <p className="mono text-[9px] text-txt-3">
+          <p className="mono text-[10px] text-txt-3">
             AIS length {Math.round(lengthM)} m
             {typeof sogKn === 'number' && (
               <span className={sogKn < 1 ? 'text-ok' : 'text-txt-3'}>
@@ -80,7 +80,7 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
             )}
           </p>
         ) : (
-          <p className="mono text-[9px] text-warn">
+          <p className="mono text-[10px] text-warn">
             AIS length not broadcast — verify visually (measure hull off the chip), or dark contact
           </p>
         )}
@@ -100,7 +100,7 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
                       onClick={() => toggle(t)}
                       title={FEATURE_DEFS[t].label}
                       className={[
-                        'mono text-[9px] tracking-[0.2px] px-1.5 py-[3px] rounded-sm border transition-colors',
+                        'mono text-[10px] tracking-[0.2px] px-1.5 py-[3px] rounded-sm border transition-colors',
                         on
                           ? 'border-accent-line bg-accent-dim text-accent'
                           : 'border-line bg-bg-2 text-txt-3 hover:text-txt-1 hover:border-accent-line',
@@ -163,11 +163,11 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
                         {v.level === 'mismatch' ? `AIS ✗ ${v.lenDeltaPct}%` : `AIS ✓ ${v.lenDeltaPct}%`}
                       </Badge>
                     )}
-                    <span className="mono text-[9px] text-txt-3 tabular-nums">
+                    <span className="mono text-[10px] text-txt-3 tabular-nums">
                       {byLengthOnly ? `Δ${Math.round(m.lenDeltaM ?? 0)} m` : `${m.matched.length}✓`}
                     </span>
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 mono text-[9px] text-txt-3 tabular-nums">
+                  <div className="mt-0.5 flex items-center gap-2 mono text-[10px] text-txt-3 tabular-nums">
                     <span>{m.cls.country}</span>
                     <span>{m.cls.lengthM} m</span>
                     {m.cls.sources[0] && (

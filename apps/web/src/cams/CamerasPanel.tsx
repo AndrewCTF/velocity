@@ -65,11 +65,17 @@ export function CamerasPanel({ viewer }: { viewer: unknown }): JSX.Element {
       <CenterHeader center={center} onSync={sync} />
       {selected && (
         <Widget title={selected.name} count={`${selected.lat.toFixed(2)}, ${selected.lon.toFixed(2)}`}>
-          <CameraCard camId={selected.cam_id} hlsUrl={selected.hls_url} />
+          <CameraCard
+            camId={selected.cam_id}
+            hlsUrl={selected.hls_url}
+            lat={selected.lat}
+            lon={selected.lon}
+            camName={selected.name}
+          />
         </Widget>
       )}
       <Widget title="Public cams" count={`${cams.length}`}>
-        {err && <span className="mono text-[9px] text-alert">{err}</span>}
+        {err && <span className="mono text-[10px] text-alert">{err}</span>}
         {cams.length === 0 && !err ? (
           <MicroLabel>loading…</MicroLabel>
         ) : (

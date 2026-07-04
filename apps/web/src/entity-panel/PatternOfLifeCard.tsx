@@ -338,7 +338,7 @@ export function PatternOfLifeCard({
       {baselineAnoms.length > 0 && (
         <ul className="mb-2.5 space-y-1">
           {baselineAnoms.slice(0, 6).map((a, i) => (
-            <li key={i} className="mono text-[9px] text-[#fcd9a0] leading-snug">
+            <li key={i} className="mono text-[10px] text-[#fcd9a0] leading-snug">
               ▲ {a}
             </li>
           ))}
@@ -369,7 +369,7 @@ export function PatternOfLifeCard({
                     )}
                   </div>
                   {(min != null || visits != null) && (
-                    <div className="flex items-center gap-3 mt-1 mono text-[9px] text-txt-3 tabular-nums">
+                    <div className="flex items-center gap-3 mt-1 mono text-[10px] text-txt-3 tabular-nums">
                       {min != null && <span>dwell {fmtMinutes(min)}</span>}
                       {visits != null && <span>{visits} visit{visits === 1 ? '' : 's'}</span>}
                     </div>
@@ -390,7 +390,7 @@ export function PatternOfLifeCard({
         </div>
       )}
 
-      {note && <p className="mono text-[8.5px] text-txt-3 leading-snug mt-2">{note}</p>}
+      {note && <p className="mono text-[10px] text-txt-3 leading-snug mt-2">{note}</p>}
     </Widget>
   );
 }
@@ -402,7 +402,7 @@ function SectionMicro({ title, count }: { title: string; count?: number }): JSX.
   return (
     <div className="flex items-center justify-between gap-2">
       <MicroLabel>{title}</MicroLabel>
-      {count !== undefined && <span className="mono text-[9px] text-txt-3 tabular-nums">{count}</span>}
+      {count !== undefined && <span className="mono text-[10px] text-txt-3 tabular-nums">{count}</span>}
     </div>
   );
 }

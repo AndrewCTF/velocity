@@ -114,7 +114,9 @@ export class VesselClusterPrimitive {
         fillColor: Cesium.Color.WHITE.withAlpha(alpha),
         verticalOrigin: Cesium.VerticalOrigin.CENTER,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        // Depth-TESTED (no disableDepthTestDistance) so the globe occludes a
+        // count bubble on the far hemisphere instead of it bleeding through the
+        // earth — matches the ring billboard + event-icon behaviour.
       });
     }
     this.viewer.scene.requestRender();

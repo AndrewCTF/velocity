@@ -22,11 +22,22 @@ export interface Settings {
   // directly — this is that knob. Default 2.0 (sharp). Mobile is always clamped
   // to 1.0 in GlobeCanvas (a 3× phone panel supersamples to a brutal fill rate).
   renderPixelCap: number;
+  // Render-on-demand governor (design §5.1). OFF by default = today's behavior:
+  // maximumRenderTimeChange stays 0 so the scene renders every animated frame
+  // (the CLAUDE.md guardrail's interpolation-smoothness intent). When ON, the
+  // governor keeps 0 whenever ANYTHING animates (dead-reckon glide, gliding
+  // vessels at low altitude, satellites, sim, follow, FOV/spotlight, emergency
+  // pulse) and only relaxes to Infinity + explicit requestRender in the
+  // genuinely-idle default case (world view, teleport aircraft, frozen vessels),
+  // dropping idle GPU burn. Ships OFF pending on-hardware fps sign-off — flip it
+  // on and confirm glide/pulse/scrub stay smooth before it becomes the default.
+  continuousRenderGovernor: boolean;
 }
 
 const DEFAULTS: Settings = {
   aircraftDeadReckon: false,
   renderPixelCap: 2.0,
+  continuousRenderGovernor: false,
 };
 
 const LS_KEY = 'velocity.settings';

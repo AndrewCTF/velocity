@@ -195,7 +195,7 @@ function MenuChooser({
         className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-bg-2 transition-colors"
       >
         {active?.icon && <span className="text-accent shrink-0">{active.icon}</span>}
-        <span className="mono text-[8px] tracking-[0.7px] uppercase text-txt-2">Panel</span>
+        <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-2">Panel</span>
         <span className="mono text-[12px] tracking-[0.3px] text-txt-0 flex-1 truncate">
           {active?.label ?? '—'}
         </span>

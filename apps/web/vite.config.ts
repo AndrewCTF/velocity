@@ -52,7 +52,30 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },
-      '/ws': { target: wsTarget, ws: true, changeOrigin: true },
+      // ws: true with lifecycle wiring. The bare proxy never tore down the
+      // UPSTREAM leg when a browser WS reconnected (the /ws/adsb 8-50s churn) —
+      // http-proxy left it half-open, so the backend socket rotted in CLOSE-WAIT
+      // (measured 1396 stranded + 1570 fds after 15h → the dev-side fd leak).
+      // Bind the upstream request's lifetime to the client socket: when the
+      // browser side closes or errors, destroy the upstream so the backend's
+      // receive loop sees the FIN and frees the fd.
+      '/ws': {
+        target: wsTarget,
+        ws: true,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReqWs', (proxyReq, _req, socket) => {
+            const kill = (): void => {
+              proxyReq.destroy();
+            };
+            socket.on('close', kill);
+            socket.on('error', kill);
+          });
+          proxy.on('error', (_err, _req, target) => {
+            (target as { destroy?: () => void })?.destroy?.();
+          });
+        },
+      },
       '/tiles': { target: apiTarget, changeOrigin: true },
     },
   },

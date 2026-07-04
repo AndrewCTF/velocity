@@ -25,7 +25,7 @@ export function ImageryDiff({ aoi }: { aoi: { lat: number; lon: number } }): JSX
   return (
     <div className="space-y-2">
       <SectionLabel title="Satellite observation" />
-      <p className="mono text-[9px] text-txt-3">
+      <p className="mono text-[10px] text-txt-3">
         AOI {aoi.lat.toFixed(3)}, {aoi.lon.toFixed(3)} · 6 km
       </p>
       <div className="flex gap-2">
@@ -68,7 +68,7 @@ function Chip({ date, url }: { date: string; url: string }): JSX.Element {
   return (
     <div className="relative rounded-sm overflow-hidden border border-line bg-bg-2 aspect-square">
       {err ? (
-        <div className="absolute inset-0 flex items-center justify-center text-[9px] text-txt-3 text-center px-2">
+        <div className="absolute inset-0 flex items-center justify-center text-[10px] text-txt-3 text-center px-2">
           no imagery for {date}
         </div>
       ) : (
@@ -79,7 +79,7 @@ function Chip({ date, url }: { date: string; url: string }): JSX.Element {
           onError={() => setErr(true)}
         />
       )}
-      <span className="absolute bottom-0 left-0 mono text-[9px] text-txt-0 bg-black/60 px-1.5 py-0.5">
+      <span className="absolute bottom-0 left-0 mono text-[10px] text-txt-0 bg-black/60 px-1.5 py-0.5">
         {date}
       </span>
     </div>

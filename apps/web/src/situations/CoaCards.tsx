@@ -92,8 +92,8 @@ export function CoaCards({ situationId }: { situationId: string }): JSX.Element 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-1.5">
           <StatusDot tone={side === 'enemy' ? 'alert' : 'accent'} />
-          <span className={`mono text-[9px] tracking-[0.6px] uppercase ${meta.cls}`}>{meta.text}</span>
-          <span className="mono text-[9px] text-txt-3 tabular-nums">{list.length}</span>
+          <span className={`mono text-[10px] tracking-[0.6px] uppercase ${meta.cls}`}>{meta.text}</span>
+          <span className="mono text-[10px] text-txt-3 tabular-nums">{list.length}</span>
         </div>
         <ul className="space-y-1.5">
           {list.map(({ c, i }) => (

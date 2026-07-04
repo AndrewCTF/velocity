@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type CSSProperties } from 'react';
 import type { TabDef } from './TabbedPanel.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { useIsMobile } from './useIsMobile.js';
@@ -25,7 +25,17 @@ interface Props {
   // left rail, below the map-health strip). Rail-aware like MapHealthStrip so it
   // tracks a resized left rail. Used by the contextual selection action ribbon.
   overlayLeft?: ReactNode;
+  // Icon-rail mode (design §6.1): the left rail is a fixed 44px icon column whose
+  // flyouts FLOAT over the map (no resizer, no fixed-width push). The map keeps
+  // ~full width; --rail-left-w resolves to 44 so map overlays dock past the rail.
+  iconRail?: boolean;
+  // Full-surface app overlay (design §6.1) rendered as a DIRECT child of <main>
+  // (a sibling of the rails) so its z-index isn't capped by the z-0 globe wrapper.
+  // Insets itself past the icon rail + inspector; the top bar + rails stay visible.
+  mainOverlay?: ReactNode;
 }
+
+const ICON_RAIL_W = 44;
 
 const RAIL_BG = 'rgba(8,10,15,0.95)';
 
@@ -91,6 +101,8 @@ export function ConsoleShell({
   leftTabs,
   rightTabs,
   overlayLeft,
+  iconRail = false,
+  mainOverlay,
 }: Props): JSX.Element {
   const isMobile = useIsMobile();
   const sim = useSim((s) => s.active);
@@ -127,15 +139,24 @@ export function ConsoleShell({
   return (
     <div
       className="csl h-screen w-screen overflow-hidden bg-bg-0 text-txt-0 grid"
-      style={{ gridTemplateRows: isMobile ? '26px 42px 1fr' : '26px 42px 1fr 158px' }}
+      style={
+        {
+          gridTemplateRows: isMobile ? '26px 42px 1fr' : '26px 42px 1fr 158px',
+          // Publish the live (resizable) rail widths so map-overlay workspaces
+          // (ModeSurface) track the rail instead of hardcoding left-[296px] and
+          // under-/over-lapping when the operator drags it (design §4 grammar #1).
+          '--rail-left-w': `${iconRail ? ICON_RAIL_W : leftW}px`,
+          '--rail-right-w': `${rightW}px`,
+        } as CSSProperties
+      }
     >
       {/* Persistent classification banner — top chrome (Gotham COP convention).
           UNCLASSIFIED (open sources); amber EXERCISE strip while the war-sim runs. */}
       <div
-        className="row-start-1 flex items-center justify-center text-[9.5px] font-semibold tracking-[1.6px] uppercase select-none"
+        className="row-start-1 flex items-center justify-center text-[10px] font-semibold tracking-[1.6px] uppercase select-none"
         style={{
-          background: sim ? '#3a2a05' : '#0c3b1f',
-          color: sim ? '#f5c451' : '#86e0a6',
+          background: sim ? 'var(--cls-exercise-bg)' : 'var(--cls-unclas-bg)',
+          color: sim ? 'var(--cls-exercise-fg)' : 'var(--cls-unclas-fg)',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}
       >
@@ -154,6 +175,11 @@ export function ConsoleShell({
         {/* globe fills the row (always mounted) */}
         <div className="absolute inset-0 z-0">{globe}</div>
 
+        {/* full-surface app overlay (Explorer/Graph/…) — a direct <main> child so
+            it stacks above the globe + its z-0-trapped overlays, while the icon
+            rail (left) and inspector (right) stay visible beside it. */}
+        {!isMobile && mainOverlay}
+
         {/* persistent Map-health strip — one hairline row consolidating the
             connection/WS, feed-health, and replay posture that were scattered
             across the command bar. Absolutely positioned so it adds no grid
@@ -162,7 +188,7 @@ export function ConsoleShell({
             On desktop it floats between the rails (left 296 / right 336). */}
         <div
           className={`absolute top-1.5 z-[15] flex justify-center pointer-events-none ${isMobile ? 'inset-x-2' : ''}`}
-          style={isMobile ? undefined : { left: leftW + 10, right: rightW + 10 }}
+          style={isMobile ? undefined : { left: (iconRail ? ICON_RAIL_W : leftW) + 10, right: rightW + 10 }}
         >
           <MapHealthStrip />
         </div>
@@ -181,14 +207,26 @@ export function ConsoleShell({
         {/* ───────────────── desktop rails ───────────────── */}
         {!isMobile && (
           <>
-            <aside
-              className="absolute left-0 top-0 bottom-0 border-r border-line-2 overflow-hidden z-20 flex flex-col"
-              aria-label="Layers"
-              style={{ background: RAIL_BG, width: leftW }}
-            >
-              {left}
-              <RailResizer side="left" set={setLeftW} />
-            </aside>
+            {iconRail ? (
+              // Icon-rail mode: 44px column, overflow-visible so its flyout floats
+              // over the map; no resizer. z above the map + AppSurface.
+              <aside
+                className="absolute left-0 top-0 bottom-0 border-r border-line-2 flex flex-col z-[var(--z-rail)]"
+                aria-label="Tools"
+                style={{ background: RAIL_BG, width: ICON_RAIL_W }}
+              >
+                {left}
+              </aside>
+            ) : (
+              <aside
+                className="absolute left-0 top-0 bottom-0 border-r border-line-2 overflow-hidden z-20 flex flex-col"
+                aria-label="Layers"
+                style={{ background: RAIL_BG, width: leftW }}
+              >
+                {left}
+                <RailResizer side="left" set={setLeftW} />
+              </aside>
+            )}
             {right && (
               <aside
                 className="absolute right-0 top-0 bottom-0 border-l border-line-2 overflow-hidden z-20 flex flex-col"
@@ -346,19 +384,19 @@ function MapHealthStrip(): JSX.Element {
       <span className="flex items-center gap-1.5" title={wsTitle}>
         <StatusDot tone={wsTone} />
         <MicroLabel>link</MicroLabel>
-        <span className="mono text-[9px] text-txt-2">{wsText}</span>
+        <span className="mono text-[10px] text-txt-2">{wsText}</span>
       </span>
       <span className="h-2.5 w-px bg-line" aria-hidden="true" />
       <span className="flex items-center gap-1.5" title={feedTitle}>
         <StatusDot tone={feedTone} />
         <MicroLabel>feeds</MicroLabel>
-        <span className="mono text-[9px] text-txt-2 tabular-nums">{feedText}</span>
+        <span className="mono text-[10px] text-txt-2 tabular-nums">{feedText}</span>
       </span>
       <span className="h-2.5 w-px bg-line" aria-hidden="true" />
       <span className="flex items-center gap-1.5" title={clockTitle}>
         <StatusDot tone={clockTone} />
         <MicroLabel>clock</MicroLabel>
-        <span className="mono text-[9px] text-txt-2">{clockText}</span>
+        <span className="mono text-[10px] text-txt-2">{clockText}</span>
       </span>
     </div>
   );

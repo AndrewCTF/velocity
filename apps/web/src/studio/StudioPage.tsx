@@ -179,7 +179,7 @@ export function StudioPage(): JSX.Element {
               <div className="mono text-[11px] text-txt-2">
                 {files.length ? `${files.length} file(s) selected` : 'Drop images or a video, or click'}
               </div>
-              <div className="mono text-[9px] text-txt-3 mt-1">jpg / png · mp4 / mov (frames @2fps)</div>
+              <div className="mono text-[10px] text-txt-3 mt-1">jpg / png · mp4 / mov (frames @2fps)</div>
             </label>
           </Widget>
 
@@ -244,7 +244,7 @@ export function StudioPage(): JSX.Element {
                 />
               </Field>
             </div>
-            <div className="mono text-[8.5px] text-txt-3 mt-2 leading-tight">
+            <div className="mono text-[10px] text-txt-3 mt-2 leading-tight">
               Single overhead chip → MapAnything feed-forward. Near-2.5D relief
               (textured surface), strongest at VHR; true building 3D needs multi-view.
             </div>
@@ -274,7 +274,7 @@ export function StudioPage(): JSX.Element {
               )}
               {prog.error && <div className="mono text-[10px] text-alert mt-2 break-words">{prog.error}</div>}
               {prog.log_tail.length > 0 && (
-                <pre className="mono text-[8.5px] text-txt-3 mt-2 max-h-32 overflow-auto whitespace-pre-wrap leading-tight">
+                <pre className="mono text-[10px] text-txt-3 mt-2 max-h-32 overflow-auto whitespace-pre-wrap leading-tight">
                   {prog.log_tail.join('\n')}
                 </pre>
               )}

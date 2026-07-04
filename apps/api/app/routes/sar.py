@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.imagery import cdse
-from app.intel import lod1, sar_vessels
+from app.intel import lod1, sar_sweep, sar_vessels
 
 router = APIRouter(tags=["intel-sar"])
 
@@ -29,6 +29,27 @@ async def dark_vessels_sar(
     result = await sar_vessels.detect_dark_vessels(aoi=aoi, date=date)
     # Strip internal verification payloads (raw bytes / arrays) from the API body.
     return {k: v for k, v in result.items() if not k.startswith("_")}
+
+
+@router.get("/api/intel/sar/sweep")
+async def sar_sweep_latest() -> dict[str, Any]:
+    """Latest scheduled SAR sweep across all chokepoint AOIs (summary per AOI).
+
+    Served from cache — the background loop (``intel.sar_sweep``) refreshes it every
+    ~6 h. Empty until the first post-boot sweep completes.
+    """
+    return sar_sweep.latest()
+
+
+@router.get("/api/intel/sar/sweep/{aoi}")
+async def sar_sweep_aoi(aoi: str) -> dict[str, Any]:
+    """Full detection GeoJSON for one AOI's latest sweep. 404 if not yet swept."""
+    if aoi not in sar_vessels.AOIS:
+        raise HTTPException(400, f"unknown aoi (have: {sorted(sar_vessels.AOIS)})")
+    res = sar_sweep.results_for(aoi)
+    if res is None:
+        raise HTTPException(404, "aoi not yet swept")
+    return res
 
 
 @router.get("/api/intel/lod1")

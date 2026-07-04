@@ -537,6 +537,61 @@ async def _ollama_chat(
         )
 
 
+# ── local-first preference (Part 4: dodge cloud rate limits on operator GPU) ────
+
+# Runtime override flipped by POST /api/ai/local (the app-scoped toggle). None →
+# fall back to Settings.llm_prefer_local. Process-global — ponytail: correct for the
+# single-operator / desktop case this exists for; a multi-tenant deploy would thread
+# a per-user header instead of a global.
+_prefer_local_override: bool | None = None
+
+
+def set_prefer_local(enabled: bool | None) -> None:
+    """Runtime toggle for local-first inference (None → defer to Settings)."""
+    global _prefer_local_override
+    _prefer_local_override = enabled
+
+
+def prefer_local() -> bool:
+    if _prefer_local_override is not None:
+        return _prefer_local_override
+    return get_settings().llm_prefer_local
+
+
+def _ollama_model_for(tier: str, explicit: str) -> str:
+    """Tier → configured local model id (reason vs fast). Empty → auto-pick."""
+    if explicit:
+        return explicit
+    s = get_settings()
+    if _resolve_tier(tier) == "reason":
+        return s.ollama_model_reason or s.ollama_model
+    return s.ollama_model_fast or s.ollama_model
+
+
+async def local_status() -> dict[str, Any]:
+    """Readiness for the local-inference toggle — GET/POST /api/ai/local.
+
+    ``ollama_up`` + ``tool_capable`` is the hardware gate the frontend uses to
+    enable/disable the switch (Ollama only serves a model if the box can run it).
+    """
+    s = get_settings()
+    host = (os.environ.get("OLLAMA_HOST") or s.ollama_host).rstrip("/")
+    models = await _ollama_tags(host, 4.0)
+    tool_capable = any(
+        any(h in m.lower() for h in ("qwen3", "qwen2.5", "llama3", "mistral", "coder", "a3b", "8b", "30b", "70b"))
+        for m in models
+    )
+    return {
+        "enabled": prefer_local(),
+        "ollama_host": host,
+        "ollama_up": bool(models),
+        "tool_capable": tool_capable,
+        "models": models,
+        "model_fast": s.ollama_model_fast or "(auto)",
+        "model_reason": s.ollama_model_reason or s.ollama_model or "(auto)",
+    }
+
+
 # ── public api ────────────────────────────────────────────────────────────────
 
 
@@ -615,6 +670,23 @@ async def _run_chat(
     else:
         eff_timeout = 180.0 if _resolve_tier(tier) == "reason" else 90.0
 
+    async def _try_ollama() -> LlmResult:
+        return await _ollama_chat(
+            messages,
+            prefer_model=_ollama_model_for(tier, ollama_model),
+            temperature=temperature,
+            timeout_s=min(eff_timeout, 300.0),
+        )
+
+    # Local-first (Part 4): when the operator opts in (POST /api/ai/local or
+    # LLM_PREFER_LOCAL), run the on-GPU model AHEAD of the cloud backends to dodge
+    # cloud rate limits. Falls through to the cloud ladder below if Ollama is
+    # unreachable or returns empty.
+    if prefer_local():
+        ol = await _try_ollama()
+        if ol.ok:
+            return ol
+
     # MiniMax-M3 (reasoning) is the PRIMARY backend when configured. It reasons
     # before answering, so it needs a generous floor; DeepSeek/Ollama remain the
     # fallbacks below if it is unconfigured or fails. `fast` skips it.
@@ -645,12 +717,7 @@ async def _run_chat(
     if ds.ok:
         return ds
 
-    ol = await _ollama_chat(
-        messages,
-        prefer_model=ollama_model,
-        temperature=temperature,
-        timeout_s=min(eff_timeout, 300.0),
-    )
+    ol = await _try_ollama()
     if ol.ok:
         return ol
     # Surface the more informative error (DeepSeek's, if a key was present).

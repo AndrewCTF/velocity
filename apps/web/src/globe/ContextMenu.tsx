@@ -7,6 +7,7 @@ import { useSituations } from '../situations/situationStore.js';
 import { useSelection } from '../state/stores.js';
 import { useImageryDiff } from '../imagery/imageryDiffStore.js';
 import { useGround } from '../ground/groundStore.js';
+import { useGeoScope } from '../state/geoScope.js';
 
 // Unified map right-click menu. Pure wiring — every action dispatches to an
 // existing store/feature at the clicked ground point. Opened by GlobeCanvas on a
@@ -55,6 +56,13 @@ export function ContextMenu(): JSX.Element | null {
       run: () => useImageryDiff.getState().openAt({ lat, lon }),
     },
     {
+      label: 'Search objects nearby (50 km)',
+      // Geo search-around (§6.4): scope the Explorer app's live object query to a
+      // radius around this point. App switches to Explorer on the scope change.
+      run: () =>
+        useGeoScope.getState().setScope({ lat, lon, radiusKm: 50, label: `${lat.toFixed(2)}, ${lon.toFixed(2)}` }),
+    },
+    {
       label: 'Geosearch',
       // Omnibar listens for Cmd/Ctrl+K itself — toggle it open.
       run: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })),
@@ -93,7 +101,7 @@ export function ContextMenu(): JSX.Element | null {
       className="fixed z-[1000] rounded-sm border border-line-2 bg-bg-1/95 backdrop-blur shadow-xl py-1"
       style={{ left, top, width: W }}
     >
-      <div className="px-3 py-1 mono text-[8.5px] tracking-[0.6px] uppercase text-txt-3 border-b border-line">
+      <div className="px-3 py-1 mono text-[10px] tracking-[0.6px] uppercase text-txt-3 border-b border-line">
         {lat.toFixed(4)}, {lon.toFixed(4)}
       </div>
       {items.map((it) => (

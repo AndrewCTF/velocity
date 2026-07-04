@@ -266,6 +266,12 @@ class Settings(BaseSettings):
     ais_vesselfinder_sidecar_url: str = "http://127.0.0.1:8091/vessels.json"
     ais_vesselfinder_sidecar_interval_s: float = 30.0
 
+    # OSINT deep-recon sidecar (tools/osint-recon) — OPTIONAL, OFF by default.
+    # A separate process that shells out to the GPL tools (SpiderFoot / theHarvester
+    # / Amass), keeping GPL code OUT of this MIT app. When unset, /api/osint/recon
+    # returns 503 and the feature is invisible. Set to e.g. http://127.0.0.1:8099.
+    osint_recon_sidecar_url: str = ""
+
     # MarineTraffic (PAID global AIS, key-gated). Dormant unless a key is set.
     # `marinetraffic_url` is a template ({key} substituted) because the exact path
     # depends on your MarineTraffic plan (area export / fleet positions). Polls into

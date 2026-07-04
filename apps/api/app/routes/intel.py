@@ -744,6 +744,21 @@ async def intel_sources() -> dict[str, Any]:
                 "breadth source."
             ),
         },
+        "osint_lookup": {
+            "note": (
+                "keyless on-demand infra/domain OSINT (not a streaming feed): "
+                "GET /api/osint/{dns,whois,ip,certs,shodan,threat}?target= and "
+                "POST /api/osint/investigate. Hit a source to confirm liveness."
+            ),
+            "sources": [
+                "dns (dns.google DoH)",
+                "whois (rdap.org)",
+                "certs (crt.sh — flaky from datacenter egress)",
+                "ip (ip-api.com, 45/min free)",
+                "shodan (internetdb.shodan.io)",
+                "threat (otx.alienvault.com)",
+            ],
+        },
         "ais_firehose": ais_firehose.stats(),
         "ais_keyless": ais_keyless.stats(),
         "ollama": {"host": s.ollama_host, "model": s.ollama_model or "(auto-detect)"},

@@ -247,7 +247,7 @@ export function ImageryCard({ id, kind }: { id: string; kind: string }): JSX.Ele
       {maxarTimedOut && (
         <MicroLabel className="block text-warn">Maxar crawl timed out — list may be partial</MicroLabel>
       )}
-      {note && <p className="mono text-[8.5px] text-txt-3 leading-snug mt-1">{note}</p>}
+      {note && <p className="mono text-[10px] text-txt-3 leading-snug mt-1">{note}</p>}
     </Widget>
   );
 }
@@ -281,7 +281,7 @@ function ImageryRow({ entityId, match }: { entityId: string; match: ImageryMatch
             note={gsdLabel(match.gsd_m)}
             tone={match.provider === 'maxar' ? 'neutral' : 'warn'}
           />
-          <span className="mono text-[9px] text-txt-2 tabular-nums">{dateLabel(match)}</span>
+          <span className="mono text-[10px] text-txt-2 tabular-nums">{dateLabel(match)}</span>
           {isAvailabilityOnly && <Badge tone="neutral">available</Badge>}
         </div>
         <Btn

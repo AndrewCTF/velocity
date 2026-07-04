@@ -96,7 +96,7 @@ export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
                   <li key={i} className="text-[10.5px] text-txt-2">
                     <span>{o.claim}</span>
                     {o.grounded_in && (
-                      <span className="ml-1.5 mono text-[8.5px] text-txt-3 align-middle">
+                      <span className="ml-1.5 mono text-[10px] text-txt-3 align-middle">
                         ⟵ {o.grounded_in}
                       </span>
                     )}
@@ -105,7 +105,7 @@ export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
               </ul>
             )}
             {data.caveats && data.caveats.length > 0 && (
-              <ul className="mt-1 list-disc list-inside text-[9.5px] text-txt-3">
+              <ul className="mt-1 list-disc list-inside text-[10px] text-txt-3">
                 {data.caveats.map((c, i) => (
                   <li key={i}>{c}</li>
                 ))}

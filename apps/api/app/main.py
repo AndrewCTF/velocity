@@ -2,10 +2,43 @@
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
 import os
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
+
+
+def _get_libc() -> ctypes.CDLL | None:
+    """Return the libc handle for the periodic ``malloc_trim`` housekeeping task.
+
+    The snapshot loop parses 6-12 MB feed bodies, re-serializes + gzips the ~6 MB
+    world blob, and rebuilds 13-20k-feature dicts EVERY second across a ~60-thread
+    executor pool — heavy multithreaded churn that ratchets RSS into the tens of
+    GB under sustained real load. The PRIMARY mitigation is jemalloc, preloaded by
+    the `scripts/run-api.sh` launcher (LD_PRELOAD) — a proper multithreaded
+    allocator that returns memory to the OS instead of hoarding arena high-water.
+
+    We do NOT set glibc ``M_ARENA_MAX`` here anymore: capping it to 2 starved 80
+    threads onto 2 arena locks and under real load ballooned RSS to ~54 GB (WORSE
+    than the untuned ~17 GB) with the CPU pegged on lock contention. On the glibc
+    fallback path (jemalloc not preloaded) we rely on default arenas + the periodic
+    ``malloc_trim`` below, which reclaims high-water without the contention. Under
+    jemalloc this handle's ``malloc_trim`` is a cheap no-op. No-ops off Linux."""
+    if sys.platform != "linux":
+        return None
+    try:
+        return ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6", use_errno=True)
+    except OSError:
+        return None
+
+
+_LIBC = _get_libc()
+# True when the jemalloc launcher (scripts/run-api.sh) preloaded it — logged at
+# boot so a memory investigation can tell which allocator is actually in play.
+_JEMALLOC = "jemalloc" in os.environ.get("LD_PRELOAD", "")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,6 +83,7 @@ from app.routes import maps as maps_routes
 from app.routes import maritime as maritime_routes
 from app.routes import news as news_routes_mod
 from app.routes import ontology as ontology_routes
+from app.routes import osint as osint_routes
 from app.routes import places as places_routes
 from app.routes import recon as recon_routes
 from app.routes import route as route_routes
@@ -63,6 +97,7 @@ from app.routes import status as status_routes
 from app.routes import targets as targets_routes
 from app.routes import tiles as tiles_routes
 from app.routes import timeline as timeline_routes
+from app.routes import watch_officer as watch_officer_routes
 from app.routes import weather as weather_routes
 
 
@@ -100,6 +135,41 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # invoke a mounted sub-app's lifespan, so drive it here (one-shot per app).
     mcp_cm = app.state.mcp_manager.run()
     await mcp_cm.__aenter__()
+    import asyncio  # noqa: PLC0415
+
+    async def _malloc_trim_loop() -> None:
+        # Housekeeping: periodically reclaim glibc arena high-water AND log RSS so a
+        # memory blow-up is diagnosable after the fact (the 54 GB thrash left no
+        # trace of WHEN it climbed). Under jemalloc (LD_PRELOAD) malloc_trim is a
+        # cheap no-op and jemalloc's own decay returns memory; on the glibc fallback
+        # it reclaims the sawtooth. RSS is logged every cycle, with a WARN when it
+        # crosses a threshold so the surrounding request log points at the trigger.
+        import logging  # noqa: PLC0415
+
+        log = logging.getLogger("app.mem")
+        log.info("allocator: %s", "jemalloc (LD_PRELOAD)" if _JEMALLOC else "glibc + malloc_trim")
+
+        def _rss_mb() -> int:
+            try:
+                with open("/proc/self/status") as f:
+                    for line in f:
+                        if line.startswith("VmRSS:"):
+                            return int(line.split()[1]) // 1024
+            except OSError:
+                pass
+            return 0
+
+        while True:
+            await asyncio.sleep(60.0)
+            if _LIBC is not None:
+                try:
+                    await asyncio.to_thread(_LIBC.malloc_trim, 0)
+                except Exception:  # noqa: BLE001 — best-effort housekeeping
+                    pass
+            rss = _rss_mb()
+            (log.warning if rss > 8_000 else log.info)("RSS %d MB", rss)
+
+    trim_task = asyncio.create_task(_malloc_trim_loop())
     try:
         if background:
             # Headless-browser tar1090 sidecar: a real Chromium clears the
@@ -172,6 +242,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.intel import watch as watch_eval  # noqa: PLC0415
 
             await watch_eval.start()
+            # Watch-officer: standing loop that files cited draft briefs from the
+            # incident-fusion diff for operator triage. Idles cheaply (one brief()
+            # per cycle) so starting at boot is free. Torn down in the finally block.
+            from app.intel import watch_officer  # noqa: PLC0415
+
+            await watch_officer.start()
+            # Scheduled SAR dark-vessel sweep: stands surveillance over the chokepoint
+            # AOIs (Sentinel-1, ~6h cadence). No-op without CDSE creds. Torn down below.
+            from app.intel import sar_sweep  # noqa: PLC0415
+
+            await sar_sweep.start()
             # Warm the CCTV catalog so the first /api/cams hits a populated
             # TtlCache instead of a cold serial upstream fan-out (~18s). Same
             # spirit as the adsb start_snapshot() pre-warm above. Fire-and-
@@ -214,6 +295,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await asyncio.gather(_warm_aircraft(), _warm_maritime())
         yield
     finally:
+        trim_task.cancel()
         await mcp_cm.__aexit__(None, None, None)
         await correlate_runner.stop_all()
         # Cancel the intel AOI priority warmer and the ADS-B snapshot
@@ -241,6 +323,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await maritime_routes.stop_background_poll()
             await history.stop()
             await watch_eval.stop()
+            from app.intel import watch_officer  # noqa: PLC0415
+
+            await watch_officer.stop()
+            from app.intel import sar_sweep  # noqa: PLC0415
+
+            await sar_sweep.stop()
             await news_routes.stop_refresher()
             # Tear down the headless-browser tar1090 sidecar (kill the whole
             # browser process group). No-op if it never started / already gone.
@@ -323,6 +411,10 @@ def create_app() -> FastAPI:
     # Typed ontology spine (read) + governed write-back actions — the semantic
     # layer the kanban, alerts, and agent compose on (Track A1/C1).
     app.include_router(ontology_routes.router)
+    # Digital-OSINT infra/domain investigation: keyless DNS/WHOIS/certs/IP/Shodan/
+    # threat lookups + an investigate orchestrator that mints results into the
+    # same ontology (app/osint).
+    app.include_router(osint_routes.router)
     app.include_router(actions_routes.router)
     # Shared named COP (save/load a viewport+layers+filters picture as a map:
     # ontology object) + the /ws/cop follow-along delta channel (Track D2).
@@ -334,6 +426,9 @@ def create_app() -> FastAPI:
     app.include_router(extract_routes.router)
     app.include_router(collab_routes.router)
     app.include_router(acars_routes.router)
+    # Watch-officer: standing loop that files cited draft briefs from the fusion
+    # diff for operator triage in the Inbox (app/intel/watch_officer.py).
+    app.include_router(watch_officer_routes.router)
 
     # TiTiler COG sub-app (Track B2): XYZ tiles for any Cloud-Optimized GeoTIFF
     # (Maxar Open Data S3, future SAR delivery), so B3/B4/B5 have a universal

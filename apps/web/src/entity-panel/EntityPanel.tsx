@@ -7,11 +7,13 @@ import { fetchEnrichment, type Enrichment, type Airport } from '../transport/ent
 import { flyToPosition, followEntity, stopFollow } from '../globe/camera.js';
 import { Sparkline } from './Sparkline.js';
 import { CameraCard } from './CameraCard.js';
+import { CaptureCard } from './CaptureCard.js';
 import type { Alert } from '@osint/shared';
 import { apiFetch } from '../transport/http.js';
 import {
   SectionLabel,
   Badge,
+  Caveat,
   KV,
   KVRow,
   Btn,
@@ -29,6 +31,7 @@ import { PatternOfLifeCard } from './PatternOfLifeCard.js';
 import { DossierNarrativeCard } from './DossierNarrativeCard.js';
 import { VesselClassCard } from './VesselClassCard.js';
 import { SituationPanel } from '../situations/SituationPanel.js';
+import { OsintEntityPanel } from '../osint/OsintEntityPanel.js';
 import { useProjection } from '../globe/ProjectionLayer.js';
 import { useFov } from '../globe/FovLayer.js';
 import { resolveAircraftFamily, aircraftSilhouette, vesselSilhouette } from './silhouettes.js';
@@ -48,26 +51,40 @@ interface PanelSnapshot {
   properties: Record<string, unknown>;
 }
 
+// 1 Hz wall-clock used ONLY by the freshness labels. Lives in a leaf (Header /
+// DetailsCard call it directly) so the per-second age tick re-renders just those
+// small cards — not the whole EntityPanel and its heavy children. Hoisting this
+// out of the panel is what kills the prior 1 Hz full-subtree cascade.
+function useNowTick(ms = 1000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), ms);
+    return () => window.clearInterval(t);
+  }, [ms]);
+  return now;
+}
+
 export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   const id = useSelection((s) => s.selectedEntityId);
   const [snap, setSnap] = useState<PanelSnapshot | null>(null);
   const [enrichment, setEnrichment] = useState<Enrichment | null>(null);
   const [enrichLoading, setEnrichLoading] = useState(false);
   const [track, setTrack] = useState(tracks.get(id ?? ''));
-  // 1 Hz wall clock so the freshness "Last seen / Last refresh" ages tick up
-  // live without a new fix arriving.
-  const [now, setNow] = useState(() => Date.now());
   // Receipt-side freshness: wall-clock ms of the last time this entity's fix
   // (position or observation time) actually CHANGED on our side — that is the
   // honest "Last refresh", distinct from the AIS/ADS-B observation time.
   const lastRefreshRef = useRef<number>(Date.now());
   const freshKeyRef = useRef<string>('');
+  // Re-render gate that INCLUDES the live freshness counters (not just position),
+  // so "Last seen"/age stays live for a cached contact whose lat/lon is steady.
+  const snapKeyRef = useRef<string>('');
 
   // Snapshot the selected entity continuously so values update in place.
   useEffect(() => {
     setSnap(null);
     setTrack(tracks.get(id ?? ''));
     freshKeyRef.current = '';
+    snapKeyRef.current = '';
     lastRefreshRef.current = Date.now();
     if (!viewer || !id) return;
     const tick = () => {
@@ -81,13 +98,21 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
       if (e.name) next.name = e.name;
       if (props['kind']) next.kind = String(props['kind']);
       if (pos) next.position = pos;
-      // Stamp the receipt clock only when the fix genuinely moved/aged, so a
-      // re-poll that re-sends the same fix doesn't reset "Last refresh".
+      // Stamp "Last refresh" ONLY when the position/fix genuinely changed — a
+      // re-sent same position must not reset it. (fk = obs time + rounded pos.)
       const fk = `${String(props['t'] ?? props['seen_at'] ?? '')}|${pos ? `${pos.lat.toFixed(4)},${pos.lon.toFixed(4)}` : ''}`;
       if (fk !== freshKeyRef.current) {
         freshKeyRef.current = fk;
         lastRefreshRef.current = Date.now();
       }
+      // Re-render when ANYTHING the panel shows changed — position OR the live
+      // freshness counters (seen_pos_s/last_contact age every poll even when the
+      // lat/lon is steady). Skip only a TRUE no-op resend (identical bag), so a
+      // genuinely static contact with no backend update doesn't churn. Excluding
+      // the freshness fields here is what froze "Last seen" — keep them in.
+      const snapKey = `${fk}|${String(props['seen_pos_s'] ?? '')}|${String(props['last_contact'] ?? '')}`;
+      if (snapKey === snapKeyRef.current) return;
+      snapKeyRef.current = snapKey;
       setSnap(next);
       setTrack(tracks.get(id));
     };
@@ -105,9 +130,17 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   // stationary aircraft and nothing else in the snapshot has changed.
   useEffect(() => {
     if (!id) return;
+    // Advance the "Track (N fixes)" counter + sparkline as PollGeoJsonAdapter
+    // pushes fixes — but ONLY re-render when the ring actually GREW. The ring is
+    // mutated in place (stable ref), so we gate on length and hand TrackCard a
+    // fresh slice on change. No more unconditional 1 Hz re-render here.
+    let lastLen = -1;
     const t = window.setInterval(() => {
-      setTrack(tracks.get(id));
-      setNow(Date.now());
+      const len = tracks.points(id);
+      if (len !== lastLen) {
+        lastLen = len;
+        setTrack(tracks.get(id).slice());
+      }
     }, 1000);
     return () => window.clearInterval(t);
   }, [id]);
@@ -119,9 +152,12 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
     typeof snap?.properties?.['callsign'] === 'string'
       ? (snap.properties['callsign'] as string)
       : null;
+  // Sim entities are notional — there is no backend /api/entity row, so the
+  // enrichment fetch would just 404. Detect via the live property bag.
+  const isSim = snap?.properties?.['sim'] === true || (snap?.kind?.startsWith('sim-') ?? false);
   useEffect(() => {
     setEnrichment(null);
-    if (!id) return;
+    if (!id || isSim) return;
     setEnrichLoading(true);
     const aborter = new AbortController();
     fetchEnrichment(id, aborter.signal, { callsign: callsignHint })
@@ -129,7 +165,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
       .catch(() => undefined)
       .finally(() => setEnrichLoading(false));
     return () => aborter.abort();
-  }, [id, callsignHint]);
+  }, [id, callsignHint, isSim]);
 
   // Continuous-follow toggle. Reset when the selection changes; stop following
   // on unmount so the camera doesn't stay locked to a stale entity.
@@ -157,19 +193,28 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
     return <SituationPanel id={id} viewer={viewer ?? null} />;
   }
 
+  // Positionless digital-OSINT entities (domain / ip / cert / asn / service /
+  // threat / org / email) have no Cesium entity to snapshot — their own panel
+  // (keyless enrichment cards + search-around), mirroring the situation branch.
+  if (/^(domain|ip|cert|asn|service|threat|org|email):/.test(id)) {
+    return <OsintEntityPanel id={id} />;
+  }
+
   return (
     <div className="p-4 space-y-5">
+      {isSim && (
+        <Caveat level="SIMULATED" note="notional war-game entity — not a real contact" tone="warn" />
+      )}
       <Header
         snap={snap}
         id={id}
         enrichment={enrichment}
-        now={now}
         lastRefreshMs={lastRefreshRef.current}
       />
 
       <ProfileCard enrichment={enrichment} snap={snap} />
 
-      {snap && <DetailsCard snap={snap} now={now} lastRefreshMs={lastRefreshRef.current} />}
+      {snap && <DetailsCard snap={snap} lastRefreshMs={lastRefreshRef.current} />}
 
       {snap && <FlightCard enrichment={enrichment} snap={snap} />}
 
@@ -305,8 +350,13 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
         <CameraCard
           camId={snap.properties['cam_id']}
           hlsUrl={(snap.properties['hls_url'] as string | null) ?? null}
+          lat={snap.position?.lat}
+          lon={snap.position?.lon}
+          camName={snap.name ?? undefined}
         />
       )}
+
+      {snap?.kind === 'capture' && <CaptureCard snap={snap} />}
 
       <PatternOfLifeCard id={id} kind={snap?.kind ?? ''} viewer={viewer ?? null} />
 
@@ -400,7 +450,7 @@ function ActionsCard({
   return (
     <section>
       <SectionLabel title="Actions" />
-      <p className="mono text-[9px] text-txt-3 mt-1 leading-snug">
+      <p className="mono text-[10px] text-txt-3 mt-1 leading-snug">
         governed write-back · audited to your account
       </p>
       <div className="flex flex-wrap gap-2 mt-1.5">
@@ -499,7 +549,7 @@ function ActionButton({
         {phase === 'running' ? '…' : phase === 'ok' ? `✓ ${doneLabel}` : label}
       </Btn>
       {phase === 'error' && msg && (
-        <span className="mono text-[8px] text-alert leading-tight max-w-[140px] truncate" title={msg}>
+        <span className="mono text-[10px] text-alert leading-tight max-w-[140px] truncate" title={msg}>
           {msg}
         </span>
       )}
@@ -616,15 +666,14 @@ function Header({
   snap,
   id,
   enrichment,
-  now,
   lastRefreshMs,
 }: {
   snap: PanelSnapshot | null;
   id: string;
   enrichment: Enrichment | null;
-  now: number;
   lastRefreshMs: number;
 }): JSX.Element {
+  const now = useNowTick();
   const display =
     (enrichment?.kind === 'aircraft' && (enrichment as { registration?: string }).registration) ||
     (enrichment?.kind === 'vessel' && (enrichment as { name?: string }).name) ||
@@ -677,7 +726,7 @@ function Header({
           {operator && <span className="mono text-[10.5px] text-txt-2 truncate">{operator}</span>}
         </div>
         {moving && (
-          <div className="flex items-center gap-2 mt-2 mono text-[9px] text-txt-2 tabular-nums">
+          <div className="flex items-center gap-2 mt-2 mono text-[10px] text-txt-2 tabular-nums">
             <StatusDot tone={freshnessTone(refreshAge)} />
             <span>updated {relAge(refreshAge)}</span>
             {seenAge != null && Math.abs(seenAge - refreshAge) > 4000 && (
@@ -696,13 +745,12 @@ function Header({
 // length/draught/destination, so those are never fabricated here.
 function DetailsCard({
   snap,
-  now,
   lastRefreshMs,
 }: {
   snap: PanelSnapshot;
-  now: number;
   lastRefreshMs: number;
 }): JSX.Element | null {
+  const now = useNowTick();
   const p = snap.properties;
   const num = (k: string): number | null => {
     const v = p[k];
@@ -1057,11 +1105,16 @@ function ProfileCard({
             alt="entity reference"
             loading="lazy"
             className="block w-full rounded-sm border border-line"
+            // Broken photo URL → hide the whole link so no broken-image box shows.
+            onError={(e) => {
+              const a = (e.currentTarget as HTMLImageElement).closest('a');
+              if (a) (a as HTMLElement).style.display = 'none';
+            }}
           />
         </a>
       )}
       {(credit || e2?.photo_license) && (
-        <div className="mono text-[8.5px] text-txt-3 mt-1 truncate">
+        <div className="mono text-[10px] text-txt-3 mt-1 truncate">
           {credit ? `© ${credit}` : ''}
           {e2?.photo_license ? `${credit ? ' · ' : ''}${e2.photo_license}` : ''}
         </div>
@@ -1084,7 +1137,7 @@ function EnrichmentCard({
     return (
       <section>
         <SectionLabel title="Enrichment" />
-        <p className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">resolving…</p>
+        <p className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">resolving…</p>
       </section>
     );
   }
@@ -1131,7 +1184,7 @@ function EnrichmentCard({
             <PropRow key={k} k={k} v={v} />
           ))}
       </KV>
-      {note && <p className="mono text-[9px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">{note}</p>}
+      {note && <p className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">{note}</p>}
       <div className="flex flex-wrap gap-2 mt-1.5">
         {wikidata && (
           <a
@@ -1250,11 +1303,11 @@ function CorrelationCard({
       <Hero tone={heroTone} title="⚠ Correlation">
         <p className="text-[11px] text-txt-1 leading-snug mb-2">{top.message}</p>
         <div className="flex items-center gap-2 mb-2">
-          <span className={`mono text-[9px] tracking-[0.5px] uppercase ${sevClass(top.severity)}`}>
+          <span className={`mono text-[10px] tracking-[0.5px] uppercase ${sevClass(top.severity)}`}>
             {top.severity}
           </span>
-          <span className="mono text-[9px] text-txt-3 tabular-nums">{top.ruleId}</span>
-          <span className="mono text-[9px] text-txt-3 tabular-nums">
+          <span className="mono text-[10px] text-txt-3 tabular-nums">{top.ruleId}</span>
+          <span className="mono text-[10px] text-txt-3 tabular-nums">
             conf {(top.confidence * 100).toFixed(0)}%
           </span>
         </div>
@@ -1282,10 +1335,10 @@ function CorrelationCard({
           {matches.map((a) => (
             <li key={a.id} className="border border-line rounded-sm p-2 bg-bg-2/60">
               <div className="flex items-baseline justify-between gap-2">
-                <span className={`mono text-[9px] tracking-[0.5px] uppercase ${sevClass(a.severity)}`}>
+                <span className={`mono text-[10px] tracking-[0.5px] uppercase ${sevClass(a.severity)}`}>
                   {a.severity}
                 </span>
-                <span className="mono text-[9px] text-txt-3 tabular-nums">{a.ruleId}</span>
+                <span className="mono text-[10px] text-txt-3 tabular-nums">{a.ruleId}</span>
               </div>
               <p className="text-[11px] text-txt-1 leading-tight mt-1">{a.message}</p>
               <div className="flex items-center gap-2 mt-1.5">
@@ -1300,10 +1353,10 @@ function CorrelationCard({
                 >
                   → Slew
                 </Btn>
-                <span className="mono text-[9px] tabular-nums text-txt-3">
+                <span className="mono text-[10px] tabular-nums text-txt-3">
                   {new Date(a.t).toISOString().slice(11, 19)}Z
                 </span>
-                <span className="mono text-[9px] tabular-nums text-txt-3">
+                <span className="mono text-[10px] tabular-nums text-txt-3">
                   conf {(a.confidence * 100).toFixed(0)}%
                 </span>
               </div>

@@ -13,12 +13,14 @@ const selectCls =
 export function WatchboxPanel(): JSX.Element {
   const wbs = useWatchboxes((s) => s.watchboxes);
   const add = useWatchboxes((s) => s.add);
+  const update = useWatchboxes((s) => s.update);
   const remove = useWatchboxes((s) => s.remove);
   const clear = useWatchboxes((s) => s.clear);
 
   const [rule, setRule] = useState<WatchRule>('enter');
   const [label, setLabel] = useState('');
   const [status, setStatus] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const draw = getDrawController();
   const noDraw = draw == null;
@@ -66,22 +68,73 @@ export function WatchboxPanel(): JSX.Element {
 
       <Widget title="Active watchboxes" count={`${wbs.length}`}>
         <div className="max-h-[200px] overflow-auto space-y-0.5">
-          {wbs.map((w) => (
-            <div key={w.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-              <span className="text-[9px]" style={{ color: '#f5a524' }}>⊙</span>
-              <span className="flex-1 text-[10px] text-txt-1 mono truncate">
-                {w.label} · {w.rule} · {w.radiusKm}km
-              </span>
-              <button
-                type="button"
-                onClick={() => remove(w.id)}
-                className="text-[11px] leading-none text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"
-                aria-label="Delete watchbox"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+          {wbs.map((w) =>
+            editId === w.id ? (
+              <div key={w.id} className="space-y-1.5 rounded-sm bg-bg-2 px-1.5 py-1.5">
+                <input
+                  className={selectCls}
+                  value={w.label}
+                  onChange={(e) => update(w.id, { label: e.target.value })}
+                  placeholder="label"
+                  aria-label="Watchbox label"
+                />
+                <div className="flex gap-1">
+                  {RULES.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => update(w.id, { rule: r })}
+                      className={`flex-1 text-[10px] mono py-1 rounded-sm border capitalize ${
+                        w.rule === r ? 'border-accent-line bg-accent-dim text-txt-0' : 'border-line text-txt-2 hover:text-txt-0'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="flex flex-1 items-center gap-1">
+                    <MicroLabel>radius km</MicroLabel>
+                    <input
+                      type="number"
+                      min={0.1}
+                      step={0.1}
+                      value={w.radiusKm}
+                      onChange={(e) => update(w.id, { radiusKm: Math.max(0.1, +e.target.value || 0.1) })}
+                      className={selectCls}
+                      aria-label="Watchbox radius km"
+                    />
+                  </label>
+                  <Btn size="sm" tone="accent" onClick={() => setEditId(null)}>
+                    done
+                  </Btn>
+                </div>
+              </div>
+            ) : (
+              <div key={w.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
+                <span className="text-[10px]" style={{ color: '#f5a524' }}>⊙</span>
+                <span className="flex-1 text-[10px] text-txt-1 mono truncate">
+                  {w.label} · {w.rule} · {w.radiusKm}km
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEditId(w.id)}
+                  className="text-[11px] leading-none text-txt-3 hover:text-accent px-1 opacity-0 group-hover:opacity-100"
+                  aria-label="Edit watchbox"
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(w.id)}
+                  className="text-[11px] leading-none text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"
+                  aria-label="Delete watchbox"
+                >
+                  ✕
+                </button>
+              </div>
+            ),
+          )}
           {wbs.length === 0 && <MicroLabel>no watchboxes — draw an AOI</MicroLabel>}
         </div>
         {wbs.length > 0 && (

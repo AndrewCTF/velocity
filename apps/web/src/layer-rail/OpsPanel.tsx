@@ -22,6 +22,7 @@ import { useAoi } from '../state/aoi.js';
 import { flyToChokepoint } from '../globe/camera.js';
 import { apiFetch } from '../transport/http.js';
 import { useReducedMotion } from '../shell/useReducedMotion.js';
+import { useEntityStats, setStatsViewer, acquireStats } from '../globe/entityStats.js';
 
 // Each chokepoint gets a small category-toned dot so the list scans fast.
 const CATEGORY_DOT: Record<Chokepoint['category'], string> = {
@@ -31,34 +32,9 @@ const CATEGORY_DOT: Record<Chokepoint['category'], string> = {
   'air-corridor': '#5eead4',
 };
 
-// Count entities across all data sources whose sampled position at the current
-// clock time falls inside a chokepoint bbox [west, south, east, north]. This is
-// the SAME iteration pattern camera.ts uses (viewer.dataSources + clock time);
-// entities without a resolvable position at this instant are skipped.
-function countInAoi(viewer: Cesium.Viewer): Map<string, number> {
-  const time = viewer.clock.currentTime;
-  const out = new Map<string, number>();
-  for (const c of chokepoints) out.set(c.id, 0);
-  const carto = new Cesium.Cartographic();
-  const scratch = new Cesium.Cartesian3();
-  for (let d = 0; d < viewer.dataSources.length; d++) {
-    const ents = viewer.dataSources.get(d).entities.values;
-    for (const e of ents) {
-      const pos = e.position?.getValue(time, scratch);
-      if (!pos) continue;
-      Cesium.Cartographic.fromCartesian(pos, Cesium.Ellipsoid.WGS84, carto);
-      const lon = Cesium.Math.toDegrees(carto.longitude);
-      const lat = Cesium.Math.toDegrees(carto.latitude);
-      for (const c of chokepoints) {
-        const [w, s, ee, n] = c.bbox;
-        if (lon >= w && lon <= ee && lat >= s && lat <= n) {
-          out.set(c.id, (out.get(c.id) ?? 0) + 1);
-        }
-      }
-    }
-  }
-  return out;
-}
+// Live in-AOI contact counts come from the shared entity-stats sampler
+// (globe/entityStats.ts) — ONE idle-scheduled walk for the whole app, instead
+// of a second per-2s walk here that competed with Cesium's render loop.
 
 // Severity ordering + badge tone mapping for the standing-detections rollup.
 const SEVERITY_ORDER: readonly AlertSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
@@ -114,24 +90,13 @@ export function OpsPanel({
     };
   }, []);
 
-  // Live in-AOI contact counts, recomputed every ~2s off the viewer's clock.
-  const [liveCounts, setLiveCounts] = useState<Map<string, number> | null>(null);
+  // Live in-AOI contact counts from the shared entity-stats sampler. Subscribing
+  // here also keeps that one walk alive (ref-counted) while Ops is open.
+  const aoiCounts = useEntityStats((s) => s.aoiCounts);
   useEffect(() => {
-    if (!viewer) {
-      setLiveCounts(null);
-      return;
-    }
-    let cancelled = false;
-    const tick = (): void => {
-      if (cancelled || viewer.isDestroyed()) return;
-      setLiveCounts(countInAoi(viewer));
-    };
-    tick();
-    const handle = window.setInterval(tick, 2000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(handle);
-    };
+    if (!viewer) return;
+    setStatsViewer(viewer);
+    return acquireStats();
   }, [viewer]);
 
   // Group the current standing-detection counts by severity, keep only non-empty
@@ -151,7 +116,7 @@ export function OpsPanel({
         <div className="space-y-px">
           {chokepoints.map((c) => {
             const isActive = active?.id === c.id;
-            const live = liveCounts?.get(c.id);
+            const live = aoiCounts[c.id];
             return (
               <button
                 key={c.id}
@@ -175,7 +140,7 @@ export function OpsPanel({
                 <span className="text-[11.5px] text-txt-1 truncate min-w-0 flex-1">{c.name}</span>
                 {live !== undefined && (
                   <span
-                    className="mono text-[9.5px] text-accent tabular-nums shrink-0"
+                    className="mono text-[10px] text-accent tabular-nums shrink-0"
                     title="live in-AOI contacts (sampled every 2s)"
                   >
                     {live}
@@ -183,7 +148,7 @@ export function OpsPanel({
                 )}
                 {c.daily_transits !== undefined && (
                   <span
-                    className="mono text-[9.5px] text-txt-2 tabular-nums shrink-0"
+                    className="mono text-[10px] text-txt-2 tabular-nums shrink-0"
                     title="typical daily transits"
                   >
                     {c.daily_transits}/d
@@ -197,7 +162,9 @@ export function OpsPanel({
       </section>
 
       {/* ── Standing detections ───────────────────────────────────────────── */}
-      <section className="space-y-1.5">
+      {/* Live region: announce detection changes to assistive tech (the counts
+          update off a 5 s poll; the rollup is small so polite re-reads are fine). */}
+      <section className="space-y-1.5" aria-live="polite">
         <SectionLabel title="Standing detections" count={standing.total} />
         {detections.length === 0 ? (
           <div className="mono text-[10px] text-txt-3 px-2 py-[5px]">no detections firing</div>
