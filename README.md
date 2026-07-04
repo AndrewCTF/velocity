@@ -9,7 +9,7 @@ can ask it for live data instead of guessing from its training cut-off.
 **[Live demo](https://projectvelocity.org)** · [Quick start](#quick-start) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server--query-the-live-console-from-an-ai-agent)
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-690%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
@@ -22,44 +22,40 @@ can ask it for live data instead of guessing from its training cut-off.
 
 ## Prerequisites
 
-You need **one** of these two setups — Docker is the shortest path.
+Honestly, not much. There are two ways to run it, pick whichever you're set up for:
 
-**A) Docker (recommended — one command).**
+- **The easy way — Docker.** If you have Docker (24 or newer, with the `compose`
+  plugin that ships with Docker Desktop), that's the whole list. One command and
+  you're up.
+- **Running the pieces yourself.** If you'd rather not use Docker, you'll need
+  Node 20+, pnpm 9 (`corepack enable` picks the right version for you), Python
+  3.12 for the backend, and `uv` to pull its dependencies — a plain venv works
+  too if you don't have `uv`.
 
-| Tool | Version | Notes |
-| --- | --- | --- |
-| Docker Engine | 24+ | with the `docker compose` v2 plugin |
-| A WebGL2 browser | Chrome/Edge 110+, Firefox 110+ | the globe is client-side WebGL2 |
+Either way, you need a browser that can do WebGL2 — any recent Chrome, Edge or
+Firefox. The globe leans on your GPU, so on a laptop with switchable graphics do
+yourself a favour and push it onto the discrete card before you judge the frame
+rate.
 
-**B) Local dev (no Docker).**
-
-| Tool | Version | Notes |
-| --- | --- | --- |
-| Node.js | 20 LTS+ | |
-| pnpm | 9+ | `corepack enable` gives you the pinned version |
-| Python | 3.12 | backend runtime |
-| uv *(or) venv* | latest | `uv` resolves the API deps cross-platform; a plain venv works too |
-| A WebGL2 browser | Chrome/Edge 110+, Firefox 110+ | discrete GPU recommended for 3D-sat |
-
-No API keys are required for either path — the core feeds (aircraft, vessels,
-quakes, satellites, basemap) run keyless. Keys only add reach; see
-[What it pulls in](#what-it-pulls-in).
+And no keys. The core feeds — planes, ships, quakes, satellites, the basemap —
+all run without a single API key. Keys only ever add reach; see
+[What it pulls in](#what-it-pulls-in) for what each one buys you.
 
 ## Quick start
 
-The fastest way is Docker — it boots the API, web app and nginx together:
+Docker is the short road — it brings up the API, the web app and nginx together:
 
 ```bash
 git clone https://github.com/AndrewCTF/ProjectVelocity.git
 cd ProjectVelocity
-cp .env.example .env       # optional — every key is optional, empty works
-docker compose up          # boots api, web, nginx on :8080
+cp .env.example .env       # optional — leave it empty, everything still works
+docker compose up          # api + web + nginx on :8080
 ```
 
-Open <http://localhost:8080>. No API keys required — it comes up with live
-aircraft, vessels, quakes and the rest straight away. **On first load a short
-in-app tour** walks you through the map, the inspector and the analysis tools;
-you can re-open it any time from **⚙ Settings**.
+Now open <http://localhost:8080>. It comes up live — planes moving, ships,
+quakes, the lot — with nothing to configure in between. The first time in, a
+short tour points out where things live; you can pull it back up whenever from
+**⚙ Settings**.
 
 <details>
 <summary><b>Local dev without Docker</b></summary>
