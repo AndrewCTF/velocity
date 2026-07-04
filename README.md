@@ -300,12 +300,18 @@ pnpm -r typecheck
 ## Phase status
 
 - [x] Phase 0 — Foundation
-- [x] Phase 1 — MVP (live ADS-B / AIS / quakes / jamming layers)
-- [ ] Phase 2 — Replay + drill-in
+- [x] Phase 1 — MVP: live ADS-B / AIS / quakes / GPS-jamming layers on the globe
+- [~] Phase 2 — Replay + drill-in: the timeline scrubber and a 7-day history
+  buffer are in (SQLite-backed playback); the durable Postgres + PostGIS +
+  TimescaleDB store is still the planned upgrade
 - [x] Phase 3 — Fusion engine + alerts (correlation rules) + 2D mirror
-- [~] Phase 4 — Advanced sensors + AI — **MCP server + intel API shipped** (agent access, local Ollama analysis)
+- [~] Phase 4 — Advanced sensors + AI: MCP server + intel API, Sentinel-1 SAR
+  dark-vessel detection, an autonomous watch-officer that writes cited incident
+  briefs, a keyless infra/domain OSINT layer, optional local-GPU (Ollama)
+  inference, and a first-run onboarding tour. More sensors and deeper analysis
+  are ongoing.
 
-See [the plan](.) for detail.
+See [`docs/`](./docs) for the per-feature design notes and pipeline writeups.
 
 ## License
 

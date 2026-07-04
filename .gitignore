@@ -69,3 +69,13 @@ apps/web/public/basemap/*.pmtiles
 
 # Generated knowledge-graph artifact (regenerate with /graphify).
 graphify-out/
+
+# Research artifacts / scratch — not source. Keep the repo to code + docs.
+Palantir_Gotham_*.pdf
+Palantir_Gotham_*.docx
+deep-research-report.md
+sim-running-snapshot.md
+eusi_*_b64.txt
+# Agent tooling & planning skill output — local workflow, not shipped.
+.claude/
+docs/superpowers/
