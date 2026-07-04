@@ -109,6 +109,19 @@ export class SimController {
   get placing(): boolean {
     return this.placeCb != null;
   }
+  // Resolve the armed one-shot from EXPLICIT lat/lon instead of a map click —
+  // mirrors the LEFT_CLICK handler above (which builds
+  // `{ lat, lon } = toDegrees(pickEllipsoid(...))` then consumes `placeCb`),
+  // but skips the pick since the operator typed the coordinates. Same callback
+  // path, so A / B / jammer set by `beginPlace()` fill programmatically. The
+  // click path is untouched. Returns false when nothing is armed.
+  placeAt(lat: number, lon: number): boolean {
+    if (!this.placeCb) return false;
+    const cb = this.placeCb;
+    this.placeCb = null;
+    cb({ lat, lon });
+    return true;
+  }
 
   load(plan: SimPlan): void {
     this.plan = plan;
@@ -220,7 +233,20 @@ export class SimController {
         },
         ...(showLabel ? { label: labelFor(spec.label) } : {}),
         name: spec.label,
-        properties: { kind: 'sim-uav', sim: true, ...(spec.swarmId ? { swarmId: spec.swarmId } : {}) },
+        properties: {
+          kind: 'sim-uav',
+          sim: true,
+          ...(spec.swarmId ? { swarmId: spec.swarmId } : {}),
+          link_profile: spec.profile.type,
+          // Live runtime fields. A CallbackProperty stays live inside a
+          // PropertyBag, so the EntityPanel shows real status (mode / link /
+          // altitude / heading) when a sim drone is clicked — the de-silo.
+          mode: new Cesium.CallbackProperty(() => rt.mode, false),
+          link: new Cesium.CallbackProperty(() => rt.link, false),
+          fate: new Cesium.CallbackProperty(() => rt.fate, false),
+          alt_m: new Cesium.CallbackProperty(() => Math.round(rt.alt), false),
+          heading_deg: new Cesium.CallbackProperty(() => Math.round(rt.heading), false),
+        },
       });
       // Fiber-optic tether: a line from the control station to the drone while
       // the link is alive (the physical spooled fiber).

@@ -7,7 +7,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as Cesium from 'cesium';
-import { search, type SearchResult } from '../transport/search.js';
+import {
+  search,
+  KIND_BADGE_LABEL,
+  KIND_BADGE_CLASS,
+  LOCATION_KINDS,
+  type SearchResult,
+} from '../transport/search.js';
 import { useSelection } from '../state/stores.js';
 import { useUiMode, type UiMode } from '../state/uiMode.js';
 import { flyToPosition } from '../globe/camera.js';
@@ -135,7 +141,7 @@ export function Omnibar({
       it.a.run();
     } else {
       const r = it.e;
-      if (r.kind === 'place' || r.kind === 'chokepoint') useSelection.getState().select(null);
+      if (LOCATION_KINDS.has(r.kind)) useSelection.getState().select(null);
       else useSelection.getState().select(r.id);
       if (viewer && (r.lon !== 0 || r.lat !== 0)) {
         flyToPosition(viewer, r.lon, r.lat, (r.kind === 'chokepoint' ? 800 : 200) * 1000, 1.2);
@@ -203,16 +209,23 @@ export function Omnibar({
                 onClick={() => runItem(it)}
                 className={`w-full text-left px-3 py-2 flex items-center gap-3 ${sel ? 'bg-accent-dim' : ''}`}
               >
-                <span
-                  className={`mono text-[9px] uppercase w-12 shrink-0 ${
-                    it.type === 'action' ? 'text-warn' : 'text-accent'
-                  }`}
-                >
-                  {hint}
+                {it.type === 'entity' ? (
+                  <span className={KIND_BADGE_CLASS[it.e.kind]}>
+                    {KIND_BADGE_LABEL[it.e.kind]}
+                  </span>
+                ) : (
+                  <span className="mono text-[10px] uppercase w-12 shrink-0 text-warn">
+                    {hint}
+                  </span>
+                )}
+                <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
+                  <span className="truncate text-[12px] text-txt-0">{label}</span>
+                  {it.type === 'entity' && it.e.detail && (
+                    <span className="truncate text-[10px] text-txt-3">{it.e.detail}</span>
+                  )}
                 </span>
-                <span className="flex-1 truncate text-[12px] text-txt-0">{label}</span>
                 {it.type === 'entity' && (
-                  <span className="mono text-[9px] text-txt-3 tabular-nums">
+                  <span className="mono text-[10px] text-txt-3 tabular-nums shrink-0">
                     {it.e.lat.toFixed(1)},{it.e.lon.toFixed(1)}
                   </span>
                 )}
@@ -220,7 +233,7 @@ export function Omnibar({
             );
           })}
         </div>
-        <div className="px-3 py-1.5 border-t border-line text-[9px] text-txt-4 mono flex gap-3">
+        <div className="px-3 py-1.5 border-t border-line text-[10px] text-txt-4 mono flex gap-3">
           <span>↑↓ navigate</span>
           <span>↵ select</span>
           <span>esc close</span>

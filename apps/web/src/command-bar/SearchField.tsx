@@ -1,26 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type * as Cesium from 'cesium';
-import { search, type SearchResult } from '../transport/search.js';
+import {
+  search,
+  KIND_BADGE_LABEL,
+  KIND_BADGE_CLASS,
+  LOCATION_KINDS,
+  type SearchResult,
+} from '../transport/search.js';
 import { useSelection } from '../state/stores.js';
 import { flyToPosition } from '../globe/camera.js';
 
 interface Props {
   viewer: Cesium.Viewer | null;
 }
-
-const KIND_LABEL: Record<SearchResult['kind'], string> = {
-  aircraft: 'AC',
-  vessel: 'SH',
-  place: 'GO',
-  chokepoint: 'CP',
-};
-
-const KIND_COLOR: Record<SearchResult['kind'], string> = {
-  aircraft: 'text-accent',
-  vessel: 'text-ok',
-  place: 'text-txt-2',
-  chokepoint: 'text-warn',
-};
 
 export function SearchField({ viewer }: Props): JSX.Element {
   const [q, setQ] = useState('');
@@ -76,7 +68,7 @@ export function SearchField({ viewer }: Props): JSX.Element {
   }, [open]);
 
   const pick = (r: SearchResult) => {
-    if (r.kind === 'place' || r.kind === 'chokepoint') {
+    if (LOCATION_KINDS.has(r.kind)) {
       useSelection.getState().select(null);
     } else {
       useSelection.getState().select(r.id);
@@ -156,8 +148,13 @@ export function SearchField({ viewer }: Props): JSX.Element {
               onClick={() => pick(r)}
               className={`w-full text-left px-2 py-2 flex items-center gap-3 ${i === active ? 'bg-bg-2' : ''}`}
             >
-              <span className={`mono text-[10px] uppercase ${KIND_COLOR[r.kind]} w-6`}>{KIND_LABEL[r.kind]}</span>
-              <span className="flex-1 truncate text-[12px] text-txt-0">{r.label}</span>
+              <span className={KIND_BADGE_CLASS[r.kind]}>{KIND_BADGE_LABEL[r.kind]}</span>
+              <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
+                <span className="truncate text-[12px] text-txt-0">{r.label}</span>
+                {r.detail && (
+                  <span className="truncate text-[10px] text-txt-3">{r.detail}</span>
+                )}
+              </span>
               <span className="mono micro tabular-nums">
                 {r.lat.toFixed(2)},{r.lon.toFixed(2)}
               </span>

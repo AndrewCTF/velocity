@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
-import { useSim } from '../state/stores.js';
+import { useSim, useAlerts } from '../state/stores.js';
 import { Widget, Btn, SectionLabel, KV, KVRow, MicroLabel, Badge, Toggle } from '../shell/instruments.js';
-import { SimController, type SimClock } from './SimController.js';
+import { SimController, type SimClock, type SimStats } from './SimController.js';
+import type { Alert } from '@osint/shared';
 import { buildPlan } from './engine.js';
 import { CATALOG, getSystem, ATTACKER_CATEGORIES, DEFENDER_CATEGORIES, type CatalogItem } from './catalog.js';
 import { resolveRaid, salvoForDefender, RENDER_AGENT_CAP, type RaidResult } from './combat.js';
@@ -12,6 +13,8 @@ import { reasonSim, type SimReasonResult } from './reason.js';
 import { linkProfileFor } from './links.js';
 import type { Jammer, JammerKind } from './ew.js';
 import { apiFetch } from '../transport/http.js';
+import { flyToPosition } from '../globe/camera.js';
+import { viewerCenter } from '../globe/center.js';
 import type { LatLon, Scenario, ScenarioKind } from './types.js';
 
 // Control-link archetypes a swarm can use (attack derives link from the system).
@@ -36,6 +39,26 @@ const KIND_LABELS: Record<ScenarioKind, string> = {
 function fmtPt(p: LatLon | null): string {
   return p ? `${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}` : '— click map —';
 }
+
+// Parse the coordinate-entry inputs into a validated {lat, lon}. Accepts a
+// pasted "lat, lon" pair in the LAT field (split on comma) so the operator can
+// drop a Google-Maps-style string; otherwise reads the two fields separately.
+// Returns null when either value is non-finite or out of geographic range.
+export function parseLatLon(latStr: string, lonStr: string): LatLon | null {
+  let latPart = latStr.trim();
+  let lonPart = lonStr.trim();
+  if (latPart.includes(',')) {
+    const [a, b] = latPart.split(',');
+    latPart = (a ?? '').trim();
+    lonPart = (b ?? '').trim();
+  }
+  if (latPart === '' || lonPart === '') return null;
+  const lat = Number(latPart);
+  const lon = Number(lonPart);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { lat, lon };
+}
 function fmtClock(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
@@ -45,6 +68,44 @@ function fmtClock(sec: number): string {
 function linkLabelFor(id: string): string {
   const s = getSystem(id);
   return s ? linkProfileFor(s.id, s.category).label : '—';
+}
+
+// De-silo: surface sim outcomes to the real Alerts rail. Aggregate-COALESCED
+// (one alert per category, throttled) so a 200-drone raid never floods the rail
+// with per-drone events. `center` (the strike point) gives the alert a geometry.
+function pushSimAlerts(
+  stats: SimStats | undefined,
+  prevRef: { current: SimStats | null },
+  lastRef: { current: Record<string, number> },
+  center: LatLon | null,
+): void {
+  if (!stats) return;
+  const prev = prevRef.current;
+  prevRef.current = stats;
+  if (!prev) return; // first sample establishes the baseline — no alert
+  const now = Date.now();
+  const geom: Alert['geom'] = {
+    type: 'Point',
+    coordinates: center ? [center.lon, center.lat] : [0, 0],
+  };
+  const fire = (key: keyof SimStats, label: string, severity: Alert['severity']): void => {
+    if (stats[key] <= prev[key]) return;
+    if (now - (lastRef.current[key] ?? 0) < 2500) return; // coalesce bursts
+    lastRef.current[key] = now;
+    useAlerts.getState().push({
+      id: `sim:${key}:${now}`,
+      ruleId: `sim_${key}`,
+      severity,
+      t: now,
+      geom,
+      confidence: 1,
+      message: `Sim · ${stats[key]} ${label}`,
+      contributingObservations: [],
+    });
+  };
+  fire('struck', 'target(s) struck', 'high');
+  fire('intercepted', 'intercepted by air defence', 'medium');
+  fire('linkLost', 'lost EW / control link', 'medium');
 }
 
 export function SimulationOverlay({
@@ -58,6 +119,11 @@ export function SimulationOverlay({
   const setActive = useSim((s) => s.setActive);
   const ctrlRef = useRef<SimController | null>(null);
   const reasonAbort = useRef<AbortController | null>(null);
+  // Sim→Alerts plumbing: previous stats snapshot + per-category throttle + the
+  // strike point (kept in a ref so the update listener reads the latest value).
+  const prevStatsRef = useRef<SimStats | null>(null);
+  const lastAlertRef = useRef<Record<string, number>>({});
+  const ptBRef = useRef<LatLon | null>(null);
 
   const attackerSystems = useMemo(() => CATALOG.filter((c) => ATTACKER_CATEGORIES.includes(c.category)), []);
   const defenderSystems = useMemo(() => CATALOG.filter((c) => DEFENDER_CATEGORIES.includes(c.category)), []);
@@ -65,6 +131,7 @@ export function SimulationOverlay({
   const [kind, setKind] = useState<ScenarioKind>('drone-swarm');
   const [ptA, setPtA] = useState<LatLon | null>(null);
   const [ptB, setPtB] = useState<LatLon | null>(null);
+  ptBRef.current = ptB; // mirror for the (closure-captured) update listener
   const [count, setCount] = useState(12);
   const [speedKph, setSpeedKph] = useState(185);
   const [altM, setAltM] = useState(1500);
@@ -80,6 +147,8 @@ export function SimulationOverlay({
   const [jamRadiusKm, setJamRadiusKm] = useState(25);
   const [liveJamLoading, setLiveJamLoading] = useState(false);
   const [placing, setPlacing] = useState<'A' | 'B' | 'JAM' | null>(null);
+  const [coordLat, setCoordLat] = useState('');
+  const [coordLon, setCoordLon] = useState('');
   const [clock, setClock] = useState<SimClock>({ simTime: 0, duration: 0, playing: false });
   const [raid, setRaid] = useState<RaidResult | null>(null);
   const [econ, setEcon] = useState<EconImpact | null>(null);
@@ -90,7 +159,11 @@ export function SimulationOverlay({
     if (!active || !viewer || viewer.isDestroyed()) return;
     const ctrl = new SimController(viewer);
     ctrlRef.current = ctrl;
-    ctrl.setUpdateListener(setClock);
+    prevStatsRef.current = null; // re-baseline the alert diff for this run
+    ctrl.setUpdateListener((c) => {
+      setClock(c);
+      pushSimAlerts(c.stats, prevStatsRef, lastAlertRef, ptBRef.current);
+    });
     const restore: Array<[string, number]> = [];
     for (const id of DIM_LAYERS) {
       const d = registry.get(id);
@@ -142,6 +215,26 @@ export function SimulationOverlay({
       ]);
       setPlacing(null);
     });
+  };
+
+  // Fill the currently-armed role (A / B / jammer) from the typed lat/lon
+  // instead of a globe click. `placeAt` resolves the SAME one-shot callback
+  // `beginPlace` armed, so this routes to setPtA/setPtB/addJammer exactly like a
+  // click — then flies the camera there so the placement is visible.
+  const applyCoords = () => {
+    const ctrl = ctrlRef.current;
+    if (!ctrl) return;
+    const p = parseLatLon(coordLat, coordLon);
+    if (!p) return;
+    if (!ctrl.placeAt(p.lat, p.lon)) return; // nothing armed
+    if (viewer && !viewer.isDestroyed()) flyToPosition(viewer, p.lon, p.lat, 400_000, 0.8);
+  };
+
+  const fillFromCenter = () => {
+    const c = viewerCenter(viewer);
+    if (!c) return;
+    setCoordLat(c.lat.toFixed(4));
+    setCoordLon(c.lon.toFixed(4));
   };
 
   const pullLiveJamming = async () => {
@@ -251,6 +344,8 @@ export function SimulationOverlay({
   const labelA = isSwarm || isAttack ? 'Launch' : 'Approach';
   const labelB = isSwarm || isAttack ? 'Target' : 'Pad';
   const ready = ptA != null && ptB != null;
+  const coordParsed = parseLatLon(coordLat, coordLon);
+  const armedLabel = placing === 'A' ? labelA : placing === 'B' ? labelB : placing === 'JAM' ? 'jammer' : null;
 
   return (
     <div className="absolute top-12 left-3 md:left-[304px] z-[1400] w-[300px] max-h-[calc(100%-6rem)] overflow-y-auto pointer-events-auto space-y-2.5 rounded-md border border-line bg-bg-0/90 backdrop-blur-sm p-2 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]">
@@ -307,6 +402,51 @@ export function SimulationOverlay({
             }
           />
         </KV>
+
+        {/* Place by coordinates — fill the currently-armed role (Launch /
+            Target / a jammer) without clicking the globe. The LAT box also
+            accepts a pasted "lat, lon" pair. */}
+        <div className="mt-2 pt-2 border-t border-line">
+          <SectionLabel title="Place by coordinates" />
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <label className="block">
+              <MicroLabel>lat</MicroLabel>
+              <input
+                value={coordLat}
+                onChange={(e) => setCoordLat(e.target.value)}
+                placeholder="51.9"
+                inputMode="decimal"
+                className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-none focus:border-accent-line"
+              />
+            </label>
+            <label className="block">
+              <MicroLabel>lon</MicroLabel>
+              <input
+                value={coordLon}
+                onChange={(e) => setCoordLon(e.target.value)}
+                placeholder="4.4"
+                inputMode="decimal"
+                className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-none focus:border-accent-line"
+              />
+            </label>
+          </div>
+          <div className="flex items-center gap-1.5 mt-2">
+            <Btn
+              size="sm"
+              onClick={applyCoords}
+              disabled={!placing || !coordParsed}
+              className={placing ? 'border-accent-line text-accent' : ''}
+            >
+              {armedLabel ? `Set ${armedLabel}` : 'Set point'}
+            </Btn>
+            <Btn size="sm" onClick={fillFromCenter} title="Fill from the centre of the current view">
+              use map centre
+            </Btn>
+          </div>
+          <MicroLabel className="block mt-1">
+            {placing ? `applies to ${armedLabel} · or paste "lat, lon"` : 'arm Launch / Target / a jammer, then Set'}
+          </MicroLabel>
+        </div>
       </Widget>
 
       <Widget title="Force / parameters">
@@ -395,7 +535,7 @@ export function SimulationOverlay({
           <div className="flex items-center justify-between">
             <MicroLabel>{jammers.length} jammer{jammers.length === 1 ? '' : 's'} placed</MicroLabel>
             {jammers.length > 0 && (
-              <button className="mono text-[9px] text-txt-3 hover:text-alert" onClick={() => setJammers([])}>
+              <button className="mono text-[10px] text-txt-3 hover:text-alert" onClick={() => setJammers([])}>
                 clear
               </button>
             )}

@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Query
 
+from app import places
 from app.config import get_settings
 from app.correlate.store import store
 from app.correlate.types import Observation
@@ -30,7 +31,7 @@ ICAO24_RE = re.compile(r"^[0-9a-f]{6}$", re.IGNORECASE)
 MMSI_RE = re.compile(r"^\d{9}$")
 
 
-SearchKind = Literal["aircraft", "vessel", "place", "chokepoint"]
+SearchKind = Literal["aircraft", "vessel", "place", "chokepoint", "airport", "port"]
 
 
 def _result(
@@ -45,6 +46,45 @@ def _result(
     if detail:
         out["detail"] = detail
     return out
+
+
+def _place_display_name(rec: dict[str, Any]) -> str:
+    """The plain place name from a places.search_places record's label.
+
+    Labels are "CODE · Name" (airport) / "Port: Name" (port); strip the prefix
+    so we can test an EXACT name match against the query."""
+    label = str(rec.get("label") or "")
+    if rec.get("kind") == "airport":
+        return label.split(" · ", 1)[-1]
+    return label[len("Port: "):] if label.startswith("Port: ") else label
+
+
+def _split_place_hits(
+    q: str, hits: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split place hits into (exact, fuzzy) for merge ranking.
+
+    A hit is EXACT when the query equals an airport's IATA/ICAO code OR the
+    place's name (case-insensitive). Everything else (a name-substring hit) is
+    fuzzy. Exact hits outrank fuzzy vessel/aircraft substring matches; fuzzy
+    place hits fall below the existing entity matches. Pure — unit-testable."""
+    ql = q.strip().lower()
+    exact: list[dict[str, Any]] = []
+    fuzzy: list[dict[str, Any]] = []
+    for rec in hits:
+        iata = str(rec.get("iata") or "").lower()
+        icao = str(rec.get("icao") or "").lower()
+        code_match = rec.get("kind") == "airport" and ql in {c for c in (iata, icao) if c}
+        name_match = _place_display_name(rec).lower() == ql
+        (exact if (code_match or name_match) else fuzzy).append(rec)
+    return exact, fuzzy
+
+
+def _place_result(rec: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a places record into the SearchResult shape."""
+    return _result(
+        rec["kind"], rec["id"], rec["label"], rec["lon"], rec["lat"], rec.get("detail") or None
+    )
 
 
 def _match_observations(q: str, kinds: set[str]) -> list[Observation]:
@@ -245,6 +285,20 @@ async def search(
         else:
             results.append(_result("vessel", eid, f"MMSI {q}", 0, 0, "no recent fix"))
 
+    # 3b. Local airport/port reference data. An EXACT code (LAX / EGLL) or exact
+    # place NAME (Rotterdam) must rank ABOVE the fuzzy vessel/aircraft substring
+    # matches below — otherwise q="LAX" surfaces ships named GALAXY and the
+    # airport never appears, and q="Singapore" buries the port under ships named
+    # SINGAPORE. Exact place hits go in here (above §4); fuzzy name-contains hits
+    # go after the entity matches (below §5).
+    place_exact, place_fuzzy = _split_place_hits(q, places.search_places(q, limit=limit))
+    place_seen: set[str] = {r["id"] for r in results}
+    for rec in place_exact:
+        if rec["id"] in place_seen:
+            continue
+        place_seen.add(rec["id"])
+        results.append(_place_result(rec))
+
     # 4. Substring across latest fixes (callsign / registration / name).
     # Dedupe BEFORE applying the limit — the old code sliced first, so
     # duplicate ids consumed result slots and the response came up short.
@@ -269,7 +323,19 @@ async def search(
         if qlower in cid or qlower in name.lower():
             results.append(_result("chokepoint", f"chokepoint:{cid}", name, lon, lat))
 
-    # 6. Nominatim forward-geocode — only if no results so far.
+    # 5b. Fuzzy place hits (name-contains, not an exact code/name) — below the
+    # entity matches, still above the Nominatim fallback and dedup-guarded.
+    for rec in place_fuzzy:
+        if len(results) >= limit:
+            break
+        if rec["id"] in place_seen:
+            continue
+        place_seen.add(rec["id"])
+        results.append(_place_result(rec))
+
+    # 6. Nominatim forward-geocode — only if no results so far. Local airport/
+    # port hits already populated `results`, so Nominatim (and any duplicate
+    # place hit) is skipped whenever a reference place matched.
     if not results:
         s = get_settings()
         base = s.nominatim_url or ("" if s.commercial_mode else "https://nominatim.openstreetmap.org")

@@ -1,13 +1,58 @@
 import { apiFetch } from './http.js';
 
 export interface SearchResult {
-  kind: 'aircraft' | 'vessel' | 'place' | 'chokepoint';
+  kind: 'aircraft' | 'vessel' | 'place' | 'airport' | 'port' | 'chokepoint';
   id: string;
   label: string;
   lon: number;
   lat: number;
   detail?: string;
 }
+
+// ── Result-kind badge presentation (shared by SearchField + Omnibar) ──
+// One source of truth so both result lists render an identical badge. The
+// class strings reuse the app's existing chip vocabulary — the pill base is
+// the ExplorerApp/InboxPanel/AlertsRailList chip (`mono text-[10px] uppercase
+// tracking-[0.4px] px-1.5 py-0.5 rounded-sm border`) and each tone is an
+// existing token pairing already used elsewhere in the tree (accent-dim /
+// warn-bg / alert-bg / mag-dim, see CommandBar/NewsPanel/App).
+
+/** Short uppercase glyph shown in the badge, keyed by result kind. */
+export const KIND_BADGE_LABEL: Record<SearchResult['kind'], string> = {
+  aircraft: 'AIR',
+  vessel: 'SHIP',
+  place: 'PLACE',
+  airport: 'ARPT',
+  port: 'PORT',
+  chokepoint: 'CHOKE',
+};
+
+const BADGE_BASE =
+  'mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-sm border text-center shrink-0 w-[54px]';
+
+/** Full className for the kind badge — pill base + a subtly-colored tone. */
+export const KIND_BADGE_CLASS: Record<SearchResult['kind'], string> = {
+  // moving live contacts → cool data tones (blue / green)
+  aircraft: `${BADGE_BASE} border-accent-line text-accent bg-accent-dim`,
+  vessel: `${BADGE_BASE} border-ok/40 text-ok bg-ok/10`,
+  // static locations → distinct warmer / neutral tones so they aren't lost
+  airport: `${BADGE_BASE} border-warn/40 text-warn bg-warn-bg`,
+  port: `${BADGE_BASE} border-mag-line text-mag bg-mag-dim`,
+  place: `${BADGE_BASE} border-line text-txt-2`,
+  chokepoint: `${BADGE_BASE} border-alert/40 text-alert bg-alert-bg`,
+};
+
+/**
+ * Location-only result kinds. These have no live-store entity to select — a
+ * click clears the selection and just flies the camera. Aircraft/vessel are
+ * the only kinds that resolve to a selectable entity id.
+ */
+export const LOCATION_KINDS: ReadonlySet<SearchResult['kind']> = new Set<SearchResult['kind']>([
+  'place',
+  'airport',
+  'port',
+  'chokepoint',
+]);
 
 export async function search(q: string, signal?: AbortSignal): Promise<SearchResult[]> {
   const r = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`, signal ? { signal } : {});

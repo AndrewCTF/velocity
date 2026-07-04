@@ -607,6 +607,42 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     visibleByDefault: false,
     emits: ['camera'],
   },
+  // Zoom-gated place markers — airports + seaports. Off by default; FR24-style
+  // tile icons that appear ONLY when zoomed into a country / metro. The gate is
+  // the LayerCompositor placesBboxQuery: it sends a bbox (comma-joined
+  // minLon,minLat,maxLon,maxLat) only below ~1,500 km camera altitude; above it
+  // the endpoint gets no bbox and returns an empty FeatureCollection, so nothing
+  // paints at world/continental view. Style is dispatched by layer id in the
+  // compositor (→ 'airport'/'port'), so no `emits` tag is needed (and neither is
+  // an EmitsKind value).
+  {
+    id: 'places.airports',
+    group: 'infra',
+    title: 'Airports',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/places/airports?limit=2000',
+    refresh: { mode: 'pull', ttlSec: 120 },
+    time: { temporal: false },
+    crs: 'EPSG:4326',
+    license: 'Curated public reference data',
+    opacity: 1,
+    visibleByDefault: false,
+  },
+  {
+    id: 'places.ports',
+    group: 'infra',
+    title: 'Ports',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/places/ports?limit=2000',
+    refresh: { mode: 'pull', ttlSec: 120 },
+    time: { temporal: false },
+    crs: 'EPSG:4326',
+    license: 'Curated public reference data',
+    opacity: 1,
+    visibleByDefault: false,
+  },
 ] as const;
 
 export function registerDefaults(registry: LayerRegistry): void {

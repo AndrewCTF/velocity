@@ -18,6 +18,7 @@ from app.correlate import runner as correlate_runner
 from app.mcp_server import build_mcp_mount
 from app.routes import actions as actions_routes
 from app.routes import adsb as adsb_routes
+from app.routes import ai as ai_routes
 from app.routes import ais as ais_routes
 from app.routes import alert_rules as alert_rules_routes
 from app.routes import alerts as alerts_routes
@@ -49,6 +50,7 @@ from app.routes import maps as maps_routes
 from app.routes import maritime as maritime_routes
 from app.routes import news as news_routes_mod
 from app.routes import ontology as ontology_routes
+from app.routes import places as places_routes
 from app.routes import recon as recon_routes
 from app.routes import route as route_routes
 from app.routes import sar as sar_routes
@@ -277,11 +279,14 @@ def create_app() -> FastAPI:
     app.include_router(eq_routes.router)
     app.include_router(aviation_routes.router)
     app.include_router(adsb_routes.router)
+    app.include_router(ai_routes.router)
     app.include_router(firms_routes.router)
     app.include_router(ais_routes.router)
     app.include_router(seismic_routes.router)
     app.include_router(events_routes.router)
     app.include_router(geocode_routes.router)
+    # Airport + seaport reference-data map overlays (keyless, like geocode).
+    app.include_router(places_routes.router)
     app.include_router(cables_routes.router)
     app.include_router(space_routes.router)
     app.include_router(weather_routes.router)

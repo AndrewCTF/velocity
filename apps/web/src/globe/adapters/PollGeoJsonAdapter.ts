@@ -2,19 +2,30 @@ import * as Cesium from 'cesium';
 import type { LayerAdapter, AdapterCtx } from './types.js';
 import {
   aircraftStyle,
+  airportStyle,
   cameraStyle,
   fireStyle,
   jammingPolygonStyle,
+  portStyle,
   quakeStyle,
   vesselStyle,
 } from './styles.js';
-import { labelFor, aircraftLabelText, vesselLabelText } from './labelStyle.js';
+import {
+  labelFor,
+  aircraftLabelText,
+  airportLabelText,
+  portLabelText,
+  vesselLabelText,
+} from './labelStyle.js';
 import {
   resolveAircraftFamily,
   aircraftSilhouette,
   vesselSilhouette,
 } from '../../entity-panel/silhouettes.js';
 import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
+import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
+import { perfSetDrain } from '../perf.js';
+import { isCameraMoving, cameraMovingForMs } from '../cameraMotion.js';
 import { VesselClusterPrimitive } from './VesselClusterPrimitive.js';
 import { tracks } from '../../intel/tracks.js';
 import { aircraftDedup } from '../../intel/registry.js';
@@ -36,12 +47,22 @@ const FILTER_DIM_ALPHA = 0.1;
 // polls and starve the main thread.
 const GRID_MIN_GAP_MS = 100;
 
+// A WS push older than this (6× the 1s cadence) means the socket has gone quiet
+// — the tab was backgrounded (browsers freeze rAF + throttle timers, so frames
+// stop applying and reconnects stall) or the socket went zombie (onclose never
+// fired). Past this the poll STOPS being suppressed and refetches over HTTP, so
+// the map self-heals without a manual refresh. A healthy 1s socket never trips it.
+const WS_STALE_MS = 6000;
+
 // Per-frame upsert budget (ms). A payload of ~8-13k entities is applied in
 // slices of at most this long so no single frame blocks — the cure for the
 // periodic "stop" when a push lands. ~6ms leaves the rest of the 16ms frame for
 // Cesium's own render of the interpolated billboards. A full world payload drains
 // over ~12-22 frames (~200-370ms), comfortably inside the ~2s push interval.
 const DRAIN_BUDGET_MS = 6;
+// Floor a budgeted slice never drops below, so a frame already spent by another
+// adapter can't stall this drain entirely — we always make a little progress.
+const DRAIN_MIN_SLICE_MS = 2;
 
 // First-payload budget: the very first world snapshot has nothing animating yet,
 // so spend a bigger one-time slice to place all ~13k icons in ~3 frames instead
@@ -49,6 +70,16 @@ const DRAIN_BUDGET_MS = 6;
 // report). Subsequent live pushes revert to DRAIN_BUDGET_MS so a push never
 // blocks a frame mid-animation.
 const FIRST_DRAIN_BUDGET_MS = 50;
+
+// Aircraft syncAll (steady poll) per-frame CEILING. The unchanged-skip keeps a
+// normal poll's apply well under this (~4-6ms) so the whole payload still
+// teleports in ONE frame — in sync, no ripple, the guardrail case preserved.
+// A BULK change (a zoom bbox refetch, or a burst poll where thousands got fresh
+// fixes at once) that would otherwise block the frame for ~640ms instead spills
+// to the next frame via the reschedule at the drain tail — the map stays
+// interactive and the newly-revealed icons ripple in over ~0.5s instead of a
+// hard freeze. ~1.5 frames of headroom so normal polls never trip it.
+const SYNC_ALL_CEILING_MS = 24;
 
 // Aircraft world pushes apply in ONE frame (operator request 2026-06-27: "all in
 // sync") instead of the time-sliced ripple, so every aircraft that moved this
@@ -100,6 +131,10 @@ const DR_FUTURE_ISO = '2100-01-01T00:00:00Z';
 // immediately snap into POS without user seeing" — hence the moveEnd reconcile.
 // Below this altitude vessels glide normally (few on screen → cheap).
 const VESSEL_GLIDE_FREEZE_ALTITUDE_M = 2_000_000; // 2,000 km
+// Hysteresis band below the freeze altitude. Once vessels are frozen (world view)
+// they stay frozen until the camera drops clearly below the threshold, so a pan
+// that grazes the boundary doesn't thrash ~6k SampledPositionProperty re-evals.
+const VESSEL_FREEZE_HYSTERESIS_M = 250_000; // 250 km
 
 // World-view render cap for vessels. The keyless feed returns ~21k vessels; at
 // world view they collapse into cluster bubbles anyway, so a deterministic
@@ -113,6 +148,19 @@ const VESSEL_WORLD_CAP = 6000;
 // Initial great-circle bearing (deg, 0=N) from point 1 to point 2. Used as a
 // heading fallback so an icon whose feed omits track/cog still points the way
 // it's actually moving instead of freezing pointing north.
+// §5.3.1: refresh a Cesium PropertyBag's values IN PLACE (no allocation). Cesium
+// stores each raw JSON value behind a getter/setter — assigning `bag[key] = v`
+// swaps the backing field and raises definitionChanged, so getValue()/facets/
+// EntityPanel stay live. Exported so the freshness invariant the 2026-06-30
+// guardrail depends on can be unit-tested (propertyBagRefresh.test.ts).
+export function refreshBagInPlace(bag: Cesium.PropertyBag, props: Record<string, unknown>): void {
+  const raw = bag as unknown as Record<string, unknown>;
+  for (const key in props) {
+    if (bag.hasProperty(key)) raw[key] = props[key];
+    else bag.addProperty(key, props[key]);
+  }
+}
+
 function bearingDeg(lon1: number, lat1: number, lon2: number, lat2: number): number {
   const phi1 = Cesium.Math.toRadians(lat1);
   const phi2 = Cesium.Math.toRadians(lat2);
@@ -147,7 +195,16 @@ async function gunzipToText(buf: ArrayBuffer): Promise<string> {
   return await new Response(inflated).text();
 }
 
-export type StyleKind = 'quake' | 'aircraft' | 'fire' | 'vessel' | 'jamming' | 'camera' | 'generic';
+export type StyleKind =
+  | 'quake'
+  | 'aircraft'
+  | 'fire'
+  | 'vessel'
+  | 'jamming'
+  | 'camera'
+  | 'airport'
+  | 'port'
+  | 'generic';
 
 interface Props {
   ctx: AdapterCtx;
@@ -291,6 +348,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // entityId → last [lon, lat], so we can derive a heading from movement when
   // the feed doesn't carry track/cog (otherwise the icon points north).
   private lastPos = new Map<string, [number, number]>();
+  // §5.3.2: last wall-clock ms we pushed a track point per id, for the 30 s
+  // heartbeat that keeps a parked contact's ring alive without pushing all ~13k
+  // contacts every poll.
+  private lastTrackPushMs = new Map<string, number>();
   // Dead-reckon only: last REAL fix position per id (Cartesian). Used to detect
   // a resent/stale fix (same position) so we DON'T re-glide to a place the icon
   // already reached.
@@ -384,6 +445,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   private wsConn: WebSocket | null = null;
   private wsReconnectDelay = 1000;
   private wsActive = false;
+  private lastWsMs = 0; // §5.6.3: wall-clock of the last applied WS frame
   // Time-sliced upsert queue. render() enqueues the latest payload; drain()
   // applies a budgeted slice per animation frame so a big batch never freezes a
   // frame. A new payload replaces the queue (latest wins); the full-scan prune at
@@ -397,6 +459,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // Last vessel glide-freeze state (camera above/below the freeze altitude). Only
   // a threshold CROSSING does work in reconcileGlideForZoom.
   private lastFreezeState: boolean | null = null;
+  // Hysteretic mirror of the freeze state used by the drain's per-vessel branch
+  // (distinct from lastFreezeState, which reconcileGlideForZoom uses as a raw
+  // threshold-crossing detector).
+  private vesselFreezeHyst = false;
   private detachZoom: (() => void) | null = null;
 
   constructor(private readonly props: Props) {
@@ -405,6 +471,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
 
   // Detach handle for the camera moveEnd listener (viewport layers only).
   private detachMove: (() => void) | null = null;
+
+  // Detach handle for the tab-visibility listener (forces a refetch + socket
+  // rebuild when the tab returns to the foreground after a background freeze).
+  private detachVis: (() => void) | null = null;
 
   async attach(viewer: Cesium.Viewer): Promise<void> {
     await viewer.dataSources.add(this.ds);
@@ -502,7 +572,13 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       let t: number | null = null;
       const onMove = (): void => {
         if (t != null) window.clearTimeout(t);
-        t = window.setTimeout(() => this.refresh(), 200);
+        t = window.setTimeout(() => {
+          // §5.6.3: skip the moveEnd re-poll when the WS push owns this view and a
+          // frame landed <1 s ago — it's already fresher than an HTTP poll. Zoomed-in
+          // (bbox) views still poll: WS is suppressed there and the bbox just changed.
+          if (this.wsActive && this.isWorldView() && Date.now() - this.lastWsMs < 1000) return;
+          this.refresh();
+        }, 200);
       };
       viewer.camera.moveEnd.addEventListener(onMove);
       this.detachMove = () => {
@@ -522,6 +598,24 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (!viewer.isDestroyed()) viewer.camera.moveEnd.removeEventListener(onZoom);
       };
     }
+    // Tab refocus: a backgrounded tab freezes rAF (drain never paints) and
+    // throttles the poll/reconnect timers, and the WS can go zombie with wsActive
+    // still true. On return to the foreground, force an immediate refetch and, if
+    // the socket has gone quiet, tear it down so onclose → reconnect fires — the
+    // map catches up in one tick instead of needing a manual page refresh.
+    const onVisible = (): void => {
+      if (document.hidden) return;
+      if (this.wsActive && Date.now() - this.lastWsMs >= WS_STALE_MS) {
+        try {
+          this.wsConn?.close();
+        } catch {
+          /* already closing; onclose will reconnect */
+        }
+      }
+      this.refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    this.detachVis = () => document.removeEventListener('visibilitychange', onVisible);
     // Server push (ADS-B): connect the socket for steady world-view updates. The
     // poll loop still starts — it gives instant first paint before the socket
     // opens and is the fallback while the socket is down / when zoomed in.
@@ -553,6 +647,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     this.detachMove = null;
     this.detachZoom?.();
     this.detachZoom = null;
+    this.detachVis?.();
+    this.detachVis = null;
     if (this.timer != null) {
       window.clearTimeout(this.timer);
       this.timer = null;
@@ -578,6 +674,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     this.ownedIcao.clear();
     this.lastAnchorLL.clear();
     this.lastPos.clear();
+    this.lastTrackPushMs.clear();
     this.drLastReal.clear();
     this.drLastT.clear();
     this.primRenderer?.destroy();
@@ -629,8 +726,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // While the WS push is healthy AND we're at world view, the pushed blob
     // already carries this data — skip the redundant fetch + render. When zoomed
     // in the push (world-view subset) is insufficient, so the bbox poll runs even
-    // with the socket open.
-    if (this.wsActive && this.isWorldView()) {
+    // with the socket open. Freshness guard: if the socket has gone quiet for
+    // WS_STALE_MS (backgrounded/zombie), stop suppressing and let the poll refetch
+    // so the map recovers without a manual refresh.
+    if (this.wsActive && this.isWorldView() && Date.now() - this.lastWsMs < WS_STALE_MS) {
       this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
       return;
     }
@@ -759,6 +858,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       }
       const fc = JSON.parse(text) as FeatureCollection;
       this.render(fc);
+      this.lastWsMs = Date.now();
       this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
     } catch {
       /* drop a bad/partial frame; the next push or the poll fallback recovers */
@@ -786,13 +886,30 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     this.pendingIds = new Set<string>();
     this.pendingIdx = 0;
     if (this.drainHandle == null) {
-      this.drainHandle = window.requestAnimationFrame(() => this.drain());
+      this.drainHandle = window.requestAnimationFrame((ts) => this.drain(ts));
     }
   }
 
-  private drain(): void {
+  private drain(ts = performance.now()): void {
     this.drainHandle = null;
     if (this.detached) return;
+    // §5.2.1 defer the heavy aircraft syncAll while the operator is actively
+    // dragging/zooming — the 13k-contact single-frame teleport is THE mid-pan
+    // long task. render() keeps replacing pendingFeats (latest-wins), so waiting
+    // for the camera to settle loses nothing. Escape hatch: apply anyway once a
+    // continuous drag exceeds 2.5 s so a long slow pan still refreshes. Aircraft
+    // only (vessels are already budget-sliced); guarded to the START of a drain
+    // (pendingIdx 0) so we never stall a slice mid-flight.
+    if (
+      this.props.styleKind === 'aircraft' &&
+      !this.firstDrain &&
+      this.pendingIdx === 0 &&
+      isCameraMoving() &&
+      cameraMovingForMs() < 2500
+    ) {
+      this.drainHandle = window.requestAnimationFrame((t) => this.drain(t));
+      return;
+    }
     const entities = this.ds.entities;
     const feats = this.pendingFeats;
     const nextIds = this.pendingIds;
@@ -800,21 +917,43 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // moved icon teleports in sync — not in a ~300ms ripple. The unchanged-skip
     // below keeps that one frame cheap. Vessels + the first load stay budget-sliced.
     const syncAll = this.props.styleKind === 'aircraft' && !this.firstDrain;
-    const noFilter = activeFilterClauses().length === 0;
     // FR24-style dead-reckoning opt-in (off by default). Read once per drain so
     // a mid-flight toggle takes effect on the next poll. Aircraft only.
     const deadReckon =
       this.props.styleKind === 'aircraft' && useSettings.getState().aircraftDeadReckon;
     // World-view vessels TELEPORT (snap to each real fix) instead of gliding, so
     // the per-frame SampledPositionProperty re-eval that pinned world view to
-    // ~9 FPS stops. Camera altitude is stable for the duration of one drain pass.
-    const vesselFreeze =
-      this.props.styleKind === 'vessel' &&
-      this.props.ctx.viewer.camera.positionCartographic.height > VESSEL_GLIDE_FREEZE_ALTITUDE_M;
-    const deadline =
-      performance.now() + (this.firstDrain ? FIRST_DRAIN_BUDGET_MS : DRAIN_BUDGET_MS);
+    // ~9 FPS stops. Hysteresis around the altitude threshold (frozen until the
+    // camera drops clearly below it) keeps a pan that grazes the boundary from
+    // flip-flopping ~6k vessels between teleport and glide every poll.
+    let vesselFreeze = false;
+    if (this.props.styleKind === 'vessel') {
+      const h = this.props.ctx.viewer.camera.positionCartographic.height;
+      if (this.vesselFreezeHyst) {
+        if (h < VESSEL_GLIDE_FREEZE_ALTITUDE_M - VESSEL_FREEZE_HYSTERESIS_M) this.vesselFreezeHyst = false;
+      } else if (h > VESSEL_GLIDE_FREEZE_ALTITUDE_M) {
+        this.vesselFreezeHyst = true;
+      }
+      vesselFreeze = this.vesselFreezeHyst;
+    }
+    // Per-frame slice. First load + aircraft sync-all are EXEMPT from the shared
+    // cooperative budget: first paint must place ~13k icons fast, and aircraft
+    // teleport in a single frame by design (operator guardrail). Steady-state
+    // vessel/other slices shrink to what's left of this frame's budget so two
+    // adapters draining in the same frame don't overrun it (the pan stutter).
+    const startMs = performance.now();
+    let budgetMs = this.firstDrain ? FIRST_DRAIN_BUDGET_MS : DRAIN_BUDGET_MS;
+    if (syncAll) {
+      // Generous ceiling, not unbounded: a normal poll finishes under it in one
+      // frame (guardrail-preserved), a bulk change spills to the next frame
+      // instead of freezing (see SYNC_ALL_CEILING_MS).
+      budgetMs = SYNC_ALL_CEILING_MS;
+    } else if (!this.firstDrain) {
+      budgetMs = Math.min(budgetMs, Math.max(DRAIN_MIN_SLICE_MS, frameBudgetRemaining(ts)));
+    }
+    const deadline = startMs + budgetMs;
     entities.suspendEvents();
-    while (this.pendingIdx < feats.length && (syncAll || performance.now() < deadline)) {
+    while (this.pendingIdx < feats.length && performance.now() < deadline) {
       const f = feats[this.pendingIdx++];
       if (!f || !f.geometry) continue;
       const props = f.properties as Record<string, unknown>;
@@ -834,7 +973,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
 
         const existing = entities.getById(id);
         if (existing) {
-          existing.properties = new Cesium.PropertyBag(props);
+          this.refreshBag(existing, props);
           this.refreshStyle(existing, props);
         } else {
           const opts: Cesium.Entity.ConstructorOptions = { id, properties: props };
@@ -898,9 +1037,14 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // it back into props so BOTH the icon rotation (aircraftStyle/vesselStyle)
       // and the dead-reckoning vector use it. Without this a vectorless contact
       // froze pointing north.
+      // Did this contact actually move since the last poll? Computed once here
+      // (reading lastPos BEFORE the set below) and reused by both the heading
+      // fallback and the §5.3.2 track-push gate. ~1e-4° ≈ 10 m.
+      let movedTrk = true;
       if (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') {
         const hdgKey = this.props.styleKind === 'aircraft' ? 'track_deg' : 'cog';
         const prev = this.lastPos.get(id);
+        movedTrk = !prev || Math.abs(prev[0] - lon) > 1e-4 || Math.abs(prev[1] - lat) > 1e-4;
         if (typeof props[hdgKey] !== 'number' && prev) {
           const [plon, plat] = prev;
           if (Math.abs(plon - lon) > 1e-6 || Math.abs(plat - lat) > 1e-6) {
@@ -910,8 +1054,17 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         this.lastPos.set(id, [lon, lat]);
       }
 
-      // Feed track ring for the entity-panel sparkline
-      if (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') {
+      // Feed track ring for the entity-panel sparkline.
+      // §5.3.2: skip the push CALL (tp alloc + map ops) for a non-selected,
+      // unmoved contact — but keep a 30 s heartbeat so a parked contact still
+      // lands occasional history. The SELECTED entity always pushes (force=true),
+      // so the ≥2-points-in-~5-8s selection-polyline guarantee is untouched.
+      const trackSelected = useSelection.getState().selectedEntityId === id;
+      const trackHeartbeat = Date.now() - (this.lastTrackPushMs.get(id) ?? 0) > 30_000;
+      if (
+        (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') &&
+        (trackSelected || movedTrk || trackHeartbeat)
+      ) {
         // Track points are stamped with the fix's true OBSERVATION time, not
         // receipt time — under bursty refresh, receipt-time stamps bunched
         // fixes together and the trail polyline drew stair-steps. Observation
@@ -946,8 +1099,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // The currently-selected entity bypasses dedup so the magenta
         // polyline gains a new fix on every poll (2s cadence → 30 points in
         // 60s) instead of looking like a straight line for slow movers.
-        const force = useSelection.getState().selectedEntityId === id;
-        tracks.push(id, tp, { force });
+        tracks.push(id, tp, { force: trackSelected });
+        this.lastTrackPushMs.set(id, Date.now());
       }
 
       const existing = entities.getById(id);
@@ -965,7 +1118,14 @@ export class PollGeoJsonAdapter implements LayerAdapter {
             const fresh =
               !lastReal || Cesium.Cartesian3.distance(lastReal, newPos) >= AIRCRAFT_POS_EPSILON_M;
             if (!fresh) {
-              if (noFilter) continue; // nothing new — let the glide run
+              // No new position — let the dead-reckon glide keep extrapolating, but
+              // STILL refresh the property bag so freshness counters (seen_pos_s/
+              // seen_at/last_contact) stay LIVE for the entity panel + histogram.
+              // (Skipping the bag here froze "Last seen" for any contact that
+              // resends the same position.) Skip only the restyle — the icon is
+              // glide-owned; filter re-dim is handled by reapplyDim.
+              this.refreshBag(existing, props);
+              continue;
             } else {
               existing.position = this.deadReckonSample(
                 existing,
@@ -979,14 +1139,20 @@ export class PollGeoJsonAdapter implements LayerAdapter {
             // TELEPORT mode (operator request 2026-06-21, overriding the prior
             // glide guardrail): snap the aircraft straight to each new REAL fix —
             // no interpolation — so the icon shows the latest reported position
-            // instantly, like a raw ADS-B map. Skip the PropertyBag rebuild +
-            // restyle for an unchanged position to keep the sync pass cheap
-            // (suppressed under an active filter so a toggle re-dims every icon).
-            if (noFilter) {
-              const prev = currentValue<Cesium.Cartesian3>(existing.position);
-              if (prev && Cesium.Cartesian3.distance(prev, newPos) < AIRCRAFT_POS_EPSILON_M) {
-                continue;
-              }
+            // instantly, like a raw ADS-B map.
+            const prev = currentValue<Cesium.Cartesian3>(existing.position);
+            if (prev && Cesium.Cartesian3.distance(prev, newPos) < AIRCRAFT_POS_EPSILON_M) {
+              // Position unchanged (cached/slow/parked contact). STILL refresh the
+              // property bag so freshness counters (seen_pos_s/seen_at/last_contact)
+              // and facet fields stay LIVE for the entity panel, histogram and
+              // watchbox — the backend keeps aging these even when the lat/lon is
+              // identical. Only skip the EXPENSIVE restyle (styleFn + dim recompute
+              // + billboard GPU write), which is what A4 actually optimises; the icon
+              // didn't move so its pixels don't need touching. (Skipping the bag too
+              // was the "aircraft last-seen never updates" regression.) Filter re-dim
+              // is still handled once-per-toggle by PrimitiveEntityLayer.reapplyDim.
+              this.refreshBag(existing, props);
+              continue;
             }
             existing.position = new Cesium.ConstantPositionProperty(newPos);
           }
@@ -1075,7 +1241,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         } else {
           existing.position = new Cesium.ConstantPositionProperty(newPos);
         }
-        existing.properties = new Cesium.PropertyBag(props);
+        this.refreshBag(existing, props);
         this.refreshStyle(existing, props);
       } else {
         const opts: Cesium.Entity.ConstructorOptions = {
@@ -1104,17 +1270,25 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         }
       }
     }
+    // Charge this drain's main-thread time against the frame's shared budget so a
+    // sibling adapter draining in the same frame yields. First load is exempt.
+    if (!this.firstDrain) recordFrameSpend(ts, performance.now() - startMs);
     entities.resumeEvents();
     this.props.ctx.viewer.scene.requestRender();
 
     if (this.pendingIdx < feats.length) {
       // More of this payload to apply — yield, continue next frame.
-      this.drainHandle = window.requestAnimationFrame(() => this.drain());
+      this.drainHandle = window.requestAnimationFrame((ts) => this.drain(ts));
       return;
     }
     // First full payload is placed — drop to the small per-frame budget so
     // subsequent live pushes never block a frame mid-animation.
     this.firstDrain = false;
+    // Perf instrument (§5.7): a steady poll finishes under SYNC_ALL_CEILING_MS so
+    // this is the whole push-application (drain) cost. A bulk change that spilled
+    // across frames reports only the FINAL slice here — the earlier slices already
+    // painted, which is the point (no single blocking frame).
+    if (this.props.styleKind === 'aircraft') perfSetDrain(performance.now() - startMs);
 
     // Payload fully applied: prune entities absent from it and release their
     // dedup claims. Full scan of the datasource (not a seenIds diff) so a pass
@@ -1131,6 +1305,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         this.primRenderer?.remove(oldId);
         this.lastAnchorLL.delete(oldId);
         this.lastPos.delete(oldId);
+        this.lastTrackPushMs.delete(oldId);
         this.drLastReal.delete(oldId);
         this.drLastT.delete(oldId);
         const icao = this.ownedIcao.get(oldId);
@@ -1247,6 +1422,45 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         }
         break;
       }
+      case 'airport': {
+        // FR24-style airport tile. Static reference marker (no rotation, no
+        // per-poll restyle — see refreshStyle). Zoom-gating is enforced in the
+        // compositor's placesBboxQuery (world/continental view → empty payload);
+        // the DDC here is belt-and-suspenders so a stray marker never paints
+        // from continental altitude even if a bbox request slips through.
+        const s = airportStyle(props);
+        opts.billboard = {
+          image: s.imageUri,
+          scale: s.scale,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
+        };
+        const labelText = airportLabelText(props);
+        if (labelText) {
+          opts.label = labelFor(labelText);
+          opts.name = labelText;
+        }
+        break;
+      }
+      case 'port': {
+        // FR24/marine-style port tile. Static reference marker (same zoom-gate +
+        // belt DDC as airport). No rotation, no per-poll restyle.
+        const s = portStyle();
+        opts.billboard = {
+          image: s.imageUri,
+          scale: s.scale,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
+        };
+        const labelText = portLabelText(props);
+        if (labelText) {
+          opts.label = labelFor(labelText);
+          opts.name = labelText;
+        }
+        break;
+      }
       default:
         opts.point = { color: Cesium.Color.WHITE, pixelSize: 4 };
     }
@@ -1269,6 +1483,26 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         opts.billboard.color = Cesium.Color.fromAlpha(base, FILTER_DIM_ALPHA);
       }
     }
+  }
+
+  // §5.3.1 push diet: refresh an entity's PropertyBag IN PLACE instead of
+  // allocating `new Cesium.PropertyBag(props)` per contact per push. Cesium wraps
+  // each raw JSON value in a "raw property" whose SETTER just swaps the backing
+  // field (no allocation) and raises definitionChanged — so getValue()/facets/
+  // EntityPanel/histogram/watchbox all stay live. The 2026-06-30 freshness
+  // guardrail requires the bag's VALUES to be current, not its object identity;
+  // this keeps them current while removing ~200k PropertyBag+ConstantProperty
+  // allocations/s (13k contacts × ~10 keys × 1 Hz) of GC churn.
+  // ponytail: keys are stable per feed source, so a key that DISAPPEARS keeps its
+  // last value. Upgrade path: track+removeProperty vanished keys if a feed ever
+  // ships variadic schemas.
+  private refreshBag(e: Cesium.Entity, props: Record<string, unknown>): void {
+    const bag = e.properties;
+    if (!bag) {
+      e.properties = new Cesium.PropertyBag(props);
+      return;
+    }
+    refreshBagInPlace(bag, props);
   }
 
   private refreshStyle(e: Cesium.Entity, props: Record<string, unknown>): void {

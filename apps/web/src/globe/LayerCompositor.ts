@@ -107,6 +107,45 @@ function cameraCenterBbox(viewer: Cesium.Viewer, limit: number): string | null {
   return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
 }
 
+// Zoom-gate for the airport/port reference layers. Emits a
+// `bbox=minLon,minLat,maxLon,maxLat` (comma-joined — exactly the vocab the
+// /api/places endpoints accept, distinct from the ADS-B/AIS lamin/lomin viewport
+// query) ONLY when the camera is closer than PLACES_LOD_ALT_M. Above that
+// altitude it returns null → the adapter fetches the BARE endpoint → the backend
+// returns an empty FeatureCollection (no bbox = nothing) → the markers stay
+// hidden at world/continental view. That is the LOD lever the operator asked for:
+// airports + ports appear only when zoomed into a country / metro.
+const PLACES_LOD_ALT_M = 1_500_000;
+function placesBboxQuery(viewer: Cesium.Viewer): () => string | null {
+  return () => {
+    // Viewer torn down (HMR / dashboard switch) while a poll timer is pending.
+    if (viewer.isDestroyed()) return null;
+    // Camera altitude above the ellipsoid. Above the LOD threshold → no data.
+    // `!(h < T)` also short-circuits NaN (a degenerate camera) to hidden.
+    const height = viewer.camera.positionCartographic.height;
+    if (!(height < PLACES_LOD_ALT_M)) return null;
+    // computeViewRectangle() is undefined at an oblique/tilted view where the
+    // horizon/sky shows — treat that as "can't scope" and hide (belt with the
+    // per-billboard DDC in applyStyle).
+    const rect = viewer.camera.computeViewRectangle();
+    if (!rect) return null;
+    const s = Cesium.Math.toDegrees(rect.south);
+    const n = Cesium.Math.toDegrees(rect.north);
+    const w = Cesium.Math.toDegrees(rect.west);
+    const e = Cesium.Math.toDegrees(rect.east);
+    // Pad ~10% so markers just outside the frame load before they scroll in.
+    const padLat = (n - s) * 0.1;
+    const widthDeg = (((e - w) % 360) + 360) % 360;
+    const padLon = widthDeg * 0.1;
+    const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+    const minLon = clamp(w - padLon, -180, 180).toFixed(3);
+    const minLat = clamp(s - padLat, -90, 90).toFixed(3);
+    const maxLon = clamp(e + padLon, -180, 180).toFixed(3);
+    const maxLat = clamp(n + padLat, -90, 90).toFixed(3);
+    return `bbox=${minLon},${minLat},${maxLon},${maxLat}`;
+  };
+}
+
 // Bridges LayerRegistry → Cesium. One adapter per enabled layer.
 export class LayerCompositor {
   private adapters = new Map<string, LayerAdapter>();
@@ -285,7 +324,13 @@ export class LayerCompositor {
       // semantically (it's a GNSS service degradation) but renders as a
       // sized translucent point, not the generic outage icon.
       const style: StyleKind =
-        d.id === 'env.jamming.nacp' ? 'jamming' : styleFromEmits(d.emits);
+        d.id === 'env.jamming.nacp'
+          ? 'jamming'
+          : d.id === 'places.airports'
+            ? 'airport'
+            : d.id === 'places.ports'
+              ? 'port'
+              : styleFromEmits(d.emits);
       const ttl = d.refresh.ttlSec ?? 30;
       // A phone can't render/upsert the full ~13k world view every ~2 s (it
       // overheats and the main thread is too busy to interpolate, so planes
@@ -313,10 +358,21 @@ export class LayerCompositor {
       } else if (d.id === 'maritime.digitraffic') {
         bboxQuery = viewportQuery(ctx.viewer, mobile ? 1500 : 6000, undefined, mobile);
         refreshOnMove = true;
-      } else if (d.id === 'maritime.keyless' && mobile) {
-        // The default global vessel layer (~5k). The endpoint honours ?limit, so
-        // cap the payload on mobile (the render path also caps as a safety net).
-        bboxQuery = () => 'limit=2000';
+      } else if (d.id === 'maritime.keyless') {
+        // §5.4 fetch-side LOD: the endpoint honours bbox (viewport_filter) AND
+        // returns the FULL union when no bbox+limit is sent. Desktop: full union at
+        // world view (operator count-truth), a local bbox when zoomed in below the
+        // glide altitude so we parse/upsert only on-screen vessels. worldLimit
+        // 20000 covers the ~4.5k union whole. Mobile: always a small bbox + cap.
+        bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 6000, mobile ? 2000 : 20000, mobile);
+        refreshOnMove = true;
+      } else if (d.id === 'places.airports' || d.id === 'places.ports') {
+        // Zoom-gated reference markers: the bbox (and therefore any data) is sent
+        // ONLY below the LOD altitude; above it placesBboxQuery returns null → the
+        // bare endpoint → an empty FeatureCollection → nothing renders at world /
+        // continental view. refreshOnMove re-fetches the new viewport on zoom/pan.
+        bboxQuery = placesBboxQuery(ctx.viewer);
+        refreshOnMove = true;
       }
       const adapter = new PollGeoJsonAdapter({
         ctx,
