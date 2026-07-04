@@ -41,6 +41,9 @@ export function pointInRing(p: LatLon, ring: readonly LatLon[]): boolean {
 }
 
 export interface DrawController {
+  /** The Cesium viewer this controller drives — so panels that already reach the
+   *  shared controller (COP, annotations) can fly/read map-centre without a prop. */
+  readonly viewer: Cesium.Viewer;
   /** Arm a one-shot click → returns the picked ground point. */
   placePoint(cb: (p: LatLon) => void): void;
   /** Multi-click polyline with a live rubber-band; finish() or right-click commits. */
@@ -222,6 +225,7 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
   }
 
   return {
+    viewer,
     placePoint(cb) {
       reset();
       mode = 'point';

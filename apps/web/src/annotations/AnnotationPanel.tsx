@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Widget, Btn, SectionLabel, MicroLabel } from '../shell/instruments.js';
 import { getDrawController } from '../globe/draw.js';
+import { CoordEntry } from '../globe/CoordEntry.js';
 import {
   useAnnotations,
   saveAnnotations,
@@ -18,6 +19,7 @@ const selectCls =
 export function AnnotationPanel(): JSX.Element {
   const annos = useAnnotations((s) => s.annotations);
   const add = useAnnotations((s) => s.add);
+  const update = useAnnotations((s) => s.update);
   const remove = useAnnotations((s) => s.remove);
   const clear = useAnnotations((s) => s.clear);
 
@@ -25,6 +27,7 @@ export function AnnotationPanel(): JSX.Element {
   const [label, setLabel] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const draw = getDrawController();
   const noDraw = draw == null;
@@ -32,7 +35,7 @@ export function AnnotationPanel(): JSX.Element {
 
   const point = (): void => {
     if (!draw) return;
-    setStatus('click the map to drop a point…');
+    setStatus('click the map to drop a point (or type coordinates below)…');
     draw.placePoint((p) => {
       add({ kind: 'point', threat, label: lbl(), coords: [[p.lon, p.lat]] });
       setStatus('point added ✓');
@@ -95,28 +98,81 @@ export function AnnotationPanel(): JSX.Element {
           <Btn onClick={() => draw?.finish()} disabled={noDraw}>Finish line</Btn>
           <Btn onClick={() => { draw?.cancel(); setStatus(null); }} disabled={noDraw}>Cancel</Btn>
         </div>
+        <div className="mt-2">
+          <MicroLabel>or drop by coordinates</MicroLabel>
+          <div className="mt-1">
+            <CoordEntry
+              viewer={getDrawController()?.viewer ?? null}
+              onPlace={(lat, lon) => {
+                useAnnotations.getState().add({ kind: 'point', threat, label: lbl(), coords: [[lon, lat]] });
+                setStatus('point added ✓');
+              }}
+              placeholder="lat,lon · place · airport / port"
+            />
+          </div>
+        </div>
         {noDraw && <MicroLabel>map not ready</MicroLabel>}
         {status && <p className="text-[10px] text-accent mt-2 mono">{status}</p>}
       </Widget>
 
       <Widget title="Graphics" count={`${annos.length}`}>
         <div className="max-h-[200px] overflow-auto space-y-0.5">
-          {annos.map((a) => (
-            <div key={a.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-              <span style={{ color: THREAT_COLOR[a.threat] }} className="text-[9px]">●</span>
-              <span className="flex-1 text-[10px] text-txt-1 mono truncate">
-                {a.kind}{a.label ? ` · ${a.label}` : ''}{a.kind === 'circle' && a.radiusKm ? ` · ${a.radiusKm}km` : ''}
-              </span>
-              <button
-                type="button"
-                onClick={() => remove(a.id)}
-                className="text-[11px] leading-none text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"
-                aria-label="Delete annotation"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+          {annos.map((a) =>
+            editId === a.id ? (
+              <div key={a.id} className="space-y-1.5 rounded-sm bg-bg-2 px-1.5 py-1.5">
+                <div className="flex gap-1">
+                  {THREATS.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => update(a.id, { threat: t })}
+                      title={t}
+                      className={`flex-1 py-1 rounded-sm border ${
+                        a.threat === t ? 'border-accent-line bg-accent-dim' : 'border-line hover:border-accent-line'
+                      }`}
+                    >
+                      <span style={{ color: THREAT_COLOR[t] }} className="text-[10px]">●</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    className={selectCls}
+                    value={a.label}
+                    onChange={(e) => update(a.id, { label: e.target.value })}
+                    placeholder="label"
+                    aria-label="Annotation label"
+                  />
+                  <Btn size="sm" tone="accent" onClick={() => setEditId(null)}>
+                    done
+                  </Btn>
+                </div>
+              </div>
+            ) : (
+              <div key={a.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
+                <span style={{ color: THREAT_COLOR[a.threat] }} className="text-[10px]">●</span>
+                <span className="flex-1 text-[10px] text-txt-1 mono truncate">
+                  {a.kind}{a.label ? ` · ${a.label}` : ''}{a.kind === 'circle' && a.radiusKm ? ` · ${a.radiusKm}km` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEditId(a.id)}
+                  className="text-[11px] leading-none text-txt-3 hover:text-accent px-1 opacity-0 group-hover:opacity-100"
+                  aria-label="Edit annotation"
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(a.id)}
+                  className="text-[11px] leading-none text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"
+                  aria-label="Delete annotation"
+                >
+                  ✕
+                </button>
+              </div>
+            ),
+          )}
           {annos.length === 0 && <MicroLabel>nothing drawn yet</MicroLabel>}
         </div>
         <div className="grid grid-cols-2 gap-1.5 mt-2">

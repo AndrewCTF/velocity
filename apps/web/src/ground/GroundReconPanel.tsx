@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { Widget, SectionLabel, MicroLabel, Caveat, Btn } from '../shell/instruments.js';
+import { CoordEntry } from '../globe/CoordEntry.js';
 import { apiFetch } from '../transport/http.js';
 import { isDesktop } from '../transport/desktop.js';
 import { useGround } from './groundStore.js';
@@ -15,20 +16,33 @@ import { WeatherCard } from '../weather/WeatherCard.js';
 import { TrafficSimSection } from '../sim/TrafficSimSection.js';
 import type { GroundPhotoFeature } from './types.js';
 
+function recentIso(days: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 function AreaChip({ lat, lon, radiusKm }: { lat: number; lon: number; radiusKm: number }): JSX.Element {
+  const [err, setErr] = useState(false);
   // Keyless /api/imagery/chip returns image bytes; same-origin so an <img> can
-  // load it directly (same reason ChipLayer uses no apiFetch).
-  const src = `/api/imagery/chip?lat=${lat}&lon=${lon}&radius_km=${radiusKm}&source=auto`;
+  // load it directly (same reason ChipLayer uses no apiFetch). `date` is required
+  // by the route — pass a recent one (Sentinel revisit ~5 d) so we get real
+  // pixels instead of today's empty pass.
+  const src = `/api/imagery/chip?lat=${lat}&lon=${lon}&radius_km=${radiusKm}&date=${recentIso(14)}&source=auto`;
   return (
     <Widget title="Area imagery" count={`${radiusKm.toFixed(1)} km`}>
-      <img
-        src={src}
-        alt="AOI satellite chip"
-        className="w-full rounded-sm border border-line"
-        onError={(e) => {
-          (e.currentTarget as HTMLImageElement).style.opacity = '0.3';
-        }}
-      />
+      {err ? (
+        <div className="flex aspect-video w-full items-center justify-center rounded-sm border border-line bg-bg-2 text-[10px] text-txt-3">
+          no imagery for this area
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt="AOI satellite chip"
+          className="w-full rounded-sm border border-line"
+          onError={() => setErr(true)}
+        />
+      )}
       <MicroLabel>Sentinel/Maxar · not live</MicroLabel>
     </Widget>
   );
@@ -93,6 +107,13 @@ export function GroundReconPanel({ viewer }: { viewer: unknown }): JSX.Element {
           Right-click the map → <span className="text-txt-1">Ground recon here</span> to load
           street-level photos, weather, area imagery, and (in the desktop app) live detection boxes.
         </p>
+        <div className="mt-2 space-y-1">
+          <MicroLabel>or recon at coordinates</MicroLabel>
+          <CoordEntry
+            viewer={viewer as Cesium.Viewer | null}
+            onPlace={(lat, lon) => useGround.getState().openAt({ lat, lon, radiusKm: 2 })}
+          />
+        </div>
       </Widget>
     );
   }
@@ -107,7 +128,14 @@ export function GroundReconPanel({ viewer }: { viewer: unknown }): JSX.Element {
           </Btn>
         </div>
         {loading && <MicroLabel>loading photos…</MicroLabel>}
-        {error && <span className="mono text-[9px] text-alert">{error}</span>}
+        {error && <span className="mono text-[10px] text-alert">{error}</span>}
+        <div className="mt-2 space-y-1">
+          <MicroLabel>or recon at coordinates</MicroLabel>
+          <CoordEntry
+            viewer={viewer as Cesium.Viewer | null}
+            onPlace={(lat, lon) => useGround.getState().openAt({ lat, lon, radiusKm: 2 })}
+          />
+        </div>
       </Widget>
 
       <WeatherCard lat={aoi.lat} lon={aoi.lon} />
@@ -127,7 +155,7 @@ export function GroundReconPanel({ viewer }: { viewer: unknown }): JSX.Element {
                   type="button"
                   title={`${p.source} ${p.name}`}
                   onClick={() => select(selectedId === key ? null : key)}
-                  className={`aspect-square overflow-hidden rounded-sm border ${
+                  className={`aspect-square overflow-hidden rounded-sm border bg-bg-2 ${
                     selectedId === key ? 'border-accent-line' : 'border-line'
                   }`}
                 >
@@ -137,6 +165,10 @@ export function GroundReconPanel({ viewer }: { viewer: unknown }): JSX.Element {
                     className="w-full h-full object-cover"
                     draggable={false}
                     loading="lazy"
+                    // Broken thumb → hide the broken-image glyph, leave the muted tile.
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
                   />
                 </button>
               );
@@ -227,7 +259,7 @@ function SplatSection(): JSX.Element {
   return (
     <Widget title="3D splat" count={stage ?? '—'}>
       <MicroLabel>{photos.length} ground photos available</MicroLabel>
-      {err && <div className="mono text-[9px] text-alert mt-1">{err}</div>}
+      {err && <div className="mono text-[10px] text-alert mt-1">{err}</div>}
       <div className="mt-2 flex items-center gap-1.5">
         <Btn size="sm" tone="accent" onClick={() => void onBuild()} disabled={stage === 'uploading' || photos.length < 3}>
           build splat

@@ -15,6 +15,7 @@ import {
   type Echelon,
 } from './copStore.js';
 import { getDrawController } from '../globe/draw.js';
+import { CoordEntry } from '../globe/CoordEntry.js';
 import { planRoute, type RouteMode } from '../globe/routePlanner.js';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 
@@ -69,7 +70,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
 
   const placeUnit = (): void => {
     if (!draw) return;
-    setStatus('click the map to place the unit…');
+    setStatus('click the map to place the unit (or type coordinates below)…');
     draw.placePoint((p) => {
       addUnit({
         sidc: composeSidc(aff, type, ech),
@@ -202,6 +203,24 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
             ＋ Place unit on map
           </Btn>
         </div>
+        <div className="mt-2">
+          <MicroLabel>or place by coordinates</MicroLabel>
+          <div className="mt-1">
+            <CoordEntry
+              viewer={getDrawController()?.viewer ?? null}
+              onPlace={(lat, lon) => {
+                useCop.getState().addUnit({
+                  sidc: composeSidc(aff, type, ech),
+                  lat,
+                  lon,
+                  designation: desig.trim() || TYPE_LABEL[type],
+                });
+                setStatus('unit placed ✓');
+              }}
+              placeholder="lat,lon · place · airport / port"
+            />
+          </div>
+        </div>
       </Widget>
 
       <Widget title="Draw graphics">
@@ -253,7 +272,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
 function Row({ dot, label, onDel }: { dot: string; label: string; onDel: () => void }): JSX.Element {
   return (
     <div className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-      <span style={{ color: dot }} className="text-[9px]">
+      <span style={{ color: dot }} className="text-[10px]">
         ●
       </span>
       <span className="flex-1 text-[10px] text-txt-1 mono truncate">{label}</span>

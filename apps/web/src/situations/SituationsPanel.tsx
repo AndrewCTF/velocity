@@ -3,6 +3,7 @@ import type * as Cesium from 'cesium';
 import { useSituations, type Severity } from './situationStore.js';
 import { useSelection } from '../state/stores.js';
 import { flyToPosition } from '../globe/camera.js';
+import { CoordEntry } from '../globe/CoordEntry.js';
 import { SectionLabel, Badge, Btn, MicroLabel, type BadgeTone } from '../shell/instruments.js';
 
 // Left-rail list of the analyst's Situations (Gotham case files). Click one to
@@ -50,6 +51,19 @@ export function SituationsPanel({ viewer }: Props = {}): JSX.Element {
           + New
         </Btn>
       </div>
+      <div className="space-y-1">
+        <MicroLabel>or create at coordinates</MicroLabel>
+        <CoordEntry
+          viewer={viewer ?? null}
+          onPlace={async (lat, lon, label) => {
+            const id = await useSituations.getState().create({
+              name: label ? `Situation — ${label}` : 'Situation',
+              centroid: { lat, lon },
+            });
+            useSelection.getState().select(id);
+          }}
+        />
+      </div>
       {error && <p className="text-[10px] text-warn">{error}</p>}
       {situations.length === 0 && (
         <p className="text-txt-3 text-[11px]">
@@ -72,7 +86,7 @@ export function SituationsPanel({ viewer }: Props = {}): JSX.Element {
               <div className="mt-1 flex items-center gap-2">
                 <MicroLabel>{s.status}</MicroLabel>
                 {s.centroid && (
-                  <span className="mono text-[9px] text-txt-3 tabular-nums">
+                  <span className="mono text-[10px] text-txt-3 tabular-nums">
                     {s.centroid.lat.toFixed(1)}, {s.centroid.lon.toFixed(1)}
                   </span>
                 )}
