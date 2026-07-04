@@ -25,6 +25,7 @@ import { useInvestigation } from './investigationStore.js';
 import { GraphHistory } from './GraphHistory.js';
 import { useSelection } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
+import { search, LOCATION_KINDS } from '../transport/search.js';
 import { SectionLabel, Btn, MicroLabel, Badge } from '../shell/instruments.js';
 
 // ── ontology wire types (mirror intel/ontology.py response models) ────────────
@@ -420,8 +421,11 @@ export function InvestigationCanvas(): JSX.Element {
         <p className="mt-2 text-txt-3 text-[11px] leading-snug">
           No investigation open. Select an entity and press{' '}
           <span className="mono text-txt-2">⊹ Search around</span> in its panel to build a
-          multi-hop link graph from the saved ontology.
+          multi-hop link graph from the saved ontology — or seed it by name below.
         </p>
+        <div className="mt-3">
+          <SeedSearch />
+        </div>
       </div>
     );
   }
@@ -443,6 +447,9 @@ export function InvestigationCanvas(): JSX.Element {
       <div className="mono text-[10px] text-txt-3 leading-snug">
         root <span className="text-txt-1">{rootId}</span> · click expands · alt-click removes
       </div>
+
+      {/* Re-seed the graph by typing (callsign / MMSI / name), without a map click. */}
+      <SeedSearch />
 
       {viewRev !== null && revisions[viewRev] && (
         <div className="mono text-[10px] text-warn leading-snug">
@@ -557,6 +564,70 @@ function EndpointSlot({ label, id, color }: { label: string; id: string | null; 
       <span className="mono text-[10px] text-txt-1 truncate" title={id ?? ''}>
         {id ?? '—'}
       </span>
+    </div>
+  );
+}
+
+// ── seed-by-search ────────────────────────────────────────────────────────────
+// Seed the graph by TYPING (callsign / MMSI / name / place) instead of only via a
+// map click or selection. Resolves the text through /api/search and centres the
+// canvas on the first aircraft/vessel hit via `searchAround`. LOCATION_KINDS
+// (place/airport/port/chokepoint) carry no live-store entity id, so they can't
+// seed a graph — surfaced as an inline hint. Purely additive to the existing
+// click-to-seed path; self-contained local state so it can live in both the
+// empty-state and the open-canvas header without lifting anything.
+function SeedSearch(): JSX.Element {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+
+  const run = useCallback(() => {
+    const q = text.trim();
+    if (!q || busy) return;
+    setBusy(true);
+    setHint(null);
+    search(q)
+      .then((results) => {
+        // First aircraft/vessel result → a real entity id searchAround accepts.
+        const entity = results.find((r) => !LOCATION_KINDS.has(r.kind));
+        if (entity) {
+          useInvestigation.getState().searchAround(entity.id);
+          setText('');
+        } else if (results.length > 0) {
+          setHint("no aircraft/vessel matched — places can't seed a graph");
+        } else {
+          setHint('no match');
+        }
+      })
+      .catch(() => setHint('search failed'))
+      .finally(() => setBusy(false));
+  }, [text, busy]);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            if (hint) setHint(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              run();
+            }
+          }}
+          placeholder="callsign / MMSI / name / place…"
+          maxLength={120}
+          className="flex-1 min-w-0 bg-bg-2 border border-line-2 rounded-sm px-2 py-1 mono text-[10px] text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+        />
+        <Btn size="sm" tone="accent" disabled={busy || !text.trim()} onClick={run}>
+          {busy ? '…' : 'Seed'}
+        </Btn>
+      </div>
+      {hint && <span className="mono text-[10px] text-warn leading-snug block">{hint}</span>}
     </div>
   );
 }
