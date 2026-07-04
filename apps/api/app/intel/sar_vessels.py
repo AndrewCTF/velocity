@@ -113,6 +113,38 @@ def _pixel_lonlat(bbox: list[float], w: int, h: int, col: float, row: float) -> 
     return epsg3857_to_lonlat(x, y)
 
 
+def _estimate_shape(rr: np.ndarray, cc: np.ndarray) -> tuple[float, float, float]:
+    """Oriented extent of a blob from its pixel coords → (major_px, minor_px, heading_deg).
+
+    Principal-axis analysis: the covariance of the (row, col) pixels has eigenvectors
+    along/across the vessel. Projecting the pixels onto those axes and taking the span
+    gives the physical extent in pixels (more robust than a std for a filled blob).
+    Heading is the geographic bearing of the MAJOR axis in a north-up image (row+ =
+    south, col+ = east) — 0–180° only, because SAR cannot see direction of travel.
+    """
+    n = len(rr)
+    if n < 2:
+        return 1.0, 1.0, 0.0
+    r = rr.astype(np.float64)
+    c = cc.astype(np.float64)
+    r -= r.mean()
+    c -= c.mean()
+    # 2x2 covariance [[var_r, cov],[cov, var_c]]; eigen-decompose for axes.
+    cov = np.array([[np.dot(r, r), np.dot(r, c)], [np.dot(r, c), np.dot(c, c)]]) / n
+    evals, evecs = np.linalg.eigh(cov)  # ascending
+    major_vec = evecs[:, 1]  # (drow, dcol) of the largest-variance axis
+    minor_vec = evecs[:, 0]
+    # Span = projected extent of the pixels onto each axis.
+    proj_major = r * major_vec[0] + c * major_vec[1]
+    proj_minor = r * minor_vec[0] + c * minor_vec[1]
+    major_px = float(proj_major.max() - proj_major.min()) + 1.0
+    minor_px = float(proj_minor.max() - proj_minor.min()) + 1.0
+    drow, dcol = major_vec[0], major_vec[1]
+    # Geographic bearing: north = -row, east = +col. atan2(east, north), fold to 0-180.
+    heading = np.degrees(np.arctan2(dcol, -drow)) % 180.0
+    return major_px, minor_px, float(heading)
+
+
 def detect_targets(
     arr: np.ndarray,
     k: float = 4.0,
@@ -200,12 +232,21 @@ def detect_targets(
         win = a[max(0, r0 - pad) : r1 + 1 + pad, max(0, c0 - pad) : c1 + 1 + pad]
         if win.size and float(np.median(win)) > bg_max:
             continue
+        major_px, minor_px, heading_deg = _estimate_shape(rr, cc)
+        peak = float(a[rr, cc].max())
         out.append(
             {
                 "row": float(rr.mean()),
                 "col": float(cc.mean()),
                 "area_px": area,
-                "peak": float(a[rr, cc].max()),
+                "peak": peak,
+                "major_px": major_px,
+                "minor_px": minor_px,
+                "heading_deg": heading_deg,
+                # Relative radar cross-section proxy: bright + compact returns (steel
+                # hulls, loaded tankers) score high. A weak discriminator, surfaced as
+                # a number — never a verdict on its own.
+                "rcs": round(peak / (area ** 0.5), 2),
             }
         )
     return out
@@ -220,13 +261,23 @@ def _ais_match(
     return False
 
 
+# Target ground sampling for the SAR grab. Sentinel-1 IW GRD is ~10 m native; the
+# Sentinel Hub Process API caps a single response at 2500 px, so a ~50 km chokepoint
+# box lands at ~20 m/px in one request. That resolves big-vs-small (a 150 m destroyer
+# is ~7 px, a 20 m skiff ~1 px) which is what the size hint needs. Native 10 m over a
+# box this wide needs tiling — tracked as a refinement, not required for Phase 1.
+_TARGET_RES_M = 20.0
+_MAX_DIM = 2500
+
+
 async def detect_dark_vessels(
     aoi: str = "hormuz",
     date: str | None = None,
-    width: int = 1000,
-    height: int = 760,
+    width: int | None = None,
+    height: int | None = None,
     k: float = 5.0,
-    max_area: int = 120,
+    max_area: int = 400,
+    mil_len_m: float = 120.0,
 ) -> dict[str, Any]:
     """Fetch a Sentinel-1 VV scene for the AOI, detect vessels, cross-ref AIS.
 
@@ -239,8 +290,18 @@ async def detect_dark_vessels(
         raise KeyError(aoi)
     if date is None:
         date = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
+    import math
+
     aoi_box = aoi_bbox(aoi)
     bbox = cdse.lonlat_bbox_3857(*aoi_box)
+    # Size the grab for ~_TARGET_RES_M ground sampling (capped at the API max), from
+    # the true ground span (EPSG:3857 metres × cos(lat) removes the Mercator stretch).
+    lat_c = (aoi_box[1] + aoi_box[3]) / 2.0
+    cos_lat = math.cos(math.radians(lat_c))
+    if width is None:
+        width = max(256, min(_MAX_DIM, int((bbox[2] - bbox[0]) * cos_lat / _TARGET_RES_M)))
+    if height is None:
+        height = max(256, min(_MAX_DIM, int((bbox[3] - bbox[1]) * cos_lat / _TARGET_RES_M)))
     img = await cdse.fetch_image("S1_GRD_VV", bbox, width, height, date)
     if not img:
         return {
@@ -263,8 +324,15 @@ async def detect_dark_vessels(
     has_ais = len(vessels) > 0
     radius_deg = 0.02  # ~2 km
 
+    # Ground pixel size (metres): EPSG:3857 px span × cos(lat) → true ground distance,
+    # so length/width estimates are physical, not Mercator-stretched.
+    merc_px_x = (bbox[2] - bbox[0]) / width
+    merc_px_y = (bbox[3] - bbox[1]) / height
+    px_size_m = ((merc_px_x + merc_px_y) / 2.0) * cos_lat
+
     features: list[dict[str, Any]] = []
     dark = 0
+    mil = 0
     for t in targets:
         lon, lat = _pixel_lonlat(bbox, width, height, t["col"], t["row"])
         matched = _ais_match(lon, lat, vessels, radius_deg)
@@ -272,6 +340,25 @@ async def detect_dark_vessels(
         dark_candidate: bool | None = (not matched) if has_ais else None
         if dark_candidate:
             dark += 1
+        length_m = round(t.get("major_px", 1.0) * px_size_m, 1)
+        width_m = round(t.get("minor_px", 1.0) * px_size_m, 1)
+        # Honest status ladder — see spec. Never asserts "military".
+        if matched:
+            status = "ais-matched"
+        elif has_ais:
+            status = "dark-candidate"
+        else:
+            status = "unverified"
+        # Plausible-vessel gate: real hulls are elongated (length/beam ≳ 2) with a
+        # bounded beam. A near-square or very wide bright blob is infrastructure (rig,
+        # breakwater) or a coast leak, not a ship — don't let it earn a mil hint.
+        plausible = width_m <= 120.0 and length_m >= 1.8 * max(width_m, 1.0)
+        # Military HINT (not a classification): a large PLAUSIBLE contact not AIS-matched.
+        # Size + darkness only; explicitly low-confidence, so the operator triages it —
+        # a 20 m SAR pixel cannot tell a frigate from a small freighter.
+        mil_hint = plausible and length_m >= mil_len_m and status != "ais-matched"
+        if mil_hint:
+            mil += 1
         features.append(
             {
                 "type": "Feature",
@@ -280,8 +367,20 @@ async def detect_dark_vessels(
                 "properties": {
                     "kind": "vessel",
                     "source": "sentinel1-sar",
+                    "status": status,
                     "aisMatch": matched,
                     "darkCandidate": dark_candidate,
+                    "lengthM": length_m,
+                    "widthM": width_m,
+                    "headingDeg": round(t.get("heading_deg", 0.0), 1),
+                    "rcs": t.get("rcs"),
+                    "plausibleVessel": plausible,
+                    "milHint": mil_hint,
+                    "milBasis": (
+                        "large unlit SAR contact — size-only heuristic, NOT a classified warship"
+                        if mil_hint
+                        else None
+                    ),
                     "areaPx": t["area_px"],
                     "peak": t["peak"],
                 },
@@ -297,6 +396,8 @@ async def detect_dark_vessels(
             "detections": len(features),
             "ais_coverage": len(vessels),
             "dark_candidates": dark,
+            "mil_hints": mil,
+            "px_size_m": round(px_size_m, 2),
         },
         "_sar_png": img,
         "_targets": targets,

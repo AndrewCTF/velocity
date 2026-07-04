@@ -8,9 +8,10 @@ Integrity Category). FAA-compliant operation requires nac_p ≥ 8 and nic ≥ 7;
 values below indicate the on-board GNSS is degraded — typically because the
 aircraft is flying through a jamming / spoofing footprint.
 
-We replicate GPSJam.org's bucketing without pulling in an H3 dep: bin every
-aircraft with a known nac_p into a 1°×1° lat/lon cell, count total vs. bad,
-and return GeoJSON points at the cell centres so the same PollGeoJsonAdapter
+We replicate GPSJam.org's hexagon heat map without pulling in an H3 dep: bin
+every aircraft with a known nac_p into a pointy-top hexagonal cell (~1 deg²,
+honeycomb lattice so the cells tessellate), count total vs. bad, and return
+GeoJSON hexagon polygons at the cell centres so the same PollGeoJsonAdapter
 can render the heat layer.
 
 Source of truth for the multi-host fan-out is /api/adsb/global, which we
@@ -45,29 +46,60 @@ PCT_HIGH = 50.0
 PCT_MEDIUM = 30.0
 
 
-def _hex_polygon(cx: float, cy: float, r: float = 0.5) -> list[list[float]]:
-    """6-sided polygon centred on (cx, cy) with circumradius r degrees.
+# Hexagon circumradius in degrees. A regular hexagon has area
+# (3*sqrt(3)/2)*S², so S=0.62 gives ~1 deg² cells — same population per cell as
+# the old 1°×1° square bins, so the MIN_TOTAL_FOR_HIGH / PCT_* thresholds below
+# still mean the same thing.
+HEX_SIZE = 0.62
+_SQRT3 = sqrt(3.0)
+
+
+def _hex_polygon(cx: float, cy: float, r: float = HEX_SIZE) -> list[list[float]]:
+    """Pointy-top hexagon centred on (cx, cy) with circumradius r degrees.
 
     Returns 7 coordinate pairs (first == last to close the GeoJSON ring).
-    At r=0.5 the hexagons tile a 1°×1° grid exactly.
+    Pointy-top (vertices at ±30°, ±90°, ±150°) is the orientation whose flat
+    edges line up with the neighbours produced by `_hex_cell`, so adjacent
+    cells share an edge and the honeycomb tiles with no gaps or overlaps —
+    the alignment the old square-lattice hexagons never had.
     """
     pts: list[list[float]] = []
-    for i in range(7):  # 6 vertices + closing repeat
-        angle = math.radians(60 * i)
+    for i in range(6):
+        angle = math.radians(60 * i - 30)
         pts.append([cx + r * math.cos(angle), cy + r * math.sin(angle)])
+    pts.append(pts[0])  # close the ring exactly (no float drift)
     return pts
 
 
-def _bucket_key(lon: float, lat: float) -> tuple[int, int]:
-    """1°×1° cell key (floor). Antimeridian-safe via wrap into [-180, 180).
+def _hex_cell(lon: float, lat: float) -> tuple[int, int]:
+    """Map a lon/lat to its pointy-top hex cell as axial (q, r) integers.
 
-    We use floor — not int() — because int() truncates toward zero, which
-    collapses (-0.5, 0.5) into bucket 0 from both sides. Floor keeps
-    negative lons in their own buckets.
+    Antimeridian-safe via wrap into [-180, 180). Uses cube rounding so every
+    point lands in exactly one cell and the cells tessellate — unlike the old
+    square floor, which put hex centres on a grid the hexagons couldn't tile.
     """
-    # wrap longitude defensively in case an upstream emits ±180.x
     wlon = ((lon + 180.0) % 360.0) - 180.0
-    return (int(wlon // 1.0), int(lat // 1.0))
+    qf = (_SQRT3 / 3.0 * wlon - lat / 3.0) / HEX_SIZE
+    rf = (2.0 / 3.0 * lat) / HEX_SIZE
+    # cube round (x + y + z == 0)
+    x, z = qf, rf
+    y = -x - z
+    rx, ry, rz = round(x), round(y), round(z)
+    dx, dy, dz = abs(rx - x), abs(ry - y), abs(rz - z)
+    if dx > dy and dx > dz:
+        rx = -ry - rz
+    elif dy > dz:
+        ry = -rx - rz
+    else:
+        rz = -rx - ry
+    return (int(rx), int(rz))
+
+
+def _hex_center(q: int, r: int) -> tuple[float, float]:
+    """Lon/lat centre of axial hex cell (q, r) — inverse of `_hex_cell`."""
+    cx = HEX_SIZE * (_SQRT3 * q + _SQRT3 / 2.0 * r)
+    cy = HEX_SIZE * (1.5 * r)
+    return (cx, cy)
 
 
 def _severity(total: int, percent_bad: float) -> str:
@@ -130,7 +162,7 @@ def _aggregate_jamming(features: list[dict[str, Any]]) -> dict[str, Any]:
         if nac_p_v is None and nic_v is None:
             continue
 
-        key = _bucket_key(lon, lat)
+        key = _hex_cell(lon, lat)
         slot = buckets.setdefault(key, {"total": 0, "bad": 0})
         slot["total"] += 1
         is_bad = (nac_p_v is not None and nac_p_v < NACP_GOOD) or (
@@ -147,9 +179,8 @@ def _aggregate_jamming(features: list[dict[str, Any]]) -> dict[str, Any]:
         severity = _severity(total, percent_bad)
         if severity == "none":
             continue
-        # Cell centre (the bucket key floors the SW corner, so add 0.5).
-        center_lon = gx + 0.5
-        center_lat = gy + 0.5
+        # Cell centre of the hex lattice (inverse of _hex_cell).
+        center_lon, center_lat = _hex_center(gx, gy)
         out_features.append(
             {
                 "type": "Feature",

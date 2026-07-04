@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useFeeds, useSelection, useTime, useAlerts } from './stores.js';
+import {
+  useFeeds,
+  useSelection,
+  useTime,
+  useAlerts,
+  useFilters,
+  matchesFilterClauses,
+  type FilterClause,
+  type FilterFacet,
+} from './stores.js';
 import type { Alert } from '@osint/shared';
 
 beforeEach(() => {
@@ -7,6 +16,7 @@ beforeEach(() => {
   useSelection.setState({ selectedEntityId: null });
   useTime.setState({ playing: false, multiplier: 1, currentTime: 0, sceneMode: '3D' });
   useAlerts.setState({ alerts: [] });
+  useFilters.setState({ clauses: [], epoch: 0 });
 });
 
 describe('useFeeds', () => {
@@ -65,5 +75,80 @@ describe('useSelection', () => {
     expect(useSelection.getState().selectedEntityId).toBe('vessel:367719770');
     useSelection.getState().select(null);
     expect(useSelection.getState().selectedEntityId).toBeNull();
+  });
+});
+
+describe('useFilters', () => {
+  it('toggles a clause on and off and bumps epoch', () => {
+    const f = useFilters.getState();
+    expect(f.clauses).toHaveLength(0);
+    f.toggleClause('aircraftCategory', 'airliner', 'only');
+    expect(useFilters.getState().clauses).toEqual([
+      { facet: 'aircraftCategory', value: 'airliner', mode: 'only' },
+    ]);
+    expect(useFilters.getState().epoch).toBe(1);
+    // Clicking the same chip again removes it.
+    useFilters.getState().toggleClause('aircraftCategory', 'airliner', 'only');
+    expect(useFilters.getState().clauses).toHaveLength(0);
+    expect(useFilters.getState().epoch).toBe(2);
+  });
+
+  it('setting one mode drops the opposite for the same facet+value', () => {
+    useFilters.getState().toggleClause('flag', 'US', 'only');
+    useFilters.getState().toggleClause('flag', 'US', 'not'); // contradicts → replaces
+    const clauses = useFilters.getState().clauses;
+    expect(clauses).toEqual([{ facet: 'flag', value: 'US', mode: 'not' }]);
+  });
+
+  it('clearFacet drops only that facet; clear drops all', () => {
+    const f = useFilters.getState();
+    f.toggleClause('aircraftCategory', 'military', 'only');
+    f.toggleClause('flag', 'RU', 'only');
+    useFilters.getState().clearFacet('flag');
+    expect(useFilters.getState().clauses).toEqual([
+      { facet: 'aircraftCategory', value: 'military', mode: 'only' },
+    ]);
+    useFilters.getState().clear();
+    expect(useFilters.getState().clauses).toHaveLength(0);
+  });
+
+  it('isActive reflects the current clause set', () => {
+    useFilters.getState().toggleClause('squawk', '7700', 'only');
+    expect(useFilters.getState().isActive('squawk', '7700', 'only')).toBe(true);
+    expect(useFilters.getState().isActive('squawk', '7700', 'not')).toBe(false);
+  });
+});
+
+describe('matchesFilterClauses (pure)', () => {
+  // A resolver mapping each facet to the values a hypothetical entity carries.
+  const resolverFor =
+    (carried: Partial<Record<FilterFacet, string[]>>) =>
+    (facet: FilterFacet): readonly string[] =>
+      carried[facet] ?? [];
+
+  it('empty clause list passes everything', () => {
+    expect(matchesFilterClauses([], resolverFor({ aircraftCategory: ['airliner'] }))).toBe(true);
+  });
+
+  it('only-include OR within facet, AND across facets', () => {
+    const clauses: FilterClause[] = [
+      { facet: 'aircraftCategory', value: 'airliner', mode: 'only' },
+      { facet: 'aircraftCategory', value: 'military', mode: 'only' },
+      { facet: 'flag', value: 'US', mode: 'only' },
+    ];
+    // military + US → passes (OR within category, AND across to flag)
+    expect(matchesFilterClauses(clauses, resolverFor({ aircraftCategory: ['military'], flag: ['US'] }))).toBe(true);
+    // airliner but GB → fails the flag group
+    expect(matchesFilterClauses(clauses, resolverFor({ aircraftCategory: ['airliner'], flag: ['GB'] }))).toBe(false);
+    // no category value at all → fails the category group
+    expect(matchesFilterClauses(clauses, resolverFor({ flag: ['US'] }))).toBe(false);
+  });
+
+  it('not-exclude rejects regardless of includes', () => {
+    const clauses: FilterClause[] = [
+      { facet: 'vesselType', value: 'tanker', mode: 'not' },
+    ];
+    expect(matchesFilterClauses(clauses, resolverFor({ vesselType: ['tanker'] }))).toBe(false);
+    expect(matchesFilterClauses(clauses, resolverFor({ vesselType: ['cargo'] }))).toBe(true);
   });
 });

@@ -32,10 +32,14 @@ def _reset_feed_state(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _stub_feeds(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, list[dict]]) -> None:
-    async def fake(_client, url):  # noqa: ANN001
-        return mapping.get(url, [])
+    # The per-feed pull runs _fetch_one_feed_sync(url) -> (ts, aircraft) off the
+    # event loop (see _pull_one_feed), so the stub must replace THAT symbol, not
+    # the async _fetch_one_feed. ts is captured per-call so freshest-fix ordering
+    # still works.
+    def fake_sync(url: str) -> tuple[float, list[dict]]:
+        return time.monotonic(), mapping.get(url, [])
 
-    monkeypatch.setattr(adsb, "_fetch_one_feed", fake)
+    monkeypatch.setattr(adsb, "_fetch_one_feed_sync", fake_sync)
 
 
 async def _drain() -> None:
@@ -120,15 +124,15 @@ async def test_stale_slice_evicted(monkeypatch: pytest.MonkeyPatch) -> None:
     adsb._FEED_SLICES[url] = (time.monotonic() - 10_000.0, ac)
     # Re-pull returns nothing (feed went dark) so the stale slice isn't
     # refreshed and gets evicted past the age window in the next merge.
-    monkeypatch.setattr(adsb, "_fetch_one_feed", _noop)
+    monkeypatch.setattr(adsb, "_fetch_one_feed_sync", _noop_sync)
     u = await adsb._readsb_feeds()
     await _drain()
     assert u == []
     assert url not in adsb._FEED_SLICES
 
 
-async def _noop(_client, _url):  # noqa: ANN001
-    return []
+def _noop_sync(_url: str) -> tuple[float, list[dict]]:
+    return time.monotonic(), []
 
 
 @pytest.mark.asyncio

@@ -361,3 +361,64 @@ export function cameraStyle(): { imageUri: string; scale: number } {
     scale: 1.0,
   };
 }
+
+// ── Airports / Ports (FR24-style reference markers) ─────────────────────────
+// Fixed infrastructure markers, NOT live contacts: a filled rounded tile with a
+// high-contrast glyph so they read as place pins on the dark basemap and never
+// get mistaken for an aircraft (yellow) or a vessel (teal arrow). Built inline
+// here (mirroring eventIcons.ts) rather than via icons.ts so the whole marker
+// lives with its style — same `data:image/svg+xml;utf8,${encodeURIComponent}`
+// data-uri pattern as icons.ts. Orientation-agnostic — never rotated. Zoom-gated
+// to appear only when zoomed in (LayerCompositor placesBboxQuery + billboard DDC).
+function placeDataUri(svg: string): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const PLACE_OUT = '#05070b'; // dark outline halo (matches label pill background)
+
+// FR24-style airport tile: rounded slate square + an upright airplane glyph.
+// Large hubs get a brighter tile + bigger scale than medium fields, so the map
+// reads primary vs secondary airports at a glance. The slate/blue hue keeps a
+// static airport visually apart from a live yellow aircraft.
+function airportSvg(large: boolean): string {
+  const tile = large ? '#e2e8f0' : '#94a3b8'; // slate-200 hub / slate-400 field
+  const glyph = large ? '#1e3a8a' : '#1e293b'; // blue-900 / slate-800 plane
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    <path d="M12 4.6 L12.9 11 L18 13 L18 14.3 L12.9 13.1 L12.9 16.7 L14.3 17.6 L14.3 18.7 L12 18 L9.7 18.7 L9.7 17.6 L11.1 16.7 L11.1 13.1 L6 14.3 L6 13 L11.1 11 Z"
+      fill="${glyph}" stroke="${PLACE_OUT}" stroke-width="0.5" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+export function airportStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
+  const large = String(props['atype'] ?? '').toLowerCase() === 'large';
+  const key = `airport:${large ? 'lg' : 'md'}`;
+  return {
+    imageUri: cachedIcon(key, () => placeDataUri(airportSvg(large))),
+    scale: large ? 1.0 : 0.8,
+  };
+}
+
+// FR24/marine-style port tile: teal rounded square + a white anchor. Teal echoes
+// the vessel palette (so it reads "maritime") but the square tile + anchor make
+// it clearly a fixed berth, not a moving vessel arrow.
+function portSvg(): string {
+  const tile = '#0d9488'; // teal-600
+  const glyph = '#f0fdfa'; // near-white anchor
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    <circle cx="12" cy="5.9" r="1.8" fill="none" stroke="${glyph}" stroke-width="1.5"/>
+    <line x1="12" y1="7.6" x2="12" y2="18.4" stroke="${glyph}" stroke-width="1.6" stroke-linecap="round"/>
+    <line x1="8.4" y1="10" x2="15.6" y2="10" stroke="${glyph}" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M6 13.4 C6 16.8 8.9 18.6 12 18.6 C15.1 18.6 18 16.8 18 13.4" fill="none" stroke="${glyph}" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M6 13.4 L4.4 13.9 L5.6 15.2 Z" fill="${glyph}"/>
+    <path d="M18 13.4 L19.6 13.9 L18.4 15.2 Z" fill="${glyph}"/>
+  </svg>`;
+}
+
+export function portStyle(): { imageUri: string; scale: number } {
+  return {
+    imageUri: cachedIcon('port', () => placeDataUri(portSvg())),
+    scale: 0.95,
+  };
+}

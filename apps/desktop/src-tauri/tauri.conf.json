@@ -1,0 +1,45 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Velocity",
+  "version": "0.1.0",
+  "identifier": "org.projectvelocity.desktop",
+  "build": {
+    "beforeDevCommand": "cd \"$(git rev-parse --show-toplevel)\" && pnpm --filter @osint/web dev --host 0.0.0.0",
+    "beforeBuildCommand": "cd \"$(git rev-parse --show-toplevel)\" && pnpm --filter @osint/web build",
+    "frontendDist": "../../web/dist",
+    "devUrl": "http://localhost:5173"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Velocity — all-source intelligence",
+        "url": "http://127.0.0.1:8000/",
+        "width": 1680,
+        "height": 1040,
+        "resizable": true,
+        "maximized": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "../sidecar/yolo_sidecar.py"
+    ],
+    "android": {
+      "debugApplicationIdSuffix": ".debug"
+    }
+  }
+}

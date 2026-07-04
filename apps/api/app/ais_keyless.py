@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import ssl
 import time
 from typing import Any
@@ -31,6 +32,8 @@ import websockets
 
 from app import ais_firehose
 from app.config import get_settings
+from app.correlate.types import Observation
+from app.routes import ais as ais_routes
 from app.upstream import get_client
 
 log = logging.getLogger(__name__)
@@ -48,6 +51,7 @@ _stats: dict[str, Any] = {
     "kystdatahuset_vessels": 0,
     "digitraffic_connected": False,
     "digitraffic_messages": 0,
+    "vesselfinder_vessels": 0,
 }
 
 
@@ -57,7 +61,11 @@ def stats() -> dict[str, Any]:
         **_stats,
         "kystdatahuset_enabled": s.ais_kystdatahuset_enabled,
         "digitraffic_mqtt_enabled": s.ais_digitraffic_mqtt_enabled,
-        "coverage": "Norway (Kystdatahuset) + Baltic (Digitraffic) — regional, NOT global",
+        "vesselfinder_sidecar_enabled": s.ais_vesselfinder_sidecar_enabled,
+        "coverage": (
+            "Norway (Kystdatahuset) + Baltic (Digitraffic) regional + "
+            "VesselFinder sidecar (global ~21k) when enabled"
+        ),
     }
 
 
@@ -233,6 +241,7 @@ async def _handle_publish(topic: str, payload: bytes) -> None:
 async def _run_digitraffic_mqtt() -> None:
     backoff = 1.0
     while True:
+        session_up_at: float | None = None  # set on SUBACK; gates the backoff reset
         try:
             ctx = ssl.create_default_context()
             async with websockets.connect(
@@ -256,7 +265,11 @@ async def _run_digitraffic_mqtt() -> None:
                                     _stats["digitraffic_connected"] = True
                             elif ptype == 9:  # SUBACK
                                 subscribed = True
-                                backoff = 1.0
+                                # Do NOT reset backoff here. Digitraffic SUBACKs
+                                # then 429-drops us seconds later; resetting on
+                                # every micro-session was the 1/2/4s reconnect
+                                # spam. Only a session that SURVIVES clears it.
+                                session_up_at = time.monotonic()
                             elif ptype == 3:  # PUBLISH
                                 pub = _decode_publish(b0, body)
                                 if pub is not None:
@@ -272,9 +285,93 @@ async def _run_digitraffic_mqtt() -> None:
             raise
         except Exception as e:  # noqa: BLE001
             _stats["digitraffic_connected"] = False
-            log.warning("digitraffic mqtt error, reconnecting in %.0fs: %s", backoff, e)
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 60.0)
+            # Reset to fast retry only after a session that stayed up long enough
+            # to be real (>60s); otherwise keep doubling so a 429-storm backs off
+            # to minutes instead of hammering once a second.
+            if session_up_at is not None and time.monotonic() - session_up_at > 60.0:
+                backoff = 1.0
+            delay = backoff * (0.5 + random.random())  # jitter: avoid lockstep retry
+            log.warning("digitraffic mqtt error, reconnecting in %.0fs: %s", delay, e)
+            await asyncio.sleep(delay)
+            backoff = min(backoff * 2, 300.0)
+
+
+# ── VesselFinder headless sidecar (keyless GLOBAL) — poll vessels.json ─────────
+
+
+def _publish_vesselfinder(vessels: list[dict[str, Any]]) -> int:
+    """Bulk-load sidecar vessels into the observation store. Testable offline.
+
+    NOT routed through ais_firehose.publish_vessel per-vessel: that does a
+    /ws/ais broadcast + a history write on EVERY call, which at ~21k vessels per
+    cycle measured ~23s of event-loop work AND would flood /ws/ais with unchanged
+    fixes. The sidecar's vessels render via the snapshot POLL layer
+    (/api/maritime/snapshot reads store.latest("vessel")), so we write the store
+    ONCE via add_many (evict-once) and refresh the shared MMSI→name cache so
+    labels resolve. Only mmsi/lat/lon/name are carried — sog/cog/heading/type
+    stay None (the packed payload's remaining bytes aren't identified, and we
+    don't guess); shipType is backfilled from the cross-source cache when another
+    feed has already typed that MMSI, so the icon category survives.
+    """
+    now = time.time()
+    batch: list[Observation] = []
+    for v in vessels:
+        try:
+            mmsi = int(v["mmsi"])
+            lat = float(v["lat"])
+            lon = float(v["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+            continue
+        name = v.get("name")
+        if name:
+            ais_firehose._remember_name(mmsi, name)
+        batch.append(
+            Observation(
+                id=f"vessel:{mmsi}",
+                source="vesselfinder",
+                t=now,
+                lon=lon,
+                lat=lat,
+                emits_kind="vessel",
+                attrs={
+                    "mmsi": mmsi,
+                    "name": ais_firehose._name_by_mmsi.get(mmsi),
+                    "sog": None,
+                    "cog": None,
+                    "heading": None,
+                    "shipType": ais_routes._ship_type_by_mmsi.get(mmsi),
+                },
+            )
+        )
+    if batch:
+        ais_firehose.store.add_many(batch)
+    return len(batch)
+
+
+async def _run_vesselfinder_sidecar() -> None:
+    s = get_settings()
+    interval = s.ais_vesselfinder_sidecar_interval_s
+    url = s.ais_vesselfinder_sidecar_url
+    client = get_client()
+    backoff = interval
+    while True:
+        try:
+            r = await client.get(url, timeout=60.0)
+            if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
+                vessels = (r.json().get("vessels")) or []
+                n = _publish_vesselfinder(vessels)
+                _stats["vesselfinder_vessels"] = n
+                backoff = interval
+            else:
+                backoff = min(backoff * 2, 300.0)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 — sidecar may be cold/booting; retry
+            log.warning("vesselfinder sidecar poll error: %s", e)
+            backoff = min(backoff * 2, 300.0)
+        await asyncio.sleep(max(interval, backoff))
 
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
@@ -287,6 +384,8 @@ def start() -> None:
         _tasks.append(asyncio.create_task(_run_kystdatahuset(), name="ais_kystdatahuset"))
     if s.ais_digitraffic_mqtt_enabled and not _running("digitraffic"):
         _tasks.append(asyncio.create_task(_run_digitraffic_mqtt(), name="ais_digitraffic_mqtt"))
+    if s.ais_vesselfinder_sidecar_enabled and not _running("vesselfinder"):
+        _tasks.append(asyncio.create_task(_run_vesselfinder_sidecar(), name="ais_vesselfinder_sidecar"))
 
 
 def _running(tag: str) -> bool:

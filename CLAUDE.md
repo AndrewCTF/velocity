@@ -44,11 +44,30 @@ not regress any of them. If unsure, leave the relevant code path alone.
   ADS-B truth instantly. The operator explicitly chose this over the prior glide,
   with full knowledge it had been rejected twice before (see memory
   `adsb-motion-glide-to-fix`). Do NOT "fix the jump" back to a glide.
-- **NEVER synthesize/predict aircraft motion — real observed fixes only.** Teleport
-  shows ONLY real fixes; do NOT add interpolation, forward-extrapolation, or
-  dead-reckoning to "smooth" it — that re-introduces the fake motion the operator
-  rejected. The glide model (`upsertAircraftSamples`) was REMOVED in the teleport
-  change; reverting to glide is a `git` revert, not a rewrite. VESSELS still glide
+- **NEVER synthesize/predict aircraft motion BY DEFAULT — real observed fixes only.**
+  Teleport shows ONLY real fixes; do NOT add interpolation, forward-extrapolation, or
+  dead-reckoning to "smooth" it ON THE DEFAULT PATH — that re-introduces the fake
+  motion the operator rejected. The glide model (`upsertAircraftSamples`) was REMOVED
+  in the teleport change; reverting to glide is a `git` revert, not a rewrite.
+- **SANCTIONED EXCEPTION — opt-in dead-reckoning (operator request 2026-06-28).** There
+  is now a settings toggle "Keep planes moving between updates" (`aircraftDeadReckon`
+  in `apps/web/src/state/settings.ts`, **OFF by default**). When the operator turns it
+  ON, `PollGeoJsonAdapter` replaces the teleport with `deadReckonPosition` — a
+  FlightRadar24-style forward-projected glide along the last `track_deg` at the last
+  `velocity_ms`, capped at `DEAD_RECKON_HORIZON_S` then HOLD. Positions while ON are
+  ESTIMATED, surfaced by the `PredictedMotionBadge` on the map. This is INTENTIONAL and
+  operator-approved with full knowledge of the rejections above — do NOT delete it as a
+  "synthesis regression". The DEFAULT (toggle off) still teleports to real fixes only.
+- **A position-unchanged SKIP must still refresh the entity PropertyBag — skip only the
+  RESTYLE, never the bag (2026-06-30).** `PollGeoJsonAdapter`'s teleport + deadReckon
+  `!fresh` branches `continue` when a contact's lat/lon is within `AIRCRAFT_POS_EPSILON_M`;
+  they set `existing.properties = new Cesium.PropertyBag(props)` BEFORE the `continue` so
+  freshness counters (`seen_pos_s`/`seen_at`/`last_contact`) + facets stay live for the
+  entity panel + histogram. Skipping the bag froze "Last seen" on every cached/resending
+  contact. `EntityPanel`'s snapshot re-render gate likewise keys on a signature that
+  INCLUDES `seen_pos_s`/`last_contact`, not position alone, or the panel freezes for steady
+  contacts. Restyle (styleFn + dim + billboard GPU write) stays skipped — that is the perf win.
+- VESSELS still glide
   via `SampledPositionProperty` + `LinearApproximation` (slow movers) — do not
   change that. Aircraft smoothness, if ever wanted again, comes from delivering
   REAL fixes faster + steadier (backend cadence, feed freshness), never from
@@ -61,6 +80,19 @@ not regress any of them. If unsure, leave the relevant code path alone.
   frozen, nothing changes, and the scene idles — so requestRenderMode still
   saves GPU. Do not set `maximumRenderTimeChange` back to `Infinity`. Follow
   (`camera.ts`) flips `requestRenderMode` off for its duration and restores it.
+- **SANCTIONED EXCEPTION — opt-in idle render governor (design §5.1, 2026-07-02).**
+  There is now a settings toggle "Idle render governor" (`continuousRenderGovernor`
+  in `state/settings.ts`, **OFF by default**). While OFF, `maximumRenderTimeChange`
+  stays `0` exactly as above — no change to the default. When the operator turns it
+  ON, GlobeCanvas' governor (`evalGovernor`, 250 ms tick + on moveEnd) relaxes it to
+  `Infinity` ONLY in the genuinely-idle case (world view, teleport aircraft, frozen
+  vessels, nothing selected, no sim, and no registered `renderNeeds` — satellites /
+  emergency pulse), and holds it at `0` whenever ANYTHING animates (so the
+  interpolation-smoothness intent above is fully preserved). Any doubt → `0`. This is
+  operator-approved with full knowledge of the `Infinity` rejection above; do NOT
+  delete it as a regression, and do NOT flip its DEFAULT to ON without an on-hardware
+  fps sign-off (headless can't measure GPU fps). Guardrail: the DEFAULT path still
+  holds `maximumRenderTimeChange: 0`.
 - **World-view decimation MUST be STABLE across polls.** At near-global zoom the
   frontend asks `/api/adsb/global?limit=20000` (no bbox); `viewport_filter`
   (`routes/adsb.py`) serves the full union (a ~13k snapshot ships WHOLE — the
@@ -78,7 +110,7 @@ not regress any of them. If unsure, leave the relevant code path alone.
 ### Refresh cadence
 
 - ADS-B global: 1 s frontend poll (`registry/defaults.ts` `ttlSec: 1`), backend
-  sticky snapshot on a 2 s target cycle (`_SNAPSHOT_TARGET_CYCLE_S`), and each
+  sticky snapshot on a 1.0 s target cycle (`_SNAPSHOT_TARGET_CYCLE_S`), and each
   fan-out is wall-clock-capped at 10 s (`_FANOUT_BUDGET_S`). The 1 s poll is
   cheap (the hot route serves the sticky snapshot in microseconds); motion
   between polls is interpolated + rendered every frame. Do not raise the poll
@@ -100,8 +132,8 @@ not regress any of them. If unsure, leave the relevant code path alone.
   Guarded by `tests/test_adsb_hot_blob.py`.
 - **`/ws/adsb` push is the PRIMARY live transport.** The refresher fans `_HOT_BLOB` to
   all subscribers (`_broadcast_blob`, per-send timeout + drop-on-error) each cycle, so
-  the client cadence is server-timed (~2 s, no request round-trip in the loop — measured
-  steady 1.9–2.1 s vs the old jitter). `require_ws_key` BEFORE `accept`; sends the blob
+  the client cadence is server-timed (~1.0 s, no request round-trip in the loop — steady,
+  no per-request jitter). `require_ws_key` BEFORE `accept`; sends the blob
   on connect for instant first paint. The browser inflates the binary frame with
   `DecompressionStream('gzip')` → `render()` (same upsert/glide owner as the poll). The
   HTTP poll is the FALLBACK (socket down) + the zoomed bbox path; `PollGeoJsonAdapter`
@@ -297,3 +329,52 @@ shipping.
   marketing ("union climbs to ~14k", not "now global").
 - Keep the repo root tidy: no dev/proof screenshots committed (gitignored), docs
   live under `docs/`. App art is SVG in code, not PNG files.
+
+### Frontend FPS is GPU/per-frame-render bound, NOT React (2026-06-30)
+
+- World-view <10 fps is dominated by rendering ~15k billboards+labels and — with
+  dead-reckoning ON — the per-frame re-eval of every aircraft's `SampledPositionProperty`
+  (`maximumRenderTimeChange:0` renders each frame; `PrimitiveEntityLayer.onPreUpdate`
+  mirrors ~15k `entity.position.getValue` + billboard position writes EVERY frame).
+  Teleport mode (deadReckon OFF, the default) is `ConstantPositionProperty` → the per-frame
+  mirror is skipped, so fps is far higher. FPS work must target the per-frame RENDER path
+  (decimate/cull at world zoom, LOD labels, cap the moving set), NOT the React panels —
+  the React-contention fixes (shared walk, frame budget, leaf clocks) cut main-thread
+  stutter but do NOT raise GPU fps.
+- **Headless Playwright CANNOT measure real GPU fps** (software raster). It CAN measure
+  main-thread longtasks/TBT during a scripted pan (`__viewer.camera.rotateRight` loop +
+  `PerformanceObserver({entryTypes:['longtask']})`). Never claim an fps win from a headless
+  number; verify fps on real hardware or say it's unverified.
+
+### "Aircraft not refreshing / Last seen climbing" = probe the BACKEND blob first (2026-06-30)
+
+- Usually BACKEND, not frontend. Diff two `/api/adsb/global` pulls N s apart on `seen_pos_s`:
+  median can read fresh (0.4 s) while <5% CHANGES over 8 s — the HOT_BLOB rebuild cadence is
+  throttled by the airplanes.live 429 storm (the fan-out burns its ~10 s budget each cycle).
+  The frontend faithfully mirrors a frozen blob; no frontend change makes stale upstream data
+  fresh. The headless sidecar (`:8090 /aircraft.json`) IS the dominant `adsb`-source tier
+  (~12k of the union) and self-heals via periodic "browser disconnected — will relaunch".
+
+### Boot-race + live-verification hooks (2026-06-30)
+
+- API lifespan blocks `accept` until the snapshot warms (~15-25 s). A page load during that
+  window stranded the one-shot `/api/config` fetch on the "config error" boot screen until a
+  manual reload. Fixed: `transport/config.ts` retries with backoff (shows "loading config…").
+  `/api/config` is keyless (returns 200 with no/bogus/expired token) — a config error is a
+  transport/timing issue, never auth.
+- Live-verify via the DEV globals `window.__viewer` / `__Cesium` / `__useSelection`
+  (`.getState().select(id)`). Boot the backend with **`bash scripts/run-api.sh`**
+  (`:8000`, `--app-dir apps/api`, anon OpenSky ~13k) — it LD_PRELOADs jemalloc so the
+  ~80-thread per-second allocation churn returns memory to the OS instead of
+  ballooning glibc arenas (a bare `uvicorn` hit a ~54 GB thrash + CPU-pegged
+  arena-lock contention under sustained real load). Run from the repo ROOT so
+  pydantic's `env_file` resolves the intended `.env` (`ADSB_SIDECAR_ONLY=1`). NEVER
+  set glibc `M_ARENA_MAX=2` — it made memory WORSE (54 GB > the untuned 17 GB).
+  Then vite `:5173`. Kill servers by PORT holder (`ss -ltnp | grep :PORT` → kill pid), not argv.
+  A stale Playwright-MCP lock blocks new browsers — `rm
+  ~/.cache/ms-playwright-mcp/*/Singleton{Lock,Cookie,Socket}`.
+- Shared perf modules added this session: `globe/entityStats.ts` (ONE idle-scheduled walk →
+  `useEntityStats`, replaces the HistogramPanel 800 ms + OpsPanel 2 s per-tick entity walks),
+  `globe/frameBudget.ts` (cooperative per-frame budget, keyed on the rAF timestamp),
+  `explorer/facets.ts` (pure facet logic, re-exported by `HistogramPanel` so the guarded
+  adapters' `entityPassesFilter` import is unchanged).

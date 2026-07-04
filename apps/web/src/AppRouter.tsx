@@ -2,11 +2,17 @@ import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { App } from './App.js';
 import { App2D } from './App2D.js';
+import { StudioPage } from './studio/StudioPage.js';
 import { AuthProvider, useAuth } from './auth/AuthContext.js';
 import { AuthForm } from './auth/AuthForm.js';
 import { LoginPage } from './auth/LoginPage.js';
 import { SignupPage } from './auth/SignupPage.js';
 import { SettingsModal } from './settings/SettingsModal.js';
+import { useSettings } from './state/settings.js';
+import { VelocityNewsPage } from './news/VelocityNewsPage.js';
+import { StoryView } from './news/StoryView.js';
+import { Onboarding, hasOnboarded } from './onboarding/Onboarding.js';
+import { isSupabaseConfigured } from './transport/supabase.js';
 
 // Served under the Vite base path (e.g. "/app" in production, "/" in dev), so
 // the router's basename tracks it — keeps client routes correct behind /app.
@@ -17,9 +23,14 @@ export function AppRouter(): JSX.Element {
     <BrowserRouter basename={BASENAME}>
       <AuthProvider>
         <TopBar />
+        <PredictedMotionBadge />
+        <OnboardingGate />
         <Routes>
-          <Route path="/" element={<App />} />
+          <Route path="/" element={<DashboardRoute />} />
           <Route path="/2d" element={<App2D />} />
+          <Route path="/studio" element={<StudioPage />} />
+          <Route path="/news" element={<VelocityNewsPage />} />
+          <Route path="/news/:id" element={<StoryView />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot" element={<AuthForm mode="forgot" />} />
@@ -30,31 +41,38 @@ export function AppRouter(): JSX.Element {
   );
 }
 
+// The "/" route now renders the SINGLE Gotham console shell (App) for every mode
+// (design §6.0 — the parallel "Normal" shell is retired). dashboardMode selects a
+// view PRESET of that one shell: 'professional' = Command (dense, all apps),
+// 'normal' = Field (a lighter landing). App reads the mode and adapts.
+function DashboardRoute(): JSX.Element {
+  return <App />;
+}
+
 function TopBar(): JSX.Element | null {
   const loc = useLocation();
-  const { user } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The auth pages are full-screen cards — no overlay chrome on them.
   if (['/login', '/signup', '/forgot', '/reset'].includes(loc.pathname)) return null;
+  if (loc.pathname.startsWith('/news')) return null;
   const is2D = loc.pathname.startsWith('/2d');
+  const isStudio = loc.pathname.startsWith('/studio');
   return (
     <div className="absolute top-1 right-2 z-[1000] flex items-center gap-2">
-      {user && (
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          title="API keys & settings"
-          className="mono text-[10px] px-2 py-0.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
-        >
-          ⚙ Keys
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => setSettingsOpen(true)}
+        title="Settings — dashboard, aircraft motion & API keys"
+        className="mono text-[10px] px-2 py-0.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
+      >
+        ⚙ Settings
+      </button>
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <AccountChip />
       <div className="flex gap-1">
         <Link
           to="/"
-          className={`mono text-[10px] px-2 py-0.5 border border-line rounded-sm ${!is2D ? 'text-accent border-accent-line' : 'text-txt-2 hover:border-accent-line'}`}
+          className={`mono text-[10px] px-2 py-0.5 border border-line rounded-sm ${!is2D && !isStudio ? 'text-accent border-accent-line' : 'text-txt-2 hover:border-accent-line'}`}
         >
           3D
         </Link>
@@ -64,13 +82,51 @@ function TopBar(): JSX.Element | null {
         >
           2D
         </Link>
+        <Link
+          to="/studio"
+          className={`mono text-[10px] px-2 py-0.5 border border-line rounded-sm ${isStudio ? 'text-accent border-accent-line' : 'text-txt-2 hover:border-accent-line'}`}
+        >
+          STUDIO
+        </Link>
       </div>
     </div>
   );
 }
 
+// Honest marker for the dead-reckoning opt-in: while aircraft positions are
+// being ESTIMATED between ADS-B fixes, a pulsing chip on the map says so. Only
+// on the live map routes ("/" and "/2d"), only when the setting is ON.
+function PredictedMotionBadge(): JSX.Element | null {
+  const loc = useLocation();
+  const on = useSettings((s) => s.aircraftDeadReckon);
+  if (!on) return null;
+  if (loc.pathname !== '/' && !loc.pathname.startsWith('/2d')) return null;
+  // The console home ("/") has a ~158px timeline footer; sit above it so the badge
+  // never overlaps the lane labels. The 2D route has a clear bottom.
+  const bottomClass = loc.pathname === '/' ? 'bottom-[172px]' : 'bottom-2';
+  return (
+    <div className={`absolute ${bottomClass} left-2 z-[1000] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5`}>
+      <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+      Predicted motion — aircraft positions estimated between ADS-B fixes
+    </div>
+  );
+}
+
+// First-run tour. Only on the live map routes ("/" and "/2d") — auth, news and
+// studio pages get no overlay. Shows once, then localStorage remembers it.
+function OnboardingGate(): JSX.Element | null {
+  const loc = useLocation();
+  const [show, setShow] = useState(() => !hasOnboarded());
+  const onMap = loc.pathname === '/' || loc.pathname.startsWith('/2d');
+  if (!show || !onMap) return null;
+  return <Onboarding onClose={() => setShow(false)} />;
+}
+
 function AccountChip(): JSX.Element | null {
   const { user, loading, signOut } = useAuth();
+  // Local / self-host build: no Supabase env → auth is disabled, so there's
+  // nothing to sign into. Hide the chip entirely (no "Sign in" link).
+  if (!isSupabaseConfigured) return null;
   if (loading) return null;
   if (!user) {
     return (

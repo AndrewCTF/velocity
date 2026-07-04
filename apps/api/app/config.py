@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     # ── third-party secrets (NEVER exposed) ──
     opensky_client_id: str = ""
     opensky_client_secret: str = ""
+    # Kill switch for the OpenSky breadth tier (env OPENSKY_ENABLED=0). When off,
+    # `_opensky_cached` serves nothing and never kicks a pull — the snapshot rides
+    # the sidecar + feeds + grid alone. Left ON by default; disable temporarily
+    # without ripping out the OpenSky code path.
+    opensky_enabled: bool = True
     aisstream_key: str = ""
     # When true AND aisstream_key is set, run the AISStream upstream ALWAYS-ON
     # (global vessel firehose) from boot, instead of only while a browser holds
@@ -105,7 +110,19 @@ class Settings(BaseSettings):
     # use the slow interval; a localhost sidecar uses the fast one.
     adsb_feed_interval_s: float = 5.0  # full aircraft.json mirrors
     adsb_feed_slow_interval_s: float = 20.0  # /v2 + /re-api APIs (rate-limited)
-    adsb_feed_fast_interval_s: float = 2.0  # localhost sidecar (no limit)
+    adsb_feed_fast_interval_s: float = 1.0  # localhost sidecar (no limit)
+    # Sidecar-only mode. The headless-browser tar1090 sidecar (:8090, started by
+    # app.adsb_sidecar) runs REAL tar1090 against globe.airplanes.live +
+    # globe.adsbexchange and reads its decoded store — the only form of tar1090's
+    # direct method reachable from a datacenter IP (the binary re-api is
+    # Cloudflare-403, measured). It's the freshest + biggest single path
+    # (~18k aircraft, position age p50 ~0.4 s), so when this is on the snapshot is
+    # served from the sidecar ALONE: the remote readsb mirrors are dropped from the
+    # pull list (less event-loop load = fresher) and OpenSky/firehose/grid run only
+    # as an automatic backfill if the sidecar union ever falls below ~8000 (a
+    # Chromium crash) so the map can't go empty. Default off keeps the multi-tier
+    # union for deploys without a sidecar; the local .env sets ADSB_SIDECAR_ONLY=1.
+    adsb_sidecar_only: bool = False
 
     # ── infra ──
     database_url: str = "postgresql+asyncpg://osint:osint@localhost:5432/osint"
@@ -121,7 +138,11 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     log_level: str = "info"
-    cors_origins: str = "http://localhost:8080"
+    cors_origins: str = (
+        "http://localhost:8080,http://127.0.0.1:8080,"
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "tauri://localhost,http://tauri.localhost,https://tauri.localhost"
+    )
     # When set, REST + WS routes require X-API-Key matching this value.
     # When unset (default), no auth — fine for single-analyst localhost.
     api_key: str = ""
@@ -154,7 +175,27 @@ class Settings(BaseSettings):
     # spending the calling agent's context. All optional; degrade gracefully.
     ollama_host: str = "http://localhost:11434"  # OLLAMA_HOST
     ollama_model: str = ""  # OLLAMA_MODEL ("" → auto-detect smallest installed)
+    # Per-tier local model ids used when running inference locally (Part 4). The
+    # auto-picker (llm._pick_ollama) biases to TINY models — right for a last-resort
+    # fallback, wrong when local is PRIMARY — so name the capable model per tier.
+    # "" → fall back to ollama_model → auto-pick.
+    ollama_model_fast: str = ""  # OLLAMA_MODEL_FAST (tool/JSON tier, e.g. qwen3-coder:30b-a3b)
+    ollama_model_reason: str = ""  # OLLAMA_MODEL_REASON (deep tier, e.g. qwen3.6)
+    # Prefer the local Ollama model FIRST, ahead of MiniMax/DeepSeek, to dodge cloud
+    # rate limits when the operator has a capable local GPU. OFF by default so
+    # hosted/cloud behaviour is unchanged; flipped at runtime via POST /api/ai/local
+    # (the desktop build turns it on when a tool-capable model is present).
+    llm_prefer_local: bool = False  # LLM_PREFER_LOCAL
     api_base: str = "http://localhost:8000"  # API_BASE (MCP → backend)
+
+    # ── Human-in-the-loop action approval (HITL gate) ──
+    # When ON (default), the intel agent's write-back actions become PROPOSALS the
+    # operator approves/rejects in AgentConsole instead of dispatching directly.
+    # An action whose model-reported confidence >= action_auto_threshold auto-runs
+    # (default 1.01 = never auto — a safe AIP-style knob; set below 1 to auto-execute
+    # high-confidence writes). Set ACTION_APPROVAL=0 to restore direct dispatch.
+    action_approval: bool = True  # ACTION_APPROVAL
+    action_auto_threshold: float = 1.01  # ACTION_AUTO_THRESHOLD (1.01 = never auto)
 
     # ── MiniMax-M3 via NVIDIA NIM (OpenAI-compatible) — PRIMARY reasoning backend ──
     # The analytical tools prefer MiniMax-M3 (a reasoning model) hosted on
@@ -212,19 +253,59 @@ class Settings(BaseSettings):
     # 24h keeps anchored/slow reporters while cutting the multi-year dead. Set to
     # 0 to disable the filter and serve every last-known position.
     digitraffic_max_fix_age_s: float = 86400.0
+    # Keyless GLOBAL AIS via headless-browser sidecar (VesselFinder) — the AIS
+    # twin of the ADS-B globe sidecar. A real Chromium clears VesselFinder's
+    # Cloudflare gate, fetches its public /api/pub/mp2 vessel tiles across a world
+    # grid (the only thing the gate authorizes) and decodes the packed binary →
+    # ~21k vessels worldwide (measured 2026-06-29), served as vessels.json on
+    # localhost by tools/ais-vesselfinder-feeder. This is the FIRST keyless source
+    # with global vessel breadth; the REST feeds above are N-Europe regional. The
+    # ais_keyless poller pulls vessels.json and republishes each fix into the
+    # unified store + /ws/ais. Set enabled=False to skip the second headless tab.
+    ais_vesselfinder_sidecar_enabled: bool = True
+    ais_vesselfinder_sidecar_url: str = "http://127.0.0.1:8091/vessels.json"
+    ais_vesselfinder_sidecar_interval_s: float = 30.0
+
+    # OSINT deep-recon sidecar (tools/osint-recon) — OPTIONAL, OFF by default.
+    # A separate process that shells out to the GPL tools (SpiderFoot / theHarvester
+    # / Amass), keeping GPL code OUT of this MIT app. When unset, /api/osint/recon
+    # returns 503 and the feature is invisible. Set to e.g. http://127.0.0.1:8099.
+    osint_recon_sidecar_url: str = ""
+
+    # MarineTraffic (PAID global AIS, key-gated). Dormant unless a key is set.
+    # `marinetraffic_url` is a template ({key} substituted) because the exact path
+    # depends on your MarineTraffic plan (area export / fleet positions). Polls into
+    # the same vessel store + /ws/ais as the keyless feeds. May be datacenter-IP
+    # restricted — probe reachability from the deployment host first.
+    marinetraffic_key: str = ""  # MARINETRAFFIC_KEY
+    marinetraffic_enabled: bool = True  # gate; only runs when a key is present
+    marinetraffic_interval_s: float = 120.0
+    marinetraffic_url: str = (
+        "https://services.marinetraffic.com/api/exportvessels/v:8/{key}/protocol:jsono"
+    )
 
     # ── Historical playback ──
     # Position history store for 3D replay/scrub. SQLite by default; safe to
     # delete (refills as live data flows). Disable to run fully stateless.
     history_enabled: bool = True
     history_db_path: str = "./data/history.db"
-    history_retention_hours: int = 48
+    # Default look-back window for replay. 7 days lets the operator scrub
+    # multi-day, not just the live ~24 h window. This is a TIME bound only —
+    # the byte cap below is what actually limits storage; the hour window just
+    # decides how far back fixes are *kept* once there's disk room.
+    history_retention_hours: int = 168  # 7 days
+    # Hard ceiling on retention so the time bound can never be set unboundedly
+    # large (a fat-fingered env var of e.g. 1_000_000 would otherwise let the
+    # DB grow until only the byte cap reins it in, much later). history.py
+    # clamps history_retention_hours into [1, history_retention_max_hours].
+    # 30 days is a generous multi-day replay horizon. 0 disables the ceiling.
+    history_retention_max_hours: int = 720  # 30 days
     # Hard upper bound on the replay store. The hourly maintenance pass time-
-    # prunes to history_retention_hours, then if the file is still larger than
-    # history_max_bytes it drops the oldest rows until under the cap and
-    # VACUUMs to actually return the pages to the filesystem. 48 h of global
-    # ADS-B + AIS is ~8 GB, so the byte cap — not the hour window — is the
-    # binding limit. 0 disables the byte cap (hour window only).
+    # prunes to the (clamped) history_retention_hours, then if the file is
+    # still larger than history_max_bytes it drops the oldest rows until under
+    # the cap and VACUUMs to actually return the pages to the filesystem. Days
+    # of global ADS-B + AIS run into many GB, so the byte cap — not the hour
+    # window — is the binding limit. 0 disables the byte cap (hour window only).
     history_max_bytes: int = 2_000_000_000  # ~2 GB
 
 

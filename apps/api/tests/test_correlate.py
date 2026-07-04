@@ -233,3 +233,25 @@ async def test_bus_recent_buffer_capped() -> None:
             )
         )
     assert len(bus.recent(1000)) <= 500
+
+
+def test_store_high_cardinality_add_is_not_quadratic() -> None:
+    # Regression: a global high-cardinality feed (AISStream whole-world firehose,
+    # >50k distinct ids within retention) must NOT turn every add() into an O(n)
+    # full _latest rebuild. That blocked the asyncio event loop and wedged the
+    # whole backend (every route, incl /tiles/basemap, timed out). With the
+    # cadence-only sweep, 60k distinct adds finish in well under a second; the
+    # per-call-O(n) version was billions of ops (tens of seconds → minutes).
+    store = ObservationStore()
+    now = time.time()
+    t0 = time.time()
+    for i in range(60_000):
+        store.add(
+            Observation(
+                id=f"vessel:{i}", source="aisstream", t=now,
+                lon=0.0, lat=0.0, emits_kind="vessel",
+            )
+        )
+    elapsed = time.time() - t0
+    assert len(store._latest) >= 50_000  # we really are past the old threshold
+    assert elapsed < 5.0, f"60k distinct adds took {elapsed:.1f}s — O(n)-per-add regression"

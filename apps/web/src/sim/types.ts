@@ -65,6 +65,13 @@ export interface AgentSpec {
   cruiseAltM: number;
   profile: LinkProfile;
   startDelaySec: number;
+  /**
+   * Group id shared by every drone laid out from a single SwarmParams (or one
+   * attacker strike force). The SimController buckets agents by this id to draw
+   * a swarm roll-up entity + AOI circle, so the group stays visible even when
+   * individual icons hit RENDER_AGENT_CAP. Undefined for ungrouped agents.
+   */
+  swarmId?: string;
 }
 
 // A defending air-defence site rendered with a range ring.

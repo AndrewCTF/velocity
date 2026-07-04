@@ -1,16 +1,32 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
 import { MapboxTerrainProvider } from '@macrostrat/cesium-martini';
 import { isMobileDevice } from '../shell/device.js';
+import { useSettings } from '../state/settings.js';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
-import { useTime, useSelection, useImagery } from '../state/stores.js';
+import { useTime, useSelection, useImagery, useSim } from '../state/stores.js';
 import type { ImageryMode } from '../state/stores.js';
 import { imageryOverlayUrl } from '../imagery/gibsUrl.js';
 import { loadLod1, loadLod1Bbox, clearLod1 } from '../lod1/lod1Layer.js';
 import { LayerCompositor } from './LayerCompositor.js';
 import { installSelectionReticle } from './selectionReticle.js';
 import { installSelectionTrack } from './selectionTrack.js';
+import { installSpotlight } from './SpotlightLayer.js';
+import { installFov } from './FovLayer.js';
+import { installProjection } from './ProjectionLayer.js';
+import { createDrawController, setDrawController, getDrawController } from './draw.js';
+import { useContextMenu } from './contextMenuStore.js';
+import { installAnnotations } from './AnnotationLayer.js';
+import { installControl } from './ControlLayer.js';
+import { installWatchboxes } from './WatchboxLayer.js';
+import { installCaptures } from './CaptureLayer.js';
+import { useInvestigation } from '../graph/investigationStore.js';
 import { prewarmIcons } from './icons.js';
+import { perfOnRender } from './perf.js';
+import { setCameraMoving } from './cameraMotion.js';
+import { hasRenderNeed } from './renderNeeds.js';
+import { ChipLayer } from '../imagery/ChipLayer.js';
+import { backendUrl } from '../transport/http.js';
 
 interface Props {
   ionToken: string;
@@ -77,14 +93,13 @@ function applyGoogleGate(
   }
 }
 
-// Dark, English-everywhere basemap (Carto Dark Matter, proxied through our
-// backend so no third-party host appears in the browser network panel and
-// the provider is swappable in one place). Works without any Cesium ion
-// token, with full 3D rendering on the ellipsoid.
+// Dark, English-everywhere basemap proxied through the backend. The backend
+// caches Carto @2x tiles and supports deep zoom; a previous bundled z0-6 tile
+// pack booted offline but became blurry when the camera got close.
 function buildDarkBasemap(): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
-    url: '/tiles/basemap/{z}/{x}/{y}.png',
-    maximumLevel: 18,
+    url: backendUrl('/tiles/basemap/{z}/{x}/{y}.png'),
+    maximumLevel: 22,
   });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
@@ -93,7 +108,7 @@ function buildDarkBasemap(): Cesium.ImageryLayer {
 // (z≥14), proxied + disk-cached by the backend. No ion token involved.
 function buildSatImagery(): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
-    url: '/tiles/sat/{z}/{x}/{y}.jpg',
+    url: backendUrl('/tiles/sat/{z}/{x}/{y}.jpg'),
     maximumLevel: 19,
   });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
@@ -127,7 +142,7 @@ function buildImageryOverlay(
 // encoding it decodes.
 function buildFreeTerrain(): Cesium.TerrainProvider {
   return new MapboxTerrainProvider({
-    urlTemplate: '/tiles/terrain/{z}/{x}/{y}.png',
+    urlTemplate: backendUrl('/tiles/terrain/{z}/{x}/{y}.png'),
     maxZoom: 15,
     tileSize: 256,
   }) as unknown as Cesium.TerrainProvider;
@@ -143,6 +158,10 @@ export function GlobeCanvas({
 }: Props): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
+  // Reactive copy of the viewer so globe-side React layers (ChipLayer) mount
+  // once the imperative Cesium viewer exists. Set on construction, cleared on
+  // teardown — a ref alone wouldn't re-render this component to mount them.
+  const [viewerState, setViewerState] = useState<Cesium.Viewer | null>(null);
   const compositorRef = useRef<LayerCompositor | null>(null);
   // Track ion-stack primitives we add so we can tear them down on toggle
   // without disturbing other primitives in the scene.
@@ -359,7 +378,72 @@ export function GlobeCanvas({
     //    adjacent tiles (~3x tile fetch/upload); the visible set is enough.
     // Mobile renders at 1× device pixels (a 3× Samsung panel supersamples to a
     // brutal fill rate otherwise — the overheating). Desktop keeps up to 1.5×.
-    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, isMobileDevice() ? 1.0 : 1.5);
+    // Render at NATIVE device pixels (sharp), capped by the operator's
+    // renderPixelCap setting so an extreme DPR can't explode the back-buffer.
+    // The old line set resolutionScale = min(DPR, 1.5) but left
+    // useBrowserRecommendedResolution at its DEFAULT (true), which forces the
+    // device-pixel base to 1.0 and only multiplies by resolutionScale — so on a
+    // DPR=2 (Retina / 200% scale / Chrome zoom) display the globe rendered at
+    // css×1.5 = 0.75× native (measured), the "pixelated in Chrome, sharp in
+    // Firefox" report. Setting it false makes Cesium honour devicePixelRatio;
+    // resolutionScale then trims the buffer to css × min(DPR, cap).
+    viewer.useBrowserRecommendedResolution = false;
+    // ADAPTIVE resolution — the cure for "sharp but laggy". Render at native
+    // device pixels (capped by renderPixelCap) when the camera is STILL, and drop
+    // to ~1× device pixels WHILE the camera moves: you can't see the softness
+    // mid-pan, and the lower fill keeps the drag smooth. Full-res is sharp but
+    // heavy; this pays that cost only on the still frame where it actually shows.
+    // buffer = css × dpr × resolutionScale ⇒ resolutionScale = min(dpr,cap)/dpr.
+    const MOTION_PIXEL_CAP = 1.0; // device-pixel cap during camera motion
+    let restoreTimer: number | null = null;
+    const setScale = (cap: number): void => {
+      if (viewer.isDestroyed()) return;
+      const dpr = window.devicePixelRatio || 1;
+      const next = Math.min(1, cap / dpr);
+      if (Math.abs(viewer.resolutionScale - next) < 0.005) return; // no realloc if unchanged
+      viewer.resolutionScale = next;
+      viewer.scene.requestRender();
+    };
+    const idleCap = (): number => (isMobileDevice() ? 1.0 : useSettings.getState().renderPixelCap);
+    const toIdle = (): void => setScale(idleCap());
+    const toMotion = (): void => setScale(Math.min(idleCap(), MOTION_PIXEL_CAP));
+    toIdle();
+    // §5.2.4 during-motion degrade: coarsen terrain/imagery + drop FXAA while the
+    // camera moves (invisible mid-pan), restore at settle. Cheap fill-rate win on
+    // top of the resolutionScale drop.
+    const MOTION_SSE = 3.2;
+    const IDLE_SSE = 2.0;
+    const setMotionQuality = (motion: boolean): void => {
+      if (viewer.isDestroyed()) return;
+      scene.globe.maximumScreenSpaceError = motion ? MOTION_SSE : IDLE_SSE;
+      const fx = scene.postProcessStages?.fxaa;
+      if (fx) fx.enabled = !motion;
+    };
+    const onMoveStart = (): void => {
+      if (restoreTimer != null) {
+        window.clearTimeout(restoreTimer);
+        restoreTimer = null;
+      }
+      setCameraMoving(true);
+      toMotion();
+      setMotionQuality(true);
+    };
+    const onMoveEnd = (): void => {
+      setCameraMoving(false);
+      // Debounce so an inertial settle doesn't snap to sharp then re-drop.
+      if (restoreTimer != null) window.clearTimeout(restoreTimer);
+      restoreTimer = window.setTimeout(() => {
+        toIdle();
+        setMotionQuality(false);
+        evalGovernor(); // re-decide continuous vs idle after a zoom settles
+      }, 180);
+    };
+    viewer.camera.moveStart.addEventListener(onMoveStart);
+    viewer.camera.moveEnd.addEventListener(onMoveEnd);
+    // Live: re-apply when the operator drags the sharpness/FPS slider, and when
+    // the window moves to a monitor of a different DPR.
+    const unsubRenderScale = useSettings.subscribe(toIdle);
+    window.addEventListener('resize', toIdle);
     scene.globe.maximumScreenSpaceError = 2.0;
     scene.globe.preloadSiblings = false;
     // Terrain+imagery tile cache. Kept at the Cesium default (100): an earlier
@@ -383,6 +467,45 @@ export function GlobeCanvas({
 
     // Strip the default credit logo so the dark chrome is clean.
     (viewer.cesiumWidget.creditContainer as HTMLElement).style.display = 'none';
+
+    // Perf instrument (design §5.7): count REAL renders (not rAF frames) so the
+    // render-governor work can be measured. postRender fires once per painted
+    // frame; window.__perf.rendersPerSec is the governor's headline metric.
+    const onPostRender = (_s: Cesium.Scene, time: Cesium.JulianDate): void => {
+      perfOnRender(performance.now());
+      void time;
+    };
+    scene.postRender.addEventListener(onPostRender);
+
+    // P0d render-on-demand governor (design §5.1). DEFAULT OFF (settings) — while
+    // off, maximumRenderTimeChange stays 0 exactly as the CLAUDE.md guardrail
+    // requires (render every animated frame → smooth interpolation). When the
+    // operator opts in, we relax to Infinity (no clock-driven renders) ONLY in the
+    // genuinely-idle case: world view, teleport aircraft, frozen vessels, nothing
+    // selected, no sim, no registered render-need (satellites / emergency pulse).
+    // Any doubt → 0 (continuous). Camera moves + explicit requestRender() calls
+    // (selection, layers, scrub) still paint under requestRenderMode either way.
+    const WORLD_VIEW_ALT_M = 2_000_000;
+    const evalGovernor = (): void => {
+      if (viewer.isDestroyed()) return;
+      if (!useSettings.getState().continuousRenderGovernor) {
+        if (scene.maximumRenderTimeChange !== 0) scene.maximumRenderTimeChange = 0;
+        return;
+      }
+      const worldView = viewer.camera.positionCartographic.height > WORLD_VIEW_ALT_M;
+      const deadReckon = useSettings.getState().aircraftDeadReckon;
+      const simActive = useSim.getState().active;
+      const hasSel = !!useSelection.getState().selectedEntityId;
+      const idle = worldView && !deadReckon && !simActive && !hasSel && !hasRenderNeed();
+      const next = idle ? Infinity : 0;
+      if (scene.maximumRenderTimeChange !== next) {
+        scene.maximumRenderTimeChange = next;
+        // Paint one fresh frame as we stop clock-driven rendering.
+        if (next === Infinity) scene.requestRender();
+      }
+    };
+    const govTimer = window.setInterval(evalGovernor, 250);
+    evalGovernor();
 
     if (import.meta.env.DEV) {
       (window as unknown as { __viewer: Cesium.Viewer; __Cesium: typeof Cesium }).__viewer = viewer;
@@ -421,10 +544,60 @@ export function GlobeCanvas({
       useSelection.getState().select(id ?? null);
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+    // Right-click an entity → "Search around" (expand its 2-hop links in the
+    // Investigation graph), mirroring the EntityPanel button. The draw toolbox's
+    // own right-click only fires while a polyline draw is in progress, so the
+    // two coexist.
+    handler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
+      const picked = scene.pick(click.position);
+      const pid = (picked as { id?: unknown } | undefined)?.id;
+      const ent = Array.isArray(pid) ? pid[0] : pid;
+      const id = (ent as { id?: string } | undefined)?.id;
+      if (id && /^(aircraft|vessel|sim|incident):/.test(id)) {
+        useSelection.getState().select(id);
+        useInvestigation.getState().searchAround(id);
+        return;
+      }
+      // Empty ground (and not mid-draw) → open the map context menu at the
+      // picked lat/lon. The draw toolbox's own right-click only matters while a
+      // draw op is armed, so it still wins then.
+      if (getDrawController()?.active) return;
+      const cart = viewer.camera.pickEllipsoid(click.position, scene.globe.ellipsoid);
+      if (!cart) return;
+      const c = Cesium.Cartographic.fromCartesian(cart);
+      const rect = viewer.canvas.getBoundingClientRect();
+      useContextMenu
+        .getState()
+        .openAt(
+          rect.left + click.position.x,
+          rect.top + click.position.y,
+          Cesium.Math.toDegrees(c.latitude),
+          Cesium.Math.toDegrees(c.longitude),
+        );
+    }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+
     // Pulsing reticle around the currently-selected entity.
     const detachReticle = installSelectionReticle(viewer);
     // Magenta polyline through the selected entity's last ~60 positions.
     const detachTrack = installSelectionTrack(viewer);
+    // Sensor fog-of-war spotlight that follows the selected sim drone (FMV toggle).
+    const detachSpotlight = installSpotlight(viewer);
+    // FOV footprint + boresight lines for the selected satellite (real) or
+    // aircraft (notional). Toggled from the EntityPanel.
+    const detachFov = installFov(viewer);
+    // Route-projection reachable-area overlay (decision support, on-demand).
+    const detachProjection = installProjection(viewer);
+    // Shared map-draw toolbox (COP placement, watchbox AOIs, annotations).
+    const drawCtl = createDrawController(viewer);
+    setDrawController(drawCtl);
+    // Free-hand annotations / graphics layer (renders the annotation store).
+    const detachAnnotations = installAnnotations(viewer);
+    // Territorial-control layer: hatched controlled/contested areas + front lines.
+    const detachControl = installControl(viewer);
+    // Geofence/watchbox AOIs + client-side enter/exit/loiter evaluator.
+    const detachWatchbox = installWatchboxes(viewer);
+    // Captured observations (YOLO detections pinned from cams/panos).
+    const detachCaptures = installCaptures(viewer);
 
     // Height gate for Google photogrammetry — applyGoogleGate no-ops when
     // nothing changed, so this listener stays requestRenderMode-friendly.
@@ -441,12 +614,29 @@ export function GlobeCanvas({
     compositor.start();
     compositorRef.current = compositor;
     onViewerReady?.(viewer);
+    setViewerState(viewer);
 
     return () => {
       handler.destroy();
+      scene.postRender.removeEventListener(onPostRender);
+      window.clearInterval(govTimer);
       viewer.camera.changed.removeEventListener(onCameraChanged);
+      unsubRenderScale();
+      window.removeEventListener('resize', toIdle);
+      viewer.camera.moveStart.removeEventListener(onMoveStart);
+      viewer.camera.moveEnd.removeEventListener(onMoveEnd);
+      if (restoreTimer != null) window.clearTimeout(restoreTimer);
       detachReticle();
       detachTrack();
+      detachSpotlight();
+      detachFov();
+      detachProjection();
+      drawCtl.dispose();
+      setDrawController(null);
+      detachAnnotations();
+      detachControl();
+      detachWatchbox();
+      detachCaptures();
       compositorRef.current?.stop();
       compositorRef.current = null;
       onViewerReady?.(null);
@@ -457,6 +647,7 @@ export function GlobeCanvas({
       googleTilesetRef.current = null;
       viewer.destroy();
       viewerRef.current = null;
+      setViewerState(null);
     };
     // Intentionally exclude imageryMode/enableGoogle3D/googleApiKey — the stack
     // is handled by the swap effect below and the Google key is read once at
@@ -613,5 +804,13 @@ export function GlobeCanvas({
     else v.scene.morphTo3D(0.8);
   }, [sceneMode]);
 
-  return <div ref={containerRef} className="h-full w-full" data-testid="globe-container" />;
+  return (
+    <>
+      <div ref={containerRef} className="h-full w-full" data-testid="globe-container" />
+      {/* Focused satellite-imagery chip draped around the selected entity/swarm.
+          Driven by the shared useChip focus the EntityPanel sets; renders its own
+          control card. Mounts only once the Cesium viewer exists. */}
+      <ChipLayer viewer={viewerState} />
+    </>
+  );
 }

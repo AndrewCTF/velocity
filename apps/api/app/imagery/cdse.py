@@ -54,6 +54,71 @@ _S3_TRUECOLOR = (
     "function evaluatePixel(s){return [2.5*s.B08,2.5*s.B06,2.5*s.B04];}"
 )
 
+# ── Multi-temporal change detection (B4) ─────────────────────────────────────
+# A change chip takes TWO time windows for the SAME bbox and renders where the
+# scene changed between them. Sentinel Hub's Process API hands the evalscript a
+# separate sample array per `data` entry (we name them `before`/`after`), so a
+# single evalscript can difference the two passes. We render a diverging
+# false-colour: vegetation/water LOSS leans red, GAIN leans green, no-change
+# stays near grey — so the operator instantly reads "what moved here".
+#
+# Optical change (S2): NDVI delta (greenness) + NDWI delta (water). New bare
+# ground / collapsed structures / drained water read RED; new vegetation /
+# flooding read GREEN. Both windows mosaic least-cloud.
+_S2_CHANGE = (
+    "//VERSION=3\n"
+    "function setup(){return{input:[\n"
+    '  {datasource:"before",bands:["B03","B04","B08"]},\n'
+    '  {datasource:"after",bands:["B03","B04","B08"]}\n'
+    "],output:{bands:3},mosaicking:\"ORBIT\"};}\n"
+    "function ndvi(s){return (s.B08-s.B04)/(s.B08+s.B04+1e-6);}\n"
+    "function ndwi(s){return (s.B03-s.B08)/(s.B03+s.B08+1e-6);}\n"
+    "function evaluatePixel(samples){\n"
+    "  var b=samples.before[0], a=samples.after[0];\n"
+    "  if(!a||!b){return [0.05,0.06,0.09];}\n"
+    "  var dv=ndvi(a)-ndvi(b);\n"   # +green gain, -loss
+    "  var dw=ndwi(a)-ndwi(b);\n"
+    "  var d=dv*0.7+dw*0.3;\n"
+    "  var g=Math.max(0,Math.min(1,0.5+d*2.2));\n"
+    "  var r=Math.max(0,Math.min(1,0.5-d*2.2));\n"
+    "  return [r, g, 0.18];\n"
+    "}"
+)
+# Radar change (S1 VV): backscatter ratio. A drop (e.g. structure removed,
+# water surface change) reads RED, a rise GREEN — keyless-region SAR change for
+# the Strait-of-Hormuz / all-weather case.
+_S1_CHANGE = (
+    "//VERSION=3\n"
+    "function setup(){return{input:[\n"
+    '  {datasource:"before",bands:["VV"]},\n'
+    '  {datasource:"after",bands:["VV"]}\n'
+    "],output:{bands:3},mosaicking:\"ORBIT\"};}\n"
+    "function evaluatePixel(samples){\n"
+    "  var b=samples.before[0], a=samples.after[0];\n"
+    "  if(!a||!b){return [0.05,0.06,0.09];}\n"
+    "  var rb=Math.max(1e-4,b.VV), ra=Math.max(1e-4,a.VV);\n"
+    "  var d=Math.log(ra/rb)/Math.LN10;\n"  # dB-ish ratio, ~[-1,1]
+    "  var g=Math.max(0,Math.min(1,0.5+d*1.2));\n"
+    "  var r=Math.max(0,Math.min(1,0.5-d*1.2));\n"
+    "  return [r, g, 0.18];\n"
+    "}"
+)
+
+# id -> {title, collection, evalscript, ext, lookback_days, optical}. Mirrors
+# _LAYERS but for the 2-window change endpoint; not exposed in the tile catalog.
+_CHANGE_LAYERS: dict[str, dict[str, Any]] = {
+    "S2_CHANGE": {
+        "title": "Sentinel-2 — Change (NDVI/NDWI Δ)",
+        "collection": "sentinel-2-l2a", "evalscript": _S2_CHANGE,
+        "ext": "png", "lookback_days": 14, "optical": True,
+    },
+    "S1_CHANGE": {
+        "title": "Sentinel-1 — Change (VV ratio)",
+        "collection": "sentinel-1-grd", "evalscript": _S1_CHANGE,
+        "ext": "png", "lookback_days": 18, "optical": False,
+    },
+}
+
 # id -> {title, group, collection, evalscript, ext, lookback_days, max_z}
 _LAYERS: dict[str, dict[str, Any]] = {
     "S2_L2A_TRUECOLOR": {
@@ -226,3 +291,94 @@ async def fetch_image(
 
 async def fetch_tile(layer_id: str, date: str, z: int, x: int, y: int) -> bytes | None:
     return await fetch_image(layer_id, tile_bbox_3857(z, x, y), 256, 256, date)
+
+
+# ── Multi-temporal change detection (B4) ─────────────────────────────────────
+
+
+def change_layer(layer_id: str) -> dict[str, Any]:
+    return _CHANGE_LAYERS[layer_id]
+
+
+def build_change_process_body(
+    layer_id: str,
+    bbox: list[float],
+    width: int,
+    height: int,
+    before: str,
+    after: str,
+) -> dict[str, Any]:
+    """Process-API body for a TWO-window change render.
+
+    Same bbox, two ``data`` entries (named ``before`` / ``after`` to match the
+    evalscript's ``datasource`` ids), each its own ``timeRange`` ending at the
+    respective date and reaching back ``lookback_days``. The evalscript
+    differences the two passes (see ``_S2_CHANGE`` / ``_S1_CHANGE``)."""
+    meta = _CHANGE_LAYERS[layer_id]
+    fmt = _MEDIA[meta["ext"]]
+
+    def _window(date: str) -> dict[str, Any]:
+        df: dict[str, Any] = {
+            "timeRange": dict(
+                zip(("from", "to"), _iso_range(date, meta["lookback_days"]), strict=True)
+            )
+        }
+        if meta["optical"]:
+            df["mosaickingOrder"] = "leastCC"
+        return df
+
+    return {
+        "input": {
+            "bounds": {
+                "bbox": bbox,
+                "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/3857"},
+            },
+            "data": [
+                {"type": meta["collection"], "id": "before", "dataFilter": _window(before)},
+                {"type": meta["collection"], "id": "after", "dataFilter": _window(after)},
+            ],
+        },
+        "output": {
+            "width": width,
+            "height": height,
+            "responses": [{"identifier": "default", "format": {"type": fmt}}],
+        },
+        "evalscript": meta["evalscript"],
+    }
+
+
+async def fetch_change_image(
+    layer_id: str,
+    bbox: list[float],
+    width: int,
+    height: int,
+    before: str,
+    after: str,
+) -> bytes | None:
+    """POST one TWO-window change-detection Process request for an arbitrary
+    bbox/size. Mirrors ``fetch_image`` (token refresh-on-401, IPv4 client) but
+    builds a multi-temporal body. None when creds are absent or the upstream
+    has nothing for either window."""
+    token = await _token()
+    if token is None:
+        return None
+    body = build_change_process_body(layer_id, bbox, width, height, before, after)
+    for attempt in (0, 1):
+        try:
+            r = await get_client().post(
+                _PROCESS_URL,
+                headers={"Authorization": f"Bearer {token}"},
+                json=body,
+                timeout=30.0,
+            )
+        except Exception:
+            return None
+        if r.status_code == 200:
+            return r.content
+        if r.status_code == 401 and attempt == 0:
+            token = await _token(force=True)
+            if token is None:
+                return None
+            continue
+        return None
+    return None

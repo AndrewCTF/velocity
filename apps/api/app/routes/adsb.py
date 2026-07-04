@@ -37,6 +37,7 @@ import datetime as dt
 import gzip
 import hashlib
 import json
+import threading
 import time
 from math import cos, radians
 from typing import Any
@@ -524,11 +525,15 @@ _SNAPSHOT_TASK: asyncio.Task[None] | None = None
 _SNAPSHOT_STARTED = False
 # Background task target cycle. Each iteration sleeps for max(0, cycle -
 # elapsed_fanout). A fast fan-out (~0.3s) waits out the rest; a slow one loops
-# immediately. 2s keeps the merged snapshot fresh for the 1s frontend pull
-# without hammering upstreams: OpenSky is served from its daily cache and the
-# keyless feeds self-pace internally (adsb_feed_interval_s), so a faster cycle
-# re-merges already-cached slices rather than issuing new upstream fetches.
-_SNAPSHOT_TARGET_CYCLE_S = 2.0
+# immediately. 1.0s is the floor (operator: "refresh not fast enough"): a fresh
+# feed slice surfaces to the /ws/adsb push within ≤1s of arriving. Going below 1s
+# is pointless — the keyless feeds self-pace at ~5s (adsb_feed_interval_s) and
+# OpenSky is daily-cached, so a tighter cycle just re-pushes identical bytes (the
+# aircraft would teleport to the SAME spot). Per-aircraft motion cadence is bounded
+# by those upstreams, NOT by this cycle — and is teleport-to-real-fix only (no
+# synthesis, see the motion guardrail). Added cost: one gzip(_build_hot_blob) +
+# broadcast per cycle, both off the event loop (asyncio.to_thread).
+_SNAPSHOT_TARGET_CYCLE_S = 1.0
 # A new snapshot is accepted only if it's non-empty AND retains at least this
 # fraction of the previous snapshot's aircraft count. Absorbs the "host
 # rate-limit blip" that used to drop the visible count from 3959 to 48.
@@ -548,6 +553,21 @@ _SNAPSHOT_STALE_S = 30.0
 # union ships in FULL at world view (no world-view decimation) — it only thins if
 # the union ever exceeds 20k, via the stable md5 subset in viewport_filter.
 _WORLD_LIMIT = 20000
+
+# Position-age cap for the SERVED snapshot. A contact whose last real fix is older
+# than this is dropped from what the frontend sees, so the map never shows a plane
+# frozen at a stale position with a climbing "44m ago" readout. The OpenSky tier is
+# pulled once/UTC-day and served cached (count-holding), so a straggler that was
+# already out-of-coverage at pull time keeps a frozen seen_pos_s; before this cap it
+# rode the union all day and surfaced in EntityPanel as "44m ago". Only a handful of
+# contacts exceed the cap (most OpenSky fixes are seconds old at pull), so the union
+# stays ~13k (>=8000 guardrail held). Applied at the serve boundary (viewport_filter)
+# so BOTH the world blob and the zoomed bbox path are covered; internal readers
+# (jamming via global_snapshot) are untouched and still see every cell.
+# ponytail: known ceiling — the OpenSky cache freezes seen_pos_s, so a contact whose
+# fix was fresh at pull can read "fresh" all day; that's the existing count-holding
+# tradeoff, not fixed here — the cap only removes the visibly-stale stragglers.
+_STALE_POS_CAP_S = 900.0
 _HOT_BLOB: bytes | None = None  # gzip-compressed JSON of the decimated world FC
 _HOT_ETAG: str = ""  # md5 of the blob — drives ETag/304 (poll inside a cycle → 304)
 # WebSocket push subscribers. The refresher fans _HOT_BLOB out to these on each new
@@ -786,6 +806,8 @@ async def _opensky_cached() -> dict[str, Any] | None:
     Stays `async` (the fan-out awaits it) but holds no network await; the
     awaited coroutine resolves in microseconds."""
     global _OPENSKY_AT, _OPENSKY_REFRESH_TASK
+    if not get_settings().opensky_enabled:
+        return None  # kill switch — no serve, no pull
     gated = bool(_OPENSKY_DISABLED_UNTIL) and time.time() < _OPENSKY_DISABLED_UNTIL
     refreshing = _OPENSKY_REFRESH_TASK is not None and not _OPENSKY_REFRESH_TASK.done()
     age = time.monotonic() - _OPENSKY_AT if _OPENSKY_AT else float("inf")
@@ -864,7 +886,14 @@ _FEED_UA = (
 
 
 def _feed_urls() -> list[str]:
-    return [u.strip() for u in get_settings().adsb_feed_urls.split(",") if u.strip()]
+    urls = [u.strip() for u in get_settings().adsb_feed_urls.split(",") if u.strip()]
+    if get_settings().adsb_sidecar_only:
+        # Pull ONLY the local sidecar — drop the remote readsb mirrors so they
+        # don't add event-loop load (which is what starved the sidecar pull). If
+        # no localhost feed is configured, keep the list (don't zero the feed).
+        local = [u for u in urls if "127.0.0.1" in u or "localhost" in u]
+        return local or urls
+    return urls
 
 
 def _feed_interval(url: str) -> float:
@@ -896,12 +925,37 @@ def _feed_timeout(url: str) -> httpx.Timeout:
     # httpx connect/read budget. theairtraffic.com gets a tight connect so a
     # stalled handshake bails fast; the TOTAL wall-clock cap below is what bounds
     # its slow body.
+    if "127.0.0.1" in url or "localhost" in url:
+        # Localhost sidecar (~2-3 MB body): a generous READ timeout so a chunk
+        # delayed by event-loop contention (other subsystems saturating the loop)
+        # doesn't abort the pull mid-stream. No network cost — it's a unix-fast
+        # loopback transfer; the only reason it's ever slow is the loop being busy.
+        return httpx.Timeout(60.0, connect=5.0)
     if "theairtraffic.com" in url:
-        return httpx.Timeout(5.0, connect=3.0)
+        # Read bumped 5 -> 12s: its ~5.7 MB body downloads in ~2.4s bare but can
+        # exceed a 5s per-read under egress contention, aborting the pull → an
+        # EMPTY slice → the union collapses to hpradar-only (~8k instead of ~12k).
+        # Connect stays tight (3s) so a stalled handshake still bails fast.
+        return httpx.Timeout(12.0, connect=3.0)
     return httpx.Timeout(12.0, connect=5.0)
 
 
 def _feed_total_s(url: str) -> float:
+    # Localhost sidecar: NO rate limit, NO bandwidth cost — so give it a generous
+    # total cap. Measured failure: under event-loop contention (the live backend
+    # ran at ~90-110% CPU with dozens of WS subscribers) a localhost pull took
+    # ~12-15 s — right at the old 13 s cap — so it was repeatedly CANCELLED and
+    # the slice never refreshed, leaving _FEED_SLICES serving a FROZEN slice
+    # (re-served stale for up to _FEED_SLICE_MAX_AGE_S = 180 s). A frozen slice is
+    # exactly what made tracked aircraft look ~44 s stale ("refresh 30s-1m") even
+    # though the sidecar's own data was ~0.4 s fresh. Letting the starved pull
+    # COMPLETE (it always lands once the loop frees up) bounds the slice age to the
+    # pull duration instead of 180 s. The 180 s slice-age cap still drops a feed
+    # that is genuinely dead. NOTE: the real speed ceiling is the upstream — these
+    # keyless aggregators regenerate their full global set only every ~4-7 s, so
+    # this makes the backend RELIABLY hit that floor; it does not beat it.
+    if "127.0.0.1" in url or "localhost" in url:
+        return 60.0
     # Total wall-clock cap per feed, enforced with asyncio.wait_for. httpx's read
     # timeout is PER-CHUNK, so theairtraffic.com's 3.6MB aircraft.json — which
     # streams steadily over 4-9s — never trips a 5s read timeout and was pushing
@@ -935,6 +989,51 @@ async def _fetch_one_feed(client: httpx.AsyncClient, url: str) -> list[dict[str,
         return []
 
 
+# Dedicated SYNC httpx client for OFF-LOOP feed pulls (driven from worker
+# threads via asyncio.to_thread). The async get_client() can't be used from a
+# thread — its transport is bound to the event loop. Lazily built, reused across
+# pulls so the loopback connection stays keep-alive. Only the localhost sidecar
+# (one feed) uses this path, so the lazy init can't race.
+_SYNC_FEED_CLIENT: httpx.Client | None = None
+_SYNC_FEED_CLIENT_LOCK = threading.Lock()
+
+
+def _sync_feed_client() -> httpx.Client:
+    # Shared sync client, reused across pulls for keep-alive. ALL feeds now pull
+    # through here from worker threads (asyncio.to_thread), so the lazy init is
+    # guarded by a lock — concurrent first-pulls would otherwise race to build two
+    # clients and leak one. httpx.Client itself is thread-safe for concurrent
+    # requests (httpcore's pool is); only the init needs protecting.
+    global _SYNC_FEED_CLIENT
+    if _SYNC_FEED_CLIENT is None:
+        with _SYNC_FEED_CLIENT_LOCK:
+            if _SYNC_FEED_CLIENT is None:
+                _SYNC_FEED_CLIENT = httpx.Client(follow_redirects=True)
+    return _SYNC_FEED_CLIENT
+
+
+def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]]]:
+    """Blocking fetch+parse of ONE feed, run via asyncio.to_thread so a saturated
+    event loop can't starve the socket read. The async path's read is a sequence
+    of per-chunk awaits, so a busy loop dribbles the 3.6 MB loopback body out over
+    8-15 s (measured) — this single blocking call the OS services immediately
+    (benchmarked: 9.0 s on-loop -> 0.9 s threaded under identical contention).
+    Returns (monotonic_ts, aircraft); ts is captured HERE in the thread so the
+    slice's age is independent of when the loop resumes to store it. Mirrors
+    _fetch_one_feed's parsing (readsb 'aircraft' / ADSBx-v2 'ac')."""
+    ac: list[dict[str, Any]] = []
+    try:
+        r = _sync_feed_client().get(
+            url, timeout=_feed_timeout(url), headers={"User-Agent": _FEED_UA}
+        )
+        if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
+            j = r.json()
+            ac = j.get("aircraft") or j.get("ac") or []
+    except Exception:  # noqa: BLE001 — timeout / transport / non-JSON body
+        ac = []
+    return time.monotonic(), ac
+
+
 # One INDEPENDENT background pull task per feed url. A shared gather over all due
 # feeds was a freshness trap: a dead/slow feed (adsb.lol /v2 times out at ~20 s
 # from a datacenter egress) held the whole gather, gating the fresh mirrors
@@ -955,12 +1054,36 @@ async def _pull_one_feed(url: str) -> None:
     dead feed never delays the fresh ones. Re-arms its own next-pull on the way
     out (success or failure) so a dead feed retries on cadence, not every tick."""
     ac: list[dict[str, Any]] = []
+    ts = time.monotonic()
     try:
-        ac = await _fetch_one_feed(get_client(), url)
+        # EVERY feed pulls OFF the event loop in a worker thread — not just the
+        # localhost sidecar. The async path parses each multi-MB body with a
+        # synchronous r.json() ON the loop (blocking it ~1-2 s per feed) AND reads
+        # the body in loop-scheduled chunks; on a CPU-contended host (the 2-vCPU
+        # droplet ran the loop at ~85%) that starves the OTHER feeds' reads until
+        # they exceed _feed_total_s and cancel — leaving EMPTY slices and an empty
+        # snapshot even though every mirror returns 200 with ~10k aircraft (the
+        # exact prod symptom: theairtraffic/hpradar 200 in the log, /api/adsb/global
+        # = 0). A blocking sync get+parse the OS services immediately regardless of
+        # loop load (measured 9.0 s on-loop -> 0.9 s threaded; socket I/O releases
+        # the GIL so the loop keeps running). ts is captured in-thread so the slice
+        # age is independent of when the loop resumes to store it.
+        ts, ac = await asyncio.to_thread(_fetch_one_feed_sync, url)
     finally:
         _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
     if ac:
-        _FEED_SLICES[url] = (time.monotonic(), ac)
+        # Stamp receipt time so these mirror aircraft carry a `seen_at` like the
+        # grid + firehose tiers do (_aircraft_geojson reads `_seen_at`). Without
+        # it a mirror aircraft has seen_at=None → the frontend "Last seen" falls
+        # back to the STALE OpenSky-cache clock (frozen at the once/day pull, so it
+        # climbs to >20m), AND _merge_with_previous can't carry the contact forward
+        # (its 180s age gate needs a numeric seen_at) so it blinks between pulls.
+        # theairtraffic/hpradar are the freshness PRIMARY (~11k @ ~1s here); their
+        # own receipt time is the honest, advancing "Last seen".
+        now_wall = time.time()
+        for a in ac:
+            a["_seen_at"] = now_wall
+        _FEED_SLICES[url] = (ts, ac)
 
 
 async def _readsb_feeds() -> list[dict[str, Any]]:
@@ -1095,6 +1218,12 @@ async def _await_within(
         return None
 
 
+# Sidecar-only serves the sidecar union alone at/above this many aircraft; below
+# it (Chromium crash / cold start) the full OpenSky/grid union backfills so the
+# map never goes empty. Matches the >=8000 operator invariant.
+_SIDECAR_ONLY_FLOOR = 8000
+
+
 async def _do_global_fanout() -> dict[str, Any]:
     """Return a merged GeoJSON FeatureCollection of all globally airborne
     aircraft, unioned across every reachable source so the count approaches the
@@ -1115,6 +1244,21 @@ async def _do_global_fanout() -> dict[str, Any]:
     OpenSky alone already supplies the ~13k breadth. Grid cells that don't
     finish inside the budget are cancelled, but any that completed are cached,
     so the next tick — reading those warm cells — finishes the grid fast."""
+    # Sidecar-only: serve the local tar1090 sidecar union ALONE (the freshest +
+    # biggest reachable path; see Settings.adsb_sidecar_only). OpenSky / firehose
+    # / grid run below only as a backfill if the sidecar comes up below the ~8000
+    # floor (Chromium crash / cold start), so the map can't go empty.
+    if get_settings().adsb_sidecar_only:
+        sidecar: dict[Any, dict[str, Any]] = {}
+        feeds0 = await _await_within(
+            asyncio.ensure_future(_readsb_feeds()), time.monotonic() + _FANOUT_BUDGET_S
+        )
+        if feeds0:
+            _merge_raw_into(sidecar, feeds0)
+        if len(sidecar) >= _SIDECAR_ONLY_FLOOR:
+            return {"type": "FeatureCollection", "features": list(sidecar.values())}
+        # sidecar thin/down → fall through to the full multi-tier union.
+
     by_id: dict[Any, dict[str, Any]] = {}
 
     osky_task = asyncio.ensure_future(_opensky_cached())
@@ -1192,8 +1336,15 @@ def _merge_with_previous(
         if fid is None or fid in by_id:
             continue
         seen = (f.get("properties") or {}).get("seen_at")
-        if isinstance(seen, (int, float)) and now - seen <= max_age_s:
-            by_id[fid] = f
+        if not (isinstance(seen, (int, float)) and now - seen <= max_age_s):
+            continue
+        # Defense-in-depth for the serve-boundary cap: don't carry forward a
+        # contact whose POSITION is already stale past the cap. seen_at can stay
+        # fresh (re-stamped each cycle from the OpenSky cache) while seen_pos_s is
+        # frozen old — that pairing is exactly the "44m ago" straggler.
+        if _pos_stale(f):
+            continue
+        by_id[fid] = f
     return {"type": "FeatureCollection", "features": list(by_id.values())}
 
 
@@ -1262,6 +1413,16 @@ async def _refresh_snapshot_forever() -> None:
         await asyncio.sleep(max(0.0, _SNAPSHOT_TARGET_CYCLE_S - elapsed))
 
 
+def _pos_stale(f: dict[str, Any]) -> bool:
+    """True when a feature's last real position fix is older than the serve cap.
+
+    Reads seen_pos_s (position age in seconds, stamped by each tier). Absent or
+    non-numeric → False (keep): an unknown age isn't evidence of staleness.
+    """
+    sp = (f.get("properties") or {}).get("seen_pos_s")
+    return isinstance(sp, (int, float)) and float(sp) > _STALE_POS_CAP_S
+
+
 def viewport_filter(
     fc: dict[str, Any],
     lamin: float | None,
@@ -1280,6 +1441,11 @@ def viewport_filter(
     set stays spatially even rather than clipping a corner.
     """
     feats = fc.get("features") or []
+    # Drop position-stale stragglers before bbox/decimation so no served contact
+    # renders frozen with a climbing "Nm ago" age (see _STALE_POS_CAP_S). Keep any
+    # feature whose seen_pos_s is absent/unparseable — we can't judge its age, and
+    # dropping unknowns would thin the union.
+    feats = [f for f in feats if not _pos_stale(f)]
     if None not in (lamin, lomin, lamax, lomax):
         wrap = lomin > lomax  # type: ignore[operator]
         kept: list[dict[str, Any]] = []
@@ -1364,6 +1530,20 @@ async def _broadcast_blob(blob: bytes) -> None:
             await asyncio.wait_for(ws.send_bytes(blob), timeout=5.0)
         except Exception:  # noqa: BLE001 — a failed send just drops that socket
             _WS_SUBSCRIBERS.discard(ws)
+            # ...and CLOSE it. A client that dropped via the dev proxy without a
+            # clean WS close frame leaves the handler blocked in receive_text()
+            # forever and the socket stuck in CLOSE-WAIT — 1000s of leaked fds +
+            # coroutines (measured 1391 in 14 min → multi-GB RSS). Closing here
+            # unblocks receive_text() so the handler's finally runs and the fd is
+            # freed. Discard-without-close was the leak.
+            try:
+                # Bounded: _broadcast_blob is awaited by the 1s snapshot loop, so
+                # an unbounded close on a zombie proxied socket (client gone but no
+                # FIN through the dev proxy) would stall the gather → the WHOLE
+                # refresh/rebuild/push halts for every client. 2s cap self-heals.
+                await asyncio.wait_for(ws.close(), timeout=2.0)
+            except Exception:  # noqa: BLE001 — already gone / close timed out
+                pass
 
     await asyncio.gather(*(_send(ws) for ws in subs))
 
@@ -1414,6 +1594,13 @@ async def adsb_global(
     lomin: float | None = Query(None, ge=-180, le=180),
     lamax: float | None = Query(None, ge=-90, le=90),
     lomax: float | None = Query(None, ge=-180, le=180),
+    # lat/lon-spelled aliases for the same bbox (API/curl callers, e.g. ?min_lat=).
+    # The live Cesium/MapLibre globe sends the OpenSky-style lamin/lomin/lamax/lomax
+    # names above; accept BOTH so a supplied bbox is never silently dropped.
+    min_lat: float | None = Query(None, ge=-90, le=90),
+    min_lon: float | None = Query(None, ge=-180, le=180),
+    max_lat: float | None = Query(None, ge=-90, le=90),
+    max_lon: float | None = Query(None, ge=-180, le=180),
     limit: int | None = Query(None, ge=1, le=20000),
 ) -> Response | dict[str, Any]:
     """Return the latest aircraft snapshot, optionally scoped to a viewport.
@@ -1433,6 +1620,18 @@ async def adsb_global(
     First call kicks off the background refresher and does one synchronous
     bootstrap fetch so the response isn't empty. Subsequent calls return
     immediately with whatever the background task last accepted."""
+    # Coalesce the two accepted bbox vocabularies into the canonical lamin/... used
+    # everywhere below. lamin/... (the live globe) wins; min_lat/... (API/curl) fills
+    # in only when its lamin counterpart is absent. Keeps the world gate + viewport_filter
+    # downstream untouched while making a supplied bbox in EITHER spelling take effect.
+    if lamin is None:
+        lamin = min_lat
+    if lomin is None:
+        lomin = min_lon
+    if lamax is None:
+        lamax = max_lat
+    if lomax is None:
+        lomax = max_lon
     # Any no-bbox request WITH a limit is a world-view poll (the only such caller
     # is the frontend; the bare no-param call below stays the full dict for the
     # MCP/intel tools). Serve the pre-built blob regardless of the exact limit
@@ -1513,6 +1712,22 @@ async def start_snapshot() -> None:
             return
         _SNAPSHOT_TASK = asyncio.create_task(_refresh_snapshot_forever())
         _SNAPSHOT_STARTED = True
+
+
+async def await_hot(timeout: float = 25.0) -> int:
+    """Block until the background refresher has filled the snapshot with aircraft
+    (or ``timeout`` s elapse), so the FIRST request is HOT rather than a cold
+    warm-up. Returns the aircraft count reached. Call AFTER start_snapshot();
+    the cap means a slow/down upstream degrades to background-fill, never hangs.
+    """
+    waited = 0.0
+    while waited < timeout:
+        n = len(_LATEST_SNAPSHOT.get("features", []))
+        if n > 0:
+            return n
+        await asyncio.sleep(0.5)
+        waited += 0.5
+    return len(_LATEST_SNAPSHOT.get("features", []))
 
 
 async def stop_snapshot() -> None:

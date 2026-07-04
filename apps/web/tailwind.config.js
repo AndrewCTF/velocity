@@ -34,7 +34,8 @@ export default {
       },
       fontFamily: {
         mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Inter', '"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        label: ['Inter', '"IBM Plex Sans"', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         sm: 'var(--r-sm)',

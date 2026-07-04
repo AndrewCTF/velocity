@@ -99,6 +99,43 @@ def test_aoi_bbox_unknown_raises_keyerror():
         sar_vessels.aoi_bbox("atlantis")
 
 
+def test_estimate_shape_horizontal_bar():
+    # Bar spanning columns (east-west): major axis E-W → heading ~90°, length>width.
+    cc = np.arange(0, 20)
+    rr = np.full_like(cc, 5)
+    major, minor, heading = sar_vessels._estimate_shape(rr, cc)
+    assert major > minor
+    assert major >= 18
+    assert abs(heading - 90.0) < 5.0
+
+
+def test_estimate_shape_vertical_bar():
+    rr = np.arange(0, 20)
+    cc = np.full_like(rr, 5)
+    major, minor, heading = sar_vessels._estimate_shape(rr, cc)
+    assert major > minor
+    assert heading < 5.0 or heading > 175.0
+
+
+def test_estimate_shape_diagonal_bearing():
+    # Down-right 45° line: north=-row, east=+col → atan2(+1,-1)=135°.
+    rr = np.arange(0, 20)
+    cc = np.arange(0, 20)
+    _, _, heading = sar_vessels._estimate_shape(rr, cc)
+    assert abs(heading - 135.0) < 8.0
+
+
+def test_detect_targets_emits_length_heading_rcs():
+    arr = np.full((200, 200), 10.0, dtype=np.float32)
+    arr[100:103, 80:100] = 255.0  # 3x20 east-west bar
+    dets = sar_vessels.detect_targets(arr, k=4.0, min_area=3, max_area=400)
+    assert dets
+    d = max(dets, key=lambda x: x["area_px"])
+    assert d["major_px"] > d["minor_px"]
+    assert abs(d["heading_deg"] - 90.0) < 10.0
+    assert d["rcs"] > 0
+
+
 def test_route_rejects_unknown_aoi_with_400(client):
     r = client.get("/api/intel/dark-vessels/sar", params={"aoi": "atlantis"})
     assert r.status_code == 400

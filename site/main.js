@@ -390,7 +390,6 @@ function typeTerminal(el) {
 /* ---- live snapshot --------------------------------------------------------*/
 async function initLive() {
   const note = document.getElementById("live-note");
-  if (!API) { if (note) note.textContent = "Demo snapshot — representative numbers. Live data on every plan."; return; }
   try {
     const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 4000);
     const r = await fetch(`${API}/api/intel/situation`, { signal: ctrl.signal }); clearTimeout(to);

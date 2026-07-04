@@ -50,6 +50,17 @@ async def get_tracks(
     )
 
 
+@router.get("/api/history/timeseries")
+async def get_timeseries(
+    window_sec: int = Query(3600, ge=300, le=86400, description="Look-back window"),
+    bucket_sec: int = Query(300, ge=60, le=3600, description="Bucket width"),
+) -> dict:
+    """Metrics-over-time (design §8) — distinct contact counts per time bucket over
+    the look-back window, from the observed position store (app.history)."""
+    now = time.time()
+    return await history.count_timeseries(bucket_sec, now - window_sec, now)
+
+
 @router.get("/api/history/stats")
 def get_stats() -> dict:
     return history.stats()

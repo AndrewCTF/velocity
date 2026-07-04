@@ -99,7 +99,7 @@ export function FeedsPanel(): JSX.Element {
                   <span className="mono text-[11.5px] text-txt-0 truncate flex-1" title={source}>
                     {source}
                   </span>
-                  <span className="mono text-[9px] text-txt-3 tabular-nums">{list.length}</span>
+                  <span className="mono text-[10px] text-txt-3 tabular-nums">{list.length}</span>
                 </div>
                 <ul className="mt-0.5">
                   {list.map((f) => (
@@ -113,14 +113,14 @@ export function FeedsPanel(): JSX.Element {
                           {f.label}
                         </span>
                         <span
-                          className="mono text-[9px] tabular-nums text-txt-3 shrink-0"
+                          className="mono text-[10px] tabular-nums text-txt-3 shrink-0"
                           title={f.lastSeen ? new Date(f.lastSeen).toISOString() : 'no last-seen'}
                         >
                           {formatLastSeen(f.lastSeen)}
                         </span>
                       </div>
                       {f.note && (
-                        <div className="mono text-[9.5px] text-txt-3 leading-snug pl-[14px] mt-0.5">
+                        <div className="mono text-[10px] text-txt-3 leading-snug pl-[14px] mt-0.5">
                           {f.note}
                         </div>
                       )}

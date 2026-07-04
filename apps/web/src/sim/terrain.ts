@@ -8,6 +8,7 @@
 // (a profile along each route) and look the cached values up per tick.
 
 import * as Cesium from 'cesium';
+import { backendUrl } from '../transport/http.js';
 
 export interface LatLon {
   lat: number;
@@ -23,7 +24,7 @@ async function provider(): Promise<Cesium.TerrainProvider> {
     _providerP = import('@macrostrat/cesium-martini').then(
       (m) =>
         new m.MapboxTerrainProvider({
-          urlTemplate: '/tiles/terrain/{z}/{x}/{y}.png',
+          urlTemplate: backendUrl('/tiles/terrain/{z}/{x}/{y}.png'),
           maxZoom: 15,
           tileSize: 256,
         }) as unknown as Cesium.TerrainProvider,
@@ -39,6 +40,21 @@ export async function sampleGround(points: LatLon[]): Promise<number[]> {
   const cartos = points.map((p) => Cesium.Cartographic.fromDegrees(p.lon, p.lat));
   try {
     await Cesium.sampleTerrainMostDetailed(await provider(), cartos);
+    return cartos.map((c) => (Number.isFinite(c.height) ? c.height : 0));
+  } catch {
+    return points.map(() => 0);
+  }
+}
+
+// Ground elevation (m) sampled at a FIXED zoom `level`, not most-detailed. The
+// route planner grids a whole bbox (thousands of points); most-detailed (z15)
+// would load thousands of tiles, so it caps the level by bbox span to bound tile
+// loads. Same graceful-0 fallback as sampleGround.
+export async function sampleGroundLevel(points: LatLon[], level: number): Promise<number[]> {
+  if (points.length === 0) return [];
+  const cartos = points.map((p) => Cesium.Cartographic.fromDegrees(p.lon, p.lat));
+  try {
+    await Cesium.sampleTerrain(await provider(), Math.max(0, Math.round(level)), cartos);
     return cartos.map((c) => (Number.isFinite(c.height) ? c.height : 0));
   } catch {
     return points.map(() => 0);

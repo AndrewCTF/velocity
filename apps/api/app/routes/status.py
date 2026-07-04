@@ -29,7 +29,7 @@ def _feed(name: str, ok: bool, detail: str, **extra: Any) -> dict[str, Any]:
 @router.get("/api/status")
 async def status() -> dict[str, Any]:
     s = get_settings()
-    from app import ais_firehose, ais_keyless  # noqa: PLC0415
+    from app import ais_firehose, ais_keyless, marinetraffic  # noqa: PLC0415
 
     try:
         fc = await adsb_routes.global_snapshot()
@@ -74,6 +74,24 @@ async def status() -> dict[str, Any]:
             f"{vessels} vessels ({parked} parked, long-retained) — Northern Europe "
             "only (Norway + Baltic). Global AIS needs an AISStream key (BYOK).",
             count=vessels,
+        ),
+        _feed(
+            "AIS vessels — AISStream (global firehose)",
+            bool(s.aisstream_key),
+            "GLOBAL coverage — live."
+            if s.aisstream_key
+            else "Dormant: set AISSTREAM_KEY (free at aisstream.io) for worldwide AIS. "
+            "No keyless global feed exists from a server — this is the firehose.",
+        ),
+        _feed(
+            "AIS vessels — MarineTraffic (global, paid)",
+            bool(s.marinetraffic_key) and marinetraffic.stats().get("last_error") is None,
+            (
+                f"{marinetraffic.stats().get('vessels', 0)} vessels"
+                + (f" · err: {marinetraffic.stats().get('last_error')}" if marinetraffic.stats().get("last_error") else "")
+            )
+            if s.marinetraffic_key
+            else "Dormant: set MARINETRAFFIC_KEY (paid) to enable. May be IP-restricted.",
         ),
         _feed(
             "GPS/GNSS jamming (derived)",

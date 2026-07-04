@@ -177,7 +177,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       </div>
 
       {/* category legend — top-left, clears the 296px rail (desktop only) */}
-      <div className="hidden md:flex absolute left-[312px] top-[14px] flex-col gap-1 text-[8.5px] text-txt-3">
+      <div className="hidden md:flex absolute left-[312px] top-[14px] flex-col gap-1 text-[10px] text-txt-3">
         {LEGEND.map((l) => (
           <span key={l.label} className="flex items-center gap-1.5">
             <i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: l.color }} />
@@ -188,7 +188,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
 
       {/* compass — top-right, rotates with camera heading */}
       <div
-        className="hidden md:flex absolute right-[352px] top-[14px] w-[34px] h-[34px] border border-line rounded-full items-center justify-center text-[9px] text-txt-2"
+        className="hidden md:flex absolute right-[352px] top-[14px] w-[34px] h-[34px] border border-line rounded-full items-center justify-center text-[10px] text-txt-2"
         style={{ background: 'rgba(8,10,15,0.5)' }}
         title={`heading ${headingDeg.toFixed(0)}°`}
       >
@@ -207,12 +207,12 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
               borderBottom: '1px solid var(--txt-2)',
             }}
           />
-          <div className="text-[8.5px] text-txt-3 mt-[3px] tracking-[0.4px]">{scale.label}</div>
+          <div className="text-[10px] text-txt-3 mt-[3px] tracking-[0.4px]">{scale.label}</div>
         </div>
       )}
 
       {/* cursor + selection coordinates — bottom-left */}
-      <div className="hidden md:block absolute left-[312px] bottom-[14px] text-[9.5px] text-txt-2 leading-[1.7]">
+      <div className="hidden md:block absolute left-[312px] bottom-[14px] text-[10px] text-txt-2 leading-[1.7]">
         <div>
           cursor{' '}
           <span className="text-txt-1">
@@ -226,7 +226,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       </div>
 
       {/* projection / center / zoom — bottom-right */}
-      <div className="hidden md:block absolute right-[352px] bottom-[14px] text-[9px] text-txt-3 tracking-[0.5px] text-right leading-[1.7]">
+      <div className="hidden md:block absolute right-[352px] bottom-[14px] text-[10px] text-txt-3 tracking-[0.5px] text-right leading-[1.7]">
         <div>
           center{' '}
           <span className="text-txt-2">
