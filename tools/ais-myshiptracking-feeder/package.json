@@ -1,0 +1,10 @@
+{
+  "name": "ais-myshiptracking-feeder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Headless-browser bridge that exposes MyShipTracking's public vesselsonmaptempTTT.php bbox API as a plain vessels.json the OSINT backend ingests via app/ais_keyless.py. MMSI-keyed twin of the MarineTraffic feeder.",
+  "type": "commonjs",
+  "bin": { "ais-myshiptracking-feeder": "index.js" },
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "playwright": "^1.47.0" }
+}
