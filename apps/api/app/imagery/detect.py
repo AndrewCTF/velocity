@@ -34,7 +34,8 @@ _R = 6378137.0
 _MAX_PX = 1280
 _MIN_PX = 256
 
-_SIDECAR = Path(__file__).resolve().parents[3] / "apps" / "desktop" / "sidecar" / "yolo_sidecar.py"
+# detect.py is apps/api/app/imagery/detect.py → parents[4] is the repo root.
+_SIDECAR = Path(__file__).resolve().parents[4] / "apps" / "desktop" / "sidecar" / "yolo_sidecar.py"
 _YOLO_TIMEOUT_S = 120.0  # cold model load + one frame
 
 
