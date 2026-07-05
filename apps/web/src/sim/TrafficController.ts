@@ -79,7 +79,7 @@ function buildWay(coords: { lat: number; lon: number }[]): Way | null {
 function posAtArc(w: Way, sMeters: number): { lat: number; lon: number; heading: number } {
   const total = w.total;
   if (total <= 0) return { lat: w.nodes[0]!.lat, lon: w.nodes[0]!.lon, heading: 0 };
-  let s = ((sMeters % total) + total) % total;
+  const s = ((sMeters % total) + total) % total;
   // find segment i where cum[i] <= s < cum[i+1]
   let i = 1;
   while (i < w.cum.length && w.cum[i]! < s) i++;

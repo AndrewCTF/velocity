@@ -14,7 +14,7 @@ export function AppSurface({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
   const app = useAppView((s) => s.app);
   if (app === 'map' || app === 'sim') return null;
 
-  let node: ReactNode = null;
+  let node: ReactNode;
   switch (app) {
     case 'explorer':
       node = <ExplorerApp viewer={viewer} />;
