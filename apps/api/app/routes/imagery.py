@@ -632,6 +632,27 @@ async def imagery_change(
     )
 
 
+@router.get("/api/imagery/detect")
+async def imagery_detect(
+    min_lon: float = Query(...),
+    min_lat: float = Query(...),
+    max_lon: float = Query(...),
+    max_lat: float = Query(...),
+    date: str = Query(...),
+    layer: str = Query("S2_L2A_TRUECOLOR", max_length=64),
+) -> dict[str, Any]:
+    """YOLO object detection over a satellite chip → geo-referenced GeoJSON.
+
+    Degrades honestly: empty features + a note when CDSE imagery or the CUDA YOLO
+    sidecar is unavailable, never a fabricated detection.
+    """
+    if not _DATE_RE.match(date):
+        raise HTTPException(400, "date must be YYYY-MM-DD")
+    from app.imagery import detect
+
+    return await detect.detect_chip([min_lon, min_lat, max_lon, max_lat], date, layer)
+
+
 @router.get("/api/imagery/tasking/providers")
 async def imagery_tasking_providers(
     settings: Settings = Depends(get_settings),

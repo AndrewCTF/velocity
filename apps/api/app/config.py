@@ -313,6 +313,11 @@ class Settings(BaseSettings):
     # in the person layer stays keyless.
     hibp_api_key: str = ""
 
+    # Path to the CUDA venv python that runs the YOLO sidecar for imagery
+    # detection (e.g. ~/.venv/bin/python — torch+ultralytics, NOT apps/api's
+    # venv). Empty → /api/imagery/detect degrades to an honest "sidecar offline".
+    yolo_python: str = ""
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
