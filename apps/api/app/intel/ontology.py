@@ -45,6 +45,7 @@ from app.keys import UserCtx, _client, _headers
 ObjectKind = Literal[
     "aircraft", "vessel", "incident", "sim",
     "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
+    "person", "username",
     "object",
 ]
 
@@ -52,6 +53,7 @@ _KNOWN_KINDS: frozenset[str] = frozenset(
     (
         "aircraft", "vessel", "incident", "sim",
         "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
+        "person", "username",
         "object",
     )
 )

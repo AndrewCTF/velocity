@@ -79,3 +79,6 @@ eusi_*_b64.txt
 # Agent tooling & planning skill output — local workflow, not shipped.
 .claude/
 docs/superpowers/
+
+# YOLO model weights (auto-downloaded at runtime, never committed)
+*.pt

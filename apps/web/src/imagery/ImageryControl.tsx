@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useImagery } from '../state/stores.js';
+import { useDetections, featuresToDetections } from '../state/detections.js';
 import { apiFetch } from '../transport/http.js';
 import { SectionLabel, MicroLabel, Btn, Badge, Caveat } from '../shell/instruments.js';
 
@@ -118,6 +119,9 @@ export function ImageryControl() {
   const eventsRadiusKm = useImagery((s) => s.eventsRadiusKm);
   const setEventsRadiusKm = useImagery((s) => s.setEventsRadiusKm);
   const requestFlyTo = useImagery((s) => s.requestFlyTo);
+  const detectCount = useDetections((s) => s.detections.length);
+  const detectNote = useDetections((s) => s.note);
+  const detectPending = useDetections((s) => s.pending);
   const [layers, setLayers] = useState<CatalogLayer[]>([]);
 
   // ── Location / events search state (local UI, applied to the store on submit).
@@ -209,6 +213,31 @@ export function ImageryControl() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Imagery-CV object detection: YOLO over a Sentinel chip for the active AOI.
+  async function runDetect(): Promise<void> {
+    const loc = eventsLocation;
+    if (!loc) return;
+    const radiusKm = 4;
+    const dLat = radiusKm / 111.0;
+    const dLon = radiusKm / (111.0 * Math.max(0.1, Math.cos((loc.lat * Math.PI) / 180)));
+    const p = new URLSearchParams({
+      min_lon: (loc.lon - dLon).toFixed(5),
+      min_lat: (loc.lat - dLat).toFixed(5),
+      max_lon: (loc.lon + dLon).toFixed(5),
+      max_lat: (loc.lat + dLat).toFixed(5),
+      date: changeAfter,
+    });
+    useDetections.getState().setPending(true);
+    try {
+      const r = await apiFetch(`/api/imagery/detect?${p.toString()}`);
+      const b: { features?: never[]; summary?: { note?: string } } = await r.json();
+      useDetections.getState().set(featuresToDetections(b.features ?? []), b.summary?.note ?? '');
+      if (loc) requestFlyTo(loc.lat, loc.lon);
+    } catch {
+      useDetections.getState().set([], 'detect request failed');
+    }
+  }
 
   async function runGeocode(): Promise<void> {
     const q = cityQuery.trim();
@@ -546,6 +575,33 @@ export function ImageryControl() {
               archived satellite passes · not live · each window mosaics nearby passes
             </MicroLabel>
           </div>
+        )}
+      </div>
+
+      {/* ── Object detection (imagery CV / YOLO) ──────────────────────────── */}
+      <div className="flex flex-col gap-1.5">
+        <SectionLabel title="Detect objects (YOLO)" count={detectCount} />
+        <MicroLabel className="block text-txt-3">
+          Runs YOLO over a Sentinel chip at the active location · detections drop on the globe.
+        </MicroLabel>
+        <Btn
+          tone="accent"
+          disabled={detectPending || !eventsLocation}
+          onClick={() => void runDetect()}
+          title={eventsLocation ? 'Detect objects in a ~4 km chip at the active location' : 'Set a location above first'}
+          className="w-full"
+        >
+          {detectPending ? 'Detecting…' : 'Detect objects here'}
+        </Btn>
+        {!eventsLocation && (
+          <MicroLabel className="block text-txt-3">Set a location above to enable detection.</MicroLabel>
+        )}
+        {detectNote && <Badge tone="warn">{detectNote}</Badge>}
+        {detectCount > 0 && !detectNote && (
+          <span className="mono text-[10.5px] text-txt-1 tabular-nums">{detectCount} detections on the globe</span>
+        )}
+        {detectCount > 0 && (
+          <Btn onClick={() => useDetections.getState().clear()} className="w-full">Clear detections</Btn>
         )}
       </div>
 

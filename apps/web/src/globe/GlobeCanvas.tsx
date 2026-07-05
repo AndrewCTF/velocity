@@ -20,6 +20,7 @@ import { installAnnotations } from './AnnotationLayer.js';
 import { installControl } from './ControlLayer.js';
 import { installWatchboxes } from './WatchboxLayer.js';
 import { installCaptures } from './CaptureLayer.js';
+import { installDetections } from './DetectLayer.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { prewarmIcons } from './icons.js';
 import { perfOnRender } from './perf.js';
@@ -598,6 +599,8 @@ export function GlobeCanvas({
     const detachWatchbox = installWatchboxes(viewer);
     // Captured observations (YOLO detections pinned from cams/panos).
     const detachCaptures = installCaptures(viewer);
+    // Imagery-CV detections (YOLO over a satellite chip for an AOI).
+    const detachDetections = installDetections(viewer);
 
     // Height gate for Google photogrammetry — applyGoogleGate no-ops when
     // nothing changed, so this listener stays requestRenderMode-friendly.
@@ -637,6 +640,7 @@ export function GlobeCanvas({
       detachControl();
       detachWatchbox();
       detachCaptures();
+      detachDetections();
       compositorRef.current?.stop();
       compositorRef.current = null;
       onViewerReady?.(null);

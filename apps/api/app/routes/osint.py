@@ -76,6 +76,31 @@ async def threat(target: str = Query(..., max_length=253)) -> dict[str, Any]:
     return await C.lookup_threat(target)
 
 
+@router.get("/gravatar")
+async def gravatar(target: str = Query(..., max_length=253)) -> dict[str, Any]:
+    return await C.lookup_gravatar(target)
+
+
+@router.get("/github")
+async def github(target: str = Query(..., max_length=64)) -> dict[str, Any]:
+    return await C.lookup_github_user(target)
+
+
+@router.get("/gitlab")
+async def gitlab(target: str = Query(..., max_length=64)) -> dict[str, Any]:
+    return await C.lookup_gitlab_user(target)
+
+
+@router.get("/username")
+async def username(target: str = Query(..., max_length=64)) -> dict[str, Any]:
+    return await C.lookup_username_sites(target)
+
+
+@router.get("/hibp")
+async def hibp(target: str = Query(..., max_length=253)) -> dict[str, Any]:
+    return await C.lookup_hibp(target)
+
+
 # ── investigate: fan out + persist into the ontology ────────────────────────────
 
 class InvestigateRequest(BaseModel):
@@ -213,19 +238,94 @@ async def _investigate_ip(g: _Graph, ip_addr: str) -> dict[str, Any]:
     return {"threat_pulses": threat_r.get("pulse_count", 0)}
 
 
+async def _investigate_email(g: _Graph, e: str) -> dict[str, Any]:
+    """Mint an email node + its Gravatar-linked person/accounts + breach flag."""
+    grav, breach = await asyncio.gather(C.lookup_gravatar(e), C.lookup_hibp(e))
+    root = g.obj("email:" + e, "Email", "person-osint", {"address": e})
+
+    if grav.get("found"):
+        name = grav.get("display_name") or e.split("@", 1)[0]
+        pid = g.obj("person:" + _slug(name), "Person", "gravatar", {
+            "name": name, "about": grav.get("about"),
+            "location": grav.get("location"), "profile_url": grav.get("profile_url"),
+        })
+        g.link(pid, root, "has_email")
+        # Self-linked verified accounts (twitter/github/…) → username nodes.
+        for acct in grav.get("accounts", []):
+            handle = acct.get("username") or ""
+            if handle:
+                uid = g.obj("username:" + _slug(handle), "Username", "gravatar",
+                            {"handle": handle, "service": acct.get("service"), "url": acct.get("url")})
+                g.link(pid, uid, "has_account")
+
+    if breach.get("checked") and breach.get("breach_count"):
+        tid = g.obj("threat:" + e, "ThreatIndicator", "hibp", {
+            "indicator": e, "breach_count": breach.get("breach_count"),
+            "breaches": [b.get("name") for b in breach.get("breaches", [])],
+        })
+        g.link(tid, root, "indicates_threat")
+
+    return {
+        "gravatar": grav.get("found", False),
+        "linked_accounts": len(grav.get("accounts", [])) if grav.get("found") else 0,
+        "breach_count": breach.get("breach_count", 0),
+    }
+
+
+async def _investigate_username(g: _Graph, u: str) -> dict[str, Any]:
+    """Mint a username node + a person + its presence across the curated sites."""
+    gh, gl, sites = await asyncio.gather(
+        C.lookup_github_user(u), C.lookup_gitlab_user(u), C.lookup_username_sites(u)
+    )
+    root = g.obj("username:" + u, "Username", "person-osint", {"handle": u})
+
+    # A person node keyed by the display name where we have one, else the handle,
+    # so a username and a document-extracted person collide on one node.
+    display = (gh.get("name") if gh.get("found") else None) or \
+              (gl.get("name") if gl.get("found") else None) or u
+    pid = g.obj("person:" + _slug(display), "Person", "person-osint", {
+        "name": display,
+        "github": gh.get("profile_url") if gh.get("found") else None,
+        "gitlab": gl.get("profile_url") if gl.get("found") else None,
+        "company": gh.get("company") if gh.get("found") else None,
+        "location": gh.get("location") if gh.get("found") else None,
+    })
+    g.link(pid, root, "has_account")
+
+    # A verified GitHub email bridges into the email graph (registrant collisions).
+    if gh.get("found") and gh.get("email"):
+        eid = g.obj("email:" + str(gh["email"]).lower(), "Email", "github",
+                    {"address": str(gh["email"]).lower()})
+        g.link(pid, eid, "has_email")
+
+    present = sites.get("present_on", [])
+    return {
+        "github": gh.get("found", False),
+        "gitlab": gl.get("found", False),
+        "present_on": present,
+        "site_count": len(present),
+    }
+
+
 @router.post("/investigate", response_model=InvestigateResponse)
 async def investigate(
     req: InvestigateRequest, ctx: UserCtx = Depends(current_user)
 ) -> InvestigateResponse:
     detected = classify_target(req.target)
     if detected is None:
-        raise HTTPException(status_code=400, detail="target must be a domain or IP")
+        raise HTTPException(status_code=400, detail="target must be a domain, IP, email, or username")
     kind, canonical = detected
 
     g = _Graph(ts=time.time())
     if kind == "domain":
         summary = await _investigate_domain(g, canonical)
         root = "domain:" + canonical
+    elif kind == "email":
+        summary = await _investigate_email(g, canonical)
+        root = "email:" + canonical
+    elif kind == "username":
+        summary = await _investigate_username(g, canonical)
+        root = "username:" + canonical
     else:
         summary = await _investigate_ip(g, canonical)
         root = "ip:" + canonical

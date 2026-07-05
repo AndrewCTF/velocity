@@ -25,6 +25,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
+from app import memtier
 from app.config import Settings, get_settings
 from app.imagery import cdse, gibs, ondemand, tasking
 from app.intel.geo import BBox
@@ -244,7 +245,7 @@ async def render_chip(
     maxar_acq = await _maxar_overlap(aoi, date) if source in ("auto", "maxar") else None
     chosen = select_chip_source(source, maxar_hit=maxar_acq is not None, cdse_ok=cdse_ok)
 
-    cache = _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes)
+    cache = _cache_for(settings.tile_cache_dir, _tile_budget(settings))
     key = chip_cache_key(chosen, aoi, date)
     rb = _round_bbox(aoi)
     bbox_3857 = cdse.lonlat_bbox_3857(rb.min_lon, rb.min_lat, rb.max_lon, rb.max_lat)
@@ -346,7 +347,7 @@ async def render_change_chip(
     w, h = _chip_px(rb)
     ext = cdse.change_layer(layer_id)["ext"]
 
-    cache = _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes)
+    cache = _cache_for(settings.tile_cache_dir, _tile_budget(settings))
     key = change_cache_key(mode, aoi, before, after)
 
     async def load_change() -> bytes | None:
@@ -379,7 +380,16 @@ def _cache_for(root: str, max_bytes: int = 0) -> TileCache:
     if tc is None:
         tc = TileCache(root, max_bytes)
         _caches[root] = tc
+    else:
+        tc.max_bytes = max_bytes  # keep the cap live as the RAM budget shifts
     return tc
+
+
+def _tile_budget(settings: Settings) -> int:
+    """Disk-cache byte cap sized to available RAM, capped by the config ceiling."""
+    return memtier.cache_budget_bytes(
+        "tilecache", floor=256 * 1024**2, ceil=int(settings.tile_cache_max_bytes)
+    )
 
 
 async def _fetch_bytes(url: str) -> bytes | None:
@@ -622,6 +632,27 @@ async def imagery_change(
     )
 
 
+@router.get("/api/imagery/detect")
+async def imagery_detect(
+    min_lon: float = Query(...),
+    min_lat: float = Query(...),
+    max_lon: float = Query(...),
+    max_lat: float = Query(...),
+    date: str = Query(...),
+    layer: str = Query("S2_L2A_TRUECOLOR", max_length=64),
+) -> dict[str, Any]:
+    """YOLO object detection over a satellite chip → geo-referenced GeoJSON.
+
+    Degrades honestly: empty features + a note when CDSE imagery or the CUDA YOLO
+    sidecar is unavailable, never a fabricated detection.
+    """
+    if not _DATE_RE.match(date):
+        raise HTTPException(400, "date must be YYYY-MM-DD")
+    from app.imagery import detect
+
+    return await detect.detect_chip([min_lon, min_lat, max_lon, max_lat], date, layer)
+
+
 @router.get("/api/imagery/tasking/providers")
 async def imagery_tasking_providers(
     settings: Settings = Depends(get_settings),
@@ -714,7 +745,7 @@ async def imagery_tile(
     if not (0 <= z <= meta["max_z"]):
         raise HTTPException(400, "z out of range")
 
-    data = await _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes).get(
+    data = await _cache_for(settings.tile_cache_dir, _tile_budget(settings)).get(
         f"{provider}/{layer}/{date}", z, x, y, meta["ext"], _TTL, load
     )
     if data is None:

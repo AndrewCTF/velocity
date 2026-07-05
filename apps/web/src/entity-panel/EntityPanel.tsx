@@ -196,7 +196,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   // Positionless digital-OSINT entities (domain / ip / cert / asn / service /
   // threat / org / email) have no Cesium entity to snapshot — their own panel
   // (keyless enrichment cards + search-around), mirroring the situation branch.
-  if (/^(domain|ip|cert|asn|service|threat|org|email):/.test(id)) {
+  if (/^(domain|ip|cert|asn|service|threat|org|email|person|username):/.test(id)) {
     return <OsintEntityPanel id={id} />;
   }
 

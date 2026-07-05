@@ -69,13 +69,14 @@ export function InvestigatePanel(): JSX.Element {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, fontSize: 13 }}>
-      <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>Investigate infrastructure</div>
+      <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>Investigate</div>
       <div style={{ fontSize: 11, color: 'var(--txt-3)' }}>
-        Enter a domain or IP. Keyless: DNS · WHOIS/RDAP · certificate transparency · IP-geo · Shodan · threat-intel.
+        Domain / IP: DNS · WHOIS · certs · IP-geo · Shodan · threat. Email / username:
+        Gravatar · GitHub · GitLab · handle presence · breaches.
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <input
-          placeholder="example.com  or  8.8.8.8"
+          placeholder="example.com · 8.8.8.8 · jane@example.com · torvalds"
           value={target}
           onChange={(e) => setTarget(e.target.value)}
           onKeyDown={(e) => {

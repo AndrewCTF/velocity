@@ -156,6 +156,100 @@ function ThreatCard({ target }: { target: string }): JSX.Element | null {
   );
 }
 
+interface Github {
+  found?: boolean; name?: string; company?: string; location?: string; email?: string;
+  bio?: string; public_repos?: number; followers?: number; created_at?: string; profile_url?: string;
+}
+
+function GithubCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Github>('github', target);
+  if (!data || !data.found) return null;
+  return (
+    <Widget title="GitHub" count={data.public_repos ?? 0}>
+      {data.name && <Row k="name" v={data.name} />}
+      {data.company && <Row k="company" v={data.company} />}
+      {data.location && <Row k="location" v={data.location} />}
+      {data.email && <Row k="email" v={data.email} />}
+      {data.bio && <Row k="bio" v={data.bio} />}
+      {data.followers != null && <Row k="followers" v={data.followers} />}
+      {data.created_at && <Row k="since" v={data.created_at.slice(0, 10)} />}
+      {data.profile_url && <Row k="profile" v={data.profile_url} />}
+    </Widget>
+  );
+}
+
+interface Gitlab { found?: boolean; name?: string; profile_url?: string }
+
+function GitlabCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Gitlab>('gitlab', target);
+  if (!data || !data.found) return null;
+  return (
+    <Widget title="GitLab">
+      {data.name && <Row k="name" v={data.name} />}
+      {data.profile_url && <Row k="profile" v={data.profile_url} />}
+    </Widget>
+  );
+}
+
+interface UsernameSites { present_on?: string[] }
+
+function UsernameSitesCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<UsernameSites>('username', target);
+  if (!data || !data.present_on?.length) return null;
+  return (
+    <Widget title="Handle presence" count={data.present_on.length}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {data.present_on.map((s) => (
+          <span key={s} style={{ fontSize: 10, color: 'var(--txt-2)', background: 'rgba(255,255,255,0.05)', padding: '1px 5px', borderRadius: 3 }}>
+            {s}
+          </span>
+        ))}
+      </div>
+    </Widget>
+  );
+}
+
+interface Gravatar {
+  found?: boolean; display_name?: string; about?: string; location?: string; profile_url?: string;
+  accounts?: { service?: string; url?: string; username?: string }[];
+}
+
+function GravatarCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Gravatar>('gravatar', target);
+  if (!data || !data.found) return null;
+  return (
+    <Widget title="Gravatar profile" count={data.accounts?.length ?? 0}>
+      {data.display_name && <Row k="name" v={data.display_name} />}
+      {data.location && <Row k="location" v={data.location} />}
+      {data.about && <Row k="about" v={data.about} />}
+      {data.accounts?.length ? (
+        <Row k="accounts" v={data.accounts.map((a) => a.service || a.username).filter(Boolean).join(', ')} />
+      ) : null}
+      {data.profile_url && <Row k="profile" v={data.profile_url} />}
+    </Widget>
+  );
+}
+
+interface Hibp { checked?: boolean; breach_count?: number; breaches?: { name?: string }[]; note?: string }
+
+function HibpCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Hibp>('hibp', target);
+  if (!data) return null;
+  if (!data.checked) {
+    return data.note ? (
+      <Widget title="Breaches (HIBP)">
+        <div style={{ fontSize: 10, color: 'var(--txt-3)' }}>{data.note}</div>
+      </Widget>
+    ) : null;
+  }
+  if (!data.breach_count) return null;
+  return (
+    <Widget title="Breaches (HIBP)" count={data.breach_count ?? 0}>
+      <Row k="breaches" v={<span style={{ color: 'var(--alert)' }}>{data.breaches?.map((b) => b.name).join(', ')}</span>} />
+    </Widget>
+  );
+}
+
 // ── panel ─────────────────────────────────────────────────────────────────────
 
 export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
@@ -193,7 +287,23 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
           <ThreatCard target={target} />
         </>
       )}
-      {kind !== 'domain' && kind !== 'ip' && <ThreatCard target={target} />}
+      {kind === 'username' && (
+        <>
+          <GithubCard target={target} />
+          <GitlabCard target={target} />
+          <UsernameSitesCard target={target} />
+        </>
+      )}
+      {kind === 'email' && (
+        <>
+          <GravatarCard target={target} />
+          <HibpCard target={target} />
+          <ThreatCard target={target} />
+        </>
+      )}
+      {kind !== 'domain' && kind !== 'ip' && kind !== 'username' && kind !== 'email' && (
+        <ThreatCard target={target} />
+      )}
     </div>
   );
 }
