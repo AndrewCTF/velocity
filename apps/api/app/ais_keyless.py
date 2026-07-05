@@ -52,6 +52,9 @@ _stats: dict[str, Any] = {
     "digitraffic_connected": False,
     "digitraffic_messages": 0,
     "vesselfinder_vessels": 0,
+    "marinetraffic_vessels": 0,
+    "myshiptracking_vessels": 0,
+    "shipxplorer_vessels": 0,
 }
 
 
@@ -62,9 +65,14 @@ def stats() -> dict[str, Any]:
         "kystdatahuset_enabled": s.ais_kystdatahuset_enabled,
         "digitraffic_mqtt_enabled": s.ais_digitraffic_mqtt_enabled,
         "vesselfinder_sidecar_enabled": s.ais_vesselfinder_sidecar_enabled,
+        "marinetraffic_sidecar_enabled": s.ais_marinetraffic_sidecar_enabled,
+        "myshiptracking_sidecar_enabled": s.ais_myshiptracking_sidecar_enabled,
+        "shipxplorer_enabled": s.ais_shipxplorer_enabled,
         "coverage": (
             "Norway (Kystdatahuset) + Baltic (Digitraffic) regional + "
-            "VesselFinder sidecar (global ~21k) when enabled"
+            "MyShipTracking sidecar (global MMSI-keyed ~22k) + "
+            "ShipXplorer direct httpx (global MMSI-keyed ~32k, incl sat AIS) + "
+            "MarineTraffic / VesselFinder sidecars when enabled"
         ),
     }
 
@@ -374,6 +382,285 @@ async def _run_vesselfinder_sidecar() -> None:
         await asyncio.sleep(max(interval, backoff))
 
 
+# ── MarineTraffic headless sidecar (keyless GLOBAL, primary) — poll vessels.json ─
+
+
+def _publish_marinetraffic(vessels: list[dict[str, Any]]) -> int:
+    """Bulk-load MarineTraffic sidecar vessels into the observation store.
+
+    Same bulk (add_many, not per-vessel publish_vessel) contract as
+    :func:`_publish_vesselfinder` — the vessels render via the snapshot POLL layer
+    (/api/maritime/snapshot), so a per-vessel /ws/ais broadcast + history write on
+    ~15k vessels would waste seconds of event-loop time for no gain.
+
+    MarineTraffic carries NO MMSI in its tile payload (only its own SHIP_ID), so
+    these are keyed under a distinct id namespace ``vessel:mt-<ship_id>`` and are
+    NOT deduped against the MMSI-keyed feeds. Unlike VesselFinder it DOES carry
+    sog/cog/heading/shipType, so those flow straight through to the icon + panel.
+    """
+    now = time.time()
+    batch: list[Observation] = []
+    for v in vessels:
+        try:
+            ship_id = str(v["ship_id"])
+            lat = float(v["lat"])
+            lon = float(v["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not ship_id or not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+            continue
+        batch.append(
+            Observation(
+                id=f"vessel:mt-{ship_id}",
+                source="marinetraffic",
+                t=now,
+                lon=lon,
+                lat=lat,
+                emits_kind="vessel",
+                attrs={
+                    "mmsi": None,
+                    "shipId": ship_id,
+                    "name": v.get("name"),
+                    "sog": v.get("sog"),
+                    "cog": v.get("cog"),
+                    "heading": v.get("heading"),
+                    "shipType": v.get("shipType"),
+                    "flag": v.get("flag"),
+                    "length": v.get("length"),
+                    "destination": v.get("destination"),
+                },
+            )
+        )
+    if batch:
+        ais_firehose.store.add_many(batch)
+    return len(batch)
+
+
+async def _run_marinetraffic_sidecar() -> None:
+    s = get_settings()
+    interval = s.ais_marinetraffic_sidecar_interval_s
+    url = s.ais_marinetraffic_sidecar_url
+    client = get_client()
+    backoff = interval
+    while True:
+        try:
+            r = await client.get(url, timeout=60.0)
+            if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
+                vessels = (r.json().get("vessels")) or []
+                n = _publish_marinetraffic(vessels)
+                _stats["marinetraffic_vessels"] = n
+                backoff = interval
+            else:
+                backoff = min(backoff * 2, 300.0)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 — sidecar may be cold/booting; retry
+            log.warning("marinetraffic sidecar poll error: %s", e)
+            backoff = min(backoff * 2, 300.0)
+        await asyncio.sleep(max(interval, backoff))
+
+
+# ── MyShipTracking headless sidecar (keyless GLOBAL, MMSI-keyed primary) ────────
+
+
+def _publish_myshiptracking(vessels: list[dict[str, Any]]) -> int:
+    """Bulk-load MyShipTracking sidecar vessels into the observation store.
+
+    Same bulk (add_many) contract as the other sidecars. Unlike MarineTraffic,
+    MyShipTracking carries a real 9-digit MMSI, so vessels key on the STANDARD
+    ``vessel:<mmsi>`` id and dedup (freshest-wins) against Digitraffic/Kystdatahuset
+    and any other MMSI feed. Carries sog/cog/name; shipType is left None and
+    backfilled from the cross-source cache when another feed has typed that MMSI
+    (MyShipTracking's row type code is its own taxonomy, not the AIS numeric type
+    the icon dispatch expects, so we don't guess it).
+    """
+    now = time.time()
+    batch: list[Observation] = []
+    for v in vessels:
+        try:
+            mmsi = int(v["mmsi"])
+            lat = float(v["lat"])
+            lon = float(v["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+            continue
+        name = v.get("name")
+        if name:
+            ais_firehose._remember_name(mmsi, name)
+        batch.append(
+            Observation(
+                id=f"vessel:{mmsi}",
+                source="myshiptracking",
+                t=now,
+                lon=lon,
+                lat=lat,
+                emits_kind="vessel",
+                attrs={
+                    "mmsi": mmsi,
+                    "name": ais_firehose._name_by_mmsi.get(mmsi),
+                    "sog": v.get("sog"),
+                    "cog": v.get("cog"),
+                    "heading": None,
+                    "shipType": ais_routes._ship_type_by_mmsi.get(mmsi),
+                },
+            )
+        )
+    if batch:
+        ais_firehose.store.add_many(batch)
+    return len(batch)
+
+
+async def _run_myshiptracking_sidecar() -> None:
+    s = get_settings()
+    interval = s.ais_myshiptracking_sidecar_interval_s
+    url = s.ais_myshiptracking_sidecar_url
+    client = get_client()
+    backoff = interval
+    while True:
+        try:
+            r = await client.get(url, timeout=60.0)
+            if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
+                vessels = (r.json().get("vessels")) or []
+                n = _publish_myshiptracking(vessels)
+                _stats["myshiptracking_vessels"] = n
+                backoff = interval
+            else:
+                backoff = min(backoff * 2, 300.0)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 — sidecar may be cold/booting; retry
+            log.warning("myshiptracking sidecar poll error: %s", e)
+            backoff = min(backoff * 2, 300.0)
+        await asyncio.sleep(max(interval, backoff))
+
+
+# ── ShipXplorer DIRECT httpx (keyless GLOBAL, no browser sidecar) ───────────────
+
+# data.shipxplorer.com/live answers a plain httpx GET as long as the browser-ish
+# Referer/Origin are present; a bare client 500s. NOT Cloudflare-gated.
+_SHIPXPLORER_HEADERS = {
+    "user-agent": _UA,
+    "accept": "application/json, text/plain, */*",
+    "referer": "https://www.shipxplorer.com/",
+    "origin": "https://www.shipxplorer.com",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-site",
+}
+_SHIPXPLORER_TYPES = [
+    "CARGO", "FISHING", "HSC", "OTHER", "PASSENGER",
+    "PLEASURE", "SAILING", "TANKER", "TUG", "UNKNOWN",
+]
+# Row layout of each vessel array in the /live response (validated live 2026-07-05):
+#   [0]=? [1]=lat [2]=lon [3]=last_ts_ms [4]=? [5]=sog [6]="AIS"/"SAT"
+#   [7]=typeName [8]=MMSI(int) [9]=? [10]=status ...
+_SX_LAT, _SX_LON, _SX_SOG, _SX_MMSI = 1, 2, 5, 8
+
+
+def _parse_shipxplorer(payload: Any) -> list[dict[str, Any]]:
+    """Parse a ShipXplorer /live body into vessel dicts. Testable offline.
+
+    The body is a JSON list ``[vesselsById, {"total":N,...}, [], {}]`` where
+    ``vesselsById`` maps a ShipXplorer id -> a positional attribute array. We only
+    trust rows with a valid 9-digit MMSI + in-range lat/lon, so a schema drift
+    thins the feed toward zero rather than emitting garbage.
+    """
+    if not isinstance(payload, list) or not payload or not isinstance(payload[0], dict):
+        return []
+    out: list[dict[str, Any]] = []
+    for a in payload[0].values():
+        if not isinstance(a, list) or len(a) <= _SX_MMSI:
+            continue
+        mmsi = a[_SX_MMSI]
+        lat = a[_SX_LAT]
+        lon = a[_SX_LON]
+        if not isinstance(mmsi, int) or mmsi < 100000000 or mmsi >= 1000000000:
+            continue
+        if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+            continue
+        if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+            continue
+        sog = a[_SX_SOG] if len(a) > _SX_SOG else None
+        out.append({
+            "mmsi": mmsi,
+            "lat": float(lat),
+            "lon": float(lon),
+            "sog": sog if isinstance(sog, (int, float)) else None,
+        })
+    return out
+
+
+def _publish_shipxplorer(vessels: list[dict[str, Any]]) -> int:
+    """Bulk-load ShipXplorer vessels into the store (MMSI-keyed, dedups)."""
+    now = time.time()
+    batch: list[Observation] = []
+    for v in vessels:
+        try:
+            mmsi = int(v["mmsi"])
+            lat = float(v["lat"])
+            lon = float(v["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+            continue
+        batch.append(
+            Observation(
+                id=f"vessel:{mmsi}",
+                source="shipxplorer",
+                t=now,
+                lon=lon,
+                lat=lat,
+                emits_kind="vessel",
+                attrs={
+                    "mmsi": mmsi,
+                    "name": ais_firehose._name_by_mmsi.get(mmsi),
+                    "sog": v.get("sog"),
+                    "cog": None,
+                    "heading": None,
+                    "shipType": ais_routes._ship_type_by_mmsi.get(mmsi),
+                },
+            )
+        )
+    if batch:
+        ais_firehose.store.add_many(batch)
+    return len(batch)
+
+
+async def _fetch_shipxplorer() -> list[dict[str, Any]]:
+    """One world-bbox pull (zoom 6 returns the full ~32k set uncapped)."""
+    s = get_settings()
+    params = [
+        ("vessel", ""), ("port", ""), ("zoom", str(s.ais_shipxplorer_zoom)),
+        ("vesselid", ""), ("bounds", "85,180,-85,-180"), ("timestamp", "false"),
+        ("lastReport", "3600"), ("designator", "iata"), ("os", "web"),
+        ("ais", "true"), ("sate", "true"),
+    ] + [("types[]", t) for t in _SHIPXPLORER_TYPES]
+    r = await get_client().get(
+        s.ais_shipxplorer_url, params=params, headers=_SHIPXPLORER_HEADERS, timeout=30.0
+    )
+    if r.status_code != 200 or "json" not in r.headers.get("content-type", ""):
+        return []
+    return _parse_shipxplorer(r.json())
+
+
+async def _run_shipxplorer() -> None:
+    s = get_settings()
+    interval = s.ais_shipxplorer_interval_s
+    backoff = interval
+    while True:
+        try:
+            vessels = await _fetch_shipxplorer()
+            n = _publish_shipxplorer(vessels)
+            _stats["shipxplorer_vessels"] = n
+            backoff = interval if n else min(backoff * 2, 300.0)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 — transient upstream; retry
+            log.warning("shipxplorer poll error: %s", e)
+            backoff = min(backoff * 2, 300.0)
+        await asyncio.sleep(max(interval, backoff))
+
+
 # ── lifecycle ─────────────────────────────────────────────────────────────────
 
 
@@ -388,6 +675,16 @@ def start() -> None:
         _tasks.append(
             asyncio.create_task(_run_vesselfinder_sidecar(), name="ais_vesselfinder_sidecar")
         )
+    if s.ais_marinetraffic_sidecar_enabled and not _running("marinetraffic"):
+        _tasks.append(
+            asyncio.create_task(_run_marinetraffic_sidecar(), name="ais_marinetraffic_sidecar")
+        )
+    if s.ais_myshiptracking_sidecar_enabled and not _running("myshiptracking"):
+        _tasks.append(
+            asyncio.create_task(_run_myshiptracking_sidecar(), name="ais_myshiptracking_sidecar")
+        )
+    if s.ais_shipxplorer_enabled and not _running("shipxplorer"):
+        _tasks.append(asyncio.create_task(_run_shipxplorer(), name="ais_shipxplorer"))
 
 
 def _running(tag: str) -> bool:

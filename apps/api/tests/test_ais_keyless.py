@@ -138,6 +138,79 @@ def test_publish_vesselfinder_bulk_loads_store(monkeypatch: pytest.MonkeyPatch) 
     assert o0.attrs["sog"] is None and o0.attrs["cog"] is None and o0.attrs["heading"] is None
 
 
+def test_publish_marinetraffic_bulk_loads_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list = []
+    monkeypatch.setattr(ais_firehose.store, "add_many", lambda batch: captured.extend(batch))
+    vessels = [
+        {"ship_id": "5645502", "lat": -2.07, "lon": -44.07, "name": "ORE TANGSHAN",
+         "sog": 0.1, "cog": 249, "heading": 121, "shipType": 7, "flag": "HK", "length": 361},
+        {"ship_id": "", "lat": 0.0, "lon": 0.0},  # empty ship_id → skipped
+        {"ship_id": "999", "lat": 99.0, "lon": 0.0},  # lat out of range → skipped
+        {"ship_id": "TnpBME5q==", "lat": -2.5, "lon": -38.9, "sog": 7.6, "shipType": 7},  # SAT-AIS, no name
+    ]
+    n = K._publish_marinetraffic(vessels)
+    assert n == 2  # two valid; empty-id + bad-lat dropped
+    # Distinct id namespace so MarineTraffic never collides with MMSI-keyed feeds.
+    assert [o.id for o in captured] == ["vessel:mt-5645502", "vessel:mt-TnpBME5q=="]
+    o0 = captured[0]
+    assert o0.source == "marinetraffic" and o0.emits_kind == "vessel"
+    assert o0.lon == -44.07 and o0.lat == -2.07
+    assert o0.attrs["mmsi"] is None and o0.attrs["shipId"] == "5645502"
+    # Unlike VesselFinder, MarineTraffic carries motion + type through to the icon.
+    assert o0.attrs["sog"] == 0.1 and o0.attrs["cog"] == 249 and o0.attrs["heading"] == 121
+    assert o0.attrs["shipType"] == 7 and o0.attrs["flag"] == "HK"
+
+
+def test_publish_myshiptracking_bulk_loads_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list = []
+    monkeypatch.setattr(ais_firehose.store, "add_many", lambda batch: captured.extend(batch))
+    vessels = [
+        {"mmsi": 985380302, "lat": 77.49, "lon": 18.19, "name": "ULT ZODIAC 02", "sog": 4.7, "cog": 147.6},
+        {"mmsi": "bad", "lat": 0.0, "lon": 0.0},  # non-int mmsi → skipped
+        {"mmsi": 512010248, "lat": 99.0, "lon": 0.0},  # lat out of range → skipped
+        {"mmsi": 992651018, "lat": 61.19, "lon": 17.17, "name": "S KAJGRUND", "sog": 0.0, "cog": 0.0},
+    ]
+    n = K._publish_myshiptracking(vessels)
+    assert n == 2  # two valid; bad-mmsi + bad-lat dropped
+    # Standard MMSI namespace so it dedups (freshest-wins) against the other feeds.
+    assert [o.id for o in captured] == ["vessel:985380302", "vessel:992651018"]
+    o0 = captured[0]
+    assert o0.source == "myshiptracking" and o0.emits_kind == "vessel"
+    assert o0.attrs["mmsi"] == 985380302 and o0.attrs["name"] == "ULT ZODIAC 02"
+    assert o0.attrs["sog"] == 4.7 and o0.attrs["cog"] == 147.6
+
+
+def test_parse_shipxplorer_decodes_list_wrapper() -> None:
+    # Real /live shape: [ {id: [_,lat,lon,ts,_,sog,"AIS",typeName,MMSI,_,status,...]}, {total}, [], {} ]
+    payload = [
+        {
+            "1101426925": [None, 26.5266, 54.884, 1783239885000, None, 12.3, "AIS", "Cargo", 620999434, None, "UnderwayUsingEngine"],
+            "1101427272": [None, 42.782, -73.675, 1783239708000, None, 0, "AIS", "Pleasure Craft", 338489704, None, "Undefined"],
+            "bad-mmsi": [None, 1.0, 2.0, 0, None, 0, "AIS", None, 123, None, ""],  # mmsi too short → dropped
+            "bad-lat": [None, 99.0, 2.0, 0, None, 0, "AIS", None, 620999999, None, ""],  # lat out of range → dropped
+        },
+        {"total": 4},
+        [],
+        {},
+    ]
+    rows = K._parse_shipxplorer(payload)
+    assert [r["mmsi"] for r in rows] == [620999434, 338489704]
+    assert rows[0]["lat"] == 26.5266 and rows[0]["lon"] == 54.884 and rows[0]["sog"] == 12.3
+    assert K._parse_shipxplorer([]) == [] and K._parse_shipxplorer({}) == []
+
+
+def test_publish_shipxplorer_bulk_loads_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list = []
+    monkeypatch.setattr(ais_firehose.store, "add_many", lambda batch: captured.extend(batch))
+    n = K._publish_shipxplorer([
+        {"mmsi": 620999434, "lat": 26.5, "lon": 54.9, "sog": 12.3},
+        {"mmsi": 338489704, "lat": 42.7, "lon": -73.6, "sog": 0.0},
+    ])
+    assert n == 2
+    assert [o.id for o in captured] == ["vessel:620999434", "vessel:338489704"]
+    assert captured[0].source == "shipxplorer" and captured[0].attrs["sog"] == 12.3
+
+
 @pytest.mark.asyncio
 async def test_publish_vessel_sentinels_and_validation(monkeypatch: pytest.MonkeyPatch) -> None:
     frames = []

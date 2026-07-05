@@ -1,5 +1,58 @@
 # CLAUDE.md — Hard guardrails for any AI agent editing this repo
 
+## How to think here (read first, every session)
+
+This file holds the *invariants*; the `osint-platform-dev` skill
+(`.claude/skills/osint-platform-dev/`) holds the *method* — explore/plan/verify
+workflow, architecture map, gotchas, roadmap, a worked example. Invoke it before
+any non-trivial task. When they disagree, this file wins.
+
+The loop that works in this repo, distilled from every prior session:
+
+1. **Evidence over assertion.** Never write done/works/fixed without showing the
+   command + output, screenshot, or file:line THIS turn. Tag claims proven-live /
+   plumbed-unverified / not-built. Wrong is recoverable; fabricated is not.
+2. **Explore cheap, then verify load-bearing facts yourself.** Delegate breadth to
+   read-only explore agents, but open the 3-4 files you'll actually depend on and
+   read the real signatures before writing code. Most "it doesn't work" traces to
+   an imagined signature.
+3. **Find the reuse before proposing new code.** This platform is large; ~80% of
+   any new feature already exists as a substrate (stores, bus, adapters, brief
+   fusion). Extending beats rebuilding and can't regress an invariant it never touches.
+4. **Change the minimum, name what you skipped.** Every regression here came from a
+   confident "cleanup" of code whose history the editor didn't know. If a diff
+   touches a sacred behavior below and you're not certain, leave that path alone
+   and say so.
+5. **Troubleshoot by measuring the layer, not guessing the fix.** "Stale/slow/empty"
+   reports: probe the BACKEND first (diff two `/api/adsb/global` pulls on
+   `seen_pos_s`; hit the sidecar `:8090/:8093` health), then the transport, then the
+   frontend. The frontend faithfully mirrors a frozen blob — no frontend change
+   fixes a backend problem. A set API key is not a working key; hit the upstream
+   and read the status/count.
+6. **Prove it before claiming it.** Run the verification commands below; a
+   subagent's report is not proof until you've seen its evidence.
+
+## Response style — terse, symbolic
+
+Chat responses to the operator: compress hard. Symbols over words, fragments
+over sentences, numbers over adjectives (`~22k vessels`, not "many").
+
+- `->` cause / effect / sequence: `blob stale -> frontend mirrors it -> fix backend`
+- `=`  is / means / result: `709 passed = baseline holds`
+- `+`  and / combined: `nac_p + nic forwarded`
+- also: `!=`, `~` (approx), `>=`, `?` (unverified), `✓` (proven this turn), `✗` (fails)
+- Drop: articles, pleasantries, hedging, restating the question, options not taken.
+- Keep EXACT: technical terms, file:line, commands, quoted error text, counts,
+  evidence tiers (proven-live / plumbed-unverified / not-built).
+
+BAD:  "I investigated and found the backend snapshot was stale, which caused
+       the frontend to display outdated positions, so I recommend fixing the feed."
+GOOD: "backend snapshot stale -> frontend mirrors it. fix = feed cadence, not frontend. ✓ diffed 2 pulls, <5% changed / 8s"
+
+EXCEPTIONS — write normal full prose for: commits, PR titles/bodies, code
+comments, docs, security warnings, irreversible-action confirmations, and any
+multi-step sequence where fragment order risks misread.
+
 ## Operator-visible behaviour that MUST hold
 
 These are sacred. Subagents reviewing this file MUST verify their edit does
@@ -146,9 +199,22 @@ not regress any of them. If unsure, leave the relevant code path alone.
   MUST call `global_snapshot()`, never the `adsb_global()` route handler in
   process — the handler's `Query(...)` defaults reach `viewport_filter` and 500
   ('>' not supported between instances of 'Query'). This broke the jamming layer.
-- AIS Digitraffic: 30 s (Baltic only). AISStream WS: live push (needs key).
-  Sentinel-1 SAR dark-vessel layer (`maritime.sar.hormuz`): 6 h poll — the only
-  keyless vessel coverage for the Strait of Hormuz.
+- Vessel breadth: two GLOBAL MMSI-keyed sources run together and dedup
+  (freshest-wins on `vessel:<mmsi>`), so their union is strictly more vessels:
+  1. **ShipXplorer** — DIRECT httpx, NO browser (`app.ais_keyless._run_shipxplorer`,
+     `data.shipxplorer.com/live` world bbox @ zoom 6, ~32k incl. satellite AIS,
+     measured 2026-07-05). Needs browser-ish `Referer`/`Origin` headers or it 500s;
+     NOT Cloudflare-gated. This is the cheapest source (one ~190 KB request/poll).
+  2. **MyShipTracking headless-browser sidecar** (`tools/ais-myshiptracking-feeder`,
+     `:8093/vessels.json`, ~22k, measured 2026-07-05), polled every 30 s.
+  `app.ais_sidecar` also registers two OTHER browser feeders — MarineTraffic `:8092`
+  (SHIP_ID-keyed, Cloudflare-throttled) + VesselFinder `:8091` — but the
+  SHIP_ID-keyed ones must NOT run alongside an MMSI source (different id namespace →
+  double-renders the same ships). Only ONE SHIP_ID feeder may be enabled, and only
+  in place of the MMSI sources. AIS Digitraffic: 30 s (Baltic only). AISStream
+  WS: live push (needs key, on-demand only — API cap). Sentinel-1 SAR
+  dark-vessel layer (`maritime.sar.hormuz`): 6 h poll — keyless Strait of
+  Hormuz coverage independent of AIS.
 
 ### Aircraft count + sources (operator-visible)
 
@@ -209,6 +275,10 @@ not regress any of them. If unsure, leave the relevant code path alone.
 
 - ADSB.lol + airplanes.live global ADS-B grid (no auth).
 - Digitraffic Finland Baltic AIS (no auth).
+- MyShipTracking browser AIS sidecar (`:8093`, headless Chrome — keyless, ~22k
+  vessels measured 2026-07-05; NOT Cloudflare-gated).
+- ShipXplorer AIS (`data.shipxplorer.com/live`, DIRECT httpx — keyless, ~32k
+  incl. satellite AIS, measured 2026-07-05; needs `Referer`/`Origin` headers).
 - NASA FIRMS — needs MAP_KEY for fires (degrade gracefully when missing).
 - USGS quakes (no auth).
 - Carto Dark Matter basemap proxied via `/tiles/basemap` (no auth).
@@ -223,7 +293,12 @@ not regress any of them. If unsure, leave the relevant code path alone.
 ### Tests / typecheck
 
 - `pnpm -r typecheck` must be green at every commit boundary.
-- `cd apps/api && .venv/bin/pytest -q` must hold at ≥25 passed.
+- Backend tests run from the **repo ROOT**, never from `apps/api` (there the
+  `.env` auth resolves and every request 401s):
+  `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
+  (`OSINT_DISABLE_BACKGROUND=1` skips boot-time feed pollers so tests never hit
+  live upstreams). Baseline: **711 passed** (measured 2026-07-05). Never commit
+  below the baseline you inherited; update this number when you raise it.
 
 ## Subagent rules of engagement
 
@@ -301,6 +376,14 @@ shipping.
   serve open `aircraft.json` keyless from a server.
 - AISStream has an API cap — keep it ON DEMAND (started on `/ws/ais` connect,
   stopped when the last viewer leaves). Keyless firehoses stay always-on.
+- The ADS-B sidecar readFn must FORWARD `nac_p`/`nic` from tar1090's planes
+  (`tools/adsb-globe-feeder/index.js`) — dropping them left `/api/jamming`
+  with ZERO cells for days while tar1090 had the data all along (2026-07-05).
+  When adding a field consumer downstream, check the sidecar actually emits it.
+- Sidecar child processes must SCRUB `LD_PRELOAD`/`MALLOC_CONF` from their env
+  (`adsb_sidecar.py`/`ais_sidecar.py` do this): `run-api.sh`'s jemalloc preload
+  inherited into headless Chrome kills the zygote (error_code=1002) → sidecar
+  serves 0 aircraft → frozen blob that looks like a "refresh" bug (2026-07-04).
 
 ### Playwright: pass FUNCTIONS to `page.evaluate`, not strings
 
@@ -316,10 +399,11 @@ shipping.
 ### Process / shell discipline
 
 - `pkill -f "<path>/index.js"` does NOT match a process whose argv is just
-  `node index.js`. Find a server by its PORT holder
-  (`ss -ltnp | grep ':<port>'` → kill that pid), not a guessed argv pattern.
-  Repeated stale processes here caused EADDRINUSE and a stale log that masked
-  whether new code was even running. Use a fresh log file per run.
+  `node index.js`. Kill a server by its PORT holder — use
+  **`scripts/kill-port.sh <port>`** (the sanctioned way; wraps
+  `ss -ltnp` → kill pid), not a guessed argv pattern. Repeated stale processes
+  here caused EADDRINUSE and a stale log that masked whether new code was even
+  running. Use a fresh log file per run.
 
 ### Commit / doc voice
 
