@@ -107,7 +107,10 @@ class _Sidecar:
             return
         if await self._already_healthy():
             self._reuse_pid = self._port_holder_pid()
-            log.info("ais sidecar %s already up on %s — reusing pid %s", self.name, self.base, self._reuse_pid)
+            log.info(
+                "ais sidecar %s already up on %s — reusing pid %s",
+                self.name, self.base, self._reuse_pid,
+            )
             return
 
         env = {
@@ -150,10 +153,16 @@ class _Sidecar:
         # return without waiting for the first scrape.
         await asyncio.sleep(1.0)
         if self._proc.returncode is not None:
-            log.warning("ais sidecar %s exited early (code %s) — see %s", self.name, self._proc.returncode, log_path)
+            log.warning(
+                "ais sidecar %s exited early (code %s) — see %s",
+                self.name, self._proc.returncode, log_path,
+            )
             self._proc = None
             return
-        log.info("ais sidecar %s spawned on %s (warming world grid in background)", self.name, self.base)
+        log.info(
+            "ais sidecar %s spawned on %s (warming world grid in background)",
+            self.name, self.base,
+        )
 
     async def stop(self) -> None:
         """Terminate the sidecar (no-op if not ours / already gone).
