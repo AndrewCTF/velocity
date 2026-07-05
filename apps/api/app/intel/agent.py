@@ -15,6 +15,7 @@ them. If the LLM is unavailable the loop still emits the brief-derived result.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -195,6 +196,77 @@ async def _t_whats_changed(a: dict[str, Any], b: BBox | None) -> dict[str, Any]:
     return incident_store.record(scope, cur.get("incidents") or [])
 
 
+# The signed-in user for the current run, so the ctx-needing read tools (ontology
+# traverse) can reach it without widening the ToolFn signature. Set at run_agent
+# start, reset in its finally.
+_agent_ctx: contextvars.ContextVar[UserCtx | None] = contextvars.ContextVar("_agent_ctx", default=None)
+
+
+async def _t_graph_lookup(a: dict[str, Any], _b: BBox | None) -> dict[str, Any]:
+    """Resolve an ontology entity + its neighbourhood (per-user graph)."""
+    oid = str(a.get("id") or "").strip()
+    if not oid:
+        return {"error": "id required (e.g. 'vessel:<mmsi>', 'person:<slug>', 'domain:<host>')"}
+    ctx = _agent_ctx.get()
+    if ctx is None:
+        return {"note": "sign-in required to read the ontology graph"}
+    from app.config import get_settings
+    from app.intel.ontology import OntologyRegistry
+
+    depth = max(1, min(int(a.get("depth", 1) or 1), 3))
+    sa = await OntologyRegistry(ctx, get_settings()).traverse(oid, depth)
+    return sa.model_dump() if hasattr(sa, "model_dump") else dict(sa)
+
+
+async def _t_track_history(a: dict[str, Any], b: BBox | None) -> dict[str, Any]:
+    """Historical positions over the last N hours, scoped by area (and id if given)."""
+    from app import history
+
+    hours = max(0.25, min(float(a.get("hours", 6) or 6), 168.0))
+    now = time.time()
+    bb = _bbox(a, b)
+    bbox_t = (bb.min_lon, bb.min_lat, bb.max_lon, bb.max_lat) if bb else None
+    kind = a.get("kind") if isinstance(a.get("kind"), str) else None
+    out = await history.query_tracks(kind, bbox_t, now - hours * 3600.0, now, limit_ids=200)
+    want = str(a.get("id") or "").strip()
+    tracks = out.get("tracks", [])
+    if want:
+        tracks = [t for t in tracks if t.get("id") == want or want in str(t.get("id"))]
+    return {"hours": hours, "track_count": len(tracks), "tracks": tracks[:50]}
+
+
+async def _t_investigate_osint(a: dict[str, Any], _b: BBox | None) -> dict[str, Any]:
+    """Run the keyless digital-OSINT investigate on a domain/ip/email/username.
+
+    READ-ONLY: builds the subgraph in memory and returns it, without persisting to
+    the caller's ontology (persistence stays the explicit POST /api/osint/investigate).
+    """
+    target = str(a.get("target") or "").strip()
+    from app.osint.fetch import classify_target
+
+    detected = classify_target(target)
+    if detected is None:
+        return {"error": "target must be a domain, IP, email, or username"}
+    kind, canonical = detected
+    from app.routes import osint as O
+
+    g = O._Graph(ts=time.time())
+    if kind == "domain":
+        summary = await O._investigate_domain(g, canonical)
+    elif kind == "ip":
+        summary = await O._investigate_ip(g, canonical)
+    elif kind == "email":
+        summary = await O._investigate_email(g, canonical)
+    else:
+        summary = await O._investigate_username(g, canonical)
+    return {
+        "root": f"{kind}:{canonical}",
+        "objects": [{"id": o.id, "kind": o.kind, "name": o.props.get("name")} for o in g.objs.values()],
+        "links": [{"src": lk.src, "rel": lk.rel, "dst": lk.dst} for lk in g.links.values()],
+        "summary": summary,
+    }
+
+
 # name → (one-line description, real async fn). Args every geo tool accepts:
 # {lat, lon, radius_nm} to scope (omit for global). Kept small + honest.
 TOOLS: dict[str, tuple[str, ToolFn]] = {
@@ -266,6 +338,24 @@ TOOLS: dict[str, tuple[str, ToolFn]] = {
         "What moved since the last watch tick — new/escalated/de-escalated/resolved "
         "incidents. Args: lat,lon,radius_nm (omit=global).",
         _t_whats_changed,
+    ),
+    "graph_lookup": (
+        "Resolve ONE ontology entity + its linked neighbourhood (operators, incidents, "
+        "OSINT infra/people). Use to answer 'what is connected to X'. Args: id (e.g. "
+        "'vessel:<mmsi>', 'person:<slug>', 'domain:<host>'), depth(1-3, default 1).",
+        _t_graph_lookup,
+    ),
+    "track_history": (
+        "Historical positions over the last N hours (from the replay store), scoped by "
+        "area. Use for 'where was X earlier'. Args: hours(0.25-168, default 6); "
+        "lat,lon,radius_nm to scope; id to filter one entity; kind(aircraft|vessel).",
+        _t_track_history,
+    ),
+    "investigate_osint": (
+        "Run keyless digital-OSINT on a domain/IP/email/username (DNS, WHOIS, certs, "
+        "Shodan, Gravatar, GitHub/GitLab, handle presence) and return the subgraph. "
+        "Args: target(str).",
+        _t_investigate_osint,
     ),
 }
 
@@ -559,6 +649,7 @@ async def run_agent(
     """
     t0 = time.monotonic()
     can_act = ctx is not None
+    _agent_ctx.set(ctx)  # let graph_lookup reach the per-user ontology
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     backend: str | None = None
     model: str | None = None
