@@ -18,7 +18,15 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from app.osint.fetch import fetch_json, normalise_domain, normalise_ip
+import hashlib
+
+from app.osint.fetch import (
+    fetch_json,
+    normalise_domain,
+    normalise_email,
+    normalise_ip,
+    normalise_username,
+)
 
 # ── DNS ────────────────────────────────────────────────────────────────────────
 
@@ -238,3 +246,160 @@ async def lookup_threat(target: str) -> dict[str, Any]:
         "pulses": pulses[:25],
         "tags": sorted(tags)[:25],
     }
+
+
+# ── person / identity (all keyless) ─────────────────────────────────────────────
+
+async def lookup_gravatar(email: str) -> dict[str, Any]:
+    """Public Gravatar profile keyed by the md5 of the address (their own scheme).
+
+    Reveals a display name, bio, location, and — most useful for OSINT — the
+    user's self-linked verified accounts (Twitter/GitHub/…) when the profile is
+    public. Silent 404 for the vast majority of addresses is normal, not an error.
+    """
+    e = normalise_email(email)
+    if e is None:
+        return {"email": email, "found": False, "note": "invalid email"}
+    h = hashlib.md5(e.encode()).hexdigest()  # noqa: S324 — Gravatar's required key, not security
+    data = await fetch_json(f"https://gravatar.com/{h}.json", 3600.0, browser_ua=True)
+    entries = (data or {}).get("entry") or []
+    if not entries:
+        return {"email": e, "hash": h, "found": False}
+    p = entries[0]
+    return {
+        "email": e,
+        "hash": h,
+        "found": True,
+        "display_name": p.get("displayName"),
+        "about": p.get("aboutMe"),
+        "location": p.get("currentLocation"),
+        "profile_url": p.get("profileUrl"),
+        "accounts": [
+            {"service": a.get("shortname"), "url": a.get("url"), "username": a.get("username")}
+            for a in (p.get("accounts") or [])
+        ],
+    }
+
+
+async def lookup_github_user(username: str) -> dict[str, Any]:
+    """Public GitHub profile (keyless, ~60 req/hr/IP)."""
+    u = normalise_username(username)
+    if u is None:
+        return {"username": username, "found": False, "note": "invalid username"}
+    data = await fetch_json(f"https://api.github.com/users/{u}", 900.0, browser_ua=True)
+    if not data or not data.get("login"):
+        return {"username": u, "found": False}
+    return {
+        "username": data.get("login"),
+        "found": True,
+        "name": data.get("name"),
+        "company": data.get("company"),
+        "blog": data.get("blog"),
+        "location": data.get("location"),
+        "email": data.get("email"),
+        "bio": data.get("bio"),
+        "public_repos": data.get("public_repos"),
+        "followers": data.get("followers"),
+        "created_at": data.get("created_at"),
+        "profile_url": data.get("html_url"),
+        "avatar_url": data.get("avatar_url"),
+    }
+
+
+async def lookup_gitlab_user(username: str) -> dict[str, Any]:
+    """Public GitLab.com profile (keyless users search)."""
+    u = normalise_username(username)
+    if u is None:
+        return {"username": username, "found": False, "note": "invalid username"}
+    data = await fetch_json(f"https://gitlab.com/api/v4/users?username={u}", 900.0, browser_ua=True)
+    if not isinstance(data, list) or not data:
+        return {"username": u, "found": False}
+    p = data[0]
+    return {
+        "username": p.get("username"),
+        "found": True,
+        "name": p.get("name"),
+        "profile_url": p.get("web_url"),
+        "avatar_url": p.get("avatar_url"),
+        "id": p.get("id"),
+    }
+
+
+# Keyless presence checks: each returns a truthy JSON only when the handle exists,
+# so fetch_json → None means "not present here (or the host blocked us)".
+_PRESENCE_SITES: dict[str, str] = {
+    "github": "https://api.github.com/users/{u}",
+    "gitlab": "https://gitlab.com/api/v4/users?username={u}",
+    "hackernews": "https://hacker-news.firebaseio.com/v0/user/{u}.json",
+    "keybase": "https://keybase.io/_/api/1.0/user/lookup.json?usernames={u}",
+    "reddit": "https://www.reddit.com/user/{u}/about.json",
+}
+
+
+def _presence_ok(site: str, data: Any) -> bool:
+    """Interpret a site's JSON as present/absent (each API shapes 'absent' differently)."""
+    if data is None:
+        return False
+    if site == "gitlab":
+        return isinstance(data, list) and len(data) > 0
+    if site == "keybase":
+        return bool((data.get("them") or []) if isinstance(data, dict) else False)
+    if site in ("github", "reddit"):
+        return isinstance(data, dict) and bool(data.get("data") or data.get("login"))
+    if site == "hackernews":
+        return isinstance(data, dict) and bool(data.get("id"))
+    return bool(data)
+
+
+async def lookup_username_sites(username: str) -> dict[str, Any]:
+    """Which of a small curated set of public sites host this handle.
+
+    ponytail: ~5 keyless sites, not a full Sherlock port — expand the map only if
+    the operator wants breadth. Datacenter-blocked hosts (reddit often 403s) just
+    read as absent, which is honest for a presence probe.
+    """
+    u = normalise_username(username)
+    if u is None:
+        return {"username": username, "sites": {}, "note": "invalid username"}
+
+    async def one(site: str, tmpl: str) -> tuple[str, bool]:
+        data = await fetch_json(tmpl.format(u=u), 900.0, browser_ua=True)
+        return site, _presence_ok(site, data)
+
+    pairs = await asyncio.gather(*(one(s, t) for s, t in _PRESENCE_SITES.items()))
+    sites = {s: ok for s, ok in pairs}
+    return {"username": u, "sites": sites, "present_on": sorted(s for s, ok in sites.items() if ok)}
+
+
+async def lookup_hibp(email: str) -> dict[str, Any]:
+    """Have-I-Been-Pwned breach check.
+
+    HIBP's email-breach API is key-gated (paid); the only keyless HIBP endpoint is
+    Pwned *Passwords*, which takes a password, not an address. So without a key we
+    return an honest note rather than faking a breach result. Set ``HIBP_API_KEY``
+    to enable the real lookup. (Kept keyless-safe: never raises, works with no key.)
+    """
+    e = normalise_email(email)
+    if e is None:
+        return {"email": email, "checked": False, "note": "invalid email"}
+    from app.config import get_settings
+
+    key = getattr(get_settings(), "hibp_api_key", "") or ""
+    if not key:
+        return {
+            "email": e,
+            "checked": False,
+            "note": "HIBP email breach lookup needs an API key (set HIBP_API_KEY)",
+        }
+    data = await fetch_json(
+        f"https://haveibeenpwned.com/api/v3/breachedaccount/{e}?truncateResponse=false",
+        3600.0,
+        headers={"hibp-api-key": key},
+        browser_ua=True,
+    )
+    breaches = [
+        {"name": b.get("Name"), "domain": b.get("Domain"), "date": b.get("BreachDate")}
+        for b in (data or [])
+        if isinstance(b, dict)
+    ]
+    return {"email": e, "checked": True, "breach_count": len(breaches), "breaches": breaches[:50]}

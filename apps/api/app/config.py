@@ -308,6 +308,11 @@ class Settings(BaseSettings):
     # window — is the binding limit. 0 disables the byte cap (hour window only).
     history_max_bytes: int = 2_000_000_000  # ~2 GB
 
+    # Optional key for the Have-I-Been-Pwned email-breach API (paid). Absent →
+    # the person-OSINT HIBP connector degrades to an honest note; everything else
+    # in the person layer stays keyless.
+    hibp_api_key: str = ""
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

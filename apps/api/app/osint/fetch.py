@@ -62,14 +62,47 @@ def normalise_ip(target: str) -> str | None:
         return None
 
 
+# An email local-part is permissive (RFC 5322 is huge); this covers the real
+# world without accepting injection chars. Username: a handle 1-39 chars of
+# a-z0-9 plus - and _ (GitHub's own ceiling), no dots (a dotted string is a domain).
+_EMAIL_RE = re.compile(r"^[a-z0-9._%+\-]+@([a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+_USERNAME_RE = re.compile(r"^[a-z0-9](?:[a-z0-9\-_]{0,38})$")
+
+
+def normalise_email(target: str) -> str | None:
+    """Lower-case + strip an email address; None if it isn't a plausible address."""
+    t = (target or "").strip().lower()
+    return t if _EMAIL_RE.match(t) else None
+
+
+def normalise_username(target: str) -> str | None:
+    """Lower-case + strip a bare handle; None if it isn't a plausible username.
+
+    Rejects anything with a dot (that's a domain) or an @ (that's an email) so
+    ``classify_target`` stays unambiguous.
+    """
+    t = (target or "").strip().lstrip("@").lower()
+    return t if _USERNAME_RE.match(t) else None
+
+
 def classify_target(target: str) -> tuple[str, str] | None:
-    """Detect whether ``target`` is a domain or an ip. Returns (kind, canonical)."""
+    """Detect a target's kind. Returns (kind, canonical).
+
+    Order matters: ip → email (contains a domain) → domain → username (the
+    loosest). An email is tried before a domain because an address embeds one.
+    """
     ip = normalise_ip(target)
     if ip is not None:
         return ("ip", ip)
+    email = normalise_email(target)
+    if email is not None:
+        return ("email", email)
     dom = normalise_domain(target)
     if dom is not None:
         return ("domain", dom)
+    user = normalise_username(target)
+    if user is not None:
+        return ("username", user)
     return None
 
 
