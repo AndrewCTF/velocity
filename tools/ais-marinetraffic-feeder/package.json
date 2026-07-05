@@ -1,0 +1,10 @@
+{
+  "name": "ais-marinetraffic-feeder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Headless-browser bridge that exposes MarineTraffic's public per-tile get_data_json_4 vessel API as a plain vessels.json the OSINT backend ingests via app/ais_keyless.py. The richer twin of ais-vesselfinder-feeder.",
+  "type": "commonjs",
+  "bin": { "ais-marinetraffic-feeder": "index.js" },
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "playwright": "^1.47.0" }
+}

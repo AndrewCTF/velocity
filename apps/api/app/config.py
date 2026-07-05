@@ -262,9 +262,60 @@ class Settings(BaseSettings):
     # with global vessel breadth; the REST feeds above are N-Europe regional. The
     # ais_keyless poller pulls vessels.json and republishes each fix into the
     # unified store + /ws/ais. Set enabled=False to skip the second headless tab.
-    ais_vesselfinder_sidecar_enabled: bool = True
+    # OFF by default: MarineTraffic (below) is now the PRIMARY keyless global AIS
+    # sidecar. VesselFinder keys vessels by MMSI while MarineTraffic keys by its own
+    # SHIP_ID (no MMSI in its tile payload), so the two CANNOT be deduped against
+    # each other — running both double-renders every ship. MarineTraffic wins on
+    # breadth (~326k tracked) AND richness (name/speed/course/heading/type/flag).
+    # Flip this back on only if you also disable MarineTraffic (or accept the dupes).
+    ais_vesselfinder_sidecar_enabled: bool = False
     ais_vesselfinder_sidecar_url: str = "http://127.0.0.1:8091/vessels.json"
     ais_vesselfinder_sidecar_interval_s: float = 30.0
+
+    # Keyless GLOBAL AIS via headless-browser sidecar (MarineTraffic) — the PRIMARY
+    # keyless vessel source. A real Chromium loads MarineTraffic (clears its
+    # Cloudflare gate) and drives the page's own public tile endpoint
+    # /getData/get_data_json_4/z/X/Y across a world grid (paced — MarineTraffic
+    # burst-throttles /getData). Unlike VesselFinder's packed binary this returns
+    # CLEAN JSON with name/speed/course/heading/type/flag/length, served as
+    # vessels.json on localhost by tools/ais-marinetraffic-feeder. Vessels are keyed
+    # vessel:mt-<ship_id> (MarineTraffic has no MMSI in the tile payload). The
+    # ais_keyless poller pulls vessels.json into the unified store + snapshot layer.
+    # OFF by default: MarineTraffic keys vessels by SHIP_ID (no MMSI in its tile
+    # payload) so it can't dedup against the MMSI-keyed feeds, and its Cloudflare
+    # gate rate-throttles a datacenter IP hard. MyShipTracking (below) is the
+    # enabled primary instead — MMSI-keyed (dedups) and not Cloudflare-gated. Flip
+    # this on (and MyShipTracking off) if you want MarineTraffic's richer
+    # flag/length/destination fields and accept the SHIP_ID dupes + throttle.
+    ais_marinetraffic_sidecar_enabled: bool = False
+    ais_marinetraffic_sidecar_url: str = "http://127.0.0.1:8092/vessels.json"
+    ais_marinetraffic_sidecar_interval_s: float = 60.0
+
+    # Keyless GLOBAL AIS via headless-browser sidecar (MyShipTracking) — the
+    # ENABLED PRIMARY vessel source. A real Chromium drives MyShipTracking's public
+    # bbox endpoint /requests/vesselsonmaptempTTT.php across a world grid; it returns
+    # a TAB-delimited body with a real 9-digit MMSI + name/sog/cog per vessel, so
+    # these key on the standard vessel:<mmsi> id and dedup cleanly against every
+    # other AIS feed. NOT Cloudflare-gated (tolerated a 72-cell grid without
+    # throttling); ~22k vessels worldwide (measured 2026-07-05), served as
+    # vessels.json on localhost by tools/ais-myshiptracking-feeder.
+    ais_myshiptracking_sidecar_enabled: bool = True
+    ais_myshiptracking_sidecar_url: str = "http://127.0.0.1:8093/vessels.json"
+    ais_myshiptracking_sidecar_interval_s: float = 30.0
+
+    # Keyless GLOBAL AIS via DIRECT httpx (NO browser sidecar) — ShipXplorer's
+    # public data.shipxplorer.com/live bbox endpoint. Reachable straight from the
+    # server with browser-like headers (referer/origin); NOT Cloudflare-gated. A
+    # single world-bbox call at zoom 6 returns the FULL set (~32.6k vessels, server
+    # `total` field == returned count, so no decimation cap) as a JSON list
+    # [ {id:[_,lat,lon,ts,_,sog,"AIS",typeName,MMSI,_,status,...]}, {total}, [], {} ].
+    # Real 9-digit MMSI → keys the standard vessel:<mmsi> id and dedups (freshest-
+    # wins) against MyShipTracking + the regional feeds; the two co-exist without
+    # double-rendering (both MMSI-keyed). Includes satellite AIS (sate=true).
+    ais_shipxplorer_enabled: bool = True
+    ais_shipxplorer_url: str = "https://data.shipxplorer.com/live"
+    ais_shipxplorer_interval_s: float = 45.0
+    ais_shipxplorer_zoom: int = 6
 
     # OSINT deep-recon sidecar (tools/osint-recon) — OPTIONAL, OFF by default.
     # A separate process that shells out to the GPL tools (SpiderFoot / theHarvester
