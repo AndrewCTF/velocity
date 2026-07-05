@@ -50,7 +50,7 @@ export function AcarsPanel(): JSX.Element {
     };
   }, []);
 
-  const all = resp?.messages ?? [];
+  const all = useMemo(() => resp?.messages ?? [], [resp]);
 
   // Per-system / per-origin counts for the filter chips (computed over the full
   // pull so the chip badges reflect the whole feed, not the current filter).

@@ -47,7 +47,8 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
   const toggle = (t: FeatureTag): void =>
     setObserved((s) => {
       const n = new Set(s);
-      n.has(t) ? n.delete(t) : n.add(t);
+      if (n.has(t)) n.delete(t);
+      else n.add(t);
       return n;
     });
 
