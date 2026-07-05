@@ -28,6 +28,7 @@ from io import BytesIO
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
+from app import memtier
 from app.config import Settings, get_settings
 from app.imagery import cdse
 from app.tier import commercial_request
@@ -70,7 +71,16 @@ def _cache_for(root: str, max_bytes: int = 0) -> TileCache:
     if tc is None:
         tc = TileCache(root, max_bytes)
         _caches[root] = tc
+    else:
+        tc.max_bytes = max_bytes  # keep the cap live as the RAM budget shifts
     return tc
+
+
+def _tile_budget(settings: Settings) -> int:
+    """Disk-cache byte cap sized to available RAM, capped by the config ceiling."""
+    return memtier.cache_budget_bytes(
+        "tilecache", floor=256 * 1024**2, ceil=int(settings.tile_cache_max_bytes)
+    )
 
 
 # A cold Cesium boot requests ~70 tiles at once; EOX (and friends) throttle
@@ -130,7 +140,7 @@ async def basemap_tile(
     async def load() -> bytes | None:
         return await _fetch_bytes(url)
 
-    data = await _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes).get(
+    data = await _cache_for(settings.tile_cache_dir, _tile_budget(settings)).get(
         source, z, x, y, "png", _TTL_BASEMAP, load
     )
     if data is None:
@@ -155,7 +165,7 @@ async def warm_basemap() -> None:
     forget from the lifespan; a failed tile just stays cold for the request to
     fill. Reuses the route's get_or_fetch + _FETCH_SEMAPHORE path verbatim."""
     settings = get_settings()
-    cache = _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes)
+    cache = _cache_for(settings.tile_cache_dir, _tile_budget(settings))
     # Warm the source this deployment actually serves: commercial base if
     # configured, else Carto dark. ponytail: warms one source; add a free+
     # commercial tier split only if a deployment serves both from cold.
@@ -233,7 +243,7 @@ async def sat_tile(
         async def load() -> bytes | None:
             return await _fetch_bytes(url)
 
-    data = await _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes).get(
+    data = await _cache_for(settings.tile_cache_dir, _tile_budget(settings)).get(
         cache_key, z, x, y, ext, _TTL_SAT, load
     )
     if data is None:
@@ -286,7 +296,7 @@ async def terrain_tile(
             return None
         return _terrarium_to_mapbox_rgb(raw)
 
-    data = await _cache_for(settings.tile_cache_dir, settings.tile_cache_max_bytes).get(
+    data = await _cache_for(settings.tile_cache_dir, _tile_budget(settings)).get(
         "terrain-rgb", z, x, y, "png", _TTL_TERRAIN, load
     )
     if data is None:

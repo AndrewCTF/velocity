@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from app import memtier
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
@@ -258,17 +259,20 @@ async def _flush_loop() -> None:
             next_prune = time.time() + _PRUNE_INTERVAL_S
             settings = get_settings()
             hours = _clamped_retention_hours()
-            deleted = await loop.run_in_executor(None, prune, hours)
-            deleted += await loop.run_in_executor(
-                None, enforce_size_cap, settings.history_max_bytes
+            # Byte cap sized to available RAM (config value is the hard ceiling),
+            # so a small box keeps less history on disk and a big one keeps more.
+            size_cap = memtier.cache_budget_bytes(
+                "history", floor=64 * 1024**2, ceil=int(settings.history_max_bytes)
             )
+            deleted = await loop.run_in_executor(None, prune, hours)
+            deleted += await loop.run_in_executor(None, enforce_size_cap, size_cap)
             if deleted:
                 await loop.run_in_executor(None, _vacuum)
                 log.info(
                     "history: pruned %d rows (>%dh / >%d bytes), vacuumed",
                     deleted,
                     hours,
-                    settings.history_max_bytes,
+                    size_cap,
                 )
 
 
