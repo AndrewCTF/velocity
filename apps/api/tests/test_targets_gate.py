@@ -87,7 +87,7 @@ class _RecordingClient:
     patches: list[dict] = []
     posts: list[tuple[str, dict]] = []
 
-    async def __aenter__(self) -> "_RecordingClient":
+    async def __aenter__(self) -> _RecordingClient:
         return self
 
     async def __aexit__(self, *a: object) -> bool:

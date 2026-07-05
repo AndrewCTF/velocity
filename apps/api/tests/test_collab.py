@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from app.routes import collab as collab_mod
 from app.routes.collab import _CollabHub
 from app.security import Principal

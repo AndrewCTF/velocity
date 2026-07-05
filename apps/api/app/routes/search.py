@@ -205,7 +205,10 @@ def filter_objects(
     for o in matched:
         by_type[o.emits_kind] = by_type.get(o.emits_kind, 0) + 1
 
-    typed = matched if (not type_ or type_ == "all") else [o for o in matched if o.emits_kind == type_]
+    typed = (
+        matched if (not type_ or type_ == "all")
+        else [o for o in matched if o.emits_kind == type_]
+    )
     typed.sort(key=lambda o: o.t, reverse=True)
 
     results = [

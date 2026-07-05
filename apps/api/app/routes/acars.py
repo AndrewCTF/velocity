@@ -40,7 +40,8 @@ async def acars_recent(limit: int = Query(100, ge=1, le=100)) -> dict[str, Any]:
             "stations": len(stations),
             "modes": modes,
             "source": "airframes.io (keyless community feed)",
-            "coverage": "community-station-shaped (dense NA/EU/oceanic tracks); NOT guaranteed-global",
+            "coverage": "community-station-shaped (dense NA/EU/oceanic tracks); "
+                        "NOT guaranteed-global",
         },
     }
 

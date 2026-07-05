@@ -100,10 +100,14 @@ async def _run() -> None:
     backoff = interval
     while True:
         try:
-            r = await client.get(url, headers={"User-Agent": _UA, "Accept": "application/json"}, timeout=30.0)
+            r = await client.get(
+                url, headers={"User-Agent": _UA, "Accept": "application/json"}, timeout=30.0
+            )
             if r.status_code == 200:
                 data = r.json()
-                rows = data if isinstance(data, list) else (data.get("data") or data.get("vessels") or [])
+                rows = data if isinstance(data, list) else (
+                    data.get("data") or data.get("vessels") or []
+                )
                 n = await _publish(rows if isinstance(rows, list) else [])
                 _stats["vessels"] = n
                 _stats["last_error"] = None

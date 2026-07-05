@@ -195,7 +195,8 @@ async def build_bbox(bbox: tuple[float, float, float, float]) -> dict[str, Any]:
                 "bbox": list(bbox),
                 "buildings": len(feats),
                 "damaged": 0,
-                "note": "footprints OSM; heights osm-or-estimate; no SAR damage overlay (general AOI)",
+                "note": "footprints OSM; heights osm-or-estimate; "
+                        "no SAR damage overlay (general AOI)",
             },
         }
 
@@ -250,7 +251,8 @@ async def build(aoi: str) -> dict[str, Any]:
             "features": feats,
             "summary": {"aoi": aoi, "buildings": len(feats), "damaged": ndmg,
                         "pre": pre, "post": post,
-                        "note": "footprints OSM; heights osm-or-estimate; damage S1 amplitude (noisy)"},
+                        "note": "footprints OSM; heights osm-or-estimate; "
+                                "damage S1 amplitude (noisy)"},
         }
 
     return await cache.get_or_fetch(f"lod1:{aoi}", _TTL, load)

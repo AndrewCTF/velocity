@@ -67,7 +67,8 @@ def _rank(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ranked = [s for s in scenes if s.get("browserUrl")]
     ranked.sort(
         key=lambda s: (
-            _f(s.get("stripCloudCoverage")) if _f(s.get("stripCloudCoverage")) is not None else 100.0,
+            (_f(s.get("stripCloudCoverage")) if _f(s.get("stripCloudCoverage")) is not None
+             else 100.0),
             _f(s.get("productResolution")) if _f(s.get("productResolution")) is not None else 999.0,
         ),
     )
@@ -86,13 +87,20 @@ async def search(aoi: BBox, limit: int = 400) -> list[dict[str, Any]]:
         data = r.json()
     except Exception:  # noqa: BLE001 — upstream flakiness must not 500 the route
         return []
-    return data if isinstance(data, list) else data.get("features", []) if isinstance(data, dict) else []
+    if isinstance(data, list):
+        return data
+    return data.get("features", []) if isinstance(data, dict) else []
 
 
-def _covering_candidates(scenes: list[dict[str, Any]], *, max_cloud: float = 15.0) -> list[dict[str, Any]]:
+def _covering_candidates(
+    scenes: list[dict[str, Any]], *, max_cloud: float = 15.0
+) -> list[dict[str, Any]]:
     """Scenes with an objectid + low cloud, sorted by off-nadir (most diverse
     angles first when sampled from both ends)."""
-    out = [s for s in scenes if s.get("objectid") and (_f(s.get("stripCloudCoverage")) or 99) < max_cloud]
+    out = [
+        s for s in scenes
+        if s.get("objectid") and (_f(s.get("stripCloudCoverage")) or 99) < max_cloud
+    ]
     out.sort(key=lambda s: _f(s.get("areaAverageOffNadir")) or 99)
     return out
 
@@ -106,12 +114,16 @@ def _diverse_pick(cands: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
     return [cands[int(i * (len(cands) - 1) / max(n - 1, 1))] for i in range(n)]
 
 
-async def export_tile(oid: int, lon: float, lat: float, half_m: float, *, retries: int = 4) -> bytes | None:
+async def export_tile(
+    oid: int, lon: float, lat: float, half_m: float, *, retries: int = 4
+) -> bytes | None:
     """One ≤(2*half_m/256) m/px PNG tile of scene *oid* centred on (lon,lat).
     Returns PNG bytes, or None if the raster doesn't cover the point / upstream
     failed after *retries*. Backs off because EUSI's mosaic 500s under repeats."""
     cx, cy = _x(lon), _y(lat)
-    mr = urllib.parse.quote(json.dumps({"mosaicMethod": "esriMosaicLockRaster", "lockRasterIds": [oid]}))
+    mr = urllib.parse.quote(
+        json.dumps({"mosaicMethod": "esriMosaicLockRaster", "lockRasterIds": [oid]})
+    )
     url = (
         f"{_EXPORT}?BBOX={cx-half_m},{cy-half_m},{cx+half_m},{cy+half_m}"
         f"&size=256,256&bboxSR=3857&imageSR=102100&format=png8&f=image&pixelType=U8"
@@ -177,7 +189,8 @@ async def fetch_browse(url: str) -> bytes | None:
         r.raise_for_status()
     except Exception:  # noqa: BLE001
         return None
-    if "image" not in (r.headers.get("content-type", "")) and "tif" not in r.headers.get("content-type", ""):
+    ctype = r.headers.get("content-type", "")
+    if "image" not in ctype and "tif" not in ctype:
         return None
     return r.content
 
@@ -196,7 +209,8 @@ async def best_chip(aoi: BBox, max_try: int = 8) -> tuple[bytes, dict[str, Any]]
         if not raw:
             continue
         try:
-            buf = BytesIO(); Image.open(BytesIO(raw)).convert("RGB").save(buf, format="PNG")
+            buf = BytesIO()
+            Image.open(BytesIO(raw)).convert("RGB").save(buf, format="PNG")
         except Exception:  # noqa: BLE001
             continue
         return buf.getvalue(), {

@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.intel import ontology as ont
-from app.intel.ontology import Object, OntologyRegistry
+from app.intel.ontology import OntologyRegistry
 from app.keys import UserCtx, current_user
 
 # ── mocked PostgREST (in-memory object + link store) ───────────────────────────

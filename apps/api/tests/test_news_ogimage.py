@@ -3,6 +3,7 @@ import asyncio
 
 from app.news.images import _is_public_url, fetch_og_image, parse_og_image
 
+
 def test_parse_og_image_property():
     html = '<head><meta property="og:image" content="https://i.ex/x.jpg"></head>'
     assert parse_og_image(html) == "https://i.ex/x.jpg"

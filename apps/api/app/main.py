@@ -49,6 +49,7 @@ from app.auth import ApiKeyMiddleware
 from app.config import get_settings
 from app.correlate import runner as correlate_runner
 from app.mcp_server import build_mcp_mount
+from app.routes import acars as acars_routes
 from app.routes import actions as actions_routes
 from app.routes import adsb as adsb_routes
 from app.routes import ai as ai_routes
@@ -57,7 +58,6 @@ from app.routes import alert_rules as alert_rules_routes
 from app.routes import alerts as alerts_routes
 from app.routes import audit as audit_routes
 from app.routes import aviation as aviation_routes
-from app.routes import acars as acars_routes
 from app.routes import cables as cables_routes
 from app.routes import cams as cams_routes
 from app.routes import collab as collab_routes
@@ -68,8 +68,8 @@ from app.routes import cyber as cyber_routes
 from app.routes import entity as entity_routes
 from app.routes import eq as eq_routes
 from app.routes import events as events_routes
-from app.routes import extract as extract_routes
 from app.routes import export as export_routes
+from app.routes import extract as extract_routes
 from app.routes import firms as firms_routes
 from app.routes import geocode as geocode_routes
 from app.routes import ground as ground_routes
@@ -313,9 +313,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 history,  # noqa: PLC0415
                 marinetraffic,  # noqa: PLC0415
             )
-            from app.routes import news as news_routes  # noqa: PLC0415
-
             from app.intel import watch as watch_eval  # noqa: PLC0415
+            from app.routes import news as news_routes  # noqa: PLC0415
 
             await ais_firehose.stop()
             await ais_keyless.stop()
@@ -462,6 +461,7 @@ def create_app() -> FastAPI:
     # every API/route above wins; only unmatched paths fall through to the SPA.
     # Keyless local runs pass ApiKeyMiddleware, so the static assets serve fine.
     from pathlib import Path as _Path  # noqa: PLC0415
+
     from fastapi.staticfiles import StaticFiles  # noqa: PLC0415
     from starlette.exceptions import HTTPException as _StarletteHTTPException  # noqa: PLC0415
 

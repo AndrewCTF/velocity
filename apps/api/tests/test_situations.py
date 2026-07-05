@@ -109,7 +109,7 @@ class _Store:
     OBJ: dict[tuple[str, str], dict] = {}
     LINKS: list[dict] = []
 
-    async def __aenter__(self) -> "_Store":
+    async def __aenter__(self) -> _Store:
         return self
 
     async def __aexit__(self, *a: object) -> bool:

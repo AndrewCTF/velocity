@@ -159,7 +159,7 @@ class _ExpiredTokenResp:
 class _ExpiredTokenClient:
     """Stands in for httpx: every request comes back 401 (expired token)."""
 
-    async def __aenter__(self) -> "_ExpiredTokenClient":
+    async def __aenter__(self) -> _ExpiredTokenClient:
         return self
 
     async def __aexit__(self, *a: object) -> bool:

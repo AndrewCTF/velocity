@@ -19,9 +19,9 @@ to ``auth.uid()``). Degrades to 503 when Supabase is unconfigured, mirroring
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-
 from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config import get_settings
 from app.intel import graph_analytics

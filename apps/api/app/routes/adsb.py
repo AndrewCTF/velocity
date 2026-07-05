@@ -43,7 +43,15 @@ from math import cos, radians
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 
 from app.auth import require_ws_key
 from app.config import get_settings
@@ -1714,7 +1722,7 @@ async def start_snapshot() -> None:
         _SNAPSHOT_STARTED = True
 
 
-async def await_hot(timeout: float = 25.0) -> int:
+async def await_hot(timeout: float = 25.0) -> int:  # noqa: ASYNC109 — sync poll-with-deadline helper, not an awaitable-timeout
     """Block until the background refresher has filled the snapshot with aircraft
     (or ``timeout`` s elapse), so the FIRST request is HOT rather than a cold
     warm-up. Returns the aircraft count reached. Call AFTER start_snapshot();

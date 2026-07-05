@@ -11,7 +11,6 @@ from app.osint import connectors as C
 from app.osint.fetch import classify_target, normalise_domain, normalise_ip
 from app.routes import osint as R
 
-
 # ── pure target validation ──────────────────────────────────────────────────────
 
 def test_normalise_domain() -> None:

@@ -64,7 +64,9 @@ async def ground_nearby(
 
 
 @router.get("/api/ground/photo/{source}/{photo_id}")
-async def ground_photo(source: str, photo_id: str, size: str = Query("hd", pattern="^(hd|thumb)$")) -> Response:
+async def ground_photo(
+    source: str, photo_id: str, size: str = Query("hd", pattern="^(hd|thumb)$")
+) -> Response:
     url = ground_lib.proxy_url(source, photo_id, size)
     if not url:
         raise HTTPException(404, "photo not in catalog — run /api/ground/nearby first")

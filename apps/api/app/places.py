@@ -190,7 +190,9 @@ def bbox_features(
             features.append(
                 {
                     "type": "Feature",
-                    "geometry": {"type": "Point", "coordinates": [float(a["lon"]), float(a["lat"])]},
+                    "geometry": {
+                        "type": "Point", "coordinates": [float(a["lon"]), float(a["lat"])],
+                    },
                     "properties": {
                         "name": a.get("name") or "",
                         "iata": a.get("iata") or "",
@@ -206,7 +208,9 @@ def bbox_features(
             features.append(
                 {
                     "type": "Feature",
-                    "geometry": {"type": "Point", "coordinates": [float(p["lon"]), float(p["lat"])]},
+                    "geometry": {
+                        "type": "Point", "coordinates": [float(p["lon"]), float(p["lat"])],
+                    },
                     "properties": {"name": p.get("name") or "", "kind": "port"},
                 }
             )

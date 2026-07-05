@@ -135,11 +135,14 @@ def _from_object(obj: Object) -> Situation | None:
         centroid = Centroid.model_validate(cen) if cen else None
     except Exception:  # noqa: BLE001 — a malformed blob loads with no AOI
         centroid = None
+    _sv, _stt = props.get("severity"), props.get("status")
+    _sev = _sv if _sv in ("critical", "high", "med", "low") else "med"
+    _st = _stt if _stt in ("active", "monitoring", "resolved", "archived") else "active"
     return Situation(
         id=obj.id,
         name=str(props.get("name") or obj.id),
-        severity=props.get("severity") if props.get("severity") in ("critical", "high", "med", "low") else "med",  # type: ignore[arg-type]
-        status=props.get("status") if props.get("status") in ("active", "monitoring", "resolved", "archived") else "active",  # type: ignore[arg-type]
+        severity=_sev,  # type: ignore[arg-type]
+        status=_st,  # type: ignore[arg-type]
         centroid=centroid,
         radius_km=float(props.get("radius_km") or 50.0),
         summary=str(props.get("summary") or ""),

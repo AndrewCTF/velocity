@@ -578,7 +578,10 @@ async def local_status() -> dict[str, Any]:
     host = (os.environ.get("OLLAMA_HOST") or s.ollama_host).rstrip("/")
     models = await _ollama_tags(host, 4.0)
     tool_capable = any(
-        any(h in m.lower() for h in ("qwen3", "qwen2.5", "llama3", "mistral", "coder", "a3b", "8b", "30b", "70b"))
+        any(
+            h in m.lower()
+            for h in ("qwen3", "qwen2.5", "llama3", "mistral", "coder", "a3b", "8b", "30b", "70b")
+        )
         for m in models
     )
     return {

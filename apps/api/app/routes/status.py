@@ -88,7 +88,10 @@ async def status() -> dict[str, Any]:
             bool(s.marinetraffic_key) and marinetraffic.stats().get("last_error") is None,
             (
                 f"{marinetraffic.stats().get('vessels', 0)} vessels"
-                + (f" · err: {marinetraffic.stats().get('last_error')}" if marinetraffic.stats().get("last_error") else "")
+                + (
+                    f" · err: {marinetraffic.stats().get('last_error')}"
+                    if marinetraffic.stats().get("last_error") else ""
+                )
             )
             if s.marinetraffic_key
             else "Dormant: set MARINETRAFFIC_KEY (paid) to enable. May be IP-restricted.",

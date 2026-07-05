@@ -66,7 +66,9 @@ def _label(code: str, root: str) -> str:
 
 
 async def _latest_ts() -> str:
-    r = await get_client().get(f"{_GDELT_BASE}/lastupdate.txt", headers={"User-Agent": "Mozilla/5.0"})
+    r = await get_client().get(
+        f"{_GDELT_BASE}/lastupdate.txt", headers={"User-Agent": "Mozilla/5.0"}
+    )
     r.raise_for_status()
     for line in r.text.splitlines():
         if "export.CSV.zip" in line:
@@ -110,7 +112,10 @@ async def conflict_events(hours: int = 6) -> dict[str, Any]:
         try:
             latest = await _latest_ts()
         except Exception as e:  # noqa: BLE001 — degrade, never 500 the layer
-            return {"type": "FeatureCollection", "features": [], "unavailable": True, "note": str(e)[:120]}
+            return {
+                "type": "FeatureCollection", "features": [], "unavailable": True,
+                "note": str(e)[:120],
+            }
         stamps = _recent_stamps(latest, max(1, hours * 4))
         sem = asyncio.Semaphore(6)
 

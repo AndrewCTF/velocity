@@ -18,7 +18,8 @@ a ``networkx`` dependency for a few dozen lines of standard graph code.
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 
 def _adjacency(node_ids: Iterable[str], edges: Iterable[tuple[str, str]]) -> dict[str, set[str]]:

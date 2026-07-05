@@ -14,7 +14,6 @@ from fastapi.testclient import TestClient
 from app import places
 from app.routes.search import _split_place_hits
 
-
 # ── loader + ranking ─────────────────────────────────────────────────────────
 
 

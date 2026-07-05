@@ -83,7 +83,7 @@ def _is_locked(stage: str | None, requirements: dict) -> bool:
     return bool(nxt and _unmet_for(nxt, requirements))
 
 
-def _to_target(row: dict) -> "Target":
+def _to_target(row: dict) -> Target:
     """Build a Target from a stored row, computing the derived ``locked`` flag.
     Tolerant of legacy rows missing the requirements/classification columns."""
     req = row.get("requirements") or {}

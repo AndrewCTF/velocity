@@ -21,7 +21,6 @@ from app.correlate.store import store
 from app.correlate.types import Observation
 from app.intel import dossier
 
-
 # ── fixtures / helpers ────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)

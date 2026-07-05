@@ -25,7 +25,6 @@ ingestion hook offloads to an executor like ``history.py``.
 
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
 import time

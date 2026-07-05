@@ -25,8 +25,9 @@ import shutil
 import struct
 import time
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator, Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
@@ -191,7 +192,10 @@ def register_image_job(images: list[tuple[str, bytes]], mode: str = "mapany") ->
         "id": job_id, "status": "running", "stage": "queued", "pct": 0.0,
         "log": [], "error": None, "n_gaussians": 0, "created": time.time(),
     }
-    task = _pipeline_mapany(job_id) if mode == "mapany" else _pipeline(job_id, 7000, 3, 1, "sequential")
+    task = (
+        _pipeline_mapany(job_id) if mode == "mapany"
+        else _pipeline(job_id, 7000, 3, 1, "sequential")
+    )
     asyncio.create_task(task)
     return job_id
 
@@ -213,8 +217,9 @@ def register_sat_job(dataset: str, *, max_views: int = 20, gsd: float = 1.0) -> 
     aoi = src / dataset if (src / dataset).is_dir() else src  # zips unpack into a same-named subdir
     tifs = sorted(aoi.glob("*.tif"))
     if not tifs:
+        known = [p.name for p in _SAT_ROOT.iterdir()] if _SAT_ROOT.exists() else "none"
         raise HTTPException(404, f"no MVS3DM AOI '{dataset}' on disk at {_SAT_ROOT} "
-                                 f"(known: {[p.name for p in _SAT_ROOT.iterdir()] if _SAT_ROOT.exists() else 'none'})")
+                                 f"(known: {known})")
     if max_views > 0:
         tifs = tifs[:max_views]
     job_id = uuid.uuid4().hex[:12]
@@ -308,7 +313,9 @@ async def _pipeline(job_id: str, steps: int, sh: int, down: int, matcher: str,
                         dict(os.environ), work,
                     )
                     src.unlink(missing_ok=True)
-                n_imgs = sum(1 for p in inp.iterdir() if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
+                n_imgs = sum(
+                    1 for p in inp.iterdir() if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+                )
                 _log(job, f"{n_imgs} input images")
                 if n_imgs < 3:
                     raise RuntimeError(f"need ≥3 images, got {n_imgs}")
@@ -425,7 +432,9 @@ def _read_points_median(path: Path, sample: int = 4000) -> list[float]:
             (tl,) = struct.unpack("<Q", f.read(8))
             f.read(8 * tl)
             if i % step == 0:
-                xs.append(x); ys.append(y); zs.append(z)
+                xs.append(x)
+                ys.append(y)
+                zs.append(z)
     med = lambda a: sorted(a)[len(a) // 2] if a else 0.0  # noqa: E731
     return [med(xs), med(ys), med(zs)]
 
@@ -459,9 +468,9 @@ async def create_job(
     sh: int = Form(3),
     down: int = Form(1),
     matcher: str = Form("sequential"),
-    mode: str = Form("full"),  # "full" = Pi3X SfM + gsplat train; "mapany" = single-image feed-forward
+    mode: str = Form("full"),  # full=Pi3X SfM+gsplat; mapany=single-image feed-forward
 ) -> dict[str, Any]:
-    if not _FUSION.exists() or not (_FUSION / ".venv").exists():
+    if not _FUSION.exists() or not (_FUSION / ".venv").exists():  # noqa: ASYNC240 — one-shot filesystem check for the recon job, blocking is fine
         raise HTTPException(503, f"recon GPU lab not found at {_FUSION}")
     steps = max(200, min(steps, 30000))
     sh = max(0, min(sh, 3))
@@ -475,7 +484,7 @@ async def create_job(
         name = Path(uf.filename or f"f{saved}").name
         if not name:
             continue
-        with open(inp / name, "wb") as out:
+        with open(inp / name, "wb") as out:  # noqa: ASYNC230 — one-shot write of the recon input chip, blocking is fine
             shutil.copyfileobj(uf.file, out)
         saved += 1
     if saved == 0:
@@ -484,7 +493,10 @@ async def create_job(
         "id": job_id, "status": "running", "stage": "queued", "pct": 0.0,
         "log": [], "error": None, "n_gaussians": 0, "created": time.time(),
     }
-    task = _pipeline_mapany(job_id) if mode == "mapany" else _pipeline(job_id, steps, sh, down, matcher)
+    task = (
+        _pipeline_mapany(job_id) if mode == "mapany"
+        else _pipeline(job_id, steps, sh, down, matcher)
+    )
     asyncio.create_task(task)
     return {"job_id": job_id, "status": "running"}
 
@@ -500,7 +512,7 @@ async def create_sat_job(
     RPC sensor model, so RPC plane-sweep stereo yields a real DSM (~2.8 m RMSE vs the
     bundled LiDAR truth). Datasets live under apps/ml/fusion/.sat_data/mvs3dm/
     (e.g. MasterProvisional1..3, Explorer). Result serves at jobs/{id}/result.ply."""
-    if not _FUSION.exists() or not (_FUSION / ".venv").exists():
+    if not _FUSION.exists() or not (_FUSION / ".venv").exists():  # noqa: ASYNC240 — one-shot filesystem check for the recon job, blocking is fine
         raise HTTPException(503, f"recon GPU lab not found at {_FUSION}")
     gsd = max(0.3, min(gsd, 5.0))
     job_id, n = register_sat_job(dataset, max_views=max_views, gsd=gsd)

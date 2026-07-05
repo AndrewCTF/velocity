@@ -124,7 +124,7 @@ def astar_grid(
     path.reverse()
 
     climb = 0.0
-    for (r0, c0), (r1, c1) in zip(path, path[1:]):
+    for (r0, c0), (r1, c1) in zip(path, path[1:], strict=False):
         dz = float(elev[r1, c1] - elev[r0, c0])
         if dz > 0:
             climb += dz
@@ -237,12 +237,15 @@ async def plan_offroad(
     goal = to_rc(to_lat, to_lon)
     path, stats = astar_grid(elev, start, goal, meters_per_cell)
     if not path:
-        return {"route": [], "reachable": False, "grid": [h, w], "source": "AWS Terrain Tiles (terrarium)"}
+        return {
+            "route": [], "reachable": False, "grid": [h, w],
+            "source": "AWS Terrain Tiles (terrarium)",
+        }
 
     coords = [list(to_lonlat(r, c)) for r, c in path]
     # Path length in metres (haversine-ish on the small mosaic).
     dist_m = 0.0
-    for (lo0, la0), (lo1, la1) in zip(coords, coords[1:]):
+    for (lo0, la0), (lo1, la1) in zip(coords, coords[1:], strict=False):
         dlat = (la1 - la0) * 110_574
         dlon = (lo1 - lo0) * 111_320 * math.cos(math.radians(mid_lat))
         dist_m += math.hypot(dlat, dlon)

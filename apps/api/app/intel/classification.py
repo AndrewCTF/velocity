@@ -184,10 +184,14 @@ if __name__ == "__main__":  # tiny self-check (ponytail: one runnable check)
     assert can_read(3, [], 3, []) is True
     assert can_read(4, [], 3, ["NOFORN"]) is False  # missing compartment
     assert can_read(4, ["NOFORN"], 3, ["noforn"]) is True  # case-insensitive
-    assert redact_for(2, [], [{"classification": 3}, {"classification": 1}]) == [{"classification": 1}]
+    assert redact_for(2, [], [{"classification": 3}, {"classification": 1}]) == [
+        {"classification": 1}
+    ]
     _fc = {"type": "FeatureCollection", "features": [
         {"properties": {"classification": 3}}, {"properties": {"classification": 0}}]}
-    assert [f["properties"]["classification"] for f in redact_features(0, [], _fc)["features"]] == [0]
+    assert [
+        f["properties"]["classification"] for f in redact_features(0, [], _fc)["features"]
+    ] == [0]
     assert len(redact_features(3, [], _fc)["features"]) == 2
     assert redact_features(0, [], {"count": 1}) == {"count": 1}  # non-FC unchanged
     print("classification self-check OK")

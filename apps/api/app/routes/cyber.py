@@ -48,7 +48,7 @@ async def ioda_outages(days: int = Query(7, ge=1, le=30)) -> dict[str, Any]:
             return {"items": [], "unavailable": True, "note": f"ioda upstream {r.status_code}"}
         try:
             j = r.json()
-        except ValueError as e:
+        except ValueError:
             return {"items": [], "unavailable": True, "note": "ioda non-json body"}
         return {"items": j.get("data") or j.get("events") or []}
 

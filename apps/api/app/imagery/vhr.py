@@ -24,7 +24,10 @@ from typing import Any
 import httpx
 
 _CONFIG_URL = "https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json"
-_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
+_UA = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126 Safari/537.36"
+)
 _MAX_TILES = 64  # guard: a stitched mosaic is at most 8x8 tiles (2048px)
 
 _client: httpx.AsyncClient | None = None
@@ -165,7 +168,9 @@ async def fetch_mosaic(
         async with sem:
             return await one(tx, ty)
 
-    tiles = await asyncio.gather(*[guarded(tx, ty) for ty in range(y0, y1 + 1) for tx in range(x0, x1 + 1)])
+    tiles = await asyncio.gather(
+        *[guarded(tx, ty) for ty in range(y0, y1 + 1) for tx in range(x0, x1 + 1)]
+    )
 
     mosaic = Image.new("RGB", (nx * 256, ny * 256))
     got = 0

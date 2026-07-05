@@ -546,7 +546,10 @@ async def intel_emitter(
     if bbox is None:
         raise HTTPException(
             status_code=422,
-            detail="lat+lon (or min_lon/min_lat/max_lon/max_lat) required; a global emitter estimate is not meaningful",
+            detail=(
+                "lat+lon (or min_lon/min_lat/max_lon/max_lat) required; "
+                "a global emitter estimate is not meaningful"
+            ),
         )
     return await emitter.estimate(bbox)
 

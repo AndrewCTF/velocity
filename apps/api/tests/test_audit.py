@@ -20,7 +20,7 @@ class _FakeClient:
         self.status = status
         self.raise_exc = raise_exc
 
-    async def __aenter__(self) -> "_FakeClient":
+    async def __aenter__(self) -> _FakeClient:
         return self
 
     async def __aexit__(self, *a: object) -> bool:

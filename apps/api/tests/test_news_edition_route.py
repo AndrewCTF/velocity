@@ -1,8 +1,9 @@
 # apps/api/tests/test_news_edition_route.py
 from fastapi.testclient import TestClient
+
 import app.routes.news as news_routes
-from app.news import store
 from app.main import create_app
+from app.news import store
 
 
 async def _no_articles():

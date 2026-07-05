@@ -155,7 +155,10 @@ async def load_kartaview(lat: float, lon: float, radius_km: float) -> list[Groun
     )
     if not isinstance(j, dict):
         return []
-    rows: Any = j.get("currentPageItems") or (j.get("result") or {}).get("data") or j.get("data") or []
+    rows: Any = (
+        j.get("currentPageItems") or (j.get("result") or {}).get("data")
+        or j.get("data") or []
+    )
     if not isinstance(rows, list):
         return []
     out: list[GroundPhoto] = []

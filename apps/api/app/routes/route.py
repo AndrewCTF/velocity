@@ -51,7 +51,10 @@ def score_route_risk(
     HIGH cell = 100). emi_resistance = 100 - risk. Empty route or no threats → 0.
     """
     if not route:
-        return {"risk": 0.0, "emi_resistance": 100.0, "exposed_pts": 0, "total_pts": 0, "worst_severity": "none"}
+        return {
+            "risk": 0.0, "emi_resistance": 100.0, "exposed_pts": 0, "total_pts": 0,
+            "worst_severity": "none",
+        }
     tot_w = 0
     exposed = 0
     worst_w = 0
@@ -176,9 +179,12 @@ async def route_offroad(
 
     async def load() -> dict[str, Any]:
         try:
-            return {"mode": "offroad", **await offroad.plan_offroad(from_lat, from_lon, to_lat, to_lon)}
+            return {
+                "mode": "offroad",
+                **await offroad.plan_offroad(from_lat, from_lon, to_lat, to_lon),
+            }
         except ValueError as e:
-            raise HTTPException(400, str(e))
+            raise HTTPException(400, str(e)) from e
 
     return await cache.get_or_fetch(key, 6 * 3600.0, load)
 
@@ -243,7 +249,13 @@ async def route_candidates(
                 c["tag"] = pred_key
 
     _tag("Least risk", [(c["key"], c["risk"]) for c in cands])
-    _tag("Shortest distance", [(c["key"], c["distance_km"]) for c in cands if c.get("distance_km") is not None])
-    _tag("Fastest", [(c["key"], c["duration_min"]) for c in cands if c.get("duration_min") is not None])
+    _tag(
+        "Shortest distance",
+        [(c["key"], c["distance_km"]) for c in cands if c.get("distance_km") is not None],
+    )
+    _tag(
+        "Fastest",
+        [(c["key"], c["duration_min"]) for c in cands if c.get("duration_min") is not None],
+    )
 
     return {"candidates": cands, "threats": threats}

@@ -48,7 +48,7 @@ async def run(lon: float, lat: float) -> dict[str, Any]:
         return {"status": "no_sar_aoi", "note": "no Sentinel-1 AOI covers this point"}
     try:
         res = await asyncio.wait_for(sar_vessels.detect_dark_vessels(aoi=aoi), CUE_TIMEOUT_S)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {"status": "timeout", "aoi": aoi}
     except Exception as exc:  # noqa: BLE001 — collection is best-effort
         log.debug("cue: SAR look failed for %s: %s", aoi, exc)

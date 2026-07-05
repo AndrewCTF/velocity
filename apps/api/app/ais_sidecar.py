@@ -115,7 +115,7 @@ async def start() -> None:
     }
     log_path = "/tmp/ais-sidecar.log"
     try:
-        log_file = open(log_path, "ab", buffering=0)  # noqa: SIM115 — append child log
+        log_file = open(log_path, "ab", buffering=0)  # noqa: SIM115,ASYNC230 — one-shot append of the child log at startup; blocking open is fine
         log.info("ais sidecar stdout/stderr -> %s", log_path)
     except Exception:  # noqa: BLE001 — log file optional
         log_file = None  # type: ignore[assignment]
@@ -173,7 +173,7 @@ async def stop() -> None:
     if proc is not None:
         try:
             await asyncio.wait_for(proc.wait(), timeout=5.0)
-        except (asyncio.TimeoutError, Exception):  # noqa: BLE001 — escalate
+        except (TimeoutError, Exception):  # noqa: BLE001 — escalate
             for pid in pids:
                 try:
                     os.kill(pid, signal.SIGKILL)

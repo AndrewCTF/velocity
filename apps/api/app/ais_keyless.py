@@ -385,7 +385,9 @@ def start() -> None:
     if s.ais_digitraffic_mqtt_enabled and not _running("digitraffic"):
         _tasks.append(asyncio.create_task(_run_digitraffic_mqtt(), name="ais_digitraffic_mqtt"))
     if s.ais_vesselfinder_sidecar_enabled and not _running("vesselfinder"):
-        _tasks.append(asyncio.create_task(_run_vesselfinder_sidecar(), name="ais_vesselfinder_sidecar"))
+        _tasks.append(
+            asyncio.create_task(_run_vesselfinder_sidecar(), name="ais_vesselfinder_sidecar")
+        )
 
 
 def _running(tag: str) -> bool:

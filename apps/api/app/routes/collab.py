@@ -203,7 +203,10 @@ async def load_doc(doc_id: str, p: Principal = Depends(current_principal)) -> di
     async with _client() as c:
         r = await c.get(
             _collab_url(),
-            params={"doc_id": f"eq.{doc_id}", "select": "state,classification,compartments,kind", "limit": "1"},
+            params={
+                "doc_id": f"eq.{doc_id}",
+                "select": "state,classification,compartments,kind", "limit": "1",
+            },
             headers=_headers(p, s),  # type: ignore[arg-type]
         )
     if r.status_code != 200:
