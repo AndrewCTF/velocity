@@ -61,11 +61,21 @@ def test_opencode_deepseek_discovery(tmp_path, monkeypatch: pytest.MonkeyPatch) 
     )
     monkeypatch.setenv("OPENCODE_CONFIG", str(cfg))
     llm._opencode_deepseek.cache_clear()
-    # No env override / settings key → resolves from the opencode file.
+    # No env key, but the opencode fallback is now OPT-IN (issue #10): it only
+    # engages when DEEPSEEK_FROM_OPENCODE=1.
     monkeypatch.setenv("DEEPSEEK_API_KEY", "")
     monkeypatch.setenv("DEEPSEEK_BASE_URL", "")
+    monkeypatch.setattr(llm, "_DEEPSEEK_SOURCE_LOGGED", False, raising=False)
     from app.config import get_settings
 
+    # Flag OFF → the server must NOT read the opencode credential file.
+    monkeypatch.setenv("DEEPSEEK_FROM_OPENCODE", "0")
+    get_settings.cache_clear()
+    key, _ = llm.deepseek_config()
+    assert key is None
+
+    # Flag ON → resolves the key + base from the opencode file.
+    monkeypatch.setenv("DEEPSEEK_FROM_OPENCODE", "1")
     get_settings.cache_clear()
     key, base = llm.deepseek_config()
     assert key == "sk-test-123"

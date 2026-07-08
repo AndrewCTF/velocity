@@ -20,6 +20,12 @@ RUN pip install --upgrade pip && pip install -e .
 
 COPY app ./app
 
+# Run as an unprivileged user (defense-in-depth: the API shells out to recon/
+# sidecar/YOLO subprocesses, so a process compromise must not land as root).
+RUN useradd --system --uid 10001 --create-home --home-dir /home/app app \
+    && chown -R app /srv
+USER app
+
 EXPOSE 8000
 # Single worker: the global snapshot + AIS firehose + warmers are in-process
 # singletons; multiple uvicorn workers would each run their own copy.

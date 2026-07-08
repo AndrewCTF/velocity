@@ -7,6 +7,12 @@ on:
     branches: [master]
   pull_request:
 
+# Least-privilege token: this workflow only builds, tests, and lints — it never
+# writes to the repo. Pin contents:read so a compromised transitive dependency
+# executing during install cannot use GITHUB_TOKEN against the repo.
+permissions:
+  contents: read
+
 jobs:
   web:
     runs-on: ubuntu-latest

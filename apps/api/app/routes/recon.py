@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
@@ -26,13 +27,18 @@ import struct
 import time
 import uuid
 from collections.abc import AsyncIterator
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
+from app.auth import _bearer, _jwt_claims
+from app.config import get_settings
+
 router = APIRouter(tags=["recon"], prefix="/api/recon")
+log = logging.getLogger("app.recon")
 
 # ── paths (env-overridable; default to the repo's GPU lab) ───────────────────
 _REPO_ROOT = Path(__file__).resolve().parents[4]  # .../OSINT
@@ -47,9 +53,82 @@ _LOG_CAP = 400  # keep the tail; a full COLMAP/train log is large
 
 Stage = Literal["queued", "frames", "sfm", "train", "export", "done", "error"]
 
-# job_id -> {id, status, stage, pct, log: list[str], error, n_gaussians, created}
+# job_id -> {id, owner, status, stage, pct, log: list[str], error, n_gaussians, created}
 _JOBS: dict[str, dict[str, Any]] = {}
 _GPU_LOCK = asyncio.Lock()
+
+@lru_cache(maxsize=1)
+def _scrub_roots() -> tuple[str, ...]:
+    # Absolute server paths that must never reach a client (issue #15). Longest
+    # first so a nested root (…/fusion/.recon_jobs) is scrubbed before its parent.
+    # Lazy: _SAT_ROOT is defined further down, so build on first use.
+    roots = {str(_JOBS_ROOT), str(_SAT_ROOT), str(_FUSION), str(_REPO_ROOT), str(Path.home())}
+    return tuple(sorted((r for r in roots if r and r != "/"), key=len, reverse=True))
+
+
+def _scrub(text: str) -> str:
+    """Strip absolute server filesystem paths from a client-facing string."""
+    for root in _scrub_roots():
+        text = text.replace(root, "…")
+    return text
+
+
+def _owner_key(request: Request) -> str:
+    """Owner id for scoping recon jobs (issue #15). The request already passed
+    ApiKeyMiddleware; extract the Supabase ``sub`` from a bearer token when one is
+    present, else fall back to the shared ``local`` identity (keyless / static-key
+    single-operator box — same convention as the local ontology graph)."""
+    token = (
+        _bearer(request.headers)
+        or request.query_params.get("key")
+        or request.headers.get("x-api-key")
+    )
+    claims = _jwt_claims(token or "") or {}
+    return str(claims.get("sub") or "local")
+
+
+def _drop_job(job_id: str) -> None:
+    """Evict one job: in-memory record + its on-disk artifact dir (issue #14)."""
+    _JOBS.pop(job_id, None)
+    d = _JOBS_ROOT / job_id
+    if d.exists():
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def _evict_jobs() -> None:
+    """Bound memory + disk (issue #14): drop FINISHED jobs past a TTL, then LRU by
+    ``created`` past the count cap. Running jobs are never evicted."""
+    s = get_settings()
+    now = time.time()
+    if s.recon_job_ttl_s > 0:
+        for jid in [
+            j["id"]
+            for j in list(_JOBS.values())
+            if j["status"] in ("done", "error")
+            and now - float(j.get("created", now)) > s.recon_job_ttl_s
+        ]:
+            _drop_job(jid)
+    if s.recon_max_jobs > 0 and len(_JOBS) > s.recon_max_jobs:
+        finished = sorted(
+            (j for j in _JOBS.values() if j["status"] in ("done", "error")),
+            key=lambda j: float(j.get("created", 0.0)),
+        )
+        for j in finished[: len(_JOBS) - s.recon_max_jobs]:
+            _drop_job(j["id"])
+
+
+def _enforce_active_cap() -> None:
+    """Reject new jobs with 429 once too many are already running (issue #9)."""
+    cap = get_settings().recon_max_active_jobs
+    if cap > 0 and sum(1 for j in _JOBS.values() if j["status"] == "running") >= cap:
+        raise HTTPException(429, "too many recon jobs running; retry when one finishes")
+
+
+def _new_job_record(job_id: str, owner: str) -> dict[str, Any]:
+    return {
+        "id": job_id, "owner": owner, "status": "running", "stage": "queued",
+        "pct": 0.0, "log": [], "error": None, "n_gaussians": 0, "created": time.time(),
+    }
 
 
 def _cuda_env() -> dict[str, str]:
@@ -172,12 +251,16 @@ async def _pipeline_mapany(job_id: str) -> None:
         _log(job, f"ERROR {job['error']}")
 
 
-def register_image_job(images: list[tuple[str, bytes]], mode: str = "mapany") -> str:
+def register_image_job(
+    images: list[tuple[str, bytes]], mode: str = "mapany", owner: str = "local"
+) -> str:
     """Create a recon job from in-memory image bytes (used by the EUSI / imagery →
     splat routes). Writes the images into the job dir and launches the chosen
     pipeline. Must be called from within the running event loop."""
     if not _FUSION.exists() or not (_FUSION / ".venv").exists():
-        raise HTTPException(503, f"recon GPU lab not found at {_FUSION}")
+        raise HTTPException(503, "recon GPU lab is not available on this server")
+    _evict_jobs()
+    _enforce_active_cap()
     job_id = uuid.uuid4().hex[:12]
     inp = _JOBS_ROOT / job_id / "images"
     inp.mkdir(parents=True, exist_ok=True)
@@ -188,10 +271,7 @@ def register_image_job(images: list[tuple[str, bytes]], mode: str = "mapany") ->
         saved += 1
     if saved == 0:
         raise HTTPException(400, "no images")
-    _JOBS[job_id] = {
-        "id": job_id, "status": "running", "stage": "queued", "pct": 0.0,
-        "log": [], "error": None, "n_gaussians": 0, "created": time.time(),
-    }
+    _JOBS[job_id] = _new_job_record(job_id, owner)
     task = (
         _pipeline_mapany(job_id) if mode == "mapany"
         else _pipeline(job_id, 7000, 3, 1, "sequential")
@@ -203,7 +283,9 @@ def register_image_job(images: list[tuple[str, bytes]], mode: str = "mapany") ->
 _SAT_ROOT = _FUSION / ".sat_data" / "mvs3dm"
 
 
-def register_sat_job(dataset: str, *, max_views: int = 20, gsd: float = 1.0) -> tuple[str, int]:
+def register_sat_job(
+    dataset: str, *, max_views: int = 20, gsd: float = 1.0, owner: str = "local"
+) -> tuple[str, int]:
     """Build a recon job from a local MVS3DM AOI (keyless WV-3 + RPC). Copies up to
     *max_views* chips + their RPC sidecars into the job dir and runs the RPC-native
     plane-sweep stereo → DSM → height-coloured splat. Returns (job_id, n_views).
@@ -217,11 +299,12 @@ def register_sat_job(dataset: str, *, max_views: int = 20, gsd: float = 1.0) -> 
     aoi = src / dataset if (src / dataset).is_dir() else src  # zips unpack into a same-named subdir
     tifs = sorted(aoi.glob("*.tif"))
     if not tifs:
-        known = [p.name for p in _SAT_ROOT.iterdir()] if _SAT_ROOT.exists() else "none"
-        raise HTTPException(404, f"no MVS3DM AOI '{dataset}' on disk at {_SAT_ROOT} "
-                                 f"(known: {known})")
+        # Client-facing message carries NO absolute server path / disk listing (#15).
+        raise HTTPException(404, f"no MVS3DM AOI '{dataset}' available on this server")
     if max_views > 0:
         tifs = tifs[:max_views]
+    _evict_jobs()
+    _enforce_active_cap()
     job_id = uuid.uuid4().hex[:12]
     work = _JOBS_ROOT / job_id
     scene = work / "aoi"  # rpc_stereo reads *.tif + rpc_*.txt from ONE dir
@@ -235,10 +318,7 @@ def register_sat_job(dataset: str, *, max_views: int = 20, gsd: float = 1.0) -> 
         if rpc is None:
             raise HTTPException(502, f"missing RPC sidecar for {tif.name}")
         shutil.copy(rpc, scene / ("rpc_" + tif.stem + ".txt"))
-    _JOBS[job_id] = {
-        "id": job_id, "status": "running", "stage": "queued", "pct": 0.0,
-        "log": [], "error": None, "n_gaussians": 0, "created": time.time(),
-    }
+    _JOBS[job_id] = _new_job_record(job_id, owner)
     asyncio.create_task(_pipeline_sat(job_id, gsd))
     return job_id, len(tifs)
 
@@ -463,6 +543,7 @@ def _initial_camera(sparse0: Path) -> dict[str, list[float]] | None:
 # ── routes ───────────────────────────────────────────────────────────────────
 @router.post("/jobs")
 async def create_job(
+    request: Request,
     files: list[UploadFile] = File(...),
     steps: int = Form(7000),
     sh: int = Form(3),
@@ -471,7 +552,9 @@ async def create_job(
     mode: str = Form("full"),  # full=Pi3X SfM+gsplat; mapany=single-image feed-forward
 ) -> dict[str, Any]:
     if not _FUSION.exists() or not (_FUSION / ".venv").exists():  # noqa: ASYNC240 — one-shot filesystem check for the recon job, blocking is fine
-        raise HTTPException(503, f"recon GPU lab not found at {_FUSION}")
+        raise HTTPException(503, "recon GPU lab is not available on this server")
+    _evict_jobs()
+    _enforce_active_cap()
     steps = max(200, min(steps, 30000))
     sh = max(0, min(sh, 3))
     down = max(1, min(down, 8))
@@ -489,10 +572,7 @@ async def create_job(
         saved += 1
     if saved == 0:
         raise HTTPException(400, "no files received")
-    _JOBS[job_id] = {
-        "id": job_id, "status": "running", "stage": "queued", "pct": 0.0,
-        "log": [], "error": None, "n_gaussians": 0, "created": time.time(),
-    }
+    _JOBS[job_id] = _new_job_record(job_id, _owner_key(request))
     task = (
         _pipeline_mapany(job_id) if mode == "mapany"
         else _pipeline(job_id, steps, sh, down, matcher)
@@ -503,6 +583,7 @@ async def create_job(
 
 @router.post("/sat")
 async def create_sat_job(
+    request: Request,
     dataset: str = Form("MasterProvisional1"),
     max_views: int = Form(20),
     gsd: float = Form(1.0),
@@ -513,36 +594,44 @@ async def create_sat_job(
     bundled LiDAR truth). Datasets live under apps/ml/fusion/.sat_data/mvs3dm/
     (e.g. MasterProvisional1..3, Explorer). Result serves at jobs/{id}/result.ply."""
     if not _FUSION.exists() or not (_FUSION / ".venv").exists():  # noqa: ASYNC240 — one-shot filesystem check for the recon job, blocking is fine
-        raise HTTPException(503, f"recon GPU lab not found at {_FUSION}")
+        raise HTTPException(503, "recon GPU lab is not available on this server")
     gsd = max(0.3, min(gsd, 5.0))
-    job_id, n = register_sat_job(dataset, max_views=max_views, gsd=gsd)
+    job_id, n = register_sat_job(dataset, max_views=max_views, gsd=gsd, owner=_owner_key(request))
     return {"job_id": job_id, "status": "running", "dataset": dataset, "n_views": n}
 
 
 def _public(job: dict[str, Any]) -> dict[str, Any]:
+    # Scrub absolute server paths out of the error string AND the log tail (which
+    # streams COLMAP/gsplat/ffmpeg stdout, often containing local paths) — issue #15.
+    err = job.get("error")
     return {
         "id": job["id"], "status": job["status"], "stage": job["stage"],
-        "pct": job["pct"], "error": job["error"], "n_gaussians": job["n_gaussians"],
-        "log_tail": job["log"][-12:],
+        "pct": job["pct"], "error": _scrub(err) if err else err,
+        "n_gaussians": job["n_gaussians"],
+        "log_tail": [_scrub(line) for line in job["log"][-12:]],
     }
 
 
 @router.get("/jobs")
-async def list_jobs() -> dict[str, Any]:
-    return {"jobs": [_public(j) for j in sorted(_JOBS.values(), key=lambda j: -j["created"])]}
+async def list_jobs(request: Request) -> dict[str, Any]:
+    # Scope to the caller (issue #15): a client only sees its own jobs' logs/errors.
+    owner = _owner_key(request)
+    mine = [j for j in _JOBS.values() if j.get("owner", "local") == owner]
+    return {"jobs": [_public(j) for j in sorted(mine, key=lambda j: -j["created"])]}
 
 
 @router.get("/jobs/{job_id}")
-async def get_job(job_id: str) -> dict[str, Any]:
+async def get_job(job_id: str, request: Request) -> dict[str, Any]:
     job = _JOBS.get(job_id)
-    if not job:
+    if not job or job.get("owner", "local") != _owner_key(request):
         raise HTTPException(404, "no such job")
     return _public(job)
 
 
 @router.get("/jobs/{job_id}/events")
-async def job_events(job_id: str) -> StreamingResponse:
-    if job_id not in _JOBS:
+async def job_events(job_id: str, request: Request) -> StreamingResponse:
+    job0 = _JOBS.get(job_id)
+    if not job0 or job0.get("owner", "local") != _owner_key(request):
         raise HTTPException(404, "no such job")
 
     async def gen() -> AsyncIterator[str]:

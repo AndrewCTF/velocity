@@ -45,10 +45,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.auth import ApiKeyMiddleware
+from app.auth import ApiKeyMiddleware, log_auth_mode
 from app.config import get_settings
 from app.correlate import runner as correlate_runner
 from app.mcp_server import build_mcp_mount
+from app.ratelimit import ComputeRateLimitMiddleware
 from app.routes import acars as acars_routes
 from app.routes import actions as actions_routes
 from app.routes import adsb as adsb_routes
@@ -130,6 +131,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # real upstream HTTP from the correlate loops.
     background = not os.environ.get("OSINT_DISABLE_BACKGROUND")
     settings = get_settings()
+    # One-line auth-posture banner so an unauthenticated box is never a surprise.
+    log_auth_mode(settings)
     # The mounted /mcp endpoint's streamable-HTTP session manager runs a task
     # group that must stay live for the whole app lifetime. Starlette does NOT
     # invoke a mounted sub-app's lifespan, so drive it here (one-shot per app).
@@ -355,6 +358,11 @@ def create_app() -> FastAPI:
     )
     # No-op when API_KEY env is unset; enforces X-API-Key otherwise.
     app.add_middleware(ApiKeyMiddleware)
+    # Per-client rate limit on the cost/compute endpoints (issue #9). Added
+    # after ApiKeyMiddleware → sits OUTSIDE it, so a flood is capped before it
+    # reaches token validation. No-op on non-compute paths and when the limit
+    # is 0.
+    app.add_middleware(ComputeRateLimitMiddleware)
     # Added last → outermost. The global ADS-B snapshot is a multi-MB JSON
     # body once per second per client; gzip cuts it ~10x on the wire.
     # compresslevel 5 trades a little ratio for much less CPU than default 9.
