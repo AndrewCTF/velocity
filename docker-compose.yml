@@ -1,3 +1,8 @@
+# ⚠️  DEV STACK ONLY — do NOT expose this to the internet.
+# This runs uvicorn --reload (filesystem-watching auto-reloader) and the Vite
+# dev server (HMR, no asset hardening) behind nginx. For a hardened front-of-
+# house deployment use docker-compose.prod.yml (built static web bundle served
+# by nginx + non-reload uvicorn, no source bind-mounts).
 # Local dev infra — one `docker compose up` boots the whole platform.
 # nginx is the only published port; everything else is on the internal network.
 #

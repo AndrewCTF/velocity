@@ -147,6 +147,33 @@ class Settings(BaseSettings):
     # When unset (default), no auth — fine for single-analyst localhost.
     api_key: str = ""
 
+    # ── open-mode opt-in (issue #8) ──
+    # When NO credential is configured (api_key + Supabase all empty) the box is
+    # "keyless". Keyless DATA layers (ADS-B, AIS, quakes, basemap, …) must keep
+    # working — that is a product invariant. But the COST/COMPUTE endpoints
+    # (hosted-LLM analysis, GPU/CPU recon, OSINT recon, imagery-detect) spend
+    # money and hardware, so on an unconfigured box they FAIL CLOSED (503) unless
+    # the operator explicitly opts into open mode by setting this True — mirroring
+    # how /mcp already fails closed. Set ALLOW_UNAUTHENTICATED=1 on a trusted
+    # local/dev box (or CI) to serve those endpoints keyless. With any credential
+    # configured this flag is irrelevant (auth is enforced normally).
+    allow_unauthenticated: bool = False  # ALLOW_UNAUTHENTICATED
+
+    # ── inbound rate limiting (issue #9) ──
+    # Per-client sliding-window cap on the cost/compute endpoints (LLM, recon,
+    # osint, imagery-detect). Bounds runaway loops and unauthenticated abuse of
+    # paid inference / GPU time. 0 disables the limiter entirely.
+    ratelimit_compute_per_min: int = 60  # RATELIMIT_COMPUTE_PER_MIN (0 = off)
+    # Hard ceiling on concurrently-running recon jobs; further POSTs get 429.
+    recon_max_active_jobs: int = 4  # RECON_MAX_ACTIVE_JOBS
+
+    # ── recon job retention (issue #14) ──
+    # Recon jobs (in-memory records + on-disk artifact dirs under .recon_jobs/)
+    # are evicted oldest-first once either bound is exceeded, so a long-running
+    # box does not leak memory + disk without bound. 0 disables that bound.
+    recon_max_jobs: int = 40  # RECON_MAX_JOBS (LRU by created; 0 = unbounded)
+    recon_job_ttl_s: int = 86_400  # RECON_JOB_TTL_S (evict older than this; 0 = off)
+
     # ── Supabase login gate ──
     # When supabase_url + supabase_anon_key are set, non-public routes also
     # accept a valid Supabase access token (Authorization: Bearer <jwt>, or
@@ -212,7 +239,14 @@ class Settings(BaseSettings):
     # Ollama. When unset, app.llm reads the key + base from the user's opencode
     # config (~/.config/opencode/opencode.jsonc).
     deepseek_api_key: str = ""  # DEEPSEEK_API_KEY
-    deepseek_base_url: str = ""  # DEEPSEEK_BASE_URL ("" → opencode/default)
+    deepseek_base_url: str = ""  # DEEPSEEK_BASE_URL ("" → default endpoint)
+    # OFF by default (issue #10): the server must NOT silently resolve a live
+    # DeepSeek key + base URL out of an unrelated dev tool's home-dir config
+    # (~/.config/opencode/opencode.jsonc) — on a shared/multi-tenant host that
+    # would spend someone else's personal key and let an edited opencode config
+    # redirect the server's LLM egress. Set DEEPSEEK_FROM_OPENCODE=1 to opt in on
+    # a single-operator dev box; otherwise supply DEEPSEEK_API_KEY explicitly.
+    deepseek_from_opencode: bool = False  # DEEPSEEK_FROM_OPENCODE
     deepseek_model_fast: str = "deepseek-chat"  # extraction / classification
     deepseek_model_reason: str = "deepseek-reasoner"  # judgement / fact-check
 

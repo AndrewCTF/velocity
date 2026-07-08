@@ -1,0 +1,48 @@
+# Production front-of-house: built web bundle via nginx + non-reload API. See README.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    runtime: runc
+    env_file:
+      # Optional: the platform boots keyless. `cp .env.example .env` to add keys.
+      - path: .env
+        required: false
+    environment:
+      CORS_ORIGINS: http://localhost:8080
+    # No source bind-mount and no --reload: the image is the deployable unit.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health').read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web-build:
+    # One-shot builder: compiles the static web bundle into the shared web_dist
+    # volume, then exits. nginx serves the produced files.
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    runtime: runc
+    command: ["pnpm", "--filter", "@osint/web", "build"]
+    volumes:
+      - web_dist:/srv/apps/web/dist
+    restart: "no"
+
+  nginx:
+    image: nginx:1.27-alpine
+    runtime: runc
+    ports:
+      - "8080:80"
+    volumes:
+      - ./infra/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - web_dist:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+      - web-build
+
+volumes:
+  web_dist: {}

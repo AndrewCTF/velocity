@@ -215,6 +215,17 @@ async def load_doc(doc_id: str, p: Principal = Depends(current_principal)) -> di
     if not rows:  # new doc, or not cleared (RLS hid it) — caller starts fresh
         return {"exists": False, "doc_id": doc_id}
     row = rows[0]
+    # Defense-in-depth backstop (issue #19): re-check clearance IN-APP, exactly as
+    # the WS join and the write path already do, instead of trusting RLS alone.
+    # A single misconfigured / hand-rolled collab_docs policy must not turn this
+    # full-state read into a classified-data disclosure. An under-cleared caller
+    # gets the same "starts fresh" shape as an RLS-hidden row — no state, and no
+    # signal that an over-classified doc even exists.
+    if not clf.can_read(
+        p.clearance, list(p.compartments),
+        row.get("classification", 0), row.get("compartments"),
+    ):
+        return {"exists": False, "doc_id": doc_id}
     return {
         "exists": True,
         "doc_id": doc_id,

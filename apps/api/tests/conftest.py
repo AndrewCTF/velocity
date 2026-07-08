@@ -16,6 +16,14 @@ from fastapi.testclient import TestClient
 # touch the network.
 os.environ.setdefault("OSINT_DISABLE_BACKGROUND", "1")
 
+# The suite runs auth-disabled (no API_KEY / Supabase). Issue #8 makes the
+# cost/compute endpoints (LLM, recon, OSINT, imagery-detect) FAIL CLOSED on an
+# unauthenticated box unless open mode is explicitly opted into. CI is a trusted
+# context, so opt in here — otherwise every compute-endpoint test would 503.
+# test_security_hardening.py re-checks the closed behavior with the flag forced
+# off, so this default does not hide the guard.
+os.environ.setdefault("ALLOW_UNAUTHENTICATED", "1")
+
 from app.config import Settings, get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402
 

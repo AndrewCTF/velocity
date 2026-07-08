@@ -305,9 +305,13 @@ def _query_sync(
             params,
         ).fetchall()
         con.close()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        # Distinguish "the store failed" from "no data in this window" (issue #16):
+        # returning a bare empty list on error made a partial outage look like a
+        # quiet window. The `degraded` flag lets the caller/UI tell them apart;
+        # the failure is also logged here for the operator.
         log.exception("history: query error")
-        return {"tracks": []}
+        return {"tracks": [], "degraded": True, "error": f"{type(exc).__name__}"}
 
     # Group into per-id tracks, enforce id + point caps
     tracks: dict[str, dict[str, Any]] = {}
@@ -358,9 +362,11 @@ def _timeseries_sync(bucket_sec: int, t_from: float, t_to: float) -> dict[str, A
             [bucket_sec, bucket_sec, t_from, t_to],
         ).fetchall()
         con.close()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        # Signal error distinctly from an empty window (issue #16).
         log.exception("history: timeseries error")
-        return {"bucket_sec": bucket_sec, "buckets": []}
+        return {"bucket_sec": bucket_sec, "buckets": [], "degraded": True,
+                "error": f"{type(exc).__name__}"}
 
     by_bucket: dict[int, dict[str, Any]] = {}
     for bkt, kind, n in rows:

@@ -151,12 +151,30 @@ def _opencode_deepseek() -> tuple[str, str]:
         return "", ""
 
 
+_DEEPSEEK_SOURCE_LOGGED = False
+
+
 def deepseek_config() -> tuple[str | None, str]:
-    """Resolve ``(api_key, base_url)``; ``api_key`` is ``None`` when unconfigured."""
+    """Resolve ``(api_key, base_url)``; ``api_key`` is ``None`` when unconfigured.
+
+    The env ``DEEPSEEK_API_KEY`` is authoritative. The opencode home-dir fallback
+    (``~/.config/opencode/opencode.jsonc``) is consulted ONLY when the operator
+    explicitly opts in via ``DEEPSEEK_FROM_OPENCODE=1`` (issue #10): a backend
+    service silently reading another tool's credential file is a shared-host /
+    provenance hazard. The selected source is logged ONCE so an operator auditing
+    "which key is this service using?" can see it."""
+    global _DEEPSEEK_SOURCE_LOGGED
     s = get_settings()
-    file_key, file_base = _opencode_deepseek()
-    key = (s.deepseek_api_key or file_key or "").strip() or None
+    env_key = (s.deepseek_api_key or "").strip()
+    file_key, file_base = ("", "")
+    if not env_key and s.deepseek_from_opencode:
+        file_key, file_base = _opencode_deepseek()
+    key = (env_key or file_key or "").strip() or None
     base = (s.deepseek_base_url or file_base or "https://api.deepseek.com").strip()
+    if not _DEEPSEEK_SOURCE_LOGGED and key:
+        source = "env DEEPSEEK_API_KEY" if env_key else "opencode.jsonc (DEEPSEEK_FROM_OPENCODE)"
+        logging.getLogger("app.llm").info("DeepSeek credential source: %s", source)
+        _DEEPSEEK_SOURCE_LOGGED = True
     return key, base.rstrip("/")
 
 

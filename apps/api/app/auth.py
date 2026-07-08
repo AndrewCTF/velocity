@@ -39,6 +39,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from app.config import Settings, get_settings
+from app.ratelimit import is_compute_path
 
 PUBLIC_PATHS = {
     "/api/health", "/api/status", "/api/config",
@@ -57,6 +58,29 @@ def _auth_enabled(s: Settings) -> bool:
         or s.supabase_jwt_secret
         or (s.supabase_url and s.supabase_anon_key)
     )
+
+
+def log_auth_mode(s: Settings) -> None:
+    """Emit a clear one-line startup banner describing the auth posture so an
+    operator can never be surprised that a box is serving unauthenticated
+    (issue #8). Called once from the app lifespan."""
+    import logging
+
+    log = logging.getLogger("app.auth")
+    if _auth_enabled(s):
+        log.info("auth ENABLED — non-public routes require a credential")
+    elif s.allow_unauthenticated:
+        log.warning(
+            "auth DISABLED and ALLOW_UNAUTHENTICATED=1 — ALL routes (including "
+            "LLM/recon/OSINT compute) are served with NO authentication. Use only "
+            "on a trusted local box; set API_KEY or Supabase for any exposed deploy."
+        )
+    else:
+        log.warning(
+            "auth DISABLED — keyless data layers are open; cost/compute endpoints "
+            "(LLM, recon, OSINT, imagery-detect) FAIL CLOSED (503). Set API_KEY / "
+            "Supabase to enable auth, or ALLOW_UNAUTHENTICATED=1 for trusted local use."
+        )
 
 
 # ── JWT helpers (HS256, matches the Supabase legacy signing scheme) ──────────
@@ -175,13 +199,26 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         if not _auth_enabled(s):
             # Fail CLOSED for the agent endpoint: the backend origin is publicly
             # resolvable, so /mcp must NEVER be served on a deployment that has
-            # no credential configured (set API_KEY and/or Supabase). Every
-            # other route stays open on an unconfigured (local dev) box.
+            # no credential configured (set API_KEY and/or Supabase).
             if path == "/mcp" or path.startswith("/mcp/"):
                 return JSONResponse(
                     {"detail": "mcp endpoint requires authentication to be configured"},
                     status_code=503,
                 )
+            # Fail CLOSED for the COST/COMPUTE endpoints too (issue #8): they
+            # spend hosted-LLM credits and GPU/CPU time, so an unconfigured box
+            # must not serve them to anonymous callers unless the operator has
+            # explicitly opted into open mode (ALLOW_UNAUTHENTICATED=1) on a
+            # trusted local/dev box. The cheap keyless DATA layers stay open, so
+            # the keyless product invariant is preserved.
+            if not s.allow_unauthenticated and is_compute_path(path):
+                return JSONResponse(
+                    {"detail": "this endpoint spends compute/credits and is disabled "
+                               "on an unauthenticated deployment; configure API_KEY / "
+                               "Supabase, or set ALLOW_UNAUTHENTICATED=1 for trusted local use"},
+                    status_code=503,
+                )
+            # Every other (cheap, keyless) route stays open on an unconfigured box.
             return await call_next(request)
         if path in PUBLIC_PATHS or any(path.startswith(p) for p in PUBLIC_PREFIXES):
             return await call_next(request)
