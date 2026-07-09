@@ -1,24 +1,21 @@
-"""Situations — Gotham aggregate object over a mocked PostgREST + the events lane.
+"""Situations — Gotham aggregate object over the LOCAL ontology store + events lane.
 
 Hermetic (no live Supabase / network). Covers:
 - Object coercion round-trips (a situation is a `situation:` ontology object,
   semantic kind in props.kind).
-- Route auth gate (401) + 503-when-Supabase-unconfigured contract.
+- The keyless-local route contract (2026-07-07 revoke of the old 401/503
+  contract — docs/decisions.md): every route works with no Supabase.
 - Namespace defence (a non-`situation:` id is rejected 400).
-- create → link child → get-detail folding (the NEW logic vs maps: the /link
-  write + traverse-folded neighbourhood) over an in-memory objects+links stand-in.
+- create → link child → get-detail folding (the /link write + traverse-folded
+  neighbourhood) against the real SQLite registry on a temp DB.
 - The /api/timeline/events lane shaping (public route, two discrete lanes).
 """
 
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
-from app.config import Settings, get_settings
 from app.intel.ontology import Object
-from app.keys import UserCtx, current_user
-from app.routes import situations as sit_mod
 from app.routes.situations import SituationIn, _from_object, _to_object
 
 # ── pure coercion ─────────────────────────────────────────────────────────────
@@ -60,131 +57,61 @@ def test_from_object_skips_non_situation_and_clamps_bad_enum() -> None:
     assert sit is not None and sit.severity == "med" and sit.status == "active"
 
 
-# ── auth + 503 contract ─────────────────────────────────────────────────────────
+# ── keyless-local route contract ─────────────────────────────────────────────────
 
 
-def test_situation_routes_require_auth(client: TestClient) -> None:
-    assert client.get("/api/situations").status_code == 401
-    assert client.post("/api/situations", json={"name": "x"}).status_code == 401
-    assert client.get("/api/situations/situation:abc").status_code == 401
-
-
-def _fake_user() -> UserCtx:
-    return UserCtx("u1", "tok")
-
-
-def test_list_503_when_supabase_unconfigured(client: TestClient) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
-    try:
-        assert client.get("/api/situations").status_code == 503
-    finally:
-        client.app.dependency_overrides.pop(current_user, None)
+def test_situation_routes_work_keyless(client: TestClient) -> None:
+    # No Supabase → the shared "local" identity + SQLite store: the list is an
+    # honest empty [], an unknown detail is 404 — not a dead 401/503.
+    r = client.get("/api/situations")
+    assert r.status_code == 200 and r.json() == []
+    assert client.get("/api/situations/situation:missing").status_code == 404
 
 
 def test_create_rejects_foreign_namespace(client: TestClient) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
-    try:
-        r = client.post("/api/situations", json={"name": "x", "id": "aircraft:pwn"})
-        assert r.status_code == 400
-    finally:
-        client.app.dependency_overrides.pop(current_user, None)
+    r = client.post("/api/situations", json={"name": "x", "id": "aircraft:pwn"})
+    assert r.status_code == 400
 
 
-# ── create → link → detail over an in-memory objects+links PostgREST stand-in ────
+# ── create → link → detail against the real local registry (temp DB) ─────────────
 
 
-class _FakeResp:
-    def __init__(self, status: int, payload: object) -> None:
-        self.status_code = status
-        self._payload = payload
+def test_create_link_detail_round_trip(client: TestClient) -> None:
+    r = client.post("/api/situations", json={"name": "SCS", "severity": "high"})
+    assert r.status_code == 201, r.text
+    sid = r.json()["id"]
+    assert sid.startswith("situation:")
 
-    def json(self) -> object:
-        return self._payload
+    # LINK an incident as a child.
+    r = client.post(
+        f"/api/situations/{sid}/link",
+        json={"dst": "incident:xyz", "rel": "contains"},
+    )
+    assert r.status_code == 200, r.text
 
+    # Move 1: linking PROMOTES the child to a real ontology object row (before
+    # this it existed only as a traversal-derived stub → GET object was a 404).
+    assert client.get("/api/ontology/object/incident:xyz").status_code == 200
 
-class _Store:
-    """In-memory objects + links tables — enough to exercise upsert/get/list/link
-    and the traverse the detail route folds in."""
+    # DETAIL folds the child in (derived stub) + the contains edge.
+    r = client.get(f"/api/situations/{sid}")
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert detail["situation"]["name"] == "SCS"
+    child_ids = [o["id"] for o in detail["objects"]]
+    assert "incident:xyz" in child_ids
+    assert any(
+        lk["rel"] == "contains" and lk["dst"] == "incident:xyz"
+        for lk in detail["links"]
+    )
 
-    OBJ: dict[tuple[str, str], dict] = {}
-    LINKS: list[dict] = []
+    # LIST shows the situation.
+    assert sid in [s["id"] for s in client.get("/api/situations").json()]
 
-    async def __aenter__(self) -> _Store:
-        return self
-
-    async def __aexit__(self, *a: object) -> bool:
-        return False
-
-    async def post(self, url: str, json: dict, headers: dict) -> _FakeResp:  # type: ignore[override]
-        if url.endswith("/links"):
-            type(self).LINKS.append({**json, "created_at": "2026-06-22T00:00:00Z"})
-            return _FakeResp(201, [type(self).LINKS[-1]])
-        key = (json["user_id"], json["id"])
-        row = {**json, "created_at": "2026-06-22T00:00:00Z"}
-        type(self).OBJ[key] = row
-        return _FakeResp(201, [row])
-
-    async def get(self, url: str, params: dict, headers: dict) -> _FakeResp:  # type: ignore[override]
-        uid = params.get("user_id", "").removeprefix("eq.")
-        if url.endswith("/links"):
-            rows = []
-            for col in ("src", "dst"):
-                f = params.get(col)
-                if f and f.startswith("in."):
-                    inside = f[len("in.(") : -1]
-                    ids = {v.strip('"') for v in inside.split(",")}
-                    rows += [lk for lk in type(self).LINKS if lk.get(col) in ids and lk["user_id"] == uid]
-            return _FakeResp(200, rows)
-        if "id" in params:
-            oid = params["id"].removeprefix("eq.")
-            row = type(self).OBJ.get((uid, oid))
-            return _FakeResp(200, [row] if row else [])
-        rows = [r for (u, _), r in type(self).OBJ.items() if u == uid and (r.get("props") or {}).get("kind") == "situation"]
-        return _FakeResp(200, rows)
-
-    async def delete(self, url: str, params: dict, headers: dict) -> _FakeResp:  # type: ignore[override]
-        return _FakeResp(204, None)
-
-
-def _supa_settings() -> Settings:
-    return Settings(supabase_url="http://x", supabase_anon_key="anon")
-
-
-def test_create_link_detail_round_trip(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    _Store.OBJ.clear()
-    _Store.LINKS.clear()
-    from app.intel import ontology as ont
-
-    monkeypatch.setattr(ont, "_client", lambda: _Store())
-    monkeypatch.setattr(ont, "get_settings", _supa_settings)
-    monkeypatch.setattr(sit_mod, "get_settings", _supa_settings)
-    monkeypatch.setattr(sit_mod, "_client", lambda: _Store())
-    client.app.dependency_overrides[current_user] = _fake_user
-    client.app.dependency_overrides[get_settings] = _supa_settings
-    try:
-        r = client.post("/api/situations", json={"name": "SCS", "severity": "high"})
-        assert r.status_code == 201, r.text
-        sid = r.json()["id"]
-        assert sid.startswith("situation:")
-
-        # LINK an incident as a child.
-        r = client.post(f"/api/situations/{sid}/link", json={"dst": "incident:xyz", "rel": "contains"})
-        assert r.status_code == 200, r.text
-
-        # DETAIL folds the child in (derived stub) + the contains edge.
-        r = client.get(f"/api/situations/{sid}")
-        assert r.status_code == 200, r.text
-        detail = r.json()
-        assert detail["situation"]["name"] == "SCS"
-        child_ids = [o["id"] for o in detail["objects"]]
-        assert "incident:xyz" in child_ids
-        assert any(lk["rel"] == "contains" and lk["dst"] == "incident:xyz" for lk in detail["links"])
-
-        # LIST shows the situation.
-        assert sid in [s["id"] for s in client.get("/api/situations").json()]
-    finally:
-        client.app.dependency_overrides.pop(current_user, None)
-        client.app.dependency_overrides.pop(get_settings, None)
+    # DELETE removes it (and is a no-op the second time).
+    assert client.delete(f"/api/situations/{sid}").status_code == 204
+    assert client.get(f"/api/situations/{sid}").status_code == 404
+    assert client.delete(f"/api/situations/{sid}").status_code == 204
 
 
 # ── timeline events lanes (public route) ──────────────────────────────────────

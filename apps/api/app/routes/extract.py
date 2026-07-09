@@ -22,7 +22,7 @@ from app import llm
 from app.audit import audit
 from app.config import get_settings
 from app.intel import classification as clf
-from app.intel.ontology import Link, Object, OntologyRegistry
+from app.intel.ontology import Link, Object, get_registry
 from app.keys import UserCtx
 from app.security import Principal, current_principal
 
@@ -172,7 +172,7 @@ async def extract(
         )
 
     ctx = UserCtx(user_id=p.user_id, token=p.token)
-    reg = OntologyRegistry(ctx, s)
+    reg = get_registry(ctx, s)
     comps = req.compartments
 
     await reg.upsert(

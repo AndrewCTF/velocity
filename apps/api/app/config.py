@@ -393,6 +393,26 @@ class Settings(BaseSettings):
     # window — is the binding limit. 0 disables the byte cap (hour window only).
     history_max_bytes: int = 2_000_000_000  # ~2 GB
 
+    # ── Ontology local spine ──
+    # Default (keyless) backend for the ontology: local SQLite next to
+    # history.db. Objects keep a materialized props blob for frontend parity;
+    # every property change is also an append-only assertion row (source,
+    # confidence, observed_at) — see intel/ontology_local.py. Supabase, when
+    # configured AND the caller is signed in, remains the remote backend.
+    ontology_db_path: str = "./data/ontology.db"
+    # Soft byte cap on the whole store (oldest assertions dropped + VACUUM).
+    # 0 disables. Same bounding philosophy as history_max_bytes.
+    ontology_db_max_bytes: int = 2_000_000_000  # ~2 GB
+    # Per-object assertion budget; oldest rows beyond it are deleted. The
+    # roadmap pins ~2000 as the starting cap. 0 disables.
+    ontology_max_assertions_per_object: int = 2000
+
+    # ── Foundry substrate (docs/foundry-plan.md) ──
+    # BYO-data datasets/transforms/builds/bindings/schedules store. Local
+    # SQLite next to ontology.db/history.db — same bounding philosophy (row
+    # cap + upload size cap enforced in app/foundry/store.py + ingest.py).
+    foundry_db_path: str = "./data/foundry.db"
+
     # Optional key for the Have-I-Been-Pwned email-breach API (paid). Absent →
     # the person-OSINT HIBP connector degrades to an honest note; everything else
     # in the person layer stays keyless.

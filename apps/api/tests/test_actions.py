@@ -181,12 +181,11 @@ def _settings() -> Settings:
 
 
 def _patch_clients(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch BOTH the actions and ontology httpx factories + reset the recorder."""
-    from app.intel import ontology as ont
-
+    """Patch the actions httpx factory (target_board / alert_rules / action_log)
+    + reset the recorder. Ontology writes go to the real local SQLite store
+    (temp DB via conftest) and are asserted by reading it back."""
     _POSTS.clear()
     monkeypatch.setattr(act, "_client", lambda: _RecordingClient())
-    monkeypatch.setattr(ont, "_client", lambda: _RecordingClient())
 
 
 def test_flag_entity_mutates_ontology_and_audits(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -205,10 +204,15 @@ def test_flag_entity_mutates_ontology_and_audits(monkeypatch: pytest.MonkeyPatch
     assert res.target_id == "aircraft:abc"
     assert res.audit["user_id"] == "u1"
     assert res.audit["action"] == "flag_entity"
-    # the recording client saw an object upsert, a link, and an audit append
+    # the local store holds the flagged object + its flag edge; the audit
+    # append still goes through the (recorded) PostgREST action_log.
+    from app.intel.ontology_local import SqliteRegistry
+
+    reg = SqliteRegistry(UserCtx("u1", "tok"), _settings())
+    assert asyncio.run(reg.get("aircraft:abc")) is not None
+    links = asyncio.run(reg._links_touching(["aircraft:abc"]))
+    assert any(lk.rel == "flagged" for lk in links)
     urls = [u for u, _ in _POSTS]
-    assert any(u.endswith("/objects") for u in urls)
-    assert any(u.endswith("/links") for u in urls)
     assert any(u.endswith("/action_log") for u in urls)
 
 

@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 
 from app.audit import audit
 from app.config import get_settings
-from app.intel.ontology import Link, Object, OntologyRegistry
+from app.intel.ontology import Link, Object, get_registry
 from app.keys import UserCtx, current_user
 from app.osint import connectors as C
 from app.osint.fetch import classify_target
@@ -336,7 +336,7 @@ async def investigate(
         summary = await _investigate_ip(g, canonical)
         root = "ip:" + canonical
 
-    reg = OntologyRegistry(ctx, get_settings())
+    reg = get_registry(ctx, get_settings())
     for obj in g.objs.values():
         await reg.upsert(obj)
     for lk in g.links.values():
@@ -405,7 +405,7 @@ async def recon(
         eid = g.obj("email:" + em.lower(), "Email", "recon:" + req.tool, {"address": em.lower()})
         g.link(root, eid, "has_email")
 
-    reg = OntologyRegistry(ctx, s)
+    reg = get_registry(ctx, s)
     for obj in g.objs.values():
         await reg.upsert(obj)
     for lk in g.links.values():

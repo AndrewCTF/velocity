@@ -4,7 +4,13 @@
   "private": true,
   "description": "Headless-browser bridge that exposes a Cloudflare-gated tar1090 aggregator (airplanes.live, adsb.fi, ...) as a plain aircraft.json the OSINT backend can ingest via ADSB_FEED_URLS.",
   "type": "commonjs",
-  "bin": { "adsb-globe-feeder": "index.js" },
-  "scripts": { "start": "node index.js" },
-  "dependencies": { "playwright": "^1.47.0" }
+  "bin": {
+    "adsb-globe-feeder": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
 }

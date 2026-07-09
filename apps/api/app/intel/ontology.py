@@ -1,9 +1,13 @@
 """Typed ontology spine — the semantic layer everything else composes on.
 
-This is Velocity's Foundry-style ontology: a small, typed Object / Link / Action
-model plus a registry that persists objects and links per user in Supabase
-(``public.objects`` / ``public.links``, RLS-scoped via the caller's token, the
-exact same PostgREST pattern as ``target_board`` / ``alert_rules`` / BYOK).
+This is Velocity's Foundry-style ontology: a small, typed Object / Link /
+Assertion / Action model plus the ``_GraphWalk`` BFS mixin. Persistence lives
+in ``SqliteRegistry`` (``intel/ontology_local.py``), reached through
+``get_registry()``: a local SQLite store (same idiom as ``app/history.py``) so
+the ontology works on a keyless boot, with an append-only ``assertions`` table
+carrying per-property provenance (source, confidence, observed_at,
+derivation). A Supabase/PostgREST remote backend existed until 2026-07-07;
+the operator invoked the kill criterion and deleted it (docs/decisions.md).
 
 Objects are keyed by the **canonical ids already used across the repo** so the
 ontology is a join over what the live layers already emit, not a parallel
@@ -17,21 +21,20 @@ namespace:
 ``ObjectKind`` is derived from the id prefix, so callers hand us an id and we
 stay consistent with `correlate/runner.py`, `incidents.py`, and the sim.
 
-Everything degrades gracefully when Supabase is unconfigured or the tables are
-absent: reads return ``None`` / ``[]`` and writes raise a 503 with the same
-"store not configured" contract the frontend relies on (mirrors `targets.py`).
 The module imports with no side effects so boot never depends on a live DB.
 """
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
-from app.keys import UserCtx, _client, _headers
+from app.keys import UserCtx
+
+if TYPE_CHECKING:  # runtime import lives in get_registry (module cycle)
+    from app.intel.ontology_local import SqliteRegistry
 
 # ── canonical object kinds ────────────────────────────────────────────────────
 # Derived from the id prefix. "object" is the catch-all for an id whose prefix we
@@ -42,10 +45,13 @@ from app.keys import UserCtx, _client, _headers
 # same graph; listing their prefixes here makes them first-class (own colour /
 # facet) instead of the catch-all "object". The DB `kind` column is free text,
 # so no migration is needed to add a prefix.
+# "investigation" joined 2026-07-07: the Investigation canvas has always
+# minted `investigation:<slug>` ids with kind="investigation" on save — the
+# Literal rejected it with a 422 that the old auth-first 401 masked.
 ObjectKind = Literal[
     "aircraft", "vessel", "incident", "sim",
     "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
-    "person", "username",
+    "person", "username", "investigation",
     "object",
 ]
 
@@ -53,7 +59,7 @@ _KNOWN_KINDS: frozenset[str] = frozenset(
     (
         "aircraft", "vessel", "incident", "sim",
         "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
-        "person", "username",
+        "person", "username", "investigation",
         "object",
     )
 )
@@ -135,6 +141,32 @@ class Link(BaseModel):
     classification: int = 0
     compartments: list[str] = Field(default_factory=list)
     shared: bool = False
+    # Provenance — first-class columns in the local store. Additive with
+    # defaults so existing callers and the frontend are unaffected.
+    source: str = "analyst"
+    confidence: float = 1.0
+    observed_at: str | None = None
+    valid_until: str | None = None
+
+
+class Assertion(BaseModel):
+    """One evidenced property statement about an object.
+
+    The local store records every property as a time series of assertions —
+    *who said this, when, how sure* — instead of only a mutable blob. ``value``
+    is the parsed JSON value; a removal tombstone is ``value=None`` with
+    ``derivation={"op": "remove"}``.
+    """
+
+    object_id: str
+    prop: str
+    value: Any = None
+    source: str = "analyst"
+    confidence: float = 1.0
+    observed_at: str
+    valid_until: str | None = None
+    derivation: dict[str, Any] | None = None
+    id: int | None = None
 
 
 class Action(BaseModel):
@@ -182,141 +214,23 @@ class PathResult(BaseModel):
     links: list[Link] = Field(default_factory=list)
 
 
-# ── PostgREST plumbing (RLS-scoped via the caller's token) ────────────────────
-# Mirrors targets.py / keys.py exactly: one base-url helper per table that raises
-# 503 when supabase_url is unset, and reuses keys._client / keys._headers.
+class _GraphWalk:
+    """Backend-agnostic graph walks over ``get`` + ``_links_touching``.
 
-
-def _objects_url(s: Settings) -> str:
-    if not s.supabase_url:
-        raise HTTPException(status_code=503, detail="Supabase is not configured")
-    return s.supabase_url.rstrip("/") + "/rest/v1/objects"
-
-
-def _links_url(s: Settings) -> str:
-    if not s.supabase_url:
-        raise HTTPException(status_code=503, detail="Supabase is not configured")
-    return s.supabase_url.rstrip("/") + "/rest/v1/links"
-
-
-class OntologyRegistry:
-    """Per-user persistent Object/Link store over PostgREST.
-
-    Constructed with the caller's ``UserCtx``; every read/write is scoped to that
-    user by RLS (``auth.uid() = user_id``) AND an explicit ``user_id=eq.`` filter,
-    so a user only ever touches their own graph.
+    ``traverse`` and ``path_between`` are pure BFS over two storage primitives,
+    so they live here once and both registries (PostgREST + SQLite) inherit
+    them — the BFS test matrix in ``test_ontology_path.py`` covers both.
+    Subclasses provide ``async get(object_id)`` and
+    ``async _links_touching(ids)``.
     """
 
-    def __init__(self, ctx: UserCtx, settings: Settings | None = None) -> None:
-        self.ctx = ctx
-        self.s = settings or get_settings()
+    async def get(self, object_id: str) -> Object | None:  # pragma: no cover
+        raise NotImplementedError
 
-    # ---- objects ----------------------------------------------------------
-
-    async def upsert(self, obj: Object) -> Object:
-        """Insert or merge an object (unique on ``(user_id, id)``).
-
-        Server-side jsonb merge is not available through PostgREST, so we send
-        the row with ``resolution=merge-duplicates``: re-upserting the same id
-        replaces the row's columns wholesale. Callers that want to *extend*
-        ``props`` should ``get`` first and merge in Python.
-        """
-        obj = obj.normalised()
-        row = {
-            "id": obj.id,
-            "user_id": self.ctx.user_id,
-            "kind": obj.kind,
-            "props": obj.props,
-            "classification": int(obj.classification),
-            "compartments": obj.compartments,
-            "shared": obj.shared,
-        }
-        headers = {
-            **_headers(self.ctx, self.s, write=True),
-            "Prefer": "resolution=merge-duplicates,return=representation",
-        }
-        async with _client() as c:
-            r = await c.post(_objects_url(self.s), json=row, headers=headers)
-        if r.status_code not in (200, 201):
-            raise HTTPException(status_code=502, detail="could not save object")
-        data = r.json()
-        stored = data[0] if isinstance(data, list) and data else (data or row)
-        return Object(**_object_row(stored))
-
-    async def get(self, object_id: str) -> Object | None:
-        """Fetch one object by id (RLS-scoped). ``None`` if absent."""
-        async with _client() as c:
-            r = await c.get(
-                _objects_url(self.s),
-                params={
-                    "user_id": f"eq.{self.ctx.user_id}",
-                    "id": f"eq.{object_id}",
-                    "select": "*",
-                    "limit": "1",
-                },
-                headers=_headers(self.ctx, self.s),
-            )
-        if r.status_code != 200:
-            raise HTTPException(status_code=502, detail="object store unavailable")
-        rows = r.json()
-        if not rows:
-            return None
-        return Object(**_object_row(rows[0]))
-
-    # ---- links ------------------------------------------------------------
-
-    async def link(self, link: Link) -> Link:
-        """Create an edge. Idempotent on ``(user_id, src, dst, rel)``."""
-        row = {
-            "user_id": self.ctx.user_id,
-            "src": link.src,
-            "dst": link.dst,
-            "rel": link.rel,
-            "props": link.props,
-            "classification": int(link.classification),
-            "compartments": link.compartments,
-            "shared": link.shared,
-        }
-        headers = {
-            **_headers(self.ctx, self.s, write=True),
-            "Prefer": "resolution=merge-duplicates,return=representation",
-        }
-        async with _client() as c:
-            r = await c.post(_links_url(self.s), json=row, headers=headers)
-        if r.status_code not in (200, 201):
-            raise HTTPException(status_code=502, detail="could not save link")
-        data = r.json()
-        stored = data[0] if isinstance(data, list) and data else (data or row)
-        return Link(**_link_row(stored))
-
-    async def _links_touching(self, ids: list[str]) -> list[Link]:
-        """All links whose src OR dst is in ``ids`` (one round trip each side)."""
-        if not ids:
-            return []
-        # PostgREST `in.(…)` list; ids are canonical (no commas/quotes) but wrap
-        # defensively. Two queries (src-side, dst-side) unioned — simpler and
-        # more index-friendly than an `or=` across both columns.
-        in_list = "(" + ",".join(_quote_in(i) for i in ids) + ")"
-        out: dict[tuple[str, str, str], Link] = {}
-        async with _client() as c:
-            for col in ("src", "dst"):
-                r = await c.get(
-                    _links_url(self.s),
-                    params={
-                        "user_id": f"eq.{self.ctx.user_id}",
-                        col: f"in.{in_list}",
-                        "select": "*",
-                    },
-                    headers=_headers(self.ctx, self.s),
-                )
-                if r.status_code != 200:
-                    raise HTTPException(
-                        status_code=502, detail="link store unavailable"
-                    )
-                for row in r.json():
-                    lk = Link(**_link_row(row))
-                    out[(lk.src, lk.dst, lk.rel)] = lk
-        return list(out.values())
+    async def _links_touching(
+        self, ids: list[str]
+    ) -> list[Link]:  # pragma: no cover
+        raise NotImplementedError
 
     async def traverse(self, object_id: str, depth: int = 1) -> SearchAround:
         """Breadth-first walk out from ``object_id`` up to ``depth`` hops.
@@ -444,39 +358,17 @@ class OntologyRegistry:
         )
 
 
-# ── row coercion ──────────────────────────────────────────────────────────────
-# PostgREST may hand back extra columns (user_id, jsonb already parsed). Keep only
-# the model fields and tolerate props arriving as None.
+# ── backend selection ─────────────────────────────────────────────────────────
 
 
-def _object_row(row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": row.get("id"),
-        "kind": row.get("kind") or kind_of(str(row.get("id", ""))),
-        "props": row.get("props") or {},
-        "created_at": row.get("created_at"),
-        "classification": row.get("classification", 0) or 0,
-        "compartments": row.get("compartments") or [],
-        "shared": bool(row.get("shared", False)),
-    }
+def get_registry(ctx: UserCtx, settings: Settings | None = None) -> SqliteRegistry:
+    """The ontology store for this caller — the local SQLite registry.
 
+    2026-07-07: the operator invoked the kill criterion and deleted the
+    Supabase/PostgREST backend (docs/decisions.md) — the local spine is the
+    only store. The factory stays so call sites and a future remote backend
+    (if ever re-earned) keep one seam. Late import avoids a module cycle.
+    """
+    from app.intel.ontology_local import SqliteRegistry
 
-def _link_row(row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": row.get("id"),
-        "src": row.get("src"),
-        "dst": row.get("dst"),
-        "rel": row.get("rel"),
-        "props": row.get("props") or {},
-        "created_at": row.get("created_at"),
-        "classification": row.get("classification", 0) or 0,
-        "compartments": row.get("compartments") or [],
-        "shared": bool(row.get("shared", False)),
-    }
-
-
-def _quote_in(value: str) -> str:
-    """Quote a value for a PostgREST ``in.(…)`` list if it needs it."""
-    if any(ch in value for ch in (",", '"', "(", ")", " ")):
-        return '"' + value.replace('"', '\\"') + '"'
-    return value
+    return SqliteRegistry(ctx, settings or get_settings())

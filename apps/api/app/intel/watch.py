@@ -7,7 +7,7 @@ on a cadence, reads the warm in-process picture everything else already shares
 500s on its unresolved ``Query(...)`` defaults — plus ``incidents.brief()``),
 tests each enabled ``alert_rules`` row's geofence, and fires **persistent,
 acknowledgeable** ``Alert`` objects into the ontology (``kind='alert'``, state
-open → ack → closed) through the P0 ``OntologyRegistry``. It also caches a
+open → ack → closed) through the ontology registry. It also caches a
 ``RiskIndicator`` onto the triggering entity's ontology object so a later
 traversal / EntityPanel read sees *why* it tripped.
 
@@ -54,7 +54,7 @@ from app.correlate.bus import bus
 from app.correlate.types import Alert
 from app.intel import incidents
 from app.intel.geo import NM_TO_KM, feature_lonlat, haversine_km
-from app.intel.ontology import Object, OntologyRegistry
+from app.intel.ontology import Object, get_registry
 from app.keys import UserCtx, _client, _headers
 
 log = logging.getLogger("velocity.watch")
@@ -524,7 +524,7 @@ async def _list_enabled_rules(ctx: UserCtx, s: Settings) -> list[dict[str, Any]]
 
 
 async def _persist_firing(
-    reg: OntologyRegistry, rule: dict[str, Any], cand: _Candidate, transition: str
+    reg: Any, rule: dict[str, Any], cand: _Candidate, transition: str
 ) -> None:
     """Upsert the Alert object and (on enter) cache the RiskIndicator on the entity.
 
@@ -535,10 +535,22 @@ async def _persist_firing(
     try:
         await reg.upsert(alert_object(rule, cand, transition, ts))
         if transition == "enter":
-            existing = await reg.get(cand.entity_id)
-            props = dict(existing.props) if existing else {}
-            props["risk_indicator"] = risk_indicator(rule, cand, ts)
-            await reg.upsert(Object(id=cand.entity_id, props=props))
+            # Mint/refresh the triggering entity as a durable object (Move 1),
+            # stamping the WATCH RULE as the provenance source. assert_props MERGES
+            # (no read + wholesale upsert) and records an evidenced assertion, so
+            # the trail shows the geofence that tripped rather than a generic
+            # "analyst" write — a rule minted this, not a person.
+            await reg.assert_props(
+                cand.entity_id,
+                {
+                    "risk_indicator": risk_indicator(rule, cand, ts),
+                    "lon": round(cand.lon, 4),
+                    "lat": round(cand.lat, 4),
+                },
+                source=f"rule:watchbox:{rule.get('id')}",
+                confidence=1.0,
+                observed_at=ts,
+            )
     except Exception as exc:  # noqa: BLE001
         log.debug("watch: persist firing failed (%s): %s", cand.entity_id, exc)
 
@@ -559,7 +571,7 @@ async def evaluate_session(
     firings = evaluate_rules(rules, candidates)
     if not firings:
         return 0
-    reg = OntologyRegistry(ctx, s)
+    reg = get_registry(ctx, s)
     fired = 0
     for rule, cand, transition in firings:
         await _persist_firing(reg, rule, cand, transition)
@@ -575,7 +587,7 @@ async def evaluate_session(
 
 
 async def _maybe_cue(
-    reg: OntologyRegistry, rule: dict[str, Any], cand: _Candidate, transition: str
+    reg: Any, rule: dict[str, Any], cand: _Candidate, transition: str
 ) -> None:
     """Tip-and-cue: a dark-zone ENTER triggers an open-source SAR look, and the
     result is attached to the alert object (``props.cue``). Best-effort — a cue
