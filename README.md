@@ -311,18 +311,20 @@ pnpm -r typecheck
 
 ## Phase status
 
-- [x] Phase 0: Foundation
-- [x] Phase 1: MVP, live ADS-B / AIS / quakes / GPS-jamming layers on the globe
-- [~] Phase 2: Replay + drill-in. The timeline scrubber and a 7-day history
+Legend: ✅ shipped · 🚧 in progress
+
+- ✅ **Phase 0** — Foundation
+- ✅ **Phase 1** — MVP: live ADS-B / AIS / quakes / GPS-jamming layers on the globe
+- 🚧 **Phase 2** — Replay + drill-in. The timeline scrubber and a 7-day history
   buffer are in (SQLite-backed playback); the durable Postgres + PostGIS +
   TimescaleDB store is still the planned upgrade
-- [x] Phase 3: Fusion engine + alerts (correlation rules) + 2D mirror
-- [~] Phase 4: Advanced sensors + AI. MCP server + intel API, Sentinel-1 SAR
+- ✅ **Phase 3** — Fusion engine + alerts (correlation rules) + 2D mirror
+- 🚧 **Phase 4** — Advanced sensors + AI. MCP server + intel API, Sentinel-1 SAR
   dark-vessel detection, an autonomous watch-officer that writes cited incident
   briefs, a keyless infra/domain OSINT layer, optional local-GPU (Ollama)
   inference, and a first-run onboarding tour. More sensors and deeper analysis
   are ongoing.
-- [~] Phase 5: Foundry — a keyless, local, single-operator take on Palantir
+- 🚧 **Phase 5** — Foundry: a keyless, local, single-operator take on Palantir
   Foundry's data-integration loop. Upload → transform (governed step DSL with
   lineage) → build (dependency DAG, staleness, cycle rejection) → data-health
   checks → bind into the local ontology graph. In: immutable versions +
