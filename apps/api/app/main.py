@@ -72,6 +72,7 @@ from app.routes import events as events_routes
 from app.routes import export as export_routes
 from app.routes import extract as extract_routes
 from app.routes import firms as firms_routes
+from app.routes import foundry as foundry_routes
 from app.routes import geocode as geocode_routes
 from app.routes import ground as ground_routes
 from app.routes import health as health_routes
@@ -256,6 +257,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.intel import sar_sweep  # noqa: PLC0415
 
             await sar_sweep.start()
+            # Foundry interval schedules: re-run a transform's build on its
+            # configured cadence. Idles cheaply with no schedules registered.
+            from app.foundry import scheduler as foundry_scheduler  # noqa: PLC0415
+
+            await foundry_scheduler.start()
             # Warm the CCTV catalog so the first /api/cams hits a populated
             # TtlCache instead of a cold serial upstream fan-out (~18s). Same
             # spirit as the adsb start_snapshot() pre-warm above. Fire-and-
@@ -331,6 +337,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.intel import sar_sweep  # noqa: PLC0415
 
             await sar_sweep.stop()
+            from app.foundry import scheduler as foundry_scheduler  # noqa: PLC0415
+
+            await foundry_scheduler.stop()
             await news_routes.stop_refresher()
             # Tear down the headless-browser tar1090 sidecar (kill the whole
             # browser process group). No-op if it never started / already gone.
@@ -436,6 +445,9 @@ def create_app() -> FastAPI:
     # Watch-officer: standing loop that files cited draft briefs from the fusion
     # diff for operator triage in the Inbox (app/intel/watch_officer.py).
     app.include_router(watch_officer_routes.router)
+    # Foundry substrate: BYO-data datasets/transforms/builds/ontology bindings
+    # (docs/foundry-plan.md). Local SQLite, keyless.
+    app.include_router(foundry_routes.router)
 
     # TiTiler COG sub-app (Track B2): XYZ tiles for any Cloud-Optimized GeoTIFF
     # (Maxar Open Data S3, future SAR delivery), so B3/B4/B5 have a universal

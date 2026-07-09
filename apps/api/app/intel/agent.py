@@ -222,10 +222,10 @@ async def _t_graph_lookup(a: dict[str, Any], _b: BBox | None) -> dict[str, Any]:
     if ctx is None:
         return {"note": "sign-in required to read the ontology graph"}
     from app.config import get_settings
-    from app.intel.ontology import OntologyRegistry
+    from app.intel.ontology import get_registry
 
     depth = max(1, min(int(a.get("depth", 1) or 1), 3))
-    sa = await OntologyRegistry(ctx, get_settings()).traverse(oid, depth)
+    sa = await get_registry(ctx, get_settings()).traverse(oid, depth)
     return sa.model_dump() if hasattr(sa, "model_dump") else dict(sa)
 
 

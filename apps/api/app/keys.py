@@ -154,6 +154,25 @@ async def current_user(request: Request) -> UserCtx:
     return UserCtx(user_id=str(sub), token=token)
 
 
+async def current_user_or_local(request: Request) -> UserCtx:
+    """``current_user``, degrading to a local identity on a keyless boot.
+
+    When Supabase is entirely unconfigured (no JWT secret and no url+anon key —
+    the exact condition under which ``_valid_supabase_token`` can never return
+    True) there is no user identity to resolve, but the request has already
+    passed ``ApiKeyMiddleware``; callers that can be served by the LOCAL
+    ontology store (ontology / situations / maps routes) get the shared
+    ``local`` identity instead of a dead 401. With Supabase configured this is
+    exactly ``current_user`` — prod behavior unchanged. Note: static-API_KEY
+    deployments share one ``local`` graph (single-operator platform; recorded
+    in docs/decisions.md).
+    """
+    s = get_settings()
+    if not (s.supabase_jwt_secret or (s.supabase_url and s.supabase_anon_key)):
+        return UserCtx(user_id="local", token="")
+    return await current_user(request)
+
+
 # ── PostgREST access (RLS-scoped via the user's own token) ────────────────────
 
 

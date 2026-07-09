@@ -446,6 +446,11 @@ function ActionsCard({
   // The display label the watch rule is filed under: entity name → kind+id → id.
   const watchLabel = (snap?.name as string | undefined) || (snap?.kind ? `${snap.kind} ${id}` : id);
   const pos = snap?.position;
+  // The live Cesium property blob for the selected entity — sent alongside each
+  // action so the backend can MINT this entity as a durable ontology object
+  // (Move 1). Feeds are transient server-side, so this client blob is the only
+  // source of the entity's props (callsign/reg/track_deg / name/mmsi/cog …).
+  const promoteProps = snap?.properties ?? {};
 
   return (
     <section>
@@ -458,12 +463,14 @@ function ActionsCard({
           label="⚑ Flag"
           action="flag_entity"
           params={{ target_id: id, note: '', severity: 3 }}
+          promoteProps={promoteProps}
           doneLabel="Flagged"
         />
         <ActionButton
           label="◎ Nominate target"
           action="nominate_target"
           params={{ target_id: id, priority: 3, note: '' }}
+          promoteProps={promoteProps}
           doneLabel="Nominated"
         />
         {pos && (
@@ -477,6 +484,7 @@ function ActionsCard({
               lon: pos.lon,
               radius_nm: 50,
             }}
+            promoteProps={promoteProps}
             doneLabel="Watching"
           />
         )}
@@ -485,6 +493,12 @@ function ActionsCard({
   );
 }
 
+// action verb → promotion trigger (drives the server-stamped provenance source).
+const PROMOTE_TRIGGER: Record<
+  'flag_entity' | 'nominate_target' | 'add_watch',
+  'flag' | 'nominate' | 'watch'
+> = { flag_entity: 'flag', nominate_target: 'nominate', add_watch: 'watch' };
+
 // One write-back verb. Owns its own busy/result state so each action reports
 // independently. On 4xx/5xx we read the backend `detail` for a useful message
 // (400 = Pydantic errors array; 502/503 = store unavailable text).
@@ -492,11 +506,13 @@ function ActionButton({
   label,
   action,
   params,
+  promoteProps,
   doneLabel,
 }: {
   label: string;
   action: 'flag_entity' | 'nominate_target' | 'add_watch';
   params: Record<string, unknown>;
+  promoteProps: Record<string, unknown>;
   doneLabel: string;
 }): JSX.Element {
   const [phase, setPhase] = useState<ActionPhase>('idle');
@@ -513,6 +529,22 @@ function ActionButton({
   const run = async (): Promise<void> => {
     setPhase('running');
     setMsg(null);
+    // Move 1: materialize the entity into the ontology BEFORE the governed
+    // action, and AWAIT it (not fire-and-forget). flag_entity's handler does a
+    // read-modify-WHOLESALE-upsert on the same object id; racing it with this
+    // merge could lose-update the feed props from the blob. Sequencing promote
+    // first means flag_entity's get then reads the merged props and preserves
+    // them. Keyless + best-effort: .catch so a promote failure never blocks the
+    // action, and going first keeps the mint even if the action then 401s keyless.
+    await apiFetch('/api/ontology/promote', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: targetKey,
+        props: promoteProps,
+        trigger: PROMOTE_TRIGGER[action],
+      }),
+    }).catch(() => undefined);
     try {
       const r = await apiFetch(`/api/actions/${action}`, {
         method: 'POST',

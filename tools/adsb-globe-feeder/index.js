@@ -65,6 +65,9 @@ function readFn() {
       track: p.track, alt_baro: p.alt_baro, gs: p.gs,
       squawk: p.squawk, category: p.category, r: p.registration,
       seen: p.seen, seen_pos: p.seen_pos,
+      // GPS-integrity fields → jamming/nacp detector. tar1090's plane store
+      // carries readsb's nac_p/nic; dropping them left the jamming layer empty.
+      nac_p: p.nac_p, nic: p.nic,
     });
   }
   return out;

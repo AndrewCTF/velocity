@@ -16,7 +16,8 @@ export type AppId =
   | 'targeting'
   | 'video'
   | 'sim'
-  | 'reports';
+  | 'reports'
+  | 'foundry';
 
 export const APP_IDS: readonly AppId[] = [
   'map',
@@ -26,6 +27,7 @@ export const APP_IDS: readonly AppId[] = [
   'video',
   'sim',
   'reports',
+  'foundry',
 ];
 
 export const APP_META: Record<AppId, { label: string; hint: string }> = {
@@ -36,6 +38,7 @@ export const APP_META: Record<AppId, { label: string; hint: string }> = {
   video: { label: 'Video', hint: 'FMV + ground recon + detections' },
   sim: { label: 'Sim', hint: 'Browser war-game overlay' },
   reports: { label: 'Reports', hint: 'Case files, briefs, dossiers' },
+  foundry: { label: 'Foundry', hint: 'BYO data: datasets, pipelines, builds, ontology binding' },
 };
 
 const LS_KEY = 'velocity.appView';

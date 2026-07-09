@@ -34,4 +34,39 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Guardrail (CLAUDE.md "Auth"): every browser→backend call goes through
+    // apiFetch so auth headers are never forgotten. Raw fetch is reserved for
+    // third-party hosts — add the file to the ignores below with a comment
+    // naming the host.
+    files: ['**/*.{ts,tsx}'],
+    ignores: [
+      'src/transport/**', // apiFetch's own implementation
+      'src/sim/TrafficController.ts', // overpass-api.de (third-party OSM)
+      'src/imagery/ChipLayer.tsx', // imagery chip hrefs (third-party STAC)
+      '**/*.test.*',
+    ],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        { name: 'fetch', message: 'Use apiFetch (src/transport/http.ts); raw fetch only for third-party hosts (scoped ignore in eslint.config.js).' },
+      ],
+    },
+  },
+  {
+    // Guardrail (CLAUDE.md "Refresh smoothness"): this adapter upserts by id;
+    // removeAll()+add() re-creates entities every poll, resets the motion
+    // model, and makes contacts blink. Deliberate change requires editing this
+    // rule, not silencing it.
+    files: ['src/globe/adapters/PollGeoJsonAdapter.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CallExpression[callee.property.name="removeAll"]',
+          message: 'PollGeoJsonAdapter is upsert-by-id — removeAll() churns entities (CLAUDE.md refresh-smoothness invariant).',
+        },
+      ],
+    },
+  },
 );

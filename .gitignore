@@ -29,6 +29,12 @@ site/
 # History playback SQLite store (refills from live data; never commit).
 **/data/history.db
 **/data/history.db-*
+# Ontology local spine (the analyst's graph + assertion history; never commit).
+**/data/ontology.db
+**/data/ontology.db-*
+# Foundry BYO-data store (uploaded datasets + build history; runtime, never commit).
+**/data/foundry.db
+**/data/foundry.db-*
 .playwright-mcp/
 # Dev screenshots / scratch images at the repo root — keep the tree tidy.
 # (Real product art lives in code as SVG, or under docs/ if ever needed.)

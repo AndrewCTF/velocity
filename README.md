@@ -9,7 +9,7 @@ can ask it for live data instead of guessing from its training cut-off.
 **[Live demo](https://projectvelocity.org)** · [Quick start](#quick-start) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-690%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-940%2B%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
@@ -92,6 +92,15 @@ the raw fields, while a magenta line traces its recent track on the globe. Click
 empty space and it clears.
 
 ![Selected aircraft with dossier panel and magenta track](docs/img/entity-panel.png)
+
+**4. Bring your own data — the Foundry tab.** Upload a CSV/JSON/NDJSON, shape it
+through a governed pipeline (13 transform steps: filter, derive, join, aggregate,
+window, pivot, dedup, cast, regex…), gate every version with data-health checks
+(freshness SLAs, schema-drift, uniqueness…), and bind it into the same ontology
+graph as the live feeds. Lineage, immutable versions with rollback, and a
+dead-letter for rows that fail a transform all come along.
+
+![Foundry lineage pipeline — datasets, transforms, stale-aware DAG](docs/media/foundry-pipeline-new.png)
 
 ## Scope and limits
 
@@ -278,11 +287,14 @@ osint/
 ├── apps/web/                 # React + Cesium console
 ├── apps/api/                 # FastAPI backend
 │   └── app/
-│       ├── intel/            # agent-facing analytics (classification, AOI, density, jamming)
+│       ├── intel/            # agent-facing analytics + local ontology store
+│       ├── foundry/          # BYO-data layer: datasets, transforms, builds, checks, binding
 │       ├── routes/intel.py   # /api/intel/* deep-query JSON API
-│       └── mcp_server.py     # Model Context Protocol server (22 tools)
+│       ├── routes/foundry.py # /api/foundry/* datasets/pipelines/checks/bindings
+│       └── mcp_server.py     # Model Context Protocol server
+├── apps/web/src/foundry/     # FOUNDRY console surface (datasets, pipeline DAG, builds, ontology)
 ├── packages/shared/          # Shared TS types (LayerDescriptor, Observation)
-├── docs/                     # adsb-aircraft-pipeline.md, mcp-server.md
+├── docs/                     # design notes, decisions.md, foundry-plan.md
 └── infra/                    # Docker, nginx, db init
 ```
 
@@ -310,6 +322,15 @@ pnpm -r typecheck
   briefs, a keyless infra/domain OSINT layer, optional local-GPU (Ollama)
   inference, and a first-run onboarding tour. More sensors and deeper analysis
   are ongoing.
+- [~] Phase 5: Foundry — a keyless, local, single-operator take on Palantir
+  Foundry's data-integration loop. Upload → transform (governed step DSL with
+  lineage) → build (dependency DAG, staleness, cycle rejection) → data-health
+  checks → bind into the local ontology graph. In: immutable versions +
+  rollback, row-level quarantine/dead-letter, freshness/schema-drift SLAs,
+  window/pivot analytics, entity resolution. Deliberately out of scope
+  (single-operator identity): multi-tenant MLS, distributed compute, streaming
+  CDC, connector catalogs. Next: ontology Actions (audited write-back) and
+  dataset branches.
 
 See [`docs/`](./docs) for the per-feature design notes and pipeline writeups.
 

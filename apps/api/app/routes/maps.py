@@ -3,7 +3,7 @@
 A *named map* is a saved snapshot of the analyst's operational picture: the
 camera viewport, which layers are on, the active imagery overlay, the selected
 entity, and the faceted filter clauses. It is persisted as an **ontology object**
-(``kind='map'``, id ``map:<uuid>``) via the P0 ``OntologyRegistry`` — no new
+(``kind='map'``, id ``map:<uuid>``) via the ontology registry — no new
 table, RLS-scoped to the caller exactly like every other ``objects`` row. So a
 COP composes on the semantic spine the same way alerts / investigations do, and
 degrades to 503 when Supabase is unconfigured (the store-not-configured contract
@@ -41,9 +41,9 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel, Field
 
 from app.auth import require_ws_key
-from app.config import Settings, get_settings
-from app.intel.ontology import Object, OntologyRegistry
-from app.keys import UserCtx, _client, _headers, current_user
+from app.config import get_settings
+from app.intel.ontology import Object, get_registry
+from app.keys import UserCtx, current_user_or_local
 
 router = APIRouter(tags=["maps"])
 
@@ -171,53 +171,21 @@ def _from_object(obj: Object) -> SavedMap | None:
     )
 
 
-def _maps_url(s: Settings) -> str:
-    """PostgREST base for the ``objects`` table (where maps live).
-
-    Raises the same 503 the registry does when Supabase is unconfigured, so the
-    list route degrades identically to ``get``/``upsert``.
-    """
-    if not s.supabase_url:
-        raise HTTPException(status_code=503, detail="Supabase is not configured")
-    return s.supabase_url.rstrip("/") + "/rest/v1/objects"
-
-
 # ── HTTP: save / list / load / delete ───────────────────────────────────────────
 
 
 @router.get("/api/maps", response_model=list[SavedMap])
-async def list_maps(ctx: UserCtx = Depends(current_user)) -> list[SavedMap]:
+async def list_maps(ctx: UserCtx = Depends(current_user_or_local)) -> list[SavedMap]:
     """The caller's saved COPs, newest first.
 
-    Queries the ``objects`` table directly (the registry has no list-by-kind),
-    RLS-scoped to the user AND filtered to ``props->>kind = 'map'`` so other
-    ontology nodes (alerts, investigations, flagged entities) never leak into the
-    map picker. 503 when Supabase is unset.
+    ``list_by_kind`` filters on ``props->>kind = 'map'`` so other ontology
+    nodes (alerts, investigations, flagged entities) never leak into the map
+    picker.
     """
-    s = get_settings()
-    async with _client() as c:
-        r = await c.get(
-            _maps_url(s),
-            params={
-                "user_id": f"eq.{ctx.user_id}",
-                "props->>kind": f"eq.{_MAP_KIND}",
-                "select": "id,kind,props,created_at",
-                "order": "created_at.desc",
-                "limit": str(_MAX_LIST),
-            },
-            headers=_headers(ctx, s),
-        )
-    if r.status_code != 200:
-        raise HTTPException(status_code=502, detail="map store unavailable")
-    rows = r.json()
+    reg = get_registry(ctx, get_settings())
+    objs = await reg.list_by_kind(_MAP_KIND, limit=_MAX_LIST)
     out: list[SavedMap] = []
-    for row in rows if isinstance(rows, list) else []:
-        obj = Object(
-            id=row.get("id"),
-            kind=row.get("kind") or "object",
-            props=row.get("props") or {},
-            created_at=row.get("created_at"),
-        )
+    for obj in objs:
         sm = _from_object(obj)
         if sm is not None:
             out.append(sm)
@@ -225,7 +193,7 @@ async def list_maps(ctx: UserCtx = Depends(current_user)) -> list[SavedMap]:
 
 
 @router.post("/api/maps", response_model=SavedMap, status_code=201)
-async def save_map(body: MapIn, ctx: UserCtx = Depends(current_user)) -> SavedMap:
+async def save_map(body: MapIn, ctx: UserCtx = Depends(current_user_or_local)) -> SavedMap:
     """Save (insert) or overwrite (when ``id`` is supplied) a named COP.
 
     Persisted as a ``map:`` ontology object via the registry's upsert (unique on
@@ -237,7 +205,7 @@ async def save_map(body: MapIn, ctx: UserCtx = Depends(current_user)) -> SavedMa
     if not map_id.startswith(f"{_MAP_KIND}:"):
         # Defend the namespace: a client must not park arbitrary objects here.
         raise HTTPException(status_code=400, detail="map id must start with 'map:'")
-    reg = OntologyRegistry(ctx, s)
+    reg = get_registry(ctx, s)
     stored = await reg.upsert(_to_object(map_id, body, _now_iso()))
     sm = _from_object(stored)
     if sm is None:  # upsert echoed something unexpected — surface, don't 500 silently
@@ -246,13 +214,13 @@ async def save_map(body: MapIn, ctx: UserCtx = Depends(current_user)) -> SavedMa
 
 
 @router.get("/api/maps/{map_id:path}", response_model=SavedMap)
-async def load_map(map_id: str, ctx: UserCtx = Depends(current_user)) -> SavedMap:
+async def load_map(map_id: str, ctx: UserCtx = Depends(current_user_or_local)) -> SavedMap:
     """Load one saved COP by id (RLS-scoped). 404 if absent / not a map.
 
     ``:path`` because the canonical id carries a colon (``map:ab12…``) — same
     converter ``ontology.get_object`` uses.
     """
-    reg = OntologyRegistry(ctx, get_settings())
+    reg = get_registry(ctx, get_settings())
     obj = await reg.get(map_id)
     sm = _from_object(obj) if obj is not None else None
     if sm is None:
@@ -261,18 +229,11 @@ async def load_map(map_id: str, ctx: UserCtx = Depends(current_user)) -> SavedMa
 
 
 @router.delete("/api/maps/{map_id:path}", status_code=204)
-async def delete_map(map_id: str, ctx: UserCtx = Depends(current_user)) -> None:
+async def delete_map(map_id: str, ctx: UserCtx = Depends(current_user_or_local)) -> None:
     """Delete a saved COP (own rows only, RLS-scoped). Idempotent-ish: a missing
     row is a no-op 204 (PostgREST delete of zero rows still 200/204)."""
-    s = get_settings()
-    async with _client() as c:
-        r = await c.delete(
-            _maps_url(s),
-            params={"id": f"eq.{map_id}", "user_id": f"eq.{ctx.user_id}"},
-            headers=_headers(ctx, s),
-        )
-    if r.status_code not in (200, 204):
-        raise HTTPException(status_code=502, detail="could not delete map")
+    reg = get_registry(ctx, get_settings())
+    await reg.delete(map_id)
 
 
 # ── live follow-along: an in-process room hub (the /ws/cop delta channel) ────────

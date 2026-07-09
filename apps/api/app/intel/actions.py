@@ -5,7 +5,7 @@ An ``ActionSpec`` binds an action name → a Pydantic param model → an async h
 that:
 
   1. validates the params (the Pydantic model rejects bad input → 400),
-  2. mutates the ontology (upserts objects / links through ``OntologyRegistry``)
+  2. mutates the ontology (upserts objects / links through the registry)
      and fires the relevant side effect (a ``target_board`` POST, an
      ``alert_rules`` POST, …), reusing the existing PostgREST patterns, and
   3. appends an **audit row** to ``public.action_log`` recording WHO
@@ -40,7 +40,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
 from app.config import Settings, get_settings
-from app.intel.ontology import Link, Object, OntologyRegistry
+from app.intel.ontology import Link, Object, get_registry
 from app.keys import UserCtx, _client, _headers
 
 # ── audit log ─────────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ class AddWatchParams(BaseModel):
 async def _handle_flag_entity(
     ctx: UserCtx, s: Settings, p: FlagEntityParams
 ) -> ActionResult:
-    reg = OntologyRegistry(ctx, s)
+    reg = get_registry(ctx, s)
     # Stamp the flag onto the object's props (creating the node if new) and add a
     # self-edge so a graph traversal surfaces the flag.
     existing = await reg.get(p.target_id)
@@ -171,7 +171,7 @@ async def _handle_flag_entity(
 async def _handle_promote_incident(
     ctx: UserCtx, s: Settings, p: PromoteIncidentParams
 ) -> ActionResult:
-    reg = OntologyRegistry(ctx, s)
+    reg = get_registry(ctx, s)
     incident_id = f"incident:{uuid.uuid4()}"
     # Ensure the source object exists, create the incident node, and wire the
     # promotion edge so the incident is reachable from the source and vice-versa.
@@ -227,7 +227,7 @@ async def _handle_nominate_target(
     target = created[0] if isinstance(created, list) and created else created
 
     # Reflect the nomination into the ontology so the board entry is a graph node.
-    reg = OntologyRegistry(ctx, s)
+    reg = get_registry(ctx, s)
     await reg.upsert(Object(id=p.target_id))
     board_id = (target or {}).get("id")
     if board_id:
@@ -272,7 +272,7 @@ async def _handle_add_watch(
     created = r.json()
     rule = created[0] if isinstance(created, list) and created else created
 
-    reg = OntologyRegistry(ctx, s)
+    reg = get_registry(ctx, s)
     await reg.upsert(Object(id=p.target_id))
     rule_id = (rule or {}).get("id")
     if rule_id:

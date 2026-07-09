@@ -1,11 +1,13 @@
-"""Shared named COP — save/load over a mocked PostgREST + the /ws/cop room hub.
+"""Shared named COP — save/load over the LOCAL ontology store + the /ws/cop hub.
 
 Hermetic (no live Supabase / network). Covers:
 - CopState / object coercion round-trips (a saved map is a `map:` ontology object).
-- Route auth gate (401 unauthed) + 503-when-Supabase-unconfigured contract.
+- The keyless-local route contract (2026-07-07 revoke of the old 401/503
+  contract — docs/decisions.md): every route works with no Supabase.
 - Namespace defence (a non-`map:` id is rejected 400).
-- Save → list → load happy path over an in-memory PostgREST stand-in, asserting
-  the picture (viewport + layers + filters + selection + imagery) survives.
+- Save → list → load happy path against the real SQLite registry on a temp DB,
+  asserting the picture (viewport + layers + filters + selection + imagery)
+  survives.
 - The `_CopHub` fan-out unit (sender excluded, slow follower dropped, room reaped).
 - A real `/ws/cop` follow-along round-trip: one socket's viewport delta reaches a
   second socket in the same room, and the auth gate rejects a keyless upgrade when
@@ -17,9 +19,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import Settings, get_settings
-from app.keys import UserCtx, current_user
-from app.routes import maps as maps_mod
+from app.config import Settings
 from app.routes.maps import (
     CopState,
     MapIn,
@@ -94,186 +94,77 @@ def test_from_object_tolerates_malformed_state() -> None:
     assert sm.state.layers == [] and sm.state.viewport is None
 
 
-# ── route auth + 503 contract ────────────────────────────────────────────────────
+# ── keyless-local route contract ─────────────────────────────────────────────────
 
 
-def test_maps_routes_require_auth(client: TestClient) -> None:
-    assert client.get("/api/maps").status_code == 401
-    assert client.post("/api/maps", json={"name": "x"}).status_code == 401
-    assert client.get("/api/maps/map:abc").status_code == 401
-    assert client.delete("/api/maps/map:abc").status_code == 401
-
-
-def _fake_user() -> UserCtx:
-    return UserCtx("u1", "tok")
-
-
-def test_list_maps_503_when_supabase_unconfigured(client: TestClient) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
-    try:
-        assert client.get("/api/maps").status_code == 503
-    finally:
-        client.app.dependency_overrides.pop(current_user, None)
-
-
-def test_save_map_503_when_supabase_unconfigured(client: TestClient) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
-    try:
-        r = client.post("/api/maps", json={"name": "x", "state": {"layers": []}})
-        assert r.status_code == 503
-    finally:
-        client.app.dependency_overrides.pop(current_user, None)
+def test_maps_routes_work_keyless(client: TestClient) -> None:
+    # No Supabase → the shared "local" identity + SQLite store: the list is an
+    # honest empty [], an unknown map is 404 — not a dead 401/503.
+    r = client.get("/api/maps")
+    assert r.status_code == 200 and r.json() == []
+    assert client.get("/api/maps/map:abc").status_code == 404
 
 
 def test_save_map_rejects_foreign_namespace(client: TestClient) -> None:
     # An explicit id that doesn't start with map: is a 400 BEFORE any store call —
     # a client must not park arbitrary objects through this route.
-    client.app.dependency_overrides[current_user] = _fake_user
-    try:
-        r = client.post("/api/maps", json={"name": "x", "id": "aircraft:pwn"})
-        assert r.status_code == 400
-    finally:
-        client.app.dependency_overrides.pop(current_user, None)
+    r = client.post("/api/maps", json={"name": "x", "id": "aircraft:pwn"})
+    assert r.status_code == 400
 
 
-# ── save → list → load over an in-memory PostgREST stand-in ──────────────────────
+# ── save → list → load against the real local registry (temp DB) ─────────────────
 
 
-class _FakeResp:
-    def __init__(self, status: int, payload: object) -> None:
-        self.status_code = status
-        self._payload = payload
+def test_save_list_load_round_trip(client: TestClient) -> None:
+    # SAVE
+    payload = {
+        "name": "Hormuz watch",
+        "state": {
+            "viewport": {"lon": 56.3, "lat": 26.5, "height": 350000},
+            "layers": ["adsb.global"],
+            "selection": "aircraft:4ca7b3",
+            "filters": [
+                {"facet": "aircraftCategory", "value": "military", "mode": "only"}
+            ],
+        },
+    }
+    r = client.post("/api/maps", json=payload)
+    assert r.status_code == 201, r.text
+    saved = SavedMap(**r.json())
+    assert saved.id.startswith("map:")
+    assert saved.name == "Hormuz watch"
 
-    def json(self) -> object:
-        return self._payload
+    # LIST — the saved map shows up, filtered to kind=map.
+    r = client.get("/api/maps")
+    assert r.status_code == 200
+    ids = [m["id"] for m in r.json()]
+    assert saved.id in ids
 
+    # LOAD — the picture round-trips intact.
+    r = client.get(f"/api/maps/{saved.id}")
+    assert r.status_code == 200
+    loaded = SavedMap(**r.json())
+    assert loaded.state.viewport is not None
+    assert loaded.state.viewport.lat == 26.5
+    assert loaded.state.layers == ["adsb.global"]
+    assert loaded.state.selection == "aircraft:4ca7b3"
+    assert loaded.state.filters[0].value == "military"
 
-class _MapStoreClient:
-    """In-memory `objects` table: upsert on POST, filter on GET, drop on DELETE.
+    # OVERWRITE by id — re-save replaces rather than duplicating.
+    payload2 = {"id": saved.id, "name": "Hormuz watch v2", "state": {"layers": []}}
+    r = client.post("/api/maps", json=payload2)
+    assert r.status_code == 201
+    r = client.get("/api/maps")
+    assert [m["id"] for m in r.json()].count(saved.id) == 1
+    assert client.get(f"/api/maps/{saved.id}").json()["name"] == "Hormuz watch v2"
 
-    Keyed by (user_id, id) like the real unique constraint. Only models what the
-    maps routes need (the objects table); good enough to exercise save/list/load.
-    """
-
-    _ROWS: dict[tuple[str, str], dict] = {}
-
-    async def __aenter__(self) -> _MapStoreClient:
-        return self
-
-    async def __aexit__(self, *a: object) -> bool:
-        return False
-
-    async def post(self, url: str, json: dict, headers: dict) -> _FakeResp:  # type: ignore[override]
-        key = (json["user_id"], json["id"])
-        row = {**json, "created_at": "2026-06-21T00:00:00Z"}
-        type(self)._ROWS[key] = row
-        return _FakeResp(201, [row])
-
-    async def get(self, url: str, params: dict, headers: dict) -> _FakeResp:  # type: ignore[override]
-        uid = params.get("user_id", "").removeprefix("eq.")
-        # Single-object fetch (registry.get) uses an id filter.
-        if "id" in params:
-            oid = params["id"].removeprefix("eq.")
-            row = type(self)._ROWS.get((uid, oid))
-            return _FakeResp(200, [row] if row else [])
-        # List fetch filters props->>kind = map.
-        rows = [
-            r for (u, _), r in type(self)._ROWS.items()
-            if u == uid and (r.get("props") or {}).get("kind") == "map"
-        ]
-        return _FakeResp(200, rows)
-
-    async def delete(self, url: str, params: dict, headers: dict) -> _FakeResp:  # type: ignore[override]
-        uid = params.get("user_id", "").removeprefix("eq.")
-        oid = params.get("id", "").removeprefix("eq.")
-        type(self)._ROWS.pop((uid, oid), None)
-        return _FakeResp(204, None)
+    # DELETE.
+    assert client.delete(f"/api/maps/{saved.id}").status_code == 204
+    assert client.get(f"/api/maps/{saved.id}").status_code == 404
 
 
-def _supa_settings() -> Settings:
-    return Settings(supabase_url="http://x", supabase_anon_key="anon")
-
-
-def test_save_list_load_round_trip(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _MapStoreClient._ROWS.clear()
-    # The maps route reads settings via get_settings() (not the test override) for
-    # the store url, and OntologyRegistry builds its own httpx client — patch both
-    # factories + point settings at a configured Supabase.
-    from app.intel import ontology as ont
-
-    monkeypatch.setattr(maps_mod, "_client", lambda: _MapStoreClient())
-    monkeypatch.setattr(ont, "_client", lambda: _MapStoreClient())
-    client.app.dependency_overrides[current_user] = _fake_user
-    client.app.dependency_overrides[get_settings] = _supa_settings
-    monkeypatch.setattr(maps_mod, "get_settings", _supa_settings)
-    monkeypatch.setattr(ont, "get_settings", _supa_settings)
-    try:
-        # SAVE
-        payload = {
-            "name": "Hormuz watch",
-            "state": {
-                "viewport": {"lon": 56.3, "lat": 26.5, "height": 350000},
-                "layers": ["adsb.global"],
-                "selection": "aircraft:4ca7b3",
-                "filters": [{"facet": "aircraftCategory", "value": "military", "mode": "only"}],
-            },
-        }
-        r = client.post("/api/maps", json=payload)
-        assert r.status_code == 201, r.text
-        saved = SavedMap(**r.json())
-        assert saved.id.startswith("map:")
-        assert saved.name == "Hormuz watch"
-
-        # LIST — the saved map shows up, filtered to kind=map.
-        r = client.get("/api/maps")
-        assert r.status_code == 200
-        ids = [m["id"] for m in r.json()]
-        assert saved.id in ids
-
-        # LOAD — the picture round-trips intact.
-        r = client.get(f"/api/maps/{saved.id}")
-        assert r.status_code == 200
-        loaded = SavedMap(**r.json())
-        assert loaded.state.viewport is not None
-        assert loaded.state.viewport.lat == 26.5
-        assert loaded.state.layers == ["adsb.global"]
-        assert loaded.state.selection == "aircraft:4ca7b3"
-        assert loaded.state.filters[0].value == "military"
-
-        # OVERWRITE by id — re-save replaces rather than duplicating.
-        payload2 = {"id": saved.id, "name": "Hormuz watch v2", "state": {"layers": []}}
-        r = client.post("/api/maps", json=payload2)
-        assert r.status_code == 201
-        r = client.get("/api/maps")
-        assert [m["id"] for m in r.json()].count(saved.id) == 1
-        assert client.get(f"/api/maps/{saved.id}").json()["name"] == "Hormuz watch v2"
-
-        # DELETE.
-        assert client.delete(f"/api/maps/{saved.id}").status_code == 204
-        assert client.get(f"/api/maps/{saved.id}").status_code == 404
-    finally:
-        client.app.dependency_overrides.pop(current_user, None)
-        client.app.dependency_overrides.pop(get_settings, None)
-
-
-def test_load_missing_map_404(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _MapStoreClient._ROWS.clear()
-    from app.intel import ontology as ont
-
-    monkeypatch.setattr(ont, "_client", lambda: _MapStoreClient())
-    monkeypatch.setattr(ont, "get_settings", _supa_settings)
-    monkeypatch.setattr(maps_mod, "get_settings", _supa_settings)
-    client.app.dependency_overrides[current_user] = _fake_user
-    client.app.dependency_overrides[get_settings] = _supa_settings
-    try:
-        assert client.get("/api/maps/map:nope").status_code == 404
-    finally:
-        client.app.dependency_overrides.pop(current_user, None)
-        client.app.dependency_overrides.pop(get_settings, None)
+def test_load_missing_map_404(client: TestClient) -> None:
+    assert client.get("/api/maps/map:nope").status_code == 404
 
 
 # ── _CopHub fan-out (pure) ───────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -69,6 +70,32 @@ def _neutralise_minimax(monkeypatch: pytest.MonkeyPatch) -> None:
         "minimax_config",
         lambda: (None, "https://integrate.api.nvidia.com/v1", "minimaxai/minimax-m3"),
     )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ontology_db(tmp_path: Path) -> Iterator[None]:
+    """Point the local ontology store at a per-test temp file.
+
+    Route handlers call ``get_settings()`` directly (not via Depends), so the
+    ``dependency_overrides`` above never reach the DB path — without this hook
+    every route test would write ``./data/ontology.db`` into the repo, and
+    tests would see each other's graphs.
+    """
+    from app.intel import ontology_local
+
+    ontology_local.override_db_path(str(tmp_path / "ontology.db"))
+    yield
+    ontology_local.override_db_path(None)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_foundry_db(tmp_path: Path) -> Iterator[None]:
+    """Point the Foundry store at a per-test temp file (mirrors ontology)."""
+    from app.foundry import store as foundry_store
+
+    foundry_store.override_db_path(str(tmp_path / "foundry.db"))
+    yield
+    foundry_store.override_db_path(None)
 
 
 @pytest.fixture

@@ -6,6 +6,7 @@ import { TargetKanbanPanel } from '../target-kanban/TargetKanbanPanel.js';
 import { VideoApp } from '../fmv/VideoApp.js';
 import { ReportsApp } from '../reports/ReportsApp.js';
 import { ExplorerApp } from '../explorer/ExplorerApp.js';
+import { FoundryApp } from '../foundry/FoundryApp.js';
 
 // AppSurface (design §6.1) — the non-Map apps render as a full surface over the
 // globe (which stays mounted behind for instant return + shared selection). Map +
@@ -30,6 +31,9 @@ export function AppSurface({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
       break;
     case 'reports':
       node = <ReportsApp viewer={viewer} />;
+      break;
+    case 'foundry':
+      node = <FoundryApp viewer={viewer} />;
       break;
     default:
       node = null;

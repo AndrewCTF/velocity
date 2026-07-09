@@ -334,12 +334,13 @@ def _settings() -> Settings:
 
 
 def test_evaluate_session_fires_persists_and_pushes(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.intel import ontology as ont
+    # Rules still come from the (mocked) PostgREST alert_rules table; ontology
+    # writes land in the real local SQLite store (temp DB via conftest).
+    from app.intel.ontology_local import SqliteRegistry
 
     _POSTS.clear()
     rules = [_rule(kinds=["military_air"])]
     monkeypatch.setattr(watch, "_client", lambda: _RecordingClient(rules))
-    monkeypatch.setattr(ont, "_client", lambda: _RecordingClient(rules))
 
     # a military contact sitting inside the AOI
     cand = _Candidate("aircraft:m1", "military_air", 56.3, 26.5, 3, "military contact RCH1")
@@ -353,18 +354,19 @@ def test_evaluate_session_fires_persists_and_pushes(monkeypatch: pytest.MonkeyPa
         off()
 
     assert fired == 1
+    reg = SqliteRegistry(UserCtx("u1", "tok"), _settings())
     # the Alert object was upserted …
-    alert_writes = [
-        j for u, j in _POSTS
-        if u.endswith("/objects") and j.get("props", {}).get("kind") == "alert"
-    ]
-    assert alert_writes, "expected an alert object upsert"
-    assert alert_writes[0]["props"]["state"] == "open"
+    alerts = asyncio.run(reg.list_by_kind("alert"))
+    assert alerts, "expected an alert object upsert"
+    assert alerts[0].props["state"] == "open"
     # … and the RiskIndicator was cached onto the entity's object
-    entity_writes = [j for u, j in _POSTS
-                     if u.endswith("/objects") and j.get("id") == "aircraft:m1"]
-    assert entity_writes, "expected a risk indicator cache on the entity"
-    assert entity_writes[-1]["props"]["risk_indicator"]["kind"] == "military_air"
+    entity = asyncio.run(reg.get("aircraft:m1"))
+    assert entity is not None, "expected a risk indicator cache on the entity"
+    assert entity.props["risk_indicator"]["kind"] == "military_air"
+    # Move 1: the mint is evidenced with the WATCH RULE as its provenance source
+    # (a rule minted this, not a generic "analyst" write).
+    ri_rows = asyncio.run(reg.get_assertions("aircraft:m1", prop="risk_indicator"))
+    assert ri_rows and ri_rows[0].source == "rule:watchbox:rule-1"
     # … and it pushed onto the existing /ws/alerts bus
     assert len(pushed) == 1
     assert pushed[0].rule_id == "watch:rule-1"
