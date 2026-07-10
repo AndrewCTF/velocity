@@ -1,0 +1,36 @@
+{
+  "name": "osint-geoint",
+  "displayName": "OSINT GEOINT",
+  "description": "Live geospatial intelligence as MCP tools — ADS-B aircraft, AIS vessels, GPS-jamming, SAR dark vessels, and a cross-domain incident-fusion engine — bundled with an analyst skill and slash commands. Sweep the planet for a few hundred tokens; drill on demand.",
+  "version": "1.0.0",
+  "author": { "name": "Velocity OSINT", "url": "https://projectvelocity.org" },
+  "homepage": "https://projectvelocity.org",
+  "repository": "https://github.com/AndrewCTF/osint-geospatial-console",
+  "license": "MIT",
+  "keywords": ["osint", "geoint", "adsb", "ais", "gps-jamming", "sar", "mcp", "intelligence"],
+  "mcpServers": "./.mcp.json",
+  "skills": "./skills/",
+  "commands": ["./commands/"],
+  "agents": ["./agents/"],
+  "userConfig": {
+    "repo_dir": {
+      "type": "directory",
+      "title": "OSINT repo directory",
+      "description": "Absolute path to your cloned OSINT repo — the folder that contains apps/api. The backend must be running (bash scripts/run-api.sh) for the tools to return live data.",
+      "required": true
+    },
+    "python": {
+      "type": "file",
+      "title": "Python interpreter",
+      "description": "Absolute path to the repo's venv Python (has the apps/api deps): macOS/Linux <repo>/apps/api/.venv/bin/python, Windows <repo>\\apps\\api\\.venv\\Scripts\\python.exe. Run plugin/osint-geoint/install.sh (or install.ps1 on Windows) to print the exact path.",
+      "required": true
+    },
+    "api_base": {
+      "type": "string",
+      "title": "Backend base URL",
+      "description": "URL of the running OSINT backend the tools query over localhost.",
+      "default": "http://127.0.0.1:8000",
+      "required": false
+    }
+  }
+}

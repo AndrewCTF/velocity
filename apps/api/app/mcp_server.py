@@ -45,6 +45,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.routing import Route
 
 from app.config import get_settings
+from app.intel.shape import normalize_detail, shape
 
 mcp = FastMCP(
     "osint-geoint",
@@ -57,7 +58,12 @@ mcp = FastMCP(
         "load an incident's region PRIMARY -> query_vessels / gps_jamming / "
         "query_aircraft to drill into its evidence -> deep_analyze() to have a "
         "reasoning model judge it. intel_brief is the headline tool: it chains "
-        "signals into incidents so you don't correlate raw layers by hand."
+        "signals into incidents so you don't correlate raw layers by hand.\n\n"
+        "CONTEXT BUDGET: most tools take detail='short'|'long'. 'short' (the "
+        "default) is a token-frugal digest — headline counts plus the top few "
+        "items of each list, with `*_total` giving the true size — ideal for "
+        "orientation and broad sweeps. Switch to detail='long' only once you've "
+        "picked an incident/area worth the full, comprehensive bundle."
     ),
 )
 
@@ -318,14 +324,17 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any
 
 
 @mcp.tool()
-async def get_situation() -> dict[str, Any]:
+async def get_situation(detail: str = "short") -> dict[str, Any]:
     """Global situational snapshot — the cheap first call to orient.
 
     Returns total aircraft (airborne/ground, by category), GNSS-degraded count,
     active emergency squawks, the worst GPS-jamming cells worldwide, tracked
     vessel counts by category, and recent fusion-alert counts. A few hundred
-    tokens describing the whole planet."""
-    return await _get("/api/intel/situation")
+    tokens describing the whole planet.
+
+    detail='short' (default) trims the jamming/vessel/alert samples to their
+    top few; detail='long' returns the full situation bundle."""
+    return shape(await _get("/api/intel/situation"), detail)
 
 
 @mcp.tool()
@@ -335,6 +344,7 @@ async def focus_area(
     radius_nm: float = 200.0,
     label: str | None = None,
     cell_deg: float = 1.0,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Load a region PRIMARY and return a full intel bundle for it in one call.
 
@@ -350,7 +360,7 @@ async def focus_area(
         label: optional human name for the AOI (e.g. "Kaliningrad").
         cell_deg: density grid cell size in degrees (0.1–10; default 1.0).
     """
-    return await _get(
+    data = await _get(
         "/api/intel/area",
         {
             "lat": lat,
@@ -361,6 +371,7 @@ async def focus_area(
             "cell_deg": cell_deg,
         },
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -373,13 +384,14 @@ async def aircraft_density(
     max_lon: float | None = None,
     max_lat: float | None = None,
     cell_deg: float = 1.0,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Aircraft density over an area as a grid of cells (count, by category,
     GNSS-degraded per cell) plus totals, peak cell, and in-area vessel count.
 
     Give either a centre (lat, lon [, radius_nm]) or an explicit bbox
     (min_lon, min_lat, max_lon, max_lat). cell_deg sets grid resolution."""
-    return await _get(
+    data = await _get(
         "/api/intel/density",
         {
             "lat": lat, "lon": lon, "radius_nm": radius_nm,
@@ -387,6 +399,7 @@ async def aircraft_density(
             "max_lon": max_lon, "max_lat": max_lat, "cell_deg": cell_deg,
         },
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -398,12 +411,13 @@ async def gps_jamming(
     min_lat: float | None = None,
     max_lon: float | None = None,
     max_lat: float | None = None,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """GPS/GNSS jamming assessment (GPSJam method: ADS-B NACp<8 / NIC<7 binned
     into 1° cells). Returns flagged cells ranked by severity, counts of
     high/medium cells, and a sample of affected aircraft. Omit all coordinates
     for a global view; otherwise pass a centre or a bbox to scope it."""
-    return await _get(
+    data = await _get(
         "/api/intel/jamming",
         {
             "lat": lat, "lon": lon, "radius_nm": radius_nm,
@@ -411,6 +425,7 @@ async def gps_jamming(
             "max_lon": max_lon, "max_lat": max_lat,
         },
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -431,6 +446,7 @@ async def query_aircraft(
     gnss_degraded: bool | None = None,
     on_ground: bool | None = None,
     limit: int = 50,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Filtered aircraft query against the live snapshot. Returns matched_total
     + a capped list of compact records.
@@ -438,7 +454,7 @@ async def query_aircraft(
     category ∈ airliner|private|helicopter|glider|military|emergency.
     Combine with area (centre or bbox), squawk, callsign_contains, altitude
     band (metres), emergency / gnss_degraded / on_ground booleans. limit ≤200."""
-    return await _get(
+    data = await _get(
         "/api/intel/aircraft",
         {
             "lat": lat, "lon": lon, "radius_nm": radius_nm,
@@ -451,6 +467,7 @@ async def query_aircraft(
             "on_ground": on_ground, "limit": limit,
         },
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -474,11 +491,12 @@ async def query_vessels(
     max_lat: float | None = None,
     dark_only: bool = False,
     limit: int = 50,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Vessels (AIS) in an area, classified (cargo/tanker/fishing/passenger/
     military/sailing/pleasure/tug). dark_only=True returns only dark-vessel
     candidates (moving with no static identity). Scoped by centre or bbox."""
-    return await _get(
+    data = await _get(
         "/api/intel/vessels",
         {
             "lat": lat, "lon": lon, "radius_nm": radius_nm,
@@ -487,6 +505,7 @@ async def query_vessels(
             "dark_only": dark_only, "limit": limit,
         },
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -498,11 +517,12 @@ async def anomalies(
     min_lat: float | None = None,
     max_lon: float | None = None,
     max_lat: float | None = None,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Fused anomaly report for an area (or global if no coords): emergency
     aircraft, GPS-jamming hotspots, dark-vessel candidates, recent fusion
     alerts, plus a triage threat_level (low|elevated|high) and score."""
-    return await _get(
+    data = await _get(
         "/api/intel/anomalies",
         {
             "lat": lat, "lon": lon, "radius_nm": radius_nm,
@@ -510,6 +530,7 @@ async def anomalies(
             "max_lon": max_lon, "max_lat": max_lat,
         },
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -523,6 +544,7 @@ async def intel_brief(
     max_lat: float | None = None,
     link_km: float = 50.0,
     window_hours: float = 6.0,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Cross-domain INCIDENT brief — the headline analytic tool.
 
@@ -536,7 +558,7 @@ async def intel_brief(
     scope it. Start here, then drill into an incident's centroid with
     query_vessels / gps_jamming / deep_analyze.
     """
-    return await _get(
+    data = await _get(
         "/api/intel/brief",
         {
             "lat": lat, "lon": lon, "radius_nm": radius_nm,
@@ -545,6 +567,7 @@ async def intel_brief(
             "link_km": link_km, "window_hours": window_hours,
         },
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -552,15 +575,17 @@ async def detect_deception(
     lat: float | None = None,
     lon: float | None = None,
     radius_nm: float = 500.0,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Denial & deception — "am I being fed?". Flags MANIPULATED tracks distinct
     from jamming: AIS duplicate-MMSI (one identity, two hulls) and impossible
     teleports; ADS-B GPS spoofing (many aircraft snapped to one false position)
     and kinematic position-injection. Run before trusting a feed in a contested
     area. Omit coords for global."""
-    return await _get(
+    data = await _get(
         "/api/intel/deception", {"lat": lat, "lon": lon, "radius_nm": radius_nm}
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -568,14 +593,16 @@ async def locate_emitter(
     lat: float | None = None,
     lon: float | None = None,
     radius_nm: float = 500.0,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Estimate a GPS jammer/spoofer LOCATION from the degraded-ADS-B footprint
     (severity-weighted centroid + CEP + confidence). Turns "jamming somewhere
     here" into "emitter ~here ±N km". Footprint-centroid estimate (~tens of km),
     not RF direction-finding — stated in the response. Scope with lat/lon."""
-    return await _get(
+    data = await _get(
         "/api/intel/emitter", {"lat": lat, "lon": lon, "radius_nm": radius_nm}
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -583,15 +610,17 @@ async def area_baseline(
     lat: float | None = None,
     lon: float | None = None,
     radius_nm: float = 500.0,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Is this normal? Current vessel / dark-vessel / jamming / military counts
     z-scored against a rolling baseline, with anomalies called out (e.g. "dark
     vessels +5σ", "traffic -3σ"). Global uses the background sampler; polling an
     AOI repeatedly builds that area's baseline. Distinguishes a real shift from
     a normal day."""
-    return await _get(
+    data = await _get(
         "/api/intel/baseline", {"lat": lat, "lon": lon, "radius_nm": radius_nm}
     )
+    return shape(data, detail)
 
 
 @mcp.tool()
@@ -599,6 +628,7 @@ async def whats_changed(
     lat: float | None = None,
     lon: float | None = None,
     radius_nm: float = 500.0,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Standing watch — what CHANGED since the last check, not the full picture.
 
@@ -608,9 +638,10 @@ async def whats_changed(
     so you can poll one region and be told only what moved. Use this to monitor
     instead of re-reading the whole brief each time.
     """
-    return await _get(
+    data = await _get(
         "/api/intel/watch", {"lat": lat, "lon": lon, "radius_nm": radius_nm}
     )
+    return shape(data, detail)
 
 
 def _compact_points(points: list[dict[str, Any]], max_points: int) -> list[dict[str, Any]]:
@@ -694,6 +725,7 @@ async def incident_history(
     hours: float = 6.0,
     limit: int = 25,
     max_incidents: int | None = None,
+    detail: str = "short",
 ) -> dict[str, Any]:
     """Timeline of how each incident built up over the recent window — per
     incident, a compact ``series`` of ``[time, threat_level, score]`` points.
@@ -713,25 +745,27 @@ async def incident_history(
         "/api/intel/incident-history",
         {"lat": lat, "lon": lon, "radius_nm": radius_nm, "hours": hours},
     )
-    return _compact_history(data, cap, max_points=12)
+    # detail='long' keeps a denser timeline (more transition points) per incident.
+    max_points = 40 if normalize_detail(detail) == "long" else 12
+    return _compact_history(data, cap, max_points=max_points)
 
 
 @mcp.tool()
-async def vessel_dossier(mmsi: int | str) -> dict[str, Any]:
+async def vessel_dossier(mmsi: int | str, detail: str = "short") -> dict[str, Any]:
     """Pattern-of-life dossier for one vessel (MMSI): recent track, AIS gaps,
     derived speed profile (loiter / transit / loiter-then-dash), area covered,
     which live incidents it appears in, and a behaviour assessment. The track is
     the store's ~1h retention window."""
     # MMSI is numeric; agents pass it as an int or a string — accept both.
-    return await _get(f"/api/intel/dossier/vessel/{quote(str(mmsi), safe='')}")
+    return shape(await _get(f"/api/intel/dossier/vessel/{quote(str(mmsi), safe='')}"), detail)
 
 
 @mcp.tool()
-async def aircraft_dossier(ident: str) -> dict[str, Any]:
+async def aircraft_dossier(ident: str, detail: str = "short") -> dict[str, Any]:
     """Pattern-of-life dossier for one aircraft (ICAO24 hex or callsign): recent
     track, gaps, derived speed profile, GNSS-integrity, emergency/military flags,
     and which live incidents it appears in."""
-    return await _get(f"/api/intel/dossier/aircraft/{quote(ident, safe='')}")
+    return shape(await _get(f"/api/intel/dossier/aircraft/{quote(ident, safe='')}"), detail)
 
 
 @mcp.tool()
@@ -797,16 +831,20 @@ async def deep_analyze(
 
     from app import llm  # noqa: PLC0415
 
-    # 1) gather context (already compact). The cross-domain incident BRIEF is the
-    #    centrepiece — the reasoner judges fused, cited incidents rather than
-    #    re-correlating raw layers in its head.
-    context: dict[str, Any] = {"question": question, "situation": await get_situation()}
+    # 1) gather context. Pull detail='long' internally — the reasoner runs
+    #    off-context with its own large window, so it should judge the FULL fused
+    #    picture, not the token-frugal digest the agent-facing default returns.
+    context: dict[str, Any] = {
+        "question": question,
+        "situation": await get_situation(detail="long"),
+    }
     context["incident_brief"] = await intel_brief(
         lat=lat, lon=lon, radius_nm=radius_nm,
         window_hours=12.0 if lat is None else 6.0,
+        detail="long",
     )
     if lat is not None and lon is not None:
-        context["focus_area"] = await focus_area(lat, lon, radius_nm)
+        context["focus_area"] = await focus_area(lat, lon, radius_nm, detail="long")
 
     # 2) reason off-context (DeepSeek → Ollama → raw data). Cap the wait so a
     #    slow upstream can't hang the tool for the 180 s default — the fast tier

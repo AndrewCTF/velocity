@@ -1,0 +1,15 @@
+{
+  "name": "osint-velocity",
+  "owner": { "name": "Velocity OSINT", "url": "https://projectvelocity.org" },
+  "description": "OSINT GEOINT — live geospatial-intelligence MCP tools, an analyst skill, and slash commands for Claude Code.",
+  "plugins": [
+    {
+      "name": "osint-geoint",
+      "source": "./plugin/osint-geoint",
+      "description": "Live ADS-B / AIS / GPS-jamming / SAR dark-vessel intelligence with cross-domain incident fusion, as 22 context-optimised MCP tools plus an analyst skill and commands.",
+      "version": "1.0.0",
+      "category": "intelligence",
+      "keywords": ["osint", "geoint", "adsb", "ais", "mcp"]
+    }
+  ]
+}

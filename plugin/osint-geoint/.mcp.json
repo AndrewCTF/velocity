@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "osint-geoint": {
+      "command": "${user_config.python}",
+      "args": ["-m", "app.mcp_server"],
+      "cwd": "${user_config.repo_dir}/apps/api",
+      "env": {
+        "PYTHONPATH": "${user_config.repo_dir}/apps/api",
+        "API_BASE": "${user_config.api_base}"
+      }
+    }
+  }
+}
