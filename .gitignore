@@ -15,6 +15,8 @@ __pycache__/
 opencode.jsonc
 .opencode.json
 .mcp.json
+# ...but the shipped plugin manifest is a checked-in template (user_config placeholders, no secrets).
+!plugin/osint-geoint/.mcp.json
 *.log
 coverage/
 .vite/

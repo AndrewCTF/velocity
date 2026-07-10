@@ -90,6 +90,24 @@ run `--list-tools` for the full set. A slice:
 `list_focus_areas`, `data_sources`, `deep_analyze`, `news_analysis`,
 `fact_check`, `aoi_imagery`.
 
+### Context budget: `detail='short'` vs `'long'`
+
+Every heavy tool takes a `detail` argument (`app/intel/shape.py`):
+
+- **`short`** (the default) — a token-frugal *digest* of the same payload:
+  scalars and small dicts kept, long arrays capped to the top few items with a
+  companion `<field>_total` giving the true size, verbose strings truncated, and
+  a top-level `truncated`/`hint` flag when anything was dropped. Ideal for
+  orientation and planet-wide sweeps. When nothing needs trimming the payload is
+  returned unchanged (short is a faithful passthrough for the already-small
+  tools).
+- **`long`** — the full route payload, untouched. Use it once you have picked one
+  incident/area/entity worth the extra context.
+
+The shaper is a pure function (no I/O) applied in the MCP layer, so the guarded
+`/api/intel/*` routes are unchanged. Rule of thumb for an agent: **sweep in
+`short`, drill in `long`.**
+
 ### `deep_analyze` (reasoning model)
 
 Gathers the relevant intel JSON and hands it to a **reasoning model** — DeepSeek
@@ -99,6 +117,26 @@ the agent's context. Auto-picks the smallest installed model; degrades to
 returning the raw structured JSON (`analysis: null`) when Ollama is absent.
 
 ## Running
+
+### Claude Code plugin (skill + commands + agent + MCP)
+
+The repo doubles as a Claude Code **plugin marketplace** (`plugin/osint-geoint/`).
+Installing the plugin wires the MCP server **and** an analyst skill
+(`osint-intel`), three slash commands (`/osint-brief`, `/osint-watch`,
+`/osint-jamming`), and a `osint-watch-officer` agent. Start the backend first
+(`bash scripts/run-api.sh`), then in Claude Code:
+
+```
+/plugin marketplace add /path/to/OSINT
+/plugin install osint-geoint@osint-velocity
+```
+
+Set **repo_dir** and **python** (the repo's venv interpreter) when prompted — the
+plugin launches that Python directly (`python -m app.mcp_server`), so one manifest
+works on Windows, macOS, and Linux. The installer prints the exact commands per OS:
+`bash plugin/osint-geoint/install.sh` (Linux/macOS, `-y` to register) or
+`plugin\osint-geoint\install.ps1` (Windows, `-Run` to register). See
+[`plugin/osint-geoint/README.md`](../plugin/osint-geoint/README.md).
 
 ### Hosted
 

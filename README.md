@@ -180,9 +180,29 @@ It exposes 22 tools over `app.mcp_server` (a representative slice below; run
 
 Every tool returns compact, bounded JSON (counts, grids, ≤50-item samples), so
 an agent can sweep the planet for a few hundred tokens instead of pulling 15k
-features. Area-primary loading means the agent's region of interest stays fresh
-and dense even while the global firehose is being rate-limited; the rest of the
-world keeps streaming from the sticky snapshot.
+features. Heavy tools also take **`detail='short'`** (the default digest — top-N
+of each list plus a `<field>_total`) or **`detail='long'`** (the full bundle), so
+an agent sweeps in `short` and drills in `long`. Area-primary loading means the
+agent's region of interest stays fresh and dense even while the global firehose is
+being rate-limited; the rest of the world keeps streaming from the sticky snapshot.
+
+### Install as a Claude Code plugin (skill + commands + agent)
+
+The repo is also a Claude Code **plugin marketplace**. One install wires the MCP
+server *plus* an analyst skill (`osint-intel`), slash commands (`/osint-brief`,
+`/osint-watch`, `/osint-jamming`), and a `osint-watch-officer` agent. Start the
+backend (`bash scripts/run-api.sh`), then in Claude Code:
+
+```
+/plugin marketplace add /path/to/OSINT
+/plugin install osint-geoint@osint-velocity
+```
+
+Set **repo_dir** and **python** (the repo's venv interpreter) when prompted; the
+plugin runs that Python directly, so it works on Windows, macOS, and Linux. The
+installer prints the exact commands for your OS: `bash
+plugin/osint-geoint/install.sh` (Linux/macOS, `-y` to register the MCP server) or
+`plugin\osint-geoint\install.ps1` (Windows, `-Run` to register).
 
 ### Hosted: point your agent at the live endpoint
 
