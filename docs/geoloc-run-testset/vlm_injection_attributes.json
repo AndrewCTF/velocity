@@ -1,0 +1,247 @@
+{
+  "Pasted image.png": {
+    "caption": "A falu-red timber cottage with a white six-pane window sits at the edge of a broadleaf/conifer forest, with a dark compact car parked on a gravel drive beside a second, tile-roofed building. [scene detail: none confirmed visible; dark compact hatchback/crossover (make/model not identifiable, no number plate visible), second building with tiled roof and exterior wall lamp/CCTV-like fixture, stacked white plastic garden chairs, bicycle wheel/rack, gravel driveway]",
+    "attributes": {
+      "vegetation": [
+        "maple_or_sycamore (lobed-leaf canopy overhead)",
+        "beech",
+        "hazel_or_hornbeam_shrub_layer",
+        "conifer_spruce (background stand)"
+      ],
+      "architecture": {
+        "material": "timber (horizontal board/plank siding)",
+        "colour": "falu_red (traditional Scandinavian red-oxide paint) with white window trim",
+        "roof": "unclear/not fully visible on foreground building (dark, low-pitch edge only); background building has a terracotta/red clay tile roof",
+        "style": "Scandinavian timber cottage/outbuilding (\"stuga\"-type gable cabin)"
+      },
+      "sun": {
+        "shadow_az_deg": null,
+        "solar_elev_deg": null
+      },
+      "language": null,
+      "driving_side": null,
+      "terrain_slope": "flat_to_gentle",
+      "signage_text": [],
+      "husbandry": [],
+      "biome": "temperate_broadleaf_forest_edge_with_conifer"
+    }
+  },
+  "Pasted image (2).png": {
+    "caption": "Two free-range hens forage and perch among saplings in a dense beech/hazel understory with a leaf-littered forest floor and small rock outcrops. [scene detail: possible small rock outcrop or moraine debris (unconfirmed \u2014 partially obscured by foliage); small rock/boulder outcrop in midground]",
+    "attributes": {
+      "vegetation": [
+        "beech",
+        "hazel_or_hornbeam_sapling",
+        "birch (trunks, background)"
+      ],
+      "architecture": {
+        "material": null,
+        "colour": null,
+        "roof": null,
+        "style": null
+      },
+      "sun": {
+        "shadow_az_deg": null,
+        "solar_elev_deg": null
+      },
+      "language": null,
+      "driving_side": null,
+      "terrain_slope": "gentle",
+      "signage_text": [],
+      "husbandry": [
+        "free_range_chickens_in_forest_understory (one buff/brown-mottled hen perched off-ground, one black-and-white speckled hen on the ground)"
+      ],
+      "biome": "temperate_broadleaf_forest (beech-dominated understory)"
+    }
+  },
+  "Pasted image (3).png": {
+    "caption": "A black-and-white speckled hen perches high on a beech branch above a leaf-littered forest floor scattered with small moss-covered stones. [scene detail: small moss-covered stones, possible weathered rock fragments (unconfirmed); small moss-covered stones on forest floor]",
+    "attributes": {
+      "vegetation": [
+        "beech (dominant canopy)",
+        "birch (trunks, lower left)",
+        "hazel_or_hornbeam sapling understory"
+      ],
+      "architecture": {
+        "material": null,
+        "colour": null,
+        "roof": null,
+        "style": null
+      },
+      "sun": {
+        "shadow_az_deg": null,
+        "solar_elev_deg": null
+      },
+      "language": null,
+      "driving_side": null,
+      "terrain_slope": "gentle",
+      "signage_text": [],
+      "husbandry": [
+        "free_range_chickens_roosting_in_trees (black-and-white mottled/speckled hen, red single comb)"
+      ],
+      "biome": "temperate_broadleaf_forest (beech-dominated)"
+    }
+  },
+  "Pasted image (5).png": {
+    "caption": "Two Hereford-cross calves stand behind a single-strand wire fence in a lush green pasture bordered by deciduous forest, with a moss-covered boulder in the foreground undergrowth. [scene detail: moss-covered boulder, possible glacial erratic (moderately consistent with glaciated terrain, unconfirmed without wider context); single-strand wire fence on white/grey insulator posts (electric fence style), moss-covered boulder in foreground undergrowth]",
+    "attributes": {
+      "vegetation": [
+        "hazel_or_hawthorn shrub (foreground)",
+        "pasture_grass",
+        "deciduous forest treeline (background, beech-type)"
+      ],
+      "architecture": {
+        "material": null,
+        "colour": null,
+        "roof": null,
+        "style": null
+      },
+      "sun": {
+        "shadow_az_deg": null,
+        "solar_elev_deg": null
+      },
+      "language": null,
+      "driving_side": null,
+      "terrain_slope": "flat",
+      "signage_text": [],
+      "husbandry": [
+        "cattle_hereford_cross (two calves, white-faced red-and-white)",
+        "small_pasture_single_strand_electric_fence"
+      ],
+      "biome": "improved_pasture_with_forest_edge"
+    }
+  },
+  "Pasted image (7).png": {
+    "caption": "A dirt path forks through a fresh spring-leafed beech-birch forest past a rustic raised wooden platform built from branches and planks, with a moss-covered boulder at the trail edge. [scene detail: gentle hummocky forest floor with a moss-covered boulder (possible small moraine/erratic feature); DIY raised wooden platform built from raw branches and sawn planks, dirt/leaf-litter trail junction, moss-covered boulder at bottom right]",
+    "attributes": {
+      "vegetation": [
+        "beech",
+        "birch (light bark trunks)",
+        "low herbaceous ground cover, sparse"
+      ],
+      "architecture": {
+        "material": "raw timber/branch construction",
+        "colour": null,
+        "roof": null,
+        "style": "informal DIY platform/treehouse-like structure, not a dwelling"
+      },
+      "sun": {
+        "shadow_az_deg": null,
+        "solar_elev_deg": null
+      },
+      "language": null,
+      "driving_side": null,
+      "terrain_slope": "gentle_undulating",
+      "signage_text": [],
+      "husbandry": [],
+      "biome": "temperate_broadleaf_forest (beech-birch, fresh spring foliage \u2014 lighter yellow-green than the summer-foliage frames)"
+    }
+  },
+  "Pasted image (8).png": {
+    "caption": "Viewed over a fresh-cut, unpainted timber rail from a raised platform, a falu-red timber cabin is visible through spring beech-birch forest beyond a pile of cut brush. [scene detail: none confirmed visible; fresh-cut, unpainted pressure-treated pine two-rail fence/railing (recently built), pile of cut branches/brush, wooden deck underfoot (photographer standing on same platform seen in Pasted image (7).png)]",
+    "attributes": {
+      "vegetation": [
+        "beech",
+        "birch"
+      ],
+      "architecture": {
+        "material": "timber (horizontal board siding)",
+        "colour": "falu_red",
+        "roof": "not visible",
+        "style": "Scandinavian timber cottage/cabin \u2014 appears to be the same or a very similar building seen in Pasted image.png, viewed from a different angle/season"
+      },
+      "sun": {
+        "shadow_az_deg": null,
+        "solar_elev_deg": null
+      },
+      "language": null,
+      "driving_side": null,
+      "terrain_slope": "gentle_downslope_from_platform_to_cabin",
+      "signage_text": [],
+      "husbandry": [],
+      "biome": "temperate_broadleaf_forest (beech-birch, spring foliage)"
+    }
+  },
+  "Pasted image (4).png": {
+    "caption": "Two free-range hens forage and perch among saplings in a dense beech/hazel understory with a leaf-littered forest floor and small rock outcrops. [scene detail: possible small rock outcrop or moraine debris (unconfirmed \u2014 partially obscured by foliage); small rock/boulder outcrop in midground]",
+    "attributes": {
+      "vegetation": [
+        "beech",
+        "hazel_or_hornbeam_sapling",
+        "birch (trunks, background)"
+      ],
+      "architecture": {
+        "material": null,
+        "colour": null,
+        "roof": null,
+        "style": null
+      },
+      "sun": {
+        "shadow_az_deg": null,
+        "solar_elev_deg": null
+      },
+      "language": null,
+      "driving_side": null,
+      "terrain_slope": "gentle",
+      "signage_text": [],
+      "husbandry": [
+        "free_range_chickens_in_forest_understory (one buff/brown-mottled hen perched off-ground, one black-and-white speckled hen on the ground)"
+      ],
+      "biome": "temperate_broadleaf_forest (beech-dominated understory)"
+    }
+  },
+  "Pasted image (6).png": {
+    "caption": "Two Hereford-cross calves stand behind a single-strand wire fence in a lush green pasture bordered by deciduous forest, with a moss-covered boulder in the foreground undergrowth. [scene detail: moss-covered boulder, possible glacial erratic (moderately consistent with glaciated terrain, unconfirmed without wider context); single-strand wire fence on white/grey insulator posts (electric fence style), moss-covered boulder in foreground undergrowth]",
+    "attributes": {
+      "vegetation": [
+        "hazel_or_hawthorn shrub (foreground)",
+        "pasture_grass",
+        "deciduous forest treeline (background, beech-type)"
+      ],
+      "architecture": {
+        "material": null,
+        "colour": null,
+        "roof": null,
+        "style": null
+      },
+      "sun": {
+        "shadow_az_deg": null,
+        "solar_elev_deg": null
+      },
+      "language": null,
+      "driving_side": null,
+      "terrain_slope": "flat",
+      "signage_text": [],
+      "husbandry": [
+        "cattle_hereford_cross (two calves, white-faced red-and-white)",
+        "small_pasture_single_strand_electric_fence"
+      ],
+      "biome": "improved_pasture_with_forest_edge"
+    }
+  },
+  "Pasted image (9).png": {
+    "caption": "Viewed over a fresh-cut, unpainted timber rail from a raised platform, a falu-red timber cabin is visible through spring beech-birch forest beyond a pile of cut brush. [scene detail: none confirmed visible; fresh-cut, unpainted pressure-treated pine two-rail fence/railing (recently built), pile of cut branches/brush, wooden deck underfoot (photographer standing on same platform seen in Pasted image (7).png)]",
+    "attributes": {
+      "vegetation": [
+        "beech",
+        "birch"
+      ],
+      "architecture": {
+        "material": "timber (horizontal board siding)",
+        "colour": "falu_red",
+        "roof": "not visible",
+        "style": "Scandinavian timber cottage/cabin \u2014 appears to be the same or a very similar building seen in Pasted image.png, viewed from a different angle/season"
+      },
+      "sun": {
+        "shadow_az_deg": null,
+        "solar_elev_deg": null
+      },
+      "language": null,
+      "driving_side": null,
+      "terrain_slope": "gentle_downslope_from_platform_to_cabin",
+      "signage_text": [],
+      "husbandry": [],
+      "biome": "temperate_broadleaf_forest (beech-birch, spring foliage)"
+    }
+  }
+}

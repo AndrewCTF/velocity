@@ -1,0 +1,239 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              8.0,
+              54.5
+            ],
+            [
+              15.2,
+              54.5
+            ],
+            [
+              15.2,
+              57.8
+            ],
+            [
+              8.0,
+              57.8
+            ],
+            [
+              8.0,
+              54.5
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "geo_prior_region",
+        "region": "Denmark",
+        "country": "Denmark",
+        "p": 0.9697,
+        "rationale": "rule-KB only (15 cue(s) fired) \u2014 no VLM estimate supplied. vegetation_beech_forest_moraine (+3.00, matched \"beech\"): European beech (Fagus sylvatica) is Denmark's national tree and its dominant natural forest type; beech does not range naturally into Finland or N Scandinavia (cold-limited), so beech + birch on mossy glacial-moraine boulders points to the North European Plain / S Scandinavia rather than the far north. || vegetation_beech_forest_moraine (+3.00, matched \"beech\"): European beech (Fagus sylvatica) is Denmark's national tree and its dominant natural forest type; beech does not range naturally into Finland or N Scandinavia (cold-limited), so beech + birch on mossy glacial-moraine boulders points to the North European Plain / S Scandinavia rather than the far north. || vegetation_beech_forest_moraine (+3.00, matched \"beech\"): European beech (Fagus sylvatica) is Denmark's national tree and its dominant natural forest type; beech does not range naturally into Finland or N Scandinavia (cold-limited), so beech + birch on mossy glacial-moraine boulders points to the North European Plain / S Scandinavia rather than the far north.",
+        "confidence_country": 0.721,
+        "confidence_region": 0.613
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              7.5,
+              54.5
+            ],
+            [
+              19.0,
+              54.5
+            ],
+            [
+              19.0,
+              61.5
+            ],
+            [
+              7.5,
+              61.5
+            ],
+            [
+              7.5,
+              54.5
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "geo_prior_region",
+        "region": "S-Scandinavia",
+        "country": "S-Scandinavia",
+        "p": 0.0303,
+        "rationale": "rule-KB only (15 cue(s) fired) \u2014 no VLM estimate supplied. architecture_falu_red_timber (+2.80, matched \"falu-red\"): Falu-red (falun copper-oxide) painted timber cladding is a strong Nordic vernacular-architecture signal, most iconic in Sweden but common across Scandinavia and into Denmark/N Germany. || architecture_falu_red_timber (+2.80, matched \"falu-red\"): Falu-red (falun copper-oxide) painted timber cladding is a strong Nordic vernacular-architecture signal, most iconic in Sweden but common across Scandinavia and into Denmark/N Germany. || architecture_falu_red_timber (+2.80, matched \"falu-red\"): Falu-red (falun copper-oxide) painted timber cladding is a strong Nordic vernacular-architecture signal, most iconic in Sweden but common across Scandinavia and into Denmark/N Germany.",
+        "confidence_country": 0.721,
+        "confidence_region": 0.613
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              10.9,
+              55.3
+            ],
+            [
+              24.2,
+              55.3
+            ],
+            [
+              24.2,
+              69.1
+            ],
+            [
+              10.9,
+              69.1
+            ],
+            [
+              10.9,
+              55.3
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "geo_prior_region",
+        "region": "Sweden",
+        "country": "Sweden",
+        "p": 0.0,
+        "rationale": "rule-KB only (15 cue(s) fired) \u2014 no VLM estimate supplied. architecture_falu_red_timber (+3.00, matched \"falu-red\"): Falu-red (falun copper-oxide) painted timber cladding is a strong Nordic vernacular-architecture signal, most iconic in Sweden but common across Scandinavia and into Denmark/N Germany. || architecture_falu_red_timber (+3.00, matched \"falu-red\"): Falu-red (falun copper-oxide) painted timber cladding is a strong Nordic vernacular-architecture signal, most iconic in Sweden but common across Scandinavia and into Denmark/N Germany. || architecture_falu_red_timber (+3.00, matched \"falu-red\"): Falu-red (falun copper-oxide) painted timber cladding is a strong Nordic vernacular-architecture signal, most iconic in Sweden but common across Scandinavia and into Denmark/N Germany.",
+        "confidence_country": 0.721,
+        "confidence_region": 0.613
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              5.9,
+              47.3
+            ],
+            [
+              15.0,
+              47.3
+            ],
+            [
+              15.0,
+              55.1
+            ],
+            [
+              5.9,
+              55.1
+            ],
+            [
+              5.9,
+              47.3
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "geo_prior_region",
+        "region": "Germany",
+        "country": "Germany",
+        "p": 0.0,
+        "rationale": "rule-KB only (15 cue(s) fired) \u2014 no VLM estimate supplied. vegetation_beech_forest_moraine (+1.40, matched \"beech\"): European beech (Fagus sylvatica) is Denmark's national tree and its dominant natural forest type; beech does not range naturally into Finland or N Scandinavia (cold-limited), so beech + birch on mossy glacial-moraine boulders points to the North European Plain / S Scandinavia rather than the far north. || vegetation_beech_forest_moraine (+1.40, matched \"beech\"): European beech (Fagus sylvatica) is Denmark's national tree and its dominant natural forest type; beech does not range naturally into Finland or N Scandinavia (cold-limited), so beech + birch on mossy glacial-moraine boulders points to the North European Plain / S Scandinavia rather than the far north. || vegetation_beech_forest_moraine (+1.40, matched \"beech\"): European beech (Fagus sylvatica) is Denmark's national tree and its dominant natural forest type; beech does not range naturally into Finland or N Scandinavia (cold-limited), so beech + birch on mossy glacial-moraine boulders points to the North European Plain / S Scandinavia rather than the far north.",
+        "confidence_country": 0.721,
+        "confidence_region": 0.613
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -8.2,
+              49.9
+            ],
+            [
+              1.8,
+              49.9
+            ],
+            [
+              1.8,
+              60.9
+            ],
+            [
+              -8.2,
+              60.9
+            ],
+            [
+              -8.2,
+              49.9
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "geo_prior_region",
+        "region": "UK",
+        "country": "UK",
+        "p": 0.0,
+        "rationale": "rule-KB only (15 cue(s) fired) \u2014 no VLM estimate supplied. husbandry_cattle_forest_edge_pasture (+1.20, matched \"hereford\"): Hereford/mixed beef-cattle smallholdings grazing forest-edge pasture are widespread across NW Europe; Hereford is UK-origin but now kept continent-wide, so this is a weak/generic signal alone. || husbandry_cattle_forest_edge_pasture (+1.20, matched \"hereford\"): Hereford/mixed beef-cattle smallholdings grazing forest-edge pasture are widespread across NW Europe; Hereford is UK-origin but now kept continent-wide, so this is a weak/generic signal alone. || vegetation_beech_forest_moraine (+1.00, matched \"beech\"): European beech (Fagus sylvatica) is Denmark's national tree and its dominant natural forest type; beech does not range naturally into Finland or N Scandinavia (cold-limited), so beech + birch on mossy glacial-moraine boulders points to the North European Plain / S Scandinavia rather than the far north.",
+        "confidence_country": 0.721,
+        "confidence_region": 0.613
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -4.8,
+              42.3
+            ],
+            [
+              8.2,
+              42.3
+            ],
+            [
+              8.2,
+              51.1
+            ],
+            [
+              -4.8,
+              51.1
+            ],
+            [
+              -4.8,
+              42.3
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "geo_prior_region",
+        "region": "France",
+        "country": "France",
+        "p": 0.0,
+        "rationale": "rule-KB only (15 cue(s) fired) \u2014 no VLM estimate supplied. architecture_terracotta_tile_roof (+1.20, matched \"red clay tile roof\"): Terracotta/clay barrel-tile roofing is dominant across S Europe, weak north of the Alps. || vegetation_beech_forest_moraine (+0.80, matched \"beech\"): European beech (Fagus sylvatica) is Denmark's national tree and its dominant natural forest type; beech does not range naturally into Finland or N Scandinavia (cold-limited), so beech + birch on mossy glacial-moraine boulders points to the North European Plain / S Scandinavia rather than the far north. || vegetation_beech_forest_moraine (+0.80, matched \"beech\"): European beech (Fagus sylvatica) is Denmark's national tree and its dominant natural forest type; beech does not range naturally into Finland or N Scandinavia (cold-limited), so beech + birch on mossy glacial-moraine boulders points to the North European Plain / S Scandinavia rather than the far north.",
+        "confidence_country": 0.721,
+        "confidence_region": 0.613
+      }
+    }
+  ]
+}

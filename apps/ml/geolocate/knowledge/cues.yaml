@@ -1,0 +1,349 @@
+# Cue -> region-weight knowledge base for Stage B's rule fuser (geoprior.py).
+#
+# GENERIC BY DESIGN: no country/region name appears anywhere in geoprior.py's
+# code paths — every region name lives here (and in region_bboxes.yaml) as
+# DATA. Extend coverage by adding a cue entry below; nothing in the matcher
+# code needs to change. Weights are relative log-additive plausibility
+# boosts (they become logits in a softmax), NOT calibrated probabilities —
+# see geoprior.py:_softmax for the normalization.
+#
+# Cue schema:
+#   id:        stable slug (shown in rationale text)
+#   path:      "text"  -> match against the whole flattened evidence blob
+#                          (caption + confidence_notes + every string leaf in
+#                          attributes, incl. nested dicts like architecture)
+#              "attributes.driving_side" (etc) -> dotted lookup into one field
+#   match:     "any"    -> fires if any `keywords` entry is a case-insensitive
+#                          substring of the value at `path`
+#              "equals" -> fires if `path` value case-insensitively equals `value`
+#              "table"  -> looks `path` value (or, if it's a list, any item in
+#                          it) up in `table`; fires per matching entry. This is
+#                          the mechanism for closed enumerations (language code,
+#                          driving side, an OCR'd plate country-code letter
+#                          cluster) — ONE cue entry covers many countries via
+#                          data, instead of one YAML block per country.
+#   weights:   {region: weight, ...}          (for match: any / equals)
+#   table:     {value: {region: weight, ...}} (for match: table)
+#   rationale: human-readable justification, echoed into geo_prior.json
+
+cues:
+  # ── architecture: material / colour / roof ──────────────────────────────
+  - id: architecture_falu_red_timber
+    path: text
+    match: any
+    keywords:
+      - "falu red"
+      - "falu-red"
+      - "falun red"
+      - "swedish red"
+      - "nordic red timber"
+      - "red timber"
+      - "red-painted timber"
+      - "red painted wood"
+    weights:
+      Sweden: 3.0
+      S-Scandinavia: 2.8
+      Norway: 2.2
+      Denmark: 2.0
+      Finland: 1.6
+      Germany: 0.4
+    rationale: >
+      Falu-red (falun copper-oxide) painted timber cladding is a strong Nordic
+      vernacular-architecture signal, most iconic in Sweden but common across
+      Scandinavia and into Denmark/N Germany.
+
+  - id: architecture_black_tarred_timber
+    path: text
+    match: any
+    keywords: ["tarred timber", "black tarred wood", "pine tar cladding", "svartlasyr", "svartlasur"]
+    weights:
+      Norway: 2.4
+      Sweden: 1.8
+      S-Scandinavia: 1.4
+      Finland: 1.2
+    rationale: "Pine-tar-blackened timber cladding is a traditional Norwegian/Swedish coastal building treatment."
+
+  - id: architecture_turf_sod_roof
+    path: text
+    match: any
+    keywords: ["turf roof", "sod roof", "grass roof", "green roof (turf)"]
+    weights:
+      Norway: 2.6
+      Iceland: 2.8
+      Sweden: 1.0
+      Finland: 0.8
+    rationale: "Turf/sod roofing is a traditional Norwegian and Icelandic vernacular technique, rare elsewhere in Europe."
+
+  - id: architecture_half_timber_fachwerk
+    path: text
+    match: any
+    keywords: ["half-timber", "half timbered", "fachwerk", "exposed timber frame"]
+    weights:
+      Germany: 2.6
+      France: 1.4
+      UK: 1.2
+      Denmark: 1.0
+      Netherlands: 0.8
+    rationale: "Half-timber (Fachwerk) construction is emblematic of Germany, with related traditions in NE France, England (Tudor) and Denmark."
+
+  - id: architecture_whitewashed_cubic_flat_roof
+    path: text
+    match: any
+    keywords: ["whitewashed cubic", "whitewashed flat-roof", "white cubic house", "cycladic architecture"]
+    weights:
+      Greece: 3.0
+      Cyprus: 1.6
+      Spain: 1.2
+      Malta: 1.2
+      Portugal: 0.8
+    rationale: "Whitewashed cubic flat-roofed houses are a strong Mediterranean/Aegean vernacular signal (classically Cycladic Greek)."
+
+  - id: architecture_terracotta_tile_roof
+    path: text
+    match: any
+    keywords: ["terracotta tile roof", "terracotta roof tiles", "red clay tile roof", "mediterranean tile roof"]
+    weights:
+      Italy: 2.2
+      Spain: 1.8
+      Portugal: 1.6
+      France: 1.2
+      Greece: 1.2
+    rationale: "Terracotta/clay barrel-tile roofing is dominant across S Europe, weak north of the Alps."
+
+  - id: architecture_slate_stone_roof
+    path: text
+    match: any
+    keywords: ["slate roof", "stone-slab roof", "grey slate tiles"]
+    weights:
+      UK: 1.6
+      Ireland: 1.6
+      Belgium: 1.0
+      France: 1.0
+      Switzerland: 0.8
+    rationale: "Grey slate roofing is common in the UK/Ireland and parts of Belgium/N France/the Alps."
+
+  - id: architecture_log_or_stave_cabin
+    path: text
+    match: any
+    keywords: ["log cabin", "log house", "stave building", "timber-log construction"]
+    weights:
+      Norway: 2.4
+      Sweden: 2.2
+      Finland: 2.0
+      Switzerland: 1.0
+      Austria: 1.0
+    rationale: "Horizontal-log (stave/log-house) construction is a Nordic and Alpine forestry-vernacular tradition."
+
+  # ── vegetation / biome ───────────────────────────────────────────────────
+  - id: vegetation_beech_forest_moraine
+    path: text
+    match: any
+    keywords:
+      - "beech"
+      - "fagus sylvatica"
+      - "birch"
+      - "betula"
+      - "mossy boulder"
+      - "moss-covered boulder"
+      - "glacial erratic"
+      - "moraine boulder"
+    weights:
+      Denmark: 3.0
+      S-Scandinavia: 2.2
+      Germany: 1.4
+      UK: 1.0
+      Poland: 0.9
+      France: 0.8
+      Sweden: 0.9
+      Netherlands: 0.6
+    rationale: >
+      European beech (Fagus sylvatica) is Denmark's national tree and its
+      dominant natural forest type; beech does not range naturally into
+      Finland or N Scandinavia (cold-limited), so beech + birch on mossy
+      glacial-moraine boulders points to the North European Plain / S
+      Scandinavia rather than the far north.
+
+  - id: vegetation_olive_grove
+    path: text
+    match: any
+    keywords: ["olive grove", "olive tree", "olea europaea"]
+    weights:
+      Greece: 2.6
+      Italy: 2.2
+      Spain: 2.0
+      Portugal: 1.4
+      Cyprus: 1.4
+    rationale: "Olive cultivation is bounded by the Mediterranean climate zone — a strong S-Europe signal."
+
+  - id: vegetation_vineyard_terraces
+    path: text
+    match: any
+    keywords: ["vineyard", "vine terraces", "grapevine rows"]
+    weights:
+      France: 2.0
+      Italy: 2.0
+      Spain: 1.8
+      Portugal: 1.6
+      Germany: 1.0
+    rationale: "Terraced vineyards are widespread across France/Italy/Spain/Portugal and the German Rhine/Mosel valleys."
+
+  - id: vegetation_cork_oak_montado
+    path: text
+    match: any
+    keywords: ["cork oak", "quercus suber", "montado", "dehesa"]
+    weights:
+      Portugal: 2.8
+      Spain: 2.4
+    rationale: "Cork oak (montado/dehesa) savanna-woodland is near-diagnostic for Portugal and SW Spain."
+
+  - id: vegetation_birch_taiga_conifer
+    path: text
+    match: any
+    keywords: ["taiga", "boreal conifer forest", "spruce and birch forest", "pine and birch forest"]
+    weights:
+      Finland: 2.4
+      Sweden: 1.8
+      Norway: 1.6
+      Estonia: 1.2
+      Latvia: 1.0
+      Lithuania: 1.0
+    rationale: "Boreal taiga (spruce/pine + birch) is the dominant far-northern European forest biome."
+
+  - id: vegetation_heather_moorland
+    path: text
+    match: any
+    keywords: ["heather moorland", "heathland", "calluna vulgaris"]
+    weights:
+      UK: 2.0
+      Ireland: 1.6
+      Denmark: 1.2
+      Netherlands: 1.0
+      Belgium: 0.8
+    rationale: "Open heather moorland/heathland is characteristic of the UK/Ireland uplands and the NW-European lowland heaths (Denmark/Netherlands)."
+
+  # ── husbandry (weak/generic on their own — NW-European smallholding cues) ─
+  - id: husbandry_free_range_poultry
+    path: text
+    match: any
+    keywords: ["free-range chicken", "free range chicken", "woodland chicken", "free-range poultry"]
+    weights:
+      Denmark: 0.6
+      S-Scandinavia: 0.5
+      UK: 0.6
+      Ireland: 0.5
+      Netherlands: 0.6
+      Germany: 0.5
+      France: 0.5
+    rationale: "Free-range/woodland poultry keeping is common smallholding practice across NW/N Europe — low discriminative power alone."
+
+  - id: husbandry_cattle_forest_edge_pasture
+    path: text
+    match: any
+    keywords: ["hereford", "hereford cattle", "cattle pasture", "forest-edge pasture", "smallholding cattle"]
+    weights:
+      UK: 1.2
+      Ireland: 1.0
+      Denmark: 0.9
+      S-Scandinavia: 0.7
+      Germany: 0.7
+      Netherlands: 0.6
+    rationale: "Hereford/mixed beef-cattle smallholdings grazing forest-edge pasture are widespread across NW Europe; Hereford is UK-origin but now kept continent-wide, so this is a weak/generic signal alone."
+
+  # ── infrastructure ────────────────────────────────────────────────────────
+  - id: utility_pole_wood_lattice_nordic
+    path: text
+    match: any
+    keywords: ["wooden lattice utility pole", "wood cross-arm pole", "timber utility pole", "wooden power pole with cross-arms"]
+    weights:
+      Sweden: 1.2
+      Norway: 1.2
+      Finland: 1.2
+      Denmark: 0.8
+      Estonia: 0.8
+      Latvia: 0.8
+      Lithuania: 0.8
+    rationale: "Wooden cross-arm utility poles (vs. concrete) are more common in rural Nordic/Baltic distribution networks."
+
+  - id: road_markings_reflective_studs_uk
+    path: text
+    match: any
+    keywords: ["cat's eyes", "catseye road stud", "coloured reflective road studs", "red and white road studs"]
+    weights:
+      UK: 2.0
+      Ireland: 1.2
+    rationale: "Colour-coded reflective road studs ('cat's eyes') are a UK-originated, UK/Ireland-concentrated road-marking technology."
+
+  # ── closed-enumeration cues (table-driven — one entry, many countries) ────
+  - id: language
+    path: attributes.language
+    match: table
+    table:
+      da: {Denmark: 5.0, S-Scandinavia: 3.0}
+      sv: {Sweden: 5.0, S-Scandinavia: 3.0}
+      "no": {Norway: 5.0, S-Scandinavia: 2.5}
+      fi: {Finland: 5.0}
+      is: {Iceland: 5.0}
+      et: {Estonia: 5.0}
+      lv: {Latvia: 5.0}
+      lt: {Lithuania: 5.0}
+      de: {Germany: 5.0, Austria: 2.0, Switzerland: 2.0}
+      nl: {Netherlands: 5.0, Belgium: 3.0}
+      fr: {France: 5.0, Belgium: 1.5, Switzerland: 1.5}
+      en: {UK: 3.0, Ireland: 3.0}
+      it: {Italy: 5.0, Switzerland: 1.0}
+      es: {Spain: 5.0}
+      pt: {Portugal: 5.0}
+      el: {Greece: 5.0, Cyprus: 2.0}
+      pl: {Poland: 5.0}
+      cs: {Czechia: 5.0}
+      mt: {Malta: 5.0}
+    rationale: "OCR/VLM-identified on-scene language is a strong, near-direct regional signal."
+
+  - id: driving_side
+    path: attributes.driving_side
+    match: table
+    table:
+      left: {UK: 4.0, Ireland: 4.0, Malta: 4.0, Cyprus: 4.0}
+      right: {Denmark: 0.15, Sweden: 0.15, Norway: 0.15, Finland: 0.15, Germany: 0.15,
+              France: 0.15, Netherlands: 0.15, Belgium: 0.15, Switzerland: 0.15,
+              Austria: 0.15, Italy: 0.15, Spain: 0.15, Portugal: 0.15, Greece: 0.15,
+              Poland: 0.15, Czechia: 0.15, Estonia: 0.15, Latvia: 0.15, Lithuania: 0.15}
+    rationale: >
+      Left-hand traffic is a near-exhaustive filter within Europe (UK/Ireland/
+      Malta/Cyprus only); right-hand traffic is the continental default and
+      barely narrows anything, so it carries only a token weight.
+
+  - id: plate_country_code
+    path: attributes.signage_text
+    match: table
+    table:
+      DK: {Denmark: 6.0}
+      S: {Sweden: 6.0}
+      N: {Norway: 6.0}
+      FIN: {Finland: 6.0}
+      IS: {Iceland: 6.0}
+      EST: {Estonia: 6.0}
+      LV: {Latvia: 6.0}
+      LT: {Lithuania: 6.0}
+      D: {Germany: 6.0}
+      NL: {Netherlands: 6.0}
+      B: {Belgium: 6.0}
+      F: {France: 6.0}
+      CH: {Switzerland: 6.0}
+      A: {Austria: 6.0}
+      GB: {UK: 6.0}
+      IRL: {Ireland: 6.0}
+      I: {Italy: 6.0}
+      E: {Spain: 6.0}
+      P: {Portugal: 6.0}
+      GR: {Greece: 6.0}
+      PL: {Poland: 6.0}
+      CZ: {Czechia: 6.0}
+      M: {Malta: 6.0}
+      CY: {Cyprus: 6.0}
+    rationale: >
+      An OCR'd EU oval/blue-band plate country-code letter cluster (e.g. "DK",
+      "D", "F") is a near-deterministic country signal when legible. Sourced
+      from attributes.signage_text (the OCR token list) — the evidence
+      contract has no dedicated plate field, so a country-code table entry
+      only fires if Stage A's OCR happened to isolate that token.

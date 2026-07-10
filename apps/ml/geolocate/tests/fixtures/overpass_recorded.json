@@ -1,0 +1,757 @@
+{
+  "recorded": true,
+  "source": "live Overpass query, overpass-api.de, 2026-07-10, bbox=Gribskov/North Zealand Denmark",
+  "query": "[out:json][timeout:25];(nwr[\"landuse\"=\"forest\"](55.95,12.25,56.05,12.45);nwr[\"natural\"=\"wood\"](55.95,12.25,56.05,12.45);nwr[\"landuse\"=\"meadow\"](55.95,12.25,56.05,12.45);nwr[\"landuse\"=\"farmland\"](55.95,12.25,56.05,12.45);nwr[\"landuse\"=\"grass\"](55.95,12.25,56.05,12.45);nwr[\"natural\"=\"grassland\"](55.95,12.25,56.05,12.45);nwr[\"building\"=\"cabin\"](55.95,12.25,56.05,12.45);nwr[\"building\"=\"hut\"](55.95,12.25,56.05,12.45);nwr[\"building\"=\"shed\"](55.95,12.25,56.05,12.45);nwr[\"building\"=\"farm_auxiliary\"](55.95,12.25,56.05,12.45);nwr[\"building:material\"=\"wood\"](55.95,12.25,56.05,12.45);nwr[\"landuse\"=\"farmyard\"](55.95,12.25,56.05,12.45);nwr[\"building\"=\"farm\"](55.95,12.25,56.05,12.45);nwr[\"building\"=\"barn\"](55.95,12.25,56.05,12.45););out center tags 400;",
+  "bbox": [
+    12.25,
+    55.95,
+    12.45,
+    56.05
+  ],
+  "attrs": {
+    "biome": "temperate broadleaf forest, forest-edge pasture",
+    "architecture": {
+      "material": "timber",
+      "type": "outbuilding cabin shed"
+    },
+    "vegetation": [
+      "beech",
+      "birch"
+    ],
+    "husbandry": [
+      "cattle pasture",
+      "poultry farm"
+    ]
+  },
+  "classes": [
+    "forest",
+    "meadow_pasture",
+    "timber_structure",
+    "farmyard"
+  ],
+  "elements": [
+    {
+      "type": "way",
+      "id": 25006710,
+      "center": {
+        "lat": 55.9506702,
+        "lon": 12.2990253
+      },
+      "tags": {
+        "landuse": "forest",
+        "name": "Tyske Plantage"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26609086,
+      "center": {
+        "lat": 55.9503033,
+        "lon": 12.3171529
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26609475,
+      "center": {
+        "lat": 55.9516921,
+        "lon": 12.3642716
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26613516,
+      "center": {
+        "lat": 55.983099,
+        "lon": 12.4126243
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26613641,
+      "center": {
+        "lat": 55.9993054,
+        "lon": 12.4138696
+      },
+      "tags": {
+        "created_by": "Potlatch 0.10b",
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26614119,
+      "center": {
+        "lat": 55.9751108,
+        "lon": 12.3998546
+      },
+      "tags": {
+        "dog": "unleashed",
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26614125,
+      "center": {
+        "lat": 55.9758033,
+        "lon": 12.3882585
+      },
+      "tags": {
+        "landuse": "forest",
+        "leaf_type": "mixed",
+        "name": "Kovang"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26614127,
+      "center": {
+        "lat": 55.9721388,
+        "lon": 12.3914438
+      },
+      "tags": {
+        "created_by": "Potlatch 0.10b",
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26614144,
+      "center": {
+        "lat": 55.9688705,
+        "lon": 12.3982559
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26619761,
+      "center": {
+        "lat": 55.9622496,
+        "lon": 12.2573279
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26639929,
+      "center": {
+        "lat": 55.9515809,
+        "lon": 12.4436701
+      },
+      "tags": {
+        "created_by": "Potlatch 0.10b",
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26723408,
+      "center": {
+        "lat": 55.9669011,
+        "lon": 12.4429524
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26723434,
+      "center": {
+        "lat": 55.9739921,
+        "lon": 12.4342816
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 31814001,
+      "center": {
+        "lat": 55.9592721,
+        "lon": 12.4040016
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 31919132,
+      "center": {
+        "lat": 55.9646849,
+        "lon": 12.2543728
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 31919166,
+      "center": {
+        "lat": 55.9591446,
+        "lon": 12.2498069
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 110917700,
+      "center": {
+        "lat": 56.0458101,
+        "lon": 12.4440666
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 116073046,
+      "center": {
+        "lat": 55.9503246,
+        "lon": 12.3944956
+      },
+      "tags": {
+        "landuse": "forest"
+      }
+    },
+    {
+      "type": "way",
+      "id": 140760140,
+      "center": {
+        "lat": 56.0491969,
+        "lon": 12.4489271
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 140762854,
+      "center": {
+        "lat": 56.0318408,
+        "lon": 12.4425062
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142308951,
+      "center": {
+        "lat": 56.0150802,
+        "lon": 12.4512272
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431305,
+      "center": {
+        "lat": 56.0238325,
+        "lon": 12.4474007
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431309,
+      "center": {
+        "lat": 56.0191586,
+        "lon": 12.4414276
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431311,
+      "center": {
+        "lat": 56.0240817,
+        "lon": 12.4380836
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431312,
+      "center": {
+        "lat": 56.01911,
+        "lon": 12.4448715
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431317,
+      "center": {
+        "lat": 56.0231079,
+        "lon": 12.4423002
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431441,
+      "center": {
+        "lat": 56.0133259,
+        "lon": 12.4389518
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431442,
+      "center": {
+        "lat": 56.0167293,
+        "lon": 12.4401289
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431443,
+      "center": {
+        "lat": 56.0112932,
+        "lon": 12.4499053
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431444,
+      "center": {
+        "lat": 56.0100606,
+        "lon": 12.4383478
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431445,
+      "center": {
+        "lat": 56.0148986,
+        "lon": 12.4409239
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431446,
+      "center": {
+        "lat": 56.0167258,
+        "lon": 12.4427574
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431447,
+      "center": {
+        "lat": 56.0094423,
+        "lon": 12.4353943
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431450,
+      "center": {
+        "lat": 56.0132424,
+        "lon": 12.4420225
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431452,
+      "center": {
+        "lat": 56.0164444,
+        "lon": 12.4382053
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 142431453,
+      "center": {
+        "lat": 56.0167129,
+        "lon": 12.4457984
+      },
+      "tags": {
+        "landuse": "farmland"
+      }
+    },
+    {
+      "type": "way",
+      "id": 4874608,
+      "center": {
+        "lat": 55.9916625,
+        "lon": 12.2531333
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 4874609,
+      "center": {
+        "lat": 55.9934693,
+        "lon": 12.2543426
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 26825469,
+      "center": {
+        "lat": 55.991113,
+        "lon": 12.2528137
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 154857194,
+      "center": {
+        "lat": 55.9673416,
+        "lon": 12.3526675
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164209637,
+      "center": {
+        "lat": 56.0008086,
+        "lon": 12.2814827
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164209947,
+      "center": {
+        "lat": 55.9997503,
+        "lon": 12.2815524
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164210186,
+      "center": {
+        "lat": 55.9987934,
+        "lon": 12.2814515
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164210191,
+      "center": {
+        "lat": 55.9994624,
+        "lon": 12.2796645
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164210277,
+      "center": {
+        "lat": 55.9983012,
+        "lon": 12.280392
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164210278,
+      "center": {
+        "lat": 55.9981897,
+        "lon": 12.2822091
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164210340,
+      "center": {
+        "lat": 56.0001261,
+        "lon": 12.2829912
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164210341,
+      "center": {
+        "lat": 55.9996196,
+        "lon": 12.2830943
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164210412,
+      "center": {
+        "lat": 56.0016866,
+        "lon": 12.2818721
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164210529,
+      "center": {
+        "lat": 56.0015089,
+        "lon": 12.280246
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164224807,
+      "center": {
+        "lat": 55.9990184,
+        "lon": 12.2705633
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164228877,
+      "center": {
+        "lat": 55.9965115,
+        "lon": 12.2808328
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164229171,
+      "center": {
+        "lat": 55.9969065,
+        "lon": 12.2783495
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164229393,
+      "center": {
+        "lat": 55.9969482,
+        "lon": 12.2771252
+      },
+      "tags": {
+        "landuse": "meadow"
+      }
+    },
+    {
+      "type": "way",
+      "id": 147260891,
+      "center": {
+        "lat": 56.001406,
+        "lon": 12.3030147
+      },
+      "tags": {
+        "landuse": "grass",
+        "name": "Fuglsanghus"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164216745,
+      "center": {
+        "lat": 55.9999709,
+        "lon": 12.2777949
+      },
+      "tags": {
+        "landuse": "grass"
+      }
+    },
+    {
+      "type": "way",
+      "id": 166143021,
+      "center": {
+        "lat": 56.0101302,
+        "lon": 12.2558867
+      },
+      "tags": {
+        "landuse": "grass"
+      }
+    },
+    {
+      "type": "way",
+      "id": 166144019,
+      "center": {
+        "lat": 56.0078307,
+        "lon": 12.2567017
+      },
+      "tags": {
+        "landuse": "grass"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164229170,
+      "center": {
+        "lat": 55.9969385,
+        "lon": 12.278747
+      },
+      "tags": {
+        "building": "farm"
+      }
+    },
+    {
+      "type": "way",
+      "id": 166159213,
+      "center": {
+        "lat": 56.0001206,
+        "lon": 12.2681402
+      },
+      "tags": {
+        "building": "farm"
+      }
+    },
+    {
+      "type": "way",
+      "id": 166159214,
+      "center": {
+        "lat": 56.0000454,
+        "lon": 12.2678697
+      },
+      "tags": {
+        "building": "farm"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164216495,
+      "center": {
+        "lat": 55.9995078,
+        "lon": 12.2783112
+      },
+      "tags": {
+        "natural": "wood"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164216692,
+      "center": {
+        "lat": 56.0009155,
+        "lon": 12.2780457
+      },
+      "tags": {
+        "natural": "wood"
+      }
+    },
+    {
+      "type": "way",
+      "id": 149444934,
+      "center": {
+        "lat": 56.0478144,
+        "lon": 12.3764302
+      },
+      "tags": {
+        "building": "shed"
+      }
+    },
+    {
+      "type": "way",
+      "id": 164229173,
+      "center": {
+        "lat": 55.9966474,
+        "lon": 12.2817056
+      },
+      "tags": {
+        "building": "hut"
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "photo": "demo_forest_scene.jpg",
+  "phash": "0000000000000000",
+  "exif": {
+    "gps": null,
+    "ts": null,
+    "camera": null,
+    "orientation": null,
+    "focal_length_mm": null
+  },
+  "scene_type": "canopy_interior",
+  "caption": "A weathered Nordic-red timber outbuilding stands at the edge of a beech and birch forest, its walls fresh-milled and pale where recently repaired. Moss-covered glacial boulders are scattered among the trees. A small flock of free-range chickens forages in the woodland litter nearby, and beyond a wooden forest-edge fence a few Hereford cattle graze a shaded pasture. No signage, license plates, or road markings are visible anywhere in frame. Warm, diffuse light suggests a temperate summer afternoon.",
+  "attributes": {
+    "biome": "temperate broadleaf forest, forest-edge pasture",
+    "architecture": {
+      "type": "outbuilding/shed",
+      "material": "timber",
+      "colour": "nordic red timber (falu red), fresh-milled pale timber repair patch",
+      "roof_type": "not visible",
+      "condition": "weathered, recently repaired with fresh-milled boards"
+    },
+    "vegetation": ["beech", "birch", "moss", "glacial erratic boulders", "moraine boulders", "woodland litter"],
+    "husbandry": ["free-range woodland chickens", "small Hereford cattle herd", "forest-edge pasture grazing"],
+    "signage_text": [],
+    "language": null,
+    "driving_side": null,
+    "sun": {"shadow_az_deg": null, "solar_elev_deg": null},
+    "terrain_slope": "flat"
+  },
+  "confidence_notes": "No EXIF GPS, no signage/plates/road markings in frame; scene_type=canopy_interior (forest interior) so cross-view (C1) and pose (D) are expected to be skipped-with-reason by the router -- only rule-based geo-prior (B) and OSM structured retrieval (C2) apply. Terrain/skyline (C3) has no usable cue (flat forest floor, no horizon) and should degrade to a no-op."
+}
