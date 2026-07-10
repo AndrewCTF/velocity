@@ -1,0 +1,255 @@
+{
+  "code": "tz",
+  "name": "Tanzania",
+  "region": "Africa",
+  "iso2": "TZ",
+  "source_url": "https://unishka.substack.com/p/osint-of-tanzania",
+  "note": "truncated to 35 of 79",
+  "resources": [
+    {
+      "name": "National Bureau of Statistics",
+      "url": "https://www.nbs.go.tz/",
+      "category": "open-data",
+      "note": "official government statistics portal",
+      "keyless": true
+    },
+    {
+      "name": "Tanzania Census Data",
+      "url": "https://sensa.nbs.go.tz/",
+      "category": "open-data",
+      "note": "census information portal",
+      "keyless": true
+    },
+    {
+      "name": "BRELA Business Search",
+      "url": "https://ors.brela.go.tz/orsreg/searchbusinesspublic",
+      "category": "business-registry",
+      "note": "official business registration search",
+      "keyless": true
+    },
+    {
+      "name": "Tanzania Revenue Authority",
+      "url": "https://www.tra.go.tz/",
+      "category": "finance-tax",
+      "note": "tax authority",
+      "keyless": true
+    },
+    {
+      "name": "Bank of Tanzania",
+      "url": "https://www.bot.go.tz/",
+      "category": "finance-tax",
+      "note": "central bank",
+      "keyless": true
+    },
+    {
+      "name": "Ministry of Lands",
+      "url": "https://www.lands.go.tz/",
+      "category": "land-property",
+      "note": "land and property authority",
+      "keyless": true
+    },
+    {
+      "name": "Tanzania Data Portal",
+      "url": "https://tanzania.opendataforafrica.org/",
+      "category": "open-data",
+      "note": "open data platform",
+      "keyless": true
+    },
+    {
+      "name": "World Bank Data - Tanzania",
+      "url": "https://data.worldbank.org/country/tanzania",
+      "category": "open-data",
+      "note": "socioeconomic indicators",
+      "keyless": true
+    },
+    {
+      "name": "WHO Country Data - Tanzania",
+      "url": "https://data.who.int/countries/834",
+      "category": "open-data",
+      "note": "health statistics",
+      "keyless": true
+    },
+    {
+      "name": "Our World in Data - Tanzania",
+      "url": "https://ourworldindata.org/country/tanzania",
+      "category": "open-data",
+      "note": "development indicators",
+      "keyless": true
+    },
+    {
+      "name": "CIA World Factbook - Tanzania",
+      "url": "https://www.cia.gov/the-world-factbook/countries/tanzania/",
+      "category": "open-data",
+      "note": "country overview",
+      "keyless": true
+    },
+    {
+      "name": "IMF DataMapper - Tanzania",
+      "url": "https://www.imf.org/external/datamapper/profile/tza",
+      "category": "finance-tax",
+      "note": "economic data",
+      "keyless": true
+    },
+    {
+      "name": "Dar es Salaam Stock Exchange",
+      "url": "https://www.dse.co.tz/",
+      "category": "finance-tax",
+      "note": "securities exchange",
+      "keyless": true
+    },
+    {
+      "name": "Tanzania Investment Centre",
+      "url": "https://www.tiseza.go.tz/",
+      "category": "government",
+      "note": "investment authority",
+      "keyless": true
+    },
+    {
+      "name": "Tanzania Land Portal",
+      "url": "https://landportal.org/book/countries/tza",
+      "category": "land-property",
+      "note": "land information platform",
+      "keyless": true
+    },
+    {
+      "name": "Ramani Huria",
+      "url": "https://ramanihuria.org/en/",
+      "category": "maps-geo",
+      "note": "open mapping project",
+      "keyless": true
+    },
+    {
+      "name": "OpenInfraMap - Tanzania",
+      "url": "https://openinframap.org/stats/area/tanzania",
+      "category": "maps-geo",
+      "note": "infrastructure mapping",
+      "keyless": true
+    },
+    {
+      "name": "Tanzania Ports Authority",
+      "url": "https://www.ports.go.tz/",
+      "category": "transport-tracking",
+      "note": "port operations",
+      "keyless": true
+    },
+    {
+      "name": "Flightradar24 - Dar es Salaam",
+      "url": "https://www.flightradar24.com/data/airports/dar",
+      "category": "transport-tracking",
+      "note": "real-time flight tracking",
+      "keyless": true
+    },
+    {
+      "name": "The Citizen",
+      "url": "https://www.thecitizen.co.tz/tanzania",
+      "category": "news-media",
+      "note": "major news outlet",
+      "keyless": true
+    },
+    {
+      "name": "Mwananchi",
+      "url": "https://www.mwananchi.co.tz/mw",
+      "category": "news-media",
+      "note": "major news outlet",
+      "keyless": true
+    },
+    {
+      "name": "Daily News Tanzania",
+      "url": "https://dailynews.co.tz/",
+      "category": "news-media",
+      "note": "government newspaper",
+      "keyless": true
+    },
+    {
+      "name": "TBC - Tanzania Broadcasting Corporation",
+      "url": "https://www.tbc.go.tz/",
+      "category": "news-media",
+      "note": "national broadcaster",
+      "keyless": true
+    },
+    {
+      "name": "BBC Swahili",
+      "url": "https://www.bbc.com/swahili",
+      "category": "news-media",
+      "note": "international news in Swahili",
+      "keyless": true
+    },
+    {
+      "name": "Vodacom Tanzania",
+      "url": "https://www.vodacom.co.tz/",
+      "category": "telecom-infra",
+      "note": "major telecom operator",
+      "keyless": true
+    },
+    {
+      "name": "Airtel Tanzania",
+      "url": "https://www.airtel.co.tz/",
+      "category": "telecom-infra",
+      "note": "major telecom operator",
+      "keyless": true
+    },
+    {
+      "name": "TTCL - Tanzania Telecommunication Company",
+      "url": "https://www.ttcl.co.tz/",
+      "category": "telecom-infra",
+      "note": "state telecom company",
+      "keyless": true
+    },
+    {
+      "name": "Halotel Tanzania",
+      "url": "https://halotel.co.tz/",
+      "category": "telecom-infra",
+      "note": "telecom operator",
+      "keyless": true
+    },
+    {
+      "name": "Open Sanctions",
+      "url": "https://www.opensanctions.org/countries/tz/",
+      "category": "sanctions-pep",
+      "note": "sanctions and PEP database",
+      "keyless": true
+    },
+    {
+      "name": "OSINT Aleph",
+      "url": "https://aleph.occrp.org",
+      "category": "sanctions-pep",
+      "note": "entity database for investigations",
+      "keyless": true
+    },
+    {
+      "name": "Human Rights Commission Tanzania",
+      "url": "https://www.chragg.go.tz/",
+      "category": "government",
+      "note": "human rights authority",
+      "keyless": true
+    },
+    {
+      "name": "National Audit Office",
+      "url": "https://www.nao.go.tz/reports",
+      "category": "government",
+      "note": "audit reports and oversight",
+      "keyless": true
+    },
+    {
+      "name": "Electronic Government Authority",
+      "url": "https://www.ega.go.tz/",
+      "category": "government",
+      "note": "e-government portal",
+      "keyless": true
+    },
+    {
+      "name": "Ministry of Foreign Affairs Tanzania",
+      "url": "https://www.foreign.go.tz/",
+      "category": "government",
+      "note": "diplomatic ministry",
+      "keyless": true
+    },
+    {
+      "name": "Immigration - Tanzania",
+      "url": "https://www.immigration.go.tz/",
+      "category": "government",
+      "note": "immigration authority",
+      "keyless": true
+    }
+  ]
+}

@@ -14,21 +14,21 @@ function targetOf(id: string): string {
   return i < 0 ? id : id.slice(i + 1);
 }
 
-// Small self-fetch hook: GET /api/osint/<endpoint>?target=… once per target.
-function useOsint<T>(endpoint: string, target: string): { data: T | null; loading: boolean } {
+// Small self-fetch hook: GET /api/osint/<endpoint>?<param>=… once per value.
+function useOsint<T>(endpoint: string, value: string, param: string = 'target'): { data: T | null; loading: boolean } {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     setData(null);
     setLoading(true);
     const aborter = new AbortController();
-    apiFetch(`/api/osint/${endpoint}?target=${encodeURIComponent(target)}`, { signal: aborter.signal })
+    apiFetch(`/api/osint/${endpoint}?${param}=${encodeURIComponent(value)}`, { signal: aborter.signal })
       .then((r) => (r.ok ? (r.json() as Promise<T>) : null))
       .then((j) => setData(j))
       .catch(() => undefined)
       .finally(() => setLoading(false));
     return () => aborter.abort();
-  }, [endpoint, target]);
+  }, [endpoint, value, param]);
   return { data, loading };
 }
 
@@ -250,6 +250,252 @@ function HibpCard({ target }: { target: string }): JSX.Element | null {
   );
 }
 
+interface Wayback { subdomains?: string[]; subdomain_count?: number; url_count?: number; note?: string }
+
+function WaybackCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Wayback>('wayback', target);
+  if (!data || data.note || !data.subdomains?.length) return null;
+  return (
+    <Widget title="Wayback Machine" count={data.url_count ?? data.subdomain_count ?? 0}>
+      <Row k="subdomains seen" v={data.subdomain_count ?? data.subdomains.length} />
+      <Row k="sample" v={data.subdomains.slice(0, 8).join(', ')} />
+    </Widget>
+  );
+}
+
+interface UrlscanScan { url?: string; ip?: string; asn?: string; time?: string }
+interface Urlscan { scans?: UrlscanScan[]; ips?: string[]; count?: number; note?: string }
+
+function UrlscanCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Urlscan>('urlscan', target);
+  if (!data || data.note || !data.scans?.length) return null;
+  return (
+    <Widget title="urlscan.io" count={data.count ?? data.scans.length}>
+      {data.ips?.length ? <Row k="ips" v={data.ips.slice(0, 6).join(', ')} /> : null}
+      {data.scans.slice(0, 5).map((s, i) => (
+        <div key={s.url ?? i} style={{ fontSize: 11, color: 'var(--txt-2)', padding: '1px 0' }}>• {s.url}</div>
+      ))}
+    </Widget>
+  );
+}
+
+interface BgpPrefix { prefix?: string; name?: string }
+interface BgpAsn { asn?: number | string; name?: string; country?: string }
+interface Bgp { prefixes?: BgpPrefix[]; asns?: BgpAsn[]; note?: string }
+
+function BgpCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Bgp>('bgpview-ip', target, 'ip');
+  if (!data || data.note || (!data.prefixes?.length && !data.asns?.length)) return null;
+  return (
+    <Widget title="BGP (bgpview)" count={data.prefixes?.length ?? 0}>
+      {data.asns?.length ? (
+        <Row k="ASNs" v={data.asns.map((a) => `${a.asn ?? ''} ${a.name ?? ''}`.trim()).join(', ')} />
+      ) : null}
+      {data.prefixes?.length ? <Row k="prefixes" v={data.prefixes.slice(0, 6).map((p) => p.prefix).join(', ')} /> : null}
+    </Widget>
+  );
+}
+
+interface Greynoise { classification?: string; name?: string; noise?: boolean; tags?: string[]; last_seen?: string; note?: string }
+
+function GreynoiseCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Greynoise>('greynoise', target, 'ip');
+  if (!data || data.note || !data.classification) return null;
+  const malicious = data.classification === 'malicious';
+  return (
+    <Widget title="GreyNoise">
+      <Row k="classification" v={<span style={{ color: malicious ? 'var(--alert)' : 'var(--txt-1)' }}>{data.classification}</span>} />
+      {data.name && <Row k="actor" v={data.name} />}
+      {data.tags?.length ? <Row k="tags" v={data.tags.join(', ')} /> : null}
+      {data.last_seen && <Row k="last seen" v={data.last_seen} />}
+    </Widget>
+  );
+}
+
+interface TorExit { is_tor_exit?: boolean; nickname?: string; country?: string; note?: string }
+
+function TorExitCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<TorExit>('onionoo', target, 'ip');
+  if (!data || data.note || !data.is_tor_exit) return null;
+  return (
+    <Widget title="Tor exit node">
+      {data.nickname && <Row k="nickname" v={data.nickname} />}
+      {data.country && <Row k="country" v={data.country} />}
+    </Widget>
+  );
+}
+
+interface Feodo { listed?: boolean; malware?: string; first_seen?: string; note?: string }
+
+function FeodoCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Feodo>('feodo', target, 'ip');
+  if (!data || data.note || !data.listed) return null;
+  return (
+    <Widget title="Feodo Tracker">
+      <Row k="malware" v={<span style={{ color: 'var(--alert)' }}>{data.malware ?? 'listed'}</span>} />
+      {data.first_seen && <Row k="first seen" v={data.first_seen} />}
+    </Widget>
+  );
+}
+
+interface EmailRep { reputation?: string; suspicious?: boolean; malicious?: boolean; breach?: boolean; profiles?: string[]; note?: string }
+
+function EmailRepCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<EmailRep>('emailrep', target);
+  if (!data || data.note || !data.reputation) return null;
+  return (
+    <Widget title="EmailRep">
+      <Row k="reputation" v={<span style={{ color: data.malicious ? 'var(--alert)' : 'var(--txt-1)' }}>{data.reputation}</span>} />
+      {data.suspicious != null && <Row k="suspicious" v={String(data.suspicious)} />}
+      {data.breach != null && <Row k="breach" v={String(data.breach)} />}
+      {data.profiles?.length ? <Row k="profiles" v={data.profiles.join(', ')} /> : null}
+    </Widget>
+  );
+}
+
+interface Libravatar { has_avatar?: boolean; note?: string }
+
+function LibravatarCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Libravatar>('libravatar', target);
+  if (!data || data.note || !data.has_avatar) return null;
+  return (
+    <Widget title="Libravatar">
+      <Row k="avatar" v="present" />
+    </Widget>
+  );
+}
+
+interface RedditPost { subreddit?: string; title?: string; created?: string }
+interface Reddit { submissions?: RedditPost[]; subreddits?: string[]; count?: number; note?: string }
+
+function RedditCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Reddit>('pullpush', target);
+  if (!data || data.note || !data.submissions?.length) return null;
+  return (
+    <Widget title="Reddit (pullpush)" count={data.count ?? data.submissions.length}>
+      {data.subreddits?.length ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {data.subreddits.slice(0, 20).map((s) => (
+            <span key={s} style={{ fontSize: 10, color: 'var(--txt-2)', background: 'rgba(255,255,255,0.05)', padding: '1px 5px', borderRadius: 3 }}>
+              {s}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </Widget>
+  );
+}
+
+interface UrlhausUrl { threat?: string; tags?: string[]; payloads?: string[]; status?: string; note?: string }
+
+function UrlhausUrlCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<UrlhausUrl>('urlhaus-url', target);
+  if (!data || data.note || !data.threat) return null;
+  return (
+    <Widget title="URLhaus">
+      <Row k="threat" v={<span style={{ color: 'var(--alert)' }}>{data.threat}</span>} />
+      {data.status && <Row k="status" v={data.status} />}
+      {data.tags?.length ? <Row k="tags" v={data.tags.join(', ')} /> : null}
+      {data.payloads?.length ? <Row k="payloads" v={data.payloads.slice(0, 6).join(', ')} /> : null}
+    </Widget>
+  );
+}
+
+interface Phishstats { score?: number; tld?: string; ip?: string; count?: number; note?: string }
+
+function PhishstatsCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Phishstats>('phishstats', target);
+  if (!data || data.note || !data.count) return null;
+  return (
+    <Widget title="PhishStats" count={data.count ?? 0}>
+      {data.score != null && <Row k="score" v={<span style={{ color: 'var(--alert)' }}>{data.score}</span>} />}
+      {data.ip && <Row k="ip" v={data.ip} />}
+      {data.tld && <Row k="tld" v={data.tld} />}
+    </Widget>
+  );
+}
+
+interface MalwareBazaar { family?: string; file_type?: string; tags?: string[]; first_seen?: string; signature?: string; note?: string }
+
+function MalwareBazaarCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<MalwareBazaar>('malwarebazaar', target, 'hash');
+  if (!data || data.note || !data.family) return null;
+  return (
+    <Widget title="MalwareBazaar">
+      <Row k="family" v={<span style={{ color: 'var(--alert)' }}>{data.family}</span>} />
+      {data.file_type && <Row k="type" v={data.file_type} />}
+      {data.signature && <Row k="signature" v={data.signature} />}
+      {data.tags?.length ? <Row k="tags" v={data.tags.join(', ')} /> : null}
+      {data.first_seen && <Row k="first seen" v={data.first_seen} />}
+    </Widget>
+  );
+}
+
+interface Yaraify { yara?: string[]; clamav?: string[]; note?: string }
+
+function YaraifyCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<Yaraify>('yaraify', target, 'hash');
+  if (!data || data.note || (!data.yara?.length && !data.clamav?.length)) return null;
+  return (
+    <Widget title="YARAify">
+      {data.yara?.length ? <Row k="yara" v={data.yara.join(', ')} /> : null}
+      {data.clamav?.length ? <Row k="clamav" v={data.clamav.join(', ')} /> : null}
+    </Widget>
+  );
+}
+
+interface Mempool { balance?: number; tx_count?: number; funded?: number; spent?: number; note?: string }
+
+function BtcWalletCard({ address }: { address: string }): JSX.Element | null {
+  const { data } = useOsint<Mempool>('mempool', address, 'address');
+  if (!data || data.note || data.tx_count == null) return null;
+  return (
+    <Widget title="BTC wallet (mempool.space)">
+      {data.balance != null && <Row k="balance" v={data.balance} />}
+      <Row k="tx count" v={data.tx_count} />
+      {data.funded != null && <Row k="funded" v={data.funded} />}
+      {data.spent != null && <Row k="spent" v={data.spent} />}
+    </Widget>
+  );
+}
+
+interface Blockscout { balance?: number | string; tx_count?: number; note?: string }
+
+function EvmWalletCard({ address }: { address: string }): JSX.Element | null {
+  const { data } = useOsint<Blockscout>('blockscout', address, 'address');
+  if (!data || data.note || data.tx_count == null) return null;
+  return (
+    <Widget title="Wallet (blockscout)">
+      {data.balance != null && <Row k="balance" v={data.balance} />}
+      <Row k="tx count" v={data.tx_count} />
+    </Widget>
+  );
+}
+
+function WalletCard({ target }: { target: string }): JSX.Element | null {
+  const ci = target.indexOf(':');
+  const chain = ci < 0 ? '' : target.slice(0, ci);
+  const address = ci < 0 ? target : target.slice(ci + 1);
+  if (!address) return null;
+  return chain === 'btc' ? <BtcWalletCard address={address} /> : <EvmWalletCard address={address} />;
+}
+
+interface BgpAsnDetail { asn?: number | string; name?: string; description?: string; country?: string; prefixes?: unknown[]; peers?: unknown[]; note?: string }
+
+function BgpAsnCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<BgpAsnDetail>('bgpview-asn', target, 'asn');
+  if (!data || data.note || !data.name) return null;
+  return (
+    <Widget title="ASN (bgpview)">
+      <Row k="name" v={data.name} />
+      {data.description && <Row k="description" v={data.description} />}
+      {data.country && <Row k="country" v={data.country} />}
+      {data.prefixes?.length ? <Row k="prefixes" v={data.prefixes.length} /> : null}
+      {data.peers?.length ? <Row k="peers" v={data.peers.length} /> : null}
+    </Widget>
+  );
+}
+
 // ── panel ─────────────────────────────────────────────────────────────────────
 
 export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
@@ -276,6 +522,8 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
           <WhoisCard target={target} />
           <DnsCard target={target} />
           <InfraCard target={target} />
+          <WaybackCard target={target} />
+          <UrlscanCard target={target} />
           <ThreatCard target={target} />
         </>
       )}
@@ -284,6 +532,10 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
           <WhoisCard target={target} />
           <IpGeoCard target={target} />
           <ShodanCard target={target} />
+          <BgpCard target={target} />
+          <GreynoiseCard target={target} />
+          <TorExitCard target={target} />
+          <FeodoCard target={target} />
           <ThreatCard target={target} />
         </>
       )}
@@ -292,16 +544,34 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
           <GithubCard target={target} />
           <GitlabCard target={target} />
           <UsernameSitesCard target={target} />
+          <RedditCard target={target} />
         </>
       )}
       {kind === 'email' && (
         <>
           <GravatarCard target={target} />
           <HibpCard target={target} />
+          <EmailRepCard target={target} />
+          <LibravatarCard target={target} />
           <ThreatCard target={target} />
         </>
       )}
-      {kind !== 'domain' && kind !== 'ip' && kind !== 'username' && kind !== 'email' && (
+      {kind === 'url' && (
+        <>
+          <UrlhausUrlCard target={target} />
+          <PhishstatsCard target={target} />
+        </>
+      )}
+      {kind === 'file' && (
+        <>
+          <MalwareBazaarCard target={target} />
+          <YaraifyCard target={target} />
+        </>
+      )}
+      {kind === 'wallet' && <WalletCard target={target} />}
+      {kind === 'asn' && <BgpAsnCard target={target} />}
+      {kind === 'tx' && null}
+      {!['domain', 'ip', 'username', 'email', 'url', 'file', 'wallet', 'asn', 'tx'].includes(kind) && (
         <ThreatCard target={target} />
       )}
     </div>

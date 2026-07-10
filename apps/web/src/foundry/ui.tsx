@@ -7,6 +7,7 @@
 
 import type { ChangeEvent, CSSProperties, ReactNode } from 'react';
 import { Badge, type BadgeTone } from '../shell/instruments.js';
+import type { Build } from '../state/foundry.js';
 
 // ── view header ───────────────────────────────────────────────────────────
 // The one chrome every view opens with: an accent tick + title eyebrow, an
@@ -232,5 +233,72 @@ export const statusTone: Record<string, BadgeTone> = {
   running: 'accent',
   failed: 'alert',
 };
+
+// Build duration from started_at/finished_at stamps (moved here so Home + Builds
+// share one implementation).
+export function durationOf(b: Build): string {
+  if (!b.finished_at) return '—';
+  const ms = new Date(b.finished_at).getTime() - new Date(b.started_at).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+// Humanize a schedule interval in seconds: 3600 → "1 h", 90 → "1m 30s".
+export function fmtInterval(s: number | null | undefined): string {
+  if (!s || s < 1) return '—';
+  if (s < 60) return `${s}s`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const parts: string[] = [];
+  if (h) parts.push(`${h}h`);
+  if (m) parts.push(`${m}m`);
+  if (sec && !h) parts.push(`${sec}s`);
+  return parts.join(' ') || `${h}h`;
+}
+
+// A row of label+count filter chips (all / succeeded / failed / …). `value` is
+// the active key; count 0 still renders but is dimmed so the operator sees the
+// dimension even when empty.
+export function FilterChips<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: Array<{ key: T; label: string; count?: number; tone?: BadgeTone }>;
+}): JSX.Element {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {options.map((o) => {
+        const on = o.key === value;
+        const empty = o.count != null && o.count === 0;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            onClick={() => onChange(o.key)}
+            className={[
+              'mono text-[10px] uppercase tracking-[0.4px] px-2 py-1 rounded-sm border transition-colors',
+              on
+                ? 'border-accent-line bg-accent-dim text-[#9cc2ff]'
+                : empty
+                  ? 'border-line text-txt-4'
+                  : 'border-line-2 text-txt-2 hover:border-accent-line hover:text-txt-0',
+            ].join(' ')}
+          >
+            {o.label}
+            {o.count != null && (
+              <span className={`ml-1.5 tabular-nums ${on ? 'text-[#9cc2ff]' : 'text-txt-4'}`}>
+                {o.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export type { CSSProperties };

@@ -1,0 +1,240 @@
+{
+  "code": "am",
+  "name": "Armenia",
+  "region": "Asia",
+  "iso2": "AM",
+  "source_url": "https://unishka.substack.com/p/osint-of-armenia",
+  "note": "truncated to 35 of 68",
+  "resources": [
+    {
+      "name": "E-Gov",
+      "url": "https://www.e-gov.am/en/",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Open Data Armenia",
+      "url": "https://opendata.am",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "ArmStat",
+      "url": "https://armstat.am/en/",
+      "category": "government",
+      "note": "National statistics office",
+      "keyless": true
+    },
+    {
+      "name": "Electronic Register",
+      "url": "https://www.e-register.am/en/",
+      "category": "business-registry",
+      "note": "Official company register",
+      "keyless": true
+    },
+    {
+      "name": "Cadastre Committee",
+      "url": "https://www.cadastre.am/en/committee",
+      "category": "land-property",
+      "note": "Land registry authority",
+      "keyless": true
+    },
+    {
+      "name": "e-Cadastre",
+      "url": "https://www.e-cadastre.am/en",
+      "category": "land-property",
+      "note": "Electronic land registry",
+      "keyless": true
+    },
+    {
+      "name": "e-request.am",
+      "url": "https://e-request.am/en",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "e-verify.am",
+      "url": "https://www.e-verify.am/en/",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Arlis",
+      "url": "https://www.arlis.am/hy/",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Tender.am",
+      "url": "https://www.tender.am/en/",
+      "category": "tenders",
+      "note": "Public procurement tenders",
+      "keyless": true
+    },
+    {
+      "name": "SPYUR",
+      "url": "https://www.spyur.am/en/business_directory/new/",
+      "category": "business-registry",
+      "note": "Armenian business directory",
+      "keyless": true
+    },
+    {
+      "name": "Yell.am",
+      "url": "https://www.yell.am/en",
+      "category": "business-registry",
+      "note": "Armenian yellow pages",
+      "keyless": true
+    },
+    {
+      "name": "I-AM.AM",
+      "url": "https://i-am.am/",
+      "category": "business-registry",
+      "note": "Armenian business directory",
+      "keyless": true
+    },
+    {
+      "name": "Taxpayer Search System",
+      "url": "https://www.src.am/en/taxpayerSearchSystemPage/112",
+      "category": "finance-tax",
+      "keyless": true
+    },
+    {
+      "name": "Staff.am",
+      "url": "https://staff.am/en",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Kompass Armenia",
+      "url": "https://gb.kompass.com/businessplace/z/am/",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "OpenSanctions Armenia",
+      "url": "https://www.opensanctions.org/countries/am/",
+      "category": "sanctions-pep",
+      "note": "Sanctions and PEP lists",
+      "keyless": true
+    },
+    {
+      "name": "ZoomInfo",
+      "url": "https://www.zoominfo.com/people-search/location-armenia",
+      "category": "people-search",
+      "keyless": false
+    },
+    {
+      "name": "FamilySearch Armenia",
+      "url": "https://www.familysearch.org/en/wiki/Armenia_Record_Finder",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "OCCRP Alpha",
+      "url": "https://aleph.occrp.org",
+      "category": "other",
+      "note": "Investigative database",
+      "keyless": true
+    },
+    {
+      "name": "Constitutional Court of Armenia",
+      "url": "https://www.concourt.am/en/decisions/advanced-search",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Court of Cassation",
+      "url": "https://www.cassationcourt.am/en/",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Armlaw",
+      "url": "https://armlaw.am/en/",
+      "category": "court-legal",
+      "note": "Legal information portal",
+      "keyless": true
+    },
+    {
+      "name": "Armenia Land Use",
+      "url": "https://ygi-data-hub-guo-un-habitat.hub.arcgis.com/datasets/eed033b52f814bd980161520dad45391/about",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Perry-Castañeda Library Map Collection",
+      "url": "https://maps.lib.utexas.edu/maps/armenia.html",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Old Maps of Armenia",
+      "url": "https://www.oldmapsonline.org/en/Armenia",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "ArmeniaTenders.com",
+      "url": "https://www.armeniatenders.com/",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "Global Tenders Armenia",
+      "url": "https://www.globaltenders.com/government-tenders-armenia",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "Amnic Whois",
+      "url": "https://www.amnic.net/whois/",
+      "category": "other",
+      "note": "Armenian domain registry",
+      "keyless": true
+    },
+    {
+      "name": "OSINT Tools Armenia",
+      "url": "https://github.com/paulpogoda/OSINT-Tools-Armenia/",
+      "category": "archives",
+      "note": "GitHub toolkit collection",
+      "keyless": true
+    },
+    {
+      "name": "Armenia OSINT Financial Crime Intelligence",
+      "url": "https://knowlesys.com/en/osint-academy/by-country/armenia-osint-financial-crime-intelligence.html",
+      "category": "other",
+      "note": "Training guide",
+      "keyless": true
+    },
+    {
+      "name": "UK Sanctions Guidance for Armenian Businesses",
+      "url": "https://www.trade-integrity.org",
+      "category": "sanctions-pep",
+      "keyless": true
+    },
+    {
+      "name": "Humanitarian Exchange Data Armenia",
+      "url": "https://data.humdata.org/group/arm",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "CIA World Factbook Armenia",
+      "url": "https://www.cia.gov/the-world-factbook/countries/armenia/",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Demographic and Health Surveys",
+      "url": "https://dhsprogram.com/data/available-datasets.cfm",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "DataPoint Armenia",
+      "url": "https://www.datapoint.am/projects",
+      "category": "open-data",
+      "keyless": true
+    }
+  ]
+}

@@ -30,15 +30,22 @@ export const APP_IDS: readonly AppId[] = [
   'foundry',
 ];
 
-export const APP_META: Record<AppId, { label: string; hint: string }> = {
-  map: { label: 'Map', hint: 'Live geospatial COP (globe)' },
-  explorer: { label: 'Explorer', hint: 'Filter / aggregate the live object store' },
-  graph: { label: 'Graph', hint: 'Link analysis + search-around' },
-  targeting: { label: 'Targeting', hint: 'Kill-chain board (notional)' },
-  video: { label: 'Video', hint: 'FMV + ground recon + detections' },
-  sim: { label: 'Sim', hint: 'Browser war-game overlay' },
-  reports: { label: 'Reports', hint: 'Case files, briefs, dossiers' },
-  foundry: { label: 'Foundry', hint: 'BYO data: datasets, pipelines, builds, ontology binding' },
+// chrome: 'globe' keeps the right inspector rail + timeline footer (apps designed
+// around the shared map context); 'full' hands the app the whole band — the shell
+// collapses the footer row and hides the right rail while it is active.
+export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'globe' | 'full' }> = {
+  map: { label: 'Map', hint: 'Live geospatial COP (globe)', chrome: 'globe' },
+  explorer: { label: 'Explorer', hint: 'Filter / aggregate the live object store', chrome: 'globe' },
+  graph: { label: 'Graph', hint: 'Link analysis + search-around', chrome: 'globe' },
+  targeting: { label: 'Targeting', hint: 'Kill-chain board (notional)', chrome: 'globe' },
+  video: { label: 'Video', hint: 'FMV + ground recon + detections', chrome: 'globe' },
+  sim: { label: 'Sim', hint: 'Browser war-game overlay', chrome: 'globe' },
+  reports: { label: 'Reports', hint: 'Case files, briefs, dossiers', chrome: 'globe' },
+  foundry: {
+    label: 'Foundry',
+    hint: 'BYO data: datasets, pipelines, builds, ontology binding',
+    chrome: 'full',
+  },
 };
 
 const LS_KEY = 'velocity.appView';

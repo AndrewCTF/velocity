@@ -65,6 +65,14 @@ class PreviewIn(BaseModel):
     limit: int = 20
 
 
+class SpecPreviewIn(BaseModel):
+    """Preview an UNSAVED transform spec — the editor's live form state."""
+
+    inputs: list[str] = Field(default_factory=list)
+    steps: list[dict[str, Any]] = Field(default_factory=list)
+    limit: int = 20
+
+
 class BindingIn(BaseModel):
     dataset_id: str
     object_kind: str
@@ -446,6 +454,22 @@ async def create_transform(
         _raise(exc)
 
 
+@router.post("/api/foundry/transforms/preview")
+async def preview_transform_spec(
+    body: SpecPreviewIn, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    """Preview an unsaved spec (editor form state) — same execution/quarantine
+    semantics as the saved-transform preview, no version written. Declared
+    before the parameterized transform routes."""
+    try:
+        tf_mod.validate_steps(body.steps)
+        return await builds_mod.preview_transform(
+            _store(), {"inputs": body.inputs, "steps": body.steps}, limit=body.limit
+        )
+    except FoundryError as exc:
+        _raise(exc)
+
+
 @router.get("/api/foundry/transforms/{transform_id}")
 async def get_transform(
     transform_id: str, ctx: UserCtx = Depends(current_user_or_local)
@@ -566,6 +590,13 @@ async def lineage(ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, An
 
 
 # ── bindings ─────────────────────────────────────────────────────────────────
+
+
+@router.get("/api/foundry/kinds")
+async def foundry_kinds(ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, list[str]]:
+    """The ontology object kinds a binding may target — lets the client offer a
+    picker instead of free text that only 422s server-side (_check_kind)."""
+    return {"kinds": sorted(_KNOWN_KINDS)}
 
 
 @router.get("/api/foundry/bindings")

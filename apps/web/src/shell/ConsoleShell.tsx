@@ -33,6 +33,11 @@ interface Props {
   // (a sibling of the rails) so its z-index isn't capped by the z-0 globe wrapper.
   // Insets itself past the icon rail + inspector; the top bar + rails stay visible.
   mainOverlay?: ReactNode;
+  // Full-bleed mode (APP_META chrome:'full' — e.g. Foundry): the timeline footer
+  // row collapses to 0 and the right rail hides, so the mainOverlay app gets the
+  // whole band. Both stay MOUNTED (Timeline drives the clock; ObjectInspector
+  // holds selection effects) — only layout/a11y visibility changes. Desktop only.
+  fullBleed?: boolean;
 }
 
 const ICON_RAIL_W = 44;
@@ -103,8 +108,10 @@ export function ConsoleShell({
   overlayLeft,
   iconRail = false,
   mainOverlay,
+  fullBleed = false,
 }: Props): JSX.Element {
   const isMobile = useIsMobile();
+  const bleed = fullBleed && !isMobile;
   const sim = useSim((s) => s.active);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -141,12 +148,14 @@ export function ConsoleShell({
       className="csl h-screen w-screen overflow-hidden bg-bg-0 text-txt-0 grid"
       style={
         {
-          gridTemplateRows: isMobile ? '26px 42px 1fr' : '26px 42px 1fr 158px',
+          gridTemplateRows: isMobile ? '26px 42px 1fr' : bleed ? '26px 42px 1fr 0px' : '26px 42px 1fr 158px',
           // Publish the live (resizable) rail widths so map-overlay workspaces
           // (ModeSurface) track the rail instead of hardcoding left-[296px] and
           // under-/over-lapping when the operator drags it (design §4 grammar #1).
+          // Full-bleed publishes 0 so AppSurface stretches to the right edge;
+          // rightW itself is untouched and restores when the flag drops.
           '--rail-left-w': `${iconRail ? ICON_RAIL_W : leftW}px`,
-          '--rail-right-w': `${rightW}px`,
+          '--rail-right-w': bleed ? '0px' : `${rightW}px`,
         } as CSSProperties
       }
     >
@@ -229,7 +238,7 @@ export function ConsoleShell({
             )}
             {right && (
               <aside
-                className="absolute right-0 top-0 bottom-0 border-l border-line-2 overflow-hidden z-20 flex flex-col"
+                className={`absolute right-0 top-0 bottom-0 border-l border-line-2 overflow-hidden z-20 flex-col ${bleed ? 'hidden' : 'flex'}`}
                 aria-label="Selection"
                 style={{ background: RAIL_BG, width: rightW }}
               >
@@ -316,11 +325,14 @@ export function ConsoleShell({
         )}
       </main>
 
-      {/* timeline footer — desktop only (mobile reaches it via the chooser) */}
+      {/* timeline footer — desktop only (mobile reaches it via the chooser).
+          Full-bleed collapses the row (grid track is 0px) but keeps Timeline
+          mounted so the clock/replay side effects never restart. */}
       {!isMobile && (
         <footer
-          className="row-start-4 border-t border-line-2 bg-bg-1 relative z-20"
+          className={`row-start-4 border-t border-line-2 bg-bg-1 relative z-20 ${bleed ? 'overflow-hidden border-t-0' : ''}`}
           style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}
+          aria-hidden={bleed || undefined}
         >
           {bottom}
         </footer>

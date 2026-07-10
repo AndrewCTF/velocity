@@ -48,10 +48,18 @@ if TYPE_CHECKING:  # runtime import lives in get_registry (module cycle)
 # "investigation" joined 2026-07-07: the Investigation canvas has always
 # minted `investigation:<slug>` ids with kind="investigation" on save — the
 # Literal rejected it with a 422 that the old auth-first 401 masked.
+# "url" / "wallet" / "tx" / "file" joined Phase 0 of the OSINT source
+# expansion (docs/osint-sources-plan.md) — url/hash/wallet/tx targets minted
+# by the new fetch.py classify_target() kinds need a first-class home too.
+# "country" / "resource" joined the country-OSINT catalog
+# (docs/country-osint-spec.md) — app/osint/country_catalog.py::build_graph
+# mints country:<code> -> resource:<code>:<slug> -> domain:<host>.
 ObjectKind = Literal[
     "aircraft", "vessel", "incident", "sim",
     "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
     "person", "username", "investigation",
+    "url", "wallet", "tx", "file",
+    "country", "resource",
     "object",
 ]
 
@@ -60,6 +68,8 @@ _KNOWN_KINDS: frozenset[str] = frozenset(
         "aircraft", "vessel", "incident", "sim",
         "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
         "person", "username", "investigation",
+        "url", "wallet", "tx", "file",
+        "country", "resource",
         "object",
     )
 )
@@ -79,6 +89,24 @@ KNOWN_RELS: frozenset[str] = frozenset(
         "member_of",  # sim drone → swarm
         "contains",  # situation → child incident/entity/COA it aggregates
         "part_of",  # inverse of contains (child → situation)
+        # Phase 0 OSINT source expansion (docs/osint-sources-plan.md) — verbs
+        # for the new url/wallet/tx/file kinds and their infra/threat context.
+        "archived_url",  # domain/url → its wayback-preserved copy
+        "contacted",  # url/malware → ip it was observed talking to
+        "peers_with",  # asn → peer asn (BGP peering/upstream relationship)
+        "tor_exit",  # ip → threat node flagging it as a Tor exit relay
+        "listed_by",  # ip/url/hash → threat feed that listed it
+        "distributes",  # url → file it serves/hosts
+        "sends_to",  # wallet → tx (outbound transfer)
+        "receives_from",  # wallet → tx (inbound transfer)
+        "officer_of",  # person → org they're an officer/director of
+        "sanctioned_as",  # org/person → threat node (sanctions list entry)
+        "same_as",  # object → wikidata entity bridge (entity resolution)
+        "posted_by",  # reddit/social activity → username that posted it
+        # Country-OSINT catalog (docs/country-osint-spec.md).
+        "has_resource",  # country → resource (a toolkit entry for that country)
+        "hosted_at",  # resource → domain (the resource URL's host — bridges
+        # into the same domain: node the digital-OSINT investigate() enriches)
     )
 )
 

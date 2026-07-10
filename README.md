@@ -116,8 +116,10 @@ A few things worth knowing up front, because I'd rather you read them here than
 be annoyed later:
 
 - It's built for one analyst. One optional API key, no accounts or roles.
-- State lives in memory. Restart the backend and the incident and AOI history is
-  gone; durable storage (Postgres + PostGIS + TimescaleDB) is Phase 2.
+- Most state lives in memory. Restart the backend and the incident and AOI
+  history is gone — but the position-track replay buffer survives: it's a 7-day
+  SQLite store on disk. Durable storage for the rest (Postgres + PostGIS +
+  TimescaleDB) is Phase 2.
 - AIS vessel coverage is mostly Northern Europe and the Baltic unless you bring
   an AISStream key. Somewhere like the Strait of Hormuz has no live AIS here,
   just the radar (SAR) layer.
@@ -275,9 +277,9 @@ VPS or the same box, and it isn't the bottleneck.
 ## Stack
 
 - **Frontend**: Vite + React 18 + TypeScript + CesiumJS + MapLibre GL JS v5.24 + Tailwind + Zustand
-- **Backend**: FastAPI (Python 3.12) + httpx + websockets. All Phase 1 state is in-process (bounded observation store + disk tile cache)
+- **Backend**: FastAPI (Python 3.12) + httpx + websockets. Live Phase 1 state is in-process (bounded observation store + disk tile cache); the 7-day position-track replay buffer persists to SQLite
 - **Agent access**: Model Context Protocol server (`app.mcp_server`, MCP SDK) + optional local Ollama analysis
-- **Data (Phase 2, planned)**: PostgreSQL 16 + PostGIS + TimescaleDB hypertables + Redis. The observation store migrates per plan §locked-decisions #5
+- **Data (Phase 2, planned)**: PostgreSQL 16 + PostGIS + TimescaleDB hypertables + Redis. A SQLite position store backs replay today; the observation store migrates per plan §locked-decisions #5
 - **Infra**: Docker Compose, nginx reverse proxy
 
 ## Layout

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useFoundry,
   type Check,
@@ -8,19 +8,25 @@ import {
   type ColumnLineage,
   type ColumnStat,
   type Dataset,
+  type DatasetDocs,
   type DatasetVersion,
   type DeadLetterEntry,
   type RowsPage,
 } from '../state/foundry.js';
 import { Badge, Btn, Toggle } from '../shell/instruments.js';
+import { useConfirm } from '../shell/Modal.js';
+import { Modal } from '../shell/Modal.js';
+import { useFoundryNav, type DetailTab } from './nav.js';
+import { useFoundryPoll } from './useFoundryPoll.js';
+import { UploadModal } from './UploadModal.js';
 import {
   EmptyState,
   Field,
+  FilterChips,
   Select,
   Tabs,
   Th,
   TypeChip,
-  ViewHeader,
   cellMono,
   controlCls,
   rowCls,
@@ -28,38 +34,15 @@ import {
   tableHeadCls,
 } from './ui.js';
 
-// Datasets — a browser (list) and a tabbed detail: Schema, Preview (paginated),
-// Stats, Versions (+ rollback), Lineage (one-hop column provenance), and the
-// Dead-letter (rows the last build quarantined). Data-health Checks sit below
-// the tabs, always visible. Every upload is a new immutable version.
+// Datasets — a master/detail workspace: a filterable list (left) and a tabbed
+// detail (right) with Schema, Preview, Stats, Versions, Lineage, Dead-letter,
+// Checks, and the auto-generated Data Docs. Selection + active tab persist to
+// the URL (foundry/nav.ts). Uploads go through the UploadModal (type pinning +
+// cascade); deletes/rollback through a styled confirm — no window.prompt.
 
 const PAGE_SIZE = 50;
-
-function UploadZone({ onFile, compact = false }: { onFile: (file: File) => void; compact?: boolean }): JSX.Element {
-  const [over, setOver] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) onFile(f); }}
-      onClick={() => inputRef.current?.click()}
-      role="button"
-      tabIndex={0}
-      className={[
-        'rounded-md border border-dashed text-center cursor-pointer transition-colors',
-        compact ? 'px-3 py-3' : 'px-4 py-7',
-        over ? 'border-accent-line bg-accent-dim' : 'border-line-2 bg-bg-1 hover:border-accent-line',
-      ].join(' ')}
-    >
-      <div className="text-[11px] text-txt-1">Drop CSV / JSON / NDJSON, or click to browse</div>
-      {!compact && <div className="text-[10px] text-txt-3 mt-1">25 MB cap · header row for CSV · leading-zero IDs preserved</div>}
-      <input ref={inputRef} type="file" accept=".csv,.json,.ndjson,.txt" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
-    </div>
-  );
-}
-
 const CHECK_TYPES: CheckType[] = ['row_count_min', 'row_count_max', 'not_null', 'unique', 'column_exists', 'freshness', 'schema_contract'];
+
 function paramsSummary(check: Check): string {
   if (check.type === 'row_count_min' || check.type === 'row_count_max') return String(check.params.min ?? check.params.max ?? '');
   if (check.type === 'freshness') return `${check.params.column} < ${check.params.max_age_s}s`;
@@ -190,30 +173,124 @@ function ChecksSection({ datasetId }: { datasetId: string }): JSX.Element {
   );
 }
 
-type DetailTab = 'schema' | 'preview' | 'stats' | 'versions' | 'lineage' | 'deadletter';
+// Data Docs — the auto-generated single-pane dataset overview the backend
+// already produced (GET /docs) but no view rendered. Producer/upstream/
+// downstream chips deep-link into Pipeline / Datasets.
+function DocsTab({ dataset, docs }: { dataset: Dataset; docs: DatasetDocs | null }): JSX.Element {
+  const navigate = useFoundryNav((s) => s.navigate);
+  const select = useFoundryNav((s) => s.select);
+  if (!docs) return <div className="p-4 mono text-[11px] text-txt-3">Loading data docs…</div>;
+  const lin = docs.lineage;
+  return (
+    <div className="space-y-3" data-testid="docs-tab">
+      <div className="rounded-md border border-line-2 bg-bg-1 p-3">
+        <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3 mb-1">Description</div>
+        <div className="text-[11px] text-txt-1">{docs.dataset.description || <span className="text-txt-4">— no description —</span>}</div>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          <Badge tone={docs.dataset.kind === 'raw' ? 'accent' : 'mag'}>{docs.dataset.kind}</Badge>
+          <span className="mono text-[10px] text-txt-2">v{docs.dataset.latest_version}</span>
+          <span className="mono text-[10px] text-txt-2 tabular-nums">{docs.dataset.row_count.toLocaleString()} rows</span>
+          {docs.dead_letter_present && <Badge tone="warn">dead-letter present</Badge>}
+          {lin.stale === true && <Badge tone="warn">stale</Badge>}
+        </div>
+      </div>
 
-function DatasetDetail({ dataset, onBack, onDeleted }: { dataset: Dataset; onBack: () => void; onDeleted: () => void }): JSX.Element {
+      <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead><tr className={tableHeadCls()}><Th>Column</Th><Th>Type</Th></tr></thead>
+          <tbody>
+            {docs.schema.map((c) => (
+              <tr key={c.name} className={rowCls}>
+                <td className={`${cellMono} text-txt-0`}>{c.name}</td>
+                <td className="px-2.5 py-1.5"><TypeChip type={c.type} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-md border border-line-2 bg-bg-1 p-3 space-y-2">
+        <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3">Lineage</div>
+        <div className="text-[11px] text-txt-1">
+          {lin.produced_by ? (
+            <>Produced by{' '}
+              <button className="mono text-accent hover:underline" onClick={() => navigate('pipeline', lin.produced_by!)}>{lin.produced_by}</button>
+            </>
+          ) : 'Raw dataset — each column is its own source.'}
+        </div>
+        {lin.upstream_datasets.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] text-txt-3 uppercase tracking-[0.4px]">upstream</span>
+            {lin.upstream_datasets.map((id) => (
+              <button key={id} className="mono text-[10px] text-accent hover:underline" onClick={() => select(id)}>{id}</button>
+            ))}
+          </div>
+        )}
+        {lin.downstream.length > 0 && (
+          <div className="space-y-1">
+            <span className="text-[10px] text-txt-3 uppercase tracking-[0.4px]">downstream</span>
+            {lin.downstream.map((d, i) => (
+              <div key={i} className="flex items-center gap-1.5 mono text-[10px]">
+                <button className="text-mag hover:underline" onClick={() => navigate('pipeline', d.transform)}>{d.transform}</button>
+                <span className="text-txt-4">→</span>
+                <button className="text-accent hover:underline" onClick={() => select(d.output_dataset_id)}>{d.output_dataset_id}</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {docs.checks.length > 0 && (
+        <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
+          <div className="px-2.5 py-1.5 text-[10px] uppercase tracking-[0.4px] text-txt-3 border-b border-line">Latest check results</div>
+          <table className="w-full border-collapse">
+            <tbody>
+              {docs.checks.map((c) => {
+                const res = docs.check_results.find((r) => r.check_id === c.id);
+                return (
+                  <tr key={c.id} className={rowCls}>
+                    <td className={`${cellMono} text-txt-0`}>{c.name}</td>
+                    <td className="px-2.5 py-1.5"><Badge tone={res ? (res.passed ? 'ok' : c.severity === 'fail' ? 'alert' : 'warn') : 'neutral'}>{res ? (res.passed ? 'pass' : 'fail') : '—'}</Badge></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="mono text-[10px] text-txt-4">Generated from dataset {dataset.id} · {docs.versions.length} versions on record.</div>
+    </div>
+  );
+}
+
+function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
   const getRows = useFoundry((s) => s.getDatasetRows);
   const getStats = useFoundry((s) => s.getDatasetStats);
   const getVersions = useFoundry((s) => s.getDatasetVersions);
   const getDeadLetter = useFoundry((s) => s.getDeadLetter);
   const getColumnLineage = useFoundry((s) => s.getColumnLineage);
-  const uploadVersion = useFoundry((s) => s.uploadVersion);
+  const getDatasetDocs = useFoundry((s) => s.getDatasetDocs);
   const rollbackDataset = useFoundry((s) => s.rollbackDataset);
   const deleteDataset = useFoundry((s) => s.deleteDataset);
   const error = useFoundry((s) => s.error);
+  const { confirm, confirmElement } = useConfirm();
+  const select = useFoundryNav((s) => s.select);
+  const detailTab = useFoundryNav((s) => s.detailTab);
+  const setDetailTab = useFoundryNav((s) => s.setDetailTab);
+  const navigate = useFoundryNav((s) => s.navigate);
 
-  const [tab, setTab] = useState<DetailTab>('schema');
+  const tab: DetailTab = detailTab ?? 'schema';
   const [rows, setRows] = useState<RowsPage | null>(null);
   const [stats, setStats] = useState<ColumnStat[]>([]);
   const [versions, setVersions] = useState<DatasetVersion[]>([]);
   const [deadLetter, setDeadLetter] = useState<DeadLetterEntry[]>([]);
   const [lineage, setLineage] = useState<ColumnLineage | null>(null);
+  const [docs, setDocs] = useState<DatasetDocs | null>(null);
   const [offset, setOffset] = useState(0);
   const [version, setVersion] = useState<number | undefined>(undefined);
-  const [uploadMode, setUploadMode] = useState<'snapshot' | 'append'>('snapshot');
+  const [uploadOpen, setUploadOpen] = useState(false);
 
-  useEffect(() => { setOffset(0); setVersion(undefined); setTab('schema'); }, [dataset.id]);
+  useEffect(() => { setOffset(0); setVersion(undefined); }, [dataset.id]);
   useEffect(() => {
     void getRows(dataset.id, version, PAGE_SIZE, offset).then(setRows);
     void getStats(dataset.id, version).then(setStats);
@@ -223,6 +300,7 @@ function DatasetDetail({ dataset, onBack, onDeleted }: { dataset: Dataset; onBac
   useEffect(() => {
     if (tab === 'deadletter') void getDeadLetter(dataset.id).then(setDeadLetter);
     if (tab === 'lineage') void getColumnLineage(dataset.id).then(setLineage);
+    if (tab === 'docs') void getDatasetDocs(dataset.id).then(setDocs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, dataset.id]);
 
@@ -235,38 +313,43 @@ function DatasetDetail({ dataset, onBack, onDeleted }: { dataset: Dataset; onBac
     { id: 'versions', label: 'Versions', count: versions.length || undefined },
     { id: 'lineage', label: 'Lineage' },
     { id: 'deadletter', label: 'Dead-letter' },
+    { id: 'checks', label: 'Checks' },
+    { id: 'docs', label: 'Docs' },
   ];
 
+  const onDelete = async (): Promise<void> => {
+    if (await confirm({ title: `Delete dataset "${dataset.name}"?`, body: 'All versions and rows are removed permanently.', tone: 'danger', confirmLabel: 'Delete' })) {
+      const ok = await deleteDataset(dataset.id);
+      if (ok) select(null);
+    }
+  };
+  const onRollback = async (v: number): Promise<void> => {
+    if (await confirm({ title: `Roll back "${dataset.name}" to v${v}?`, body: 'Creates a new latest version from v' + v + ' — does not delete history.', confirmLabel: 'Roll back' })) {
+      const d = await rollbackDataset(dataset.id, v);
+      if (d) refresh();
+    }
+  };
+
   return (
-    <div className="p-5 space-y-4">
-      <ViewHeader
-        title={dataset.name}
-        subtitle={dataset.description || undefined}
-        meta={
-          <>
-            <Badge tone={dataset.kind === 'raw' ? 'accent' : 'mag'}>{dataset.kind}</Badge>
-            <span className="mono text-[10px] text-txt-3">{dataset.id}</span>
-            <span className="mono text-[10px] text-txt-2">v{dataset.latest_version}</span>
-            <span className="mono text-[10px] text-txt-2 tabular-nums">{dataset.row_count.toLocaleString()} rows</span>
-          </>
-        }
-        actions={
-          <>
-            <Btn onClick={onBack}>‹ Datasets</Btn>
-            <Btn onClick={() => { if (window.confirm(`Delete dataset "${dataset.name}"?`)) void deleteDataset(dataset.id).then((ok) => ok && onDeleted()); }}>Delete</Btn>
-          </>
-        }
-      />
-      {error && <p className="text-[11px] text-alert">{error}</p>}
-
-      <div className="flex items-center gap-3">
-        <div className="w-56"><Field label="New-version mode"><Select value={uploadMode} onChange={(v) => setUploadMode(v as 'snapshot' | 'append')} options={[{ value: 'snapshot', label: 'snapshot (replace)' }, { value: 'append', label: 'append (concat)' }]} /></Field></div>
-        <div className="flex-1"><UploadZone compact onFile={(f) => void uploadVersion(dataset.id, f, uploadMode).then((d) => d && refresh())} /></div>
+    <div className="h-full flex flex-col">
+      <div className="px-4 py-2.5 border-b border-line-2 bg-bg-1 flex items-center justify-between gap-3">
+        <div className="min-w-0 flex items-center gap-2">
+          <Badge tone={dataset.kind === 'raw' ? 'accent' : 'mag'}>{dataset.kind}</Badge>
+          <h2 className="text-[13px] font-semibold text-txt-0 truncate">{dataset.name}</h2>
+          <span className="mono text-[10px] text-txt-3">v{dataset.latest_version}</span>
+          <span className="mono text-[10px] text-txt-2 tabular-nums">{dataset.row_count.toLocaleString()} rows</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Btn size="sm" tone="accent" onClick={() => setUploadOpen(true)}>⇪ Upload version</Btn>
+          <Btn size="sm" onClick={() => navigate('pipeline')}>Lineage ›</Btn>
+          <Btn size="sm" onClick={() => void onDelete()}>Delete</Btn>
+        </div>
       </div>
-      <AutoSyncBanner />
-
-      <div className="space-y-2.5">
-        <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      <div className="flex-1 min-h-0 overflow-auto p-4 space-y-3">
+        {dataset.description && <p className="text-[11px] text-txt-2">{dataset.description}</p>}
+        {error && <p className="text-[11px] text-alert">{error}</p>}
+        <AutoSyncBanner />
+        <Tabs tabs={tabs} active={tab} onChange={setDetailTab} />
 
         {tab === 'schema' && (
           <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
@@ -292,7 +375,7 @@ function DatasetDetail({ dataset, onBack, onDeleted }: { dataset: Dataset; onBac
               <span className="tabular-nums">{offset + 1}–{offset + (rows?.rows.length ?? 0)} of {(rows?.total ?? 0).toLocaleString()}</span>
               <Btn size="sm" disabled={!rows || offset + PAGE_SIZE >= rows.total} onClick={() => setOffset(offset + PAGE_SIZE)}>next ›</Btn>
             </div>
-            <div className="overflow-auto rounded-md border border-line-2 bg-bg-1 max-h-[420px]">
+            <div className="overflow-auto rounded-md border border-line-2 bg-bg-1 max-h-[60vh]">
               <table className="w-full border-collapse">
                 <thead><tr className={tableHeadCls()}>{(rows?.schema ?? []).map((f) => <Th key={f.name}>{f.name}</Th>)}</tr></thead>
                 <tbody>
@@ -336,16 +419,14 @@ function DatasetDetail({ dataset, onBack, onDeleted }: { dataset: Dataset; onBac
               <tbody>
                 {versions.map((v) => (
                   <tr key={v.version} className={`${rowCls} ${version === v.version ? 'bg-accent-dim' : ''}`}>
-                    <td className={`${cellMono} text-txt-0 cursor-pointer`} onClick={() => { setVersion(v.version); setOffset(0); setTab('preview'); }}>
+                    <td className={`${cellMono} text-txt-0 cursor-pointer`} onClick={() => { setVersion(v.version); setOffset(0); setDetailTab('preview'); }}>
                       v{v.version}{v.version === dataset.latest_version && <span className="ml-1 text-txt-3 text-[10px]">latest</span>}
                     </td>
                     <td className={`${cellMono} text-txt-2`}>{v.source}</td>
                     <td className={`${cellMono} text-right`}>{v.row_count.toLocaleString()}</td>
                     <td className={`${cellMono} text-txt-3 text-[10px]`}>{stamp(v.created_at)}</td>
                     <td className="px-2.5 py-1.5 text-right">
-                      {v.version !== dataset.latest_version && (
-                        <Btn size="sm" onClick={() => { if (window.confirm(`Roll back "${dataset.name}" to v${v.version}? Creates a new latest version.`)) void rollbackDataset(dataset.id, v.version).then((d) => d && refresh()); }}>Roll back</Btn>
-                      )}
+                      {v.version !== dataset.latest_version && <Btn size="sm" onClick={() => void onRollback(v.version)}>Roll back</Btn>}
                     </td>
                   </tr>
                 ))}
@@ -394,66 +475,154 @@ function DatasetDetail({ dataset, onBack, onDeleted }: { dataset: Dataset; onBac
             )}
           </div>
         )}
-      </div>
 
-      <ChecksSection datasetId={dataset.id} />
+        {tab === 'checks' && <ChecksSection datasetId={dataset.id} />}
+        {tab === 'docs' && <DocsTab dataset={dataset} docs={docs} />}
+      </div>
+      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} existing={dataset} onDone={() => { setUploadOpen(false); refresh(); }} />
+      {confirmElement}
     </div>
   );
 }
+
+type KindFilter = 'all' | 'raw' | 'derived';
+type SortKey = 'updated' | 'name' | 'rows';
 
 export function DatasetsView(): JSX.Element {
   const datasets = useFoundry((s) => s.datasets);
   const error = useFoundry((s) => s.error);
   const loadDatasets = useFoundry((s) => s.loadDatasets);
   const createDataset = useFoundry((s) => s.createDataset);
-  const uploadDataset = useFoundry((s) => s.uploadDataset);
   const clearAutoSync = useFoundry((s) => s.clearAutoSync);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedId = useFoundryNav((s) => s.selectedId);
+  const select = useFoundryNav((s) => s.select);
 
-  useEffect(() => { void loadDatasets(); }, [loadDatasets]);
+  const [query, setQuery] = useState('');
+  const [kind, setKind] = useState<KindFilter>('all');
+  const [sort, setSort] = useState<SortKey>('updated');
+  const [newOpen, setNewOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newDesc, setNewDesc] = useState('');
 
-  const navigate = (id: string | null): void => { clearAutoSync(); setSelectedId(id); };
+  useFoundryPoll(() => loadDatasets());
+
+  const filtered = useMemo(() => {
+    let list = datasets;
+    if (kind !== 'all') list = list.filter((d) => d.kind === kind);
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      list = list.filter((d) => d.name.toLowerCase().includes(q) || d.description.toLowerCase().includes(q));
+    }
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      if (sort === 'name') return a.name.localeCompare(b.name);
+      if (sort === 'rows') return b.row_count - a.row_count;
+      return b.updated_at.localeCompare(a.updated_at);
+    });
+    return sorted;
+  }, [datasets, kind, query, sort]);
+
   const selected = datasets.find((d) => d.id === selectedId) ?? null;
 
-  if (selected) return <DatasetDetail dataset={selected} onBack={() => navigate(null)} onDeleted={() => navigate(null)} />;
+  const onCreate = async (): Promise<void> => {
+    if (!newName.trim()) return;
+    const d = await createDataset(newName.trim(), newDesc || undefined);
+    if (d) {
+      setNewOpen(false);
+      setNewName('');
+      setNewDesc('');
+      clearAutoSync();
+      select(d.id);
+    }
+  };
 
   return (
-    <div className="p-5 space-y-4">
-      <ViewHeader
-        title="Datasets"
-        subtitle="Upload data; each upload is a new immutable version."
-        meta={<span className="mono text-[11px] text-txt-3 tabular-nums">{datasets.length} total</span>}
-        actions={
-          <Btn tone="accent" onClick={() => { const name = window.prompt('New dataset name'); if (name) void createDataset(name); }}>+ New dataset</Btn>
-        }
-      />
-      {error && <p className="text-[11px] text-alert">{error}</p>}
+    <div className="h-full flex">
+      {/* master list */}
+      <div className="w-[320px] shrink-0 border-r border-line-2 bg-bg-1 flex flex-col">
+        <div className="p-2.5 space-y-2 border-b border-line-2">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search datasets…" className={controlCls} />
+          <div className="flex items-center gap-2">
+            <FilterChips<KindFilter>
+              value={kind}
+              onChange={setKind}
+              options={[
+                { key: 'all', label: 'all', count: datasets.length },
+                { key: 'raw', label: 'raw', count: datasets.filter((d) => d.kind === 'raw').length },
+                { key: 'derived', label: 'derived', count: datasets.filter((d) => d.kind === 'derived').length },
+              ]}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-[0.4px] text-txt-3">sort</span>
+            <Select value={sort} onChange={(v) => setSort(v as SortKey)} className="flex-1" options={[{ value: 'updated', label: 'updated' }, { value: 'name', label: 'name' }, { value: 'rows', label: 'rows' }]} />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Btn size="sm" tone="accent" className="flex-1" onClick={() => setNewOpen(true)}>+ New dataset</Btn>
+            <Btn size="sm" className="flex-1" onClick={() => setUploadOpen(true)}>⇪ Upload</Btn>
+          </div>
+          {error && <p className="text-[10px] text-alert">{error}</p>}
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {filtered.map((d) => {
+            const on = d.id === selectedId;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => { clearAutoSync(); select(d.id); }}
+                className={`w-full text-left px-3 py-2 border-l-2 border-b border-line transition-colors ${on ? 'border-accent bg-accent-dim' : 'border-transparent hover:bg-bg-2'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] text-txt-0 truncate flex-1">{d.name}</span>
+                  <Badge tone={d.kind === 'raw' ? 'accent' : 'mag'}>{d.kind}</Badge>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5 mono text-[10px] text-txt-3">
+                  <span className="tabular-nums">{d.row_count.toLocaleString()} rows</span>
+                  <span>· v{d.latest_version}</span>
+                  <span className="ml-auto">{stamp(d.updated_at)}</span>
+                </div>
+              </button>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="p-4"><EmptyState icon="▤" title="No datasets" hint="Upload a CSV, JSON, or NDJSON file to create your first dataset." /></div>
+          )}
+        </div>
+      </div>
 
-      <UploadZone onFile={(f) => { const name = window.prompt('Dataset name for this upload', f.name.replace(/\.[^.]+$/, '')); if (name) void uploadDataset(f, name); }} />
-
-      <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className={tableHeadCls()}>
-              <Th>Name</Th><Th>Kind</Th><Th align="right">Rows</Th><Th align="right">Versions</Th><Th>Updated</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {datasets.map((d) => (
-              <tr key={d.id} onClick={() => navigate(d.id)} className={`${rowCls} cursor-pointer`}>
-                <td className="px-2.5 py-1.5 text-[12px] text-txt-0">{d.name}</td>
-                <td className="px-2.5 py-1.5"><Badge tone={d.kind === 'raw' ? 'accent' : 'mag'}>{d.kind}</Badge></td>
-                <td className={`${cellMono} text-right`}>{d.row_count.toLocaleString()}</td>
-                <td className={`${cellMono} text-right text-txt-2`}>{d.latest_version}</td>
-                <td className={`${cellMono} text-txt-3 text-[10px]`}>{stamp(d.updated_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {datasets.length === 0 && (
-          <div className="p-4"><EmptyState icon="▤" title="No datasets yet" hint="Drop a CSV, JSON, or NDJSON file above to create your first dataset." /></div>
+      {/* detail pane */}
+      <div className="flex-1 min-w-0">
+        {selected ? (
+          <DatasetDetail dataset={selected} />
+        ) : (
+          <div className="h-full flex items-center justify-center p-8">
+            <EmptyState icon="▤" title="Select a dataset" hint="Pick one from the list, or upload a file to create a new dataset." />
+          </div>
         )}
       </div>
+
+      {/* new-dataset modal */}
+      <Modal
+        open={newOpen}
+        onClose={() => setNewOpen(false)}
+        title="New dataset"
+        footer={
+          <>
+            <Btn onClick={() => setNewOpen(false)}>Cancel</Btn>
+            <Btn tone="accent" disabled={!newName.trim()} onClick={() => void onCreate()}>Create</Btn>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Field label="Name"><input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="my_dataset" className={controlCls} /></Field>
+          <Field label="Description (optional)"><input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} className={controlCls} /></Field>
+          <p className="text-[10px] text-txt-4">Creates an empty dataset — upload a file next to add its first version.</p>
+        </div>
+      </Modal>
+
+      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onDone={() => setUploadOpen(false)} />
     </div>
   );
 }
