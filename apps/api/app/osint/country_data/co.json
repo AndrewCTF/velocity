@@ -1,0 +1,250 @@
+{
+  "code": "co",
+  "name": "Colombia",
+  "region": "South America",
+  "iso2": "CO",
+  "source_url": "https://unishka.substack.com/p/osint-of-colombia",
+  "note": "truncated to 35 of 133",
+  "resources": [
+    {
+      "name": "DANE",
+      "url": "https://www.dane.gov.co/",
+      "category": "open-data",
+      "note": "Colombian statistics & census bureau",
+      "keyless": true
+    },
+    {
+      "name": "DIAN",
+      "url": "https://www.dian.gov.co/",
+      "category": "business-registry",
+      "note": "Colombian tax authority",
+      "keyless": true
+    },
+    {
+      "name": "Ministry of Finance",
+      "url": "https://www.minhacienda.gov.co/",
+      "category": "government",
+      "note": "Financial policy & budgets",
+      "keyless": true
+    },
+    {
+      "name": "National Planning Department",
+      "url": "https://www.dnp.gov.co/",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Electoral Registry",
+      "url": "https://www.registraduria.gov.co/",
+      "category": "people-search",
+      "note": "Voter & citizen registry",
+      "keyless": true
+    },
+    {
+      "name": "Property Registry",
+      "url": "https://www.supernotariado.gov.co/",
+      "category": "land-property",
+      "note": "Official property records",
+      "keyless": true
+    },
+    {
+      "name": "IGAC",
+      "url": "https://www.igac.gov.co/",
+      "category": "maps-geo",
+      "note": "Geographic & cartographic institute",
+      "keyless": true
+    },
+    {
+      "name": "RUES",
+      "url": "https://www.rues.org.co/",
+      "category": "business-registry",
+      "note": "Commercial business registry",
+      "keyless": true
+    },
+    {
+      "name": "Bogotá Chamber of Commerce",
+      "url": "https://www.ccb.org.co/",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Judicial System",
+      "url": "https://www.ramajudicial.gov.co/web/guest/consultas",
+      "category": "court-legal",
+      "note": "Court case lookup",
+      "keyless": true
+    },
+    {
+      "name": "Constitutional Court",
+      "url": "https://www.corteconstitucional.gov.co/",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Supreme Court",
+      "url": "https://www.cortesuprema.gov.co/",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Procuraduría",
+      "url": "https://www.procuraduria.gov.co/",
+      "category": "government",
+      "note": "Attorney General's office",
+      "keyless": true
+    },
+    {
+      "name": "Contraloría",
+      "url": "https://www.contraloria.gov.co/",
+      "category": "government",
+      "note": "Comptroller's office",
+      "keyless": true
+    },
+    {
+      "name": "Central Bank",
+      "url": "https://www.banrep.gov.co/",
+      "category": "finance-tax",
+      "note": "Colombian central bank",
+      "keyless": true
+    },
+    {
+      "name": "IDEAM",
+      "url": "https://www.ideam.gov.co/",
+      "category": "government",
+      "note": "Environmental & meteorological agency",
+      "keyless": true
+    },
+    {
+      "name": "SECOP",
+      "url": "https://www.colombiacompra.gov.co/secop-ii",
+      "category": "tenders",
+      "note": "Public procurement portal",
+      "keyless": true
+    },
+    {
+      "name": "National Electoral Council",
+      "url": "https://cne.gov.co/",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "OpenCorporates",
+      "url": "https://opencorporates.com/companies/co",
+      "category": "business-registry",
+      "note": "Global company registry",
+      "keyless": true
+    },
+    {
+      "name": "OpenSanctions",
+      "url": "https://www.opensanctions.org/countries/co/",
+      "category": "sanctions-pep",
+      "note": "PEP & sanctions lookup",
+      "keyless": true
+    },
+    {
+      "name": "OFAC Sanctions List",
+      "url": "https://sanctionssearch.ofac.treas.gov/",
+      "category": "sanctions-pep",
+      "note": "US sanctions list search",
+      "keyless": true
+    },
+    {
+      "name": "World Bank Data",
+      "url": "https://data.worldbank.org/country/colombia",
+      "category": "open-data",
+      "note": "Development indicators",
+      "keyless": true
+    },
+    {
+      "name": "IMF",
+      "url": "https://www.imf.org/en/Countries/COL",
+      "category": "finance-tax",
+      "note": "IMF country statistics",
+      "keyless": true
+    },
+    {
+      "name": "OECD",
+      "url": "https://data.oecd.org/colombia.htm",
+      "category": "open-data",
+      "note": "OECD development data",
+      "keyless": true
+    },
+    {
+      "name": "OEC",
+      "url": "https://oec.world/en/profile/country/col",
+      "category": "open-data",
+      "note": "Trade & economic complexity",
+      "keyless": true
+    },
+    {
+      "name": "UN Comtrade",
+      "url": "https://comtradeplus.un.org/",
+      "category": "open-data",
+      "note": "UN trade statistics",
+      "keyless": true
+    },
+    {
+      "name": "CIA World Factbook",
+      "url": "https://www.cia.gov/the-world-factbook/countries/colombia/",
+      "category": "open-data",
+      "note": "Country background info",
+      "keyless": true
+    },
+    {
+      "name": "Interpol Red Notices",
+      "url": "https://www.interpol.int/en/How-we-work/Notices/View-Red-Notices",
+      "category": "sanctions-pep",
+      "note": "International wanted notices",
+      "keyless": true
+    },
+    {
+      "name": "El Tiempo",
+      "url": "https://www.eltiempo.com/",
+      "category": "news-media",
+      "note": "Major Colombian newspaper",
+      "keyless": true
+    },
+    {
+      "name": "El Espectador",
+      "url": "https://www.elespectador.com/",
+      "category": "news-media",
+      "note": "Colombian news outlet",
+      "keyless": true
+    },
+    {
+      "name": "Semana",
+      "url": "https://www.semana.com/",
+      "category": "news-media",
+      "note": "Colombian news magazine",
+      "keyless": true
+    },
+    {
+      "name": "La Silla Vacía",
+      "url": "https://www.lasillavacia.com/",
+      "category": "news-media",
+      "note": "Political news & analysis",
+      "keyless": true
+    },
+    {
+      "name": "InSight Crime",
+      "url": "https://insightcrime.org/colombia-organized-crime-news/",
+      "category": "news-media",
+      "note": "Organized crime reporting",
+      "keyless": true
+    },
+    {
+      "name": "Google Earth",
+      "url": "https://earth.google.com/",
+      "category": "maps-geo",
+      "note": "Satellite imagery & mapping",
+      "keyless": true
+    },
+    {
+      "name": "Wayback Machine",
+      "url": "https://web.archive.org/web/",
+      "category": "archives",
+      "note": "Web history archive",
+      "keyless": true
+    }
+  ]
+}

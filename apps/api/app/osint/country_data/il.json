@@ -1,0 +1,233 @@
+{
+  "code": "il",
+  "name": "Israel",
+  "region": "Asia",
+  "iso2": "IL",
+  "source_url": "https://unishka.substack.com/p/osint-of-israel",
+  "note": "truncated to 35 of 77",
+  "resources": [
+    {
+      "name": "Israel Central Bureau of Statistics",
+      "url": "https://www.cbs.gov.il/en/cbsNewBrand/Pages/default.aspx",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Israeli Government Open Data Platform",
+      "url": "https://data.gov.il/dataset",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Open Knesset",
+      "url": "https://oknesset.org",
+      "category": "government",
+      "note": "Israeli parliament records and legislation",
+      "keyless": true
+    },
+    {
+      "name": "Israeli Corporations Authority",
+      "url": "https://www.gov.il/en/service/company_extract/",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "KYCIsrael",
+      "url": "https://www.kycisrael.com/companies/",
+      "category": "business-registry",
+      "keyless": false
+    },
+    {
+      "name": "Non-Profit Registry",
+      "url": "https://ica.justice.gov.il/Request/OpenRequest?rt=ExposeDocumentsAssociation",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "GuideStar Israel",
+      "url": "https://www.guidestar.org.il/home",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "TabaSearch",
+      "url": "https://apps.land.gov.il/TabaSearch/#/Plans",
+      "category": "land-property",
+      "note": "Israeli land registry by parcel",
+      "keyless": true
+    },
+    {
+      "name": "Tabu - Land Registry",
+      "url": "https://www.gov.il/en/service/land_registration_extract",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Parcel/Address Converter",
+      "url": "https://www.gov.il/apps/mapi/parcel_address/parcel_address.html",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Vehicle Ownership History",
+      "url": "https://www.gov.il/he/Departments/DynamicCollectors/private_vehicle_history_2",
+      "category": "vehicle",
+      "keyless": true
+    },
+    {
+      "name": "Mechanical Changes History",
+      "url": "https://www.gov.il/he/Departments/DynamicCollectors/private_vehicle_history_1",
+      "category": "vehicle",
+      "keyless": true
+    },
+    {
+      "name": "Check-Car.co.il",
+      "url": "https://www.check-car.co.il/israeli-vin-check/",
+      "category": "vehicle",
+      "keyless": true
+    },
+    {
+      "name": "Ben Gurion Airport Flight Board",
+      "url": "https://www.iaa.gov.il/en/airports/ben-gurion/flight-board/",
+      "category": "transport-tracking",
+      "keyless": true
+    },
+    {
+      "name": "Ramon Airport Flight Board",
+      "url": "https://www.iaa.gov.il/en/airports/ramon/flight-board/",
+      "category": "transport-tracking",
+      "keyless": true
+    },
+    {
+      "name": "Israeli Aircraft Dataset",
+      "url": "https://data.gov.il/dataset/aircraft_data_il/resource/bc00ed41-75d0-4d0f-9eca-3cd0a2c332cc",
+      "category": "transport-tracking",
+      "keyless": true
+    },
+    {
+      "name": "FlightRadar24",
+      "url": "https://www.flightradar24.com/31.85,-6.21/7",
+      "category": "transport-tracking",
+      "keyless": false
+    },
+    {
+      "name": "Unknown Persons Finder",
+      "url": "https://www.gov.il/en/service/tracing_informaition_about_anonymous_persons",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "Doctors Registry",
+      "url": "https://practitioners.health.gov.il/Practitioners/1/search",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "Israel Genealogy Research Association",
+      "url": "https://genealogy.org.il/AID/",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "VAT Registration Check",
+      "url": "https://taxinfo.taxes.gov.il/emosek/wHzanatTik.aspx",
+      "category": "people-search",
+      "note": "business tax registration lookup",
+      "keyless": true
+    },
+    {
+      "name": "Tax Deductions Registry",
+      "url": "https://taxinfo.taxes.gov.il/gmishurim/firstPage.aspx",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "Govmap",
+      "url": "https://www.govmap.gov.il/?c=204000,595000&z=0",
+      "category": "maps-geo",
+      "note": "Israeli geographic information system",
+      "keyless": true
+    },
+    {
+      "name": "Supreme Court of Israel",
+      "url": "https://supreme.court.gov.il/sites/en/Pages/home.aspx",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Israeli Judicial Authority",
+      "url": "http://www.court.gov.il/",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Israeli Government Procurement Portal",
+      "url": "https://mr.gov.il/ilgstorefront/he/search/",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "TendersInfo - Israel",
+      "url": "https://www.tendersinfo.com/global-israel-tenders.php",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "Marcaria Domain Search",
+      "url": "https://whois.marcaria.com/en/asia/il-domain-search",
+      "category": "telecom-infra",
+      "note": ".il domain WHOIS lookup",
+      "keyless": true
+    },
+    {
+      "name": "OpenSanctions",
+      "url": "https://www.opensanctions.org/countries/il/",
+      "category": "sanctions-pep",
+      "keyless": true
+    },
+    {
+      "name": "DataGuidance - Privacy Laws",
+      "url": "https://www.dataguidance.com/jurisdictions/israel",
+      "category": "government",
+      "note": "Israeli data protection regulations",
+      "keyless": true
+    },
+    {
+      "name": "Wikileaks - Israel",
+      "url": "https://search.wikileaks.org/?query=israel",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "Archive.org - Israel",
+      "url": "https://archive.org/search?query=israel",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "National Library of Israel - Archives",
+      "url": "https://www.nli.org.il/en/discover/archives",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "Freedom of Information",
+      "url": "https://www.gov.il/en/departments/topics/freedom-of-information-s/govil-landing-page",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Transparency International CPI",
+      "url": "https://www.transparency.org/en/countries/israel",
+      "category": "government",
+      "note": "Corruption Perception Index data",
+      "keyless": true
+    },
+    {
+      "name": "Human Rights Watch - Israel",
+      "url": "https://www.hrw.org/world-report/2025/country-chapters/israel-and-palestine",
+      "category": "news-media",
+      "keyless": true
+    }
+  ]
+}

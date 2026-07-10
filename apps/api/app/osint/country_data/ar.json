@@ -1,0 +1,255 @@
+{
+  "code": "ar",
+  "name": "Argentina",
+  "region": "South America",
+  "iso2": "AR",
+  "source_url": "https://unishka.substack.com/p/osint-of-argentina",
+  "note": "truncated to 35 of 113",
+  "resources": [
+    {
+      "name": "INDEC",
+      "url": "https://www.indec.gob.ar",
+      "category": "open-data",
+      "note": "Official statistics, demographics, CPI, employment",
+      "keyless": true
+    },
+    {
+      "name": "Boletín Oficial",
+      "url": "https://www.boletinoficial.gob.ar",
+      "category": "business-registry",
+      "note": "Corporate filings and official notices",
+      "keyless": true
+    },
+    {
+      "name": "Inspección General de Justicia (IGJ)",
+      "url": "https://www.argentina.gob.ar/justicia/igj",
+      "category": "business-registry",
+      "note": "Registry for corporations in Buenos Aires",
+      "keyless": true
+    },
+    {
+      "name": "COMPR.AR",
+      "url": "https://comprar.gob.ar",
+      "category": "tenders",
+      "note": "Federal public procurement and suppliers",
+      "keyless": true
+    },
+    {
+      "name": "Datos Argentina",
+      "url": "https://datos.gob.ar",
+      "category": "open-data",
+      "note": "National open data portal",
+      "keyless": true
+    },
+    {
+      "name": "Banco Central de la República Argentina (BCRA)",
+      "url": "https://www.bcra.gob.ar",
+      "category": "finance-tax",
+      "note": "FX rates and monetary policy",
+      "keyless": true
+    },
+    {
+      "name": "AFIP",
+      "url": "https://www.afip.gob.ar",
+      "category": "finance-tax",
+      "note": "Tax authority, irregularities and sanctions",
+      "keyless": true
+    },
+    {
+      "name": "Instituto Geográfico Nacional (IGN)",
+      "url": "https://www.ign.gob.ar",
+      "category": "maps-geo",
+      "note": "Maps, parcels, coordinates and cadastral data",
+      "keyless": true
+    },
+    {
+      "name": "Padrón Electoral",
+      "url": "https://www.padron.gob.ar",
+      "category": "people-search",
+      "note": "Voter lookup by DNI",
+      "keyless": true
+    },
+    {
+      "name": "RENAPER",
+      "url": "https://www.argentina.gob.ar/interior/renaper",
+      "category": "people-search",
+      "note": "ID validation (limited public access)",
+      "keyless": false
+    },
+    {
+      "name": "Registro de la Propiedad - Buenos Aires",
+      "url": "https://buenosaires.gob.ar/registrodelapropiedad",
+      "category": "land-property",
+      "note": "Real estate ownership records",
+      "keyless": true
+    },
+    {
+      "name": "Poder Judicial de la Nación",
+      "url": "https://www.pjn.gov.ar",
+      "category": "court-legal",
+      "note": "Court case search and tracking",
+      "keyless": true
+    },
+    {
+      "name": "OpenCorporates - Argentina",
+      "url": "https://opencorporates.com/companies/ar",
+      "category": "business-registry",
+      "note": "International corporate database",
+      "keyless": true
+    },
+    {
+      "name": "World Bank - Argentina",
+      "url": "https://www.worldbank.org/en/country/argentina",
+      "category": "open-data",
+      "note": "Economic and development indicators",
+      "keyless": true
+    },
+    {
+      "name": "OECD - Argentina",
+      "url": "https://www.oecd.org/en/countries/argentina.html",
+      "category": "open-data",
+      "note": "Development statistics and indicators",
+      "keyless": true
+    },
+    {
+      "name": "IMF - Argentina",
+      "url": "https://www.imf.org/en/Countries/ARG",
+      "category": "open-data",
+      "note": "Macroeconomic data and reports",
+      "keyless": true
+    },
+    {
+      "name": "Google Earth",
+      "url": "https://earth.google.com",
+      "category": "maps-geo",
+      "note": "Satellite imagery and timelapse",
+      "keyless": true
+    },
+    {
+      "name": "USGS Earth Explorer",
+      "url": "https://earthexplorer.usgs.gov",
+      "category": "maps-geo",
+      "note": "Global satellite and aerial data",
+      "keyless": true
+    },
+    {
+      "name": "Sentinel Hub EO Browser",
+      "url": "https://apps.sentinel-hub.com/eo-browser",
+      "category": "maps-geo",
+      "note": "Copernicus satellite imagery browser",
+      "keyless": true
+    },
+    {
+      "name": "OpenSanctions",
+      "url": "https://www.opensanctions.org",
+      "category": "sanctions-pep",
+      "note": "Sanction profiles and PEPs database",
+      "keyless": true
+    },
+    {
+      "name": "OFAC Sanctions Search",
+      "url": "https://sanctionssearch.ofac.treas.gov",
+      "category": "sanctions-pep",
+      "note": "US Treasury sanctions and blocked persons",
+      "keyless": true
+    },
+    {
+      "name": "Interpol Red Notices",
+      "url": "https://www.interpol.int/en/How-we-work/Notices/View-Red-Notices",
+      "category": "government",
+      "note": "International wanted persons",
+      "keyless": true
+    },
+    {
+      "name": "CELS",
+      "url": "https://www.cels.org.ar",
+      "category": "government",
+      "note": "Legal and social studies center for human rights",
+      "keyless": true
+    },
+    {
+      "name": "La Nación",
+      "url": "https://www.lanacion.com.ar",
+      "category": "news-media",
+      "note": "Major Argentine newspaper",
+      "keyless": false
+    },
+    {
+      "name": "Clarín",
+      "url": "https://www.clarin.com",
+      "category": "news-media",
+      "note": "Major Argentine newspaper",
+      "keyless": false
+    },
+    {
+      "name": "Página/12",
+      "url": "https://www.pagina12.com.ar",
+      "category": "news-media",
+      "note": "Opposition-leaning news outlet",
+      "keyless": false
+    },
+    {
+      "name": "Chequeado",
+      "url": "https://chequeado.com",
+      "category": "news-media",
+      "note": "Argentina's main fact-checker",
+      "keyless": true
+    },
+    {
+      "name": "Infobel Argentina",
+      "url": "https://www.infobel.com/en/argentina",
+      "category": "phone",
+      "note": "Phone and company directory",
+      "keyless": false
+    },
+    {
+      "name": "FamilySearch",
+      "url": "https://www.familysearch.org/en/wiki/Argentina_Genealogy",
+      "category": "archives",
+      "note": "Genealogy and family history resources",
+      "keyless": true
+    },
+    {
+      "name": "Wayback Machine",
+      "url": "https://web.archive.org",
+      "category": "archives",
+      "note": "Web archive snapshots",
+      "keyless": true
+    },
+    {
+      "name": "GeoINTA",
+      "url": "https://geointa.inta.gob.ar",
+      "category": "maps-geo",
+      "note": "Agricultural and land-use satellite data",
+      "keyless": true
+    },
+    {
+      "name": "CIPPEC",
+      "url": "https://www.cippec.org",
+      "category": "other",
+      "note": "Argentine policy think tank",
+      "keyless": true
+    },
+    {
+      "name": "Bellingcat",
+      "url": "https://www.bellingcat.com",
+      "category": "news-media",
+      "note": "Investigative journalism for Latin America",
+      "keyless": true
+    },
+    {
+      "name": "CIA World Factbook - Argentina",
+      "url": "https://www.cia.gov/the-world-factbook/countries/argentina/",
+      "category": "open-data",
+      "note": "Country profile and statistics",
+      "keyless": true
+    },
+    {
+      "name": "Prefectura Naval Argentina",
+      "url": "https://www.prefecturanaval.gob.ar",
+      "category": "transport-tracking",
+      "note": "Maritime incidents and vessel tracking",
+      "keyless": true
+    }
+  ]
+}

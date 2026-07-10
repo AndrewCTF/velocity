@@ -1,0 +1,239 @@
+{
+  "code": "iq",
+  "name": "Iraq",
+  "region": "Asia",
+  "iso2": "IQ",
+  "source_url": "https://unishka.substack.com/p/osint-of-iraq",
+  "note": "truncated to 35 of 48",
+  "resources": [
+    {
+      "name": "Iraqi Ministry of Planning – CSO",
+      "url": "https://cosit.gov.iq/ar/",
+      "category": "government",
+      "note": "Central Statistical Organization",
+      "keyless": true
+    },
+    {
+      "name": "Kurdistan Region Statistics Office",
+      "url": "https://krso.gov.krd/en",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Iraq Open Data Portal - MERI",
+      "url": "https://www.meri-k.org/iraqopendata/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Iraq Conflict Events Data",
+      "url": "https://data.humdata.org/dataset/ucdp-data-for-iraq",
+      "category": "open-data",
+      "note": "UCDP conflict events dataset",
+      "keyless": true
+    },
+    {
+      "name": "ReliefWeb Iraq Data",
+      "url": "https://response.reliefweb.int/iraq/data",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Iraq Databank",
+      "url": "https://www.iraqdatabank.org",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Kurdistan Open Data",
+      "url": "https://auis.edu.krd/cida/kurdistan-open-data-list",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Iraq Body Count",
+      "url": "https://www.iraqbodycount.org",
+      "category": "news-media",
+      "note": "conflict casualty documentation",
+      "keyless": true
+    },
+    {
+      "name": "Iraq Government Revenues",
+      "url": "https://tradingeconomics.com/iraq/government-revenues",
+      "category": "finance-tax",
+      "keyless": true
+    },
+    {
+      "name": "General Commission for Taxes",
+      "url": "https://tax.mof.gov.iq",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Iraqi Business Directory",
+      "url": "https://iraqdirectory.com",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Open Corporates - Iraq",
+      "url": "https://opencorporates.com/companies/iq",
+      "category": "business-registry",
+      "note": "corporate registry aggregator",
+      "keyless": true
+    },
+    {
+      "name": "Basra Chamber of Commerce",
+      "url": "https://basrachamber.iq/en/",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "OFAC Sanctions List",
+      "url": "https://sanctionssearch.ofac.treas.gov",
+      "category": "sanctions-pep",
+      "note": "US Treasury sanctions search",
+      "keyless": true
+    },
+    {
+      "name": "USGS EarthExplorer",
+      "url": "https://earthexplorer.usgs.gov",
+      "category": "maps-geo",
+      "note": "satellite imagery and terrain data",
+      "keyless": false
+    },
+    {
+      "name": "OpenStreetMap",
+      "url": "https://www.openstreetmap.org/",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Google Maps",
+      "url": "https://www.google.com/maps",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Satellites Pro",
+      "url": "https://satellites.pro/Google/Iraq_map",
+      "category": "maps-geo",
+      "note": "satellite imagery viewer",
+      "keyless": true
+    },
+    {
+      "name": "Mapog GIS Platform",
+      "url": "https://story.mapog.com/app/gisdata/iraq/District%20level%202",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Iraq Yellow Pages",
+      "url": "https://yp.iq",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "TrueCaller",
+      "url": "https://www.truecaller.com",
+      "category": "phone",
+      "note": "phone number and caller ID lookup",
+      "keyless": true
+    },
+    {
+      "name": "Have I Been Pwned",
+      "url": "https://haveibeenpwned.com",
+      "category": "archives",
+      "note": "data breach search",
+      "keyless": true
+    },
+    {
+      "name": "DeHashed",
+      "url": "https://dehashed.com",
+      "category": "archives",
+      "note": "leaked credential search",
+      "keyless": true
+    },
+    {
+      "name": "Iraq People Search & Finder",
+      "url": "https://searchpeoplefree.net/iraq-people-search",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "FamilySearch - Iraq Records",
+      "url": "https://www.familysearch.org/en/wiki/Iraq_Record_Finder",
+      "category": "archives",
+      "note": "genealogy and historical records",
+      "keyless": true
+    },
+    {
+      "name": "Sayari - Iraqi Names Guide",
+      "url": "https://sayari.com/resources/search-iraqi-names/",
+      "category": "people-search",
+      "note": "Iraqi naming conventions and search",
+      "keyless": true
+    },
+    {
+      "name": "Federal Supreme Court of Iraq",
+      "url": "https://www.iraqfsc.iq/Judgments-decisions-en.php",
+      "category": "court-legal",
+      "note": "court decisions and judgments",
+      "keyless": true
+    },
+    {
+      "name": "EAJTN - Judicial Systems Iraq",
+      "url": "https://www.eajtn.com/judicial-systems/iraq/",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Iraqi Ministry of Justice",
+      "url": "https://www.moj.gov.iq/tmeez",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "National Investment Commission",
+      "url": "https://investpromo.gov.iq",
+      "category": "government",
+      "note": "investment and procurement authority",
+      "keyless": true
+    },
+    {
+      "name": "UNDP Iraq Procurement",
+      "url": "https://procurement-notices.undp.org",
+      "category": "tenders",
+      "note": "UN development program contracts",
+      "keyless": true
+    },
+    {
+      "name": "World Bank Projects - Iraq",
+      "url": "https://projects.worldbank.org/en/projects-operations/projects-list",
+      "category": "tenders",
+      "note": "development and infrastructure projects",
+      "keyless": true
+    },
+    {
+      "name": "Bellingcat - Iraq Investigations",
+      "url": "https://www.bellingcat.com/tag/iraq/",
+      "category": "news-media",
+      "note": "investigative journalism archives",
+      "keyless": true
+    },
+    {
+      "name": "CIA World Factbook - Iraq",
+      "url": "https://www.cia.gov/the-world-factbook/countries/iraq/",
+      "category": "government",
+      "note": "country profile and statistics",
+      "keyless": true
+    },
+    {
+      "name": "WikiLeaks - Iraq",
+      "url": "https://search.wikileaks.org/?q=iraq",
+      "category": "archives",
+      "note": "leaked documents archive",
+      "keyless": true
+    }
+  ]
+}

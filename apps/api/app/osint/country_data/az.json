@@ -1,0 +1,224 @@
+{
+  "code": "az",
+  "name": "Azerbaijan",
+  "region": "Asia",
+  "iso2": "AZ",
+  "source_url": "https://unishka.substack.com/p/osint-of-azerbaijan",
+  "note": "truncated to 35 of 95",
+  "resources": [
+    {
+      "name": "Azerbaijan Open Data Portal",
+      "url": "https://opendata.az/en",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "State Statistical Committee",
+      "url": "https://www.stat.gov.az/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "World Bank Data - Azerbaijan",
+      "url": "https://data.worldbank.org/country/azerbaijan",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "World Health Organization",
+      "url": "https://data.who.int/countries/031",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Ministry of Energy Open Data",
+      "url": "https://minenergy.gov.az/en/aciq-melumatlar",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "State Registry - Commercial Entities",
+      "url": "https://www.e-taxes.gov.az/ebyn/commersialchecker_en.jsp",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Yellow Pages Azerbaijan",
+      "url": "https://yellowpages.az",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "List of Companies - Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/list_of_companies_of_azerbaijan",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Open Sanctions Azerbaijan",
+      "url": "https://www.opensanctions.org/countries/az/",
+      "category": "sanctions-pep",
+      "keyless": true
+    },
+    {
+      "name": "OCCRP Aleph",
+      "url": "https://aleph.occrp.org",
+      "category": "sanctions-pep",
+      "note": "investigation database",
+      "keyless": true
+    },
+    {
+      "name": "ICIJ Offshore Leaks Database",
+      "url": "https://offshoreleaks.icij.org/search?c=aze&cat=3",
+      "category": "finance-tax",
+      "note": "Panama Papers, Paradise Papers",
+      "keyless": true
+    },
+    {
+      "name": "State Property Service",
+      "url": "https://dedkr.gov.az/az",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Property Register",
+      "url": "https://emlak.gov.az/en",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "State Urban Cadastre Map",
+      "url": "https://arxkom.gov.az/en/sehersalma/sehersalma-kadastri",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "VIN Check",
+      "url": "https://vini.az/az",
+      "category": "vehicle",
+      "keyless": true
+    },
+    {
+      "name": "Marine Traffic - Baku Port",
+      "url": "https://www.marinetraffic.com/en/ais/details/ports/2398",
+      "category": "transport-tracking",
+      "keyless": true
+    },
+    {
+      "name": "FlightRadar24 - Baku Airport",
+      "url": "https://www.flightradar24.com/data/airports/gyd",
+      "category": "transport-tracking",
+      "keyless": false
+    },
+    {
+      "name": "FamilySearch Azerbaijan",
+      "url": "https://www.familysearch.org/en/wiki/azerbaijan_genealogy",
+      "category": "archives",
+      "note": "genealogy records",
+      "keyless": true
+    },
+    {
+      "name": "RealPeopleSearch Azerbaijan",
+      "url": "https://realpeoplesearch.com/find-people/azerbaijan",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "ZoomInfo Azerbaijan",
+      "url": "https://www.zoominfo.com/people-search/location-azerbaijan",
+      "category": "people-search",
+      "keyless": false
+    },
+    {
+      "name": "Supreme Court",
+      "url": "https://supremecourt.gov.az/en/supreme-court/judges",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Courts Portal",
+      "url": "https://courts.gov.az",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "AZERTAC News Agency",
+      "url": "https://azertag.az/en/",
+      "category": "news-media",
+      "keyless": true
+    },
+    {
+      "name": "Trend News Agency",
+      "url": "https://www.trend.az",
+      "category": "news-media",
+      "keyless": true
+    },
+    {
+      "name": "APA News Agency",
+      "url": "https://en.apa.az",
+      "category": "news-media",
+      "keyless": true
+    },
+    {
+      "name": "AzerNews",
+      "url": "https://www.azernews.az",
+      "category": "news-media",
+      "keyless": true
+    },
+    {
+      "name": "Old Maps of Azerbaijan",
+      "url": "https://www.oldmapsonline.org/en/azerbaijan",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "DXR Electronic Services Portal",
+      "url": "https://www.dxr.az/",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Taxpayer Database",
+      "url": "https://www.taxes.gov.az/ru/page/vergi-odeyicileri-uzre-axtaris",
+      "category": "finance-tax",
+      "keyless": true
+    },
+    {
+      "name": "Phone Book of the World",
+      "url": "https://phonebookoftheworld.com/azerbaijan/",
+      "category": "phone",
+      "keyless": true
+    },
+    {
+      "name": "Joshua Project - People Groups",
+      "url": "https://joshuaproject.net/people_groups/10528/aj",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "Transparency International",
+      "url": "https://www.transparency.org/en/countries/azerbaijan",
+      "category": "other",
+      "note": "corruption index",
+      "keyless": true
+    },
+    {
+      "name": "Wikileaks",
+      "url": "https://search.wikileaks.org/?q=azerbaijan",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "Satellite Maps",
+      "url": "https://satellites.pro/azerbaijan_map",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "OSINT Industries",
+      "url": "https://www.osint.industries",
+      "category": "other",
+      "keyless": true
+    }
+  ]
+}

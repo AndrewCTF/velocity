@@ -1,0 +1,219 @@
+{
+  "code": "in",
+  "name": "India",
+  "region": "Asia",
+  "iso2": "IN",
+  "source_url": "https://unishka.substack.com/p/osint-of-india",
+  "resources": [
+    {
+      "name": "data.gov.in",
+      "url": "https://data.gov.in/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Master Data Services (MCA)",
+      "url": "https://www.mca.gov.in/content/mca/global/en/mca/master-data/MDS.html",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Zauba Corp",
+      "url": "https://www.zaubacorp.com/",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Tofler",
+      "url": "https://www.tofler.in/",
+      "category": "business-registry",
+      "keyless": false
+    },
+    {
+      "name": "SEBI",
+      "url": "https://www.sebi.gov.in/",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "IBBI",
+      "url": "https://ibbi.gov.in/",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "National Data and Analytics Platform (NDAP)",
+      "url": "https://ndap.niti.gov.in/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "DORIS - Delhi Property Records",
+      "url": "https://doris.delhigovt.nic.in/",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Bhulekh UP",
+      "url": "http://upbhulekh.gov.in/",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Bhoomi RTC",
+      "url": "https://rtcbhoomionline.in/",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Jamabandi Punjab",
+      "url": "https://jamabandi.punjab.gov.in/Default.aspx?itemPID=1",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Bhu-Naksha",
+      "url": "https://bhunaksha.nic.in/bhunaksha/",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Parivahan",
+      "url": "https://parivahan.gov.in/parivahan/",
+      "category": "vehicle",
+      "keyless": true
+    },
+    {
+      "name": "Teoalida - India Vehicle Database",
+      "url": "https://www.teoalida.com/cardatabase/india/",
+      "category": "vehicle",
+      "keyless": true
+    },
+    {
+      "name": "RailYatri - Train Status",
+      "url": "https://www.railyatri.in/m/live-train-status",
+      "category": "transport-tracking",
+      "keyless": true
+    },
+    {
+      "name": "India Rail Info",
+      "url": "https://indiarailinfo.com/",
+      "category": "transport-tracking",
+      "keyless": true
+    },
+    {
+      "name": "NVSP - National Voter's Service Portal",
+      "url": "https://voters.eci.gov.in/",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "National Tracking System for Missing Children",
+      "url": "http://www.trackthemissingchild.gov.in/trackchild/index.php",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "eCourts India",
+      "url": "https://ecourts.gov.in/ecourts_home/index1.php",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Indian Kanoon",
+      "url": "https://indiankanoon.org/",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Supreme Court of India - Judgements",
+      "url": "https://www.sci.gov.in/judgements-case-no/",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "Delhi High Court",
+      "url": "https://delhihighcourt.nic.in/web/",
+      "category": "court-legal",
+      "keyless": true
+    },
+    {
+      "name": "National Archives of India",
+      "url": "https://nationalarchives.nic.in/",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "IP India Archive",
+      "url": "https://ipindia.gov.in/archive.htm",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "Central Public Procurement Portal",
+      "url": "https://eprocure.gov.in/cppp/",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "GeM - Government e-Marketplace",
+      "url": "https://gem.gov.in/",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "Survey of India Maps",
+      "url": "https://onlinemaps.surveyofindia.gov.in/",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Bhuvan - NRSC",
+      "url": "https://bhuvan-app1.nrsc.gov.in/thematic/thematic/index.php",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "OpenStreetMap India",
+      "url": "https://www.openstreetmap.in/",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Radaris",
+      "url": "https://radaris.in/",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "White Pages India",
+      "url": "https://whitepages.in/",
+      "category": "people-search",
+      "keyless": true
+    },
+    {
+      "name": "Ministry of Statistics and Programme Implementation",
+      "url": "https://mospi.gov.in/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "India Stat",
+      "url": "https://www.indiastat.com/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Our World in Data - India",
+      "url": "https://ourworldindata.org/country/india",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Reserve Bank of India - IFSC Search",
+      "url": "https://www.rbi.org.in/Scripts/IFSCMICRDetails.aspx",
+      "category": "finance-tax",
+      "keyless": true
+    }
+  ]
+}

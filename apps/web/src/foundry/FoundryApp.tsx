@@ -1,10 +1,10 @@
-import { useState } from 'react';
 import type * as Cesium from 'cesium';
 import { HomeView } from './HomeView.js';
 import { DatasetsView } from './DatasetsView.js';
 import { PipelineView } from './PipelineView.js';
 import { BuildsView } from './BuildsView.js';
 import { OntologyView } from './OntologyView.js';
+import { useFoundryNav, type FoundryView } from './nav.js';
 
 // FOUNDRY surface (docs/foundry-plan.md) — BYO-data layer: upload → transform
 // (with lineage) → build → bind into the ontology, operated from a Workshop-
@@ -13,7 +13,7 @@ import { OntologyView } from './OntologyView.js';
 // state/appView.ts + shell/AppSurface.tsx). All chrome is token-driven so the
 // whole thing flips with the light/dark theme.
 
-export type FoundryView = 'home' | 'datasets' | 'pipeline' | 'builds' | 'ontology';
+export type { FoundryView } from './nav.js';
 
 const NAV: Array<{ id: FoundryView; label: string; glyph: string; hint: string }> = [
   { id: 'home', label: 'Overview', glyph: '◱', hint: 'health + recent builds' },
@@ -25,7 +25,8 @@ const NAV: Array<{ id: FoundryView; label: string; glyph: string; hint: string }
 
 export function FoundryApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
   void viewer; // reserved for future fly-to-on-select parity with other apps
-  const [view, setView] = useState<FoundryView>('home');
+  const view = useFoundryNav((s) => s.view);
+  const setView = useFoundryNav((s) => s.setView);
 
   return (
     <div className="h-full flex text-txt-1 bg-bg-0">
@@ -67,7 +68,7 @@ export function FoundryApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
         </div>
       </nav>
       <div className="flex-1 min-w-0 overflow-auto">
-        {view === 'home' && <HomeView onNavigate={setView} />}
+        {view === 'home' && <HomeView />}
         {view === 'datasets' && <DatasetsView />}
         {view === 'pipeline' && <PipelineView />}
         {view === 'builds' && <BuildsView />}

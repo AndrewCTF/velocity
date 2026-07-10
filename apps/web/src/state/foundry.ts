@@ -230,6 +230,17 @@ export interface DatasetDocs {
   dead_letter_present: boolean;
 }
 
+// Discriminated result for mutations whose validation error the editor renders
+// inline (cycle/step 422s) instead of into the shared global `error` string.
+export type MutResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+export interface PreviewData {
+  schema: SchemaField[];
+  rows: Array<Record<string, unknown>>;
+  quarantined: number;
+  quarantine_sample: Array<Record<string, unknown>>;
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 async function readJson<T>(r: Response): Promise<T> {
@@ -265,8 +276,18 @@ interface FoundryState {
   getDataset: (id: string) => Promise<Dataset | null>;
   createDataset: (name: string, description?: string) => Promise<Dataset | null>;
   deleteDataset: (id: string) => Promise<boolean>;
-  uploadDataset: (file: File, name: string, description?: string) => Promise<Dataset | null>;
-  uploadVersion: (id: string, file: File, mode?: 'snapshot' | 'append') => Promise<Dataset | null>;
+  uploadDataset: (
+    file: File,
+    name: string,
+    description?: string,
+    opts?: { types?: Record<string, string> },
+  ) => Promise<Dataset | null>;
+  uploadVersion: (
+    id: string,
+    file: File,
+    mode?: 'snapshot' | 'append',
+    opts?: { types?: Record<string, string>; cascade?: boolean },
+  ) => Promise<(Dataset & { cascade_build?: Build }) | null>;
   rollbackDataset: (id: string, version: number) => Promise<Dataset | null>;
   getDatasetRows: (id: string, version?: number, limit?: number, offset?: number) => Promise<RowsPage | null>;
   getDatasetVersions: (id: string) => Promise<DatasetVersion[]>;
@@ -282,13 +303,19 @@ interface FoundryState {
     inputs: string[];
     output_name: string;
     steps: TransformStep[];
-  }) => Promise<Transform | null>;
+  }) => Promise<MutResult<Transform>>;
   updateTransform: (
     id: string,
     body: { name: string; description?: string; inputs: string[]; output_name: string; steps: TransformStep[] },
-  ) => Promise<Transform | null>;
+  ) => Promise<MutResult<Transform>>;
   deleteTransform: (id: string) => Promise<boolean>;
-  previewTransform: (id: string, limit?: number) => Promise<{ schema: SchemaField[]; rows: Array<Record<string, unknown>> } | null>;
+  // Preview an UNSAVED spec (editor form state) — POST /transforms/preview.
+  previewSpec: (body: {
+    inputs: string[];
+    steps: TransformStep[];
+    limit?: number;
+  }) => Promise<MutResult<PreviewData>>;
+  previewTransform: (id: string, limit?: number) => Promise<PreviewData | null>;
   buildTransform: (id: string) => Promise<Build | null>;
   buildPipeline: (onlyStale?: boolean) => Promise<Build | null>;
 
@@ -296,6 +323,10 @@ interface FoundryState {
   loadLineage: () => Promise<void>;
 
   loadBindings: () => Promise<void>;
+  // Ontology object kinds a binding may target (GET /kinds) — drives the picker
+  // so the client never submits an object_kind that only 422s server-side.
+  kinds: string[];
+  loadKinds: () => Promise<void>;
   createBinding: (body: {
     dataset_id: string;
     object_kind: string;
@@ -348,6 +379,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
   builds: [],
   lineage: null,
   bindings: [],
+  kinds: [],
   schedules: [],
   checks: [],
   error: null,
@@ -422,12 +454,14 @@ export const useFoundry = create<FoundryState>((set, get) => ({
     }
   },
 
-  uploadDataset: async (file, name, description) => {
+  uploadDataset: async (file, name, description, opts) => {
     try {
       const form = new FormData();
       form.append('file', file);
       form.append('name', name);
       if (description) form.append('description', description);
+      if (opts?.types && Object.keys(opts.types).length)
+        form.append('types', JSON.stringify(opts.types));
       const r = await apiFetch('/api/foundry/datasets/upload', { method: 'POST', body: form });
       if (r.ok) {
         const d = await readJson<Dataset & { auto_sync?: AutoSyncResult[] }>(r);
@@ -443,14 +477,19 @@ export const useFoundry = create<FoundryState>((set, get) => ({
     }
   },
 
-  uploadVersion: async (id, file, mode = 'snapshot') => {
+  uploadVersion: async (id, file, mode = 'snapshot', opts) => {
     try {
       const form = new FormData();
       form.append('file', file);
       form.append('mode', mode);
+      if (opts?.types && Object.keys(opts.types).length)
+        form.append('types', JSON.stringify(opts.types));
+      if (opts?.cascade) form.append('cascade', 'true');
       const r = await apiFetch(`/api/foundry/datasets/${id}/upload`, { method: 'POST', body: form });
       if (r.ok) {
-        const d = await readJson<Dataset & { auto_sync?: AutoSyncResult[] }>(r);
+        const d = await readJson<
+          Dataset & { auto_sync?: AutoSyncResult[]; cascade_build?: Build }
+        >(r);
         set({ lastAutoSync: d.auto_sync ?? null });
         await get().loadDatasets();
         return d;
@@ -579,13 +618,13 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       if (r.ok) {
         const t = await readJson<Transform>(r);
         await get().loadTransforms();
-        return t;
+        return { ok: true, value: t };
       }
-      set({ error: await detailOf(r) });
-      return null;
+      // Validation detail (cycle/step 422) returned to the caller for inline
+      // rendering — NOT pushed to the shared global `error`.
+      return { ok: false, error: await detailOf(r) };
     } catch {
-      set({ error: 'create transform: request failed' });
-      return null;
+      return { ok: false, error: 'create transform: request failed' };
     }
   },
 
@@ -599,13 +638,11 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       if (r.ok) {
         const t = await readJson<Transform>(r);
         await get().loadTransforms();
-        return t;
+        return { ok: true, value: t };
       }
-      set({ error: await detailOf(r) });
-      return null;
+      return { ok: false, error: await detailOf(r) };
     } catch {
-      set({ error: 'update transform: request failed' });
-      return null;
+      return { ok: false, error: 'update transform: request failed' };
     }
   },
 
@@ -624,6 +661,20 @@ export const useFoundry = create<FoundryState>((set, get) => ({
     }
   },
 
+  previewSpec: async (body) => {
+    try {
+      const r = await apiFetch('/api/foundry/transforms/preview', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ limit: 20, ...body }),
+      });
+      if (r.ok) return { ok: true, value: await readJson<PreviewData>(r) };
+      return { ok: false, error: await detailOf(r) };
+    } catch {
+      return { ok: false, error: 'preview: request failed' };
+    }
+  },
+
   previewTransform: async (id, limit = 20) => {
     try {
       const r = await apiFetch(`/api/foundry/transforms/${id}/preview`, {
@@ -631,7 +682,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
         headers: JSON_HEADERS,
         body: JSON.stringify({ limit }),
       });
-      if (r.ok) return readJson<{ schema: SchemaField[]; rows: Array<Record<string, unknown>> }>(r);
+      if (r.ok) return readJson<PreviewData>(r);
       set({ error: await detailOf(r) });
       return null;
     } catch {
@@ -703,6 +754,17 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       else set({ error: await detailOf(r) });
     } catch {
       set({ error: 'bindings: request failed' });
+    }
+  },
+
+  loadKinds: async () => {
+    if (get().kinds.length) return; // static set — fetch once per session
+    try {
+      const r = await apiFetch('/api/foundry/kinds');
+      if (r.ok) set({ kinds: (await readJson<{ kinds: string[] }>(r)).kinds, error: null });
+      else set({ error: await detailOf(r) });
+    } catch {
+      set({ error: 'kinds: request failed' });
     }
   },
 

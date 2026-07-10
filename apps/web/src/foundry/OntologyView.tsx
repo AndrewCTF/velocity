@@ -1,21 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useFoundry, type Binding, type SyncResult } from '../state/foundry.js';
 import { Badge, Btn, Toggle } from '../shell/instruments.js';
+import { Modal, useConfirm } from '../shell/Modal.js';
+import { useFoundryPoll } from './useFoundryPoll.js';
 import { EmptyState, Field, Select, ViewHeader, controlCls } from './ui.js';
 
 // Ontology — bindings map a dataset into the local ontology (dataset → object
-// kind, key column, column→property map). Sync mints/updates objects through
-// the registry with source='foundry:<dataset_id>', landing BYO data in the same
-// graph as the live world. Entity resolution (the `resolve` toggle) matches an
-// incoming key against existing objects of the kind so the same real-world
-// entity from two datasets updates one object instead of minting a duplicate.
+// kind, key column, column→property map). Now: object-kind picker from the
+// backend's known kinds (no more free text that only 422s server-side), a
+// key-column picker from the chosen dataset's schema, a Sync-all that
+// aggregates results, a 2-column card grid, and a guided empty state.
 
 function PropMapEditor({
   map,
   onChange,
+  columns,
 }: {
   map: Record<string, string>;
   onChange: (m: Record<string, string>) => void;
+  columns: string[];
 }): JSX.Element {
   const rows = Object.entries(map);
   const setRow = (i: number, col: string, prop: string): void => {
@@ -28,23 +31,21 @@ function PropMapEditor({
     <div className="space-y-1.5">
       {rows.map(([col, prop], i) => (
         <div key={i} className="flex items-center gap-2">
-          <input value={col} onChange={(e) => setRow(i, e.target.value, prop)} placeholder="column" className={controlCls} />
+          <input list="propmap-cols" value={col} onChange={(e) => setRow(i, e.target.value, prop)} placeholder="column" className={controlCls} />
+          <datalist id="propmap-cols">{columns.map((c) => <option key={c} value={c} />)}</datalist>
           <span aria-hidden className="text-txt-3">→</span>
           <input value={prop} onChange={(e) => setRow(i, col, e.target.value)} placeholder="property" className={controlCls} />
-          <button type="button" onClick={() => removeRow(i)} className="text-txt-3 hover:text-alert text-[12px] px-1" aria-label="Remove row">
-            ✕
-          </button>
+          <button type="button" onClick={() => removeRow(i)} className="text-txt-3 hover:text-alert text-[12px] px-1" aria-label="Remove row">✕</button>
         </div>
       ))}
-      <button type="button" onClick={() => onChange({ ...map, '': '' })} className="mono text-[10px] text-accent hover:underline">
-        + property
-      </button>
+      <button type="button" onClick={() => onChange({ ...map, '': '' })} className="mono text-[10px] text-accent hover:underline">+ property</button>
     </div>
   );
 }
 
-function BindingEditor({ onDone }: { onDone: () => void }): JSX.Element {
+function BindingEditor({ open, onClose }: { open: boolean; onClose: () => void }): JSX.Element | null {
   const datasets = useFoundry((s) => s.datasets);
+  const kinds = useFoundry((s) => s.kinds);
   const createBinding = useFoundry((s) => s.createBinding);
   const [datasetId, setDatasetId] = useState('');
   const [objectKind, setObjectKind] = useState('');
@@ -52,45 +53,60 @@ function BindingEditor({ onDone }: { onDone: () => void }): JSX.Element {
   const [propMap, setPropMap] = useState<Record<string, string>>({});
   const [resolve, setResolve] = useState(false);
 
+  const selectedDs = datasets.find((d) => d.id === datasetId);
+  const schemaCols = selectedDs?.schema.map((c) => c.name) ?? [];
+
   const save = async (): Promise<void> => {
-    await createBinding({ dataset_id: datasetId, object_kind: objectKind, key_column: keyColumn, prop_map: propMap, resolve });
-    onDone();
+    const cleanMap: Record<string, string> = {};
+    for (const [c, p] of Object.entries(propMap)) if (c && p) cleanMap[c] = p;
+    await createBinding({ dataset_id: datasetId, object_kind: objectKind, key_column: keyColumn, prop_map: cleanMap, resolve });
+    setDatasetId('');
+    setObjectKind('');
+    setKeyColumn('');
+    setPropMap({});
+    setResolve(false);
+    onClose();
   };
 
   return (
-    <div className="rounded-md border border-line-2 bg-bg-1 p-4 space-y-3">
-      <div className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">New binding</div>
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Dataset">
-          <Select value={datasetId} onChange={setDatasetId} placeholder="Dataset…" options={datasets.map((d) => ({ value: d.id, label: d.name }))} />
-        </Field>
-        <Field label="Object kind">
-          <input value={objectKind} onChange={(e) => setObjectKind(e.target.value)} placeholder="e.g. vessel" className={controlCls} />
-        </Field>
-        <Field label="Key column">
-          <input value={keyColumn} onChange={(e) => setKeyColumn(e.target.value)} placeholder="e.g. mmsi" className={controlCls} />
-        </Field>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="New binding"
+      footer={
+        <>
+          <Btn onClick={onClose}>Cancel</Btn>
+          <Btn tone="accent" disabled={!datasetId || !objectKind || !keyColumn} onClick={() => void save()}>Create binding</Btn>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Dataset">
+            <Select value={datasetId} onChange={setDatasetId} placeholder="Dataset…" options={datasets.map((d) => ({ value: d.id, label: d.name }))} />
+          </Field>
+          <Field label="Object kind">
+            <Select value={objectKind} onChange={setObjectKind} placeholder="kind…" options={kinds.map((k) => ({ value: k, label: k }))} />
+          </Field>
+          <Field label="Key column">
+            <Select value={keyColumn} onChange={setKeyColumn} placeholder="column…" options={schemaCols.map((c) => ({ value: c, label: c }))} />
+          </Field>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3 mb-1.5">Property map — column → ontology property</div>
+          <PropMapEditor map={propMap} onChange={setPropMap} columns={schemaCols} />
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <Toggle on={resolve} onChange={setResolve} label="entity resolution" />
+          <span className="text-[11px] text-txt-1">Entity resolution</span>
+          <span className="text-[10px] text-txt-4">— match an existing object by key instead of minting a duplicate</span>
+        </label>
       </div>
-      <div>
-        <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3 mb-1.5">Property map — column → ontology property</div>
-        <PropMapEditor map={propMap} onChange={setPropMap} />
-      </div>
-      <label className="flex items-center gap-2 cursor-pointer">
-        <Toggle on={resolve} onChange={setResolve} label="entity resolution" />
-        <span className="text-[11px] text-txt-1">Entity resolution</span>
-        <span className="text-[10px] text-txt-4">— match an existing object by key instead of minting a duplicate</span>
-      </label>
-      <div className="flex items-center gap-2 pt-1">
-        <Btn tone="accent" disabled={!datasetId || !objectKind || !keyColumn} onClick={() => void save()}>
-          Create binding
-        </Btn>
-        <Btn onClick={onDone}>Cancel</Btn>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
-function BindingCard({ binding }: { binding: Binding }): JSX.Element {
+function BindingCard({ binding, confirm }: { binding: Binding; confirm: (o: { title: string; body?: string; tone?: 'danger' | 'neutral'; confirmLabel?: string }) => Promise<boolean> }): JSX.Element {
   const datasets = useFoundry((s) => s.datasets);
   const updateBinding = useFoundry((s) => s.updateBinding);
   const deleteBinding = useFoundry((s) => s.deleteBinding);
@@ -115,11 +131,10 @@ function BindingCard({ binding }: { binding: Binding }): JSX.Element {
           <Btn
             size="sm"
             tone="accent"
-            disabled={busy}
+            disabled={busy || !binding.enabled}
             onClick={async () => {
               setBusy(true);
-              const r = await syncBinding(binding.id);
-              setResult(r);
+              setResult(await syncBinding(binding.id));
               setBusy(false);
             }}
           >
@@ -127,7 +142,7 @@ function BindingCard({ binding }: { binding: Binding }): JSX.Element {
           </Btn>
           <button
             type="button"
-            onClick={() => window.confirm('Delete this binding?') && void deleteBinding(binding.id)}
+            onClick={() => void confirm({ title: 'Delete this binding?', tone: 'danger', confirmLabel: 'Delete' }).then((ok) => ok && deleteBinding(binding.id))}
             className="text-txt-3 hover:text-alert text-[12px]"
             aria-label="Delete binding"
           >
@@ -156,12 +171,34 @@ export function OntologyView(): JSX.Element {
   const error = useFoundry((s) => s.error);
   const loadBindings = useFoundry((s) => s.loadBindings);
   const loadDatasets = useFoundry((s) => s.loadDatasets);
+  const loadKinds = useFoundry((s) => s.loadKinds);
+  const syncBinding = useFoundry((s) => s.syncBinding);
+  const { confirm, confirmElement } = useConfirm();
   const [editorOpen, setEditorOpen] = useState(false);
+  const [syncAll, setSyncAll] = useState<{ done: number; total: number; agg: SyncResult } | null>(null);
 
-  useEffect(() => {
-    void loadBindings();
-    void loadDatasets();
-  }, [loadBindings, loadDatasets]);
+  useFoundryPoll(async () => {
+    await Promise.all([loadBindings(), loadDatasets(), loadKinds()]);
+  });
+
+  const enabledBindings = useMemo(() => bindings.filter((b) => b.enabled), [bindings]);
+
+  const runSyncAll = async (): Promise<void> => {
+    const agg: SyncResult = { minted: 0, updated: 0, skipped: 0, errors: [] };
+    let done = 0;
+    setSyncAll({ done: 0, total: enabledBindings.length, agg });
+    for (const b of enabledBindings) {
+      const r = await syncBinding(b.id);
+      if (r) {
+        agg.minted += r.minted;
+        agg.updated += r.updated;
+        agg.skipped += r.skipped;
+        agg.errors.push(...r.errors);
+      }
+      done++;
+      setSyncAll({ done, total: enabledBindings.length, agg: { ...agg } });
+    }
+  };
 
   return (
     <div className="p-5 space-y-5">
@@ -169,30 +206,45 @@ export function OntologyView(): JSX.Element {
         title="Ontology bindings"
         subtitle="Map datasets into the ontology graph; sync mints or updates objects."
         actions={
-          <Btn tone="accent" onClick={() => setEditorOpen(true)}>
-            + New binding
-          </Btn>
+          <>
+            <Btn onClick={() => void runSyncAll()} disabled={syncAll != null || enabledBindings.length === 0}>
+              {syncAll ? `Syncing ${syncAll.done}/${syncAll.total}` : `Sync all (${enabledBindings.length})`}
+            </Btn>
+            <Btn tone="accent" onClick={() => setEditorOpen(true)}>+ New binding</Btn>
+          </>
         }
       />
       {error && <p className="text-[11px] text-alert">{error}</p>}
-      {editorOpen && <BindingEditor onDone={() => setEditorOpen(false)} />}
-      <div className="space-y-2.5">
+
+      {syncAll && syncAll.done >= syncAll.total && (
+        <div className="rounded-md border border-line-2 bg-bg-1 px-3 py-2 mono text-[11px] flex items-center gap-2" data-testid="sync-all-result">
+          <span className="text-txt-3 uppercase tracking-[0.4px] text-[10px]">Sync all</span>
+          <Badge tone="ok">minted {syncAll.agg.minted}</Badge>
+          <Badge tone="accent">updated {syncAll.agg.updated}</Badge>
+          {syncAll.agg.skipped > 0 && <span className="text-txt-3">skipped {syncAll.agg.skipped}</span>}
+          {syncAll.agg.errors.length > 0 && <Badge tone="alert">{syncAll.agg.errors.length} error(s)</Badge>}
+          <button type="button" onClick={() => setSyncAll(null)} className="ml-auto text-txt-3 hover:text-txt-0">✕</button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
         {bindings.map((b) => (
-          <BindingCard key={b.id} binding={b} />
+          <BindingCard key={b.id} binding={b} confirm={confirm} />
         ))}
-        {bindings.length === 0 && !editorOpen && (
-          <EmptyState
-            icon="◈"
-            title="No bindings yet"
-            hint="Bind a dataset to an object kind to land its rows in the ontology graph — the same graph as the live feeds."
-            action={
-              <Btn tone="accent" onClick={() => setEditorOpen(true)}>
-                + New binding
-              </Btn>
-            }
-          />
+        {bindings.length === 0 && (
+          <div className="lg:col-span-2">
+            <EmptyState
+              icon="◈"
+              title="No bindings yet"
+              hint="The loop: upload a dataset → author a transform → bind the output here → sync to land its rows in the ontology graph (the same graph as the live feeds)."
+              action={<Btn tone="accent" onClick={() => setEditorOpen(true)}>+ New binding</Btn>}
+            />
+          </div>
         )}
       </div>
+
+      <BindingEditor open={editorOpen} onClose={() => setEditorOpen(false)} />
+      {confirmElement}
     </div>
   );
 }

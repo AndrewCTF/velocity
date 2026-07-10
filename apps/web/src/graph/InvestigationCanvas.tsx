@@ -78,6 +78,12 @@ const KIND_COLOR: Record<string, string> = {
   threat: 'var(--alert)',
   org: 'var(--txt-1)',
   email: 'var(--txt-2)',
+  person: 'var(--accent)',
+  username: 'var(--mag)',
+  url: 'var(--accent)',
+  wallet: 'var(--ok)',
+  tx: 'var(--txt-2)',
+  file: 'var(--alert)',
   object: 'var(--txt-2)',
 };
 function kindColor(kind: string): string {

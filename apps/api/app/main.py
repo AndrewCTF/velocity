@@ -65,6 +65,7 @@ from app.routes import collab as collab_routes
 from app.routes import config as config_routes
 from app.routes import conflict as conflict_routes
 from app.routes import correlations as correlations_routes
+from app.routes import countries as countries_routes
 from app.routes import cyber as cyber_routes
 from app.routes import entity as entity_routes
 from app.routes import eq as eq_routes
@@ -431,6 +432,10 @@ def create_app() -> FastAPI:
     # threat lookups + an investigate orchestrator that mints results into the
     # same ontology (app/osint).
     app.include_router(osint_routes.router)
+    # Country-OSINT catalog: 53 keyless per-country toolkits (national
+    # registries, land/court/sanctions portals) linked into the same
+    # digital-OSINT graph investigate() enriches (docs/country-osint-spec.md).
+    app.include_router(countries_routes.router)
     app.include_router(actions_routes.router)
     # Shared named COP (save/load a viewport+layers+filters picture as a map:
     # ontology object) + the /ws/cop follow-along delta channel (Track D2).

@@ -23,6 +23,7 @@ export function InvestigatePanel(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<InvestigateResult | null>(null);
+  const [companyMode, setCompanyMode] = useState(false);
 
   const [tool, setTool] = useState('amass');
 
@@ -64,19 +65,25 @@ export function InvestigatePanel(): JSX.Element {
     }
   }
 
-  const run = () => post('/api/osint/investigate', { target: target.trim() });
+  const run = () =>
+    post(
+      '/api/osint/investigate',
+      companyMode ? { target: target.trim(), kind: 'company' } : { target: target.trim() },
+    );
   const runRecon = () => post('/api/osint/recon', { target: target.trim(), tool });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, fontSize: 13 }}>
       <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>Investigate</div>
       <div style={{ fontSize: 11, color: 'var(--txt-3)' }}>
-        Domain / IP: DNS · WHOIS · certs · IP-geo · Shodan · threat. Email / username:
-        Gravatar · GitHub · GitLab · handle presence · breaches.
+        Domain / IP: DNS · WHOIS · certs · subdomains · ASN/BGP · Tor/C2 threat feeds. Email /
+        username: Gravatar · GitHub/GitLab · handle presence · breaches · reputation · Reddit
+        history. Also: url · file hash · btc/eth wallet · ASN — or toggle Company for a
+        free-text org/sanctions/registry search.
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <input
-          placeholder="example.com · 8.8.8.8 · jane@example.com · torvalds"
+          placeholder="example.com · 8.8.8.8 · jane@example.com · torvalds · http://evil.test/x · AS15169 · 1A1zP…"
           value={target}
           onChange={(e) => setTarget(e.target.value)}
           onKeyDown={(e) => {
@@ -84,10 +91,25 @@ export function InvestigatePanel(): JSX.Element {
           }}
           style={{ ...inputStyle, flex: 1 }}
         />
+        <button
+          type="button"
+          aria-pressed={companyMode}
+          title="Search a free-text company/org name (SEC, sanctions, registries, ownership) instead of classifying the target"
+          onClick={() => setCompanyMode((v) => !v)}
+          style={{ ...btnStyle, background: companyMode ? 'var(--accent, #3b82f6)' : btnStyle.background }}
+        >
+          Company
+        </button>
         <button disabled={busy || !target.trim()} onClick={() => void run()} style={btnStyle}>
           {busy ? '…' : 'Run'}
         </button>
       </div>
+      {companyMode && (
+        <div style={{ fontSize: 11, color: 'var(--txt-3)' }}>
+          Company mode: searches SEC EDGAR, OpenSanctions, OpenCorporates, OpenOwnership, Aleph,
+          Wikidata by name — mints an <code>org</code> node with officers/sanctions linked in.
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <span style={{ fontSize: 11, color: 'var(--txt-3)' }}>Deep recon (GPL sidecar):</span>
         <select value={tool} onChange={(e) => setTool(e.target.value)} style={inputStyle}>

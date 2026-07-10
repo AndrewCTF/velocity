@@ -1,0 +1,221 @@
+{
+  "code": "ng",
+  "name": "Nigeria",
+  "region": "Africa",
+  "iso2": "NG",
+  "source_url": "https://unishka.substack.com/p/osint-of-nigeria",
+  "resources": [
+    {
+      "name": "Corporate Affairs Commission (CAC)",
+      "url": "https://search.cac.gov.ng/home",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Nigeria Data Portal (NBS)",
+      "url": "https://www.nigerianstat.gov.ng",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Open Sanctions - Nigeria",
+      "url": "https://www.opensanctions.org/datasets/ng_nigsac_sanctions/",
+      "category": "sanctions-pep",
+      "keyless": true
+    },
+    {
+      "name": "NIMC NIN Verification Portal",
+      "url": "https://nimc.gov.ng/nimc-verification-service",
+      "category": "people-search",
+      "note": "NIN verification service",
+      "keyless": false
+    },
+    {
+      "name": "Voter Registration (INEC)",
+      "url": "https://cvr.inecnigeria.org",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "OpenCorporates",
+      "url": "https://opencorporates.com/companies/",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "FRSC Vehicle Verification",
+      "url": "https://nvis.frsc.gov.ng",
+      "category": "vehicle",
+      "keyless": false
+    },
+    {
+      "name": "Lagos State Land Bureau",
+      "url": "https://landonline.lagosstate.gov.ng",
+      "category": "land-property",
+      "keyless": false
+    },
+    {
+      "name": "Nigeria Open Contracting Portal",
+      "url": "https://nocopo.bpp.gov.ng",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "eTenders Nigeria",
+      "url": "https://etenders.com.ng",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "NigeriaLII",
+      "url": "https://nigerialii.org/judgments/",
+      "category": "court-legal",
+      "note": "Court judgments database",
+      "keyless": true
+    },
+    {
+      "name": "Nigeria Sexual Offenders Register",
+      "url": "https://nsod.naptip.gov.ng",
+      "category": "sanctions-pep",
+      "keyless": false
+    },
+    {
+      "name": "EFCC Wanted List",
+      "url": "https://www.efcc.gov.ng/efcc/news-and-information/wanted-persons-1",
+      "category": "sanctions-pep",
+      "keyless": true
+    },
+    {
+      "name": "OpenAfrica - Nigeria",
+      "url": "https://open.africa/group/nigeria",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "World Bank Nigeria Data",
+      "url": "https://data.worldbank.org/country/nigeria",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "UN Data for Nigeria",
+      "url": "https://data.un.org/en/iso/ng.html",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Nigeria Watch",
+      "url": "https://www.nigeriawatch.org",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "AidData",
+      "url": "https://aiddata.org/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Humanitarian Data Exchange (HDX)",
+      "url": "https://data.humdata.org/group/nga",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Open Treasury Portal",
+      "url": "https://opentreasury.gov.ng",
+      "category": "finance-tax",
+      "keyless": true
+    },
+    {
+      "name": "BudgIT Tracka",
+      "url": "https://tracka.ng",
+      "category": "finance-tax",
+      "keyless": true
+    },
+    {
+      "name": "Nigeria Government Spending",
+      "url": "https://tradingeconomics.com/nigeria/government-spending",
+      "category": "finance-tax",
+      "keyless": true
+    },
+    {
+      "name": "Asset Recovery Watch Database",
+      "url": "https://star.worldbank.org/asset-recovery-watch-database",
+      "category": "finance-tax",
+      "keyless": true
+    },
+    {
+      "name": "PropertyPro.ng",
+      "url": "https://propertypro.ng",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "PrivateProperty.ng",
+      "url": "https://privateproperty.ng",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Land.ng",
+      "url": "https://land.ng",
+      "category": "land-property",
+      "keyless": true
+    },
+    {
+      "name": "Nigeria GeoPortal",
+      "url": "https://nigeria.africageoportal.com",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "OpenStreetMap - Nigeria",
+      "url": "https://www.openstreetmap.org/relation/192787",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "GRID3 Nigeria",
+      "url": "https://data.grid3.org/search",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Panama Papers",
+      "url": "https://www.icij.org/investigations/panama-papers/",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "Paradise Papers",
+      "url": "https://www.icij.org/investigations/paradise-papers/",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "SwissLeaks",
+      "url": "https://www.icij.org/investigations/swiss-leaks/explore-swiss-leaks-data/",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "sourceAFRICA",
+      "url": "https://sourceafrica.net",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "OCCRP Aleph",
+      "url": "https://aleph.occrp.org",
+      "category": "archives",
+      "keyless": true
+    },
+    {
+      "name": "Truecaller",
+      "url": "https://www.truecaller.com",
+      "category": "phone",
+      "keyless": false
+    }
+  ]
+}

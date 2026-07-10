@@ -1,0 +1,242 @@
+{
+  "code": "lb",
+  "name": "Lebanon",
+  "region": "Asia",
+  "iso2": "LB",
+  "source_url": "https://unishka.substack.com/p/osint-of-lebanon",
+  "note": "truncated to 35 of 58",
+  "resources": [
+    {
+      "name": "Central Administration of Statistics",
+      "url": "https://www.cas.gov.lb",
+      "category": "government",
+      "note": "official statistics bureau",
+      "keyless": true
+    },
+    {
+      "name": "Internal Security Forces",
+      "url": "https://isf.gov.lb/ar/",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Public Procurement Authority",
+      "url": "https://www.ppa.gov.lb/ar",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "Lebanese Customs",
+      "url": "https://www.customs.gov.lb/home.aspx",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Council for Development & Reconstruction",
+      "url": "https://www.cdr.gov.lb/en-US/Procurment.aspx",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "World Bank - Lebanon",
+      "url": "https://data.worldbank.org/country/lebanon",
+      "category": "open-data",
+      "note": "economic and development data",
+      "keyless": true
+    },
+    {
+      "name": "IMF - Lebanon",
+      "url": "https://www.imf.org/external/datamapper/profile/LBN",
+      "category": "open-data",
+      "note": "financial and economic indicators",
+      "keyless": true
+    },
+    {
+      "name": "CIA Factbook - Lebanon",
+      "url": "https://www.cia.gov/the-world-factbook/countries/lebanon/",
+      "category": "government",
+      "note": "country reference materials",
+      "keyless": true
+    },
+    {
+      "name": "Humanitarian Data Exchange",
+      "url": "https://data.humdata.org/group/lbn",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Open Data Lebanon",
+      "url": "https://www.opendatalebanon.org/about/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Energy Data Lebanon",
+      "url": "https://energydata.info/dataset/?vocab_country_names=LBN",
+      "category": "open-data",
+      "note": "energy and infrastructure data",
+      "keyless": true
+    },
+    {
+      "name": "Open Map Lebanon",
+      "url": "https://openmaplebanon.org/open-data",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "CCIB Directory",
+      "url": "https://www.ccib.org.lb/en/membership-directory",
+      "category": "business-registry",
+      "note": "Chamber of Commerce members",
+      "keyless": true
+    },
+    {
+      "name": "5INDEX",
+      "url": "https://5index.com",
+      "category": "business-registry",
+      "note": "Lebanese business database",
+      "keyless": false
+    },
+    {
+      "name": "Global Database",
+      "url": "https://www.globaldatabase.com/lebanon-companies-database",
+      "category": "business-registry",
+      "keyless": false
+    },
+    {
+      "name": "Zawya",
+      "url": "https://www.zawya.com/en/companies/find-companies",
+      "category": "business-registry",
+      "note": "MENA company search",
+      "keyless": false
+    },
+    {
+      "name": "atlebanon",
+      "url": "https://www.atlebanon.com",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Property Finder Lebanon",
+      "url": "https://www.propertyfinder.com.lb",
+      "category": "land-property",
+      "note": "real estate listings",
+      "keyless": true
+    },
+    {
+      "name": "Dubizzle Lebanon",
+      "url": "https://www.dubizzle.com.lb/properties",
+      "category": "land-property",
+      "note": "classifieds including property",
+      "keyless": true
+    },
+    {
+      "name": "Sakan",
+      "url": "https://www.sakanmp.com",
+      "category": "land-property",
+      "note": "real estate marketplace",
+      "keyless": true
+    },
+    {
+      "name": "Pipl",
+      "url": "https://pipl.com",
+      "category": "people-search",
+      "note": "people search engine",
+      "keyless": false
+    },
+    {
+      "name": "3ayli",
+      "url": "https://3ayli.com",
+      "category": "people-search",
+      "note": "family tree and genealogy",
+      "keyless": true
+    },
+    {
+      "name": "Ogero Directory",
+      "url": "https://ogero.gov.lb/directory.php",
+      "category": "people-search",
+      "note": "telecom directory service",
+      "keyless": true
+    },
+    {
+      "name": "Islamic Development Bank Tenders",
+      "url": "https://www.isdb.org/project-procurement/tenders",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "Tenders Info",
+      "url": "https://www.tendersinfo.com/global-lebanon-tenders.php",
+      "category": "tenders",
+      "note": "global tender search",
+      "keyless": true
+    },
+    {
+      "name": "Bid Detail",
+      "url": "https://www.biddetail.com/lebanon-tenders",
+      "category": "tenders",
+      "keyless": true
+    },
+    {
+      "name": "UNGM",
+      "url": "https://www.ungm.org/Public/Notice",
+      "category": "tenders",
+      "note": "UN procurement notices",
+      "keyless": true
+    },
+    {
+      "name": "OpenStreetMap",
+      "url": "https://www.openstreetmap.org/relation/184843",
+      "category": "maps-geo",
+      "note": "Lebanon geographic data",
+      "keyless": true
+    },
+    {
+      "name": "Nations Online Lebanon Map",
+      "url": "https://www.nationsonline.org/oneworld/map/lebanon_map.htm",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Live UA Map",
+      "url": "https://lebanon.liveuamap.com",
+      "category": "news-media",
+      "note": "live conflict mapping",
+      "keyless": true
+    },
+    {
+      "name": "VIN Check",
+      "url": "https://detailedvehiclehistory.com/vin-check/lebanon",
+      "category": "vehicle",
+      "note": "vehicle history check",
+      "keyless": false
+    },
+    {
+      "name": "961 Plate",
+      "url": "https://961-plate-lebanon-plate-numb.en.softonic.com/android",
+      "category": "vehicle",
+      "note": "license plate lookup app",
+      "keyless": true
+    },
+    {
+      "name": "LSEG Company Data",
+      "url": "https://www.lseg.com/en/data-analytics/financial-data/company-data/middle-east-company-data",
+      "category": "business-registry",
+      "note": "MENA company intelligence",
+      "keyless": false
+    },
+    {
+      "name": "Transparency International",
+      "url": "https://transparency-lebanon.org/take-action/",
+      "category": "other",
+      "note": "corruption reporting",
+      "keyless": true
+    },
+    {
+      "name": "War Crimes Alert",
+      "url": "https://english.legal-agenda.com/war-crimes-alert/",
+      "category": "court-legal",
+      "keyless": true
+    }
+  ]
+}

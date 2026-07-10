@@ -1,0 +1,254 @@
+{
+  "code": "lt",
+  "name": "Lithuania",
+  "region": "Europe",
+  "iso2": "LT",
+  "source_url": "https://unishka.substack.com/p/osint-of-lithuania",
+  "resources": [
+    {
+      "name": "National Open Data Portal",
+      "url": "https://data.gov.lt/",
+      "category": "open-data",
+      "note": "Lithuanian government open data repository",
+      "keyless": true
+    },
+    {
+      "name": "Register of Legal Entities",
+      "url": "https://www.registrucentras.lt/en/",
+      "category": "business-registry",
+      "note": "Official registry of legal entities in Lithuania",
+      "keyless": true
+    },
+    {
+      "name": "JARS.LT",
+      "url": "https://jars.lt/en",
+      "category": "business-registry",
+      "note": "Lithuanian business registry search",
+      "keyless": true
+    },
+    {
+      "name": "Rekvizitai.lt",
+      "url": "https://rekvizitai.vz.lt/en/company-search/",
+      "category": "business-registry",
+      "note": "Company search and business information",
+      "keyless": true
+    },
+    {
+      "name": "Electoral Commission Open Data",
+      "url": "https://www.vrk.lt/atviri-duomenys",
+      "category": "government",
+      "note": "Lithuanian electoral data and statistics",
+      "keyless": true
+    },
+    {
+      "name": "Seimas Legal Acts Database",
+      "url": "https://e-seimas.lrs.lt/portal/legalActSearch/lt",
+      "category": "government",
+      "note": "Lithuanian parliamentary legal documents",
+      "keyless": true
+    },
+    {
+      "name": "Address Register Search",
+      "url": "https://www.registrucentras.lt/adr/p/",
+      "category": "land-property",
+      "note": "Lithuanian address registry search",
+      "keyless": true
+    },
+    {
+      "name": "Real Estate Property Value Search",
+      "url": "https://www.registrucentras.lt/masvert/paieska-un",
+      "category": "land-property",
+      "note": "Taxable property value search",
+      "keyless": true
+    },
+    {
+      "name": "Vehicle Registration Search",
+      "url": "https://www.eregitra.lt/services/vehicle-registration/data-search",
+      "category": "vehicle",
+      "note": "Lithuanian vehicle information search",
+      "keyless": true
+    },
+    {
+      "name": "Geoportal.lt",
+      "url": "https://www.geoportal.lt/geoportal/",
+      "category": "maps-geo",
+      "note": "Lithuanian geospatial data portal",
+      "keyless": true
+    },
+    {
+      "name": "Lithuanian Court E-Services Portal",
+      "url": "https://e.teismas.lt/en/public/home/",
+      "category": "court-legal",
+      "note": "Official Lithuanian courts portal",
+      "keyless": true
+    },
+    {
+      "name": "PINREG",
+      "url": "https://pinreg.vtek.lt/app/deklaraciju-paieska",
+      "category": "people-search",
+      "note": "Declaration of financial interests search",
+      "keyless": true
+    },
+    {
+      "name": "Wanted Persons Registry",
+      "url": "https://ird.lt/lt/gyventojams/iazr-ieskomu-asmenu-neatpazintu-lavonu-ir-nezinomu-bejegiu-asmenu-zinybinis-registras-2",
+      "category": "people-search",
+      "note": "Individuals sought by law enforcement",
+      "keyless": true
+    },
+    {
+      "name": "FamilySearch - Lithuania Records",
+      "url": "https://www.familysearch.org/en/wiki/Lithuania_Online_Genealogy_Records",
+      "category": "archives",
+      "note": "Historical genealogy records for Lithuania",
+      "keyless": true
+    },
+    {
+      "name": "Flightradar24",
+      "url": "https://www.flightradar24.com/",
+      "category": "transport-tracking",
+      "note": "Real-time flight tracking",
+      "keyless": true
+    },
+    {
+      "name": "FlightAware",
+      "url": "https://www.flightaware.com/live/",
+      "category": "transport-tracking",
+      "note": "Flight tracking and aviation data",
+      "keyless": true
+    },
+    {
+      "name": "MarineTraffic",
+      "url": "https://www.marinetraffic.com/",
+      "category": "transport-tracking",
+      "note": "Vessel tracking and maritime data",
+      "keyless": true
+    },
+    {
+      "name": "VesselFinder",
+      "url": "https://www.vesselfinder.com/",
+      "category": "transport-tracking",
+      "note": "Ship and vessel location tracking",
+      "keyless": true
+    },
+    {
+      "name": "LRT News in English",
+      "url": "https://www.lrt.lt/en/news-in-english",
+      "category": "news-media",
+      "note": "Lithuanian National Radio and Television news",
+      "keyless": true
+    },
+    {
+      "name": "Delfi News",
+      "url": "https://en.delfi.lt/",
+      "category": "news-media",
+      "note": "Major Lithuanian news portal",
+      "keyless": true
+    },
+    {
+      "name": "LRytas News",
+      "url": "https://www.lrytas.lt/english",
+      "category": "news-media",
+      "note": "Lithuanian news outlet",
+      "keyless": true
+    },
+    {
+      "name": "Baltic News Service",
+      "url": "https://www.bns.lt/en/",
+      "category": "news-media",
+      "note": "News service for Baltic states",
+      "keyless": true
+    },
+    {
+      "name": "Public Procurement Data",
+      "url": "https://vpt.lrv.lt/lt/statistika-ir-analize/pirkimu-ir-sutarciu-duomenys-1/sutarciu-duomenys/sutartys/",
+      "category": "tenders",
+      "note": "Lithuanian procurement contracts database",
+      "keyless": true
+    },
+    {
+      "name": "Lithuania Tenders",
+      "url": "https://www.lithuaniatenders.com",
+      "category": "tenders",
+      "note": "Government and public tenders search",
+      "keyless": true
+    },
+    {
+      "name": "Open Sanctions",
+      "url": "https://www.opensanctions.org/datasets/lt_fiu_freezes/",
+      "category": "sanctions-pep",
+      "note": "Lithuanian sanctions and PEP database",
+      "keyless": true
+    },
+    {
+      "name": "Infolex",
+      "url": "https://www.infolex.lt/portal/start.asp",
+      "category": "government",
+      "note": "Lithuanian legal documents and regulations",
+      "keyless": false
+    },
+    {
+      "name": "Tax Inspectorate",
+      "url": "https://www.vmi.lt/evmi/rinkmenos?lang=en",
+      "category": "government",
+      "note": "Lithuanian tax administration",
+      "keyless": true
+    },
+    {
+      "name": "State Social Insurance Fund",
+      "url": "https://atvira.sodra.lt/imones/paieska/index.html",
+      "category": "government",
+      "note": "Social insurance and employment data",
+      "keyless": true
+    },
+    {
+      "name": "Baltic Times",
+      "url": "https://www.baltictimes.com/news_lithuania/",
+      "category": "news-media",
+      "note": "English-language Baltic news",
+      "keyless": true
+    },
+    {
+      "name": "ELTA",
+      "url": "https://www.elta.lt/en",
+      "category": "news-media",
+      "note": "Lithuanian news agency",
+      "keyless": true
+    },
+    {
+      "name": "Official Statistics Portal",
+      "url": "https://atviri-duomenys.stat.gov.lt/",
+      "category": "open-data",
+      "note": "Lithuanian statistical office open data",
+      "keyless": true
+    },
+    {
+      "name": "European e-Justice Portal",
+      "url": "https://e-justice.europa.eu/topics/registers-business-insolvency-land/business-registers-eu-countries/lt_en",
+      "category": "government",
+      "note": "EU business register portal for Lithuania",
+      "keyless": true
+    },
+    {
+      "name": "Lithuanian Data Archive",
+      "url": "https://lida.dataverse.lt/",
+      "category": "archives",
+      "note": "Social sciences research data archive",
+      "keyless": true
+    },
+    {
+      "name": "Nasdaq Baltic",
+      "url": "https://www.nasdaqbaltic.com/",
+      "category": "finance-tax",
+      "note": "Baltic stock exchange and market data",
+      "keyless": true
+    },
+    {
+      "name": "Interpol Wanted List",
+      "url": "https://www.interpol.int/en/How-we-work/Notices/Yellow-Notices/View-Yellow-Notices",
+      "category": "people-search",
+      "note": "International wanted persons database",
+      "keyless": true
+    }
+  ]
+}

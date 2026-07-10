@@ -1,0 +1,236 @@
+{
+  "code": "kp",
+  "name": "North Korea",
+  "region": "Asia",
+  "iso2": "KP",
+  "source_url": "https://unishka.substack.com/p/osint-of-north-korea",
+  "note": "truncated to 35 of 96",
+  "resources": [
+    {
+      "name": "CIA Factbook - North Korea",
+      "url": "https://www.cia.gov/the-world-factbook/countries/korea-north/",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Open Sanctions",
+      "url": "https://www.opensanctions.org/countries/kp/",
+      "category": "sanctions-pep",
+      "note": "sanctions and PEP database for DPRK entities",
+      "keyless": true
+    },
+    {
+      "name": "OFAC Sanctions - North Korean Vessels",
+      "url": "https://ofac.treasury.gov/sanctions-programs-and-country-information/north-korea-sanctions/north-korean-vessels",
+      "category": "government",
+      "note": "official US Treasury sanctions list for DPRK vessels",
+      "keyless": true
+    },
+    {
+      "name": "State Department Human Rights Report",
+      "url": "https://www.state.gov/reports/2024-country-reports-on-human-rights-practices/north-korea",
+      "category": "government",
+      "keyless": true
+    },
+    {
+      "name": "Our World in Data - North Korea",
+      "url": "https://ourworldindata.org/country/north-korea",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "UN Data",
+      "url": "https://data.un.org/en/iso/kp.html",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "World Bank Data - North Korea",
+      "url": "https://data.worldbank.org/country/korea-dem-peoples-rep",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "SIPRI",
+      "url": "https://www.sipri.org/",
+      "category": "open-data",
+      "note": "Stockholm International Peace Research Institute",
+      "keyless": true
+    },
+    {
+      "name": "World Health Organization Data",
+      "url": "https://data.who.int/countries/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Worldometers - Population Data",
+      "url": "https://www.worldometers.info/world-population/north-korea-population/",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Global Edge - MSU",
+      "url": "https://globaledge.msu.edu/countries/north-korea/statistics",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Data Commons",
+      "url": "https://datacommons.org/place/country/PRK",
+      "category": "open-data",
+      "keyless": true
+    },
+    {
+      "name": "Statista - North Korea",
+      "url": "https://www.statista.com/topics/4927/north-korea/",
+      "category": "open-data",
+      "keyless": false
+    },
+    {
+      "name": "NK News",
+      "url": "https://www.nknews.org/",
+      "category": "news-media",
+      "note": "independent North Korea news outlet",
+      "keyless": true
+    },
+    {
+      "name": "NK Pro",
+      "url": "https://www.nknews.org/pro/",
+      "category": "news-media",
+      "note": "premium analysis subscription service",
+      "keyless": false
+    },
+    {
+      "name": "KCNA Watch",
+      "url": "https://kcnawatch.org/",
+      "category": "news-media",
+      "note": "monitors DPRK state media",
+      "keyless": true
+    },
+    {
+      "name": "38 North",
+      "url": "https://www.38north.org/",
+      "category": "archives",
+      "note": "DPRK research and analysis resource",
+      "keyless": true
+    },
+    {
+      "name": "Human Rights Watch - North Korea",
+      "url": "https://www.hrw.org/world-report/2025/country-chapters/north-korea",
+      "category": "news-media",
+      "keyless": true
+    },
+    {
+      "name": "Amnesty International - North Korea",
+      "url": "https://www.amnesty.org.uk/issues/North-Korea",
+      "category": "news-media",
+      "keyless": true
+    },
+    {
+      "name": "CIA World Factbook Maps",
+      "url": "https://www.cia.gov/resources/map/north-korea/",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Google Earth",
+      "url": "https://earth.google.com/web/",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Zoom Earth",
+      "url": "https://zoom.earth/maps/satellite/",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Old Maps Online",
+      "url": "https://www.oldmapsonline.org/en/North_Korea",
+      "category": "maps-geo",
+      "keyless": true
+    },
+    {
+      "name": "Marine Traffic - North Korea",
+      "url": "https://www.marinetraffic.com/en/ais/details/ports/18818",
+      "category": "transport-tracking",
+      "note": "AIS vessel tracking for Nampo Port",
+      "keyless": true
+    },
+    {
+      "name": "Flightradar24 - North Korea Airports",
+      "url": "https://www.flightradar24.com/data/airports/north-korea",
+      "category": "transport-tracking",
+      "keyless": true
+    },
+    {
+      "name": "NK Pro Ship Tracker",
+      "url": "https://membership.nknews.org/nk-pro-ship-tracker/",
+      "category": "transport-tracking",
+      "note": "premium vessel tracking service",
+      "keyless": false
+    },
+    {
+      "name": "NK Pro Leadership Tracker",
+      "url": "https://membership.nknews.org/nk-pro-leadership-tracker/",
+      "category": "people-search",
+      "note": "DPRK government officials and military leadership",
+      "keyless": false
+    },
+    {
+      "name": "Joshua Project - North Korea",
+      "url": "https://joshuaproject.net/countries/kn",
+      "category": "people-search",
+      "note": "people group and ethnic data",
+      "keyless": true
+    },
+    {
+      "name": "FOOTPRINTS",
+      "url": "https://nkfootprints.info/en/",
+      "category": "people-search",
+      "note": "database of defectors and escapees",
+      "keyless": true
+    },
+    {
+      "name": "North Korean Prison Database",
+      "url": "https://nkpd.io/",
+      "category": "people-search",
+      "note": "political prison camp information",
+      "keyless": true
+    },
+    {
+      "name": "NKDB",
+      "url": "https://en.nkdb.org/",
+      "category": "open-data",
+      "note": "North Korea database with statistics",
+      "keyless": true
+    },
+    {
+      "name": "List of Companies of North Korea",
+      "url": "https://en.wikipedia.org/wiki/List_of_companies_of_North_Korea",
+      "category": "business-registry",
+      "keyless": true
+    },
+    {
+      "name": "Wikipedia List of Active Ships",
+      "url": "https://en.wikipedia.org/wiki/List_of_active_ships_of_the_Korean_People%27s_Navy",
+      "category": "transport-tracking",
+      "keyless": true
+    },
+    {
+      "name": "Korean Central News Agency",
+      "url": "https://www.kcna.kp/en/",
+      "category": "government",
+      "note": "DPRK state news agency",
+      "keyless": true
+    },
+    {
+      "name": "Carnegie Endowment - Nuclear Verification",
+      "url": "https://carnegieendowment.org/posts/2021/07/new-approaches-to-verifying-and-monitoring-north-koreas-nuclear-arsenal",
+      "category": "archives",
+      "note": "research on DPRK nuclear monitoring",
+      "keyless": true
+    }
+  ]
+}
