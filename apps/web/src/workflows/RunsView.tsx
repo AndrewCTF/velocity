@@ -1,3 +1,4 @@
+import { ListChecks } from 'lucide-react';
 import { Fragment, useEffect, useState } from 'react';
 import { useWorkflows } from '../state/workflows.js';
 import { Badge } from '../shell/instruments.js';
@@ -149,7 +150,7 @@ export function RunsView(): JSX.Element {
       {error && <p className="text-[11px] text-alert">{error}</p>}
 
       {!workflowId && (
-        <EmptyState icon="⧉" title="No workflow selected" hint="Pick a workflow above, or trigger a Run from the editor to land here." />
+        <EmptyState icon={ListChecks} title="No workflow selected" hint="Pick a workflow above, or trigger a Run from the editor to land here." />
       )}
 
       {workflowId && (
@@ -196,7 +197,7 @@ export function RunsView(): JSX.Element {
           {runs.length === 0 && (
             <div className="p-4">
               <EmptyState
-                icon="⧉"
+                icon={ListChecks}
                 title="No runs yet"
                 hint={`Runs appear here once you trigger "${nameOf(workflowId)}" manually or via a schedule.`}
               />

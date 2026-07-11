@@ -1,3 +1,4 @@
+import { CheckCircle2, Table2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   useFoundry,
@@ -462,7 +463,7 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
         {tab === 'deadletter' && (
           <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
             {deadLetter.length === 0 ? (
-              <div className="p-4"><EmptyState icon="✓" title="No quarantined rows" hint="Rows that raise during a filter/derive in the last build land here instead of failing the whole build." /></div>
+              <div className="p-4"><EmptyState icon={CheckCircle2} title="No quarantined rows" hint="Rows that raise during a filter/derive in the last build land here instead of failing the whole build." /></div>
             ) : (
               <table className="w-full border-collapse">
                 <thead><tr className={tableHeadCls()}><Th>Step</Th><Th>Error</Th><Th>Row</Th></tr></thead>
@@ -594,7 +595,7 @@ export function DatasetsView(): JSX.Element {
             );
           })}
           {filtered.length === 0 && (
-            <div className="p-4"><EmptyState icon="▤" title="No datasets" hint="Upload a CSV, JSON, or NDJSON file to create your first dataset." /></div>
+            <div className="p-4"><EmptyState icon={Table2} title="No datasets" hint="Upload a CSV, JSON, or NDJSON file to create your first dataset." /></div>
           )}
         </div>
       </div>
@@ -605,7 +606,7 @@ export function DatasetsView(): JSX.Element {
           <DatasetDetail dataset={selected} />
         ) : (
           <div className="h-full flex items-center justify-center p-8">
-            <EmptyState icon="▤" title="Select a dataset" hint="Pick one from the list, or upload a file to create a new dataset." />
+            <EmptyState icon={Table2} title="Select a dataset" hint="Pick one from the list, or upload a file to create a new dataset." />
           </div>
         )}
       </div>

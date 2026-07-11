@@ -1,3 +1,4 @@
+import { Boxes } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useFoundry, type Binding, type SyncResult } from '../state/foundry.js';
 import { Badge, Btn, Toggle } from '../shell/instruments.js';
@@ -234,7 +235,7 @@ export function OntologyView(): JSX.Element {
         {bindings.length === 0 && (
           <div className="lg:col-span-2">
             <EmptyState
-              icon="◈"
+              icon={Boxes}
               title="No bindings yet"
               hint="The loop: upload a dataset → author a transform → bind the output here → sync to land its rows in the ontology graph (the same graph as the live feeds)."
               action={<Btn tone="accent" onClick={() => setEditorOpen(true)}>+ New binding</Btn>}

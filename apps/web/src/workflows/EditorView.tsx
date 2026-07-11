@@ -1,3 +1,4 @@
+import { Workflow } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useWorkflows,
@@ -1006,7 +1007,7 @@ export function EditorView(): JSX.Element {
               {laid.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center p-6">
                   <EmptyState
-                    icon="⋔"
+                    icon={Workflow}
                     title="No blocks yet"
                     hint="Add a source, wire it into ops and sinks — the graph draws here."
                     action={<Btn tone="accent" size="sm" onClick={() => setPaletteOpen(true)}>+ Add block</Btn>}

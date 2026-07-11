@@ -1,3 +1,4 @@
+import { GitBranch } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useFoundry,
@@ -556,7 +557,7 @@ export function PipelineView(): JSX.Element {
             </svg>
             {laid.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center p-6">
-                <EmptyState icon="⋔" title="No pipeline yet" hint="Upload a dataset, then author a transform — its lineage graph draws here." />
+                <EmptyState icon={GitBranch} title="No pipeline yet" hint="Upload a dataset, then author a transform — its lineage graph draws here." />
               </div>
             )}
           </div>

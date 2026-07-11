@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SearchX } from 'lucide-react';
 import * as Cesium from 'cesium';
 import { searchObjects, type ObjectResult } from '../transport/search.js';
 import { useSelection } from '../state/stores.js';
@@ -525,6 +526,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
             ))}
             {data.results.length === 0 && (
               <div className="mono text-[11px] text-txt-3 py-4 text-center">
+                {!loading && <SearchX aria-hidden className="h-5 w-5 mx-auto mb-1.5 text-txt-4" />}
                 {loading ? 'searching…' : 'No results yet — set your scope and hit Search.'}
               </div>
             )}

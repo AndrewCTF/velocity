@@ -1,3 +1,4 @@
+import { Blocks } from 'lucide-react';
 import { useEffect } from 'react';
 import { useWorkflows, type BlockCatalogEntry, type BlockCategory } from '../state/workflows.js';
 import { Badge } from '../shell/instruments.js';
@@ -119,7 +120,7 @@ export function BlocksView(): JSX.Element {
       <ViewHeader title="Blocks" subtitle="The DAG's typed vocabulary — sources pull data in, ops transform it, sinks act on it." />
       {error && <p className="text-[11px] text-alert">{error}</p>}
 
-      {blocks.length === 0 && <EmptyState icon="◈" title="Loading catalog…" />}
+      {blocks.length === 0 && <EmptyState icon={Blocks} title="Loading catalog…" />}
 
       {GROUPS.map((g) => {
         const items = blocks.filter((b) => b.category === g.key);

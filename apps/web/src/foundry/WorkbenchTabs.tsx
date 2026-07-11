@@ -1,3 +1,4 @@
+import { Bell, Clock, Map as MapIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
   useFoundry,
@@ -70,7 +71,7 @@ export function MapTab({ dataset }: { dataset: Dataset }): JSX.Element {
   if (geo === null || !geo.ok) {
     return (
       <div className="p-4">
-        <EmptyState icon="⊙" title="No map to show" hint={geo === null ? 'Failed to load geo data.' : geo.reason} />
+        <EmptyState icon={MapIcon} title="No map to show" hint={geo === null ? 'Failed to load geo data.' : geo.reason} />
       </div>
     );
   }
@@ -79,7 +80,7 @@ export function MapTab({ dataset }: { dataset: Dataset }): JSX.Element {
     return (
       <div className="p-4">
         <EmptyState
-          icon="⊙"
+          icon={MapIcon}
           title="No plottable rows"
           hint={`Columns ${geo.lat_col}/${geo.lon_col} were detected, but no row had valid coordinates in both.`}
         />
@@ -473,7 +474,7 @@ export function MonitorsTab({ datasetId }: { datasetId: string }): JSX.Element {
         </table>
         {monitors.length === 0 && (
           <div className="p-4">
-            <EmptyState icon="◈" title="No monitors" hint="Watch this dataset for new versions, row conditions, or failed checks/builds — fire an alert, an LLM summary, or both." />
+            <EmptyState icon={Bell} title="No monitors" hint="Watch this dataset for new versions, row conditions, or failed checks/builds — fire an alert, an LLM summary, or both." />
           </div>
         )}
       </div>
@@ -536,11 +537,11 @@ export function MonitorsTab({ datasetId }: { datasetId: string }): JSX.Element {
         <div className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">Events</div>
         {!selectedId ? (
           <div className="p-4 rounded-md border border-line-2 bg-bg-1">
-            <EmptyState icon="◷" title="Select a monitor" hint="Click a monitor above to see its firing history." />
+            <EmptyState icon={Clock} title="Select a monitor" hint="Click a monitor above to see its firing history." />
           </div>
         ) : events.length === 0 ? (
           <div className="p-4 rounded-md border border-line-2 bg-bg-1">
-            <EmptyState icon="◷" title="No events yet" hint="This monitor hasn't fired." />
+            <EmptyState icon={Clock} title="No events yet" hint="This monitor hasn't fired." />
           </div>
         ) : (
           <div className="rounded-md border border-line-2 bg-bg-1 divide-y divide-line">

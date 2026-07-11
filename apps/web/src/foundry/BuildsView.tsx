@@ -1,3 +1,4 @@
+import { Hammer } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useFoundry } from '../state/foundry.js';
 import { Badge, Btn, Toggle } from '../shell/instruments.js';
@@ -233,7 +234,7 @@ export function BuildsView(): JSX.Element {
         </table>
         {filtered.length === 0 && (
           <div className="p-4">
-            <EmptyState icon="⧉" title={builds.length === 0 ? 'No builds yet' : 'No builds match'} hint={builds.length === 0 ? 'Runs appear here once you build a transform or the whole pipeline.' : 'Adjust the filters above.'} />
+            <EmptyState icon={Hammer} title={builds.length === 0 ? 'No builds yet' : 'No builds match'} hint={builds.length === 0 ? 'Runs appear here once you build a transform or the whole pipeline.' : 'Adjust the filters above.'} />
           </div>
         )}
       </div>
