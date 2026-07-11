@@ -337,6 +337,20 @@ class Settings(BaseSettings):
     ais_myshiptracking_sidecar_url: str = "http://127.0.0.1:8093/vessels.json"
     ais_myshiptracking_sidecar_interval_s: float = 30.0
 
+    # MAVLink bridge sidecar (app.mavlink_sidecar → `python -m app.mavlink_bridge`).
+    # The first-class control server the Workflows `control.drone` block points
+    # at: it translates the drone.command JSON envelope into real MAVLink and
+    # forwards it to a vehicle / SITL. OFF by default — a control bridge that
+    # auto-connects to a drone at boot is not something you want implicitly, and
+    # pymavlink + a MAVLink endpoint are optional (without them it runs log-only,
+    # echoing the planned commands without touching a vehicle). Enable it and
+    # point `control.drone.server_url` at http://127.0.0.1:{port}.
+    mavlink_bridge_enabled: bool = False
+    mavlink_bridge_port: int = 9010
+    # pymavlink connection string, e.g. "udpout:127.0.0.1:14550" (SITL/ArduPilot/
+    # PX4) or "/dev/ttyACM0,57600" (a real radio). Empty → log-only (no uplink).
+    mavlink_bridge_connect: str = ""
+
     # Keyless GLOBAL AIS via DIRECT httpx (NO browser sidecar) — ShipXplorer's
     # public data.shipxplorer.com/live bbox endpoint. Reachable straight from the
     # server with browser-like headers (referer/origin); NOT Cloudflare-gated. A
