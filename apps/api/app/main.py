@@ -197,6 +197,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import ais_sidecar  # noqa: PLC0415
 
             await ais_sidecar.start()
+            # MAVLink bridge: the drone control server the Workflows control.drone
+            # block talks to. OFF unless mavlink_bridge_enabled; log-only without a
+            # MAVLINK_CONNECT endpoint. Best-effort — never blocks boot.
+            from app import mavlink_sidecar  # noqa: PLC0415
+
+            await mavlink_sidecar.start()
             correlate_runner.start()
             # ADS-B sticky snapshot: start the background refresher at BOOT so the
             # snapshot (and the pre-gzipped world-view blob the hot route + /ws/adsb
@@ -360,6 +366,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import ais_sidecar  # noqa: PLC0415
 
             await ais_sidecar.stop()
+            # Tear down the MAVLink bridge (no-op if it never started).
+            from app import mavlink_sidecar  # noqa: PLC0415
+
+            await mavlink_sidecar.stop()
 
 
 def create_app() -> FastAPI:

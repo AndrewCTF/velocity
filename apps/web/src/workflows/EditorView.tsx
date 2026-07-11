@@ -131,6 +131,7 @@ function layout(blocks: WorkflowBlock[], edges: WorkflowEdge[]): { laid: Laid[];
 function nodeColors(category: BlockCategory): { fill: string; stroke: string; band: string } {
   if (category === 'source') return { fill: 'var(--accent-dim)', stroke: 'var(--accent-line)', band: 'var(--accent)' };
   if (category === 'sink') return { fill: 'var(--mag-dim)', stroke: 'var(--mag-line)', band: 'var(--mag)' };
+  if (category === 'control') return { fill: 'var(--warn-bg)', stroke: 'var(--warn-line, var(--line-2))', band: 'var(--warn)' };
   return { fill: 'var(--bg-3)', stroke: 'var(--line-2)', band: 'var(--txt-3)' };
 }
 
@@ -212,6 +213,19 @@ function LlmContractNote(): JSX.Element {
       <span className="mono">{'{memory}'}</span> — this workflow&apos;s persisted memory. per_batch
       returns one summary row; per_row processes up to 50 rows and adds an{' '}
       <span className="mono">llm</span> column per row.
+    </div>
+  );
+}
+
+function ControlContractNote(): JSX.Element {
+  return (
+    <div className="rounded-sm border border-[rgba(245,165,36,0.38)] bg-warn-bg px-2.5 py-2 text-[10.5px] text-[#fcd9a0] leading-relaxed">
+      <div className="uppercase tracking-[0.4px] text-[9.5px] mb-1">Acts on external systems</div>
+      Sends a JSON command to <em>your</em> control server. <strong>Preview never fires</strong> —
+      write commands (and drone/device dispatch) run dry and show the would-be envelope; only a real
+      run actuates. Capped at 200 dispatches/run. Set{' '}
+      <span className="mono">WORKFLOWS_CONTROL_ENABLED=0</span> to force dry-run everywhere. Wire
+      contract: <span className="mono">docs/workflows-control-blocks.md</span>.
     </div>
   );
 }
@@ -327,7 +341,7 @@ function ConfigPanel({
           <div className="text-[12px] text-txt-0 truncate">{spec.title}</div>
           <div className="mono text-[10px] text-txt-3">{block.id}</div>
         </div>
-        <Badge tone={spec.category === 'source' ? 'accent' : spec.category === 'sink' ? 'mag' : 'neutral'}>
+        <Badge tone={spec.category === 'source' ? 'accent' : spec.category === 'sink' ? 'mag' : spec.category === 'control' ? 'warn' : 'neutral'}>
           {spec.category}
         </Badge>
       </div>
@@ -336,6 +350,7 @@ function ConfigPanel({
       {block.type === 'op.python' && <PythonContractNote />}
       {block.type === 'op.sql' && <SqlContractNote />}
       {block.type === 'op.llm' && <LlmContractNote />}
+      {spec.category === 'control' && <ControlContractNote />}
 
       <div className="space-y-2.5">
         {spec.config_schema.map((f) => (
@@ -364,6 +379,7 @@ function PaletteModal({
     { key: 'source', label: 'Sources' },
     { key: 'op', label: 'Ops' },
     { key: 'sink', label: 'Sinks' },
+    { key: 'control', label: 'Control' },
   ];
   return (
     <Modal open onClose={onClose} title="Add block" width={560}>

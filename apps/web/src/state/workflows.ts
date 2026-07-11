@@ -28,7 +28,7 @@ export interface ConfigFieldSpec {
   help?: string;
 }
 
-export type BlockCategory = 'source' | 'op' | 'sink';
+export type BlockCategory = 'source' | 'op' | 'sink' | 'control';
 
 export interface BlockCatalogEntry {
   type: string;
