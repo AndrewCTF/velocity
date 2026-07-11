@@ -11,8 +11,9 @@ import { EmptyState, ViewHeader } from '../foundry/ui.js';
 
 const GROUPS: Array<{ key: BlockCategory; label: string; hint: string }> = [
   { key: 'source', label: 'Sources', hint: '0 inputs — pull live platform data into the DAG' },
-  { key: 'op', label: 'Ops', hint: '1-2 inputs — transform, filter, join, or compute' },
+  { key: 'op', label: 'Ops', hint: '0-2 inputs — transform, filter, join, compute, or call an external HTTP server' },
   { key: 'sink', label: 'Sinks', hint: '1 input — act on the result, rows pass through unchanged' },
+  { key: 'control', label: 'Control', hint: '1 input — act on EXTERNAL systems: webhooks, drones, devices via your control server' },
 ];
 
 const CONTRACTS: Record<string, { title: string; body: string }> = {
@@ -83,7 +84,7 @@ function BlockCard({ block }: { block: BlockCatalogEntry }): JSX.Element {
           <div className="text-[12px] text-txt-0">{block.title}</div>
           <div className="mono text-[10px] text-txt-3">{block.type}</div>
         </div>
-        <Badge tone={block.category === 'source' ? 'accent' : block.category === 'sink' ? 'mag' : 'neutral'}>
+        <Badge tone={block.category === 'source' ? 'accent' : block.category === 'sink' ? 'mag' : block.category === 'control' ? 'warn' : 'neutral'}>
           {block.min_inputs}-{block.max_inputs} in
         </Badge>
       </div>

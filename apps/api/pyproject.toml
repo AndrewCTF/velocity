@@ -43,6 +43,12 @@ dev = [
   "httpx>=0.27.2",
   "ruff>=0.6.8",
 ]
+# MAVLink bridge sidecar (app.mavlink_bridge). Optional: without it the bridge
+# runs log-only (echoes planned commands, no vehicle uplink). Install with
+# `pip install -e '.[mavlink]'` to command a real drone / SITL.
+mavlink = [
+  "pymavlink>=2.4.40",
+]
 
 [build-system]
 requires = ["hatchling"]
