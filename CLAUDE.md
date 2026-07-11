@@ -101,9 +101,9 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1196 passed + 1 skipped** (the skip is the opt-in live probe;
-  measured 2026-07-11 on master @ 24cdc83, up from 939 after the Workflows /
-  geolocate / City merges #24–#32).
+  Baseline: **1209 passed + 1 skipped** (the skip is the opt-in live probe;
+  measured 2026-07-11 on branch roadmap-first-users after W3 keyless alert
+  push, up from 1196 on master @ 24cdc83).
   Never commit below the baseline you inherited; update this number when you raise it.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
   = typecheck + lint + web unit + api tests in one command.

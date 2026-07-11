@@ -439,6 +439,13 @@ class Settings(BaseSettings):
     # Same local-SQLite idiom as foundry_db_path.
     workflows_db_path: str = "./data/workflows.db"
 
+    # ── Alert rules local spine (W3 keyless alert push, docs/decisions.md) ──
+    # Default (keyless) backend for standing watch rules: local SQLite next to
+    # ontology.db/history.db, same idiom. Supabase, when configured, remains
+    # the RLS-scoped remote backend for signed-in multi-tenant deployments —
+    # this path is additive, not a replacement.
+    alert_rules_db_path: str = "./data/alert_rules.db"
+
     # Optional key for the Have-I-Been-Pwned email-breach API (paid). Absent →
     # the person-OSINT HIBP connector degrades to an honest note; everything else
     # in the person layer stays keyless.

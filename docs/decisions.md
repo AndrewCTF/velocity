@@ -579,6 +579,71 @@ precedent for adding glide/dead-reckoning to the live default path — still
 banned there. Guard: the W1 replay guard test asserts ≥2-point tracks on a
 replayed window (file named in `docs/replay-flagship-plan.md`).
 
+## Keyless alert push: local rule store + Discord/webhook sinks (2026-07-11)
+
+W3 of `docs/roadmap-users-2026-07.md` ("demand rank #2, mostly wiring"). Prior
+state (verified at the time): `intel/watch.py::_list_enabled_rules` returned
+`[]` whenever `settings.supabase_url` was unset, and firing additionally
+required a browser to have opened `/ws/alerts` (which calls
+`register_session`) — so an operator-defined watch rule was dead on a keyless
+boot even though the evaluator loop itself was already started at boot
+(`watch.start()` in `main.py`'s lifespan). The 2026-07-07 ontology entry above
+had explicitly named `alert_rules` as still-503/Supabase-only, deferred to
+"Phase-4 territory" — this is that deferred work, pulled forward per the
+roadmap's demand ranking.
+
+- **Local rule store** (`intel/alert_rules_local.py`): same idiom as
+  `ontology_local.py`/`history.py` — WAL SQLite under `./data/alert_rules.db`,
+  `override_db_path()` test hook, `user_id`-scoped rows (the shared `"local"`
+  identity on a keyless boot). Two tables: `alert_rules` and an append-only
+  `alert_deliveries` log (the durable proof a sink push happened, readable via
+  `GET /api/alerts/deliveries` with no browser attached).
+- **`routes/alert_rules.py`** now selects backend on `not
+  settings.supabase_url` (the exact predicate `watch.py` already used) —
+  Supabase REST when configured (byte-for-byte unchanged behavior), the local
+  store otherwise. Auth changed from `current_user` to `current_user_or_local`
+  (the same contract revoke the ontology routes made 2026-07-07): a keyless
+  boot gets the `local` identity instead of a dead 401; a Supabase-configured
+  deployment is unchanged. `CHANNELS` gained `discord` / `webhook`, each
+  requiring a `sink_url` validated with `workflows/control.py::check_url` at
+  creation time (fail fast on a bad URL, not on first firing).
+- **`intel/watch.py::evaluate_all`**: when no session is registered AND
+  Supabase is unset, it now cheaply probes the local store
+  (`_list_enabled_rules(UserCtx("local",""), s)`) and, only if a rule exists,
+  synthesizes an implicit `local` session for that sweep — so the zero-rule
+  case (a fresh install) stays a single fast SQLite read and never touches a
+  snapshot/brief (same cost as the old no-op; the existing
+  `test_evaluate_all_noop_without_sessions` still passes unmodified). A rule
+  now fires with no WS session and no Supabase.
+- **Delivery** (`intel/watch.py::_deliver_sinks`): reuses
+  `workflows/control.py::send` (the IPv4-pinned, never-raising HTTP primitive)
+  rather than the Workflows-block `dispatch` wrapper — there is no
+  preview/dry-run or per-run dispatch budget concept for a standing alert, so
+  bypassing that layer is deliberate, not an oversight. Discord gets
+  `{"content": "[label] message"}` (its incoming-webhook contract); generic
+  `webhook` gets the `alert_object` props as a `{"type": "watch.alert", ...}`
+  envelope. Every attempt — success or failure — is logged to
+  `alert_deliveries`, isolated so a bad sink can never stall the sweep
+  (mirrors `_persist_firing` / `_maybe_cue`).
+- Verified live (not just unit-tested): a rule created in the local store,
+  evaluated with zero registered sessions and default (blank) Supabase
+  settings, delivered a real HTTP POST to a real localhost receiver and logged
+  the attempt — see the guard tests below for the mocked-network version of
+  the same path.
+- Guards: `apps/api/tests/test_watch.py` (`test_list_enabled_rules_reads_local_store_when_supabase_unset`,
+  `test_evaluate_all_fires_keyless_local_rule_and_logs_delivery`),
+  `apps/api/tests/test_alert_rules.py` (keyless CRUD + the Supabase-configured
+  path kept exercised via targeted `get_settings` patching — `get_settings` is
+  `@lru_cache(maxsize=1)` process-wide, so `monkeypatch.setenv` cannot move it
+  once memoized; patch the name each module imports instead).
+- Not done (named, not silently dropped): email channel is still unimplemented
+  (route validates it, nothing sends it); no retry/backoff on a failed sink
+  POST (logged as a failure, not retried — a flaky notifier is worse than
+  none, per the roadmap's kill criterion, so this stays a future increment
+  rather than rushed); no per-rule rate limiting on delivery (a loitering
+  contact still only fires on ENTER/EXIT transitions, so this is bounded by
+  the existing no-spam geofence design, not a new gap).
+
 ## Lessons from past sessions (post-mortems)
 
 ### Never claim coverage/parity without a measurement
