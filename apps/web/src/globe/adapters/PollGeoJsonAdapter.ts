@@ -3,19 +3,25 @@ import type { LayerAdapter, AdapterCtx } from './types.js';
 import {
   aircraftStyle,
   airportStyle,
+  baseStyle,
   cameraStyle,
   fireStyle,
   jammingPolygonStyle,
   portStyle,
   quakeStyle,
+  tfrPolygonStyle,
   vesselStyle,
+  warningStyle,
 } from './styles.js';
 import {
   labelFor,
   aircraftLabelText,
   airportLabelText,
+  baseLabelText,
   portLabelText,
+  tfrLabelText,
   vesselLabelText,
+  warningLabelText,
 } from './labelStyle.js';
 import {
   resolveAircraftFamily,
@@ -228,6 +234,9 @@ export type StyleKind =
   | 'camera'
   | 'airport'
   | 'port'
+  | 'tfr'
+  | 'base'
+  | 'warning'
   | 'generic';
 
 interface Props {
@@ -1380,9 +1389,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     props: Record<string, unknown>,
     polygon?: PolygonGeometry,
   ): void {
-    // Polygon geometry path: only jamming uses this today.
-    if (polygon && this.props.styleKind === 'jamming') {
-      const { fillColor, outlineColor, alpha } = jammingPolygonStyle(props);
+    // Polygon geometry path: jamming cells + TFR airspace restrictions.
+    if (polygon && (this.props.styleKind === 'jamming' || this.props.styleKind === 'tfr')) {
+      const { fillColor, outlineColor, alpha } =
+        this.props.styleKind === 'tfr' ? tfrPolygonStyle(props) : jammingPolygonStyle(props);
       const outerRing = polygon.coordinates[0] ?? [];
       // Flatten [lon, lat] pairs into the flat array Cesium.Cartesian3.fromDegreesArray expects.
       const flat = outerRing.flatMap(([pLon, pLat]) => [pLon, pLat]);
@@ -1394,6 +1404,18 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         height: 0,
         classificationType: Cesium.ClassificationType.TERRAIN,
       };
+      // TFR polygons carry a small facility/notam_id label (jamming cells stay
+      // unlabeled — hundreds of overlapping hexagons would be unreadable text
+      // soup). `kind: 'tfr'` already rides along in `properties: props` above
+      // (the backend stamps it), so the entity stays clickable/identifiable in
+      // the EntityPanel exactly like every other layer.
+      if (this.props.styleKind === 'tfr') {
+        const labelText = tfrLabelText(props);
+        if (labelText) {
+          opts.label = labelFor(labelText);
+          opts.name = labelText;
+        }
+      }
       return;
     }
 
@@ -1514,6 +1536,42 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         }
         break;
       }
+      case 'base': {
+        // Military base — category SVG by branch (air/naval/army), same
+        // zoom-gated static-reference-marker treatment as airport/port.
+        const s = baseStyle(props);
+        opts.billboard = {
+          image: s.imageUri,
+          scale: s.scale,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
+        };
+        const labelText = baseLabelText(props);
+        if (labelText) {
+          opts.label = labelFor(labelText);
+          opts.name = labelText;
+        }
+        break;
+      }
+      case 'warning': {
+        // NGA naval broadcast warning — triangle glyph, distinct red mine
+        // glyph when props.mine is true. Global layer (no zoom-gate DDC —
+        // 386 active warnings worldwide is cheap to keep resident).
+        const s = warningStyle(props);
+        opts.billboard = {
+          image: s.imageUri,
+          scale: s.scale,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        };
+        const labelText = warningLabelText(props);
+        if (labelText) {
+          opts.label = labelFor(labelText);
+          opts.name = labelText;
+        }
+        break;
+      }
       default:
         opts.point = { color: Cesium.Color.WHITE, pixelSize: 4 };
     }
@@ -1595,6 +1653,27 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           const { color, pixelSize } = jammingStyle(props);
           e.point.color = new Cesium.ConstantProperty(color);
           e.point.pixelSize = new Cesium.ConstantProperty(pixelSize);
+        }
+        break;
+      }
+      case 'tfr': {
+        if (e.polygon) {
+          const { fillColor, outlineColor, alpha } = tfrPolygonStyle(props);
+          e.polygon.material = new Cesium.ColorMaterialProperty(
+            Cesium.Color.fromCssColorString(fillColor).withAlpha(alpha),
+          );
+          e.polygon.outlineColor = new Cesium.ConstantProperty(
+            Cesium.Color.fromCssColorString(outlineColor),
+          );
+        }
+        const labelText = tfrLabelText(props);
+        if (labelText && e.name !== labelText) {
+          if (e.label) {
+            e.label.text = new Cesium.ConstantProperty(labelText);
+          } else {
+            e.label = new Cesium.LabelGraphics(labelFor(labelText));
+          }
+          e.name = labelText;
         }
         break;
       }

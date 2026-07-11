@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { useAlerts, useImagery, useSim } from '../state/stores.js';
+import type { ImageryMode } from '../state/stores.js';
 import { useAoi } from '../state/aoi.js';
 import { AppSwitcher } from '../shell/AppSwitcher.js';
 import { AoiSelector } from './AoiSelector.js';
@@ -70,13 +71,11 @@ export function CommandBar({
         <AoiSelector onPick={onPickAoi} />
       </div>
 
-      {/* 3D satellite imagery toggle. Keyless: sat tiles + terrain come from
-          our own cached proxies; an ion token only adds OSM Buildings. */}
+      {/* Basemap picker. '2d-dark' and '3d-sat' are keyless proxied stacks
+          (ion token only adds OSM Buildings on top of 3d-sat); the rest are
+          third-party imagery/topo basemaps streamed direct from the browser. */}
       <div className={CELL}>
-        <ImageryToggle
-          mode={imageryMode}
-          onToggle={() => setImageryMode(imageryMode === '3d-sat' ? '2d-dark' : '3d-sat')}
-        />
+        <BasemapPicker mode={imageryMode} onChange={setImageryMode} />
       </div>
 
       {/* simulation mode toggle — browser-side war-game overlay */}
@@ -304,39 +303,68 @@ const SEV_COLOR: Record<string, string> = {
   critical: 'text-alert',
 };
 
+// Basemap picker options, in display order. Attribution strings double as
+// the option tooltip — Esri/OpenTopoMap/USGS/EOX all require it per their
+// ToS. The Cesium credit container itself stays off (dark-chrome invariant,
+// GlobeCanvas.tsx) so this tooltip is the attribution surface for now; a
+// future pass can also surface it in a persistent footer.
+const BASEMAP_OPTIONS: Array<{ value: ImageryMode; label: string; title: string }> = [
+  { value: '2d-dark', label: '2D dark', title: 'Dark Matter basemap (Carto, proxied, keyless)' },
+  {
+    value: '3d-sat',
+    label: '3D sat',
+    title: 'Keyless satellite imagery + 3D terrain (ion token adds OSM Buildings)',
+  },
+  {
+    value: 'esri-imagery',
+    label: 'Esri imagery',
+    title: 'Esri World Imagery — Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+  },
+  { value: 'esri-topo', label: 'Esri topo', title: 'Esri World Topographic Map — Esri, HERE, Garmin, FAO, NOAA, USGS' },
+  { value: 'esri-dark', label: 'Esri dark', title: 'Esri Dark Gray Canvas — Esri' },
+  {
+    value: 'opentopo',
+    label: 'OpenTopo',
+    title: 'OpenTopoMap — Map data (c) OpenStreetMap contributors, SRTM | Map style (c) OpenTopoMap (CC-BY-SA)',
+  },
+  { value: 'usgs-imagery', label: 'USGS imagery', title: 'USGS Imagery Only — USGS The National Map (public domain)' },
+  {
+    value: 'eox-s2',
+    label: 'EOX S2',
+    title: 'Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data)',
+  },
+];
+
 /**
- * Compact mono pill that flips Cesium between the dark 2D basemap and the
- * keyless satellite + terrain stack (EOX/Esri imagery, AWS terrain via our
- * cached proxies). Always enabled — an ion token only adds OSM Buildings.
+ * Compact mono basemap picker. Replaces the old binary 3D-sat toggle with a
+ * dropdown covering the two proxied/keyless stacks plus six direct
+ * third-party basemaps (docs/places-airspace-plan.md §6). Always enabled —
+ * an ion token only adds OSM Buildings on top of 3d-sat.
  */
-function ImageryToggle({
+function BasemapPicker({
   mode,
-  onToggle,
+  onChange,
 }: {
-  mode: '2d-dark' | '3d-sat';
-  onToggle: () => void;
+  mode: ImageryMode;
+  onChange: (m: ImageryMode) => void;
 }): JSX.Element {
-  const on = mode === '3d-sat';
+  // BASEMAP_OPTIONS is a non-empty literal array, so the fallback is always defined.
+  const current = BASEMAP_OPTIONS.find((o) => o.value === mode) ?? BASEMAP_OPTIONS[0]!;
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      title="Toggle satellite imagery + 3D terrain (keyless; ion token adds OSM Buildings)"
-      aria-pressed={on}
-      aria-label="Toggle 3D satellite imagery and buildings"
-      data-testid="imagery-toggle"
-      className={[
-        'mono text-[10px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
-        on
-          ? 'border-accent-line text-accent bg-accent-dim'
-          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+    <select
+      value={mode}
+      onChange={(e) => onChange(e.target.value as ImageryMode)}
+      title={current.title}
+      aria-label="Basemap"
+      data-testid="basemap-picker"
+      className="mono text-[10px] tracking-[0.6px] uppercase bg-transparent border border-line rounded-sm px-1.5 py-1 text-txt-2 hover:border-accent-line hover:text-txt-1 focus:outline-none focus:border-accent-line cursor-pointer"
     >
-      <span aria-hidden="true" className="mr-1">{on ? '◆' : '◇'}</span>
-      3D sat
-    </button>
+      {BASEMAP_OPTIONS.map((o) => (
+        <option key={o.value} value={o.value} title={o.title}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
 

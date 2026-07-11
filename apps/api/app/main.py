@@ -54,6 +54,7 @@ from app.routes import acars as acars_routes
 from app.routes import actions as actions_routes
 from app.routes import adsb as adsb_routes
 from app.routes import ai as ai_routes
+from app.routes import airspace as airspace_routes
 from app.routes import ais as ais_routes
 from app.routes import alert_rules as alert_rules_routes
 from app.routes import alerts as alerts_routes
@@ -409,8 +410,10 @@ def create_app() -> FastAPI:
     app.include_router(seismic_routes.router)
     app.include_router(events_routes.router)
     app.include_router(geocode_routes.router)
-    # Airport + seaport reference-data map overlays (keyless, like geocode).
+    # Airport + seaport + base reference-data map overlays (keyless, like geocode).
     app.include_router(places_routes.router)
+    # FAA Temporary Flight Restrictions, as GeoJSON polygons (keyless).
+    app.include_router(airspace_routes.router)
     app.include_router(cables_routes.router)
     app.include_router(space_routes.router)
     app.include_router(weather_routes.router)

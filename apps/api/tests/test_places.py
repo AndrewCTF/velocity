@@ -139,3 +139,121 @@ def test_places_route_missing_bbox_is_empty_fc(client: TestClient) -> None:
     r = client.get("/api/places/airports")
     assert r.status_code == 200
     assert r.json() == {"type": "FeatureCollection", "features": []}
+
+
+# ── bases (w5 places-airspace wave) ──────────────────────────────────────────
+
+
+def test_bases_loader_row_count() -> None:
+    assert len(places.bases()) >= 7000
+
+
+def test_bbox_bases_props_and_id() -> None:
+    fc = places.bbox_features("base", -180.0, -90.0, 180.0, 90.0, 50)
+    assert fc["type"] == "FeatureCollection"
+    assert fc["features"], "no bases anywhere"
+    f = fc["features"][0]
+    assert f["properties"]["kind"] == "base"
+    assert f["properties"]["branch"] in {"air", "naval", "army"}
+    assert f["id"].startswith("base:")
+
+
+def test_bases_route_bbox(client: TestClient) -> None:
+    r = client.get("/api/places/bases", params={"bbox": "-180,-90,180,90"})
+    assert r.status_code == 200
+    fc = r.json()
+    assert fc["type"] == "FeatureCollection"
+    assert len(fc["features"]) >= 1
+
+
+def test_bases_route_missing_bbox_is_empty_fc(client: TestClient) -> None:
+    r = client.get("/api/places/bases")
+    assert r.status_code == 200
+    assert r.json() == {"type": "FeatureCollection", "features": []}
+
+
+# ── id contract: bbox Feature.id matches app.places' own record ids ─────────
+
+
+def test_bbox_airport_feature_id_matches_airport_record() -> None:
+    fc = places.bbox_features("airport", -119.0, 33.0, -118.0, 34.0, 2000)
+    f = next(f for f in fc["features"] if f["properties"]["iata"] == "LAX")
+    assert f["id"] == "airport:LAX"
+
+
+def test_bbox_port_feature_id_is_wpi_prefixed() -> None:
+    fc = places.bbox_features("port", 4.0, 51.0, 5.0, 52.0, 2000)
+    rotterdam = next(f for f in fc["features"] if "Rotterdam" in f["properties"]["name"])
+    assert rotterdam["id"] == "port:31140"
+    assert rotterdam["properties"]["wpi"] == "31140"
+
+
+# ── detail loaders + lookups (Agent D's airports_detail/ports_detail/bases) ─
+
+
+def test_airport_by_code_matches_iata_and_icao() -> None:
+    by_iata = places.airport_by_code("LAX")
+    by_icao = places.airport_by_code("KLAX")
+    assert by_iata is not None and by_icao is not None
+    assert by_iata["icao"] == by_icao["icao"] == "KLAX"
+    # case-insensitive
+    assert places.airport_by_code("lax") == by_iata
+
+
+def test_airport_by_code_unknown_returns_none() -> None:
+    assert places.airport_by_code("ZZZZ99") is None
+
+
+def test_airport_detail_has_runways_and_ils_category() -> None:
+    detail = places.airport_detail("KJFK")
+    assert detail is not None
+    runways = detail["runways"]
+    assert len(runways) >= 1
+    assert any(r.get("ils_category") for r in runways), "expected at least one ILS category at KJFK"
+    freqs = detail["frequencies"]
+    assert len(freqs) >= 1
+    assert all({"type", "desc", "mhz"} <= set(f) for f in freqs)
+
+
+def test_port_by_wpi_rotterdam() -> None:
+    row = places.port_by_wpi("31140")
+    assert row is not None
+    assert "Rotterdam" in row["name"]
+
+
+def test_port_detail_rotterdam_has_repairs_and_drydock() -> None:
+    detail = places.port_detail("31140")
+    assert detail is not None
+    assert "repairs" in detail
+    assert "dryDock" in detail
+
+
+def test_port_detail_unknown_wpi_returns_none() -> None:
+    assert places.port_detail("999999999") is None
+    assert places.port_by_wpi("999999999") is None
+
+
+def test_places_airport_detail_route(client: TestClient) -> None:
+    r = client.get("/api/places/airport/KJFK")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["icao"] == "KJFK"
+    assert "runways" in body
+
+
+def test_places_airport_detail_route_unknown_404(client: TestClient) -> None:
+    r = client.get("/api/places/airport/ZZZZ99")
+    assert r.status_code == 404
+
+
+def test_places_port_detail_route(client: TestClient) -> None:
+    r = client.get("/api/places/port/31140")
+    assert r.status_code == 200
+    body = r.json()
+    assert "Rotterdam" in body["name"]
+    assert "repairs" in body
+
+
+def test_places_port_detail_route_unknown_404(client: TestClient) -> None:
+    r = client.get("/api/places/port/999999999")
+    assert r.status_code == 404

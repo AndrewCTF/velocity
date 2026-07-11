@@ -120,6 +120,65 @@ function buildSatImagery(): Cesium.ImageryLayer {
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
 
+// Direct-from-browser third-party basemaps (2026-07, docs/places-airspace-plan.md
+// §6). These stream straight from each host's tile server — NOT through the
+// /tiles/ proxy that buildDarkBasemap/buildSatImagery use for caching, because
+// wiring a new host into tiles.py is app/routes/tiles.py's owner's call, not
+// this picker's. A future pass can move them behind /tiles/ once that's done.
+// Axis order differs by host: Esri/USGS serve {z}/{y}/{x}; OpenTopoMap/EOX
+// serve {z}/{x}/{y} — verified live 2026-07-11 (curl -4 -sI each z3 tile, 200).
+export type ThirdPartyImageryMode = Exclude<ImageryMode, '2d-dark' | '3d-sat'>;
+
+interface ThirdPartyBasemapDef {
+  url: string;
+  maximumLevel: number;
+  // Shown in the Cesium credit container when visible, and as the picker's
+  // option tooltip (CommandBar.tsx) — each host's ToS requires attribution.
+  credit: string;
+}
+
+export const THIRD_PARTY_BASEMAPS: Record<ThirdPartyImageryMode, ThirdPartyBasemapDef> = {
+  'esri-imagery': {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    maximumLevel: 19,
+    credit: 'Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+  },
+  'esri-topo': {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    maximumLevel: 19,
+    credit: 'Esri, HERE, Garmin, FAO, NOAA, USGS',
+  },
+  'esri-dark': {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    maximumLevel: 19,
+    credit: 'Esri',
+  },
+  opentopo: {
+    url: 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
+    maximumLevel: 17,
+    credit: 'Map data: (c) OpenStreetMap contributors, SRTM | Map style: (c) OpenTopoMap (CC-BY-SA)',
+  },
+  'usgs-imagery': {
+    url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
+    maximumLevel: 16,
+    credit: 'USGS The National Map: Imagery (public domain)',
+  },
+  'eox-s2': {
+    url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg',
+    maximumLevel: 14,
+    credit: 'Sentinel-2 cloudless by EOX IT Services GmbH (Contains modified Copernicus Sentinel data)',
+  },
+};
+
+function buildThirdPartyBasemap(def: ThirdPartyBasemapDef): Cesium.ImageryLayer {
+  const provider = new Cesium.UrlTemplateImageryProvider({
+    url: def.url,
+    maximumLevel: def.maximumLevel,
+    credit: def.credit,
+  });
+  return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
+}
+
 // Imagery overlay (date-templated) drawn ON TOP of the base layer. Proxied +
 // disk-cached by the backend at /api/imagery/{provider}/* (GIBS or CDSE).
 function buildImageryOverlay(
@@ -737,6 +796,10 @@ export function GlobeCanvas({
     // 3d-sat no longer requires ion: imagery + terrain come from our own
     // keyless proxies. ion remains an optional bonus (OSM Buildings).
     const wantSat = imageryMode === '3d-sat';
+    const thirdPartyDef =
+      imageryMode === '2d-dark' || imageryMode === '3d-sat'
+        ? undefined
+        : THIRD_PARTY_BASEMAPS[imageryMode];
 
     const gen = ++stackGenRef.current;
     const stale = (): boolean => gen !== stackGenRef.current || !viewerRef.current;
@@ -762,13 +825,23 @@ export function GlobeCanvas({
       scene.requestRender();
     };
 
-    // Replace the imagery layer base. removeAll() destroys old layers; we
-    // re-add the appropriate provider for the new mode.
-    scene.imageryLayers.removeAll();
+    // Replace the imagery layer base. Add the new layer BEFORE removing the
+    // old one(s) — removeAll()-then-add() left a one-frame blank globe under
+    // requestRenderMode; snapshotting first and removing after guarantees at
+    // least one (and, once the removes land, exactly one) basemap layer is
+    // ever active.
+    const oldLayers: Cesium.ImageryLayer[] = [];
+    for (let i = 0; i < scene.imageryLayers.length; i++) {
+      oldLayers.push(scene.imageryLayers.get(i));
+    }
+    const swapInLayer = (layer: Cesium.ImageryLayer): void => {
+      scene.imageryLayers.add(layer);
+      for (const old of oldLayers) scene.imageryLayers.remove(old, true);
+    };
 
     if (wantSat) {
       // Keyless satellite basemap via our cached proxy.
-      scene.imageryLayers.add(buildSatImagery());
+      swapInLayer(buildSatImagery());
 
       // Keyless terrain via cesium-martini over /tiles/terrain.
       try {
@@ -846,9 +919,14 @@ export function GlobeCanvas({
       } else {
         scene.globe.show = true;
       }
+    } else if (thirdPartyDef) {
+      // One of the six direct-from-browser third-party basemaps (Esri/
+      // OpenTopoMap/USGS/EOX) — see THIRD_PARTY_BASEMAPS above.
+      swapInLayer(buildThirdPartyBasemap(thirdPartyDef));
+      teardownIonStack();
     } else {
-      // '2d-dark' OR '3d-sat' without an ion token → fall back to dark basemap.
-      scene.imageryLayers.add(buildDarkBasemap());
+      // '2d-dark' (default) → proxied dark basemap.
+      swapInLayer(buildDarkBasemap());
       teardownIonStack();
     }
 

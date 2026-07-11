@@ -77,3 +77,31 @@ export function portLabelText(props: Record<string, unknown>): string | null {
   const name = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
   return name || null;
 }
+
+// Resolve the label for a TFR polygon. Preference order: facility (the
+// controlling ATC facility — short and human-legible) → notam_id (always
+// present, the fallback identifier).
+export function tfrLabelText(props: Record<string, unknown>): string | null {
+  const facility = (props['facility'] as string | null | undefined)?.toString().trim() ?? null;
+  if (facility) return facility;
+  const notamId = (props['notam_id'] as string | null | undefined)?.toString().trim() ?? null;
+  return notamId || null;
+}
+
+// Resolve the label for a military-base marker: its name. Returns null when
+// unnamed.
+export function baseLabelText(props: Record<string, unknown>): string | null {
+  const name = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
+  return name || null;
+}
+
+// Resolve the label for an NGA naval warning point: "NAVAREA <n> #<msgNumber>"
+// so the operator can cross-reference the source bulletin at a glance.
+export function warningLabelText(props: Record<string, unknown>): string | null {
+  const navArea = (props['navArea'] as string | number | null | undefined) ?? null;
+  const msgNumber = (props['msgNumber'] as string | number | null | undefined) ?? null;
+  if (navArea != null && msgNumber != null) return `NAVAREA ${navArea} #${msgNumber}`;
+  if (msgNumber != null) return `#${msgNumber}`;
+  if (navArea != null) return `NAVAREA ${navArea}`;
+  return null;
+}

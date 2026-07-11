@@ -95,3 +95,6 @@ docs/superpowers/
 
 # YOLO model weights (auto-downloaded at runtime, never committed)
 *.pt
+
+# Runtime local databases (SQLite, tile cache) — never committed
+/data/

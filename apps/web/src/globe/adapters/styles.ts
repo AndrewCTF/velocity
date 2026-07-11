@@ -422,3 +422,129 @@ export function portStyle(): { imageUri: string; scale: number } {
     scale: 0.95,
   };
 }
+
+// ── TFR / airspace restriction polygons ──────────────────────────────────
+// Semi-transparent fill colored by the FAA `type` (reason) field, solid
+// outline in the same hue so a busy map still reads which restriction class
+// a shape belongs to at a glance. Unknown/unclassified types fall back to a
+// neutral gray rather than guessing a reason.
+const HEX_TFR_SECURITY = '#ef4444';   // SECURITY / VIP / Presidential — alert red
+const HEX_TFR_HAZARD = '#f59e0b';     // HAZARDS (fire, disaster) — warn amber
+const HEX_TFR_SHOW = '#38bdf8';       // AIR SHOWS / SPORTS — sky blue
+const HEX_TFR_SPACE = '#a78bfa';      // SPACE OPERATIONS — violet
+const HEX_TFR_UAS = '#2dd4bf';        // UAS / PUBLIC GATHERING — teal
+const HEX_TFR_DEFAULT = '#8b98a8';    // everything else — neutral gray
+
+export function tfrPolygonStyle(props: Record<string, unknown>): {
+  fillColor: string;
+  outlineColor: string;
+  alpha: number;
+} {
+  const type = String(props['type'] ?? '').toUpperCase();
+  let hex = HEX_TFR_DEFAULT;
+  if (type.includes('SECURITY') || type.includes('VIP') || type.includes('PRESIDENT')) {
+    hex = HEX_TFR_SECURITY;
+  } else if (type.includes('HAZARD')) {
+    hex = HEX_TFR_HAZARD;
+  } else if (type.includes('AIR SHOW') || type.includes('SPORT')) {
+    hex = HEX_TFR_SHOW;
+  } else if (type.includes('SPACE')) {
+    hex = HEX_TFR_SPACE;
+  } else if (type.includes('UAS') || type.includes('PUBLIC GATHERING')) {
+    hex = HEX_TFR_UAS;
+  }
+  return { fillColor: hex, outlineColor: hex, alpha: 0.28 };
+}
+
+// ── Military bases ───────────────────────────────────────────────────────
+// Three distinct category SVG glyphs by branch — never a bare point (CLAUDE.md
+// invariant). Shares the same rounded-tile language as airport/port markers so
+// all "place" reference layers read as one visual family, but a different
+// glyph + hue per branch keeps them tellable apart: a chevron for air, an
+// anchor for naval, a star for army. `branch` outside {air,naval,army} (a
+// future data-source surprise) falls back to the army star rather than
+// silently dropping the icon.
+const HEX_BASE_AIR = '#60a5fa';   // blue-400
+const HEX_BASE_NAVAL = '#2dd4bf'; // teal-400 (echoes the vessel/port palette)
+const HEX_BASE_ARMY = '#a3a380'; // olive-drab
+
+function baseAirSvg(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${HEX_BASE_AIR}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    <path d="M12 4.6 L12.9 11 L18 13 L18 14.3 L12.9 13.1 L12.9 16.7 L14.3 17.6 L14.3 18.7 L12 18 L9.7 18.7 L9.7 17.6 L11.1 16.7 L11.1 13.1 L6 14.3 L6 13 L11.1 11 Z"
+      fill="#0b1a3a" stroke="${PLACE_OUT}" stroke-width="0.5" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function baseNavalSvg(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${HEX_BASE_NAVAL}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    <circle cx="12" cy="5.9" r="1.8" fill="none" stroke="#04241f" stroke-width="1.5"/>
+    <line x1="12" y1="7.6" x2="12" y2="18.4" stroke="#04241f" stroke-width="1.6" stroke-linecap="round"/>
+    <line x1="8.4" y1="10" x2="15.6" y2="10" stroke="#04241f" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M6 13.4 C6 16.8 8.9 18.6 12 18.6 C15.1 18.6 18 16.8 18 13.4" fill="none" stroke="#04241f" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function baseArmySvg(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${HEX_BASE_ARMY}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    <path d="M12 4.5 13.8 9 18.5 9.6 15 12.8 16 17.5 12 15.1 8 17.5 9 12.8 5.5 9.6 10.2 9 Z"
+      fill="#1c1c12" stroke="${PLACE_OUT}" stroke-width="0.5" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+export function baseStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
+  const branch = String(props['branch'] ?? '').toLowerCase();
+  if (branch === 'naval') {
+    return { imageUri: cachedIcon('base:naval', () => placeDataUri(baseNavalSvg())), scale: 0.95 };
+  }
+  if (branch === 'army') {
+    return { imageUri: cachedIcon('base:army', () => placeDataUri(baseArmySvg())), scale: 0.95 };
+  }
+  // 'air' and any unrecognized branch value both render the air glyph — the
+  // most common branch in the Wikidata source set — rather than dropping the
+  // icon entirely.
+  return { imageUri: cachedIcon('base:air', () => placeDataUri(baseAirSvg())), scale: 0.95 };
+}
+
+// ── Naval (NGA broadcast) warnings ───────────────────────────────────────
+// A warning-triangle glyph for ordinary navigational warnings; `mine: true`
+// swaps to a visually distinct red mine glyph (a spiked circle — the
+// universal naval-mine pictogram) so the operator can spot the highest-
+// severity subset without reading the text.
+const HEX_WARNING = '#f59e0b'; // warn amber
+const HEX_MINE = '#ef4444';    // alert red
+
+function warningSvg(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <path d="M12 2.5 22 20.5H2z" fill="${HEX_WARNING}" stroke="${PLACE_OUT}" stroke-width="1.4" stroke-linejoin="round"/>
+    <line x1="12" y1="9" x2="12" y2="14.5" stroke="#1a1200" stroke-width="1.8" stroke-linecap="round"/>
+    <circle cx="12" cy="17.3" r="1.1" fill="#1a1200"/>
+  </svg>`;
+}
+
+function mineSvg(): string {
+  const spikes = [0, 45, 90, 135, 180, 225, 270, 315]
+    .map((deg) => {
+      const rad = (deg * Math.PI) / 180;
+      const x1 = 12 + Math.cos(rad) * 6.5;
+      const y1 = 12 + Math.sin(rad) * 6.5;
+      const x2 = 12 + Math.cos(rad) * 10.5;
+      const y2 = 12 + Math.sin(rad) * 10.5;
+      return `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${HEX_MINE}" stroke-width="1.8" stroke-linecap="round"/>`;
+    })
+    .join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    ${spikes}
+    <circle cx="12" cy="12" r="6.5" fill="${HEX_MINE}" stroke="${PLACE_OUT}" stroke-width="1.2"/>
+    <circle cx="9.6" cy="9.6" r="1.3" fill="#3a0000"/>
+  </svg>`;
+}
+
+export function warningStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
+  if (props['mine'] === true) {
+    return { imageUri: cachedIcon('warning:mine', () => placeDataUri(mineSvg())), scale: 1.0 };
+  }
+  return { imageUri: cachedIcon('warning:std', () => placeDataUri(warningSvg())), scale: 0.9 };
+}

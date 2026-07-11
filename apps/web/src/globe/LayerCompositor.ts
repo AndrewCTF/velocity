@@ -330,7 +330,13 @@ export class LayerCompositor {
             ? 'airport'
             : d.id === 'places.ports'
               ? 'port'
-              : styleFromEmits(d.emits);
+              : d.id === 'airspace.tfr'
+                ? 'tfr'
+                : d.id === 'places.bases'
+                  ? 'base'
+                  : d.id === 'maritime.warnings'
+                    ? 'warning'
+                    : styleFromEmits(d.emits);
       const ttl = d.refresh.ttlSec ?? 30;
       // A phone can't render/upsert the full ~13k world view every ~2 s (it
       // overheats and the main thread is too busy to interpolate, so planes
@@ -366,7 +372,11 @@ export class LayerCompositor {
         // 20000 covers the ~4.5k union whole. Mobile: always a small bbox + cap.
         bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 6000, mobile ? 2000 : 20000, mobile);
         refreshOnMove = true;
-      } else if (d.id === 'places.airports' || d.id === 'places.ports') {
+      } else if (
+        d.id === 'places.airports' ||
+        d.id === 'places.ports' ||
+        d.id === 'places.bases'
+      ) {
         // Zoom-gated reference markers: the bbox (and therefore any data) is sent
         // ONLY below the LOD altitude; above it placesBboxQuery returns null → the
         // bare endpoint → an empty FeatureCollection → nothing renders at world /

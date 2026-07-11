@@ -81,7 +81,20 @@ export const useTime = create<TimeState>((set) => ({
   setSceneMode: (m) => set({ sceneMode: m }),
 }));
 
-export type ImageryMode = '2d-dark' | '3d-sat';
+// '2d-dark' (default) and '3d-sat' are the original two proxied/keyless
+// stacks (see GlobeCanvas.tsx buildDarkBasemap/buildSatImagery). The other
+// six are direct-from-browser third-party basemaps (no backend proxy) added
+// 2026-07 — see docs/places-airspace-plan.md §6 for the tile URLs + why each
+// exists (topo/dark/imagery variety + an EOX Sentinel-2 alternative).
+export type ImageryMode =
+  | '2d-dark'
+  | '3d-sat'
+  | 'esri-imagery'
+  | 'esri-topo'
+  | 'esri-dark'
+  | 'opentopo'
+  | 'usgs-imagery'
+  | 'eox-s2';
 
 // Date-templated imagery overlay drawn on top of the base layer.
 // null = off; else a provider + layer id + UTC date (YYYY-MM-DD) + max zoom.

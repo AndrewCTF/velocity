@@ -6,12 +6,18 @@ default vessel layer for an OSINT console because it requires no setup.
 
 Returns GeoJSON normalized to the same vessel shape as AISStream so the
 PollGeoJsonAdapter / MapLibre vessel paint reuse without changes.
+
+Also: GET /api/maritime/warnings — NGA active navigational (broadcast)
+warnings, see the dedicated section near the bottom of this file (kept in the
+same module/router because `router` here is already registered in
+`main.py`; a second brand-new `maritime.py` would collide).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any
 
@@ -460,3 +466,163 @@ async def keyless_vessels(
     if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
         return full
     return viewport_filter(full, lamin, lomin, lamax, lomax, limit)
+
+
+# ── NGA navigational (broadcast) warnings ────────────────────────────────────
+# Source: https://msi.nga.mil/api/publications/broadcast-warn?status=active&output=json
+# Bare requests 503; the endpoint 200s when sent browser-like headers
+# (User-Agent, Accept, Referer) — control-tested per
+# docs/places-airspace-plan.md §3. It also occasionally 503s transiently and
+# self-clears in well under 30s, so we retry a few times with a short backoff
+# before giving up.
+#
+# Warning `text` is free-form NAVTEX-style prose; coordinates appear inline as
+# either `DD-MM.mmH DDD-MM.mmH` (decimal minutes) or `DD-MM-SSH DDD-MM-SSH`
+# (minutes+seconds), space-separated lat/lon pairs, with no structured
+# geometry field anywhere in the payload. `parse_warning_coords` extracts
+# every pair it can find; warnings with none (in-force summaries,
+# cancellations, admin notices — verified against a real 386-warning pull,
+# ~17/386 have no embedded coordinate) legitimately yield zero coordinates
+# and are dropped from the FeatureCollection (nothing fabricated).
+#
+# ASAM is NOT built here (Akamai WAF blocks even full browser headers — see
+# plan §7); this route is broadcast-warn only.
+
+MARITIME_WARNINGS_UPSTREAM = "https://msi.nga.mil/api/publications/broadcast-warn"
+
+_WARN_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+    "Referer": "https://msi.nga.mil/home",
+}
+
+_WARN_RETRIES = 3
+_WARN_BACKOFF_SEC = 2.0
+
+# Matches "DD-MM.mmmH" or "DD-MM-SSH" (H = N/S), followed by whitespace and a
+# matching longitude "DDD-MM.mmmH"/"DDD-MM-SSH" (H = E/W). Minutes may carry a
+# decimal fraction (decimal-minutes format) OR a dash-separated seconds group
+# (DMS format) — never both in the same pair.
+_COORD_RE = re.compile(
+    r"(?P<latd>\d{1,3})-(?P<latm>\d{1,2}(?:\.\d+)?)(?:-(?P<lats>\d{1,2}(?:\.\d+)?))?"
+    r"(?P<lath>[NS])\s+"
+    r"(?P<lond>\d{1,3})-(?P<lonm>\d{1,2}(?:\.\d+)?)(?:-(?P<lons>\d{1,2}(?:\.\d+)?))?"
+    r"(?P<lonh>[EW])"
+)
+
+_MINE_RE = re.compile(r"\bMINES?\b", re.IGNORECASE)
+
+MAX_COORDS_PER_WARNING = 25
+WARNING_TEXT_TRUNCATE = 500
+
+
+def _dms_to_decimal(deg: str, minutes: str, seconds: str | None, hemi: str) -> float:
+    d = float(deg)
+    m = float(minutes)
+    s = float(seconds) if seconds is not None else 0.0
+    value = d + m / 60.0 + s / 3600.0
+    if hemi in ("S", "W"):
+        value = -value
+    return value
+
+
+def parse_warning_coords(text: str) -> list[tuple[float, float]]:
+    """Pure function: extract (lon, lat) pairs from NGA warning free text.
+
+    Handles `DD-MM.mmH DDD-MM.mmH` and `DD-MM-SSH DDD-MM-SSH`. Tolerant of
+    junk / no-coordinate text (returns an empty list, never raises). Caps at
+    `MAX_COORDS_PER_WARNING` to bound huge multi-position warnings (e.g. a
+    50-rig MODU roster) into a sane number of point features.
+    """
+    if not text:
+        return []
+    out: list[tuple[float, float]] = []
+    for m in _COORD_RE.finditer(text):
+        try:
+            lat = _dms_to_decimal(
+                m.group("latd"), m.group("latm"), m.group("lats"), m.group("lath")
+            )
+            lon = _dms_to_decimal(
+                m.group("lond"), m.group("lonm"), m.group("lons"), m.group("lonh")
+            )
+        except (TypeError, ValueError):
+            continue
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            continue
+        out.append((lon, lat))
+        if len(out) >= MAX_COORDS_PER_WARNING:
+            break
+    return out
+
+
+def warning_to_features(warning: dict[str, Any]) -> list[dict[str, Any]]:
+    """Pure function: one NGA broadcast-warn record -> 0..N GeoJSON Point features."""
+    text = warning.get("text") or ""
+    coords = parse_warning_coords(text)
+    if not coords:
+        return []
+    is_mine = bool(_MINE_RE.search(text))
+    msg_number = warning.get("msgNumber")
+    msg_year = warning.get("msgYear")
+    truncated = text[:WARNING_TEXT_TRUNCATE]
+    props_base = {
+        "msgNumber": msg_number,
+        "msgYear": msg_year,
+        "navArea": warning.get("navArea"),
+        "subregion": warning.get("subregion"),
+        "text": truncated,
+        "mine": is_mine,
+        "issueDate": warning.get("issueDate"),
+        "authority": warning.get("authority"),
+        "kind": "warning",
+        "source": "nga-broadcast-warn",
+    }
+    feats: list[dict[str, Any]] = []
+    for idx, (lon, lat) in enumerate(coords):
+        feats.append(
+            {
+                "type": "Feature",
+                "id": f"warn:{msg_year}-{msg_number}-{idx}",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": dict(props_base),
+            }
+        )
+    return feats
+
+
+def parse_broadcast_warn(payload: dict[str, Any]) -> dict[str, Any]:
+    """Pure function: raw NGA JSON payload -> GeoJSON FeatureCollection."""
+    warnings = payload.get("broadcast-warn") or []
+    feats: list[dict[str, Any]] = []
+    for w in warnings:
+        feats.extend(warning_to_features(w))
+    return {"type": "FeatureCollection", "features": feats}
+
+
+@router.get("/api/maritime/warnings")
+async def maritime_warnings() -> dict[str, Any]:
+    async def load() -> dict[str, Any]:
+        client = get_client()
+        last_status: int | None = None
+        for attempt in range(_WARN_RETRIES):
+            r = await client.get(
+                MARITIME_WARNINGS_UPSTREAM,
+                params={"status": "active", "output": "json"},
+                headers=_WARN_HEADERS,
+            )
+            if r.status_code == 200:
+                try:
+                    payload = r.json()
+                except ValueError as exc:
+                    raise HTTPException(502, "nga broadcast-warn: non-JSON body") from exc
+                return parse_broadcast_warn(payload)
+            last_status = r.status_code
+            if r.status_code != 503 or attempt == _WARN_RETRIES - 1:
+                break
+            await asyncio.sleep(_WARN_BACKOFF_SEC)
+        raise HTTPException(502, f"nga broadcast-warn upstream {last_status}")
+
+    return await cache.get_or_fetch("maritime:warnings", 900.0, load)
