@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { Btn, Widget, Badge } from '../shell/instruments.js';
 import { SplatView, type CamPose } from '../studio/SplatView.js';
+import { splatCityFromSat } from './satToSplat.js';
 
 interface ReconJob {
   id: string;
@@ -45,6 +46,10 @@ export function CityApp(): JSX.Element {
   const [radiusKm, setRadiusKm] = useState(2);
   // Mesh-reported splat count for file/URL scenes (best-effort, from Spark).
   const [meshCount, setMeshCount] = useState<number | null>(null);
+  // Keyless "Splat this city" (satellite chip → feed-forward Gaussians): the
+  // in-flight job id we're polling + a status/error line for the button.
+  const [citySplatJob, setCitySplatJob] = useState<string | null>(null);
+  const [citySplatMsg, setCitySplatMsg] = useState<string | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   // Monotonic counter so a slow openJob can't clobber a scene set by a later
   // click (last-click-wins, not last-response-wins).
@@ -141,6 +146,54 @@ export function CityApp(): JSX.Element {
     const qs = new URLSearchParams({ lat: String(lat), lon: String(lon), radius: String(radiusKm) });
     window.open(`/studio?${qs.toString()}`, '_blank', 'noopener');
   }, [lat, lon, radiusKm]);
+
+  // Keyless "Splat this city": stitch a satellite chip from the keyless /tiles/sat
+  // proxy around the AOI and run it through the feed-forward recon engine — a real
+  // Gaussian splat of anywhere on Earth, no API key (satToSplat.ts).
+  const splatThisCity = useCallback(async () => {
+    setCitySplatMsg('Stitching keyless satellite chip…');
+    try {
+      const id = await splatCityFromSat(lat, lon, radiusKm);
+      setCitySplatJob(id);
+      setCitySplatMsg('Generating Gaussians (feed-forward)…');
+      void fetchJobs();
+    } catch (e) {
+      setCitySplatMsg(e instanceof Error ? e.message : String(e));
+    }
+  }, [lat, lon, radiusKm, fetchJobs]);
+
+  // Poll the in-flight city-splat job; open it in the viewer when it finishes.
+  useEffect(() => {
+    if (!citySplatJob) return;
+    let stop = false;
+    const tick = async (): Promise<void> => {
+      try {
+        const r = await apiFetch(`/api/recon/jobs/${citySplatJob}`);
+        if (!r.ok) throw new Error(`job ${r.status}`);
+        const job = (await r.json()) as ReconJob;
+        if (stop) return;
+        if (job.status === 'done') {
+          setCitySplatMsg(`Done — ${job.n_gaussians.toLocaleString()} Gaussians`);
+          setCitySplatJob(null);
+          void fetchJobs();
+          void openJob(job);
+        } else if (job.status === 'error') {
+          setCitySplatMsg(job.error || 'recon failed');
+          setCitySplatJob(null);
+        } else {
+          setCitySplatMsg(`${job.stage} · ${job.pct}%`);
+        }
+      } catch (e) {
+        if (!stop) setCitySplatMsg(e instanceof Error ? e.message : String(e));
+      }
+    };
+    const iv = window.setInterval(() => void tick(), 1500);
+    void tick();
+    return () => {
+      stop = true;
+      window.clearInterval(iv);
+    };
+  }, [citySplatJob, fetchJobs, openJob]);
 
   const doneJobs = jobs.filter((j) => j.status === 'done');
   const shownCount = scene?.splatCount ?? meshCount;
@@ -260,11 +313,29 @@ export function CityApp(): JSX.Element {
                 />
               </label>
             </div>
-            <div className="mono text-[9px] text-txt-3 mt-2 leading-tight">
-              Opens Reconstruction Studio in a new tab, prefilled — the actual training
-              runs there, not here.
+            <Btn
+              tone="accent"
+              size="sm"
+              className="mt-2 w-full"
+              onClick={() => void splatThisCity()}
+              disabled={!!citySplatJob}
+              title="Keyless: stitch a satellite chip for this AOI and generate a real Gaussian splat — anywhere on Earth, no API key"
+            >
+              {citySplatJob ? 'GENERATING…' : 'SPLAT THIS CITY (keyless satellite)'}
+            </Btn>
+            {citySplatMsg && (
+              <div
+                className="mono text-[9px] text-txt-3 mt-1.5 leading-tight break-words"
+                data-testid="city-splat-status"
+              >
+                {citySplatMsg}
+              </div>
+            )}
+            <div className="mono text-[9px] text-txt-4 mt-2 leading-tight">
+              Single-view feed-forward → a 2.5D relief splat. For multi-view training,
+              open Reconstruction Studio:
             </div>
-            <Btn tone="accent" size="sm" className="mt-2 w-full" onClick={buildFromAoi}>
+            <Btn size="sm" className="mt-1.5 w-full" onClick={buildFromAoi}>
               OPEN STUDIO →
             </Btn>
           </Widget>

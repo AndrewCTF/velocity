@@ -5,6 +5,7 @@ import {
   useTime,
   useAlerts,
   useFilters,
+  useImagery,
   matchesFilterClauses,
   type FilterClause,
   type FilterFacet,
@@ -116,6 +117,18 @@ describe('useFilters', () => {
     useFilters.getState().toggleClause('squawk', '7700', 'only');
     expect(useFilters.getState().isActive('squawk', '7700', 'only')).toBe(true);
     expect(useFilters.getState().isActive('squawk', '7700', 'not')).toBe(false);
+  });
+});
+
+describe('useImagery lod1 auto-fill toggle', () => {
+  beforeEach(() => useImagery.setState({ lod1Auto: false }));
+
+  it('defaults off and toggles the keyless auto-fill flag', () => {
+    expect(useImagery.getState().lod1Auto).toBe(false);
+    useImagery.getState().setLod1Auto(true);
+    expect(useImagery.getState().lod1Auto).toBe(true);
+    useImagery.getState().setLod1Auto(false);
+    expect(useImagery.getState().lod1Auto).toBe(false);
   });
 });
 

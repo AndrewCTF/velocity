@@ -128,6 +128,12 @@ interface ImageryState {
   lod1Here: boolean;
   requestLod1Here: () => void;
   clearLod1Here: () => void;
+  // Keyless auto-fill: when on, GlobeCanvas extrudes OSM buildings for the
+  // current viewport every time the camera settles below the visible-buildings
+  // altitude — so panning across any city fills in 3D with no clicking. Reuses
+  // the same replace-in-place loader as 'here' (one district shown at a time).
+  lod1Auto: boolean;
+  setLod1Auto: (on: boolean) => void;
   // Events-anywhere focus: the operator-chosen location + search radius (km).
   eventsLocation: EventsLocation | null;
   eventsRadiusKm: number;
@@ -156,6 +162,8 @@ export const useImagery = create<ImageryState>((set) => ({
   lod1Here: false,
   requestLod1Here: () => set({ lod1Here: true }),
   clearLod1Here: () => set({ lod1Here: false }),
+  lod1Auto: false,
+  setLod1Auto: (on) => set({ lod1Auto: on }),
   eventsLocation: null,
   eventsRadiusKm: 500,
   setEventsLocation: (l) => set({ eventsLocation: l }),
@@ -172,6 +180,12 @@ export const useImagery = create<ImageryState>((set) => ({
     })),
   clearFlyTo: () => set({ flyTo: null }),
 }));
+
+// DEV-only handle so the imagery/3D-buildings state is drivable from the console
+// and E2E (mirrors __useSelection / __useAlerts / __useFilters above).
+if (typeof window !== 'undefined' && import.meta.env?.DEV) {
+  (window as unknown as { __useImagery: typeof useImagery }).__useImagery = useImagery;
+}
 
 export type WsStatus = 'connecting' | 'open' | 'closed';
 

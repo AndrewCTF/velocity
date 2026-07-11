@@ -123,6 +123,21 @@ describe('CityApp', () => {
     expect(screen.getByText(/no scene loaded/i)).toBeInTheDocument();
   });
 
+  it('offers the keyless "Splat this city" satellite→Gaussian action', async () => {
+    mockedFetch.mockImplementation(async (url: string) => {
+      if (url.toString().includes('/api/recon/jobs')) return jsonResponse({ jobs: [] });
+      return jsonResponse({});
+    });
+
+    render(<CityApp />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/no finished recon jobs yet/i)).toBeInTheDocument(),
+    );
+    // The whole-world keyless splat path (satToSplat.ts) is surfaced as a button.
+    expect(screen.getByText(/splat this city/i)).toBeInTheDocument();
+  });
+
   it('loads a recon job into the viewer on click and shows the source chip', async () => {
     mockedFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       const u = url.toString();

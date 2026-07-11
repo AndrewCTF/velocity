@@ -59,6 +59,11 @@ const GOOGLE_3D_MAX_CAMERA_HEIGHT_M = 30_000;
 // draw entirely. Below it (city / street scale) they paint as before.
 const OSM_BUILDINGS_MAX_CAMERA_HEIGHT_M = 100_000;
 
+// Auto-fill won't refetch until the view centre has moved at least this far
+// (degrees) — ~half the backend's clamped district span (MAX_BBOX_SPAN 0.09),
+// so panning within one district reuses what's already extruded.
+const LOD1_AUTO_MIN_MOVE_DEG = 0.045;
+
 // Hide the OSM buildings tileset when the camera is too high to see it.
 // No-ops when the show state didn't change, so it's safe to call from
 // camera.changed under requestRenderMode (render only requested on flips).
@@ -181,6 +186,7 @@ export function GlobeCanvas({
   const lod1Aoi = useImagery((s) => s.lod1Aoi);
   const lod1Here = useImagery((s) => s.lod1Here);
   const clearLod1Here = useImagery((s) => s.clearLod1Here);
+  const lod1Auto = useImagery((s) => s.lod1Auto);
   const flyTo = useImagery((s) => s.flyTo);
   const clearFlyTo = useImagery((s) => s.clearFlyTo);
   const gibsLayerRef = useRef<Cesium.ImageryLayer | null>(null);
@@ -225,6 +231,68 @@ export function GlobeCanvas({
     }
     clearLod1Here();
   }, [lod1Here, clearLod1Here]);
+
+  // Keyless AUTO-FILL: while lod1Auto is on, extrude OSM buildings for the
+  // current viewport every time the camera settles below the visible-buildings
+  // altitude — so panning across any city on Earth fills in 3D with no clicking
+  // and no API key (footprints from public Overpass mirrors, backend-cached
+  // 12h). Debounced + move-distance-gated so a settle-storm doesn't hammer the
+  // mirrors; reuses loadLod1Bbox's replace-in-place semantics (one district
+  // shown at a time → bounded memory, and revisits hit the 12h cache).
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !lod1Auto) return;
+    let timer: number | null = null;
+    let inFlight = false;
+    let lastCenter: { lon: number; lat: number } | null = null;
+
+    const maybeLoad = (): void => {
+      if (viewer.isDestroyed() || inFlight) return;
+      const c = viewer.camera.positionCartographic;
+      if (!c || c.height >= OSM_BUILDINGS_MAX_CAMERA_HEIGHT_M) return;
+      const rect = viewer.camera.computeViewRectangle();
+      let bbox: [number, number, number, number];
+      if (rect) {
+        bbox = [
+          Cesium.Math.toDegrees(rect.west),
+          Cesium.Math.toDegrees(rect.south),
+          Cesium.Math.toDegrees(rect.east),
+          Cesium.Math.toDegrees(rect.north),
+        ];
+      } else {
+        const lon = Cesium.Math.toDegrees(c.longitude);
+        const lat = Cesium.Math.toDegrees(c.latitude);
+        bbox = [lon - 0.04, lat - 0.04, lon + 0.04, lat + 0.04];
+      }
+      const center = { lon: (bbox[0] + bbox[2]) / 2, lat: (bbox[1] + bbox[3]) / 2 };
+      // Skip a refetch until the view has moved ~half a clamped tile — otherwise
+      // every tiny settle re-hits Overpass for essentially the same district.
+      if (lastCenter) {
+        const moved =
+          Math.abs(center.lon - lastCenter.lon) >= LOD1_AUTO_MIN_MOVE_DEG ||
+          Math.abs(center.lat - lastCenter.lat) >= LOD1_AUTO_MIN_MOVE_DEG;
+        if (!moved) return;
+      }
+      lastCenter = center;
+      inFlight = true;
+      loadLod1Bbox(viewer, bbox)
+        .catch((e) => console.warn('lod1 auto-fill failed:', e))
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+
+    const onSettle = (): void => {
+      if (timer != null) window.clearTimeout(timer);
+      timer = window.setTimeout(maybeLoad, 500);
+    };
+    viewer.camera.moveEnd.addEventListener(onSettle);
+    maybeLoad(); // fill wherever the camera already is the moment auto is enabled
+    return () => {
+      if (timer != null) window.clearTimeout(timer);
+      viewer.camera.moveEnd.removeEventListener(onSettle);
+    };
+  }, [lod1Auto]);
 
   // Events-anywhere: fly the camera to an operator-chosen point. One-shot
   // request from useImagery (ImageryControl city-search / lat-lon / event

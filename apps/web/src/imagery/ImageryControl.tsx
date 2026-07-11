@@ -114,6 +114,8 @@ export function ImageryControl() {
   const lod1Aoi = useImagery((s) => s.lod1Aoi);
   const setLod1Aoi = useImagery((s) => s.setLod1Aoi);
   const requestLod1Here = useImagery((s) => s.requestLod1Here);
+  const lod1Auto = useImagery((s) => s.lod1Auto);
+  const setLod1Auto = useImagery((s) => s.setLod1Auto);
   const eventsLocation = useImagery((s) => s.eventsLocation);
   const setEventsLocation = useImagery((s) => s.setEventsLocation);
   const eventsRadiusKm = useImagery((s) => s.eventsRadiusKm);
@@ -635,6 +637,18 @@ export function ImageryControl() {
         >
           Load 3D buildings here
         </Btn>
+        <label
+          className="flex items-center gap-2 cursor-pointer select-none"
+          title="Keyless: auto-extrude OSM buildings for the current view every time the camera settles — pan across any city and it fills in 3D, no clicking"
+        >
+          <input
+            type="checkbox"
+            checked={lod1Auto}
+            onChange={(e) => setLod1Auto(e.target.checked)}
+            className="accent-accent"
+          />
+          <MicroLabel>Auto-fill as I pan (keyless)</MicroLabel>
+        </label>
         <div className="flex flex-col gap-1">
           <MicroLabel>War-damage 3D</MicroLabel>
           <select
