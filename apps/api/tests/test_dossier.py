@@ -107,8 +107,11 @@ async def test_dossier_merges_db_history_with_live_fix(tmp_path) -> None:
     assert res["found"] is True
     # 20 DB + 1 live (the live fix is far in time from every DB row → no dedup).
     assert res["track"]["fixes"] == 21
-    # Freshest fix wins for last_fix + identity comes from the live tier.
-    assert res["last_fix"]["age_s"] <= 5
+    # Freshest fix wins for last_fix: it must be the live fix (lon 20 / lat 51),
+    # not a staler DB row (lon ~10 / lat 50). Asserted by position rather than a
+    # wall-clock age bound — the old `age_s <= 5` flaked on slow/loaded CI where
+    # the test's own elapsed time pushed the live fix's age past 5 s.
+    assert (res["last_fix"]["lon"], res["last_fix"]["lat"]) == (20.0, 51.0)
     assert res["callsign"] == "LIVE99"
 
 
