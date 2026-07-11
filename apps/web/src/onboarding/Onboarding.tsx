@@ -3,6 +3,7 @@
 // live, then gets out of the way. Style mirrors SettingsModal (bg-bg-1 card,
 // mono type, accent-line focus). Re-openable from Settings via `resetOnboarding`.
 import { useEffect, useState } from 'react';
+import { MousePointerClick, Radar, Settings2, Waypoints, type LucideIcon } from 'lucide-react';
 
 const SEEN_KEY = 'velocity.onboarded.v1';
 
@@ -34,12 +35,14 @@ export function resetOnboarding(): void {
 interface Step {
   tag: string;
   title: string;
+  icon: LucideIcon;
   body: JSX.Element;
 }
 
 const STEPS: Step[] = [
   {
     tag: 'Welcome',
+    icon: Radar,
     title: 'A live OSINT intelligence console',
     body: (
       <>
@@ -53,6 +56,7 @@ const STEPS: Step[] = [
   },
   {
     tag: 'The map',
+    icon: MousePointerClick,
     title: 'Click anything to interrogate it',
     body: (
       <>
@@ -66,6 +70,7 @@ const STEPS: Step[] = [
   },
   {
     tag: 'Analysis',
+    icon: Waypoints,
     title: 'From raw feeds to sense-making',
     body: (
       <>
@@ -79,6 +84,7 @@ const STEPS: Step[] = [
   },
   {
     tag: 'Make it yours',
+    icon: Settings2,
     title: 'Keys, layout & local AI live in Settings',
     body: (
       <>
@@ -116,7 +122,7 @@ export function Onboarding({ onClose }: { onClose: () => void }): JSX.Element | 
 
   return (
     <div
-      className="fixed inset-0 z-[2500] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[2500] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={finish}
       role="dialog"
       aria-modal="true"
@@ -140,9 +146,14 @@ export function Onboarding({ onClose }: { onClose: () => void }): JSX.Element | 
         </div>
 
         <div className="px-5 py-4">
-          <h2 className="mono text-[15px] font-semibold text-txt-0 leading-snug">
-            {step.title}
-          </h2>
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-sm border border-line-2 bg-bg-2">
+              <step.icon aria-hidden className="h-[18px] w-[18px] text-accent" strokeWidth={1.75} />
+            </span>
+            <h2 className="mono text-[15px] font-semibold text-txt-0 leading-snug">
+              {step.title}
+            </h2>
+          </div>
           <p className="mono text-[12px] text-txt-2 leading-relaxed mt-2.5">{step.body}</p>
         </div>
 
