@@ -37,6 +37,8 @@ export function HomeView(): JSX.Element {
   const failed24h = summary?.failed_builds_24h ?? 0;
   const lastBuild = summary?.recent_builds[0];
   const runningCount = (summary?.recent_builds ?? []).filter((b) => b.status === 'running').length;
+  const monitorCount = summary?.monitors ?? 0;
+  const monitorEvents24h = summary?.monitor_events_24h ?? 0;
 
   return (
     <div className="p-5 space-y-4">
@@ -119,7 +121,28 @@ export function HomeView(): JSX.Element {
               <Btn size="sm" onClick={() => navigate('pipeline')}>⋔ New transform</Btn>
               <Btn size="sm" disabled={staleNodes.length === 0} onClick={() => void buildPipeline(true)}>Build stale{staleNodes.length ? ` (${staleNodes.length})` : ''}</Btn>
               <Btn size="sm" onClick={() => setView('ontology')}>◈ Sync bindings</Btn>
+              <Btn size="sm" className="col-span-2" onClick={() => navigate('datasets')}>▤ Query a dataset (SQL)</Btn>
             </div>
+          </Widget>
+
+          <Widget title="Monitor activity" {...(monitorEvents24h ? { count: monitorEvents24h } : {})}>
+            {monitorCount === 0 ? (
+              <div className="flex items-center gap-2 text-[11px] text-txt-3">
+                <StatusDot tone="neutral" /> no monitors configured — add one from a dataset&apos;s Monitors tab
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate('datasets')}
+                className="w-full flex items-center justify-between gap-2 text-left hover:opacity-80"
+              >
+                <span className="flex items-center gap-2 text-[11px] text-txt-1">
+                  <StatusDot tone={monitorEvents24h > 0 ? 'accent' : 'ok'} />
+                  {monitorCount} monitor{monitorCount === 1 ? '' : 's'} watching
+                </span>
+                <span className="mono text-[11px] text-txt-0 tabular-nums">{monitorEvents24h} event{monitorEvents24h === 1 ? '' : 's'} (24h)</span>
+              </button>
+            )}
           </Widget>
 
           <Widget title="Staleness" {...(staleNodes.length ? { count: staleNodes.length } : {})}>

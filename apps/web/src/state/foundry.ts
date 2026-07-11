@@ -102,6 +102,8 @@ export interface Summary {
   objects_synced: number;
   recent_builds: Build[];
   checks_failing?: number;
+  monitors?: number;
+  monitor_events_24h?: number;
 }
 
 export interface LineageNode {
@@ -241,6 +243,75 @@ export interface PreviewData {
   quarantine_sample: Array<Record<string, unknown>>;
 }
 
+// ── geo (Map tab) ────────────────────────────────────────────────────────────
+// GET /datasets/{id}/geo — auto-detected lat/lon columns rendered as a capped
+// GeoJSON Point FeatureCollection. `properties._idx` is the source row index
+// (app/foundry/geo.py::to_feature_collection), kept so a plotted point still
+// traces back to its underlying row even after the 5000-feature cap.
+export interface GeoFeature {
+  type: 'Feature';
+  geometry: { type: 'Point'; coordinates: [number, number] };
+  properties: Record<string, unknown> & { _idx: number };
+}
+
+export interface GeoFeatureCollection {
+  type: 'FeatureCollection';
+  features: GeoFeature[];
+}
+
+export type GeoResult =
+  | { ok: true; lat_col: string; lon_col: string; count: number; features: GeoFeatureCollection }
+  | { ok: false; reason: string };
+
+// ── SQL console ──────────────────────────────────────────────────────────────
+export type SqlResult =
+  | { ok: true; columns: string[]; rows: Array<Record<string, unknown>>; row_count: number; tables: Record<string, string> }
+  | { ok: false; error: string };
+
+// ── monitors ─────────────────────────────────────────────────────────────────
+export type MonitorTrigger = 'new_version' | 'row_condition' | 'check_failed' | 'build_failed';
+export type MonitorAction = 'alert' | 'llm' | 'both';
+export type MonitorLlmTier = 'fast' | 'reason';
+export type MonitorSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
+
+export interface Monitor {
+  id: string;
+  dataset_id: string;
+  name: string;
+  trigger: MonitorTrigger;
+  condition_expr: string;
+  action: MonitorAction;
+  llm_tier: MonitorLlmTier;
+  llm_system: string;
+  llm_prompt: string;
+  severity: MonitorSeverity;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MonitorInput {
+  dataset_id: string;
+  name: string;
+  trigger: MonitorTrigger;
+  condition_expr?: string;
+  action?: MonitorAction;
+  llm_tier?: MonitorLlmTier;
+  llm_system?: string;
+  llm_prompt?: string;
+  severity?: MonitorSeverity;
+  enabled?: boolean;
+}
+
+export interface MonitorEvent {
+  id: number;
+  monitor_id: string;
+  at: string;
+  kind: string;
+  summary: string;
+  detail: Record<string, unknown>;
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 async function readJson<T>(r: Response): Promise<T> {
@@ -295,6 +366,9 @@ interface FoundryState {
   getDeadLetter: (id: string, limit?: number) => Promise<DeadLetterEntry[]>;
   getColumnLineage: (id: string) => Promise<ColumnLineage | null>;
   getDatasetDocs: (id: string) => Promise<DatasetDocs | null>;
+  // GET /datasets/{id}/geo — always HTTP 200 ({ok:false, reason} when no geo
+  // columns detected); null only on a transport/network failure.
+  loadGeo: (id: string) => Promise<GeoResult | null>;
 
   loadTransforms: () => Promise<void>;
   createTransform: (body: {
@@ -370,6 +444,18 @@ interface FoundryState {
   ) => Promise<Check | null>;
   deleteCheck: (id: string) => Promise<boolean>;
   getCheckResults: (datasetId: string, version?: number) => Promise<CheckResult[]>;
+
+  // POST /api/foundry/sql — read-only console over one or more datasets'
+  // latest rows. Same HTTP-200-with-ok:false-on-authoring-error shape as geo;
+  // null only on a transport failure.
+  runSql: (datasetIds: string[], query: string, maxRows?: number) => Promise<SqlResult | null>;
+
+  monitors: Monitor[];
+  loadMonitors: (datasetId?: string) => Promise<void>;
+  createMonitor: (body: MonitorInput) => Promise<Monitor | null>;
+  updateMonitor: (id: string, body: MonitorInput) => Promise<Monitor | null>;
+  deleteMonitor: (id: string) => Promise<boolean>;
+  loadMonitorEvents: (monitorId: string, limit?: number) => Promise<MonitorEvent[]>;
 }
 
 export const useFoundry = create<FoundryState>((set, get) => ({
@@ -382,6 +468,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
   kinds: [],
   schedules: [],
   checks: [],
+  monitors: [],
   error: null,
   lastAutoSync: null,
 
@@ -594,6 +681,18 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       return null;
     } catch {
       set({ error: 'docs: request failed' });
+      return null;
+    }
+  },
+
+  loadGeo: async (id) => {
+    try {
+      const r = await apiFetch(`/api/foundry/datasets/${id}/geo`);
+      if (r.ok) return readJson<GeoResult>(r);
+      set({ error: await detailOf(r) });
+      return null;
+    } catch {
+      set({ error: 'geo: request failed' });
       return null;
     }
   },
@@ -979,6 +1078,104 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       return [];
     } catch {
       set({ error: 'check results: request failed' });
+      return [];
+    }
+  },
+
+  runSql: async (datasetIds, query, maxRows) => {
+    try {
+      const r = await apiFetch('/api/foundry/sql', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          dataset_ids: datasetIds,
+          query,
+          ...(maxRows != null ? { max_rows: maxRows } : {}),
+        }),
+      });
+      if (r.ok) return readJson<SqlResult>(r);
+      set({ error: await detailOf(r) });
+      return null;
+    } catch {
+      set({ error: 'sql: request failed' });
+      return null;
+    }
+  },
+
+  loadMonitors: async (datasetId) => {
+    try {
+      const params = datasetId ? `?dataset_id=${datasetId}` : '';
+      const r = await apiFetch(`/api/foundry/monitors${params}`);
+      if (r.ok) set({ monitors: await readJson<Monitor[]>(r), error: null });
+      else set({ error: await detailOf(r) });
+    } catch {
+      set({ error: 'monitors: request failed' });
+    }
+  },
+
+  createMonitor: async (body) => {
+    try {
+      const r = await apiFetch('/api/foundry/monitors', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(body),
+      });
+      if (r.ok) {
+        const m = await readJson<Monitor>(r);
+        await get().loadMonitors(body.dataset_id);
+        return m;
+      }
+      set({ error: await detailOf(r) });
+      return null;
+    } catch {
+      set({ error: 'create monitor: request failed' });
+      return null;
+    }
+  },
+
+  updateMonitor: async (id, body) => {
+    try {
+      const r = await apiFetch(`/api/foundry/monitors/${id}`, {
+        method: 'PUT',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(body),
+      });
+      if (r.ok) {
+        const m = await readJson<Monitor>(r);
+        await get().loadMonitors(body.dataset_id);
+        return m;
+      }
+      set({ error: await detailOf(r) });
+      return null;
+    } catch {
+      set({ error: 'update monitor: request failed' });
+      return null;
+    }
+  },
+
+  deleteMonitor: async (id) => {
+    try {
+      const r = await apiFetch(`/api/foundry/monitors/${id}`, { method: 'DELETE' });
+      if (r.ok) {
+        set((s) => ({ monitors: s.monitors.filter((m) => m.id !== id), error: null }));
+        return true;
+      }
+      set({ error: await detailOf(r) });
+      return false;
+    } catch {
+      set({ error: 'delete monitor: request failed' });
+      return false;
+    }
+  },
+
+  loadMonitorEvents: async (monitorId, limit = 100) => {
+    try {
+      const r = await apiFetch(`/api/foundry/monitors/${monitorId}/events?limit=${limit}`);
+      if (r.ok) return readJson<MonitorEvent[]>(r);
+      set({ error: await detailOf(r) });
+      return [];
+    } catch {
+      set({ error: 'monitor events: request failed' });
       return [];
     }
   },

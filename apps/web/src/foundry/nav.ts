@@ -14,7 +14,10 @@ export type DetailTab =
   | 'lineage'
   | 'deadletter'
   | 'checks'
-  | 'docs';
+  | 'docs'
+  | 'map'
+  | 'sql'
+  | 'monitors';
 
 const VIEWS: readonly FoundryView[] = ['home', 'datasets', 'pipeline', 'builds', 'ontology'];
 const TABS: readonly DetailTab[] = [
@@ -26,6 +29,9 @@ const TABS: readonly DetailTab[] = [
   'deadletter',
   'checks',
   'docs',
+  'map',
+  'sql',
+  'monitors',
 ];
 
 function readInitial(): Pick<FoundryNavState, 'view' | 'selectedId' | 'detailTab'> {

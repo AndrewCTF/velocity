@@ -102,6 +102,7 @@ from app.routes import tiles as tiles_routes
 from app.routes import timeline as timeline_routes
 from app.routes import watch_officer as watch_officer_routes
 from app.routes import weather as weather_routes
+from app.routes import workflows as workflows_routes
 
 
 class SelectiveGZipMiddleware:
@@ -263,6 +264,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.foundry import scheduler as foundry_scheduler  # noqa: PLC0415
 
             await foundry_scheduler.start()
+            # Workflows interval schedules: re-run a workflow on its
+            # configured cadence. Idles cheaply with no schedules registered.
+            from app.workflows import scheduler as workflows_scheduler  # noqa: PLC0415
+
+            await workflows_scheduler.start()
             # Warm the CCTV catalog so the first /api/cams hits a populated
             # TtlCache instead of a cold serial upstream fan-out (~18s). Same
             # spirit as the adsb start_snapshot() pre-warm above. Fire-and-
@@ -341,6 +347,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.foundry import scheduler as foundry_scheduler  # noqa: PLC0415
 
             await foundry_scheduler.stop()
+            from app.workflows import scheduler as workflows_scheduler  # noqa: PLC0415
+
+            await workflows_scheduler.stop()
             await news_routes.stop_refresher()
             # Tear down the headless-browser tar1090 sidecar (kill the whole
             # browser process group). No-op if it never started / already gone.
@@ -453,6 +462,9 @@ def create_app() -> FastAPI:
     # Foundry substrate: BYO-data datasets/transforms/builds/ontology bindings
     # (docs/foundry-plan.md). Local SQLite, keyless.
     app.include_router(foundry_routes.router)
+    # Workflows: user-authored DAG pipelines over live platform data
+    # (docs/dashboard-workflows-plan.md). Local SQLite, keyless.
+    app.include_router(workflows_routes.router)
 
     # TiTiler COG sub-app (Track B2): XYZ tiles for any Cloud-Optimized GeoTIFF
     # (Maxar Open Data S3, future SAR delivery), so B3/B4/B5 have a universal
