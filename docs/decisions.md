@@ -564,6 +564,21 @@ Same PR also repointed the README Quick Start clone/cd at
 `osint-geospatial-console` (matching the `origin` remote and plugin
 manifest) and clarified AIS coverage caveats — hygiene only, no guard.
 
+## Replay motion: interpolation between recorded fixes is sanctioned (2026-07-11)
+
+History replay (`HistoryPlayback.ts`, installed from `Timeline.tsx`) renders
+`SampledPositionProperty` with `LinearApproximation` between RECORDED REAL
+fixes for aircraft and vessels alike. This is deliberate and stays: the
+no-synthesis rule above is scoped to the default LIVE path; replay draws
+only recorded fixes and was validated in the 2026-06-20 warsim stress test
+(`docs/velocity-stress-test-warsim-2026-06-20.md`, 24h replay PASS). Two
+failure modes this entry forbids: (1) "fixing" replay to teleport-only —
+unrequested, and a naive `CallbackProperty` swap breaks trail rendering
+(`PathGraphics` samples the position property); (2) citing replay as
+precedent for adding glide/dead-reckoning to the live default path — still
+banned there. Guard: the W1 replay guard test asserts ≥2-point tracks on a
+replayed window (file named in `docs/replay-flagship-plan.md`).
+
 ## Lessons from past sessions (post-mortems)
 
 ### Never claim coverage/parity without a measurement
