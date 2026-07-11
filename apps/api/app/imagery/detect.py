@@ -35,7 +35,13 @@ _MAX_PX = 1280
 _MIN_PX = 256
 
 # detect.py is apps/api/app/imagery/detect.py → parents[4] is the repo root.
-_SIDECAR = Path(__file__).resolve().parents[4] / "apps" / "desktop" / "sidecar" / "yolo_sidecar.py"
+# In the Docker image this file only has 3 ancestors, so parents[4] would
+# IndexError; fall back to the shallowest parent — the desktop sidecar script
+# is absent in the container anyway, and the call site below already checks
+# _SIDECAR.exists() before shelling out.
+_PARENTS = Path(__file__).resolve().parents
+_REPO_ROOT = _PARENTS[4] if len(_PARENTS) > 4 else _PARENTS[-1]
+_SIDECAR = _REPO_ROOT / "apps" / "desktop" / "sidecar" / "yolo_sidecar.py"
 _YOLO_TIMEOUT_S = 120.0  # cold model load + one frame
 
 

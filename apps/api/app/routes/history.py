@@ -64,3 +64,11 @@ async def get_timeseries(
 @router.get("/api/history/stats")
 def get_stats() -> dict:
     return history.stats()
+
+
+@router.get("/api/history/coverage")
+async def get_coverage(
+    window_hours: int = Query(720, ge=1, le=8760, description="Heat-strip look-back, hours"),
+    bucket_hours: int = Query(1, ge=1, le=24, description="Bucket width, hours"),
+) -> dict:
+    return await history.coverage(window_hours, bucket_hours)

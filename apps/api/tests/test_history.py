@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import time
 from collections.abc import Iterator
 
 import pytest
+from fastapi.testclient import TestClient
 
 import app.history as H
+from app import memtier
 from app.config import get_settings
 
 
@@ -32,6 +35,35 @@ def _retention_env(
     finally:
         monkeypatch.delenv("HISTORY_RETENTION_HOURS", raising=False)
         monkeypatch.delenv("HISTORY_RETENTION_MAX_HOURS", raising=False)
+        get_settings.cache_clear()
+
+
+@contextlib.contextmanager
+def _archive_env(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    archive_mode: bool,
+    disk_budget_gb: float | None = None,
+    retention_hours: int | None = None,
+) -> Iterator[None]:
+    """Override the archive-profile settings via env + clear the cached singleton.
+
+    Mirrors _retention_env's pattern above — history.py reads the cached
+    module-level get_settings(), so it must be cleared for env changes to take
+    effect, and cleared again on exit to not leak into the next test.
+    """
+    monkeypatch.setenv("ARCHIVE_MODE", "1" if archive_mode else "0")
+    if disk_budget_gb is not None:
+        monkeypatch.setenv("HISTORY_DISK_BUDGET_GB", str(disk_budget_gb))
+    if retention_hours is not None:
+        monkeypatch.setenv("HISTORY_RETENTION_HOURS", str(retention_hours))
+    get_settings.cache_clear()
+    try:
+        yield
+    finally:
+        monkeypatch.delenv("ARCHIVE_MODE", raising=False)
+        monkeypatch.delenv("HISTORY_DISK_BUDGET_GB", raising=False)
+        monkeypatch.delenv("HISTORY_RETENTION_HOURS", raising=False)
         get_settings.cache_clear()
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -80,6 +112,22 @@ def _reset_module(tmp_db: str) -> None:
     H._rows_written = 0
     H._flush_task = None
     H.override_db_path(tmp_db)
+
+
+async def _seed_past_cap(db: str) -> int:
+    """Reset the module against *db*, write 200 rows spanning ~200 s, flush, and
+    return the resulting file size — a baseline other tests use to pick a cap
+    small enough to force enforce_size_cap to actually drop rows."""
+    _reset_module(db)
+    now = time.time()
+    for i in range(200):
+        H._buffer.append(
+            ("aircraft", f"aircraft:v{i}", now - (200 - i), float(i % 90), 50.0, 0.0, "{}")
+        )
+    rows, H._buffer = H._buffer, []
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, H._flush_sync, rows)
+    return await loop.run_in_executor(None, os.path.getsize, db)
 
 
 # ── tests ──────────────────────────────────────────────────────────────────────
@@ -209,8 +257,6 @@ async def test_bbox_filter(tmp_path: pytest.TempPathFactory) -> None:
 async def test_size_cap_drops_oldest_keeps_newest(tmp_path: pytest.TempPathFactory) -> None:
     """enforce_size_cap drops the OLDEST rows when the file exceeds the cap;
     0 disables it and a cap above the file size is a no-op."""
-    import os
-
     db = str(tmp_path / "cap.db")
     _reset_module(db)
 
@@ -378,3 +424,124 @@ def test_stats_reports_effective_retention(monkeypatch: pytest.MonkeyPatch) -> N
         assert st["retention_hours"] == 720, "stats must report the clamped value"
         assert st["retention_max_hours"] == 720
         assert "max_bytes" in st
+
+
+# ── archive profile (W1 §1) ───────────────────────────────────────────────────
+
+
+def test_archive_mode_lifts_time_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ARCHIVE_MODE=1 uncaps the retention ceiling even though
+    HISTORY_RETENTION_MAX_HOURS is left at its normal (non-zero) default —
+    proving the archive_mode override itself, not just the pre-existing
+    ceiling=0 path (test_retention_ceiling_zero_disables_upper_bound stays
+    green, unchanged, and covers that path)."""
+    with _archive_env(monkeypatch, archive_mode=True, retention_hours=5_000):
+        assert get_settings().history_retention_max_hours > 0, (
+            "ceiling config value itself must stay non-zero — archive_mode "
+            "overrides its effect, not the setting"
+        )
+        assert H._clamped_retention_hours() == 5_000
+
+
+def test_archive_mode_uses_disk_budget_not_ram_scaled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """archive_mode sources the size cap from the fixed disk budget, not RAM —
+    a tiny available_bytes must not shrink it; the same tiny value DOES shrink
+    the cap outside archive mode (proves the branch, not just one arm)."""
+    monkeypatch.setattr(memtier, "available_bytes", lambda: 1024)  # tiny RAM
+
+    with _archive_env(monkeypatch, archive_mode=True, disk_budget_gb=50.0):
+        cap = H._size_cap_bytes(get_settings())
+        assert cap == int(50.0 * 1024**3)
+
+    with _archive_env(monkeypatch, archive_mode=False):
+        cap = H._size_cap_bytes(get_settings())
+        assert cap < get_settings().history_max_bytes, (
+            "tiny available RAM must still shrink the non-archive cap"
+        )
+
+
+def test_archive_mode_falls_back_to_history_max_bytes_when_budget_unset(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """ARCHIVE_MODE=1 with HISTORY_DISK_BUDGET_GB=0 (unset) falls back to
+    history_max_bytes rather than silently no-op'ing — with a logged warning."""
+    with _archive_env(monkeypatch, archive_mode=True, disk_budget_gb=0.0):
+        settings = get_settings()
+        with caplog.at_level("WARNING", logger="app.history"):
+            cap = H._size_cap_bytes(settings)
+        assert cap == int(settings.history_max_bytes)
+        assert any("history_disk_budget_gb=0" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_archive_mode_skips_vacuum(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory
+) -> None:
+    """§1.4: a seeded-past-cap archive-mode pass still deletes down to the cap
+    (byte cap enforced promptly) but does NOT call _vacuum(); the same scenario
+    outside archive mode DOES call _vacuum() (proves the branch, not one arm)."""
+    vacuum_calls: list[bool] = []
+    monkeypatch.setattr(H, "_vacuum", lambda: vacuum_calls.append(True))
+    monkeypatch.setattr(H, "_clamped_retention_hours", lambda: 10_000)  # no time-prune
+
+    db_archive = str(tmp_path / "vacuum_archive.db")
+    size = await _seed_past_cap(db_archive)
+    monkeypatch.setattr(H, "_size_cap_bytes", lambda settings: size // 2)
+
+    with _archive_env(monkeypatch, archive_mode=True):
+        await H._maintenance_pass()
+    assert vacuum_calls == [], "archive mode must skip the full VACUUM"
+    res = await H.query_tracks(
+        kind="aircraft", bbox=None, t_from=0, t_to=time.time() + 10, limit_ids=1000
+    )
+    ids = {t["id"] for t in res["tracks"]}
+    assert "aircraft:v0" not in ids, "byte cap must still be enforced promptly in archive mode"
+
+    db_default = str(tmp_path / "vacuum_default.db")
+    size2 = await _seed_past_cap(db_default)
+    monkeypatch.setattr(H, "_size_cap_bytes", lambda settings: size2 // 2)
+
+    with _archive_env(monkeypatch, archive_mode=False):
+        await H._maintenance_pass()
+    assert vacuum_calls == [True], "non-archive mode must still VACUUM after a cap-triggered delete"
+
+
+# ── coverage endpoint (W1 §2) ─────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_coverage_shape_and_totals(tmp_path: pytest.TempPathFactory) -> None:
+    """history.coverage() returns the documented shape and bucket counts sum to
+    the total row count for a window covering all seeded rows."""
+    db = str(tmp_path / "coverage.db")
+    _reset_module(db)
+
+    now = time.time()
+    H._buffer.append(("aircraft", "aircraft:cov1", now - 3600, 5.0, 50.0, 0.0, "{}"))
+    H._buffer.append(("aircraft", "aircraft:cov2", now - 7200, 6.0, 51.0, 0.0, "{}"))
+    H._buffer.append(("vessel", "vessel:cov1", now - 1800, 7.0, 52.0, 0.0, "{}"))
+
+    rows, H._buffer = H._buffer, []
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, H._flush_sync, rows)
+
+    result = await H.coverage(window_hours=24, bucket_hours=1)
+    assert result["recording_since"] is not None
+    assert result["total_bytes"] > 0
+    assert result["row_count"] == 3
+    assert sum(b["count"] for b in result["buckets"]) == result["row_count"]
+
+
+def test_coverage_route_returns_expected_keys(
+    client: TestClient, tmp_path: pytest.TempPathFactory
+) -> None:
+    """GET /api/history/coverage — route-level smoke test."""
+    db = str(tmp_path / "coverage_route.db")
+    _reset_module(db)
+    try:
+        r = client.get("/api/history/coverage")
+        assert r.status_code == 200
+        body = r.json()
+        assert set(body.keys()) >= {"recording_since", "total_bytes", "row_count", "buckets"}
+    finally:
+        H.override_db_path(None)

@@ -82,7 +82,11 @@ def _clamped_retention_hours() -> int:
     """
     settings = get_settings()
     hours = int(settings.history_retention_hours)
-    ceiling = int(settings.history_retention_max_hours)
+    # Archive mode overrides only how the ceiling is computed (reusing the
+    # existing ceiling=0 "no upper bound" branch below) — operators who don't
+    # want ARCHIVE_MODE to also uncap retention can still set
+    # HISTORY_RETENTION_MAX_HOURS=0 directly, unchanged.
+    ceiling = 0 if settings.archive_mode else int(settings.history_retention_max_hours)
     if hours < 1:
         hours = 1
     if ceiling > 0 and hours > ceiling:
@@ -241,6 +245,60 @@ def _flush_sync(rows: list[tuple[str, str, float, float, float, float, str]]) ->
         return 0
 
 
+def _size_cap_bytes(settings: Any) -> int:
+    """Effective byte cap for the hourly prune pass.
+
+    Default profile: sized to available RAM (config value is the hard ceiling),
+    so a small box keeps less history on disk and a big one keeps more. Archive
+    profile: the operator deliberately allocated disk for a multi-day/week
+    archive, so the cap is the fixed disk budget regardless of free RAM —
+    falling back to history_max_bytes (with a warning) if the budget wasn't set,
+    so an operator opt-in is never a silent no-op.
+    """
+    if settings.archive_mode:
+        if settings.history_disk_budget_gb > 0:
+            return int(settings.history_disk_budget_gb * 1024**3)
+        log.warning(
+            "history: archive_mode=1 but history_disk_budget_gb=0 — "
+            "falling back to history_max_bytes (%d)",
+            settings.history_max_bytes,
+        )
+        return int(settings.history_max_bytes)
+    return memtier.cache_budget_bytes(
+        "history", floor=64 * 1024**2, ceil=int(settings.history_max_bytes)
+    )
+
+
+async def _maintenance_pass() -> None:
+    """One retention pass: time-prune to the hour window, then enforce the byte
+    cap, then VACUUM so deleted pages return to the filesystem (a bare DELETE
+    leaves the file at its high-water mark — the "10 GB history.db" bug).
+
+    Factored out of _flush_loop so the hourly cycle is a single testable unit.
+    """
+    loop = asyncio.get_running_loop()
+    settings = get_settings()
+    hours = _clamped_retention_hours()
+    size_cap = _size_cap_bytes(settings)
+    deleted = await loop.run_in_executor(None, prune, hours)
+    deleted += await loop.run_in_executor(None, enforce_size_cap, size_cap)
+    if deleted:
+        # Archive mode skips the full-file VACUUM here on purpose: at archive
+        # scale (tens-to-hundreds of GB) a full VACUUM can stall the writer for
+        # minutes, and the archive is byte-budget-capped anyway (enforce_size_cap
+        # already ran above), so reclaiming disk space isn't needed until the
+        # configured budget is hit.
+        if not settings.archive_mode:
+            await loop.run_in_executor(None, _vacuum)
+        log.info(
+            "history: pruned %d rows (>%dh / >%d bytes)%s",
+            deleted,
+            hours,
+            size_cap,
+            "" if settings.archive_mode else ", vacuumed",
+        )
+
+
 async def _flush_loop() -> None:
     """Background task: drain the buffer to SQLite every _FLUSH_INTERVAL_S and
     enforce retention (prune) at most once per _PRUNE_INTERVAL_S."""
@@ -252,28 +310,9 @@ async def _flush_loop() -> None:
         if _buffer:
             rows, _buffer = _buffer, []
             _rows_written += await loop.run_in_executor(None, _flush_sync, rows)
-        # Retention: time-prune to the hour window, then enforce the byte cap,
-        # then VACUUM so deleted pages return to the filesystem (a bare DELETE
-        # leaves the file at its high-water mark — the "10 GB history.db" bug).
         if time.time() >= next_prune:
             next_prune = time.time() + _PRUNE_INTERVAL_S
-            settings = get_settings()
-            hours = _clamped_retention_hours()
-            # Byte cap sized to available RAM (config value is the hard ceiling),
-            # so a small box keeps less history on disk and a big one keeps more.
-            size_cap = memtier.cache_budget_bytes(
-                "history", floor=64 * 1024**2, ceil=int(settings.history_max_bytes)
-            )
-            deleted = await loop.run_in_executor(None, prune, hours)
-            deleted += await loop.run_in_executor(None, enforce_size_cap, size_cap)
-            if deleted:
-                await loop.run_in_executor(None, _vacuum)
-                log.info(
-                    "history: pruned %d rows (>%dh / >%d bytes), vacuumed",
-                    deleted,
-                    hours,
-                    size_cap,
-                )
+            await _maintenance_pass()
 
 
 # ── query ─────────────────────────────────────────────────────────────────────
@@ -380,6 +419,50 @@ def _timeseries_sync(bucket_sec: int, t_from: float, t_to: float) -> dict[str, A
 async def count_timeseries(bucket_sec: int, t_from: float, t_to: float) -> dict[str, Any]:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _timeseries_sync, bucket_sec, t_from, t_to)
+
+
+# ── coverage (replay ownership chip + heat-strip) ─────────────────────────────
+
+def _coverage_sync(window_hours: int, bucket_hours: int) -> dict[str, Any]:
+    """Recording-since / total size / row count / per-bucket fix counts — the
+    real-data source for the replay bar's ownership chip and heat-strip."""
+    path = _resolved_db_path()
+    try:
+        total_bytes = os.path.getsize(path)
+    except OSError:
+        total_bytes = 0
+    try:
+        con = _connect()
+        recording_since = con.execute("SELECT MIN(t) FROM positions").fetchone()[0]
+        row_count = con.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
+        bucket_sec = bucket_hours * 3600
+        now = time.time()
+        t_from = now - window_hours * 3600
+        rows = con.execute(
+            "SELECT CAST(t / ? AS INTEGER) * ? AS bkt, COUNT(*) AS n "
+            "FROM positions WHERE t >= ? GROUP BY bkt ORDER BY bkt",
+            [bucket_sec, bucket_sec, t_from],
+        ).fetchall()
+        con.close()
+    except Exception as exc:  # noqa: BLE001
+        # Signal error distinctly from an empty window (issue #16, same pattern
+        # as _query_sync/_timeseries_sync above).
+        log.exception("history: coverage error")
+        return {
+            "recording_since": None, "total_bytes": total_bytes, "row_count": 0,
+            "buckets": [], "degraded": True, "error": f"{type(exc).__name__}",
+        }
+    return {
+        "recording_since": recording_since,
+        "total_bytes": total_bytes,
+        "row_count": int(row_count),
+        "buckets": [{"t": int(bkt), "count": int(n)} for bkt, n in rows],
+    }
+
+
+async def coverage(window_hours: int, bucket_hours: int) -> dict[str, Any]:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _coverage_sync, window_hours, bucket_hours)
 
 
 # ── prune ─────────────────────────────────────────────────────────────────────

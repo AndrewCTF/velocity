@@ -1,25 +1,38 @@
 # Velocity
 
-A 3D globe that pulls a stack of open intelligence feeds into one place: live
-aircraft, ships, satellites, GPS jamming, dark vessels, earthquakes, internet
-outages, conflict events and news. It correlates them on the server instead of
-leaving you to eyeball six tabs. It also runs as an MCP server, so an AI agent
-can ask it for live data instead of guessing from its training cut-off.
+A self-hosted, keyless situation console: live aircraft, ships, satellites,
+GPS jamming, dark vessels, earthquakes, outages and conflict events, fused on
+one 3D globe and correlated on the server instead of leaving you to eyeball
+six tabs.
+
+The part that's genuinely hard to find elsewhere: it keeps history *you* own.
+Flightradar24 gates replay at 7 days free, MarineTraffic cut its free window
+to 24 hours, ADS-B Exchange killed its free API tier outright — a self-hosted
+tool just doesn't have that problem. Turn on the archive profile and Velocity
+keeps recording position history to your own disk for as long as you give it
+room, with a scrubber to rewind to any past moment. No account, no API key,
+nobody who can paywall, filter or cut off your archive.
+
+It also runs as an MCP server, so an AI agent can query the same live feeds
+instead of guessing from its training cut-off — everything it returns is
+labelled as automated output, not sold as "AI insight."
 
 **[Live demo](https://projectvelocity.org)** · [Quick start](#quick-start) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-940%2B%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
   <img src="docs/img/tour.gif" alt="Velocity: overview, zoom, and clicking an aircraft" width="880">
 </p>
 
-> **Before you get excited:** it's a single-analyst tool, state lives in memory
-> (restart = gone), AIS is densest over Northern Europe (global coverage is
-> sparser and terrestrial-biased), and the 3D satellite mode is a VRAM hog. Full
-> caveats in [Scope and limits](#scope-and-limits).
+> **Before you get excited:** it's a single-analyst tool, most operational
+> state (incidents, AOIs) lives in memory and restart clears it — only the
+> position-history archive persists to disk. AIS is densest over Northern
+> Europe (global coverage is sparser and terrestrial-biased), and the 3D
+> satellite mode is a VRAM hog. Full caveats in
+> [Scope and limits](#scope-and-limits).
 
 ## Prerequisites
 
@@ -54,9 +67,17 @@ docker compose up          # api + web + nginx on :8080
 ```
 
 Now open <http://localhost:8080>. It comes up live, planes moving, ships,
-quakes, the lot, with nothing to configure in between. The first time in, a
-short tour points out where things live; you can pull it back up whenever from
-**⚙ Settings**.
+quakes, the lot, with nothing to configure in between — and position history
+is already recording to a Docker volume, so it's still there the next time you
+run `docker compose up` (set `ARCHIVE_MODE=1` in `.env` for an open-ended
+archive instead of the default rolling window; see
+[Scope and limits](#scope-and-limits)). The first time in, a short tour points
+out where things live; you can pull it back up whenever from **⚙ Settings**.
+
+![Replay scrubber: coverage chip and archived-history strip over the live globe](docs/media/replay-scrubber.png)
+
+That strip along the bottom is the archive: drag it back an hour, a day, as
+far as your history goes, and the globe rewinds to that exact moment.
 
 <details>
 <summary><b>Local dev without Docker</b></summary>
@@ -117,14 +138,29 @@ A few things worth knowing up front, because I'd rather you read them here than
 be annoyed later:
 
 - It's built for one analyst. One optional API key, no accounts or roles.
-- Most state lives in memory. Restart the backend and the incident and AOI
-  history is gone — but the position-track replay buffer survives: it's a 7-day
-  SQLite store on disk. Durable storage for the rest (Postgres + PostGIS +
-  TimescaleDB) is Phase 2.
+- Most *operational* state — incidents, AOI selections, watch-officer briefs —
+  lives in memory and clears on backend restart; durable storage for that
+  layer is Phase 2. Position history is different: it's a SQLite store on disk
+  (`./data/history.db`), and the Docker Compose volume means it now survives
+  `docker compose down` and container restarts, not just the process. The dev
+  compose sets `HISTORY_RETENTION_HOURS=48` (2 days) so that holds out of the
+  box, with no `.env` required; set `ARCHIVE_MODE=1` (the production compose
+  profile does this by default, with a 5 GB starting budget via
+  `HISTORY_DISK_BUDGET_GB`) to size the archive against your disk instead of a
+  fixed time window.
 - AIS runs keyless and global (~33k vessels, MMSI-deduped across ShipXplorer,
   MyShipTracking, Digitraffic and Kystverket), but coverage is densest over
   Northern Europe and the Baltic and thins out elsewhere; an AISStream key fills
   in the gaps. Sparse regions still lean on the radar (SAR) layer.
+- **The two headless-Chrome sidecars are degraded under Docker, not crashed.**
+  ADS-B (OpenSky + the httpx tar1090 mirrors + ShipXplorer AIS) and the
+  regional Kystverket/Digitraffic AIS feeds are direct HTTP calls and run at
+  full strength in the container. But the tar1090 ADS-B sidecar and
+  MyShipTracking (the enabled primary keyless *wide-area* AIS source) drive a
+  real Chromium via Node, which the slim API image doesn't ship — they log a
+  warning and sit idle rather than crash the backend, so you lose their extra
+  coverage, not the app. Run bare-metal (`bash scripts/run-api.sh`) for full
+  sidecar coverage.
 - The 3D satellite view will eat your VRAM. The default 2D dark map runs on a
   laptop; check [System requirements](#system-requirements) before switching the
   heavy mode on.
@@ -299,7 +335,7 @@ VPS or the same box, and it isn't the bottleneck.
 ## Stack
 
 - **Frontend**: Vite + React 18 + TypeScript + CesiumJS + MapLibre GL JS v5.24 + Tailwind + Zustand
-- **Backend**: FastAPI (Python 3.12) + httpx + websockets. Live Phase 1 state is in-process (bounded observation store + disk tile cache); the 7-day position-track replay buffer persists to SQLite
+- **Backend**: FastAPI (Python 3.12) + httpx + websockets. Live Phase 1 state is in-process (bounded observation store + disk tile cache); the position-track replay archive persists to SQLite, on a Docker volume in Compose, with a rolling window by default or an open-ended disk-budgeted archive via `ARCHIVE_MODE`
 - **Agent access**: Model Context Protocol server (`app.mcp_server`, MCP SDK) + optional local Ollama analysis
 - **Data (Phase 2, planned)**: PostgreSQL 16 + PostGIS + TimescaleDB hypertables + Redis. A SQLite position store backs replay today; the observation store migrates per plan §locked-decisions #5
 - **Infra**: Docker Compose, nginx reverse proxy
@@ -335,17 +371,20 @@ pnpm -r typecheck
 
 ## Phase status
 
-Legend: ✅ shipped · 🚧 in progress
+This is the internal build log, in order shipped — not the pitch (that's
+above). Legend: ✅ shipped · 🚧 in progress
 
 - ✅ **Phase 0** — Foundation
 - ✅ **Phase 1** — MVP: live ADS-B / AIS / quakes / GPS-jamming layers on the globe
-- ✅ **Phase 2** — Replay + drill-in. The timeline scrubber and a 7-day history
-  buffer ship as SQLite-backed playback; drilling into any past moment works
-  today. A durable Postgres + PostGIS + TimescaleDB store is a deferred scaling
-  upgrade for multi-week retention, not a blocker
+- ✅ **Phase 2** — Replay + drill-in. The timeline scrubber and a disk-backed
+  history archive ship as SQLite-backed playback (48h rolling window by
+  default, or an open-ended disk-budgeted archive with `ARCHIVE_MODE`);
+  drilling into any past moment works today. A durable Postgres + PostGIS +
+  TimescaleDB store for the rest of the platform's state is a deferred scaling
+  upgrade, not a blocker
 - ✅ **Phase 3** — Fusion engine + alerts (correlation rules) + 2D mirror
-- 🚧 **Phase 4** — Advanced sensors + AI. MCP server + intel API (now with a
-  Claude Code plugin and `detail=short|long` tool variants), Sentinel-1 SAR
+- 🚧 **Phase 4** — Advanced sensors + agent access. MCP server + intel API
+  (now with a Claude Code plugin and `detail=short|long` tool variants), Sentinel-1 SAR
   dark-vessel detection, an autonomous watch-officer that writes cited incident
   briefs, a keyless infra/domain OSINT layer, a photo-geolocation pipeline
   (content inference + satellite 3DGS pose), a City 3D Gaussian-splat viewer,

@@ -367,6 +367,283 @@ the deleted Supabase `action_log` — needs a local-store audit rewrite) and
 **dataset branches** (linear versions today). Baseline **939 backend tests**;
 web 201; verify.sh green; pivot/window/freshness proven-live vs :8000.
 
+## OSINT World Series country catalog (2026-07-10)
+
+Harvested all 53 country toolkits listed at unishka.com/osint-world-series
+into per-country datasets (`app/osint/country_data/<code>.json`), served
+behind one generic parameterized endpoint set (`/api/osint/countries`: list,
+detail, graph preview, authenticated ingest) and linked into the shared
+ontology graph via a single `build_graph()` that mints `country:<code> ->
+resource:<code>:<slug> -> domain:<host>` — a national registry resolves to
+the SAME `domain:` node the existing digital-OSINT `investigate()` fan-out
+already enriches, so country toolkits get investigation for free instead of
+a parallel enrichment path. New **Countries** rail panel lists toolkits by
+region and ingests a country's linked graph into the Investigation canvas.
+
+Bundled in the same branch snapshot (not this PR's main scope, but shipped
+alongside): the keyless OSINT source-expansion connector modules
+(`app/osint/sources/*`) and initial Foundry upload/nav/poll UI work later
+deepened by the 2026-07-10/11 Foundry entries below.
+
+Guards: `apps/web/src/osint/CountriesPanel.test.tsx`,
+`apps/web/src/osint/OsintEntityPanel.test.tsx`. Spec: `docs/country-osint-spec.md`,
+`docs/osint-sources-plan.md`. At merge: web unit 226 passed, API pytest 1069
+passed + 1 skipped.
+
+## MCP short/long tool variants + plugin packaging (2026-07-10)
+
+**Context budget decision.** The heavy MCP tools were returning full payloads
+by default (`query_aircraft` measured 47,374 B) which burns a calling agent's
+context for little marginal signal. Tools now take `detail='short'` (a
+token-frugal digest, the DEFAULT) or `detail='long'` (the full bundle). The
+shaper (`apps/api/app/intel/shape.py`) runs entirely in the MCP layer — it
+caps long arrays to the top few items with a companion `<field>_total`,
+truncates verbose strings, and flags what it trimmed — so the guarded
+`/api/intel/*` HTTP routes are untouched and unshaped. `deep_analyze` pulls
+`long` internally so the reasoning path always sees the full picture.
+Measured savings at merge: `query_aircraft` 97%, `query_vessels` 96%,
+`aircraft_density` 95%, `gps_jamming` 91%, `anomalies` 77%; `get_situation`
+0% (already small, faithful passthrough).
+
+**Packaged as an installable plugin.** The repo became a plugin marketplace
+(`.claude-plugin/marketplace.json` → `plugin/osint-geoint/`) bundling the MCP
+server, an `osint-intel` skill, three slash commands, and an
+`osint-watch-officer` agent. The plugin launches the venv Python directly
+(`python -m app.mcp_server`) so one manifest works on Windows/macOS/Linux;
+installers ship for each (`install.sh`/`.command`, `install.ps1`/`.cmd`).
+
+Guards: `apps/api/tests/test_mcp_detail.py`,
+`apps/api/tests/test_plugin_manifest.py` (manifest resolves, POSIX installers
+keep their exec bit, `install.ps1` stays ASCII). **Not verified**: the
+Windows installers are review-validated only — no PowerShell host to execute
+them on at merge time.
+
+## Photo geolocation pipeline (2026-07-10)
+
+New `apps/ml/geolocate/`: estimates where a photo was taken **from image
+content** when EXIF/GPS metadata is stripped — the gap left by metadata-only
+geolocation tools, which return nothing on such images. Five stages, each
+tagged with an honesty level rather than claimed uniformly proven:
+A forensics (EXIF/GPS, perceptual-hash dedup, classical scene-type, pluggable
+VLM cue extraction) → B geo-prior (data-driven cue→region KB +
+log-opinion-pool fusion, worldwide, no country hardcoded) → C retrieval
+(keyless live OSM/Overpass co-occurrence, CLIP cross-view vs
+Panoramax/KartaView, DEM skyline — live but weak/OOD on rural-forest queries)
+→ D pose (render-and-compare 6-DoF pose vs a satellite-derived Gaussian
+splat/DSM, reusing `fusion/recon`'s `rpc_stereo`, DSM+shadow fallback;
+proven on WorldView-3/MVS3DM: 3.8 m / 0.15° pose recovery) → E report
+(calibrated per-level confidence with `proven`/`plumbed`/`heuristic` tags;
+**caps AOI/pose confidence to 0 under forest canopy** — a physics limit
+stated honestly rather than a guessed pin).
+
+Keyless by default; torch/GPU stages isolated to the CUDA venv (see memory
+`cuda-yolo-sidecar-env`). Guard: `apps/ml/geolocate/tests/` (107 tests,
+e.g. `test_contracts.py`, `test_report.py`, `test_crossview.py`). Architecture:
+`docs/photo-geolocation-pipeline.md`. Worked example in
+`docs/geo-assessment-testset.md` — raw evidence images intentionally NOT
+committed.
+
+## Workflows + City 3D apps, grouped navigation, Foundry deepening (2026-07-10 → 2026-07-11)
+
+Top navigation reworked into grouped tabs (Live / Analyze / Data / Product /
+3D) to make room for two new apps without flattening the tab bar further.
+
+- **Workflows** — a user-authored DAG pipeline builder over live platform
+  data. 16 block types at ship, including subprocess-sandboxed Python (CPU/
+  memory rlimits + wall-clock kill), read-only SQL over an in-memory SQLite,
+  and LLM blocks, plus per-workflow persistent memory, schedules, and run
+  history. Local SQLite store, keyless.
+- **City 3D** — a keyless gaussian-splat scene viewer. The Spark/THREE
+  viewer was EXTRACTED out of Reconstruction Studio into a shared
+  `SplatView` (`apps/web/src/studio/SplatView.tsx`) so both apps use ONE
+  implementation — do not fork a second splat renderer for either app.
+- **Foundry** deepened with a dataset map view (lat/lon autodetect), ad-hoc
+  SQL, and monitors that raise plain or LLM-summarized alerts on new
+  versions, row conditions, or failed checks.
+
+Nine frontend correctness fixes landed in the same PR; two are guarded
+permanently and must not regress:
+- **LOD1 buildings floated/sank in 3D-satellite mode.** The cesium-martini
+  terrain provider exposes no tile availability, so
+  `sampleTerrainMostDetailed` is unusable — building bases now clamp to
+  `scene.globe.getHeight`, re-clamped on every terrain tile-load drain so
+  they track the height as tiles refine coarse→fine. Verified live over
+  Beirut Dahieh: 410/410 sampled buildings settled within 2.5 m of terrain.
+  Guard: `apps/web/src/lod1/lod1Layer.test.ts`.
+- **`SplatView` must dispose its WebGL context on scene switch**
+  (`forceContextLoss` + `SparkRenderer` disposal) — without it City 3D
+  blanked after ~16 scene swaps.
+- Workflows editor block ids must stay unique against the CURRENT draft — a
+  module-level counter that reset on page reload could regenerate an
+  existing id, and the backend rejects a save with a duplicate id (422).
+
+Guards: `apps/web/src/foundry/foundry.workbench.test.tsx`,
+`apps/web/src/workflows/workflows.test.tsx`,
+`apps/web/src/state/appView.test.ts`. Runtime store `data/workflows.db` is
+gitignored, never committed. Plan doc: `docs/dashboard-workflows-plan.md`.
+
+This PR was frontend + `.gitignore` only; the backend suite (1163 passing at
+branch state) was not re-run as part of it. A wall-clock-flaky backend test
+that predated this merge slipped into master through it and was de-flaked
+the same day: `test_dossier.py::test_dossier_merges_db_history_with_live_fix`
+asserted the live fix's `age_s <= 5`, which fails on a slow/loaded CI runner;
+it now asserts by the live fix's distinct seeded position instead, since that
+was the actual intent (freshest fix wins `last_fix`, not a stale DB row).
+
+## Workflows external-actuation control blocks + MAVLink bridge (2026-07-11)
+
+**Decision: Workflows could only read/transform internal platform data; this
+adds a way to act OUTWARD.** Four new blocks in a new `control` category
+(block count 16 → 20): `op.http` (request any server; response becomes rows,
+once or per-row), `control.webhook` (POST rows to a URL), `control.drone`
+(command a drone/UAV via a ground-control server: `goto` auto-nav to each
+row's lat/lon, plus takeoff/land/rtl/orbit/follow/arm/disarm/pause), and
+`control.device` (any controllable relay/gimbal/PTZ/rover).
+
+**Safety model** (`apps/api/app/workflows/control.py`) — do not weaken any of
+these without a new operator decision:
+- Preview NEVER actuates: dry-run returns only the would-be envelope.
+- Run-wide dispatch budget (200) plus a per-block `max_dispatch` cap.
+- `WORKFLOWS_CONTROL_ENABLED=0` kill switch; optional
+  `WORKFLOWS_HTTP_ALLOW_HOSTS` allowlist.
+- Bearer auth is sourced by ENV-VAR NAME — the token itself is never stored
+  in the workflow spec. IPv4-pinned HTTP client (same reason as
+  `upstream.get_client`; see memory `host-ipv6-broken`).
+
+**MAVLink bridge** (`apps/api/app/mavlink_bridge.py`) is a ready-made control
+server translating the `drone.command` envelope into standard MAVLink for a
+vehicle or SITL. `plan_mavlink()` is a pure, testable envelope→intent
+mapping; `MavlinkLink` lazily imports `pymavlink` and **degrades to
+log-only** (echoes planned commands, sends nothing) with no `pymavlink` or
+connection string — a drone workflow can be built and rehearsed with no
+hardware. Runs as a lifespan-managed sidecar (`app/mavlink_sidecar.py`, OFF
+by default) or standalone (`python -m app.mavlink_bridge`); `pymavlink` is an
+optional extra (`pip install -e '.[mavlink]'`).
+
+Guards: `apps/api/tests/test_workflows_control.py` (19),
+`apps/api/tests/test_mavlink_bridge.py` (14). Wire contract:
+`docs/workflows-control-blocks.md`. Proven live:
+`control.drone(goto)` → the real bridge → HTTP 200, planned
+`SET_POSITION_TARGET_GLOBAL_INT` (25.28, 55.32, 120 m).
+
+PR #31 ("Workflows city foundry overhaul") merged immediately after this one
+as a squash-merge of a branch whose history had already landed on master —
+its tree is byte-identical to this commit (`git diff` against its parent is
+empty). It added no new files, code, or guards.
+
+## Keyless whole-world 3D city (2026-07-11)
+
+**Constraint: no free whole-planet Gaussian-splat STREAM exists keyless.**
+Google/Apple planet-scale 3D is keyed mesh, not splats, and ToS-restricted
+against extraction — surveyed in `docs/gaussian-splat-free-sources.md`. Two
+keyless paths shipped instead of waiting on that gap to close:
+
+1. **Globe: "Auto-fill as I pan (keyless)."** Extrudes OSM building
+   footprints (public Overpass mirrors, no key) for the current viewport
+   whenever the camera settles below 100 km, debounced and move-gated so the
+   mirrors aren't hammered. Reuses the existing replace-in-place LOD1 loader,
+   so memory stays bounded and revisits hit its 12 h cache.
+2. **City 3D: "Splat this city."** Stitches a satellite chip for any
+   lat/lon from the keyless `/tiles/sat` proxy (Sentinel-2 + Esri, no key)
+   and runs it through the EXISTING feed-forward recon engine
+   (`POST /api/recon/jobs mode=mapany`, MapAnything) to produce a real
+   Gaussian splat in the Spark viewer. No backend change — pure reuse of the
+   recon pipeline (`apps/web/src/city/satToSplat.ts`).
+
+**Honesty constraint, do not silently drop:** single-view feed-forward
+yields a 2.5D relief splat, and the UI must say so — true multi-view towers
+need per-city imagery that isn't keyless/global (Reconstruction Studio /
+`POST /api/recon/sat` cover that case instead). Recon endpoints fail closed
+unauthenticated, so local generation needs `ALLOW_UNAUTHENTICATED=1` plus the
+GPU lab (`apps/ml/fusion/.venv`).
+
+Guards: `apps/web/src/city/CityApp.test.tsx`, `apps/web/src/state/stores.test.ts`.
+Proven live: OSM auto-fill extruded 9k buildings over Manhattan with zero
+clicks; "Splat this city" over Manhattan produced 268,324 Gaussians in ~6 s.
+Same PR also repointed the README Quick Start clone/cd at
+`osint-geospatial-console` (matching the `origin` remote and plugin
+manifest) and clarified AIS coverage caveats — hygiene only, no guard.
+
+## Replay motion: interpolation between recorded fixes is sanctioned (2026-07-11)
+
+History replay (`HistoryPlayback.ts`, installed from `Timeline.tsx`) renders
+`SampledPositionProperty` with `LinearApproximation` between RECORDED REAL
+fixes for aircraft and vessels alike. This is deliberate and stays: the
+no-synthesis rule above is scoped to the default LIVE path; replay draws
+only recorded fixes and was validated in the 2026-06-20 warsim stress test
+(`docs/velocity-stress-test-warsim-2026-06-20.md`, 24h replay PASS). Two
+failure modes this entry forbids: (1) "fixing" replay to teleport-only —
+unrequested, and a naive `CallbackProperty` swap breaks trail rendering
+(`PathGraphics` samples the position property); (2) citing replay as
+precedent for adding glide/dead-reckoning to the live default path — still
+banned there. Guard: the W1 replay guard test asserts ≥2-point tracks on a
+replayed window (file named in `docs/replay-flagship-plan.md`).
+
+## Keyless alert push: local rule store + Discord/webhook sinks (2026-07-11)
+
+W3 of `docs/roadmap-users-2026-07.md` ("demand rank #2, mostly wiring"). Prior
+state (verified at the time): `intel/watch.py::_list_enabled_rules` returned
+`[]` whenever `settings.supabase_url` was unset, and firing additionally
+required a browser to have opened `/ws/alerts` (which calls
+`register_session`) — so an operator-defined watch rule was dead on a keyless
+boot even though the evaluator loop itself was already started at boot
+(`watch.start()` in `main.py`'s lifespan). The 2026-07-07 ontology entry above
+had explicitly named `alert_rules` as still-503/Supabase-only, deferred to
+"Phase-4 territory" — this is that deferred work, pulled forward per the
+roadmap's demand ranking.
+
+- **Local rule store** (`intel/alert_rules_local.py`): same idiom as
+  `ontology_local.py`/`history.py` — WAL SQLite under `./data/alert_rules.db`,
+  `override_db_path()` test hook, `user_id`-scoped rows (the shared `"local"`
+  identity on a keyless boot). Two tables: `alert_rules` and an append-only
+  `alert_deliveries` log (the durable proof a sink push happened, readable via
+  `GET /api/alerts/deliveries` with no browser attached).
+- **`routes/alert_rules.py`** now selects backend on `not
+  settings.supabase_url` (the exact predicate `watch.py` already used) —
+  Supabase REST when configured (byte-for-byte unchanged behavior), the local
+  store otherwise. Auth changed from `current_user` to `current_user_or_local`
+  (the same contract revoke the ontology routes made 2026-07-07): a keyless
+  boot gets the `local` identity instead of a dead 401; a Supabase-configured
+  deployment is unchanged. `CHANNELS` gained `discord` / `webhook`, each
+  requiring a `sink_url` validated with `workflows/control.py::check_url` at
+  creation time (fail fast on a bad URL, not on first firing).
+- **`intel/watch.py::evaluate_all`**: when no session is registered AND
+  Supabase is unset, it now cheaply probes the local store
+  (`_list_enabled_rules(UserCtx("local",""), s)`) and, only if a rule exists,
+  synthesizes an implicit `local` session for that sweep — so the zero-rule
+  case (a fresh install) stays a single fast SQLite read and never touches a
+  snapshot/brief (same cost as the old no-op; the existing
+  `test_evaluate_all_noop_without_sessions` still passes unmodified). A rule
+  now fires with no WS session and no Supabase.
+- **Delivery** (`intel/watch.py::_deliver_sinks`): reuses
+  `workflows/control.py::send` (the IPv4-pinned, never-raising HTTP primitive)
+  rather than the Workflows-block `dispatch` wrapper — there is no
+  preview/dry-run or per-run dispatch budget concept for a standing alert, so
+  bypassing that layer is deliberate, not an oversight. Discord gets
+  `{"content": "[label] message"}` (its incoming-webhook contract); generic
+  `webhook` gets the `alert_object` props as a `{"type": "watch.alert", ...}`
+  envelope. Every attempt — success or failure — is logged to
+  `alert_deliveries`, isolated so a bad sink can never stall the sweep
+  (mirrors `_persist_firing` / `_maybe_cue`).
+- Verified live (not just unit-tested): a rule created in the local store,
+  evaluated with zero registered sessions and default (blank) Supabase
+  settings, delivered a real HTTP POST to a real localhost receiver and logged
+  the attempt — see the guard tests below for the mocked-network version of
+  the same path.
+- Guards: `apps/api/tests/test_watch.py` (`test_list_enabled_rules_reads_local_store_when_supabase_unset`,
+  `test_evaluate_all_fires_keyless_local_rule_and_logs_delivery`),
+  `apps/api/tests/test_alert_rules.py` (keyless CRUD + the Supabase-configured
+  path kept exercised via targeted `get_settings` patching — `get_settings` is
+  `@lru_cache(maxsize=1)` process-wide, so `monkeypatch.setenv` cannot move it
+  once memoized; patch the name each module imports instead).
+- Not done (named, not silently dropped): email channel is still unimplemented
+  (route validates it, nothing sends it); no retry/backoff on a failed sink
+  POST (logged as a failure, not retried — a flaky notifier is worse than
+  none, per the roadmap's kill criterion, so this stays a future increment
+  rather than rushed); no per-rule rate limiting on delivery (a loitering
+  contact still only fires on ENTER/EXIT transitions, so this is bounded by
+  the existing no-spam geofence design, not a new gap).
+
 ## Lessons from past sessions (post-mortems)
 
 ### Never claim coverage/parity without a measurement
