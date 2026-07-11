@@ -12,6 +12,12 @@ services:
         required: false
     environment:
       CORS_ORIGINS: http://localhost:8080
+      # Archive profile: lift the retention clamp and size the replay store to
+      # a disk budget instead of the default in-memory-sized byte cap, so the
+      # osint_data volume below actually holds a multi-week history/AIS+ADS-B
+      # archive instead of the bounded live buffer.
+      ARCHIVE_MODE: 1
+      HISTORY_DISK_BUDGET_GB: 5
     # No source bind-mount and no --reload: the image is the deployable unit.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
     healthcheck:
@@ -19,6 +25,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    volumes:
+      # Named volume (matching web_dist's style below) so the SQLite stores
+      # (history/ontology/foundry/workflows/alert-rules) and tile cache under
+      # WORKDIR /srv survive `docker compose down` and image rebuilds.
+      - osint_data:/srv/data
 
   web-build:
     # One-shot builder: compiles the static web bundle into the shared web_dist
@@ -46,3 +57,4 @@ services:
 
 volumes:
   web_dist: {}
+  osint_data: {}

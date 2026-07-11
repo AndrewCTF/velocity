@@ -30,7 +30,12 @@ import httpx
 log = logging.getLogger("adsb_sidecar")
 
 # tools/adsb-globe-feeder sits at the repo root (this file is apps/api/app/).
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# In the Docker image this file only has 2 ancestors, so parents[3] would
+# IndexError; fall back to the shallowest parent (the sidecar node script is
+# absent in the container anyway — start() below is best-effort and no-ops
+# without node/chrome).
+_PARENTS = Path(__file__).resolve().parents
+_REPO_ROOT = _PARENTS[3] if len(_PARENTS) > 3 else _PARENTS[-1]
 _SIDECAR_DIR = _REPO_ROOT / "tools" / "adsb-globe-feeder"
 _INDEX = _SIDECAR_DIR / "index.js"
 

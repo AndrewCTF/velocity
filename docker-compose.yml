@@ -24,10 +24,23 @@ services:
         required: false
     environment:
       CORS_ORIGINS: http://localhost:8080
+      # Make the README's 48h-retention claim true for a bare `docker compose
+      # up` with no .env copied — the code default is 168h (7 days); 48h only
+      # applies automatically if .env.example got copied to .env.
+      HISTORY_RETENTION_HOURS: 48
     volumes:
       # bind-mount source so code changes hot-reload without rebuilding the image
       - ./apps/api/app:/srv/app
       - ./apps/api/tests:/srv/tests
+      # Persist the SQLite stores (history/ontology/foundry/workflows/
+      # alert-rules + the tile cache) across `docker compose down`. Named
+      # volume, not a host bind: WORKDIR is /srv and the api image runs as
+      # uid 10001 (`USER app`), but a host-owned `./data` dir isn't writable
+      # by that uid. A named volume initializes owned by the image's
+      # /srv/data mountpoint (api.Dockerfile mkdir+chown), so it stays
+      # writable. The other bind mounts above are read-only source mounts;
+      # this path is written at runtime, so it doesn't share their rationale.
+      - osint_data_dev:/srv/data
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health').read()"]
@@ -69,3 +82,6 @@ services:
     depends_on:
       - api
       - web
+
+volumes:
+  osint_data_dev: {}

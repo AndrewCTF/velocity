@@ -49,7 +49,12 @@ from .config import get_settings
 log = logging.getLogger("ais_sidecar")
 
 # tools/ sits at the repo root (this file is apps/api/app/).
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# In the Docker image this file only has 2 ancestors, so parents[3] would
+# IndexError; fall back to the shallowest parent (the feeder scripts are
+# absent in the container anyway — each feeder's start() no-ops when its
+# index.js is missing).
+_PARENTS = Path(__file__).resolve().parents
+_REPO_ROOT = _PARENTS[3] if len(_PARENTS) > 3 else _PARENTS[-1]
 _TOOLS = _REPO_ROOT / "tools"
 # Reuse the ADS-B feeder's installed playwright (no second npm install / Chromium).
 _NODE_MODULES = _TOOLS / "adsb-globe-feeder" / "node_modules"
