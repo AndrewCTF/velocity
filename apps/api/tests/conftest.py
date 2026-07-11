@@ -108,6 +108,18 @@ def _isolate_workflows_db(tmp_path: Path) -> Iterator[None]:
     workflows_store.override_db_path(None)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_alert_rules_db(tmp_path: Path) -> Iterator[None]:
+    """Point the local alert-rules store at a per-test temp file (mirrors
+    ontology/foundry/workflows) — without this every keyless-rule test would
+    write ``./data/alert_rules.db`` into the repo and see other tests' rules."""
+    from app.intel import alert_rules_local
+
+    alert_rules_local.override_db_path(str(tmp_path / "alert_rules.db"))
+    yield
+    alert_rules_local.override_db_path(None)
+
+
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     app = create_app()

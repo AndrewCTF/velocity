@@ -1,0 +1,60 @@
+# Keep the Docker build context small — only trims what neither
+# infra/docker/api.Dockerfile nor infra/docker/web.Dockerfile ever COPY.
+# Careful with globs: apps/web/public/darktiles ships thousands of tile PNGs
+# the web image needs, so image exclusions below are root-anchored, not bare.
+
+.git/
+.github/
+node_modules/
+**/node_modules/
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+**/.pytest_cache/
+.ruff_cache/
+**/.ruff_cache/
+.mypy_cache/
+**/.mypy_cache/
+.turbo/
+.vite/
+coverage/
+**/dist/
+.playwright-mcp/
+graphify-out/
+scratchpad/
+tmp/
+test_images/
+.wrangler/
+site/
+
+# Whole apps NOT referenced by either Dockerfile's COPY — apps/ml/fusion
+# alone runs tens of GB of model/training artifacts, and apps/desktop's Rust
+# target/ dir is gigabytes of Tauri build output. Neither image needs them.
+apps/ml/
+apps/desktop/
+apps/native/
+
+# Runtime data dirs (multi-GB SQLite stores + tile cache): the repo-root one
+# (WORKDIR /srv path parity) and apps/api/data/ (bare-metal dev CWD, stale
+# 2.7GB) and apps/web/data/ — plus doc/report assets that never cross into
+# either image. Root-anchored, NOT a bare `**/data/`: that also swallowed
+# apps/api/app/data/ (airports.json/ports.json/cams.yaml), which is tracked,
+# COPYed into the api image via `COPY apps/api/app ./app`, and loaded at
+# runtime by app/places.py and routes/cams.py.
+/data/
+/apps/api/data/
+/apps/web/data/
+/docs/media/
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
+/*.pdf
+/*.docx
+/*.pt
+/*_b64.txt
+/deep-research-report.md

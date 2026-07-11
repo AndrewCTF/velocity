@@ -6,6 +6,7 @@ import { flyToPosition } from '../globe/camera.js';
 import { installHistoryPlayback, type PlaybackController, type PlaybackInfo } from '../globe/HistoryPlayback.js';
 import { usePolReplay } from '../state/polReplayStore.js';
 import { MicroLabel } from '../shell/instruments.js';
+import { CoverageStrip, type Coverage } from './CoverageStrip.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -81,6 +82,11 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
   const [replay, setReplay] = useState<{ active: boolean; loading: boolean; info: PlaybackInfo | null }>(
     { active: false, loading: false, info: null },
   );
+  // Archive ownership: recording_since / total_bytes / row_count, lifted up
+  // from CoverageStrip (which owns the /api/history/coverage fetch) so the
+  // "recording since <date> · <N> GB · <M> fixes" chip can be formatted here
+  // with the same isoDay helper the day-picker already uses.
+  const [coverage, setCoverage] = useState<Coverage | null>(null);
 
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
@@ -304,6 +310,16 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
     setStamp(isoStamp(ms));
   };
 
+  // Ownership chip text — "recording since <date> · <N> GB · <M> fixes",
+  // sourced from the coverage endpoint lifted up via CoverageStrip's
+  // onCoverage callback. Falls back to the old "~7d buffer" label until the
+  // first successful response lands (or if the endpoint errors/degrades),
+  // so the chip never shows a fabricated number.
+  const ownershipChip =
+    coverage && coverage.recording_since
+      ? `recording since ${isoDay(coverage.recording_since * 1000)} · ${(coverage.total_bytes / 1024 ** 3).toFixed(1)} GB · ${coverage.row_count.toLocaleString()} fixes`
+      : `${retentionDays(retentionHours)} buffer`;
+
   return (
     <div className="h-full flex flex-col" style={{ padding: '9px 14px', gap: '7px' }}>
       {/* ── Row 1 · transport ──────────────────────────────────────────── */}
@@ -370,81 +386,87 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
 
         <span className="w-px h-4 bg-line shrink-0" />
 
-        <div className="flex items-center gap-1.5" aria-label="Historical replay">
-          <MicroLabel>rpl</MicroLabel>
-          <div className="flex items-center rounded-sm border border-line overflow-hidden">
-            {REPLAY_WINDOWS.map((w, i) => (
+        <div className="flex flex-col gap-1" aria-label="Historical replay">
+          <div className="flex items-center gap-1.5">
+            <MicroLabel>rpl</MicroLabel>
+            <div className="flex items-center rounded-sm border border-line overflow-hidden">
+              {REPLAY_WINDOWS.map((w, i) => (
+                <button
+                  key={w.sec}
+                  type="button"
+                  onClick={() => {
+                    setReplayDay('');
+                    setReplayWindow(w.sec);
+                  }}
+                  disabled={replay.active}
+                  aria-pressed={!replayDay && replayWindow === w.sec}
+                  title={`Replay the last ${w.label} ending now`}
+                  className={`mono text-[10px] px-1.5 py-1 disabled:opacity-40 ${
+                    i > 0 ? 'border-l border-line' : ''
+                  } ${
+                    !replayDay && replayWindow === w.sec
+                      ? 'bg-accent-dim text-accent'
+                      : 'bg-bg-2 text-txt-2 hover:text-txt-1'
+                  }`}
+                >
+                  {w.label}
+                </button>
+              ))}
+            </div>
+            {/* Day picker — scrub a specific past day (multi-day, not just the
+                live window). Bounded to the retained range so we never offer a
+                pruned day. Empty = use the rolling-window presets above. */}
+            <input
+              type="date"
+              value={replayDay}
+              min={minDay}
+              max={maxDay}
+              disabled={replay.active}
+              onChange={(e) => setReplayDay(e.target.value)}
+              aria-label="Replay a specific day"
+              title={`Replay a specific UTC day (retained back to ${minDay})`}
+              className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-none focus:border-accent-line disabled:opacity-40 [color-scheme:dark]"
+            />
+            {replayDay && !replay.active && (
               <button
-                key={w.sec}
                 type="button"
-                onClick={() => {
-                  setReplayDay('');
-                  setReplayWindow(w.sec);
-                }}
-                disabled={replay.active}
-                aria-pressed={!replayDay && replayWindow === w.sec}
-                title={`Replay the last ${w.label} ending now`}
-                className={`mono text-[10px] px-1.5 py-1 disabled:opacity-40 ${
-                  i > 0 ? 'border-l border-line' : ''
-                } ${
-                  !replayDay && replayWindow === w.sec
-                    ? 'bg-accent-dim text-accent'
-                    : 'bg-bg-2 text-txt-2 hover:text-txt-1'
-                }`}
+                onClick={() => setReplayDay('')}
+                aria-label="Clear day selection"
+                title="Back to rolling-window replay"
+                className="mono text-[10px] px-1 py-1 rounded-sm border border-line bg-bg-2 text-txt-3 hover:text-txt-1 hover:border-accent-line"
               >
-                {w.label}
+                ✕
               </button>
-            ))}
-          </div>
-          {/* Day picker — scrub a specific past day (multi-day, not just the
-              live window). Bounded to the retained range so we never offer a
-              pruned day. Empty = use the rolling-window presets above. */}
-          <input
-            type="date"
-            value={replayDay}
-            min={minDay}
-            max={maxDay}
-            disabled={replay.active}
-            onChange={(e) => setReplayDay(e.target.value)}
-            aria-label="Replay a specific day"
-            title={`Replay a specific UTC day (retained back to ${minDay})`}
-            className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-none focus:border-accent-line disabled:opacity-40 [color-scheme:dark]"
-          />
-          {replayDay && !replay.active && (
+            )}
             <button
               type="button"
-              onClick={() => setReplayDay('')}
-              aria-label="Clear day selection"
-              title="Back to rolling-window replay"
-              className="mono text-[10px] px-1 py-1 rounded-sm border border-line bg-bg-2 text-txt-3 hover:text-txt-1 hover:border-accent-line"
+              onClick={() => void toggleReplay()}
+              disabled={replay.loading}
+              aria-pressed={replay.active}
+              className={`mono text-[10px] tracking-[0.3px] px-2 py-1 rounded-sm border ${
+                replay.active
+                  ? 'border-accent-line bg-accent-dim text-accent'
+                  : 'border-line bg-bg-2 text-txt-1 hover:border-accent-line'
+              } disabled:opacity-40`}
             >
-              ✕
+              {replay.loading ? '…' : replay.active ? '◼ exit' : '▶ replay'}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => void toggleReplay()}
-            disabled={replay.loading}
-            aria-pressed={replay.active}
-            className={`mono text-[10px] tracking-[0.3px] px-2 py-1 rounded-sm border ${
-              replay.active
-                ? 'border-accent-line bg-accent-dim text-accent'
-                : 'border-line bg-bg-2 text-txt-1 hover:border-accent-line'
-            } disabled:opacity-40`}
-          >
-            {replay.loading ? '…' : replay.active ? '◼ exit' : '▶ replay'}
-          </button>
-          {replay.active && replay.info && (
-            <span className="mono text-[10px] tabular-nums text-txt-3">
-              {replay.info.tracks}t·{replay.info.points}p
+            {replay.active && replay.info && (
+              <span className="mono text-[10px] tabular-nums text-txt-3">
+                {replay.info.tracks}t·{replay.info.points}p
+              </span>
+            )}
+            <span
+              className="mono text-[10px] uppercase tracking-[0.5px] text-txt-4"
+              title={`Position history is a rolling, size-capped buffer (~${retentionDays(retentionHours)} retained, then oldest fixes drop). Replay older than this is unavailable — no cold storage.`}
+            >
+              {ownershipChip}
             </span>
-          )}
-          <span
-            className="mono text-[10px] uppercase tracking-[0.5px] text-txt-4"
-            title={`Position history is a rolling, size-capped buffer (~${retentionDays(retentionHours)} retained, then oldest fixes drop). Replay older than this is unavailable — no cold storage.`}
-          >
-            {retentionDays(retentionHours)} buffer
-          </span>
+          </div>
+          {/* Coverage heat-strip — real recorded-fix density per hour, fed by
+              /api/history/coverage (§3 of the replay plan), so the operator can
+              see which hours/days have data before picking a day above. */}
+          <CoverageStrip windowHours={retentionHours} onCoverage={setCoverage} />
         </div>
 
         <span className="flex-1" />

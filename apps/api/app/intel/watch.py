@@ -498,11 +498,22 @@ def standing_detections(
 async def _list_enabled_rules(ctx: UserCtx, s: Settings) -> list[dict[str, Any]]:
     """Fetch a user's enabled alert_rules exactly as routes/alert_rules.py does.
 
-    Returns ``[]`` (never raises) when Supabase is unset or the store is
-    unavailable, so a bad session can't stall the sweep.
+    On a keyless boot (``supabase_url`` unset — the same predicate
+    ``routes/alert_rules.py::_use_local`` uses) rules live in the local SQLite
+    store (``intel/alert_rules_local.py``) instead of Supabase PostgREST, so a
+    self-hosted operator's watch rule is reachable with no cloud project.
+    Never raises: a bad/unavailable store degrades to ``[]`` so one flaky
+    session can't stall the sweep.
     """
     if not s.supabase_url:
-        return []
+        from app.intel import alert_rules_local  # noqa: PLC0415
+
+        try:
+            return await alert_rules_local.list_rules(
+                ctx.user_id, enabled_only=True, settings=s
+            )
+        except Exception:  # noqa: BLE001
+            return []
     url = s.supabase_url.rstrip("/") + "/rest/v1/alert_rules"
     try:
         async with _client() as c:
@@ -576,6 +587,7 @@ async def evaluate_session(
     for rule, cand, transition in firings:
         await _persist_firing(reg, rule, cand, transition)
         await _maybe_cue(reg, rule, cand, transition)
+        await _deliver_sinks(rule, cand, transition)
         # Reuse the EXISTING /ws/alerts transport: publish onto the bus the live
         # socket already broadcasts. Enters and exits both notify.
         try:
@@ -584,6 +596,70 @@ async def evaluate_session(
             pass
         fired += 1
     return fired
+
+
+async def _deliver_sinks(
+    rule: dict[str, Any], cand: _Candidate, transition: str
+) -> None:
+    """Push a firing to the rule's configured out-of-band sink — a Discord
+    webhook or a generic ``webhook`` URL (``routes/alert_rules.py`` CHANNELS) —
+    and log the attempt, so "did my alert reach my phone" is answerable with no
+    browser attached to the evaluator (W3, docs/decisions.md 2026-07-11).
+
+    Reuses ``workflows/control.py``'s IPv4-pinned, never-raising HTTP
+    primitive (``send``) rather than the Workflows-block-only ``dispatch``
+    wrapper — there is no preview/dry-run or per-run dispatch budget concept
+    here, just "deliver this notification the operator asked for." A bad or
+    unreachable sink is isolated (logged, not raised) so it can never stall the
+    sweep, mirroring ``_persist_firing`` / ``_maybe_cue``.
+    """
+    channel = rule.get("channel")
+    url = str(rule.get("sink_url") or "").strip()
+    if channel not in ("discord", "webhook") or not url:
+        return
+
+    from app.intel import alert_rules_local  # noqa: PLC0415
+    from app.workflows import control  # noqa: PLC0415
+
+    ts = _now_iso()
+    message = _alert_message(rule, cand, transition)
+    rule_id = str(rule.get("id"))
+
+    try:
+        control.check_url(url)
+    except Exception as exc:  # noqa: BLE001 — bad sink config, log + stop
+        await alert_rules_local.record_delivery(
+            rule_id=rule_id, entity_id=cand.entity_id, transition=transition,
+            channel=channel, target=url, ok=False, status=None,
+            error=str(exc), message=message,
+        )
+        return
+
+    if channel == "discord":
+        # Discord's incoming-webhook contract: a plain {"content": <text>} post.
+        body: dict[str, Any] = {"content": f"[{rule.get('label') or 'watch'}] {message}"}
+    else:
+        obj = alert_object(rule, cand, transition, ts)
+        body = {"type": "watch.alert", **obj.props}
+
+    try:
+        res = await control.send(
+            "POST", url, headers={"content-type": "application/json"},
+            json_body=body, timeout_s=10.0,
+        )
+        ok = res.error is None and (res.status is not None and res.status < 400)
+        await alert_rules_local.record_delivery(
+            rule_id=rule_id, entity_id=cand.entity_id, transition=transition,
+            channel=channel, target=url, ok=ok, status=res.status,
+            error=res.error, message=message,
+        )
+    except Exception as exc:  # noqa: BLE001 — never let a sink failure stall the sweep
+        log.debug("watch: sink delivery failed (%s): %s", cand.entity_id, exc)
+        await alert_rules_local.record_delivery(
+            rule_id=rule_id, entity_id=cand.entity_id, transition=transition,
+            channel=channel, target=url, ok=False, status=None,
+            error=str(exc), message=message,
+        )
 
 
 async def _maybe_cue(
@@ -613,8 +689,20 @@ async def evaluate_all() -> int:
     cost one snapshot + one brief, not N.
     """
     sessions = active_sessions()
+    s = get_settings()
     if not sessions:
-        return 0  # nothing registered → no reads, no work (also the Supabase-unset case)
+        if s.supabase_url:
+            return 0  # no browser registered a token → nothing to read, no work
+        # Keyless boot: there is no WS session and no Supabase token to forge,
+        # but a locally-stored rule (intel/alert_rules_local.py) still deserves
+        # to fire with no browser open (W3, docs/decisions.md 2026-07-11).
+        # Cheaply probe the local store first so the zero-rule case (the vast
+        # majority of ticks on a fresh install) stays a single fast SQLite read
+        # and never touches a snapshot/brief — same cost as the old no-op.
+        local_rules = await _list_enabled_rules(UserCtx("local", ""), s)
+        if not local_rules:
+            return 0
+        sessions = [UserCtx("local", "")]
 
     from app.routes.adsb import global_snapshot  # noqa: PLC0415
 
@@ -659,7 +747,6 @@ async def evaluate_all() -> int:
     _LAST_CANDIDATES = candidates
     _CANDIDATES_TS = time.time()
 
-    s = get_settings()
     total = 0
     for ctx in sessions:
         try:

@@ -18,6 +18,7 @@ COPY apps/api/tests ./tests
 # Run as an unprivileged user (defense-in-depth: the API shells out to recon/
 # sidecar/YOLO subprocesses, so a process compromise must not land as root).
 RUN useradd --system --uid 10001 --create-home --home-dir /home/app app \
+    && mkdir -p /srv/data \
     && chown -R app /srv
 USER app
 

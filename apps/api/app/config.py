@@ -406,6 +406,13 @@ class Settings(BaseSettings):
     # of global ADS-B + AIS run into many GB, so the byte cap — not the hour
     # window — is the binding limit. 0 disables the byte cap (hour window only).
     history_max_bytes: int = 2_000_000_000  # ~2 GB
+    # Archive profile — turns the bounded live buffer into an intentional
+    # multi-day/week archive. OFF by default (current bounded-buffer behavior
+    # is unchanged unless the operator opts in).
+    archive_mode: bool = False  # ARCHIVE_MODE
+    # Disk budget used ONLY when archive_mode is True (GB). 0 = fall back to
+    # history_max_bytes (documented, logged once at boot — never a silent no-op).
+    history_disk_budget_gb: float = 0.0  # HISTORY_DISK_BUDGET_GB
 
     # ── Ontology local spine ──
     # Default (keyless) backend for the ontology: local SQLite next to
@@ -431,6 +438,13 @@ class Settings(BaseSettings):
     # User-authored DAG pipelines (sources/ops/sinks) over live platform data.
     # Same local-SQLite idiom as foundry_db_path.
     workflows_db_path: str = "./data/workflows.db"
+
+    # ── Alert rules local spine (W3 keyless alert push, docs/decisions.md) ──
+    # Default (keyless) backend for standing watch rules: local SQLite next to
+    # ontology.db/history.db, same idiom. Supabase, when configured, remains
+    # the RLS-scoped remote backend for signed-in multi-tenant deployments —
+    # this path is additive, not a replacement.
+    alert_rules_db_path: str = "./data/alert_rules.db"
 
     # Optional key for the Have-I-Been-Pwned email-breach API (paid). Absent →
     # the person-OSINT HIBP connector degrades to an honest note; everything else
