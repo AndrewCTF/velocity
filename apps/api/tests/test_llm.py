@@ -223,7 +223,7 @@ class _RaisingClient:
     def __init__(self, exc: Exception) -> None:
         self._exc = exc
 
-    async def __aenter__(self) -> "_RaisingClient":
+    async def __aenter__(self) -> _RaisingClient:
         return self
 
     async def __aexit__(self, *a: object) -> bool:
