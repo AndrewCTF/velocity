@@ -1,9 +1,9 @@
 # Velocity
 
 A self-hosted, keyless situation console: live aircraft, ships, satellites,
-GPS jamming, dark vessels, earthquakes, outages and conflict events, fused on
-one 3D globe and correlated on the server instead of leaving you to eyeball
-six tabs.
+GPS jamming, dark vessels, TFR airspace, military bases, naval warnings,
+earthquakes, outages and conflict events, fused on one 3D globe and correlated
+on the server instead of leaving you to eyeball six tabs.
 
 The part that's genuinely hard to find elsewhere: it keeps history *you* own.
 Flightradar24 gates replay at 7 days free, MarineTraffic cut its free window
@@ -115,7 +115,37 @@ empty space and it clears.
 
 ![Selected aircraft with dossier panel and magenta track](docs/img/entity-panel.png)
 
-**4. Bring your own data — the Foundry tab.** Upload a CSV/JSON/NDJSON, shape it
+**4. Airspace, bases, ports and airports — operational context, still keyless.**
+Toggle the TFR/Airspace layer and live FAA temporary flight restrictions draw as
+real polygons, coloured by reason with their altitude bands. Alongside them:
+7,183 military bases (air, naval and army, from Wikidata), NGA NAVAREA broadcast
+warnings with mine areas flagged, 3,804 ports from the NGA World Port Index
+(harbour size and type, shelter, repairs, dry dock, pier and channel depths),
+and airports enriched with runways (length, surface, lighting, per-end ILS
+category from FAA NASR), tower/ground/ATIS frequencies, live METAR with flight
+category, and a LiveATC linkout. A basemap picker swaps between eight keyless
+map styles (Esri imagery/topo/dark, OpenTopoMap, USGS, Sentinel-2 cloudless…),
+each probed live before it's offered.
+
+![TFR polygons, military bases and the enriched port dossier over the US](docs/media/places-airspace.jpeg)
+
+**5. Space, with real physics.** ~16k satellites from CelesTrak, propagated
+in-browser with actual SGP4 orbital mechanics and enriched from SATCAT with
+owner, launch date, radar cross-section and orbit class.
+
+![The globe wrapped in the live satellite constellation](docs/media/hero-satellites.png)
+
+**6. The watch officer writes the brief.** Every two minutes an autonomous
+watch officer fuses jamming, dark vessels, military air activity and conflict
+events into ranked, cited incidents — "vessels went dark near reported
+activity", "spoofed tracks co-located with an AIS gap" — each with a *slew to*
+button that flies the globe there. Actionable incidents are auto-promoted into
+the investigation graph, so the ontology fills itself on a fresh keyless boot
+with no operator setup.
+
+![Watch-officer intel brief: ranked, cited cross-domain incidents](docs/media/ui-briefs.png)
+
+**7. Bring your own data — the Foundry tab.** Upload a CSV/JSON/NDJSON, shape it
 through a governed pipeline (13 transform steps: filter, derive, join, aggregate,
 window, pivot, dedup, cast, regex…), gate every version with data-health checks
 (freshness SLAs, schema-drift, uniqueness…), and bind it into the same ontology
@@ -123,6 +153,15 @@ graph as the live feeds. Lineage, immutable versions with rollback, and a
 dead-letter for rows that fail a transform all come along.
 
 ![Foundry lineage pipeline — datasets, transforms, stale-aware DAG](docs/media/foundry-pipeline-new.png)
+
+**8. Automate it — the Workflows tab.** A node-graph editor over the same live
+feeds and ontology: wire sources (aircraft, vessels, quakes, alerts, datasets)
+through sandboxed Python/SQL/LLM transform blocks into sinks (alerts, ontology
+objects, datasets, persistent memory), then run it on a schedule. Control
+blocks can reach outward too — webhooks to your own server, or a MAVLink
+bridge for drone tasking that rehearses log-only without a vehicle.
+
+![A Workflows DAG: live aircraft through Python and SQL into an alert](docs/media/workflows-dag.png)
 
 ## Scope and limits
 
@@ -179,7 +218,12 @@ Rough live numbers off a running backend; they move around through the day:
 | GPS jamming | ~200 flagged 1° cells | ADS-B NACp/NIC, the GPSJam method |
 | Dark vessels | radar change-detection | Sentinel-1 SAR |
 | Fused incidents | correlation-driven | the correlation engine |
-| Satellites | ~16k | CelesTrak |
+| Satellites | ~16k, SATCAT-enriched | CelesTrak |
+| Airspace (TFRs) | live restriction polygons | FAA |
+| Military bases | 7,183 | Wikidata |
+| Naval broadcast warnings | ~800 plotted points | NGA NAVAREA |
+| Ports | 3,804, with harbour detail | NGA World Port Index |
+| Airports | runways + ILS + frequencies + live METAR | FAA NASR, NOAA, LiveATC |
 | Earthquakes | ~250/day | USGS + EMSC |
 | News + fact-check | ~370 articles | publisher RSS |
 | Internet outages | country level | IODA, Cloudflare |
@@ -386,10 +430,13 @@ above). Legend: ✅ shipped · 🚧 in progress
 - 🚧 **Phase 4** — Advanced sensors + agent access. MCP server + intel API
   (now with a Claude Code plugin and `detail=short|long` tool variants), Sentinel-1 SAR
   dark-vessel detection, an autonomous watch-officer that writes cited incident
-  briefs, a keyless infra/domain OSINT layer, a photo-geolocation pipeline
-  (content inference + satellite 3DGS pose), a City 3D Gaussian-splat viewer,
-  optional local-GPU (Ollama) inference, and a first-run onboarding tour. More
-  sensors and deeper analysis are ongoing.
+  briefs and auto-populates the ontology graph from them, a keyless
+  infra/domain OSINT layer, a places/airspace layer (FAA TFR polygons,
+  military bases, NGA naval warnings, World Port Index port detail, NASR/METAR
+  airport enrichment, an 8-way keyless basemap picker), a photo-geolocation
+  pipeline (content inference + satellite 3DGS pose), a City 3D Gaussian-splat
+  viewer, optional local-GPU (Ollama) inference, and a first-run onboarding
+  tour. More sensors and deeper analysis are ongoing.
 - 🚧 **Phase 5** — Foundry: a keyless, local, single-operator take on Palantir
   Foundry's data-integration loop. Upload → transform (governed step DSL with
   lineage) → build (dependency DAG, staleness, cycle rejection) → data-health
