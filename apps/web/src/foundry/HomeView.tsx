@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiFetch } from '../transport/http.js';
 import { useFoundry, type Build } from '../state/foundry.js';
 import { Badge, Btn, StatusDot, Widget } from '../shell/instruments.js';
 import { useFoundryNav } from './nav.js';
@@ -23,6 +24,28 @@ export function HomeView(): JSX.Element {
   const navigate = useFoundryNav((s) => s.navigate);
   const setView = useFoundryNav((s) => s.setView);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedNote, setSeedNote] = useState<string | null>(null);
+
+  // Seed the built-in reference datasets (airports/ports/bases, infrastructure,
+  // military, country OSINT resources, indicator manifest) into Foundry.
+  const seedReference = async (): Promise<void> => {
+    setSeeding(true);
+    setSeedNote(null);
+    try {
+      const r = await apiFetch('/api/foundry/seed/reference', { method: 'POST' });
+      if (!r.ok) throw new Error(`http ${r.status}`);
+      const body = (await r.json()) as { results: { dataset: string; status: string }[] };
+      const seeded = body.results.filter((x) => x.status === 'seeded').length;
+      const exists = body.results.filter((x) => x.status === 'exists').length;
+      setSeedNote(`${seeded} seeded, ${exists} already present`);
+      await loadSummary();
+    } catch (e) {
+      setSeedNote(`seed failed: ${String(e)}`);
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   useFoundryPoll(async () => {
     await Promise.all([loadSummary(), loadLineage(), loadTransforms()]);
@@ -122,7 +145,11 @@ export function HomeView(): JSX.Element {
               <Btn size="sm" disabled={staleNodes.length === 0} onClick={() => void buildPipeline(true)}>Build stale{staleNodes.length ? ` (${staleNodes.length})` : ''}</Btn>
               <Btn size="sm" onClick={() => setView('ontology')}>◈ Sync bindings</Btn>
               <Btn size="sm" className="col-span-2" onClick={() => navigate('datasets')}>▤ Query a dataset (SQL)</Btn>
+              <Btn size="sm" className="col-span-2" disabled={seeding} onClick={() => void seedReference()}>
+                {seeding ? 'seeding…' : '⛁ Seed reference data'}
+              </Btn>
             </div>
+            {seedNote && <p className="mt-1.5 text-[10.5px] mono text-txt-3">{seedNote}</p>}
           </Widget>
 
           <Widget title="Monitor activity" {...(monitorEvents24h ? { count: monitorEvents24h } : {})}>

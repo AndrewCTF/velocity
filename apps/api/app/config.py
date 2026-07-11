@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     gmaps_key: str = ""
     acled_key: str = ""
     acled_email: str = ""
+    # UCDP GED API token — the API went token-gated (x-ucdp-access-token,
+    # verified 2026-07-11); /api/conflict/ucdp degrades to empty without it.
+    ucdp_token: str = ""
     cloudflare_token: str = ""
     openaip_key: str = ""
 

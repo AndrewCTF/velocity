@@ -19,7 +19,8 @@ export type AppId =
   | 'reports'
   | 'foundry'
   | 'workflows'
-  | 'city';
+  | 'city'
+  | 'country';
 
 export const APP_IDS: readonly AppId[] = [
   'map',
@@ -32,6 +33,7 @@ export const APP_IDS: readonly AppId[] = [
   'foundry',
   'workflows',
   'city',
+  'country',
 ];
 
 // chrome: 'globe' keeps the right inspector rail + timeline footer (apps designed
@@ -60,6 +62,11 @@ export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'glo
     hint: 'Gaussian-splat 3D scenes',
     chrome: 'full',
   },
+  country: {
+    label: 'Country',
+    hint: 'World Bank + UN statistics · OSINT resources',
+    chrome: 'full',
+  },
 };
 
 // Grouped clusters for the top-bar app switcher (design §6.1 overhaul): the
@@ -69,7 +76,7 @@ export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'glo
 // appView.test.ts).
 export const APP_GROUPS: readonly { id: string; label: string; apps: readonly AppId[] }[] = [
   { id: 'live', label: 'Live', apps: ['map', 'sim'] },
-  { id: 'analyze', label: 'Analyze', apps: ['explorer', 'graph', 'targeting', 'video'] },
+  { id: 'analyze', label: 'Analyze', apps: ['explorer', 'graph', 'targeting', 'video', 'country'] },
   { id: 'data', label: 'Data', apps: ['foundry', 'workflows'] },
   { id: 'product', label: 'Product', apps: ['reports'] },
   { id: '3d', label: '3D', apps: ['city'] },

@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { baseStyle, tfrPolygonStyle, warningStyle } from './styles.js';
-import { baseLabelText, tfrLabelText, warningLabelText } from './labelStyle.js';
+import { baseStyle, facilityStyle, tfrPolygonStyle, warningStyle } from './styles.js';
+import { baseLabelText, facilityLabelText, tfrLabelText, warningLabelText } from './labelStyle.js';
 import { defaultLayers } from '../../registry/defaults.js';
 
 // W5 places/airspace enrichment wave: three new layers on the existing
@@ -157,5 +157,68 @@ describe('StyleKind dispatch reaches the new cases', () => {
 
   it('places.bases participates in the bbox/LOD gate alongside airports/ports', () => {
     expect(COMPOSITOR_SRC).toMatch(/d\.id === 'places\.bases'/);
+  });
+});
+
+// 2026-07-11 infrastructure wave: facility StyleKind + per-category icons.
+describe('facilityStyle', () => {
+  it('emits a distinct data-URI SVG per category, never a bare point', () => {
+    const cats = [
+      'power', 'nuclear', 'water_treatment', 'desalination', 'datacenter',
+      'telecom_hub', 'ground_station', 'telescope', 'launch',
+      'military_installation', 'garrison', 'training',
+    ];
+    const uris = new Set(cats.map((c) => facilityStyle({ category: c }).imageUri));
+    expect(uris.size).toBeGreaterThanOrEqual(11); // garrison shares the mil star
+    for (const u of uris) expect(u.startsWith('data:image/svg+xml')).toBe(true);
+  });
+
+  it('nuclear-fuel power rows get the trefoil even via the power toggle', () => {
+    expect(facilityStyle({ category: 'power', fuel: 'Nuclear' }).imageUri).toBe(
+      facilityStyle({ category: 'nuclear' }).imageUri,
+    );
+  });
+
+  it('unknown category falls back to a neutral tile rather than dropping the icon', () => {
+    expect(facilityStyle({ category: 'wat' }).imageUri.startsWith('data:image/svg+xml')).toBe(true);
+  });
+});
+
+describe('facilityLabelText', () => {
+  it('labels by name, falling back to the professional subcategory label', () => {
+    expect(facilityLabelText({ name: 'Diablo Canyon' })).toBe('Diablo Canyon');
+    expect(facilityLabelText({ subcategory: 'nuclear power station' })).toBe('nuclear power station');
+    expect(facilityLabelText({})).toBeNull();
+  });
+});
+
+describe('registry: infrastructure/military facility descriptors', () => {
+  const facilityIds = [
+    'infra.power', 'infra.nuclear', 'infra.water', 'infra.desalination',
+    'infra.datacenters', 'infra.telecom', 'infra.ground_stations',
+    'infra.telescopes', 'infra.launch', 'military.installations',
+  ];
+
+  it('every facility layer exists, off by default, on the places routes', () => {
+    for (const id of facilityIds) {
+      const d = defaultLayers.find((l) => l.id === id);
+      expect(d, id).toBeDefined();
+      expect(d?.visibleByDefault, id).toBe(false);
+      expect(d?.endpoint, id).toMatch(/^\/api\/places\/(infrastructure|military)/);
+    }
+  });
+
+  it('every facility layer id routes to the facility StyleKind + bbox gate', () => {
+    expect(COMPOSITOR_SRC).toMatch(/FACILITY_LAYER_IDS\.has\(d\.id\)\s*\n?\s*\?\s*'facility'/);
+    for (const id of facilityIds) {
+      expect(COMPOSITOR_SRC, id).toContain(`'${id}'`);
+    }
+    // and the bbox/LOD zoom gate includes the facility set
+    expect(COMPOSITOR_SRC).toMatch(/FACILITY_LAYER_IDS\.has\(d\.id\)\s*\n?\s*\) \{/);
+  });
+
+  it('StyleKind union + applyStyle handle facility', () => {
+    expect(ADAPTER_SRC).toMatch(/\|\s*'facility'/);
+    expect(ADAPTER_SRC).toMatch(/case 'facility': \{/);
   });
 });

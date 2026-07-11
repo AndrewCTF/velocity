@@ -104,6 +104,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Internet outages', icon: 'signal', layerIds: ['cyber.ioda.outages'] },
       { label: 'GDELT events', icon: 'bell', layerIds: ['news.gdelt.events'] },
       { label: 'ACLED conflict', icon: 'bell', layerIds: ['news.acled.events'] },
+      { label: 'UCDP actor-coded', icon: 'crosshair', layerIds: ['conflict.ucdp'] },
     ],
   },
   {
@@ -120,6 +121,15 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Airports', icon: 'plane', layerIds: ['places.airports'] },
       { label: 'Ports', icon: 'anchor', layerIds: ['places.ports'] },
       { label: 'Military bases', icon: 'shield', layerIds: ['places.bases'] },
+      { label: 'Military installations (MIRTA)', icon: 'shield', layerIds: ['military.installations'] },
+      { label: 'Power plants', icon: 'signal', layerIds: ['infra.power'] },
+      { label: 'Nuclear facilities', icon: 'warning', layerIds: ['infra.nuclear'] },
+      { label: 'Water / desalination', icon: 'network', layerIds: ['infra.water', 'infra.desalination'] },
+      { label: 'Datacenters', icon: 'network', layerIds: ['infra.datacenters'] },
+      { label: 'Telecom hubs', icon: 'signal', layerIds: ['infra.telecom'] },
+      { label: 'Ground stations', icon: 'satellite', layerIds: ['infra.ground_stations'] },
+      { label: 'Telescopes', icon: 'satellite', layerIds: ['infra.telescopes'] },
+      { label: 'Launch facilities', icon: 'satellite', layerIds: ['infra.launch'] },
     ],
   },
   {

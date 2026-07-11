@@ -5,6 +5,7 @@ import {
   airportStyle,
   baseStyle,
   cameraStyle,
+  facilityStyle,
   fireStyle,
   jammingPolygonStyle,
   portStyle,
@@ -18,6 +19,7 @@ import {
   aircraftLabelText,
   airportLabelText,
   baseLabelText,
+  facilityLabelText,
   portLabelText,
   tfrLabelText,
   vesselLabelText,
@@ -237,6 +239,7 @@ export type StyleKind =
   | 'tfr'
   | 'base'
   | 'warning'
+  | 'facility'
   | 'generic';
 
 interface Props {
@@ -1548,6 +1551,26 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
         };
         const labelText = baseLabelText(props);
+        if (labelText) {
+          opts.label = labelFor(labelText);
+          opts.name = labelText;
+        }
+        break;
+      }
+      case 'facility': {
+        // Critical-infrastructure / military-installation facility — category
+        // SVG dispatched on props.category (power/nuclear/water/datacenter/
+        // telecom/ground_station/telescope/launch/military_*), same zoom-gated
+        // static-reference-marker treatment as airport/port/base.
+        const s = facilityStyle(props);
+        opts.billboard = {
+          image: s.imageUri,
+          scale: s.scale,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
+        };
+        const labelText = facilityLabelText(props);
         if (labelText) {
           opts.label = labelFor(labelText);
           opts.name = labelText;

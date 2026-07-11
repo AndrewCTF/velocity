@@ -89,6 +89,48 @@ async def places_bases(
     return places.bbox_features("base", *box, limit=limit)
 
 
+@router.get("/api/places/infrastructure")
+async def places_infrastructure(
+    response: Response,
+    bbox: str | None = Query(None, description="minLon,minLat,maxLon,maxLat"),
+    category: str | None = Query(None, description="power|nuclear|water_treatment|desalination|datacenter|telecom_hub|ground_station|telescope|launch"),
+    limit: int = Query(2000, ge=1, le=20000),
+) -> dict[str, Any]:
+    """Critical-infrastructure facilities inside the bbox as GeoJSON
+    (power plants incl. nuclear/wind/geothermal, water treatment/desalination,
+    datacenters, telecom hubs, satellite ground stations, telescopes, launch
+    facilities). `category=nuclear` filters power rows flagged nuclear."""
+    box = _parse_bbox(bbox)
+    if box is None:
+        return _EMPTY_FC
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return places.facility_bbox_features("infrastructure", *box, limit=limit, category=category)
+
+
+@router.get("/api/places/military")
+async def places_military(
+    response: Response,
+    bbox: str | None = Query(None, description="minLon,minLat,maxLon,maxLat"),
+    category: str | None = Query(None, description="military_installation|garrison|training"),
+    limit: int = Query(2000, ge=1, le=20000),
+) -> dict[str, Any]:
+    """MIRTA installations + Wikidata garrisons/training areas inside the bbox."""
+    box = _parse_bbox(bbox)
+    if box is None:
+        return _EMPTY_FC
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return places.facility_bbox_features("military", *box, limit=limit, category=category)
+
+
+@router.get("/api/places/facility/{fid}")
+async def places_facility_detail(fid: str) -> dict[str, Any]:
+    """Full stored row for one infrastructure/military facility, by dataset id."""
+    row = places.facility_by_id(fid)
+    if row is None:
+        raise HTTPException(404, f"unknown facility {fid!r}")
+    return row
+
+
 @router.get("/api/places/airport/{ident}")
 async def places_airport_detail(ident: str) -> dict[str, Any]:
     """Base row + runway/frequency detail for one airport, by IATA or ICAO."""

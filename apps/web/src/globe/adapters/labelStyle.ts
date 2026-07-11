@@ -105,3 +105,12 @@ export function warningLabelText(props: Record<string, unknown>): string | null 
   if (navArea != null) return `NAVAREA ${navArea}`;
   return null;
 }
+
+// Facility (infrastructure/military) label: name, else the professional
+// subcategory label ("nuclear power station", "desalination plant", …).
+export function facilityLabelText(props: Record<string, unknown>): string | null {
+  const name = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
+  if (name) return name;
+  const sub = (props['subcategory'] as string | null | undefined)?.toString().trim() ?? null;
+  return sub || null;
+}

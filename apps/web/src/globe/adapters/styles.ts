@@ -548,3 +548,82 @@ export function warningStyle(props: Record<string, unknown>): { imageUri: string
   }
   return { imageUri: cachedIcon('warning:std', () => placeDataUri(warningSvg())), scale: 0.9 };
 }
+
+// ── Critical-infrastructure / military facilities (2026-07-11 wave) ──────
+// One StyleKind ('facility') dispatched on props.category, exactly like
+// baseStyle dispatches on props.branch — square place tiles, one glyph +
+// palette color per category. Unknown categories fall back to a neutral tile.
+const FACILITY_COLORS: Record<string, string> = {
+  power: '#f59e0b',                // amber — generation
+  nuclear: '#ef4444',              // red — nuclear
+  water_treatment: '#38bdf8',      // sky — water
+  desalination: '#2dd4bf',         // teal — desalination
+  datacenter: '#a78bfa',           // violet — compute
+  telecom_hub: '#818cf8',          // indigo — comms
+  ground_station: '#34d399',       // emerald — space downlink
+  telescope: '#c084fc',            // purple — astronomy
+  launch: '#fb923c',               // orange — launch
+  military_installation: '#f87171', // light red — DoD MIRTA
+  garrison: '#f87171',
+  training: '#fbbf24',
+};
+
+function facilityGlyph(category: string): string {
+  switch (category) {
+    case 'power': // lightning bolt
+      return '<path d="M13 3 6.5 13.2h4L10.6 21l6.9-10.4h-4z" fill="#1a1200"/>';
+    case 'nuclear': { // trefoil
+      const wedges = [90, 210, 330]
+        .map((deg) => {
+          const a1 = ((deg - 28) * Math.PI) / 180;
+          const a2 = ((deg + 28) * Math.PI) / 180;
+          const x1 = 12 + Math.cos(a1) * 7;
+          const y1 = 12 + Math.sin(a1) * 7;
+          const x2 = 12 + Math.cos(a2) * 7;
+          const y2 = 12 + Math.sin(a2) * 7;
+          return `<path d="M12 12 L${x1.toFixed(1)} ${y1.toFixed(1)} A7 7 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z" fill="#2b0505"/>`;
+        })
+        .join('');
+      return `${wedges}<circle cx="12" cy="12" r="1.8" fill="#2b0505"/>`;
+    }
+    case 'water_treatment': // droplet
+      return '<path d="M12 4.5c2.8 3.6 5 6.4 5 9a5 5 0 1 1-10 0c0-2.6 2.2-5.4 5-9z" fill="#062a3a"/>';
+    case 'desalination': // droplet over wave
+      return '<path d="M12 4c2.3 3 4.1 5.3 4.1 7.4a4.1 4.1 0 1 1-8.2 0C7.9 9.3 9.7 7 12 4z" fill="#032b26"/><path d="M5 18.5q1.75-1.6 3.5 0t3.5 0 3.5 0 3.5 0" stroke="#032b26" stroke-width="1.6" fill="none" stroke-linecap="round"/>';
+    case 'datacenter': // server rack
+      return '<rect x="6.5" y="5" width="11" height="4.2" rx="1" fill="#211437"/><rect x="6.5" y="10.4" width="11" height="4.2" rx="1" fill="#211437"/><rect x="6.5" y="15.8" width="11" height="3.2" rx="1" fill="#211437"/><circle cx="9" cy="7.1" r="0.8" fill="#a78bfa"/><circle cx="9" cy="12.5" r="0.8" fill="#a78bfa"/>';
+    case 'telecom_hub': // radio mast
+      return '<path d="M12 5v14M12 5l-4.5 14M12 5l4.5 14" stroke="#141737" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M7.5 7.5a6.4 6.4 0 0 1 9 0M9.2 9.6a3.6 3.6 0 0 1 5.6 0" stroke="#141737" stroke-width="1.3" fill="none" stroke-linecap="round"/>';
+    case 'ground_station': // dish
+      return '<path d="M6 8a8.5 8.5 0 0 0 10 10z" fill="#03291c"/><line x1="11" y1="13" x2="17" y2="7" stroke="#03291c" stroke-width="1.6" stroke-linecap="round"/><circle cx="17.3" cy="6.7" r="1.4" fill="#03291c"/><path d="M9.5 18.5h5" stroke="#03291c" stroke-width="1.6" stroke-linecap="round"/>';
+    case 'telescope': // scope tube on mount
+      return '<rect x="5" y="8.6" width="12.5" height="3.4" rx="1.5" transform="rotate(-25 11 10.5)" fill="#26103a"/><path d="M11 13.5 8.5 19.5M12.5 13.5 15 19.5" stroke="#26103a" stroke-width="1.6" stroke-linecap="round"/>';
+    case 'launch': // rocket
+      return '<path d="M12 3.5c2.6 2 3.4 5.4 2.4 9.1l1.9 2.6-2.9-.4c-.4.7-.9 1.4-1.4 2-.5-.6-1-1.3-1.4-2l-2.9.4 1.9-2.6c-1-3.7-.2-7.1 2.4-9.1z" fill="#331303"/><path d="M10.4 17.5 12 21l1.6-3.5" stroke="#331303" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
+    case 'military_installation':
+    case 'garrison':
+    case 'training': // five-point star
+      return '<path d="M12 4.6l2 4.6 5 .5-3.8 3.3 1.1 4.9L12 15.3l-4.3 2.6 1.1-4.9L5 9.7l5-.5z" fill="#2b0808"/>';
+    default:
+      return '<circle cx="12" cy="12" r="4.5" fill="#101418"/>';
+  }
+}
+
+function facilitySvg(category: string): string {
+  const tile = FACILITY_COLORS[category] ?? '#9ca3af';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    ${facilityGlyph(category)}
+  </svg>`;
+}
+
+export function facilityStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
+  let category = String(props['category'] ?? '').toLowerCase();
+  // The nuclear toggle serves power rows flagged nuclear — give them the
+  // trefoil regardless of which toggle fetched them.
+  if (category === 'power' && String(props['fuel'] ?? '') === 'Nuclear') category = 'nuclear';
+  return {
+    imageUri: cachedIcon(`facility:${category}`, () => placeDataUri(facilitySvg(category))),
+    scale: 0.95,
+  };
+}

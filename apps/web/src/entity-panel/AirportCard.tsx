@@ -202,6 +202,19 @@ export function AirportCard({ enrichment }: { enrichment: AirportEnrichment }): 
           {enrichment.scheduled_service && <Badge tone="accent">scheduled service</Badge>}
         </div>
 
+        {enrichment.approach_capability && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Derived worldwide tier — deliberately a neutral tone + "derived"
+                suffix so it never reads as a measured FAA NASR CAT badge. */}
+            <Badge tone="neutral">{enrichment.approach_capability} · derived</Badge>
+            {enrichment.approach_capability_basis && enrichment.approach_capability_basis.length > 0 && (
+              <span className="mono text-[9.5px] text-txt-3" title={enrichment.approach_capability_basis.join('; ')}>
+                basis: {enrichment.approach_capability_basis.join('; ')}
+              </span>
+            )}
+          </div>
+        )}
+
         <KV>
           <KVRow k="Runways" v={enrichment.runway_count ?? runways.length} />
           <KVRow

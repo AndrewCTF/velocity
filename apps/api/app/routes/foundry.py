@@ -23,6 +23,7 @@ from app.foundry import binding as binding_mod
 from app.foundry import builds as builds_mod
 from app.foundry import geo as geo_mod
 from app.foundry import ingest, sqlrun
+from app.foundry import seed as seed_mod
 from app.foundry import transforms as tf_mod
 from app.foundry.store import FoundryError, FoundryStore
 from app.intel.ontology import _KNOWN_KINDS
@@ -273,6 +274,18 @@ async def _read_upload(
     except FoundryError as exc:
         _raise(exc)
         raise AssertionError("unreachable") from exc  # pragma: no cover
+
+
+@router.post("/api/foundry/seed/reference")
+async def seed_reference(
+    refresh: bool = Query(False, description="write a new version for datasets that already exist"),
+    ctx: UserCtx = Depends(current_user_or_local),
+) -> dict[str, Any]:
+    """Seed the built-in reference data (airports/ports/bases, infrastructure,
+    military, country-OSINT resources, country-stat indicator manifest) as
+    Foundry datasets. Idempotent — existing datasets are skipped unless
+    ``refresh``."""
+    return await seed_mod.seed_reference_datasets(_store(), refresh=refresh)
 
 
 @router.post("/api/foundry/datasets/upload")

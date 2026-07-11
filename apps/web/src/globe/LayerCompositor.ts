@@ -116,6 +116,22 @@ function cameraCenterBbox(viewer: Cesium.Viewer, limit: number): string | null {
 // hidden at world/continental view. That is the LOD lever the operator asked for:
 // airports + ports appear only when zoomed into a country / metro.
 const PLACES_LOD_ALT_M = 1_500_000;
+// Facility layers (2026-07-11 infrastructure wave) — all styled 'facility'
+// (icon dispatched on props.category) and zoom-gated like places.*. NOT a
+// prefix match: infra.cables.* / infra.cams.public keep their own adapters.
+export const FACILITY_LAYER_IDS: ReadonlySet<string> = new Set([
+  'infra.power',
+  'infra.nuclear',
+  'infra.water',
+  'infra.desalination',
+  'infra.datacenters',
+  'infra.telecom',
+  'infra.ground_stations',
+  'infra.telescopes',
+  'infra.launch',
+  'military.installations',
+]);
+
 function placesBboxQuery(viewer: Cesium.Viewer): () => string | null {
   return () => {
     // Viewer torn down (HMR / dashboard switch) while a poll timer is pending.
@@ -336,7 +352,9 @@ export class LayerCompositor {
                   ? 'base'
                   : d.id === 'maritime.warnings'
                     ? 'warning'
-                    : styleFromEmits(d.emits);
+                    : FACILITY_LAYER_IDS.has(d.id)
+                      ? 'facility'
+                      : styleFromEmits(d.emits);
       const ttl = d.refresh.ttlSec ?? 30;
       // A phone can't render/upsert the full ~13k world view every ~2 s (it
       // overheats and the main thread is too busy to interpolate, so planes
@@ -375,7 +393,8 @@ export class LayerCompositor {
       } else if (
         d.id === 'places.airports' ||
         d.id === 'places.ports' ||
-        d.id === 'places.bases'
+        d.id === 'places.bases' ||
+        FACILITY_LAYER_IDS.has(d.id)
       ) {
         // Zoom-gated reference markers: the bbox (and therefore any data) is sent
         // ONLY below the LOD altitude; above it placesBboxQuery returns null → the

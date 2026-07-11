@@ -281,6 +281,8 @@ async def entity(
         if not SAT_NORAD_RE.match(raw):
             raise HTTPException(400, "satellite id must be a numeric NORAD id")
         return await _enrich_satellite(raw)
+    if kind in ("facility", "military"):
+        return _enrich_facility(kind, raw)
     # See the SAT_TAIL_RE comment above: a globe-clicked satellite entity id
     # carries the layer descriptor as its head, not a "satellite:"/"sat:"
     # kind — recover the NORAD id from the id's tail before giving up.
@@ -801,6 +803,10 @@ async def _enrich_airport(code: str) -> dict[str, Any]:
         "max_runway_length_ft": max(lengths) if lengths else None,
         "source": "ourairports+faa-nasr",
     }
+    # Derived worldwide landing-capability tier (the non-US counterpart to the
+    # NASR CAT badge) — always flagged derived with its basis; never a CAT
+    # II/III string unless NASR put one on a runway row above.
+    out.update(places.approach_capability(detail))
     if icao:
         icao_lower = icao.lower()
         out["liveatc_url"] = f"https://www.liveatc.net/search/?icao={icao}"
@@ -813,6 +819,16 @@ async def _enrich_airport(code: str) -> dict[str, Any]:
         ]
         out["candidate_mounts_best_effort"] = True
     return out
+
+
+def _enrich_facility(kind: str, fid: str) -> dict[str, Any]:
+    """Local lookup only — the full stored row from infrastructure.json /
+    military.json (WRI/SatNOGS/Wikidata/MIRTA/OSM snapshot). Every field is
+    the upstream's own value; nothing is derived or fabricated here."""
+    row = places.facility_by_id(fid)
+    if row is None:
+        raise HTTPException(404, f"unknown facility {fid!r}")
+    return {**row, "kind": kind}
 
 
 # ── seaports ─────────────────────────────────────────────────────────────

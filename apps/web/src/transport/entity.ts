@@ -128,6 +128,13 @@ export interface AirportEnrichment {
   /** Derived capability PROXIES only (never a fabricated capacity number). */
   runway_count?: number;
   max_runway_length_ft?: number | null;
+  /** Worldwide DERIVED landing-capability tier (the non-US counterpart to the
+   * NASR CAT badge) — always flagged derived, never a CAT I/II/III string. */
+  approach_capability?: string | null;
+  approach_capability_derived?: boolean;
+  approach_capability_basis?: string[];
+  /** ILS presence-on-record (NASR cats or OSM navigation aids) — no category. */
+  ils_present?: boolean;
   /** https://www.liveatc.net/search/?icao=… — Cloudflare-403s server-side, linkout only. */
   liveatc_url?: string | null;
   /** Guessed mount URLs, NOT enumerated/verified — label as experimental. */

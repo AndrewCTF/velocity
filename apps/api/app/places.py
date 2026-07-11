@@ -76,6 +76,51 @@ def bases() -> list[dict[str, Any]]:
 
 
 @lru_cache(maxsize=1)
+def infrastructure() -> list[dict[str, Any]]:
+    """Unified facility rows (power/nuclear, water, datacenters, telecom hubs,
+    ground stations, telescopes, launch facilities). Keys: id, category,
+    subcategory, name, lat, lon, source + per-source extras. Built by
+    scripts/build_places_data.py; empty list when the file hasn't been built
+    (honest degrade, never an error)."""
+    path = _DATA / "infrastructure.json"
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as fh:
+        rows = json.load(fh)
+    return rows if isinstance(rows, list) else []
+
+
+@lru_cache(maxsize=1)
+def military() -> list[dict[str, Any]]:
+    """Military installation rows (MIRTA + Wikidata garrisons/training areas).
+    Same shape as infrastructure(); categories: military_installation,
+    garrison, training."""
+    path = _DATA / "military.json"
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as fh:
+        rows = json.load(fh)
+    return rows if isinstance(rows, list) else []
+
+
+@lru_cache(maxsize=1)
+def _facility_index() -> dict[str, dict[str, Any]]:
+    """facility id -> row, over infrastructure() + military()."""
+    idx: dict[str, dict[str, Any]] = {}
+    for r in infrastructure() + military():
+        rid = str(r.get("id") or "")
+        if rid:
+            idx.setdefault(rid, r)
+    return idx
+
+
+def facility_by_id(fid: str) -> dict[str, Any] | None:
+    """Resolve an infrastructure/military row by its dataset id (the part
+    after the ``facility:``/``military:`` entity-id prefix)."""
+    return _facility_index().get(str(fid or "").strip())
+
+
+@lru_cache(maxsize=1)
 def airports_detail() -> dict[str, dict[str, Any]]:
     """Per-ICAO runway/frequency detail (large+medium only). Loaded lazily —
     only entity enrichment touches this, never the bbox map-overlay path."""
@@ -144,6 +189,54 @@ def _base_id(b: dict[str, Any]) -> str:
     lon = float(b.get("lon") or 0.0)
     raw = f"{name}|{lat:.4f}|{lon:.4f}".encode()
     return hashlib.md5(raw).hexdigest()[:16]
+
+
+def approach_capability(detail: dict[str, Any] | None) -> dict[str, Any]:
+    """Derived landing-capability tier for ANY airport, worldwide — the honest
+    non-US counterpart to the US-only FAA NASR CAT I/II/III rating.
+
+    Sources actually on record (never guessed):
+      - ``ils_category*`` per runway end — FAA NASR, US only, the only place a
+        CAT I/II/III string may come from.
+      - ``ils_present`` — OurAirports navaids.csv, global, presence-only.
+      - runway ``lighted`` / ``length_ft`` — OurAirports, global.
+
+    Output is ALWAYS labeled derived (``approach_capability_derived: true``)
+    with the exact basis facts listed, so the UI can render it visually
+    distinct from a measured NASR category. Tiers:
+      - "precision (ILS present)" — an ILS exists on record.
+      - "non-precision/visual (lighted)" — no ILS on record, lighted runway.
+      - "visual only (no ILS/lighting on record)" — neither on record.
+    Absence of data lowers the tier honestly; it never invents a CAT level.
+    """
+    detail = detail or {}
+    runways = [r for r in detail.get("runways") or [] if not r.get("closed")]
+    cats = sorted({str(c) for r in runways for c in (r.get("ils_category_le"), r.get("ils_category_he")) if c})
+    ils = bool(detail.get("ils_present") or cats)
+    lighted = any(r.get("lighted") for r in runways)
+    lengths = [r.get("length_ft") for r in runways if isinstance(r.get("length_ft"), (int, float))]
+    basis: list[str] = []
+    if cats:
+        basis.append(f"FAA NASR ILS categories on record: {', '.join(cats)}")
+    elif ils:
+        basis.append("ILS navaid on record (OurAirports navaids.csv, category unknown)")
+    else:
+        basis.append("no ILS on record")
+    basis.append("lighted runway" if lighted else "no lighted runway on record")
+    if lengths:
+        basis.append(f"longest runway {max(lengths)} ft")
+    if ils:
+        tier = "precision (ILS present)"
+    elif lighted:
+        tier = "non-precision/visual (lighted)"
+    else:
+        tier = "visual only (no ILS/lighting on record)"
+    return {
+        "approach_capability": tier,
+        "approach_capability_derived": True,
+        "approach_capability_basis": basis,
+        "ils_present": ils,
+    }
 
 
 # ── record shaping ───────────────────────────────────────────────────────────
@@ -358,6 +451,63 @@ def bbox_features(
                 }
             )
 
+    return {"type": "FeatureCollection", "features": features}
+
+
+def facility_bbox_features(
+    dataset: Literal["infrastructure", "military"],
+    minlon: float,
+    minlat: float,
+    maxlon: float,
+    maxlat: float,
+    limit: int,
+    category: str | None = None,
+) -> dict[str, Any]:
+    """GeoJSON FeatureCollection of facility/military rows inside a bbox,
+    optionally filtered to one ``category``. Feature.id = ``facility:{id}`` /
+    ``military:{id}`` per the ID CONTRACT (module docstring) so map clicks
+    resolve through ``/api/entity/{id}`` and the selection AI brief."""
+
+    def _in_box(lat: float, lon: float) -> bool:
+        if not (minlat <= lat <= maxlat):
+            return False
+        if minlon <= maxlon:
+            return minlon <= lon <= maxlon
+        return lon >= minlon or lon <= maxlon
+
+    rows = infrastructure() if dataset == "infrastructure" else military()
+    prefix = "facility" if dataset == "infrastructure" else "military"
+    features: list[dict[str, Any]] = []
+    for r in rows:
+        if category and str(r.get("category") or "") != category:
+            # `nuclear` is a filter over power rows, not a stored category.
+            if not (category == "nuclear" and r.get("nuclear")):
+                continue
+        try:
+            lat, lon = float(r["lat"]), float(r["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not _in_box(lat, lon):
+            continue
+        props = {
+            "name": r.get("name") or "",
+            "kind": prefix,
+            "category": r.get("category") or "",
+            "subcategory": r.get("subcategory") or "",
+        }
+        for extra in ("fuel", "capacity_mw", "operator", "component", "operational_status", "status"):
+            if r.get(extra) not in (None, ""):
+                props[extra] = r[extra]
+        features.append(
+            {
+                "type": "Feature",
+                "id": f"{prefix}:{r.get('id')}",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": props,
+            }
+        )
+        if len(features) >= limit:
+            break
     return {"type": "FeatureCollection", "features": features}
 
 

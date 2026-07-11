@@ -694,6 +694,72 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     opacity: 1,
     visibleByDefault: false,
   },
+  // UCDP GED candidate events — research-grade conflict events with NAMED
+  // side_a/side_b actors (threat-actor identification). Token-gated upstream:
+  // the layer stays registered but the endpoint returns empty+unavailable
+  // without OSINT_UCDP_TOKEN; GDELT above is the keyless default.
+  {
+    id: 'conflict.ucdp',
+    group: 'conflict',
+    title: 'Conflict — UCDP actor-coded events',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/conflict/ucdp',
+    refresh: { mode: 'pull', ttlSec: 3600 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'UCDP GED candidate (token-gated)',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['event'],
+  },
+
+  // ── CRITICAL INFRASTRUCTURE (2026-07-11 wave) ───────────────────────────
+  // Unified facility dataset (WRI power plants, SatNOGS ground stations,
+  // Wikidata telescopes/launch sites, OSM water/datacenter/telecom snapshot),
+  // one toggle per category via ?category=; all zoom-gated (placesBboxQuery)
+  // and styled by the 'facility' StyleKind (icon dispatched on
+  // props.category, like baseStyle on props.branch).
+  ...([
+    ['infra.power', 'Power plants', 'power', 'WRI GPPD (CC BY 4.0)'],
+    ['infra.nuclear', 'Nuclear facilities', 'nuclear', 'WRI GPPD (CC BY 4.0)'],
+    ['infra.water', 'Water treatment / desalination', 'water_treatment', 'OpenStreetMap (ODbL)'],
+    ['infra.desalination', 'Desalination plants', 'desalination', 'OpenStreetMap (ODbL)'],
+    ['infra.datacenters', 'Datacenters', 'datacenter', 'OpenStreetMap (ODbL)'],
+    ['infra.telecom', 'Telecom hubs', 'telecom_hub', 'OpenStreetMap (ODbL)'],
+    ['infra.ground_stations', 'Satellite ground stations', 'ground_station', 'SatNOGS (CC BY-SA)'],
+    ['infra.telescopes', 'Telescopes / observatories', 'telescope', 'Wikidata (CC0)'],
+    ['infra.launch', 'Launch facilities', 'launch', 'Wikidata (CC0)'],
+  ] as const).map(([id, title, category, license]) => ({
+    id,
+    group: 'infra' as const,
+    title,
+    kind: 'geojson' as const,
+    auth: 'none' as const,
+    endpoint: `/api/places/infrastructure?category=${category}&limit=2000`,
+    refresh: { mode: 'pull' as const, ttlSec: 86400 },
+    time: { temporal: false },
+    crs: 'EPSG:4326' as const,
+    license,
+    opacity: 1,
+    visibleByDefault: false,
+  })),
+  // MIRTA (US DoD installations/ranges/training areas) + Wikidata garrisons
+  // and military training areas — same facility substrate, military dataset.
+  {
+    id: 'military.installations',
+    group: 'infra',
+    title: 'Military installations (MIRTA + garrisons/training)',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/places/military?limit=2000',
+    refresh: { mode: 'pull', ttlSec: 86400 },
+    time: { temporal: false },
+    crs: 'EPSG:4326',
+    license: 'US DoD MIRTA (public) / Wikidata (CC0)',
+    opacity: 1,
+    visibleByDefault: false,
+  },
 ] as const;
 
 export function registerDefaults(registry: LayerRegistry): void {
