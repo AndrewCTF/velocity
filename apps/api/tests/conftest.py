@@ -98,6 +98,16 @@ def _isolate_foundry_db(tmp_path: Path) -> Iterator[None]:
     foundry_store.override_db_path(None)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_workflows_db(tmp_path: Path) -> Iterator[None]:
+    """Point the Workflows store at a per-test temp file (mirrors foundry)."""
+    from app.workflows import store as workflows_store
+
+    workflows_store.override_db_path(str(tmp_path / "workflows.db"))
+    yield
+    workflows_store.override_db_path(None)
+
+
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     app = create_app()

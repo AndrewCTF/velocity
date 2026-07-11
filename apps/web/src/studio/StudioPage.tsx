@@ -2,19 +2,12 @@
 // Ingest images or a video → POST /api/recon/jobs → live SSE progress → view the
 // finished splat in Spark (THREE.js WebGPU/WebGL2 splat renderer — full spherical
 // harmonics, no DC-only/cap compromise). No upload to any cloud.
-import { useCallback, useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { Btn, Widget } from '../shell/instruments.js';
+import { SplatView, type CamPose } from './SplatView.js';
 
 type Stage = 'queued' | 'frames' | 'sfm' | 'train' | 'export' | 'done' | 'error';
-interface CamPose {
-  position: number[];
-  target: number[];
-  up: number[];
-}
 interface Progress {
   id: string;
   status: 'running' | 'done' | 'error';
@@ -346,86 +339,4 @@ async function streamEvents(jobId: string, onEvent: (p: Progress) => void): Prom
       }
     }
   }
-}
-
-// Spark splat viewer — THREE.js, renders FULL spherical harmonics (no DC-only
-// compromise), WebGL2/WebGPU. Builds a minimal THREE scene; rebuilt per URL.
-function SplatView({ url, cam }: { url: string; cam: CamPose | null }): JSX.Element {
-  const hostRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    let raf = 0;
-    let disposed = false;
-    const w = host.clientWidth || 960;
-    const h = host.clientHeight || 720;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(w, h);
-    host.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, w / h, 0.01, 1000);
-    camera.position.set(0, 0, 5);
-    const controls = new OrbitControls(camera, renderer.domElement);
-
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-
-    // Spark detects the file type from the URL extension; renders full SH.
-    const mesh = new SplatMesh({
-      url,
-      onLoad: () => {
-        if (disposed) return;
-        // Frame on a real training viewpoint (camera.json) — guessing put the
-        // camera inside the cloud ("spilled paint"). cam is in the splat's
-        // median-centered space, matching the served .ply.
-        if (cam) {
-          camera.up.set(cam.up[0]!, cam.up[1]!, cam.up[2]!);
-          camera.position.set(cam.position[0]!, cam.position[1]!, cam.position[2]!);
-          controls.target.set(cam.target[0]!, cam.target[1]!, cam.target[2]!);
-        }
-        controls.update();
-        if (import.meta.env.DEV) {
-          (window as unknown as { __sv?: unknown }).__sv = { renderer, scene, camera, mesh, spark };
-        }
-      },
-    });
-    scene.add(mesh);
-
-    const onResize = (): void => {
-      const ww = host.clientWidth;
-      const hh = host.clientHeight;
-      if (!ww || !hh) return;
-      camera.aspect = ww / hh;
-      camera.updateProjectionMatrix();
-      renderer.setSize(ww, hh);
-    };
-    window.addEventListener('resize', onResize);
-
-    const loop = (): void => {
-      raf = requestAnimationFrame(loop);
-      controls.update();
-      renderer.render(scene, camera);
-    };
-    loop();
-
-    return () => {
-      disposed = true;
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', onResize);
-      controls.dispose();
-      try {
-        (mesh as unknown as { dispose?: () => void }).dispose?.();
-      } catch {
-        /* already gone */
-      }
-      renderer.dispose();
-      host.replaceChildren();
-    };
-  }, [url, cam]);
-
-  return <div ref={hostRef} className="absolute inset-0" />;
 }

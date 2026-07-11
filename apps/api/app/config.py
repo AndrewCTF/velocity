@@ -413,6 +413,11 @@ class Settings(BaseSettings):
     # cap + upload size cap enforced in app/foundry/store.py + ingest.py).
     foundry_db_path: str = "./data/foundry.db"
 
+    # ── Workflows substrate (docs/dashboard-workflows-plan.md) ──
+    # User-authored DAG pipelines (sources/ops/sinks) over live platform data.
+    # Same local-SQLite idiom as foundry_db_path.
+    workflows_db_path: str = "./data/workflows.db"
+
     # Optional key for the Have-I-Been-Pwned email-breach API (paid). Absent →
     # the person-OSINT HIBP connector degrades to an honest note; everything else
     # in the person layer stays keyless.

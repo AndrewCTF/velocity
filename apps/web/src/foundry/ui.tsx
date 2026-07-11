@@ -257,6 +257,19 @@ export function fmtInterval(s: number | null | undefined): string {
   return parts.join(' ') || `${h}h`;
 }
 
+// Frontend mirror of the backend's table-name slugging (app/foundry/sqlrun.py
+// ::slug_ident) — used to pre-fill the SQL console with a query that actually
+// resolves, since the SQL endpoint loads each dataset into a table named by
+// this slug (collisions get a numeric suffix server-side, not reproduced here
+// since a single-dataset console query never collides).
+export function slugIdent(name: string): string {
+  const lowered = (name || '').trim().toLowerCase();
+  let ident = lowered.replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  if (!ident) ident = 't';
+  if (/^[0-9]/.test(ident)) ident = `t_${ident}`;
+  return ident.slice(0, 64);
+}
+
 // A row of label+count filter chips (all / succeeded / failed / …). `value` is
 // the active key; count 0 still renders but is dimmed so the operator sees the
 // dimension even when empty.

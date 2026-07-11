@@ -10,6 +10,7 @@ operator local SQLite, matching the frozen schema).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -20,7 +21,8 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.foundry import binding as binding_mod
 from app.foundry import builds as builds_mod
-from app.foundry import ingest
+from app.foundry import geo as geo_mod
+from app.foundry import ingest, sqlrun
 from app.foundry import transforms as tf_mod
 from app.foundry.store import FoundryError, FoundryStore
 from app.intel.ontology import _KNOWN_KINDS
@@ -105,6 +107,25 @@ class CheckIn(BaseModel):
     enabled: bool = True
 
 
+class SqlIn(BaseModel):
+    dataset_ids: list[str] = Field(min_length=1)
+    query: str = Field(min_length=1)
+    max_rows: int = 1000
+
+
+class MonitorIn(BaseModel):
+    dataset_id: str
+    name: str = Field(min_length=1, max_length=200)
+    trigger: str
+    condition_expr: str = ""
+    action: str = "alert"
+    llm_tier: str = "fast"
+    llm_system: str = ""
+    llm_prompt: str = ""
+    severity: str = "medium"
+    enabled: bool = True
+
+
 # ── summary ──────────────────────────────────────────────────────────────────
 
 
@@ -124,6 +145,8 @@ async def summary(ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, An
     )
     recent_builds = await store.list_builds(limit=10)
     checks_failing = await store.checks_failing_count()
+    monitors_count = await store.count_monitors()
+    monitor_events_24h = await store.count_monitor_events_since(cutoff)
     return {
         "datasets": len(datasets),
         "total_rows": total_rows,
@@ -133,6 +156,52 @@ async def summary(ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, An
         "objects_synced": objects_synced,
         "recent_builds": recent_builds,
         "checks_failing": checks_failing,
+        "monitors": monitors_count,
+        "monitor_events_24h": monitor_events_24h,
+    }
+
+
+# ── SQL console ──────────────────────────────────────────────────────────────
+
+
+@router.post("/api/foundry/sql")
+async def foundry_sql(
+    body: SqlIn, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    """Read-only SQL over the latest-version rows of the given datasets, each
+    loaded into an in-memory table named by ``slug_ident(dataset name)``
+    (collisions suffixed ``_2``, ``_3``, ...). Unknown dataset id → 404; a
+    query rejection/failure (non-SELECT, syntax error, timeout) → HTTP 200
+    ``{ok: false, error}`` since that's an authoring mistake, not a server
+    error."""
+    store = _store()
+    tables: dict[str, list[dict[str, Any]]] = {}
+    table_to_dataset: dict[str, str] = {}
+    used_names: set[str] = set()
+    for dataset_id in body.dataset_ids:
+        ds = await store.get_dataset(dataset_id)
+        if ds is None:
+            raise HTTPException(status_code=404, detail=f"dataset not found: {dataset_id}")
+        base = sqlrun.slug_ident(ds["name"])
+        name = base
+        n = 2
+        while name in used_names:
+            name = f"{base}_{n}"
+            n += 1
+        used_names.add(name)
+        table_to_dataset[name] = dataset_id
+        tables[name] = await store.latest_rows(dataset_id)
+    max_rows = min(int(body.max_rows or 1000), 10_000)
+    try:
+        rows, cols = await asyncio.to_thread(sqlrun.run_sql, body.query, tables, max_rows=max_rows)
+    except sqlrun.SqlError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {
+        "ok": True,
+        "columns": cols,
+        "rows": rows,
+        "row_count": len(rows),
+        "tables": table_to_dataset,
     }
 
 
@@ -346,6 +415,32 @@ async def dataset_dead_letter(
     if await store.get_dataset(dataset_id) is None:
         raise HTTPException(status_code=404, detail="dataset not found")
     return await store.get_dead_letter(dataset_id, limit=limit)
+
+
+@router.get("/api/foundry/datasets/{dataset_id}/geo")
+async def dataset_geo(
+    dataset_id: str, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    """Auto-detect lat/lon columns (name heuristics + numeric-range check) and
+    return the latest version's rows as a capped GeoJSON FeatureCollection.
+    No geo columns found → ``{ok: false, reason}`` with HTTP 200 (frontend-
+    friendly — this is a "nothing to show" case, not an error), not 404."""
+    store = _store()
+    ds = await store.get_dataset(dataset_id)
+    if ds is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    rows = await store.latest_rows(dataset_id)
+    detected = geo_mod.detect_geo(ds["schema"], rows)
+    if detected is None:
+        return {"ok": False, "reason": "no lat/lon columns detected"}
+    features = geo_mod.to_feature_collection(rows, detected["lat_col"], detected["lon_col"])
+    return {
+        "ok": True,
+        "lat_col": detected["lat_col"],
+        "lon_col": detected["lon_col"],
+        "count": len(features["features"]),
+        "features": features,
+    }
 
 
 @router.get("/api/foundry/datasets/{dataset_id}/checks/results")
@@ -695,3 +790,84 @@ async def delete_schedule(
 ) -> dict[str, bool]:
     await _store().delete_schedule(schedule_id)
     return {"ok": True}
+
+
+# ── monitors ─────────────────────────────────────────────────────────────────
+
+
+@router.get("/api/foundry/monitors")
+async def list_monitors(
+    dataset_id: str | None = Query(None), ctx: UserCtx = Depends(current_user_or_local)
+) -> list[dict[str, Any]]:
+    return await _store().list_monitors(dataset_id)
+
+
+@router.post("/api/foundry/monitors")
+async def create_monitor(
+    body: MonitorIn, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    store = _store()
+    ds = await store.get_dataset(body.dataset_id)
+    if ds is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    try:
+        return await store.create_monitor(
+            body.dataset_id,
+            body.name,
+            body.trigger,
+            body.condition_expr,
+            body.action,
+            body.llm_tier,
+            body.llm_system,
+            body.llm_prompt,
+            body.severity,
+            body.enabled,
+        )
+    except FoundryError as exc:
+        _raise(exc)
+
+
+@router.put("/api/foundry/monitors/{monitor_id}")
+async def update_monitor(
+    monitor_id: str, body: MonitorIn, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    try:
+        updated = await _store().update_monitor(
+            monitor_id,
+            body.name,
+            body.trigger,
+            body.condition_expr,
+            body.action,
+            body.llm_tier,
+            body.llm_system,
+            body.llm_prompt,
+            body.severity,
+            body.enabled,
+        )
+    except FoundryError as exc:
+        _raise(exc)
+        raise AssertionError("unreachable") from exc  # pragma: no cover
+    if updated is None:
+        raise HTTPException(status_code=404, detail="monitor not found")
+    return updated
+
+
+@router.delete("/api/foundry/monitors/{monitor_id}")
+async def delete_monitor(
+    monitor_id: str, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, bool]:
+    await _store().delete_monitor(monitor_id)
+    return {"ok": True}
+
+
+@router.get("/api/foundry/monitors/{monitor_id}/events")
+async def monitor_events(
+    monitor_id: str,
+    limit: int = Query(100, ge=1, le=500),
+    ctx: UserCtx = Depends(current_user_or_local),
+) -> list[dict[str, Any]]:
+    store = _store()
+    m = await store.get_monitor(monitor_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="monitor not found")
+    return await store.get_monitor_events(monitor_id, limit=limit)

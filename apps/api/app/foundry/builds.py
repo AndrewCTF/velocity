@@ -24,6 +24,24 @@ _LOCAL_CTX = UserCtx(user_id="local", token="")
 _PREVIEW_QUARANTINE_SAMPLE = 20
 
 
+async def _evaluate_build_failed_monitors(
+    store: FoundryStore, transform: dict[str, Any], error: str
+) -> None:
+    """Fire ``build_failed`` monitors on a transform's declared output
+    dataset — evaluation is fire-and-forget-safe (never raises) so a monitor
+    bug can never mask the real build failure being recorded."""
+    from app.foundry import (
+        monitors as monitors_mod,  # noqa: PLC0415 — break the builds<->monitors cycle
+    )
+
+    await monitors_mod.evaluate_monitors(
+        store,
+        transform["output_dataset_id"],
+        trigger_kind="build_failed",
+        context={"error": error, "transform_name": transform.get("name")},
+    )
+
+
 async def _execute_transform(
     store: FoundryStore, transform: dict[str, Any], quarantine: tf.QuarantineSink | None
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
@@ -155,9 +173,11 @@ async def run_transform_build(
         )
     except FoundryError as exc:
         log.append(f"error: {exc.detail}")
+        await _evaluate_build_failed_monitors(store, transform, exc.detail)
         return await store.finish_build(build["id"], "failed", None, exc.detail, log)
     except Exception as exc:  # noqa: BLE001 — surface as a failed build, not a 500
         log.append(f"error: {exc}")
+        await _evaluate_build_failed_monitors(store, transform, str(exc))
         return await store.finish_build(build["id"], "failed", None, str(exc), log)
 
 

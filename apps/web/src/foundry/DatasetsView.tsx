@@ -19,6 +19,7 @@ import { Modal } from '../shell/Modal.js';
 import { useFoundryNav, type DetailTab } from './nav.js';
 import { useFoundryPoll } from './useFoundryPoll.js';
 import { UploadModal } from './UploadModal.js';
+import { MapTab, MonitorsTab, SqlTab } from './WorkbenchTabs.js';
 import {
   EmptyState,
   Field,
@@ -315,6 +316,9 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
     { id: 'deadletter', label: 'Dead-letter' },
     { id: 'checks', label: 'Checks' },
     { id: 'docs', label: 'Docs' },
+    { id: 'map', label: 'Map' },
+    { id: 'sql', label: 'SQL' },
+    { id: 'monitors', label: 'Monitors' },
   ];
 
   const onDelete = async (): Promise<void> => {
@@ -478,6 +482,9 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
 
         {tab === 'checks' && <ChecksSection datasetId={dataset.id} />}
         {tab === 'docs' && <DocsTab dataset={dataset} docs={docs} />}
+        {tab === 'map' && <MapTab dataset={dataset} />}
+        {tab === 'sql' && <SqlTab dataset={dataset} />}
+        {tab === 'monitors' && <MonitorsTab datasetId={dataset.id} />}
       </div>
       <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} existing={dataset} onDone={() => { setUploadOpen(false); refresh(); }} />
       {confirmElement}

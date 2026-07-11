@@ -116,6 +116,19 @@ CREATE TABLE IF NOT EXISTS check_results (
   dataset_id TEXT NOT NULL, version INTEGER NOT NULL, check_id TEXT NOT NULL,
   passed INTEGER NOT NULL, detail TEXT, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS monitors (
+  id TEXT PRIMARY KEY, dataset_id TEXT NOT NULL, name TEXT NOT NULL,
+  trigger TEXT NOT NULL, condition_expr TEXT NOT NULL DEFAULT '',
+  action TEXT NOT NULL, llm_tier TEXT NOT NULL DEFAULT 'fast',
+  llm_system TEXT NOT NULL DEFAULT '', llm_prompt TEXT NOT NULL DEFAULT '',
+  severity TEXT NOT NULL DEFAULT 'medium', enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS monitor_events (
+  id INTEGER PRIMARY KEY, monitor_id TEXT NOT NULL, at TEXT NOT NULL,
+  kind TEXT NOT NULL, summary TEXT NOT NULL, detail_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_monitor_events_monitor ON monitor_events(monitor_id);
 """
 
 # Bounding (docs/foundry-plan.md): per-dataset row cap + version retention.
@@ -400,7 +413,20 @@ class FoundryStore:
                 422,
                 f"row cap exceeded: {len(rows)} > {MAX_ROWS_PER_DATASET}",
             )
-        check_results = await self._eval_checks_or_raise(dataset_id, rows, schema)
+        try:
+            check_results = await self._eval_checks_or_raise(dataset_id, rows, schema)
+        except FoundryError as exc:
+            from app.foundry import (
+                monitors as monitors_mod,  # noqa: PLC0415 — break the store<->monitors cycle
+            )
+
+            await monitors_mod.evaluate_monitors(
+                self,
+                dataset_id,
+                trigger_kind="check_failed",
+                context={"error": exc.detail, "rows": rows[:50]},
+            )
+            raise
 
         def _sync() -> dict[str, Any]:
             con = _connect(self.s)
@@ -463,6 +489,21 @@ class FoundryStore:
 
         dataset_row = await self._run(_sync)
         await self.record_check_results(dataset_id, dataset_row["latest_version"], check_results)
+        from app.foundry import (
+            monitors as monitors_mod,  # noqa: PLC0415 — break the store<->monitors cycle
+        )
+
+        # Single choke point for the "a version was written" event: every
+        # writer (upload, append, rollback, transform build) funnels through
+        # add_version, so hooking here — rather than duplicating the call at
+        # each of those call sites — covers new_version/row_condition monitors
+        # for all of them uniformly.
+        await monitors_mod.evaluate_monitors(
+            self,
+            dataset_id,
+            trigger_kind="version_written",
+            context={"rows": rows, "schema": schema, "version": dataset_row["latest_version"]},
+        )
         return dataset_row
 
     def _rows_for_version_sync(
@@ -1631,6 +1672,272 @@ class FoundryStore:
                     "  JOIN checks c ON c.id = cr.check_id"
                     "  WHERE c.enabled = 1"
                     ") WHERE rn = 1 AND passed = 0"
+                ).fetchone()
+                return r[0]
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    # ---- monitors ---------------------------------------------------------------
+
+    _MONITOR_COLS = (
+        "id, dataset_id, name, trigger, condition_expr, action, llm_tier,"
+        " llm_system, llm_prompt, severity, enabled, created_at, updated_at"
+    )
+
+    def _monitor_row(self, row: tuple[Any, ...]) -> dict[str, Any]:
+        return {
+            "id": row[0],
+            "dataset_id": row[1],
+            "name": row[2],
+            "trigger": row[3],
+            "condition_expr": row[4],
+            "action": row[5],
+            "llm_tier": row[6],
+            "llm_system": row[7],
+            "llm_prompt": row[8],
+            "severity": row[9],
+            "enabled": bool(row[10]),
+            "created_at": row[11],
+            "updated_at": row[12],
+        }
+
+    def _monitor_event_row(self, row: tuple[Any, ...]) -> dict[str, Any]:
+        return {
+            "id": row[0],
+            "monitor_id": row[1],
+            "at": row[2],
+            "kind": row[3],
+            "summary": row[4],
+            "detail": json.loads(row[5]) if row[5] else {},
+        }
+
+    async def create_monitor(
+        self,
+        dataset_id: str,
+        name: str,
+        trigger: str,
+        condition_expr: str,
+        action: str,
+        llm_tier: str,
+        llm_system: str,
+        llm_prompt: str,
+        severity: str,
+        enabled: bool = True,
+    ) -> dict[str, Any]:
+        from app.foundry import monitors as monitors_mod  # noqa: PLC0415
+
+        monitors_mod.validate_monitor(trigger, action, condition_expr, severity)
+
+        def _sync() -> dict[str, Any]:
+            con = _connect(self.s)
+            try:
+                row = con.execute(
+                    "SELECT id FROM datasets WHERE id=?", (dataset_id,)
+                ).fetchone()
+                if row is None:
+                    raise FoundryError(404, "dataset not found")
+                mid = new_id("mon")
+                now = _now_iso()
+                con.execute(
+                    "INSERT INTO monitors (id, dataset_id, name, trigger,"
+                    " condition_expr, action, llm_tier, llm_system, llm_prompt,"
+                    " severity, enabled, created_at, updated_at)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        mid,
+                        dataset_id,
+                        name,
+                        trigger,
+                        condition_expr,
+                        action,
+                        llm_tier,
+                        llm_system,
+                        llm_prompt,
+                        severity,
+                        int(enabled),
+                        now,
+                        now,
+                    ),
+                )
+                con.commit()
+                r = con.execute(
+                    f"SELECT {self._MONITOR_COLS} FROM monitors WHERE id=?", (mid,)
+                ).fetchone()
+                return self._monitor_row(r)
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def update_monitor(
+        self,
+        monitor_id: str,
+        name: str,
+        trigger: str,
+        condition_expr: str,
+        action: str,
+        llm_tier: str,
+        llm_system: str,
+        llm_prompt: str,
+        severity: str,
+        enabled: bool,
+    ) -> dict[str, Any] | None:
+        from app.foundry import monitors as monitors_mod  # noqa: PLC0415
+
+        monitors_mod.validate_monitor(trigger, action, condition_expr, severity)
+
+        def _sync() -> dict[str, Any] | None:
+            con = _connect(self.s)
+            try:
+                existing = con.execute(
+                    "SELECT id FROM monitors WHERE id=?", (monitor_id,)
+                ).fetchone()
+                if existing is None:
+                    return None
+                now = _now_iso()
+                con.execute(
+                    "UPDATE monitors SET name=?, trigger=?, condition_expr=?,"
+                    " action=?, llm_tier=?, llm_system=?, llm_prompt=?,"
+                    " severity=?, enabled=?, updated_at=? WHERE id=?",
+                    (
+                        name,
+                        trigger,
+                        condition_expr,
+                        action,
+                        llm_tier,
+                        llm_system,
+                        llm_prompt,
+                        severity,
+                        int(enabled),
+                        now,
+                        monitor_id,
+                    ),
+                )
+                con.commit()
+                r = con.execute(
+                    f"SELECT {self._MONITOR_COLS} FROM monitors WHERE id=?", (monitor_id,)
+                ).fetchone()
+                return self._monitor_row(r)
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def delete_monitor(self, monitor_id: str) -> None:
+        def _sync() -> None:
+            con = _connect(self.s)
+            try:
+                con.execute("DELETE FROM monitors WHERE id=?", (monitor_id,))
+                con.execute("DELETE FROM monitor_events WHERE monitor_id=?", (monitor_id,))
+                con.commit()
+            finally:
+                con.close()
+
+        await self._run(_sync)
+
+    async def get_monitor(self, monitor_id: str) -> dict[str, Any] | None:
+        def _sync() -> dict[str, Any] | None:
+            con = _connect(self.s)
+            try:
+                r = con.execute(
+                    f"SELECT {self._MONITOR_COLS} FROM monitors WHERE id=?", (monitor_id,)
+                ).fetchone()
+                return self._monitor_row(r) if r else None
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def list_monitors(self, dataset_id: str | None = None) -> list[dict[str, Any]]:
+        def _sync() -> list[dict[str, Any]]:
+            con = _connect(self.s)
+            try:
+                if dataset_id:
+                    rows = con.execute(
+                        f"SELECT {self._MONITOR_COLS} FROM monitors WHERE dataset_id=?"
+                        " ORDER BY created_at DESC",
+                        (dataset_id,),
+                    ).fetchall()
+                else:
+                    rows = con.execute(
+                        f"SELECT {self._MONITOR_COLS} FROM monitors ORDER BY created_at DESC"
+                    ).fetchall()
+                return [self._monitor_row(r) for r in rows]
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def record_monitor_event(
+        self, monitor_id: str, kind: str, summary: str, detail: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Insert one event and prune older events beyond the last 200 for
+        this monitor — events are a rolling window, not an ever-growing log."""
+
+        def _sync() -> dict[str, Any]:
+            con = _connect(self.s)
+            try:
+                now = _now_iso()
+                cur = con.execute(
+                    "INSERT INTO monitor_events (monitor_id, at, kind, summary,"
+                    " detail_json) VALUES (?,?,?,?,?)",
+                    (monitor_id, now, kind, summary, json.dumps(detail, default=str)),
+                )
+                eid = cur.lastrowid
+                con.execute(
+                    "DELETE FROM monitor_events WHERE monitor_id=? AND id NOT IN ("
+                    "  SELECT id FROM monitor_events WHERE monitor_id=?"
+                    "  ORDER BY id DESC LIMIT 200"
+                    ")",
+                    (monitor_id, monitor_id),
+                )
+                con.commit()
+                r = con.execute(
+                    "SELECT id, monitor_id, at, kind, summary, detail_json"
+                    " FROM monitor_events WHERE id=?",
+                    (eid,),
+                ).fetchone()
+                return self._monitor_event_row(r)
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def get_monitor_events(
+        self, monitor_id: str, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        def _sync() -> list[dict[str, Any]]:
+            con = _connect(self.s)
+            try:
+                rows = con.execute(
+                    "SELECT id, monitor_id, at, kind, summary, detail_json"
+                    " FROM monitor_events WHERE monitor_id=? ORDER BY id DESC LIMIT ?",
+                    (monitor_id, int(limit)),
+                ).fetchall()
+                return [self._monitor_event_row(r) for r in rows]
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def count_monitors(self) -> int:
+        def _sync() -> int:
+            con = _connect(self.s)
+            try:
+                return con.execute("SELECT COUNT(*) FROM monitors").fetchone()[0]
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def count_monitor_events_since(self, iso_cutoff: str) -> int:
+        def _sync() -> int:
+            con = _connect(self.s)
+            try:
+                r = con.execute(
+                    "SELECT COUNT(*) FROM monitor_events WHERE at >= ?", (iso_cutoff,)
                 ).fetchone()
                 return r[0]
             finally:

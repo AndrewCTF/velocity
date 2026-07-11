@@ -37,6 +37,9 @@ site/
 # Foundry BYO-data store (uploaded datasets + build history; runtime, never commit).
 **/data/foundry.db
 **/data/foundry.db-*
+# Workflows store (saved DAGs + run history + per-workflow memory; runtime).
+**/data/workflows.db
+**/data/workflows.db-*
 .playwright-mcp/
 # Dev screenshots / scratch images at the repo root — keep the tree tidy.
 # (Real product art lives in code as SVG, or under docs/ if ever needed.)
@@ -79,6 +82,8 @@ apps/web/public/basemap/*.pmtiles
 graphify-out/
 
 # Research artifacts / scratch — not source. Keep the repo to code + docs.
+scratchpad/
+test_images/
 Palantir_Gotham_*.pdf
 Palantir_Gotham_*.docx
 deep-research-report.md

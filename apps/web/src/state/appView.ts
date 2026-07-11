@@ -17,7 +17,9 @@ export type AppId =
   | 'video'
   | 'sim'
   | 'reports'
-  | 'foundry';
+  | 'foundry'
+  | 'workflows'
+  | 'city';
 
 export const APP_IDS: readonly AppId[] = [
   'map',
@@ -28,6 +30,8 @@ export const APP_IDS: readonly AppId[] = [
   'sim',
   'reports',
   'foundry',
+  'workflows',
+  'city',
 ];
 
 // chrome: 'globe' keeps the right inspector rail + timeline footer (apps designed
@@ -46,7 +50,30 @@ export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'glo
     hint: 'BYO data: datasets, pipelines, builds, ontology binding',
     chrome: 'full',
   },
+  workflows: {
+    label: 'Workflows',
+    hint: 'User-programmable analysis pipelines (Python/SQL/LLM blocks)',
+    chrome: 'full',
+  },
+  city: {
+    label: 'City 3D',
+    hint: 'Gaussian-splat 3D scenes',
+    chrome: 'full',
+  },
 };
+
+// Grouped clusters for the top-bar app switcher (design §6.1 overhaul): the
+// flat segmented control got too wide once Foundry/Workflows/City landed, so
+// the switcher renders these as labeled clusters instead. Order here is
+// render order; every AppId must appear in exactly one group (enforced by
+// appView.test.ts).
+export const APP_GROUPS: readonly { id: string; label: string; apps: readonly AppId[] }[] = [
+  { id: 'live', label: 'Live', apps: ['map', 'sim'] },
+  { id: 'analyze', label: 'Analyze', apps: ['explorer', 'graph', 'targeting', 'video'] },
+  { id: 'data', label: 'Data', apps: ['foundry', 'workflows'] },
+  { id: 'product', label: 'Product', apps: ['reports'] },
+  { id: '3d', label: '3D', apps: ['city'] },
+];
 
 const LS_KEY = 'velocity.appView';
 
