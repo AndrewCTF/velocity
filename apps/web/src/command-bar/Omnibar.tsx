@@ -14,7 +14,7 @@ import {
   LOCATION_KINDS,
   type SearchResult,
 } from '../transport/search.js';
-import { useSelection } from '../state/stores.js';
+import { useSelection, useSearchTarget } from '../state/stores.js';
 import { useUiMode, type UiMode } from '../state/uiMode.js';
 import { flyToPosition } from '../globe/camera.js';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
@@ -141,9 +141,18 @@ export function Omnibar({
       it.a.run();
     } else {
       const r = it.e;
-      if (LOCATION_KINDS.has(r.kind)) useSelection.getState().select(null);
-      else useSelection.getState().select(r.id);
-      if (viewer && (r.lon !== 0 || r.lat !== 0)) {
+      const located = r.lon !== 0 || r.lat !== 0;
+      if (LOCATION_KINDS.has(r.kind)) {
+        // Static location — pin the exact coordinate (see searchTargetMarker).
+        useSelection.getState().select(null);
+        useSearchTarget.getState().setTarget(
+          located ? { lon: r.lon, lat: r.lat, label: r.label, kind: r.kind } : null,
+        );
+      } else {
+        useSelection.getState().select(r.id);
+        useSearchTarget.getState().setTarget(null);
+      }
+      if (viewer && located) {
         flyToPosition(viewer, r.lon, r.lat, (r.kind === 'chokepoint' ? 800 : 200) * 1000, 1.2);
       }
     }

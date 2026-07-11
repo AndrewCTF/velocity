@@ -8,6 +8,7 @@ import { type CSSProperties, useEffect, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { Widget, SectionLabel } from '../shell/instruments.js';
 import { useInvestigation } from '../graph/investigationStore.js';
+import { AiAssessmentCard } from '../entity-panel/AiAssessmentCard.js';
 
 function targetOf(id: string): string {
   const i = id.indexOf(':');
@@ -516,6 +517,12 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
       >
         ⊹ Search around
       </button>
+
+      {/* Selection-tier AI brief — same card the map-entity EntityPanel shows;
+          positionless OSINT entities have no Cesium snapshot, so the id (which
+          encodes kind:target) plus the target as `name` is all the model gets.
+          Inert unless selection AI is enabled. */}
+      <AiAssessmentCard id={id} kind={kind} properties={{ name: target }} />
 
       {kind === 'domain' && (
         <>

@@ -41,7 +41,13 @@ router = APIRouter(tags=["recon"], prefix="/api/recon")
 log = logging.getLogger("app.recon")
 
 # ── paths (env-overridable; default to the repo's GPU lab) ───────────────────
-_REPO_ROOT = Path(__file__).resolve().parents[4]  # .../OSINT
+# In the Docker image (COPY apps/api/app ./app) this file only has 3 ancestors,
+# so parents[4] would IndexError at import and take the whole app down; fall
+# back to the shallowest available parent — the GPU-lab dir it points to is
+# absent in the keyless container anyway, and every use below already checks
+# _FUSION.exists() first.
+_PARENTS = Path(__file__).resolve().parents
+_REPO_ROOT = _PARENTS[4] if len(_PARENTS) > 4 else _PARENTS[-1]  # .../OSINT
 _FUSION = Path(os.environ.get("FUSION_DIR") or (_REPO_ROOT / "apps" / "ml" / "fusion"))
 _MAMBA = os.environ.get("MICROMAMBA_BIN") or shutil.which("micromamba") or str(
     Path.home() / ".local" / "bin" / "micromamba"

@@ -3,7 +3,13 @@ import * as Cesium from 'cesium';
 import { useSelection, useAlerts } from '../state/stores.js';
 import { aircraftStyle, vesselStyle } from '../globe/adapters/styles.js';
 import { tracks } from '../intel/tracks.js';
-import { fetchEnrichment, type Enrichment, type Airport } from '../transport/entity.js';
+import {
+  fetchEnrichment,
+  type Enrichment,
+  type Airport,
+  type AirportEnrichment,
+  type PortEnrichment,
+} from '../transport/entity.js';
 import { flyToPosition, followEntity, stopFollow } from '../globe/camera.js';
 import { Sparkline } from './Sparkline.js';
 import { CameraCard } from './CameraCard.js';
@@ -29,7 +35,11 @@ import { AcarsCard } from './AcarsCard.js';
 import { ImageryCard } from './ImageryCard.js';
 import { PatternOfLifeCard } from './PatternOfLifeCard.js';
 import { DossierNarrativeCard } from './DossierNarrativeCard.js';
+import { AiAssessmentCard } from './AiAssessmentCard.js';
 import { VesselClassCard } from './VesselClassCard.js';
+import { AirportCard } from './AirportCard.js';
+import { PortCard } from './PortCard.js';
+import { BaseCard } from './BaseCard.js';
 import { SituationPanel } from '../situations/SituationPanel.js';
 import { OsintEntityPanel } from '../osint/OsintEntityPanel.js';
 import { useProjection } from '../globe/ProjectionLayer.js';
@@ -360,6 +370,13 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
 
       <PatternOfLifeCard id={id} kind={snap?.kind ?? ''} viewer={viewer ?? null} />
 
+      <AiAssessmentCard
+        id={id}
+        kind={snap?.kind ?? ''}
+        properties={snap?.properties ?? {}}
+        {...(snap?.position ? { altM: snap.position.alt } : {})}
+      />
+
       <DossierNarrativeCard id={id} kind={snap?.kind ?? ''} />
 
       {snap?.kind === 'vessel' && (
@@ -379,6 +396,23 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
                 ? (snap.properties['speed'] as number)
                 : undefined) ?? null
           }
+        />
+      )}
+
+      {enrichment?.kind === 'airport' && (
+        <AirportCard enrichment={enrichment as AirportEnrichment} />
+      )}
+
+      {enrichment?.kind === 'port' && (
+        <PortCard enrichment={enrichment as PortEnrichment} />
+      )}
+
+      {snap?.kind === 'base' && (
+        <BaseCard
+          name={snap.name ?? (typeof snap.properties['name'] === 'string' ? (snap.properties['name'] as string) : null)}
+          branch={typeof snap.properties['branch'] === 'string' ? (snap.properties['branch'] as string) : null}
+          lat={snap.position?.lat ?? null}
+          lon={snap.position?.lon ?? null}
         />
       )}
 
@@ -641,6 +675,10 @@ const OTHER_GLYPH: Record<string, string> = {
   quake: '◉',
   camera: '▣',
   fire: '✦',
+  airport: '✈',
+  port: '⚓',
+  base: '⛨',
+  satellite: '◈',
 };
 
 interface Category {
@@ -686,6 +724,14 @@ function kindBadgeTone(kind: string | undefined): BadgeTone {
     case 'quake':
       return 'warn';
     case 'camera':
+      return 'mag';
+    case 'airport':
+      return 'accent';
+    case 'port':
+      return 'ok';
+    case 'base':
+      return 'warn';
+    case 'satellite':
       return 'mag';
     default:
       return 'neutral';
@@ -1196,6 +1242,10 @@ function EnrichmentCard({
     'origin',
     'destination',
     'route_airline',
+    // Owned by AirportCard — arrays of objects that would render as
+    // "[object Object]" in the generic key/value grid below.
+    'runways',
+    'frequencies',
   ]);
   const note = (enrichment as { note?: string }).note;
   const wikidata = (enrichment as { wikidata_url?: string }).wikidata_url;

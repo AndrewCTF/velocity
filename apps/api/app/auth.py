@@ -252,6 +252,26 @@ async def require_ws_key(ws: WebSocket) -> bool:
     return await _authorized(static_supplied, token, s)
 
 
+async def require_compute_enabled() -> None:
+    """FastAPI dependency for a single POST route that must fail closed the
+    same way ``ApiKeyMiddleware``'s compute-path gate does (issue #8), without
+    listing the route in ``is_compute_path`` — used when a GET sibling on the
+    same path must stay open (e.g. ``POST /api/ai/local`` gains write
+    authority over the local engine/selection-model, but ``GET /api/ai/local``
+    is a pure keyless status probe the settings UI polls). When auth is
+    enabled, ``ApiKeyMiddleware`` already enforces a credential on this route;
+    when ``ALLOW_UNAUTHENTICATED=1``, the operator opted into open mode — both
+    cases pass through here unchanged."""
+    s = get_settings()
+    if not _auth_enabled(s) and not s.allow_unauthenticated:
+        raise HTTPException(
+            status_code=503,
+            detail="this endpoint spends compute/credits and is disabled "
+                   "on an unauthenticated deployment; configure API_KEY / "
+                   "Supabase, or set ALLOW_UNAUTHENTICATED=1 for trusted local use",
+        )
+
+
 async def require_api_key(
     request: Request,
     x_api_key: str | None = Header(default=None),

@@ -20,6 +20,7 @@ import { useInvestigation } from '../graph/investigationStore.js';
 import { apiFetch } from '../transport/http.js';
 import { CoaCards } from './CoaCards.js';
 import { ImageryDiff } from '../imagery/ImageryDiff.js';
+import { AiAssessmentCard } from '../entity-panel/AiAssessmentCard.js';
 
 const SEV_TONE: Record<Severity, BadgeTone> = {
   critical: 'alert',
@@ -254,6 +255,15 @@ function SummaryTab({
           className="w-full bg-bg-2 border border-line rounded-sm px-2 py-1.5 text-[11px] text-txt-1 leading-snug resize-y focus:outline-none focus:border-accent-line"
         />
       </Widget>
+
+      {/* Selection-tier AI brief — same card the map-entity EntityPanel shows.
+          A situation is an aggregate case file (no Cesium snapshot), so the
+          model gets its id plus name/severity. Inert unless selection AI is on. */}
+      <AiAssessmentCard
+        id={sit.id}
+        kind="situation"
+        properties={{ name: sit.name, category: sit.severity }}
+      />
       {error && <p className="text-[10px] text-warn">{error}</p>}
     </div>
   );

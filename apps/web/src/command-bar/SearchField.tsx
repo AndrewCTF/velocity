@@ -7,7 +7,7 @@ import {
   LOCATION_KINDS,
   type SearchResult,
 } from '../transport/search.js';
-import { useSelection } from '../state/stores.js';
+import { useSelection, useSearchTarget } from '../state/stores.js';
 import { flyToPosition } from '../globe/camera.js';
 
 interface Props {
@@ -48,7 +48,7 @@ export function SearchField({ viewer }: Props): JSX.Element {
           setActive(0);
         })
         .catch(() => undefined);
-    }, 200);
+    }, 140);
     return () => {
       window.clearTimeout(id);
       aborter.abort();
@@ -68,12 +68,20 @@ export function SearchField({ viewer }: Props): JSX.Element {
   }, [open]);
 
   const pick = (r: SearchResult) => {
+    const located = r.lon !== 0 || r.lat !== 0;
     if (LOCATION_KINDS.has(r.kind)) {
+      // Static location — no live entity to select. Drop a pinned marker at the
+      // exact coordinate so the operator sees WHICH icon they searched for.
       useSelection.getState().select(null);
+      useSearchTarget.getState().setTarget(
+        located ? { lon: r.lon, lat: r.lat, label: r.label, kind: r.kind } : null,
+      );
     } else {
+      // Live entity — the selection reticle locks onto it; retire any search pin.
       useSelection.getState().select(r.id);
+      useSearchTarget.getState().setTarget(null);
     }
-    if (viewer && (r.lon !== 0 || r.lat !== 0)) {
+    if (viewer && located) {
       const altKm = r.kind === 'chokepoint' ? 800 : 200;
       flyToPosition(viewer, r.lon, r.lat, altKm * 1000, 1.2);
     }
@@ -99,6 +107,13 @@ export function SearchField({ viewer }: Props): JSX.Element {
           // A valid coordinate is fully handled here — fly if we have a viewer,
           // and ALWAYS return so it never falls through to pick a coincidental
           // result for a coordinate-looking string.
+          useSelection.getState().select(null);
+          useSearchTarget.getState().setTarget({
+            lon,
+            lat,
+            label: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+            kind: 'place',
+          });
           if (viewer) flyToPosition(viewer, lon, lat, 200_000, 1.2);
           setOpen(false);
           setQ('');
@@ -126,7 +141,7 @@ export function SearchField({ viewer }: Props): JSX.Element {
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKey}
-        placeholder="search MMSI / ICAO24 / callsign / lat,lon  (press /)"
+        placeholder="search airport / port / callsign / MMSI / ICAO24 / lat,lon  (press /)"
         className="mono w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-1 placeholder:text-txt-3 focus:outline-none focus:border-accent-line"
         aria-label="Unified search"
         aria-autocomplete="list"

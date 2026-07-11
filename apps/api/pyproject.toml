@@ -26,6 +26,10 @@ dependencies = [
   "feedparser>=6.0.11",
   "cryptography>=42.0",
   "pyjwt>=2.0",
+  # Local model manager (app.localllm): HF Hub API for catalog metadata/size
+  # preflight + snapshot_download for Unsloth GGUF pulls. Pure-Python, safe as
+  # a hard dependency (unlike the GDAL/torch-class optional extras below).
+  "huggingface_hub>=0.34.0",
   # COG tiler (Track B2): turns Cloud-Optimized GeoTIFFs into XYZ tiles. Pulls
   # rasterio/GDAL, which do NOT build on every platform — app.imagery.tiler
   # guards the import so the app still boots if this fails to install. Keep it

@@ -89,7 +89,124 @@ export interface QuakeEnrichment {
   felt?: number | null;
   source?: string;
 }
-export type Enrichment = AircraftEnrichment | VesselEnrichment | QuakeEnrichment | { kind: string; [k: string]: unknown };
+/** A single physical runway from OurAirports + FAA NASR (ils_rf.txt). */
+export interface Runway {
+  le_ident?: string | null;
+  he_ident?: string | null;
+  length_ft?: number | null;
+  width_ft?: number | null;
+  surface?: string | null;
+  lighted?: boolean | null;
+  closed?: boolean | null;
+  /** Best (lowest) ILS CAT seen on this runway; US-only — null elsewhere. */
+  ils_category?: string | null;
+  /** Per-end CAT — differs from `ils_category` when the two ends aren't equipped alike. */
+  ils_category_le?: string | null;
+  ils_category_he?: string | null;
+}
+export interface Frequency {
+  type?: string | null;
+  desc?: string | null;
+  mhz?: number | null;
+}
+export interface AirportEnrichment {
+  kind: 'airport';
+  icao: string;
+  iata?: string | null;
+  name?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  elevation_ft?: number | null;
+  municipality?: string | null;
+  iso?: string | null;
+  atype?: string | null;
+  scheduled_service?: boolean;
+  /** Best-effort regex flag off the name (AFB/NAS/MCAS/…) — no source flag exists. */
+  military?: boolean;
+  runways?: Runway[];
+  frequencies?: Frequency[];
+  /** Derived capability PROXIES only (never a fabricated capacity number). */
+  runway_count?: number;
+  max_runway_length_ft?: number | null;
+  /** https://www.liveatc.net/search/?icao=… — Cloudflare-403s server-side, linkout only. */
+  liveatc_url?: string | null;
+  /** Guessed mount URLs, NOT enumerated/verified — label as experimental. */
+  candidate_mounts?: string[];
+  candidate_mounts_best_effort?: boolean;
+  source?: string;
+}
+export interface PortEnrichment {
+  kind: 'port';
+  wpi: string;
+  name?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  /** Always "Unknown" today — NGA WPI carries no live closure feed (§7). */
+  op_status?: string;
+  harborSize?: string | null;
+  harborType?: string | null;
+  shelter?: string | null;
+  repairs?: string | null;
+  dryDock?: string | null;
+  railway?: string | null;
+  portSecurity?: string | null;
+  harborUse?: string | null;
+  cargoPierDepth?: number | null;
+  channelDepth?: number | null;
+  maxVesselLength?: number | null;
+  maxVesselBeam?: number | null;
+  maxVesselDraft?: number | null;
+  source?: string;
+}
+export interface SatelliteEnrichment {
+  kind: 'satellite';
+  norad_cat_id: string;
+  object_name?: string | null;
+  object_type?: string | null;
+  ops_status_code?: string | null;
+  owner?: string | null;
+  launch_date?: string | null;
+  launch_site?: string | null;
+  decay_date?: string | null;
+  period?: number | null;
+  inclination?: number | null;
+  apogee?: number | null;
+  perigee?: number | null;
+  rcs?: number | null;
+  source?: string;
+}
+export type Enrichment =
+  | AircraftEnrichment
+  | VesselEnrichment
+  | QuakeEnrichment
+  | AirportEnrichment
+  | PortEnrichment
+  | SatelliteEnrichment
+  | { kind: string; [k: string]: unknown };
+
+/** One station row from the aviationweather.gov METAR passthrough
+ * (`GET /api/weather/metar`) — fields are the upstream JSON as-is (no
+ * renaming), see apps/api/tests/fixtures/metar_kjfk.json for a live sample.
+ * `wdir` is a number except for the literal string "VRB" (variable);
+ * `visib` is usually a number of statute miles but can be a string like
+ * "10+" — never coerce either without checking `typeof`. */
+export interface Metar {
+  icaoId?: string;
+  wdir?: number | string | null;
+  wspd?: number | null;
+  visib?: number | string | null;
+  altim?: number | null;
+  temp?: number | null;
+  dewp?: number | null;
+  clouds?: { cover?: string; base?: number | null }[];
+  /** Flight category: VFR / MVFR / IFR / LIFR — absent for non-reporting stations. */
+  fltCat?: string | null;
+  rawOb?: string;
+  name?: string;
+  lat?: number;
+  lon?: number;
+  elev?: number;
+}
 
 import { apiFetch } from './http.js';
 
@@ -105,4 +222,16 @@ export async function fetchEnrichment(
   const r = await apiFetch(path, signal ? { signal } : {});
   if (!r.ok) return null;
   return (await r.json()) as Enrichment;
+}
+
+/** Live METAR for one ICAO station (AirportCard's weather block). Returns
+ * null on any failure or when the station simply has no current report
+ * (`data` empty — a non-reporting airfield, not an error) so callers can
+ * render a graceful "unavailable" state instead of crashing. */
+export async function fetchMetar(icao: string, signal?: AbortSignal): Promise<Metar | null> {
+  const path = `/api/weather/metar?ids=${encodeURIComponent(icao)}`;
+  const r = await apiFetch(path, signal ? { signal } : {});
+  if (!r.ok) return null;
+  const body = (await r.json()) as { data?: Metar[] };
+  return body.data && body.data.length > 0 ? body.data[0]! : null;
 }

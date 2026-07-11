@@ -24,7 +24,7 @@ from app.config import get_settings
 from app.intel import classification as clf
 from app.intel.ontology import Link, Object, get_registry
 from app.keys import UserCtx
-from app.security import Principal, current_principal
+from app.security import Principal, current_principal_or_local
 
 router = APIRouter(tags=["extract"])
 
@@ -152,7 +152,7 @@ def _normalise(parsed: dict[str, Any]) -> tuple[list[ExtractedEntity], list[Extr
 
 @router.post("/api/extract", response_model=ExtractResponse)
 async def extract(
-    req: ExtractRequest, p: Principal = Depends(current_principal)
+    req: ExtractRequest, p: Principal = Depends(current_principal_or_local)
 ) -> ExtractResponse:
     s = get_settings()
     level = clf.clamp(req.classification)

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { App } from './App.js';
 import { App2D } from './App2D.js';
@@ -13,6 +13,9 @@ import { VelocityNewsPage } from './news/VelocityNewsPage.js';
 import { StoryView } from './news/StoryView.js';
 import { Onboarding, hasOnboarded } from './onboarding/Onboarding.js';
 import { isSupabaseConfigured } from './transport/supabase.js';
+import { AiSetupWizard } from './settings/localAi/AiSetupWizard.js';
+import { hasSeenAiSetup } from './settings/localAi/aiSetupSeen.js';
+import { fetchModelsOnce } from './settings/localAi/LocalAiSection.js';
 
 // Served under the Vite base path (e.g. "/app" in production, "/" in dev), so
 // the router's basename tracks it — keeps client routes correct behind /app.
@@ -25,6 +28,7 @@ export function AppRouter(): JSX.Element {
         <TopBar />
         <PredictedMotionBadge />
         <OnboardingGate />
+        <AiSetupGate />
         <Routes>
           <Route path="/" element={<DashboardRoute />} />
           <Route path="/2d" element={<App2D />} />
@@ -120,6 +124,38 @@ function OnboardingGate(): JSX.Element | null {
   const onMap = loc.pathname === '/' || loc.pathname.startsWith('/2d');
   if (!show || !onMap) return null;
   return <Onboarding onClose={() => setShow(false)} />;
+}
+
+// First-run local-AI setup wizard gate. Only on the live map routes, only
+// once per browser (velocity.aiSetupSeen), and only when there's actually
+// nothing to route to yet: zero installed models AND llama.cpp isn't already
+// running (an operator who already has a model or a hand-run llama-server
+// doesn't need the wizard nagging them).
+function AiSetupGate(): JSX.Element | null {
+  const loc = useLocation();
+  const onMap = loc.pathname === '/' || loc.pathname.startsWith('/2d');
+  const [show, setShow] = useState(false);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (!onMap || hasSeenAiSetup() || checked) return;
+    let live = true;
+    void (async () => {
+      const models = await fetchModelsOnce();
+      if (!live) return;
+      setChecked(true);
+      if (!models) return; // backend unreachable — don't nag with a broken wizard
+      const noModels = models.installed.length === 0;
+      const llamaRunning = models.engines.llamacpp.running;
+      if (noModels && !llamaRunning) setShow(true);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [onMap, checked]);
+
+  if (!show || !onMap) return null;
+  return <AiSetupWizard onClose={() => setShow(false)} />;
 }
 
 function AccountChip(): JSX.Element | null {

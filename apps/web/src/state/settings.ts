@@ -32,12 +32,22 @@ export interface Settings {
   // dropping idle GPU burn. Ships OFF pending on-hardware fps sign-off — flip it
   // on and confirm glide/pulse/scrub stay smooth before it becomes the default.
   continuousRenderGovernor: boolean;
+  // Selection-tier local AI (local-llm-design.md, 2026-07-11): mirrors the
+  // backend's /api/ai/local selection_enabled/selection_model fields so the
+  // EntityPanel "AI assessment" card can gate its fetch without polling the
+  // backend on every entity click. SettingsModal's Local AI section is the
+  // sole writer — it updates these right after a successful POST that
+  // changes either field. Never write these from EntityPanel itself.
+  selectionAiEnabled: boolean;
+  selectionAiModel: string | null;
 }
 
 const DEFAULTS: Settings = {
   aircraftDeadReckon: false,
   renderPixelCap: 2.0,
   continuousRenderGovernor: false,
+  selectionAiEnabled: false,
+  selectionAiModel: null,
 };
 
 const LS_KEY = 'velocity.settings';

@@ -213,7 +213,54 @@ class Settings(BaseSettings):
     # hosted/cloud behaviour is unchanged; flipped at runtime via POST /api/ai/local
     # (the desktop build turns it on when a tool-capable model is present).
     llm_prefer_local: bool = False  # LLM_PREFER_LOCAL
+    # Strict local-only mode: when on, `_run_chat` uses ONLY the Ollama rung —
+    # on failure it returns the Ollama error directly and never falls through to
+    # MiniMax/DeepSeek cloud. Distinct from `llm_prefer_local` (which tries
+    # Ollama first but still falls back to cloud): this is for a caller who
+    # wants a hard guarantee that no request leaves the box (e.g. a cloud key
+    # is present in the environment but the operator does not want it used for
+    # this run). OFF by default; flipped at runtime via POST /api/ai/local.
+    llm_local_only: bool = False  # LLM_LOCAL_ONLY
     api_base: str = "http://localhost:8000"  # API_BASE (MCP → backend)
+
+    # ── Local model manager (app.localllm) — Unsloth GGUF catalog + engines ──
+    # Which local engine serves the "local" LLM rung: llama.cpp (all Unsloth
+    # GGUF tiers, MoE CPU-offload) is PRIMARY; vLLM is opt-in for small models
+    # fully in VRAM; Ollama is the long-standing fallback above. "auto" picks
+    # llama.cpp when a binary + main model are ready, else falls back to
+    # Ollama — see app.llm's engine-resolution ladder.
+    llm_local_engine: str = "auto"  # LLM_LOCAL_ENGINE auto|llamacpp|vllm|ollama
+    # Operator-supplied llama-server path — used verbatim, skips PATH lookup
+    # and the managed release install entirely.
+    llamacpp_binary: str = ""  # LLAMACPP_BINARY
+    # Pinned llama.cpp GitHub release tag for the managed install (never a
+    # floating "latest" — CVE-2026-27940 fixed at b8146; b9964 verified live
+    # 2026-07-11 as the current stable tag). llama.cpp ships no Linux CUDA
+    # prebuilt (Windows-only) — the managed installer pulls that release's
+    # Ubuntu **Vulkan** build instead (runs on the same NVIDIA driver stack).
+    llamacpp_release: str = "b9964"  # LLAMACPP_RELEASE
+    # llama-server listens on localhost only, router mode (--models-dir), a
+    # per-boot --api-key the browser never sees. Set by the sidecar (owned
+    # elsewhere); this is just where the backend's OpenAI-compatible rung and
+    # the hardware/models routes look for it.
+    llamacpp_host: str = "http://127.0.0.1:8094"  # LLAMACPP_HOST
+    llamacpp_models_max: int = 2  # LLAMACPP_MODELS_MAX (main + hot selection)
+    # vLLM stays OFF by default — no CPU/GPU hybrid offload (whole model must
+    # fit VRAM), and it rejects Unsloth's UD-* GGUF dynamic quants (GH
+    # #39469), so it is opt-in only for small models fully in VRAM.
+    vllm_enabled: bool = False  # VLLM_ENABLED
+    vllm_host: str = "http://127.0.0.1:8095"  # VLLM_HOST
+    # Installed-model root. "" → ./data/models (same relative-to-CWD idiom as
+    # history_db_path/ontology_db_path above); created 0700 on first use.
+    local_models_dir: str = ""  # LOCAL_MODELS_DIR
+    # Gotham-style "selection inference": a separate, faster model pick used
+    # for the AI-assessment brief when an entity is selected on the globe.
+    # Installed-model key (see app.localllm.manager); "" → unconfigured.
+    llm_selection_model: str = ""  # LLM_SELECTION_MODEL
+    llm_selection_enabled: bool = False  # LLM_SELECTION_ENABLED
+    # Pin the selection model resident (load-on-startup, exempt from the
+    # router's LRU eviction) instead of loading it cold on first selection.
+    llm_selection_hot: bool = False  # LLM_SELECTION_HOT
 
     # ── Human-in-the-loop action approval (HITL gate) ──
     # When ON (default), the intel agent's write-back actions become PROPOSALS the
@@ -406,6 +453,13 @@ class Settings(BaseSettings):
     # of global ADS-B + AIS run into many GB, so the byte cap — not the hour
     # window — is the binding limit. 0 disables the byte cap (hour window only).
     history_max_bytes: int = 2_000_000_000  # ~2 GB
+    # Archive profile — turns the bounded live buffer into an intentional
+    # multi-day/week archive. OFF by default (current bounded-buffer behavior
+    # is unchanged unless the operator opts in).
+    archive_mode: bool = False  # ARCHIVE_MODE
+    # Disk budget used ONLY when archive_mode is True (GB). 0 = fall back to
+    # history_max_bytes (documented, logged once at boot — never a silent no-op).
+    history_disk_budget_gb: float = 0.0  # HISTORY_DISK_BUDGET_GB
 
     # ── Ontology local spine ──
     # Default (keyless) backend for the ontology: local SQLite next to
@@ -431,6 +485,13 @@ class Settings(BaseSettings):
     # User-authored DAG pipelines (sources/ops/sinks) over live platform data.
     # Same local-SQLite idiom as foundry_db_path.
     workflows_db_path: str = "./data/workflows.db"
+
+    # ── Alert rules local spine (W3 keyless alert push, docs/decisions.md) ──
+    # Default (keyless) backend for standing watch rules: local SQLite next to
+    # ontology.db/history.db, same idiom. Supabase, when configured, remains
+    # the RLS-scoped remote backend for signed-in multi-tenant deployments —
+    # this path is additive, not a replacement.
+    alert_rules_db_path: str = "./data/alert_rules.db"
 
     # Optional key for the Have-I-Been-Pwned email-breach API (paid). Absent →
     # the person-OSINT HIBP connector degrades to an honest note; everything else

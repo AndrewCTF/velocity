@@ -643,6 +643,57 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     opacity: 1,
     visibleByDefault: false,
   },
+
+  // ── AIRSPACE / BASES / NAVAL WARNINGS (2026-07 places-airspace wave) ────
+  // TFR: FAA temporary flight restrictions, built server-side from XNOTAM
+  // detail XML into GeoJSON polygons (no bbox — the whole ~151-shape active
+  // set is cheap to keep resident; style dispatched to 'tfr' below).
+  {
+    id: 'airspace.tfr',
+    group: 'infra',
+    title: 'TFR / Airspace restrictions',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/airspace/tfr',
+    refresh: { mode: 'pull', ttlSec: 600 },
+    time: { temporal: false },
+    crs: 'EPSG:4326',
+    license: 'FAA (public)',
+    opacity: 1,
+    visibleByDefault: false,
+  },
+  // Military bases: Wikidata/Overpass reference points, zoom-gated exactly
+  // like places.airports/places.ports (placesBboxQuery in LayerCompositor).
+  {
+    id: 'places.bases',
+    group: 'infra',
+    title: 'Military bases',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/places/bases?limit=2000',
+    refresh: { mode: 'pull', ttlSec: 86400 },
+    time: { temporal: false },
+    crs: 'EPSG:4326',
+    license: 'Wikidata (CC0) / OpenStreetMap (ODbL)',
+    opacity: 1,
+    visibleByDefault: false,
+  },
+  // NGA active navigational (broadcast) warnings — global point layer, no
+  // bbox gate (386 active worldwide is cheap to keep resident).
+  {
+    id: 'maritime.warnings',
+    group: 'maritime',
+    title: 'Naval warnings — NGA broadcast',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/maritime/warnings',
+    refresh: { mode: 'pull', ttlSec: 900 },
+    time: { temporal: false },
+    crs: 'EPSG:4326',
+    license: 'NGA (public)',
+    opacity: 1,
+    visibleByDefault: false,
+  },
 ] as const;
 
 export function registerDefaults(registry: LayerRegistry): void {

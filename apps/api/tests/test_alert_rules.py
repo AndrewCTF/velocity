@@ -1,50 +1,143 @@
-"""Alert-rule routes: auth gate, validation, and CRUD wiring (hermetic)."""
+"""Alert-rule routes: auth gate, validation, and CRUD wiring (hermetic).
+
+Two backends, exercised separately: the default test settings carry no
+Supabase config, so ``current_user_or_local`` degrades to the shared
+``local`` identity and the route serves the local SQLite store (W3,
+2026-07-11) — same keyless contract as the ontology routes. A Supabase-
+configured deployment (env vars set here for one test at a time) keeps the
+original RLS-scoped PostgREST behavior unchanged.
+"""
 
 from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.keys import UserCtx, current_user
+from app import keys as keys_mod
+from app.config import Settings
+from app.keys import UserCtx, current_user_or_local
 from app.routes import alert_rules as ar
-
-
-def test_rules_require_auth(client: TestClient) -> None:
-    assert client.get("/api/alerts/rules").status_code == 401
 
 
 def _fake_user() -> UserCtx:
     return UserCtx("u1", "tok")
 
 
-def test_create_rejects_unknown_kind(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+def _configure_supabase(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``current_user_or_local`` and this route's own backend-selection
+    both see Supabase as configured, for exactly this test.
+
+    ``app.config.get_settings`` is ``@lru_cache(maxsize=1)`` — the process-wide
+    singleton is already memoized (blank supabase, matching the hermetic test
+    default and the ``ALLOW_UNAUTHENTICATED=1`` test posture) by the time any
+    test runs, so ``monkeypatch.setenv`` has no effect on it. Patch the name
+    each module actually calls instead (the standard "patch where it's used"
+    fix) rather than touching the global cache or the auth middleware (which
+    stays in its normal open test posture) — this isolates exactly the thing
+    under test: does the ROUTE fall back to the Supabase REST backend and
+    ``current_user``'s strict token check once Supabase is configured.
+    """
+    fake = Settings(supabase_url="http://x", supabase_anon_key="anon")
+    monkeypatch.setattr(keys_mod, "get_settings", lambda: fake)
+    monkeypatch.setattr(ar, "get_settings", lambda: fake)
+
+
+# ── keyless (default test settings: no Supabase) ─────────────────────────────
+
+
+def test_rules_serve_keyless_with_local_identity(client: TestClient) -> None:
+    # No Supabase configured (default test settings) → current_user_or_local
+    # degrades to the shared "local" identity instead of a dead 401 — same
+    # contract test_ontology_local.py asserts for the ontology routes.
+    assert client.get("/api/alerts/rules").status_code == 200
+    assert client.get("/api/alerts/rules").json() == []
+
+
+def test_create_rejects_unknown_kind(client: TestClient) -> None:
     r = client.post(
         "/api/alerts/rules",
         json={"label": "x", "lat": 1, "lon": 2, "kinds": ["bogus"]},
     )
     assert r.status_code == 400
-    client.app.dependency_overrides.pop(current_user, None)
 
 
-def test_create_rejects_bad_channel(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+def test_create_rejects_bad_channel(client: TestClient) -> None:
     r = client.post(
         "/api/alerts/rules",
         json={"label": "x", "lat": 1, "lon": 2, "channel": "carrier-pigeon"},
     )
     assert r.status_code == 400
-    client.app.dependency_overrides.pop(current_user, None)
 
 
-def test_crud_with_fake_user(
+def test_create_rejects_discord_without_sink_url(client: TestClient) -> None:
+    r = client.post(
+        "/api/alerts/rules",
+        json={"label": "x", "lat": 1, "lon": 2, "channel": "discord"},
+    )
+    assert r.status_code == 400
+    assert "sink_url" in r.json()["detail"]
+
+
+def test_create_rejects_bad_sink_url(client: TestClient) -> None:
+    r = client.post(
+        "/api/alerts/rules",
+        json={
+            "label": "x", "lat": 1, "lon": 2,
+            "channel": "webhook", "sink_url": "not-a-url",
+        },
+    )
+    assert r.status_code == 400
+
+
+def test_crud_keyless_local_store(client: TestClient) -> None:
+    # Local SQLite CRUD path (no Supabase): create, list, delete round-trip.
+    r = client.post(
+        "/api/alerts/rules",
+        json={
+            "label": "Hormuz watch",
+            "lat": 26.5,
+            "lon": 56.3,
+            "radius_nm": 80,
+            "kinds": ["jamming", "dark_vessel"],
+            "min_severity": 2,
+            "channel": "discord",
+            "sink_url": "https://discord.com/api/webhooks/123/abc",
+        },
+    )
+    assert r.status_code == 201, r.text
+    created = r.json()
+    assert created["label"] == "Hormuz watch"
+    assert created["channel"] == "discord"
+    rule_id = created["id"]
+
+    listed = client.get("/api/alerts/rules").json()
+    assert [row["id"] for row in listed] == [rule_id]
+
+    assert client.delete(f"/api/alerts/rules/{rule_id}").status_code == 204
+    assert client.get("/api/alerts/rules").json() == []
+
+
+def test_deliveries_endpoint_starts_empty(client: TestClient) -> None:
+    r = client.get("/api/alerts/deliveries")
+    assert r.status_code == 200
+    assert r.json() == {"deliveries": []}
+
+
+# ── Supabase path (unchanged behavior when configured) ────────────────────────
+
+
+def test_rules_require_auth_when_supabase_configured(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+    _configure_supabase(monkeypatch)
+    assert client.get("/api/alerts/rules").status_code == 401
+
+
+def test_crud_with_fake_user_supabase(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _configure_supabase(monkeypatch)
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
 
     class FakeResp:
         def __init__(self, status: int, payload):  # type: ignore[no-untyped-def]
@@ -87,22 +180,23 @@ def test_crud_with_fake_user(
     monkeypatch.setattr(ar, "_client", lambda: FakeClient())
     monkeypatch.setattr(ar, "_rest", lambda s: "http://x/rest/v1/alert_rules")
 
-    assert client.get("/api/alerts/rules").json() == []
+    try:
+        assert client.get("/api/alerts/rules").json() == []
 
-    r = client.post(
-        "/api/alerts/rules",
-        json={
-            "label": "Hormuz watch",
-            "lat": 26.5,
-            "lon": 56.3,
-            "radius_nm": 80,
-            "kinds": ["jamming", "dark_vessel"],
-            "min_severity": 2,
-        },
-    )
-    assert r.status_code == 201
-    assert r.json()["id"] == "r1"
+        r = client.post(
+            "/api/alerts/rules",
+            json={
+                "label": "Hormuz watch",
+                "lat": 26.5,
+                "lon": 56.3,
+                "radius_nm": 80,
+                "kinds": ["jamming", "dark_vessel"],
+                "min_severity": 2,
+            },
+        )
+        assert r.status_code == 201
+        assert r.json()["id"] == "r1"
 
-    assert client.delete("/api/alerts/rules/r1").status_code == 204
-
-    client.app.dependency_overrides.pop(current_user, None)
+        assert client.delete("/api/alerts/rules/r1").status_code == 204
+    finally:
+        client.app.dependency_overrides.pop(current_user_or_local, None)

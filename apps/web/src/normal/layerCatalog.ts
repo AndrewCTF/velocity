@@ -40,6 +40,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Aircraft', icon: 'plane', layerIds: ['aviation.adsb.global'] },
       { label: 'Military', icon: 'jet', layerIds: ['aviation.adsb.live.mil'] },
       { label: 'Emergency', icon: 'warning', layerIds: ['aviation.adsb.live.emergencies'] },
+      { label: 'TFR / Airspace', icon: 'warning', layerIds: ['airspace.tfr'] },
     ],
   },
   {
@@ -63,6 +64,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
         ],
       },
       { label: 'Parking mode', icon: 'anchor', layerIds: ['maritime.parked'] },
+      { label: 'Naval warnings', icon: 'warning', layerIds: ['maritime.warnings'] },
     ],
   },
   {
@@ -117,6 +119,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'CCTV cameras', icon: 'image', layerIds: ['infra.cams.public'] },
       { label: 'Airports', icon: 'plane', layerIds: ['places.airports'] },
       { label: 'Ports', icon: 'anchor', layerIds: ['places.ports'] },
+      { label: 'Military bases', icon: 'shield', layerIds: ['places.bases'] },
     ],
   },
   {

@@ -197,7 +197,7 @@ def minimax_config() -> tuple[str | None, str, str]:
 class LlmResult:
     text: str | None
     model: str | None = None
-    backend: str | None = None  # "deepseek" | "ollama" | None
+    backend: str | None = None  # "minimax" | "deepseek" | "ollama" | "llamacpp" | "vllm" | None
     error: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
 
@@ -362,6 +362,76 @@ _PENDING_LOGS: set[asyncio.Task[None]] = set()
 # ── http ──────────────────────────────────────────────────────────────────────
 
 
+def _exc_error(prefix: str, exc: Exception) -> str:
+    """``"<prefix>: <ClassName>: <str(exc)>"`` — self-explanatory even when the
+    exception stringifies to empty (httpx timeout/connect errors commonly do:
+    ``str(httpx.ReadTimeout())`` is ``""``, so a naive f-string logs
+    ``"ollama call failed: "`` with no signal of WHAT failed). Always includes
+    the exception class name; drops the trailing separator when there is no
+    message to append.
+    """
+    detail = str(exc).strip()
+    name = type(exc).__name__
+    return f"{prefix}: {name}: {detail}" if detail else f"{prefix}: {name}"
+
+
+_THINK_BLOCK_RE = re.compile(r"<think(?:ing)?>.*?</think(?:ing)?>", re.IGNORECASE | re.DOTALL)
+_THINK_OPEN_RE = re.compile(r"<think(?:ing)?>", re.IGNORECASE)
+
+
+def _strip_thinking(text: str) -> str:
+    """Strip ``<think>...</think>`` / ``<thinking>...</thinking>`` block(s) from
+    model output.
+
+    Reasoning models (Qwen3 family, DeepSeek-R1-style, GLM, …) are *supposed* to
+    emit their chain-of-thought on a separate ``reasoning_content`` channel and
+    leave ``message.content`` as just the answer, but some llama.cpp chat
+    templates emit the whole thing — thinking included — INTO ``content``. Left
+    unstripped, a short ``max_tokens`` budget makes the caller see either an
+    empty string (thinking ate the whole budget) or a thinking-only string with
+    no answer; both should be treated as "no real answer" by the caller. Strips
+    ALL well-formed blocks (not just a leading one). A ``finish_reason="length"``
+    completion can also cut off mid-thought BEFORE the closing tag is ever
+    emitted — an unterminated ``<think>``/``<thinking>`` left after that pass is
+    still all-preamble, so everything from it to the end is dropped too.
+    """
+    if not text:
+        return text
+    stripped = _THINK_BLOCK_RE.sub("", text)
+    m = _THINK_OPEN_RE.search(stripped)
+    if m:
+        stripped = stripped[: m.start()]
+    return stripped.strip()
+
+
+def _content_or_think_error(body: dict[str, Any], *, backend: str) -> tuple[str | None, str | None]:
+    """Extract ``choices[0].message.content`` from an OpenAI-style chat body,
+    stripping a leading think block (see :func:`_strip_thinking`) before
+    deciding whether it's empty.
+
+    A short-``max_tokens`` request to a reasoning model commonly finishes with
+    ``finish_reason == "length"`` and an empty (or thinking-only) message: the
+    model spent its whole budget on the thinking preamble and never got to the
+    answer. That case gets a DESCRIPTIVE error (so a caller/operator can tell
+    "the model needs more budget" apart from "the backend is down") instead of
+    the generic empty-content message the other backends use. Both branches
+    still return ``text=None`` — the caller falls back exactly as before, only
+    the error string is more informative when the root cause is diagnosable.
+    """
+    choice = (body.get("choices") or [{}])[0]
+    msg = choice.get("message") or {}
+    text = _strip_thinking(msg.get("content") or "")
+    if text:
+        return text, None
+    if choice.get("finish_reason") == "length":
+        return None, (
+            f"{backend} model exhausted token budget on reasoning before answering "
+            "(finish_reason=length, empty content after stripping thinking tokens) "
+            "— raise max_tokens or use a non-reasoning model"
+        )
+    return None, f"{backend} returned empty content"
+
+
 def _client(timeout: float) -> httpx.AsyncClient:
     # Fresh per call: low frequency, and avoids binding a pooled client to one
     # event loop (tests spin many). IPv4-pinned — remote DeepSeek publishes AAAA
@@ -424,7 +494,10 @@ async def _deepseek_chat(
         )
     except Exception as exc:  # noqa: BLE001
         return LlmResult(
-            text=None, model=model, backend="deepseek", error=f"deepseek call failed: {exc}"
+            text=None,
+            model=model,
+            backend="deepseek",
+            error=_exc_error("deepseek call failed", exc),
         )
 
 
@@ -479,7 +552,7 @@ async def _minimax_chat(
         )
     except Exception as exc:  # noqa: BLE001
         return LlmResult(
-            text=None, model=model, backend="minimax", error=f"minimax call failed: {exc}"
+            text=None, model=model, backend="minimax", error=_exc_error("minimax call failed", exc)
         )
 
 
@@ -551,7 +624,179 @@ async def _ollama_chat(
         return LlmResult(text=text or None, model=chosen, backend="ollama")
     except Exception as exc:  # noqa: BLE001
         return LlmResult(
-            text=None, model=chosen, backend="ollama", error=f"ollama call failed: {exc}"
+            text=None, model=chosen, backend="ollama", error=_exc_error("ollama call failed", exc)
+        )
+
+
+# ── local model manager engines (app.localllm) ──────────────────────────────
+# llama.cpp (PRIMARY, all Unsloth GGUF tiers) and vLLM (opt-in, safetensors-only)
+# rungs. Both talk OpenAI ``/v1/chat/completions`` to their own sidecar
+# (``app.llamacpp_sidecar`` / ``app.vllm_sidecar``) over a per-boot bearer key
+# that never leaves the backend process. Deferred imports throughout this
+# section: the sidecar modules pull in ``app.localllm`` (huggingface_hub) and
+# app.llm is imported almost everywhere, so keeping that coupling out of the
+# top-level import graph matches this codebase's existing deferred-import
+# convention (see main.py's lifespan for the same local-import style).
+
+
+def local_engine() -> str:
+    """Resolve the effective local engine — never ``"auto"``. ``"auto"``
+    (the default) picks llama.cpp when its sidecar is enable-able (a binary
+    resolves AND at least one model is installed), else Ollama. An explicit
+    choice (``POST /api/ai/engine`` / ``LLM_LOCAL_ENGINE``) passes through
+    unchanged even if that engine turns out to be unavailable — the caller
+    opted in deliberately, so ``_try_local`` below is what falls back to
+    Ollama on an actual call failure, not this resolver."""
+    from app.localllm import state as engine_state  # noqa: PLC0415
+
+    engine = engine_state.get_engine()
+    if engine != "auto":
+        return engine
+    from app import llamacpp_sidecar  # noqa: PLC0415
+
+    return "llamacpp" if llamacpp_sidecar.is_enabled() else "ollama"
+
+
+def _installed_model_name(role: str) -> str | None:
+    """The server-side model id for the installed model pinned to *role*
+    ("main"/"selection"). llama-server's router mode (``--models-dir``) ids each
+    model by its on-disk **directory name**, which the manager sets to the
+    model *key* (``data/models/<key>/<file>.gguf``) — verified live against
+    release b9964: ``GET /v1/models`` returns ``id == <key>``. So the key IS the
+    server-side id; return it directly (only when the model is still installed)."""
+    from app.localllm import manager as local_manager  # noqa: PLC0415
+
+    active = local_manager.get_active().get(role)
+    if not active:
+        return None
+    if any(m["key"] == active for m in local_manager.list_installed()):
+        return active
+    return None
+
+
+async def _llamacpp_chat(
+    messages: list[dict[str, str]],
+    *,
+    role: str,
+    temperature: float,
+    max_tokens: int,
+    timeout_s: float,
+) -> LlmResult:
+    from app import llamacpp_sidecar  # noqa: PLC0415
+
+    key = llamacpp_sidecar.api_key()
+    if not key:
+        return LlmResult(text=None, backend="llamacpp", error="llamacpp sidecar not running")
+    model = _installed_model_name(role)
+    if not model:
+        return LlmResult(text=None, backend="llamacpp", error=f"no active {role!r} model")
+    host = get_settings().llamacpp_host.rstrip("/")
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": False,
+        # Disable Qwen3-family "thinking" so a small max_tokens budget isn't
+        # spent entirely on a reasoning preamble (the diagnosed bug: 200 OK,
+        # finish_reason="length", content=""). `chat_template_kwargs` is the
+        # field name llama-server's own docs specify for this exact example —
+        # https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
+        # ("chat_template_kwargs: Allows sending additional parameters to the
+        # json templating system. For example: {"enable_thinking": false}").
+        # `reasoning_effort` covers gpt-oss/OpenAI-style harmony templates
+        # instead; both are simply ignored by templates/engines that don't
+        # recognize them, so sending both is safe across the whole catalog.
+        "chat_template_kwargs": {"enable_thinking": False},
+        "reasoning_effort": "low",
+    }
+    try:
+        async with _client(timeout_s) as c:
+            r = await c.post(
+                host + "/v1/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {key}"},
+            )
+        if r.status_code != 200:
+            return LlmResult(
+                text=None,
+                model=model,
+                backend="llamacpp",
+                error=f"llamacpp {r.status_code}: {r.text[:200]}",
+            )
+        body = r.json()
+        text, error = _content_or_think_error(body, backend="llamacpp")
+        return LlmResult(
+            text=text,
+            model=model,
+            backend="llamacpp",
+            usage=body.get("usage") or {},
+            error=error,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return LlmResult(
+            text=None,
+            model=model,
+            backend="llamacpp",
+            error=_exc_error("llamacpp call failed", exc),
+        )
+
+
+async def _vllm_chat(
+    messages: list[dict[str, str]],
+    *,
+    temperature: float,
+    max_tokens: int,
+    timeout_s: float,
+) -> LlmResult:
+    from app import vllm_sidecar  # noqa: PLC0415
+
+    key = vllm_sidecar.api_key()
+    if not key:
+        return LlmResult(text=None, backend="vllm", error="vllm sidecar not running")
+    model = vllm_sidecar.served_model_name()
+    if not model:
+        return LlmResult(text=None, backend="vllm", error="vllm has no served model")
+    host = get_settings().vllm_host.rstrip("/")
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": False,
+        # Same no-think belt-and-suspenders as `_llamacpp_chat` — see the
+        # comment there for the doc reference. vLLM's OpenAI-compatible server
+        # also honors `chat_template_kwargs` (forwarded straight into the HF
+        # chat template) and ignores unknown fields otherwise.
+        "chat_template_kwargs": {"enable_thinking": False},
+        "reasoning_effort": "low",
+    }
+    try:
+        async with _client(timeout_s) as c:
+            r = await c.post(
+                host + "/v1/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {key}"},
+            )
+        if r.status_code != 200:
+            return LlmResult(
+                text=None,
+                model=model,
+                backend="vllm",
+                error=f"vllm {r.status_code}: {r.text[:200]}",
+            )
+        body = r.json()
+        text, error = _content_or_think_error(body, backend="vllm")
+        return LlmResult(
+            text=text,
+            model=model,
+            backend="vllm",
+            usage=body.get("usage") or {},
+            error=error,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return LlmResult(
+            text=None, model=model, backend="vllm", error=_exc_error("vllm call failed", exc)
         )
 
 
@@ -574,6 +819,45 @@ def prefer_local() -> bool:
     if _prefer_local_override is not None:
         return _prefer_local_override
     return get_settings().llm_prefer_local
+
+
+# Strict local-only mode (POST /api/ai/local `local_only`): same process-global
+# override idiom as `prefer_local`. None → defer to Settings.llm_local_only.
+_local_only_override: bool | None = None
+
+
+def set_local_only(enabled: bool | None) -> None:
+    """Runtime toggle for strict local-only inference (None → defer to Settings)."""
+    global _local_only_override
+    _local_only_override = enabled
+
+
+def local_only() -> bool:
+    if _local_only_override is not None:
+        return _local_only_override
+    return get_settings().llm_local_only
+
+
+# Gotham-style selection-inference enable switch (POST /api/ai/local
+# `selection_enabled`): same process-global override idiom as `prefer_local` /
+# `local_only`. None → defer to Settings.llm_selection_enabled.
+_selection_enabled_override: bool | None = None
+
+
+def set_selection_enabled(enabled: bool | None) -> None:
+    """Runtime toggle for the selection-inference brief (None → defer to Settings)."""
+    global _selection_enabled_override
+    _selection_enabled_override = enabled
+
+
+def selection_enabled() -> bool:
+    if _selection_enabled_override is not None:
+        return _selection_enabled_override
+    return get_settings().llm_selection_enabled
+
+
+def _is_selection_tier(tier: str) -> bool:
+    return (tier or "").strip().lower() == "selection"
 
 
 def _ollama_model_for(tier: str, explicit: str) -> str:
@@ -602,14 +886,24 @@ async def local_status() -> dict[str, Any]:
         )
         for m in models
     )
+    from app.localllm import manager as local_manager  # noqa: PLC0415
+    from app.localllm import state as engine_state  # noqa: PLC0415
+
     return {
         "enabled": prefer_local(),
+        "local_only": local_only(),
         "ollama_host": host,
         "ollama_up": bool(models),
         "tool_capable": tool_capable,
         "models": models,
         "model_fast": s.ollama_model_fast or "(auto)",
         "model_reason": s.ollama_model_reason or s.ollama_model or "(auto)",
+        # app.localllm engine + selection-inference fields (design doc "API
+        # contract": GET/POST /api/ai/local gains engine/selection_model/
+        # selection_enabled) — purely additive, existing fields unchanged.
+        "engine": engine_state.get_engine(),
+        "selection_model": local_manager.get_active().get("selection"),
+        "selection_enabled": selection_enabled(),
     }
 
 
@@ -691,6 +985,20 @@ async def _run_chat(
     else:
         eff_timeout = 180.0 if _resolve_tier(tier) == "reason" else 90.0
 
+    # tier="selection" (Gotham-style entity-assessment brief) targets the
+    # manager's "selection"-role model on the LOCAL engine — a separate,
+    # faster pick than "main". When unconfigured (no active selection model)
+    # it behaves exactly like "fast": `_resolve_tier`/`deepseek_model_for`
+    # already alias the unknown "selection" tier to "fast" for the cloud
+    # rungs above, and dropping to role="main" here makes the local rung match
+    # too.
+    selection_role = _is_selection_tier(tier)
+    if selection_role:
+        from app.localllm import manager as local_manager  # noqa: PLC0415
+
+        selection_role = bool(local_manager.get_active().get("selection"))
+    role = "selection" if selection_role else "main"
+
     async def _try_ollama() -> LlmResult:
         return await _ollama_chat(
             messages,
@@ -699,14 +1007,51 @@ async def _run_chat(
             timeout_s=min(eff_timeout, 300.0),
         )
 
+    async def _try_local() -> LlmResult:
+        """Route through the resolved local engine (never "auto" — see
+        `local_engine()`); llamacpp/vllm fall back to Ollama on error so a
+        cold/unhealthy sidecar still serves something local — `local_only()` /
+        `prefer_local()` callers never leave the box regardless of which
+        local engine ends up picked."""
+        engine = local_engine()
+        if engine == "llamacpp":
+            res = await _llamacpp_chat(
+                messages,
+                role=role,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout_s=min(eff_timeout, 300.0),
+            )
+            if res.ok:
+                return res
+            return await _try_ollama()
+        if engine == "vllm":
+            res = await _vllm_chat(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout_s=min(eff_timeout, 300.0),
+            )
+            if res.ok:
+                return res
+            return await _try_ollama()
+        return await _try_ollama()
+
+    # Strict local-only (POST /api/ai/local `local_only`): use ONLY the local
+    # engine, success or failure — never touch MiniMax/DeepSeek, even if a
+    # cloud key is present in the environment. Implies trying local first
+    # regardless of `prefer_local`, so it is checked ahead of that ladder.
+    if local_only():
+        return await _try_local()
+
     # Local-first (Part 4): when the operator opts in (POST /api/ai/local or
     # LLM_PREFER_LOCAL), run the on-GPU model AHEAD of the cloud backends to dodge
-    # cloud rate limits. Falls through to the cloud ladder below if Ollama is
-    # unreachable or returns empty.
+    # cloud rate limits. Falls through to the cloud ladder below if the local
+    # engine is unreachable or returns empty.
     if prefer_local():
-        ol = await _try_ollama()
-        if ol.ok:
-            return ol
+        loc = await _try_local()
+        if loc.ok:
+            return loc
 
     # MiniMax-M3 (reasoning) is the PRIMARY backend when configured. It reasons
     # before answering, so it needs a generous floor; DeepSeek/Ollama remain the
@@ -738,11 +1083,11 @@ async def _run_chat(
     if ds.ok:
         return ds
 
-    ol = await _try_ollama()
-    if ol.ok:
-        return ol
+    loc = await _try_local()
+    if loc.ok:
+        return loc
     # Surface the more informative error (DeepSeek's, if a key was present).
-    primary = ds if ds.error and "not configured" not in ds.error else ol
+    primary = ds if ds.error and "not configured" not in ds.error else loc
     return LlmResult(text=None, model=primary.model, backend=primary.backend, error=primary.error)
 
 

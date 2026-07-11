@@ -51,6 +51,20 @@ describe('CLAUDE.md sacred behaviors (source-scan guards)', () => {
     expect(s).not.toContain('PointGraphics');
   });
 
+  it('HistoryPlayback interpolates between recorded fixes for both aircraft and vessel replay tracks (sanctioned, docs/decisions.md 2026-07-11)', () => {
+    // Decision "Replay motion: interpolation between recorded fixes is
+    // sanctioned (2026-07-11)": replay draws only RECORDED REAL fixes and
+    // glides between them for both kinds — scoped away from the live-path
+    // no-synthesis rule. This must fail loud if a future edit "fixes" replay
+    // to teleport (swaps in a CallbackProperty/held position) for either
+    // kind, before HistoryPlayback.test.ts's behavioral assertions even run.
+    const s = read('globe/HistoryPlayback.ts');
+    expect(s).toMatch(/new Cesium\.SampledPositionProperty\(\)/);
+    expect(s).toMatch(/LinearApproximation/);
+    expect(s).not.toContain('CallbackProperty');
+    expect(s).not.toContain('ConstantPositionProperty');
+  });
+
   it('every new WebSocket() wraps its URL in withWsKey()', () => {
     // Decision (CLAUDE.md Auth): raw sockets bypass auth; withWsKey is mandatory.
     for (const file of walk(SRC)) {

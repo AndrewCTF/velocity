@@ -3,6 +3,7 @@
 - /api/weather/swpc/kp — NOAA SWPC planetary K-index (1-minute). No auth.
 - /api/weather/openmeteo — Open-Meteo point forecast. No auth, CC BY.
 - /api/weather/alerts — NOAA NWS US weather alerts (active). No auth.
+- /api/weather/metar — aviationweather.gov METAR passthrough. No auth.
 """
 
 from __future__ import annotations
@@ -63,6 +64,42 @@ async def openmeteo(
         return r.json()  # type: ignore[no-any-return]
 
     return await cache.get_or_fetch(key, 600.0, load)
+
+
+MAX_METAR_IDS = 10
+
+
+@router.get("/api/weather/metar")
+async def metar(
+    ids: str = Query(..., description="comma-separated ICAO station ids, e.g. KJFK,EGLL"),
+) -> dict[str, Any]:
+    """METAR passthrough for the airport EntityPanel's live-weather block.
+
+    aviationweather.gov's own rate policy is ~100 req/min; a 5-minute TtlCache
+    keyed on the NORMALIZED id set (uppercased + sorted, so "kjfk,egll" and
+    "EGLL,KJFK" share one cache entry) keeps us well inside that regardless of
+    how many browsers ask. Capped at MAX_METAR_IDS per request — a caller
+    wanting more should split the request rather than have us silently drop
+    stations upstream would otherwise accept but we can't cache sanely.
+    """
+    raw_ids = [p.strip().upper() for p in ids.split(",") if p.strip()]
+    if not raw_ids:
+        raise HTTPException(400, "ids must not be empty")
+    if len(raw_ids) > MAX_METAR_IDS:
+        raise HTTPException(400, f"at most {MAX_METAR_IDS} ids per request")
+    normalized = sorted(set(raw_ids))
+    key = f"metar:{','.join(normalized)}"
+
+    async def load() -> dict[str, Any]:
+        r = await get_client().get(
+            "https://aviationweather.gov/api/data/metar",
+            params={"ids": ",".join(normalized), "format": "json"},
+        )
+        if r.status_code != 200:
+            raise HTTPException(502, f"aviationweather upstream {r.status_code}")
+        return {"data": r.json()}
+
+    return await cache.get_or_fetch(key, 300.0, load)
 
 
 @router.get("/api/weather/alerts")

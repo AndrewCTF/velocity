@@ -17,7 +17,7 @@ from fastapi import Depends, HTTPException, Request
 
 from app.auth import _jwt_claims, _valid_supabase_token
 from app.config import Settings, get_settings
-from app.keys import UserCtx, _client, _headers, current_user
+from app.keys import UserCtx, _client, _headers, current_user, current_user_or_local
 
 
 @dataclass(frozen=True)
@@ -116,6 +116,29 @@ async def principal_for_token(token: str) -> Principal | None:
         compartments=tuple(str(c) for c in (prof.get("compartments") or ())),
         roles=tuple(str(r) for r in roles),
     )
+
+
+async def current_principal_or_local(
+    request: Request, ctx: UserCtx = Depends(current_user_or_local)
+) -> Principal:
+    """``current_principal``, degrading to a local identity on a keyless boot.
+
+    Mirrors ``app.keys.current_user_or_local`` EXACTLY: when Supabase is
+    entirely unconfigured (no JWT secret and no url+anon key — the same
+    condition that function checks) there is no user to resolve a profile for,
+    so this returns the least-privilege ``Principal`` (clearance 0, role
+    ``analyst``, no compartments) for the shared ``local`` identity instead of
+    a dead 401. With Supabase configured this is exactly ``current_principal``
+    — the token still needs to be a real, valid Supabase session, so an
+    authenticated deployment's behavior is unchanged (still 401 without a
+    token). Used by routes (e.g. ``POST /api/extract``) that should be usable
+    keyless like every other ontology/LLM route, not stranded behind a hard
+    sign-in requirement.
+    """
+    s = get_settings()
+    if not (s.supabase_jwt_secret or (s.supabase_url and s.supabase_anon_key)):
+        return Principal(user_id=ctx.user_id, token=ctx.token)
+    return await current_principal(request, ctx=ctx)
 
 
 def require_role(role: str):  # type: ignore[no-untyped-def]

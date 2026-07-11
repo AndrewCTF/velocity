@@ -42,6 +42,9 @@ _COMPUTE_PREFIXES: tuple[str, ...] = (
     "/api/intel/baseline",           # LLM baseline narrative
     "/api/intel/emitter",            # LLM emitter analysis
     "/api/intel/dossier/narrative",  # LLM dossier narrative
+    "/api/ai/models",     # local model manager: downloads spend disk+bandwidth
+    "/api/ai/engine",     # local engine switch (cheap, but gated with the rest)
+    "/api/ai/selection",  # selection-inference brief (LLM call per entity click)
 )
 
 

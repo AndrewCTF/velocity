@@ -20,8 +20,11 @@ import time
 import uuid
 from typing import Any
 
-from app.intel import cue, incidents
+from app.config import get_settings
+from app.intel import cue, incidents, promotion
 from app.intel.incident_store import incident_key, incident_store
+from app.intel.ontology import get_registry
+from app.keys import UserCtx
 
 log = logging.getLogger("app.watch_officer")
 
@@ -29,6 +32,11 @@ _SCOPE = "watch-officer"
 _CYCLE_S = 120.0
 _MAX_BRIEFS = 100
 _ACTIONABLE = {"high", "elevated"}
+
+# Same shared local identity Foundry's build-runner / workflow scheduler
+# default to (keys.py:172's keyless fallback) — this loop runs headless, with
+# no request/caller ctx. See docs/ontology-autopopulation-plan.md §2.
+_LOCAL_CTX = UserCtx(user_id="local", token="")
 
 # key (incident_key) -> brief record. Keyed by incident_key so the same
 # convergence is one brief across cycles (dedup); an operator dismiss removes the
@@ -102,6 +110,17 @@ async def run_once() -> int:
     incs = br.get("incidents") or []
     by_key = {incident_key(i): i for i in incs}
     diff = incident_store.record(_SCOPE, incs)
+
+    actionable = [i for i in incs if i.get("threat_level") in _ACTIONABLE]
+    try:
+        reg = get_registry(_LOCAL_CTX, get_settings())
+        minted = await promotion.promote_incidents(
+            reg, actionable, source="agent:watch_officer"
+        )
+        if minted:
+            log.debug("watch_officer: promoted %d incident object(s)", len(minted))
+    except Exception as exc:  # noqa: BLE001 — a promotion bug must not sink the loop
+        log.debug("watch_officer: promotion failed: %s", exc)
 
     filed = 0
     for summary in [*diff.get("new", []), *diff.get("escalated", [])]:

@@ -48,6 +48,30 @@ export const useSelection = create<SelectionState>((set) => ({
   selectedEntityId: null,
   select: (id) => set({ selectedEntityId: id }),
 }));
+
+// A pinned search target — a static location (airport / port / place /
+// chokepoint / coordinate) the operator jumped to from the search box. These
+// have no live-store entity to select, and their globe layers are off/zoom-
+// gated by default, so the camera fly-to alone leaves the operator staring at
+// a cluster of identical icons with no cue which one they searched for. This
+// store drives a distinct pin + label at the exact coordinate (see
+// globe/searchTargetMarker.ts) so the answer to "which one is JFK?" is drawn
+// right on the map. Picking a live entity (aircraft/vessel) clears it.
+export interface SearchTarget {
+  lon: number;
+  lat: number;
+  label: string;
+  kind: string;
+}
+interface SearchTargetState {
+  target: SearchTarget | null;
+  setTarget: (t: SearchTarget | null) => void;
+}
+export const useSearchTarget = create<SearchTargetState>((set) => ({
+  target: null,
+  setTarget: (t) => set({ target: t }),
+}));
+
 if (typeof window !== 'undefined' && import.meta.env?.DEV) {
   (window as unknown as { __useSelection: typeof useSelection }).__useSelection = useSelection;
 }
@@ -81,7 +105,20 @@ export const useTime = create<TimeState>((set) => ({
   setSceneMode: (m) => set({ sceneMode: m }),
 }));
 
-export type ImageryMode = '2d-dark' | '3d-sat';
+// '2d-dark' (default) and '3d-sat' are the original two proxied/keyless
+// stacks (see GlobeCanvas.tsx buildDarkBasemap/buildSatImagery). The other
+// six are direct-from-browser third-party basemaps (no backend proxy) added
+// 2026-07 — see docs/places-airspace-plan.md §6 for the tile URLs + why each
+// exists (topo/dark/imagery variety + an EOX Sentinel-2 alternative).
+export type ImageryMode =
+  | '2d-dark'
+  | '3d-sat'
+  | 'esri-imagery'
+  | 'esri-topo'
+  | 'esri-dark'
+  | 'opentopo'
+  | 'usgs-imagery'
+  | 'eox-s2';
 
 // Date-templated imagery overlay drawn on top of the base layer.
 // null = off; else a provider + layer id + UTC date (YYYY-MM-DD) + max zoom.

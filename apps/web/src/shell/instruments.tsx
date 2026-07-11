@@ -147,7 +147,7 @@ export function KV({ children, className = '' }: { children: ReactNode; classNam
   return (
     <div
       className={`grid items-baseline gap-x-3 gap-y-[5px] text-[10.5px] ${className}`}
-      style={{ gridTemplateColumns: 'auto 1fr' }}
+      style={{ gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)' }}
     >
       {children}
     </div>
@@ -157,7 +157,7 @@ export function KVRow({ k, v, warn = false }: { k: string; v: ReactNode; warn?: 
   return (
     <>
       <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-2">{k}</span>
-      <span className={`mono text-right ${warn ? 'text-[#ffb3ae]' : 'text-txt-0'}`}>{v}</span>
+      <span className={`mono text-right min-w-0 break-words ${warn ? 'text-[#ffb3ae]' : 'text-txt-0'}`}>{v}</span>
     </>
   );
 }

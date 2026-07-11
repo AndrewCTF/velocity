@@ -10,6 +10,11 @@ appropriate upstream:
                        lookup + OSM Nominatim reverse-geocode for nearest port
                        from the last AISStream position.
 - quake:{id}         → USGS event detail
+- airport:{iata|icao} → app.places base row + runways/frequencies detail +
+                       best-effort LiveATC linkout.
+- port:{wpi}         → app.places base row + WPI harbor/repair/depth detail.
+- satellite:{norad}, or a map-clicked satellite entity id (see the
+  SAT_TAIL_RE note below) → CelesTrak SATCAT row (app.satcat).
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app import places, satcat
 from app.config import Settings, get_settings
 from app.correlate.store import store
 from app.intel import imagery_index
@@ -36,6 +42,21 @@ router = APIRouter(tags=["entity"])
 ICAO24_RE = re.compile(r"^[0-9a-fA-F]{6}$")
 MMSI_RE = re.compile(r"^\d{1,9}$")
 QUAKE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# Airport idents are mostly IATA (3 alnum) / ICAO (4 alnum) but OurAirports
+# also carries idents like "AG-0001" for fields with no assigned ICAO code —
+# allow hyphens, cap the length generously.
+AIRPORT_CODE_RE = re.compile(r"^[A-Za-z0-9-]{1,10}$")
+PORT_WPI_RE = re.compile(r"^\d{1,10}$")
+SAT_NORAD_RE = re.compile(r"^\d{1,9}$")
+# The globe's SatelliteAdapter does NOT emit ids shaped "satellite:<norad>" —
+# it prefixes with the layer descriptor id, e.g.
+# "space.celestrak.stations:sat:25544" (SatelliteAdapter.ts, ~L200:
+# `next.set(`${descriptorId}:sat:${norad}`, ...)`). That id has MULTIPLE
+# colons, so `eid.split(":", 1)` below yields kind="space.celestrak.…",
+# which matches nothing — the NORAD id has to be recovered from the id's
+# TAIL instead of its head. This regex also matches a clean "satellite:NNNNN"
+# or "sat:NNNNN" id if some other caller ever uses that scheme directly.
+SAT_TAIL_RE = re.compile(r":sat:(\d{1,9})$")
 
 # ── ITU-R M.585 MMSI MID → flag country (top maritime flag states + key MIDs).
 # Maps the first 3 digits of an MMSI to ISO country / flag of registry. Not
@@ -248,6 +269,24 @@ async def entity(
         if not QUAKE_ID_RE.match(raw):
             raise HTTPException(400, "malformed quake id")
         return await _enrich_quake(raw)
+    if kind == "airport":
+        if not AIRPORT_CODE_RE.match(raw):
+            raise HTTPException(400, "malformed airport code")
+        return await _enrich_airport(raw)
+    if kind == "port":
+        if not PORT_WPI_RE.match(raw):
+            raise HTTPException(400, "port id must be a numeric WPI")
+        return await _enrich_port(raw)
+    if kind == "satellite":
+        if not SAT_NORAD_RE.match(raw):
+            raise HTTPException(400, "satellite id must be a numeric NORAD id")
+        return await _enrich_satellite(raw)
+    # See the SAT_TAIL_RE comment above: a globe-clicked satellite entity id
+    # carries the layer descriptor as its head, not a "satellite:"/"sat:"
+    # kind — recover the NORAD id from the id's tail before giving up.
+    sat_tail = SAT_TAIL_RE.search(eid)
+    if sat_tail:
+        return await _enrich_satellite(sat_tail.group(1))
     raise HTTPException(404, f"no enrichment for kind {kind}")
 
 
@@ -718,3 +757,118 @@ async def _enrich_quake(qid: str) -> dict[str, Any]:
         }
 
     return await cache.get_or_fetch(key, 600.0, load)
+
+
+# ── airports ─────────────────────────────────────────────────────────────
+async def _enrich_airport(code: str) -> dict[str, Any]:
+    """Local lookup only (no upstream HTTP) — the base row + detail already
+    live in app/data/*.json, loaded once via app.places' lru_cache loaders.
+
+    Honesty constraints (docs/places-airspace-plan.md §7): ils_category is
+    US-only (FAA NASR) and stays null elsewhere — never guessed from length/
+    lighting. There is no keyless capacity/hangar/MRO source, so the only
+    derived fields are PROXIES computed straight from the runways list
+    (runway_count, max_runway_length_ft) — no fabricated passenger numbers.
+    LiveATC is a best-effort linkout: the search page is Cloudflare-403'd
+    from server-side httpx and the mount URLs are guessed, not enumerated —
+    both facts are surfaced in the response, not just this comment.
+    """
+    row = places.airport_by_code(code)
+    if row is None:
+        raise HTTPException(404, f"unknown airport {code!r}")
+    icao = str(row.get("icao") or "")
+    detail = places.airport_detail(icao) or {}
+    runways = detail.get("runways") or []
+    frequencies = detail.get("frequencies") or []
+    lengths = [r.get("length_ft") for r in runways if isinstance(r.get("length_ft"), (int, float))]
+    out: dict[str, Any] = {
+        "kind": "airport",
+        "icao": icao,
+        "iata": row.get("iata") or "",
+        "name": row.get("name") or "",
+        "lat": row.get("lat"),
+        "lon": row.get("lon"),
+        "elevation_ft": row.get("elevation_ft"),
+        "municipality": row.get("municipality"),
+        "iso": row.get("iso"),
+        "atype": row.get("type"),
+        "scheduled_service": bool(row.get("scheduled_service")),
+        "military": bool(row.get("military")),
+        "runways": runways,
+        "frequencies": frequencies,
+        # Derived capability PROXIES only — never a fabricated capacity number.
+        "runway_count": len(runways),
+        "max_runway_length_ft": max(lengths) if lengths else None,
+        "source": "ourairports+faa-nasr",
+    }
+    if icao:
+        icao_lower = icao.lower()
+        out["liveatc_url"] = f"https://www.liveatc.net/search/?icao={icao}"
+        # Guessed mount naming convention, not an enumerated/verified list —
+        # candidate_mounts_best_effort tells the frontend to label them
+        # experimental (mounts may 404).
+        out["candidate_mounts"] = [
+            f"https://s1-fmt2.liveatc.net/{icao_lower}_twr",
+            f"https://s1-bos.liveatc.net/{icao_lower}_twr",
+        ]
+        out["candidate_mounts_best_effort"] = True
+    return out
+
+
+# ── seaports ─────────────────────────────────────────────────────────────
+async def _enrich_port(wpi: str) -> dict[str, Any]:
+    """Local lookup only. Op-status stays "Unknown" unless the NGA World Port
+    Index itself carries a status field for this port — it doesn't today, so
+    every port reports "Unknown" rather than implying a live closure feed
+    that doesn't exist (docs/places-airspace-plan.md §7)."""
+    row = places.port_by_wpi(wpi)
+    if row is None:
+        raise HTTPException(404, f"unknown port wpi {wpi!r}")
+    detail = places.port_detail(wpi) or {}
+    out: dict[str, Any] = {
+        "kind": "port",
+        "wpi": wpi,
+        "name": row.get("name") or "",
+        "lat": row.get("lat"),
+        "lon": row.get("lon"),
+        "op_status": "Unknown",
+        "source": "nga-wpi",
+    }
+    out.update(detail)
+    return out
+
+
+# ── satellites ───────────────────────────────────────────────────────────
+async def _enrich_satellite(norad_id: str) -> dict[str, Any]:
+    """CelesTrak SATCAT catalog data — the only keyless NORAD-adjacent source
+    (no public NORAD/NORTHCOM API exists); labeled honestly as such."""
+    row = await satcat.satcat_row(norad_id)
+    if row is None:
+        raise HTTPException(404, f"no SATCAT row for NORAD {norad_id}")
+
+    def _num(field: str) -> float | None:
+        v = row.get(field)
+        if v in (None, ""):
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "kind": "satellite",
+        "norad_cat_id": norad_id,
+        "object_name": row.get("OBJECT_NAME"),
+        "object_type": row.get("OBJECT_TYPE"),
+        "ops_status_code": row.get("OPS_STATUS_CODE"),
+        "owner": row.get("OWNER"),
+        "launch_date": row.get("LAUNCH_DATE") or None,
+        "launch_site": row.get("LAUNCH_SITE"),
+        "decay_date": row.get("DECAY_DATE") or None,
+        "period": _num("PERIOD"),
+        "inclination": _num("INCLINATION"),
+        "apogee": _num("APOGEE"),
+        "perigee": _num("PERIGEE"),
+        "rcs": _num("RCS"),
+        "source": "CelesTrak SATCAT",
+    }

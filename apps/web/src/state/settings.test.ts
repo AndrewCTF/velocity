@@ -35,7 +35,19 @@ describe('settings store', () => {
       aircraftDeadReckon: true,
       renderPixelCap: 2,
       continuousRenderGovernor: false,
+      selectionAiEnabled: false,
+      selectionAiModel: null,
     });
+  });
+
+  it('selectionAiEnabled/selectionAiModel mirror the backend selection-brief state, OFF/null by default', async () => {
+    const { useSettings } = await import('./settings.js');
+    expect(useSettings.getState().selectionAiEnabled).toBe(false);
+    expect(useSettings.getState().selectionAiModel).toBeNull();
+    useSettings.getState().set('selectionAiEnabled', true);
+    useSettings.getState().set('selectionAiModel', 'unsloth/Qwen3.5-9B-GGUF:UD-Q4_K_XL');
+    expect(useSettings.getState().selectionAiEnabled).toBe(true);
+    expect(useSettings.getState().selectionAiModel).toBe('unsloth/Qwen3.5-9B-GGUF:UD-Q4_K_XL');
   });
 
   it('reads an existing blob on init', async () => {

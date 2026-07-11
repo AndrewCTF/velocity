@@ -374,8 +374,102 @@ def test_evaluate_session_fires_persists_and_pushes(monkeypatch: pytest.MonkeyPa
 
 
 def test_evaluate_session_noop_when_supabase_unset() -> None:
-    # No supabase_url → _list_enabled_rules returns [] without raising, so the
-    # session evaluates to zero firings (graceful degrade, no crash).
+    # No supabase_url → _list_enabled_rules reads the LOCAL SQLite store
+    # instead of PostgREST (W3); with no rule persisted for this user_id there
+    # it still comes back [] (graceful degrade, no crash, no network).
     cand = _Candidate("aircraft:m1", "military_air", 56.3, 26.5, 3, "mil")
     fired = asyncio.run(evaluate_session(UserCtx("u1", "tok"), Settings(), [cand]))
     assert fired == 0
+
+
+# ── keyless boot: local-store rules fire + sink delivery is logged (W3) ─────────
+
+
+def test_list_enabled_rules_reads_local_store_when_supabase_unset() -> None:
+    from app.intel import alert_rules_local
+
+    asyncio.run(
+        alert_rules_local.create_rule(
+            "local",
+            {
+                "label": "local rule", "lat": 1.0, "lon": 2.0,
+                "kinds": [], "min_severity": 1, "enabled": True,
+            },
+        )
+    )
+    rules = asyncio.run(watch._list_enabled_rules(UserCtx("local", ""), Settings()))
+    assert [r["label"] for r in rules] == ["local rule"]
+
+
+def test_evaluate_all_fires_keyless_local_rule_and_logs_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The keyless boot contract (W3, docs/decisions.md 2026-07-11): a rule
+    stored in the LOCAL SQLite store fires with NO registered session and NO
+    Supabase configured, and the Discord sink delivery is durably logged —
+    proof reachable with no browser attached to the evaluator."""
+    from app.intel import alert_rules_local
+    from app.intel import incidents as incidents_mod
+    from app.routes import adsb as adsb_routes
+    from app.workflows import control
+
+    asyncio.run(
+        alert_rules_local.create_rule(
+            "local",
+            {
+                "label": "Hormuz watch",
+                "lat": 26.5,
+                "lon": 56.3,
+                "radius_nm": 50,
+                "kinds": ["military_air"],
+                "min_severity": 1,
+                "channel": "discord",
+                "sink_url": "https://discord.com/api/webhooks/1/2",
+            },
+        )
+    )
+
+    async def _patched_snapshot() -> dict:
+        return {
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [56.3, 26.5]},
+                    "properties": {
+                        "icao24": "abc123",
+                        "callsign": "RCH1",
+                        "source": "adsb_mil",
+                    },
+                }
+            ]
+        }
+
+    async def _patched_brief(*a: object, **k: object) -> dict:
+        return {"incidents": []}
+
+    monkeypatch.setattr(adsb_routes, "global_snapshot", _patched_snapshot)
+    monkeypatch.setattr(incidents_mod, "brief", _patched_brief)
+
+    sent: list[dict] = []
+
+    async def _fake_send(method, url, *, headers, json_body=None, timeout_s=15.0):  # type: ignore[no-untyped-def]
+        sent.append({"method": method, "url": url, "body": json_body})
+        return control.HttpResult(status=204, ok=True, json=None, text="", error=None)
+
+    monkeypatch.setattr(control, "send", _fake_send)
+
+    # No registered session and no Supabase configured (default Settings()).
+    assert watch.active_sessions() == []
+    total = asyncio.run(watch.evaluate_all())
+    assert total == 1
+
+    assert len(sent) == 1
+    assert sent[0]["method"] == "POST"
+    assert sent[0]["url"] == "https://discord.com/api/webhooks/1/2"
+    assert "Hormuz watch" in sent[0]["body"]["content"]
+
+    deliveries = asyncio.run(alert_rules_local.recent_deliveries())
+    assert len(deliveries) == 1
+    assert deliveries[0]["channel"] == "discord"
+    assert deliveries[0]["ok"] is True
+    assert deliveries[0]["status"] == 204

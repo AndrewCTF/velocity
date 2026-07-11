@@ -63,6 +63,52 @@ def test_compute_endpoint_served_when_opted_in(monkeypatch):
             assert r.status_code in (400, 422)
 
 
+# ── POST /api/ai/local write-authority gating parity ────────────────────────
+# POST gained engine/local_only/selection_model write authority alongside its
+# siblings /api/ai/models and /api/ai/selection, but (unlike them) sat outside
+# both is_compute_path and any per-route auth dependency. It is deliberately
+# NOT added to ratelimit._COMPUTE_PREFIXES (that predicate is path-prefix +
+# method-blind, so it would also 503 GET /api/ai/local — polled by the
+# settings UI to gate the switch on ollama_up/tool_capable — on a keyless
+# box). Instead the POST handler alone carries a dependency mirroring the
+# exact fail-closed semantics of ApiKeyMiddleware's compute-path gate.
+
+
+def test_ai_local_post_fails_closed_when_keyless_and_not_opted_in(monkeypatch):
+    monkeypatch.setattr(
+        auth, "get_settings", lambda: _keyless_settings(allow_unauthenticated=False)
+    )
+    app = create_app()
+    with TestClient(app) as c:
+        r = c.post("/api/ai/local", json={"enabled": True})
+        assert r.status_code == 503
+        assert "ALLOW_UNAUTHENTICATED" in r.json()["detail"]
+        # GET is a pure status probe — must stay open even though POST 503s.
+        assert c.get("/api/ai/local").status_code == 200
+
+
+def test_ai_local_post_served_when_opted_in(monkeypatch):
+    monkeypatch.setattr(
+        auth, "get_settings", lambda: _keyless_settings(allow_unauthenticated=True)
+    )
+    app = create_app()
+    with TestClient(app) as c:
+        r = c.post("/api/ai/local", json={"enabled": True})
+        assert r.status_code == 200
+        assert c.get("/api/ai/local").status_code == 200
+
+
+def test_ai_local_get_stays_open_keyless_no_opt_in(monkeypatch):
+    """GET must never 503 on a keyless box regardless of ALLOW_UNAUTHENTICATED
+    — only the write path (POST) is gated."""
+    monkeypatch.setattr(
+        auth, "get_settings", lambda: _keyless_settings(allow_unauthenticated=False)
+    )
+    app = create_app()
+    with TestClient(app) as c:
+        assert c.get("/api/ai/local").status_code == 200
+
+
 # ── #9 inbound rate limiting ─────────────────────────────────────────────────
 
 
