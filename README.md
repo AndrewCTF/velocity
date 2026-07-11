@@ -17,8 +17,9 @@ can ask it for live data instead of guessing from its training cut-off.
 </p>
 
 > **Before you get excited:** it's a single-analyst tool, state lives in memory
-> (restart = gone), AIS coverage is mostly Northern Europe, and the 3D satellite
-> mode is a VRAM hog. Full caveats in [Scope and limits](#scope-and-limits).
+> (restart = gone), AIS is densest over Northern Europe (global coverage is
+> sparser and terrestrial-biased), and the 3D satellite mode is a VRAM hog. Full
+> caveats in [Scope and limits](#scope-and-limits).
 
 ## Prerequisites
 
@@ -46,8 +47,8 @@ run without a single API key. Keys only ever add reach; see
 Docker is the short road. It brings up the API, the web app and nginx together:
 
 ```bash
-git clone https://github.com/AndrewCTF/ProjectVelocity.git
-cd ProjectVelocity
+git clone https://github.com/AndrewCTF/osint-geospatial-console.git
+cd osint-geospatial-console
 cp .env.example .env       # optional, leave it empty and it still works
 docker compose up          # api + web + nginx on :8080
 ```
@@ -120,9 +121,10 @@ be annoyed later:
   history is gone — but the position-track replay buffer survives: it's a 7-day
   SQLite store on disk. Durable storage for the rest (Postgres + PostGIS +
   TimescaleDB) is Phase 2.
-- AIS vessel coverage is mostly Northern Europe and the Baltic unless you bring
-  an AISStream key. Somewhere like the Strait of Hormuz has no live AIS here,
-  just the radar (SAR) layer.
+- AIS runs keyless and global (~33k vessels, MMSI-deduped across ShipXplorer,
+  MyShipTracking, Digitraffic and Kystverket), but coverage is densest over
+  Northern Europe and the Baltic and thins out elsewhere; an AISStream key fills
+  in the gaps. Sparse regions still lean on the radar (SAR) layer.
 - The 3D satellite view will eat your VRAM. The default 2D dark map runs on a
   laptop; check [System requirements](#system-requirements) before switching the
   heavy mode on.
@@ -135,18 +137,18 @@ Rough live numbers off a running backend; they move around through the day:
 
 | Feed | Typical live count | Where it comes from |
 | --- | --- | --- |
-| Aircraft (ADS-B) | 9–13k | OpenSky + airplanes.live |
+| Aircraft (ADS-B) | 9–13k (~11k typical) | OpenSky + airplanes.live |
 | Military aircraft | ~140 | adsb.lol |
-| Vessels (AIS) | ~4.7k, mostly N. Europe | Digitraffic + Kystverket |
+| Vessels (AIS) | ~33k, global | ShipXplorer + MyShipTracking + Digitraffic + Kystverket |
 | GPS jamming | ~200 flagged 1° cells | ADS-B NACp/NIC, the GPSJam method |
 | Dark vessels | radar change-detection | Sentinel-1 SAR |
-| Fused incidents | ~25 | the correlation engine |
-| Satellites | 15.7k | CelesTrak |
+| Fused incidents | correlation-driven | the correlation engine |
+| Satellites | ~16k | CelesTrak |
 | Earthquakes | ~250/day | USGS + EMSC |
-| News + fact-check | ~260 articles | publisher RSS |
+| News + fact-check | ~370 articles | publisher RSS |
 | Internet outages | country level | IODA, Cloudflare |
-| Submarine cables | 714 | TeleGeography |
-| Conflict events | varies | GDELT, EONET, ACLED |
+| Submarine cables | 715 | TeleGeography |
+| Conflict events | ~1.5k live | GDELT, EONET, ACLED |
 | Wildfires | VIIRS hotspots | NASA FIRMS (needs a key) |
 | 3D war damage, imagery, webcams | varies | Sentinel, GIBS, OSM |
 
@@ -337,15 +339,18 @@ Legend: ✅ shipped · 🚧 in progress
 
 - ✅ **Phase 0** — Foundation
 - ✅ **Phase 1** — MVP: live ADS-B / AIS / quakes / GPS-jamming layers on the globe
-- 🚧 **Phase 2** — Replay + drill-in. The timeline scrubber and a 7-day history
-  buffer are in (SQLite-backed playback); the durable Postgres + PostGIS +
-  TimescaleDB store is still the planned upgrade
+- ✅ **Phase 2** — Replay + drill-in. The timeline scrubber and a 7-day history
+  buffer ship as SQLite-backed playback; drilling into any past moment works
+  today. A durable Postgres + PostGIS + TimescaleDB store is a deferred scaling
+  upgrade for multi-week retention, not a blocker
 - ✅ **Phase 3** — Fusion engine + alerts (correlation rules) + 2D mirror
-- 🚧 **Phase 4** — Advanced sensors + AI. MCP server + intel API, Sentinel-1 SAR
+- 🚧 **Phase 4** — Advanced sensors + AI. MCP server + intel API (now with a
+  Claude Code plugin and `detail=short|long` tool variants), Sentinel-1 SAR
   dark-vessel detection, an autonomous watch-officer that writes cited incident
-  briefs, a keyless infra/domain OSINT layer, optional local-GPU (Ollama)
-  inference, and a first-run onboarding tour. More sensors and deeper analysis
-  are ongoing.
+  briefs, a keyless infra/domain OSINT layer, a photo-geolocation pipeline
+  (content inference + satellite 3DGS pose), a City 3D Gaussian-splat viewer,
+  optional local-GPU (Ollama) inference, and a first-run onboarding tour. More
+  sensors and deeper analysis are ongoing.
 - 🚧 **Phase 5** — Foundry: a keyless, local, single-operator take on Palantir
   Foundry's data-integration loop. Upload → transform (governed step DSL with
   lineage) → build (dependency DAG, staleness, cycle rejection) → data-health
@@ -355,6 +360,16 @@ Legend: ✅ shipped · 🚧 in progress
   (single-operator identity): multi-tenant MLS, distributed compute, streaming
   CDC, connector catalogs. Next: ontology Actions (audited write-back) and
   dataset branches.
+- 🚧 **Phase 6** — Workflows: a node-graph automation layer over the same live
+  feeds and ontology. 20 blocks — sources (aircraft, vessels, quakes, alerts,
+  datasets, ontology, countries), transforms (`op.python`/`op.sql`/`op.llm`
+  sandboxed subprocesses, `op.geo`, `op.http`, `op.steps`), sinks (alert,
+  ontology, dataset, persistent memory), and **external-actuation control
+  blocks** that reach out of the platform: `op.http`/`control.webhook` to any
+  server, and `control.drone`/`control.device` to command a UAV or hardware via
+  a JSON envelope. A first-class **MAVLink bridge** (`app.mavlink_bridge`,
+  ArduPilot/PX4, log-only without a vehicle so you can rehearse) ships in-repo.
+  See [`docs/workflows-control-blocks.md`](./docs/workflows-control-blocks.md).
 
 See [`docs/`](./docs) for the per-feature design notes and pipeline writeups.
 
