@@ -167,9 +167,26 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   // Sim entities are notional — there is no backend /api/entity row, so the
   // enrichment fetch would just 404. Detect via the live property bag.
   const isSim = snap?.properties?.['sim'] === true || (snap?.kind?.startsWith('sim-') ?? false);
+  // Fetch once per selected id. The callsign hint is derived from the async
+  // snapshot and typically arrives ~1s AFTER selection, so re-running on every
+  // hint change would blank the card (setEnrichment(null)) and double-fetch.
+  // Instead: fetch on id change (with the hint if it's already available), and
+  // refetch ONLY the first time a hint arrives to improve a hint-less fetch —
+  // never blanking the card in that case.
+  const enrichStateRef = useRef<{ id: string | null; hadHint: boolean }>({ id: null, hadHint: false });
   useEffect(() => {
-    setEnrichment(null);
-    if (!id || isSim) return;
+    if (!id || isSim) {
+      setEnrichment(null);
+      enrichStateRef.current = { id: null, hadHint: false };
+      return;
+    }
+    const prev = enrichStateRef.current;
+    const idChanged = prev.id !== id;
+    // Same id, and either we already fetched with a hint or none has arrived to
+    // improve the first fetch → nothing to do (no refetch, no blank).
+    if (!idChanged && (prev.hadHint || !callsignHint)) return;
+    if (idChanged) setEnrichment(null);
+    enrichStateRef.current = { id, hadHint: Boolean(callsignHint) };
     setEnrichLoading(true);
     const aborter = new AbortController();
     fetchEnrichment(id, aborter.signal, { callsign: callsignHint })
@@ -610,28 +627,37 @@ function ActionButton({
   };
 
   return (
-    <Btn
-      size="sm"
-      disabled={phase === 'running'}
-      onClick={() => void run()}
-      className={`gap-1.5 ${
-        phase === 'ok'
-          ? 'border-ok-line text-ok'
-          : phase === 'error'
-            ? 'border-alert-line text-alert'
-            : ''
-      }`}
-      {...(msg ? { title: msg } : {})}
-    >
-      {phase === 'running' ? (
-        '…'
-      ) : (
-        <>
-          {icon}
-          {phase === 'ok' ? doneLabel : label}
-        </>
+    <div className="flex flex-col gap-0.5">
+      <Btn
+        size="sm"
+        disabled={phase === 'running'}
+        onClick={() => void run()}
+        className={`gap-1.5 ${
+          phase === 'ok'
+            ? 'border-ok-line text-ok'
+            : phase === 'error'
+              ? 'border-alert-line text-alert'
+              : ''
+        }`}
+        {...(msg ? { title: msg } : {})}
+      >
+        {phase === 'running' ? (
+          '…'
+        ) : (
+          <>
+            {icon}
+            {phase === 'ok' ? doneLabel : label}
+          </>
+        )}
+      </Btn>
+      {/* Persistent inline error — the toast auto-dismisses after 4s, but a
+          failed governed action must stay visible until the operator retries. */}
+      {phase === 'error' && msg && (
+        <span className="mono text-[10px] text-alert leading-tight max-w-[140px] truncate" title={msg}>
+          {msg}
+        </span>
       )}
-    </Btn>
+    </div>
   );
 }
 

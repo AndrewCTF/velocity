@@ -80,16 +80,18 @@ async def seed_reference_datasets(store: FoundryStore, refresh: bool = False) ->
         if len(rows) > MAX_ROWS_PER_DATASET:
             dropped = len(rows) - MAX_ROWS_PER_DATASET
             rows = rows[:MAX_ROWS_PER_DATASET]
+        desc = f"Built-in reference data ({SEED_SOURCE})"
+        if dropped:
+            desc += f"; TRUNCATED: {dropped} rows over the {MAX_ROWS_PER_DATASET} cap were dropped"
         existing = await store.get_dataset_by_name(name)
         if existing is not None:
             if not refresh:
                 results.append({"dataset": name, "status": "exists", "id": existing["id"]})
                 continue
             ds_id = existing["id"]
+            # Keep the truncation note current on the refresh path too.
+            await store.update_dataset_description(ds_id, desc)
         else:
-            desc = f"Built-in reference data ({SEED_SOURCE})"
-            if dropped:
-                desc += f"; TRUNCATED: {dropped} rows over the {MAX_ROWS_PER_DATASET} cap were dropped"
             ds = await store.create_dataset(name, desc, kind="reference")
             ds_id = ds["id"]
         try:

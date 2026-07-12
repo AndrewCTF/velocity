@@ -294,15 +294,23 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
 
   useEffect(() => { setOffset(0); setVersion(undefined); }, [dataset.id]);
   useEffect(() => {
-    void getRows(dataset.id, version, PAGE_SIZE, offset).then(setRows);
-    void getStats(dataset.id, version).then(setStats);
-    void getVersions(dataset.id).then(setVersions);
+    // Guard against a stale page winning: switching dataset resets offset in the
+    // same commit, so an in-flight fetch for the old id/offset must not land.
+    let cancelled = false;
+    void getRows(dataset.id, version, PAGE_SIZE, offset).then((r) => { if (!cancelled) setRows(r); });
+    void getStats(dataset.id, version).then((r) => { if (!cancelled) setStats(r); });
+    void getVersions(dataset.id).then((r) => { if (!cancelled) setVersions(r); });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset.id, version, offset]);
   useEffect(() => {
-    if (tab === 'deadletter') void getDeadLetter(dataset.id).then(setDeadLetter);
-    if (tab === 'lineage') void getColumnLineage(dataset.id).then(setLineage);
-    if (tab === 'docs') void getDatasetDocs(dataset.id).then(setDocs);
+    // Same guard for the tab sub-fetches — dataset A's rows must never render
+    // under dataset B when selection changes mid-flight.
+    let cancelled = false;
+    if (tab === 'deadletter') void getDeadLetter(dataset.id).then((r) => { if (!cancelled) setDeadLetter(r); });
+    if (tab === 'lineage') void getColumnLineage(dataset.id).then((r) => { if (!cancelled) setLineage(r); });
+    if (tab === 'docs') void getDatasetDocs(dataset.id).then((r) => { if (!cancelled) setDocs(r); });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, dataset.id]);
 

@@ -49,6 +49,24 @@ def test_seed_idempotent_then_refresh(client):
     assert statuses3["ref_airports"] == "seeded"
 
 
+def test_truncation_note_survives_refresh(client, monkeypatch):
+    # Force truncation so a note is minted, then confirm the refresh path
+    # carries it onto the existing dataset's description (regression: the note
+    # used to be added only on the create branch).
+    monkeypatch.setattr(seed, "MAX_ROWS_PER_DATASET", 1)
+    assert client.post("/api/foundry/seed/reference").status_code == 200
+
+    def _desc(name):
+        return next(d for d in client.get("/api/foundry/datasets").json()
+                    if d["name"] == name)["description"]
+
+    # ref_country_indicators ships 100+ rows, so a cap of 1 truncates it.
+    assert "TRUNCATED" in _desc("ref_country_indicators")
+    r = client.post("/api/foundry/seed/reference", params={"refresh": "true"})
+    assert r.status_code == 200
+    assert "TRUNCATED" in _desc("ref_country_indicators")
+
+
 def test_country_resources_flattened():
     rows = seed._country_resource_rows()
     # 53-country catalog ships in-repo; every row is one resource with its country context.

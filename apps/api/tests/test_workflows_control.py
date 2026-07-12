@@ -284,6 +284,37 @@ def test_check_url_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
         control.check_url("http://evil.example/x")  # refused
 
 
+def test_check_url_blocks_link_local_metadata() -> None:
+    # The cloud-metadata IP (169.254.169.254) and its /16 are refused even
+    # though localhost/private LAN stay open.
+    with pytest.raises(WorkflowError) as exc:
+        control.check_url("http://169.254.169.254/latest/meta-data/")
+    assert exc.value.status_code == 403
+    with pytest.raises(WorkflowError):
+        control.check_url("http://169.254.1.2/x")
+    control.check_url("http://127.0.0.1:9010/command")  # localhost still fine
+    control.check_url("http://192.168.1.50/command")  # private LAN still fine
+
+
+def test_check_url_link_local_allowed_when_explicitly_allowlisted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WORKFLOWS_HTTP_ALLOW_HOSTS", "169.254.169.254")
+    control.check_url("http://169.254.169.254/x")  # operator opted in → allowed
+
+
+@pytest.mark.asyncio
+async def test_dispatch_5xx_is_not_dispatched(monkeypatch: pytest.MonkeyPatch) -> None:
+    # An HTTP 500 has error=None but is a rejection — dispatched must be False.
+    rec = _Recorder(control.HttpResult(status=500, ok=False, json=None, text="boom", error=None))
+    monkeypatch.setattr(control, "send", rec)
+    res = await control.dispatch(
+        "http://h/x", {"type": "drone.command"}, budget=[10], preview=False
+    )
+    assert res["dispatched"] is False
+    assert res["status"] == 500
+
+
 def test_kill_switch_forces_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WORKFLOWS_CONTROL_ENABLED", "0")
     assert control.control_enabled() is False

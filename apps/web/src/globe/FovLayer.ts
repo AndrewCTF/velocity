@@ -192,7 +192,11 @@ export function installFov(viewer: Cesium.Viewer): () => void {
   let lastPaint = 0;
   let lastResolve = 0;
   const off = viewer.scene.preUpdate.addEventListener(() => {
-    if (currentId && !entityRef) {
+    // Re-resolve on a throttle: picks up an entity that appears after the
+    // selection AND drops a stale ref whose entity was pruned/decimated out
+    // of its data source (findEntity returns undefined once it's gone), so we
+    // never paint a frozen ghost disc at the last known position.
+    if (currentId) {
       const now = performance.now();
       if (now - lastResolve > 250) {
         lastResolve = now;

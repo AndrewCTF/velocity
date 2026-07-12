@@ -45,6 +45,15 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
     void loadControl();
   }, []);
 
+  // facId is seeded before loadControl resolves; if the loaded factions don't
+  // include the seed ('blue' or a since-removed id), re-point it at the first
+  // real faction so drawn zones/lines are filed under an existing faction.
+  useEffect(() => {
+    if (factions.length > 0 && !factions.some((f) => f.id === facId)) {
+      setFacId(factions[0]!.id);
+    }
+  }, [factions, facId]);
+
   const draw = getDrawController();
   const noDraw = draw == null;
   const lbl = (): string | undefined => label.trim() || undefined;

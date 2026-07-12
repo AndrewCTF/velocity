@@ -250,6 +250,28 @@ class FoundryStore:
 
         return await self._run(_sync)
 
+    async def update_dataset_description(
+        self, dataset_id: str, description: str
+    ) -> dict[str, Any] | None:
+        def _sync() -> dict[str, Any] | None:
+            con = _connect(self.s)
+            try:
+                row = con.execute(
+                    "SELECT id FROM datasets WHERE id=?", (dataset_id,)
+                ).fetchone()
+                if row is None:
+                    return None
+                con.execute(
+                    "UPDATE datasets SET description=?, updated_at=? WHERE id=?",
+                    (description, _now_iso(), dataset_id),
+                )
+                con.commit()
+                return self._dataset_row(con, dataset_id)
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
     async def list_datasets(self) -> list[dict[str, Any]]:
         def _sync() -> list[dict[str, Any]]:
             con = _connect(self.s)

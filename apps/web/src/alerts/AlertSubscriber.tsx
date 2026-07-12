@@ -78,7 +78,13 @@ export function AlertSubscriber(): null {
       stopped = true;
       ws?.close();
     };
-  }, [push, setWs, session, loading]);
+    // Depend on the token string, not the `session` object: supabase emits a
+    // fresh session identity on TOKEN_REFRESHED / refocus, which would tear
+    // down and reconnect /ws/alerts hourly and on every window focus. The
+    // socket only cares whether we're authed (token present) — the specific
+    // token is carried by withWsKey at connect time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [push, setWs, session?.access_token, loading]);
 
   // Register this signed-in session with the backend geofence evaluator so its
   // background loop has a token for the caller's per-user RLS reads. Gated on a

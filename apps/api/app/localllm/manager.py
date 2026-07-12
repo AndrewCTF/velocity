@@ -26,8 +26,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -103,6 +105,15 @@ def models_root(settings: Settings | None = None) -> Path:
 _STATE_FILENAME = ".manager_state.json"
 
 
+# The install registry lives in-memory + a small JSON sidecar, mutated from
+# worker threads (routes call set_active/set_hot/delete via asyncio.to_thread).
+# Without serialization two concurrent read-mutate-write cycles lose one of the
+# updates; the file write must also be atomic so a crash mid-write can't leave a
+# truncated (unparseable) sidecar. One process-global lock guards every
+# read-mutate-write below; _save_state does temp-file + os.replace.
+_STATE_LOCK = threading.Lock()
+
+
 def _state_path(root: Path) -> Path:
     return root / _STATE_FILENAME
 
@@ -127,7 +138,27 @@ def _load_state(root: Path) -> dict[str, Any]:
 
 
 def _save_state(root: Path, state: dict[str, Any]) -> None:
-    _state_path(root).write_text(json.dumps(state))
+    """Atomic write: serialize to a temp file in the same dir, then os.replace
+    (rename is atomic on the same filesystem) so a reader/crash never sees a
+    half-written sidecar."""
+    p = _state_path(root)
+    tmp = p.with_name(f"{p.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp.write_text(json.dumps(state))
+        os.replace(tmp, p)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _mutate_state(root: Path, fn) -> dict[str, Any]:
+    """Serialized read-mutate-write. ``fn(state)`` mutates in place and returns
+    whatever the caller wants to read back; the whole cycle holds
+    ``_STATE_LOCK`` so concurrent callers can't lose an update."""
+    with _STATE_LOCK:
+        st = _load_state(root)
+        result = fn(st)
+        _save_state(root, st)
+        return result
 
 
 def _tier_for_repo(repo_id: str) -> str | None:
@@ -203,6 +234,10 @@ def delete_model(key: str) -> None:
     """
     if not _KEY_RE.match(key):
         raise HTTPException(status_code=404, detail="unknown model key")
+    if _running_job_for_key(key) is not None:
+        raise HTTPException(
+            status_code=409, detail="a download for this model is in progress; cannot delete"
+        )
     root = models_root().resolve()
     target = root / key
     if target.is_symlink():  # checked BEFORE resolve() — never follow it anywhere
@@ -245,18 +280,14 @@ def delete_model(key: str) -> None:
 
 
 def _drop_active_refs(key: str) -> None:
-    root = models_root()
-    st = _load_state(root)
-    changed = False
-    for role in ("main", "selection"):
-        if st["active"].get(role) == key:
-            st["active"][role] = None
-            changed = True
-    if key in st["hot"]:
-        st["hot"].remove(key)
-        changed = True
-    if changed:
-        _save_state(root, st)
+    def _apply(st: dict[str, Any]) -> None:
+        for role in ("main", "selection"):
+            if st["active"].get(role) == key:
+                st["active"][role] = None
+        if key in st["hot"]:
+            st["hot"].remove(key)
+
+    _mutate_state(models_root(), _apply)
 
 
 # ── active / hot roles ────────────────────────────────────────────────────────
@@ -275,26 +306,28 @@ def set_active(role: str, key: str | None) -> dict[str, str | None]:
         raise HTTPException(status_code=422, detail="role must be 'main' or 'selection'")
     if key is not None and key not in _installed_keys():
         raise HTTPException(status_code=404, detail="unknown model key")
-    root = models_root()
-    st = _load_state(root)
-    st["active"][role] = key
-    _save_state(root, st)
-    return dict(st["active"])
+
+    def _apply(st: dict[str, Any]) -> dict[str, str | None]:
+        st["active"][role] = key
+        return dict(st["active"])
+
+    return _mutate_state(models_root(), _apply)
 
 
 def set_hot(key: str, hot: bool) -> list[str]:
     if key not in _installed_keys():
         raise HTTPException(status_code=404, detail="unknown model key")
-    root = models_root()
-    st = _load_state(root)
-    hot_set = set(st["hot"])
-    if hot:
-        hot_set.add(key)
-    else:
-        hot_set.discard(key)
-    st["hot"] = sorted(hot_set)
-    _save_state(root, st)
-    return list(st["hot"])
+
+    def _apply(st: dict[str, Any]) -> list[str]:
+        hot_set = set(st["hot"])
+        if hot:
+            hot_set.add(key)
+        else:
+            hot_set.discard(key)
+        st["hot"] = sorted(hot_set)
+        return list(st["hot"])
+
+    return _mutate_state(models_root(), _apply)
 
 
 # ── download jobs ─────────────────────────────────────────────────────────────
@@ -311,6 +344,10 @@ class Job:
     bytes_done: int = 0
     progress_pct: float = 0.0
     error: str | None = None
+    # True only when the download's files were checked against an upstream
+    # sha256; False when the repo published no lfs.sha256 for the matched files
+    # (nothing to check against — the bytes are accepted but unverified).
+    verified: bool = False
     created: float = field(default_factory=time.time)
 
     def as_dict(self) -> dict[str, Any]:
@@ -320,12 +357,25 @@ class Job:
             "bytes_done": self.bytes_done,
             "bytes_total": self.bytes_total,
             "error": self.error,
+            "verified": self.verified,
             "key": self.key if self.status == "done" else None,
         }
 
 
 _JOBS: dict[str, Job] = {}
 _MAX_JOBS = 100
+
+_ACTIVE_JOB_STATUSES = ("queued", "downloading", "verifying")
+
+
+def _running_job_for_key(key: str) -> Job | None:
+    """The in-flight download job (if any) targeting *key* — used to dedup a
+    second download of the same model and to refuse deleting a model whose
+    bytes are still landing."""
+    for j in _JOBS.values():
+        if j.key == key and j.status in _ACTIVE_JOB_STATUSES:
+            return j
+    return None
 
 
 def get_job(job_id: str) -> dict[str, Any] | None:
@@ -425,11 +475,26 @@ async def _run_job(job: Job, sha256_by_file: dict[str, str]) -> None:
     monitor.cancel()
 
     job.status = "verifying"
-    ok = await asyncio.to_thread(_verify_sha256, target_dir, sha256_by_file)
-    if not ok:
-        job.status = "error"
-        job.error = "sha256 verification failed"
-        return
+    if sha256_by_file:
+        ok = await asyncio.to_thread(_verify_sha256, target_dir, sha256_by_file)
+        if not ok:
+            job.status = "error"
+            job.error = "sha256 verification failed"
+            return
+        job.verified = True
+    else:
+        # The repo published no lfs.sha256 for the matched files, so there is
+        # nothing to check the bytes against. Accept the download (upstream is
+        # the unsloth-org allowlist + HF TLS) but flag it unverified rather than
+        # silently implying it passed a digest check.
+        job.verified = False
+        log.warning(
+            "download %s (%s %s): no upstream sha256 to verify against; "
+            "accepting unverified",
+            job.key,
+            job.repo_id,
+            job.quant,
+        )
 
     size_bytes = await asyncio.to_thread(
         lambda: sum(
@@ -454,6 +519,14 @@ async def start_download(repo_id: str, quant: str) -> str:
     validate_repo_id(repo_id)
     validate_quant(quant)
 
+    # In-flight dedup: a second POST for a model already downloading returns the
+    # existing job instead of spawning a second snapshot_download into the same
+    # directory (two writers racing over the same .gguf files).
+    key = key_for(repo_id, quant)
+    existing = _running_job_for_key(key)
+    if existing is not None:
+        return existing.job_id
+
     matched = await asyncio.to_thread(_matched_files, repo_id, quant)
     if not matched:
         raise HTTPException(
@@ -472,7 +545,6 @@ async def start_download(repo_id: str, quant: str) -> str:
             detail=f"insufficient disk space: need ~{needed_gb:.1f}GB free, have {free_gb:.1f}GB",
         )
 
-    key = key_for(repo_id, quant)
     job_id = uuid.uuid4().hex
     job = Job(job_id=job_id, repo_id=repo_id, quant=quant, key=key, bytes_total=total_bytes)
     _JOBS[job_id] = job

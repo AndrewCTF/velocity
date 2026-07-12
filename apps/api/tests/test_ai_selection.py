@@ -87,6 +87,28 @@ def test_selection_brief_different_id_is_not_cached(
     assert calls["n"] == 2
 
 
+def test_selection_brief_changed_props_not_cached(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same (kind, id) but changed props must recompute — the cache key folds
+    in a hash of the props, so a re-clicked entity whose data moved gets a
+    fresh brief, never a stale one served as cached:true."""
+    fake, calls = _fake_chat()
+    monkeypatch.setattr(llm, "chat", fake)
+
+    r1 = client.post(
+        "/api/ai/selection/brief",
+        json={"kind": "aircraft", "id": "AC-move-1", "props": {"alt_ft": 35000}},
+    )
+    r2 = client.post(
+        "/api/ai/selection/brief",
+        json={"kind": "aircraft", "id": "AC-move-1", "props": {"alt_ft": 12000}},
+    )
+    assert r1.json()["cached"] is False
+    assert r2.json()["cached"] is False  # props changed → recomputed
+    assert calls["n"] == 2
+
+
 def test_selection_brief_409_when_disabled(client) -> None:
     llm.set_selection_enabled(False)
     r = client.post(

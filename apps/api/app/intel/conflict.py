@@ -22,6 +22,8 @@ import io
 import zipfile
 from typing import Any
 
+import httpx
+
 from app.upstream import cache, get_client
 
 # CAMEO event roots we treat as armed conflict.
@@ -92,7 +94,7 @@ async def _fetch_slice(ts: str) -> list[list[str]]:
             return []
         z = zipfile.ZipFile(io.BytesIO(r.content))
         raw = z.read(z.namelist()[0]).decode("utf-8", "replace")
-    except (OSError, zipfile.BadZipFile, ValueError):
+    except (OSError, zipfile.BadZipFile, ValueError, httpx.HTTPError):
         return []
     out: list[list[str]] = []
     for line in raw.splitlines():

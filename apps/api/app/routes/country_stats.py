@@ -28,16 +28,21 @@ _TTL = 86400.0
 # api.worldbank.org rate-limits by IP and STALLS (accepts the connection,
 # never responds) after a burst — hit live 2026-07-12 firing 16 indicators in
 # parallel. Keep upstream concurrency polite; the 24h cache absorbs the rest.
-_WB_SEM = None
+_WB_SEMS: dict[int, Any] = {}
 
 
 def _wb_sem():
-    global _WB_SEM  # noqa: PLW0603 — lazy so the semaphore binds to the running loop
+    # Keyed by running loop id: an asyncio primitive binds to the loop it is
+    # first awaited on, so a single module-global would raise "attached to a
+    # different loop" when reused across event loops (e.g. per-test loops).
     import asyncio
 
-    if _WB_SEM is None:
-        _WB_SEM = asyncio.Semaphore(4)
-    return _WB_SEM
+    loop = asyncio.get_event_loop()
+    sem = _WB_SEMS.get(id(loop))
+    if sem is None:
+        sem = asyncio.Semaphore(4)
+        _WB_SEMS[id(loop)] = sem
+    return sem
 
 # Curated World Bank indicator manifest — id, human label, unit hint.
 WB_INDICATORS: list[dict[str, str]] = [
@@ -204,9 +209,10 @@ async def country_un(
                 body = r.json()
             except Exception as e:  # noqa: BLE001
                 return {"id": code, "unavailable": True, "note": f"{type(e).__name__}: {e}"[:120], "series": []}
+            data = body.get("data") if isinstance(body, dict) else None
             pts = [
                 {"year": d.get("timePeriodStart"), "value": d.get("value")}
-                for d in body.get("data") or []
+                for d in data or []
                 if d.get("timePeriodStart") is not None
             ]
             pts.sort(key=lambda p: p["year"])

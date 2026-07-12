@@ -418,6 +418,122 @@ def test_get_job_unknown_returns_none() -> None:
     assert manager.get_job("does-not-exist") is None
 
 
+async def test_start_download_dedups_in_flight_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A second download of a model already in flight returns the SAME job id
+    instead of spawning a second snapshot_download into the same dir."""
+    _fake_hf_api(
+        monkeypatch,
+        [SimpleNamespace(rfilename="model-UD-Q4_K_XL.gguf", size=10, lfs=None)],
+    )
+    started = {"n": 0}
+
+    def slow_snapshot_download(**kw):
+        started["n"] += 1
+        import time as _t
+
+        _t.sleep(0.2)  # keep the job in "downloading" long enough to race a 2nd POST
+        target = Path(kw["local_dir"])
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "model-UD-Q4_K_XL.gguf").write_bytes(b"0123456789")
+
+    monkeypatch.setattr(manager, "snapshot_download", slow_snapshot_download)
+
+    job_id_1 = await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    job_id_2 = await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    assert job_id_1 == job_id_2  # deduped, not a second job
+
+    import asyncio
+
+    job = manager._JOBS[job_id_1]
+    for _ in range(200):
+        if job.status in ("done", "error"):
+            break
+        await asyncio.sleep(0.01)
+    assert job.status == "done", job.error
+    assert started["n"] == 1  # snapshot_download ran exactly once
+
+
+async def test_delete_model_refuses_while_download_running() -> None:
+    """A model whose bytes are still landing cannot be deleted (409)."""
+    key = _install_fake_model()
+    # Plant a live download job targeting the same key.
+    job = manager.Job(
+        job_id="j1",
+        repo_id="unsloth/Qwen3.5-9B-GGUF",
+        quant="UD-Q4_K_XL",
+        key=key,
+        status="downloading",
+    )
+    manager._JOBS[job.job_id] = job
+    with pytest.raises(HTTPException) as exc:
+        manager.delete_model(key)
+    assert exc.value.status_code == 409
+    # A finished job no longer blocks deletion.
+    job.status = "done"
+    manager.delete_model(key)
+    assert key not in {m["key"] for m in manager.list_installed()}
+
+
+async def test_download_without_upstream_sha_is_unverified(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No lfs.sha256 published → the download is accepted but flagged
+    verified:false rather than silently passing verification."""
+    _fake_hf_api(
+        monkeypatch,
+        [SimpleNamespace(rfilename="model-UD-Q4_K_XL.gguf", size=10, lfs=None)],
+    )
+
+    def fake_snapshot_download(**kw):
+        target = Path(kw["local_dir"])
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "model-UD-Q4_K_XL.gguf").write_bytes(b"0123456789")
+
+    monkeypatch.setattr(manager, "snapshot_download", fake_snapshot_download)
+
+    import asyncio
+
+    job_id = await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    job = manager._JOBS[job_id]
+    for _ in range(200):
+        if job.status in ("done", "error"):
+            break
+        await asyncio.sleep(0.01)
+    assert job.status == "done", job.error
+    assert manager.get_job(job_id)["verified"] is False
+
+
+async def test_download_with_matching_sha_is_verified(monkeypatch: pytest.MonkeyPatch) -> None:
+    import hashlib as _h
+
+    payload = b"verified-payload"
+    sha = _h.sha256(payload).hexdigest()
+    _fake_hf_api(
+        monkeypatch,
+        [
+            SimpleNamespace(
+                rfilename="model-UD-Q4_K_XL.gguf", size=len(payload), lfs=SimpleNamespace(sha256=sha)
+            )
+        ],
+    )
+
+    def fake_snapshot_download(**kw):
+        target = Path(kw["local_dir"])
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "model-UD-Q4_K_XL.gguf").write_bytes(payload)
+
+    monkeypatch.setattr(manager, "snapshot_download", fake_snapshot_download)
+
+    import asyncio
+
+    job_id = await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    job = manager._JOBS[job_id]
+    for _ in range(200):
+        if job.status in ("done", "error"):
+            break
+        await asyncio.sleep(0.01)
+    assert job.status == "done", job.error
+    assert manager.get_job(job_id)["verified"] is True
+
+
 # ── models_root ───────────────────────────────────────────────────────────────
 
 

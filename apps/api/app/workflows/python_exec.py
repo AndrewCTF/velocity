@@ -106,6 +106,12 @@ async def run_python_block(
         except (BrokenPipeError, ConnectionResetError):
             pass
         out = await _read_capped(proc.stdout, _MAX_STDOUT_BYTES)
+        if len(out) > _MAX_STDOUT_BYTES:
+            # Cap breached: stop reading and kill NOW. Otherwise the child keeps
+            # writing into a full pipe, `proc.wait()` blocks until the wall
+            # timeout, and the caller sees a spurious "timed out" instead of the
+            # real "output exceeded cap" — which is what the check below reports.
+            _kill(proc)
         await proc.wait()
         return out
 

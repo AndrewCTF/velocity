@@ -102,10 +102,14 @@ export function RunsView(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // Default to the first workflow once the list loads, if nothing is picked yet.
+  // Default pick once the list loads, if nothing is chosen yet. Honor a
+  // deep-linked WORKFLOW id (EditorView.select passes a workflow id, not a run
+  // id — getRun 404s on it above) before falling back to the first workflow.
   useEffect(() => {
-    if (!workflowId && workflows.length > 0) setWorkflowId(workflows[0]?.id ?? '');
-  }, [workflowId, workflows]);
+    if (workflowId || workflows.length === 0) return;
+    const deep = selectedId && workflows.some((w) => w.id === selectedId) ? selectedId : null;
+    setWorkflowId(deep ?? workflows[0]?.id ?? '');
+  }, [workflowId, workflows, selectedId]);
 
   // Fetch runs the moment a workflow becomes selected (default pick, deep
   // link, or manual dropdown change) — the poll below only refreshes an
@@ -119,13 +123,14 @@ export function RunsView(): JSX.Element {
     if (workflowId) await loadRuns(workflowId);
   });
 
-  // Fast 5s poll while a run is in flight.
+  // Fast 5s poll while a run is in flight. Depend on the derived boolean, not
+  // the runs array (a fresh ref each poll would recreate the interval every tick).
+  const anyRunning = runs.some((r) => r.status === 'running' || r.status === 'queued');
   useEffect(() => {
-    const anyRunning = runs.some((r) => r.status === 'running' || r.status === 'queued');
     if (!anyRunning || !workflowId) return;
     const id = window.setInterval(() => void loadRuns(workflowId), 5000);
     return () => window.clearInterval(id);
-  }, [runs, workflowId, loadRuns]);
+  }, [anyRunning, workflowId, loadRuns]);
 
   const nameOf = (id: string): string => workflows.find((w) => w.id === id)?.name ?? id;
 

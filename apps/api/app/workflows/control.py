@@ -26,7 +26,9 @@ POSTed with ``content-type: application/json``.
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -90,6 +92,32 @@ def _allow_hosts() -> set[str] | None:
     return {h.strip().lower() for h in raw.split(",") if h.strip()}
 
 
+def _is_link_local(host: str) -> bool:
+    """True if *host* is, or resolves to, an IPv4 link-local address
+    (169.254.0.0/16 — the cloud-metadata range, incl. 169.254.169.254). Kept
+    deliberately narrow: this is the one range a benign single-operator tool
+    never legitimately targets, and the one that leaks instance credentials.
+    Localhost/private LAN are intentionally NOT blocked (the operator's control
+    server is routinely on 127.0.0.1 or the LAN — see the module docstring)."""
+    candidates: list[str] = []
+    try:
+        ipaddress.ip_address(host)
+        candidates.append(host)
+    except ValueError:
+        try:
+            candidates = [ai[4][0] for ai in socket.getaddrinfo(host, None)]
+        except OSError:
+            return False  # unresolvable — let the actual request fail/blocked elsewhere
+    for addr in candidates:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if isinstance(ip, ipaddress.IPv4Address) and ip in ipaddress.ip_network("169.254.0.0/16"):
+            return True
+    return False
+
+
 def check_url(url: str) -> None:
     """Validate scheme (http/https only) and enforce the optional host
     allowlist. Raises ``WorkflowError`` naming the problem; never returns a
@@ -101,11 +129,22 @@ def check_url(url: str) -> None:
     if not parts.hostname:
         raise WorkflowError(422, f"url has no host: {url!r}")
     allow = _allow_hosts()
-    if allow is not None and parts.hostname.lower() not in allow:
+    host_lower = parts.hostname.lower()
+    if allow is not None and host_lower not in allow:
         raise WorkflowError(
             403,
             f"host {parts.hostname!r} is not in WORKFLOWS_HTTP_ALLOW_HOSTS "
             f"({', '.join(sorted(allow))})",
+        )
+    # Block the cloud-metadata / link-local range (169.254.0.0/16) unless the
+    # operator explicitly allowlisted this exact host — that endpoint hands out
+    # instance credentials and is never a legitimate control target. Everything
+    # else (localhost, private LAN, public) stays open per the BYO posture.
+    if (allow is None or host_lower not in allow) and _is_link_local(parts.hostname):
+        raise WorkflowError(
+            403,
+            f"host {parts.hostname!r} resolves to the link-local/metadata range "
+            "(169.254.0.0/16), which is blocked",
         )
 
 
@@ -262,7 +301,11 @@ async def dispatch(
     budget[0] -= 1
     headers = {"content-type": "application/json", **auth_headers(auth_env)}
     res = await send("POST", url, headers=headers, json_body=envelope, timeout_s=timeout_s)
-    out: dict[str, Any] = {"dispatched": res.error is None, "dry_run": False, "request": envelope}
+    # "dispatched" must mean the control server ACCEPTED the command, not merely
+    # that the socket didn't error: a 5xx/4xx has error=None but is a rejection,
+    # so key off res.ok (2xx) — a downstream block branching on `dispatched`
+    # would otherwise treat a failed uplink as a success.
+    out: dict[str, Any] = {"dispatched": res.ok, "dry_run": False, "request": envelope}
     out.update(res.summary())
     return out
 

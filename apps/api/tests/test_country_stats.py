@@ -69,6 +69,22 @@ def test_un_series_shape(client, monkeypatch):
     assert [p["year"] for p in s["series"]] == [2018, 2020]
 
 
+def test_un_non_dict_body_degrades(client, monkeypatch):
+    # Upstream sometimes returns a bare list on error; .get("data") on it used
+    # to raise AttributeError and 500 the route. It must degrade instead.
+    async def fake_get(self, url, **kwargs):
+        return httpx.Response(200, json=[], request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    from app.upstream import cache
+
+    cache.invalidate("un:840:SI_POV_DAY1")
+    r = client.get("/api/country/USA/un", params={"series": "SI_POV_DAY1"})
+    assert r.status_code == 200
+    (s,) = r.json()["series"]
+    assert s["series"] == []
+
+
 def test_malformed_indicator_rejected(client):
     assert (
         client.get("/api/country/USA/worldbank", params={"indicators": "evil;drop"}).status_code

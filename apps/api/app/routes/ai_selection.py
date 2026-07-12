@@ -17,6 +17,7 @@ without a second model call); the caller sees ``cached: true`` on a hit.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from typing import Any
@@ -72,7 +73,13 @@ async def post_selection_brief(
             status_code=413, detail=f"props too large (max {_MAX_PROPS_BYTES} bytes serialized)"
         )
 
-    cache_key = f"selection-brief:{body.kind}:{body.id}"
+    # Key on a hash of the props too, not just (kind, id): the same entity
+    # re-clicked within 60s can carry changed props (new position, altitude,
+    # status), and keying on identity alone would serve a stale brief as
+    # cached:true. `serialized` is the exact props payload used to build the
+    # prompt, so its digest tracks every input the brief depends on.
+    props_hash = hashlib.sha1(serialized.encode("utf-8")).hexdigest()[:16]
+    cache_key = f"selection-brief:{body.kind}:{body.id}:{props_hash}"
     computed = False
 
     async def _load() -> dict[str, Any]:

@@ -133,12 +133,12 @@ export function BuildsView(): JSX.Element {
 
   // Fast 5s poll while a build is running (nested inside the app-visibility
   // gate via useFoundryPoll's parent — this just tightens the cadence).
+  const anyRunning = builds.some((b) => b.status === 'running');
   useEffect(() => {
-    const anyRunning = builds.some((b) => b.status === 'running');
     if (!anyRunning) return;
     const id = window.setInterval(() => void loadBuilds(), 5000);
     return () => window.clearInterval(id);
-  }, [builds, loadBuilds]);
+  }, [anyRunning, loadBuilds]);
 
   const tfName = (id: string | null): string => {
     if (!id) return '—';

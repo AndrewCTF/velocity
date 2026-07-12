@@ -780,7 +780,10 @@ async def _enrich_airport(code: str) -> dict[str, Any]:
         raise HTTPException(404, f"unknown airport {code!r}")
     icao = str(row.get("icao") or "")
     detail = places.airport_detail(icao) or {}
-    runways = detail.get("runways") or []
+    all_runways = detail.get("runways") or []
+    # Derived proxies count OPEN runways only, matching approach_capability
+    # (which filters `closed`) — a decommissioned strip is not usable capacity.
+    runways = [r for r in all_runways if not r.get("closed")]
     frequencies = detail.get("frequencies") or []
     lengths = [r.get("length_ft") for r in runways if isinstance(r.get("length_ft"), (int, float))]
     out: dict[str, Any] = {
@@ -796,7 +799,7 @@ async def _enrich_airport(code: str) -> dict[str, Any]:
         "atype": row.get("type"),
         "scheduled_service": bool(row.get("scheduled_service")),
         "military": bool(row.get("military")),
-        "runways": runways,
+        "runways": all_runways,
         "frequencies": frequencies,
         # Derived capability PROXIES only — never a fabricated capacity number.
         "runway_count": len(runways),
