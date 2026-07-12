@@ -148,10 +148,10 @@ function HistogramBlock({
                   style={{
                     width: `${pct}%`,
                     background: notOn
-                      ? 'rgba(255,90,82,0.18)'
+                      ? 'var(--alert-bg)'
                       : onlyOn
                         ? 'var(--accent-dim)'
-                        : 'rgba(120,140,170,0.16)',
+                        : 'var(--line-2)',
                   }}
                 />
                 <span className="relative z-10 flex items-center justify-between h-full px-2">
@@ -173,8 +173,8 @@ function HistogramBlock({
                 aria-pressed={notOn}
                 className={`mono text-[10px] leading-none w-[18px] h-[18px] flex items-center justify-center rounded-sm border shrink-0 ${
                   notOn
-                    ? 'border-[rgba(255,90,82,0.5)] text-[#ffb3ae] bg-alert-bg'
-                    : 'border-line text-txt-3 hover:text-[#ffb3ae] hover:border-[rgba(255,90,82,0.4)]'
+                    ? 'border-alert-line text-alert-fg bg-alert-bg'
+                    : 'border-line text-txt-3 hover:text-alert-fg hover:border-alert-line'
                 }`}
               >
                 ⊘

@@ -96,6 +96,8 @@ function flagEmoji(iso2: string | undefined | null): string {
 
 // Compact number: 1.2T / 340M / 12.3 — trims trailing ".0".
 function formatCompact(v: number): string {
+  v = Number(v);
+  if (!Number.isFinite(v)) return '—';
   const abs = Math.abs(v);
   const fmt = (n: number, suffix: string): string => {
     const s = n >= 100 ? n.toFixed(0) : n.toFixed(1).replace(/\.0$/, '');
@@ -289,7 +291,7 @@ export function CountryApp(): JSX.Element {
         </div>
         <div className="flex-1 overflow-auto py-1">
           {!countries && !listError && <div className="mono text-[10px] text-txt-4 px-3 py-2">Loading countries…</div>}
-          {listError && <div className="mono text-[10px] text-[var(--alert,#ef4444)] px-3 py-2">Failed to load: {listError}</div>}
+          {listError && <div className="mono text-[10px] text-alert-fg px-3 py-2">Failed to load: {listError}</div>}
           {grouped.map(([region, rows]) => (
             <div key={region} className="mb-1">
               <div className="px-3 pt-2 pb-1 text-[9.5px] uppercase tracking-[0.6px] text-txt-4 flex justify-between">
@@ -354,7 +356,7 @@ export function CountryApp(): JSX.Element {
             <section>
               <SectionHeader title="Statistics — World Bank" meta={wb.data?.source} />
               {wb.loading && <div className="mono text-[10px] text-txt-4">Loading…</div>}
-              {wb.error && <div className="mono text-[10px] text-[var(--alert,#ef4444)]">Failed: {wb.error}</div>}
+              {wb.error && <div className="mono text-[10px] text-alert-fg">Failed: {wb.error}</div>}
               {wb.data && (
                 <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(170px,1fr))]">
                   {wb.data.indicators.map((ind) => (
@@ -367,7 +369,7 @@ export function CountryApp(): JSX.Element {
             <section>
               <SectionHeader title="UN SDG series" meta={un.data?.source} />
               {un.loading && <div className="mono text-[10px] text-txt-4">Loading…</div>}
-              {un.error && <div className="mono text-[10px] text-[var(--alert,#ef4444)]">Failed: {un.error}</div>}
+              {un.error && <div className="mono text-[10px] text-alert-fg">Failed: {un.error}</div>}
               {un.data &&
                 (un.data.series.length === 0 ? (
                   <div className="mono text-[10px] text-txt-4">No UN series for this country.</div>
@@ -391,7 +393,7 @@ export function CountryApp(): JSX.Element {
               )}
               {osintCode && osint.loading && <div className="mono text-[10px] text-txt-4">Loading…</div>}
               {osintCode && osint.error && (
-                <div className="mono text-[10px] text-[var(--alert,#ef4444)]">Failed: {osint.error}</div>
+                <div className="mono text-[10px] text-alert-fg">Failed: {osint.error}</div>
               )}
               {osint.data && (
                 <>
@@ -404,7 +406,7 @@ export function CountryApp(): JSX.Element {
                     >
                       {ingestBusy ? 'Ingesting…' : 'Ingest into ontology'}
                     </button>
-                    {ingestError && <span className="mono text-[10px] text-[var(--alert,#ef4444)]">{ingestError}</span>}
+                    {ingestError && <span className="mono text-[10px] text-alert-fg">{ingestError}</span>}
                     {ingestResult && (
                       <span className="mono text-[10px] text-txt-2">
                         {ingestResult.objects} objects · {ingestResult.links} links minted.

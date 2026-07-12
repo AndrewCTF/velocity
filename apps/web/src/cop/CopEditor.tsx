@@ -4,6 +4,8 @@
 
 import { useEffect, useState } from 'react';
 import { Widget, Btn, SectionLabel, MicroLabel } from '../shell/instruments.js';
+import { Anchor, Mountain, Plus, X } from 'lucide-react';
+import { toast } from '../shell/toast.js';
 import { OrbatTree } from './OrbatTree.js';
 import {
   useCop,
@@ -78,7 +80,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
         lon: p.lon,
         designation: desig.trim() || TYPE_LABEL[type],
       });
-      setStatus('unit placed ✓');
+      setStatus('Unit placed');
     });
   };
 
@@ -91,7 +93,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
         label: side === 'hostile' ? 'FLOT' : 'PL',
         coords: verts.map((v) => [v.lon, v.lat] as [number, number]),
       });
-      setStatus(`${side} line added ✓`);
+      setStatus(`${side === 'hostile' ? 'FLOT' : 'PL'} line added`);
     });
   };
 
@@ -116,7 +118,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
           setStatus(
             res.blockedFallback
               ? `${mode} route added — some legs had no path (straight fallback)`
-              : `${mode} route added ✓ (${res.coords.length} pts, grid ${res.cells})`,
+              : `${mode} route added (${res.coords.length} pts, grid ${res.cells})`,
           );
         })
         .catch(() => setStatus('route failed'));
@@ -128,7 +130,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
     setStatus('click centre, then click the edge to set radius…');
     draw.drawCircle((c, rKm) => {
       addRing({ lat: c.lat, lon: c.lon, radiusKm: +rKm.toFixed(1), label: 'AO' });
-      setStatus(`ring added ✓ (${rKm.toFixed(1)} km)`);
+      setStatus(`Ring added (${rKm.toFixed(1)} km)`);
     });
   };
 
@@ -137,13 +139,14 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
     setStatus('saving…');
     const r = await saveCopToOntology();
     setBusy(false);
-    setStatus(
-      r.ok
-        ? 'saved to ontology ✓'
-        : r.status === 401 || r.status === 403
-          ? 'sign in to persist (local-only for now)'
-          : `save failed (${r.status})`,
-    );
+    setStatus(null);
+    if (r.ok) {
+      toast.ok('COP saved to ontology');
+    } else if (r.status === 401 || r.status === 403) {
+      toast.warn('Sign in to persist (local-only for now)');
+    } else {
+      toast.error(`Save failed (${r.status})`);
+    }
   };
 
   return (
@@ -162,7 +165,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
                 aff === a ? 'border-accent-line bg-accent-dim text-txt-0' : 'border-line text-txt-2 hover:text-txt-0'
               }`}
             >
-              <span style={{ color: AFFIL_COLOR[a] }}>●</span> {a}
+              <span style={{ color: AFFIL_COLOR[a] }} aria-hidden>●</span> {a}
             </button>
           ))}
         </div>
@@ -199,8 +202,9 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
           />
         </label>
         <div className="mt-2">
-          <Btn tone="accent" onClick={placeUnit} disabled={noDraw} className="w-full justify-center">
-            ＋ Place unit on map
+          <Btn tone="accent" onClick={placeUnit} disabled={noDraw} className="w-full justify-center gap-1.5">
+            <Plus size={12} strokeWidth={1.75} aria-hidden />
+            Place unit on map
           </Btn>
         </div>
         <div className="mt-2">
@@ -215,7 +219,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
                   lon,
                   designation: desig.trim() || TYPE_LABEL[type],
                 });
-                setStatus('unit placed ✓');
+                setStatus('Unit placed');
               }}
               placeholder="lat,lon · place · airport / port"
             />
@@ -233,8 +237,14 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
         <div className="mt-1.5">
           <MicroLabel>A* routes (terrain-aware)</MicroLabel>
           <div className="grid grid-cols-2 gap-1.5 mt-1">
-            <Btn tone="accent" onClick={() => drawRoute('naval')} disabled={noDraw}>⚓ Naval route</Btn>
-            <Btn tone="accent" onClick={() => drawRoute('ground')} disabled={noDraw}>⛰ Ground route</Btn>
+            <Btn tone="accent" onClick={() => drawRoute('naval')} disabled={noDraw} className="gap-1.5">
+              <Anchor size={12} strokeWidth={1.75} aria-hidden />
+              Naval route
+            </Btn>
+            <Btn tone="accent" onClick={() => drawRoute('ground')} disabled={noDraw} className="gap-1.5">
+              <Mountain size={12} strokeWidth={1.75} aria-hidden />
+              Ground route
+            </Btn>
           </div>
         </div>
         <div className="mt-1.5">
@@ -272,7 +282,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
 function Row({ dot, label, onDel }: { dot: string; label: string; onDel: () => void }): JSX.Element {
   return (
     <div className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-      <span style={{ color: dot }} className="text-[10px]">
+      <span style={{ color: dot }} className="text-[10px]" aria-hidden>
         ●
       </span>
       <span className="flex-1 text-[10px] text-txt-1 mono truncate">{label}</span>
@@ -281,8 +291,9 @@ function Row({ dot, label, onDel }: { dot: string; label: string; onDel: () => v
         onClick={onDel}
         className="text-[11px] leading-none text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"
         aria-label={`Delete ${label}`}
+        title={`Delete ${label}`}
       >
-        ✕
+        <X size={12} strokeWidth={1.75} aria-hidden />
       </button>
     </div>
   );

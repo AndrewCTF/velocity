@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../transport/supabase.js';
+import { InlineAlert } from '../shell/InlineAlert.js';
 
 type Mode = 'login' | 'signup' | 'forgot' | 'reset';
 
@@ -159,14 +160,14 @@ export function AuthForm({ mode }: { mode: Mode }): JSX.Element {
         )}
 
         {error && (
-          <div className="mb-4 rounded-sm border border-alert bg-alert-bg px-2 py-1.5 font-mono text-[11px] text-alert">
+          <InlineAlert tone="alert" className="mb-4 font-mono">
             {error}
-          </div>
+          </InlineAlert>
         )}
         {notice && (
-          <div className="mb-4 rounded-sm border border-accent-line bg-accent-dim px-2 py-1.5 font-mono text-[11px] text-accent">
+          <InlineAlert tone="info" className="mb-4 font-mono">
             {notice}
-          </div>
+          </InlineAlert>
         )}
 
         <button

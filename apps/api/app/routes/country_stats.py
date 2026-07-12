@@ -13,6 +13,7 @@ nulls stay null, nothing interpolated.
 from __future__ import annotations
 
 import json
+import weakref
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -28,16 +29,24 @@ _TTL = 86400.0
 # api.worldbank.org rate-limits by IP and STALLS (accepts the connection,
 # never responds) after a burst — hit live 2026-07-12 firing 16 indicators in
 # parallel. Keep upstream concurrency polite; the 24h cache absorbs the rest.
-_WB_SEM = None
+# Per-loop semaphore, keyed by the loop OBJECT via a WeakKeyDictionary: an
+# asyncio primitive binds to the loop it is first awaited on, so a single
+# module-global would raise "attached to a different loop" when reused across
+# event loops (e.g. per-test loops). Keying by the object (not ``id(loop)``)
+# means entries are dropped when a loop is GC'd — no unbounded leak, and no
+# id-reuse collision resurrecting a semaphore bound to a dead loop.
+_WB_SEMS: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
 
 
 def _wb_sem():
-    global _WB_SEM  # noqa: PLW0603 — lazy so the semaphore binds to the running loop
     import asyncio
 
-    if _WB_SEM is None:
-        _WB_SEM = asyncio.Semaphore(4)
-    return _WB_SEM
+    loop = asyncio.get_running_loop()
+    sem = _WB_SEMS.get(loop)
+    if sem is None:
+        sem = asyncio.Semaphore(4)
+        _WB_SEMS[loop] = sem
+    return sem
 
 # Curated World Bank indicator manifest — id, human label, unit hint.
 WB_INDICATORS: list[dict[str, str]] = [
@@ -55,14 +64,22 @@ WB_INDICATORS: list[dict[str, str]] = [
     {"id": "SP.DYN.LE00.IN", "label": "Life expectancy at birth", "unit": "years"},
     {"id": "SL.UEM.TOTL.ZS", "label": "Unemployment", "unit": "% of labor force"},
     {"id": "NE.EXP.GNFS.ZS", "label": "Exports of goods and services", "unit": "% of GDP"},
-    {"id": "BX.KLT.DINV.CD.WD", "label": "Foreign direct investment, net inflows", "unit": "current US$"},
+    {
+        "id": "BX.KLT.DINV.CD.WD",
+        "label": "Foreign direct investment, net inflows",
+        "unit": "current US$",
+    },
     {"id": "EN.ATM.CO2E.PC", "label": "CO2 emissions", "unit": "t per capita"},
 ]
 
 # Curated UNSD SDG series (seriesCode, label).
 UN_SERIES: list[dict[str, str]] = [
     {"id": "SI_POV_DAY1", "label": "Population below intl. poverty line (SDG 1.1.1)", "unit": "%"},
-    {"id": "SH_DYN_MORT", "label": "Under-5 mortality rate (SDG 3.2.1)", "unit": "per 1,000 live births"},
+    {
+        "id": "SH_DYN_MORT",
+        "label": "Under-5 mortality rate (SDG 3.2.1)",
+        "unit": "per 1,000 live births",
+    },
     {"id": "SE_ADT_LITRT", "label": "Adult literacy rate (SDG 4.6)", "unit": "%"},
     {"id": "EG_ELC_ACCS", "label": "Access to electricity (SDG 7.1.1)", "unit": "%"},
     {"id": "VC_IHR_PSRC", "label": "Intentional homicide rate (SDG 16.1.1)", "unit": "per 100,000"},
@@ -114,7 +131,9 @@ async def country_indicators() -> dict[str, Any]:
 @router.get("/api/country/{iso3}/worldbank")
 async def country_worldbank(
     iso3: str,
-    indicators: str | None = Query(None, description="comma-joined WB indicator ids; default = curated manifest"),
+    indicators: str | None = Query(
+        None, description="comma-joined WB indicator ids; default = curated manifest"
+    ),
     years: int = Query(15, ge=1, le=60),
 ) -> dict[str, Any]:
     """World Bank time-series for one country. Values are WB's own; a series
@@ -142,7 +161,8 @@ async def country_worldbank(
                     )
                 body = r.json()
             except Exception as e:  # noqa: BLE001 — one bad series never fails the country
-                return {"id": ind, "unavailable": True, "note": f"{type(e).__name__}: {e}"[:120], "series": []}
+                note = f"{type(e).__name__}: {e}"[:120]
+                return {"id": ind, "unavailable": True, "note": note, "series": []}
             if not isinstance(body, list) or len(body) < 2 or not isinstance(body[1], list):
                 return {"id": ind, "unavailable": True, "note": "wb: no data", "series": []}
             series = [
@@ -179,7 +199,9 @@ async def country_worldbank(
 @router.get("/api/country/{iso3}/un")
 async def country_un(
     iso3: str,
-    series: str | None = Query(None, description="comma-joined UNSD SDG series codes; default = curated set"),
+    series: str | None = Query(
+        None, description="comma-joined UNSD SDG series codes; default = curated set"
+    ),
 ) -> dict[str, Any]:
     """UNSD SDG series for one country (matched by M49 numeric area code)."""
     row = _resolve_iso3(iso3)
@@ -203,10 +225,12 @@ async def country_un(
                 )
                 body = r.json()
             except Exception as e:  # noqa: BLE001
-                return {"id": code, "unavailable": True, "note": f"{type(e).__name__}: {e}"[:120], "series": []}
+                note = f"{type(e).__name__}: {e}"[:120]
+                return {"id": code, "unavailable": True, "note": note, "series": []}
+            data = body.get("data") if isinstance(body, dict) else None
             pts = [
                 {"year": d.get("timePeriodStart"), "value": d.get("value")}
-                for d in body.get("data") or []
+                for d in data or []
                 if d.get("timePeriodStart") is not None
             ]
             pts.sort(key=lambda p: p["year"])

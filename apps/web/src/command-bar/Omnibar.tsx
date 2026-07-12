@@ -163,7 +163,7 @@ export function Omnibar({
 
   return (
     <div
-      className="fixed inset-0 z-[2000] flex items-start justify-center pt-[12vh]"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-start justify-center pt-[12vh]"
       onMouseDown={() => setOpen(false)}
       role="dialog"
       aria-label="Command palette"

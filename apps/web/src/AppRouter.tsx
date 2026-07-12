@@ -16,6 +16,7 @@ import { isSupabaseConfigured } from './transport/supabase.js';
 import { AiSetupWizard } from './settings/localAi/AiSetupWizard.js';
 import { hasSeenAiSetup } from './settings/localAi/aiSetupSeen.js';
 import { fetchModelsOnce } from './settings/localAi/LocalAiSection.js';
+import { ToastHost } from './shell/toast.js';
 
 // Served under the Vite base path (e.g. "/app" in production, "/" in dev), so
 // the router's basename tracks it — keeps client routes correct behind /app.
@@ -40,6 +41,7 @@ export function AppRouter(): JSX.Element {
           <Route path="/forgot" element={<AuthForm mode="forgot" />} />
           <Route path="/reset" element={<AuthForm mode="reset" />} />
         </Routes>
+        <ToastHost />
       </AuthProvider>
     </BrowserRouter>
   );
@@ -62,7 +64,7 @@ function TopBar(): JSX.Element | null {
   const is2D = loc.pathname.startsWith('/2d');
   const isStudio = loc.pathname.startsWith('/studio');
   return (
-    <div className="absolute top-1 right-2 z-[1000] flex items-center gap-2">
+    <div className="absolute top-1 right-2 z-[var(--z-dock)] flex items-center gap-2">
       <button
         type="button"
         onClick={() => setSettingsOpen(true)}
@@ -109,7 +111,7 @@ function PredictedMotionBadge(): JSX.Element | null {
   // never overlaps the lane labels. The 2D route has a clear bottom.
   const bottomClass = loc.pathname === '/' ? 'bottom-[172px]' : 'bottom-2';
   return (
-    <div className={`absolute ${bottomClass} left-2 z-[1000] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5`}>
+    <div className={`absolute ${bottomClass} left-2 z-[var(--z-dock)] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5`}>
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
       Predicted motion — aircraft positions estimated between ADS-B fixes
     </div>

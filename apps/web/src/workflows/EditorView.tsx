@@ -1,3 +1,4 @@
+import { TriangleAlert, Workflow } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useWorkflows,
@@ -11,6 +12,8 @@ import {
 } from '../state/workflows.js';
 import { Badge, Btn, Toggle } from '../shell/instruments.js';
 import { Modal, useConfirm } from '../shell/Modal.js';
+import { InlineAlert } from '../shell/InlineAlert.js';
+import { toast } from '../shell/toast.js';
 import { useWorkflowsNav } from './nav.js';
 import { useWorkflowsPoll } from './useWorkflowsPoll.js';
 import {
@@ -219,14 +222,14 @@ function LlmContractNote(): JSX.Element {
 
 function ControlContractNote(): JSX.Element {
   return (
-    <div className="rounded-sm border border-[rgba(245,165,36,0.38)] bg-warn-bg px-2.5 py-2 text-[10.5px] text-[#fcd9a0] leading-relaxed">
+    <InlineAlert tone="warn" className="leading-relaxed">
       <div className="uppercase tracking-[0.4px] text-[9.5px] mb-1">Acts on external systems</div>
       Sends a JSON command to <em>your</em> control server. <strong>Preview never fires</strong> —
       write commands (and drone/device dispatch) run dry and show the would-be envelope; only a real
       run actuates. Capped at 200 dispatches/run. Set{' '}
       <span className="mono">WORKFLOWS_CONTROL_ENABLED=0</span> to force dry-run everywhere. Wire
       contract: <span className="mono">docs/workflows-control-blocks.md</span>.
-    </div>
+    </InlineAlert>
   );
 }
 
@@ -359,7 +362,7 @@ function ConfigPanel({
         {spec.config_schema.length === 0 && <p className="text-[10px] text-txt-4">No configuration for this block.</p>}
       </div>
 
-      <Btn size="sm" onClick={onDelete} className="border-[rgba(255,90,82,0.38)] text-[#ffc9c5] hover:border-alert">
+      <Btn size="sm" onClick={onDelete} className="border-alert-line text-alert-fg hover:border-alert">
         Delete block
       </Btn>
     </div>
@@ -742,6 +745,7 @@ export function EditorView(): JSX.Element {
     if (res.ok) {
       setDraft((d) => ({ ...d, id: res.value.id }));
       select(res.value.id);
+      toast.ok('Workflow saved');
     } else {
       setSaveError(res.error);
     }
@@ -834,10 +838,15 @@ export function EditorView(): JSX.Element {
       {saveError && <p className="px-4 pt-1.5 text-[11px] text-alert">save: {saveError}</p>}
       {previewError && <p className="px-4 pt-1.5 text-[11px] text-alert">preview: {previewError}</p>}
       {warnings.length > 0 && (
-        <div className="mx-4 mt-2 rounded-sm border border-[rgba(245,165,36,0.38)] bg-warn-bg px-2.5 py-1.5 text-[10.5px] text-[#fcd9a0] space-y-0.5" data-testid="spec-warnings">
-          {warnings.map((w, i) => (
-            <div key={i}>⚠ {w}</div>
-          ))}
+        <div className="mx-4 mt-2" data-testid="spec-warnings">
+          <InlineAlert tone="warn" className="space-y-0.5">
+            {warnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-1.5">
+                <TriangleAlert size={12} strokeWidth={1.75} className="flex-none mt-[2px]" aria-hidden />
+                <span>{w}</span>
+              </div>
+            ))}
+          </InlineAlert>
         </div>
       )}
 
@@ -1006,7 +1015,7 @@ export function EditorView(): JSX.Element {
               {laid.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center p-6">
                   <EmptyState
-                    icon="⋔"
+                    icon={Workflow}
                     title="No blocks yet"
                     hint="Add a source, wire it into ops and sinks — the graph draws here."
                     action={<Btn tone="accent" size="sm" onClick={() => setPaletteOpen(true)}>+ Add block</Btn>}

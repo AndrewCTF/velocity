@@ -48,11 +48,11 @@ export function AoiSelector({ onPick }: Props): JSX.Element {
         aria-expanded={open}
       >
         <span>{active ? active.name : 'AOI · global'}</span>
-        <span className="micro text-txt-3">▾</span>
+        <span aria-hidden className="micro text-txt-3">▾</span>
       </button>
       {open && (
         <div
-          className="absolute z-50 top-full mt-1 left-0 w-[520px] bg-bg-1 border border-line rounded-md"
+          className="absolute z-[var(--z-dropdown)] top-full mt-1 left-0 w-[520px] max-w-[92vw] bg-bg-1 border border-line rounded-md"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.5)',

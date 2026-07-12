@@ -254,7 +254,7 @@ export function StudioPage(): JSX.Element {
                 </span>
                 <span className="text-txt-2">{pct.toFixed(0)}%</span>
               </div>
-              <div className="h-1.5 bg-bg-2 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-bg-2 rounded-sm overflow-hidden">
                 <div
                   className={`h-full transition-[width] duration-300 ${stage === 'error' ? 'bg-alert' : 'bg-accent'}`}
                   style={{ width: `${stage === 'error' ? 100 : pct}%` }}

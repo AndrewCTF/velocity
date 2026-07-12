@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Check, X } from 'lucide-react';
 import { Widget, Badge, Caveat, Btn, MicroLabel, StatusDot, type BadgeTone } from '../shell/instruments.js';
 import {
   FEATURE_DEFS,
@@ -161,11 +162,28 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
                     </span>
                     {v && v.level !== 'no_ais' && (
                       <Badge tone={VERDICT_TONE[v.level]}>
-                        {v.level === 'mismatch' ? `AIS ✗ ${v.lenDeltaPct}%` : `AIS ✓ ${v.lenDeltaPct}%`}
+                        <span className="inline-flex items-center gap-0.5">
+                          AIS
+                          {v.level === 'mismatch' ? (
+                            <X size={11} strokeWidth={2} aria-hidden />
+                          ) : (
+                            <Check size={11} strokeWidth={2} aria-hidden />
+                          )}
+                          <span className="sr-only">{v.level === 'mismatch' ? 'mismatch' : 'match'}</span>
+                          {v.lenDeltaPct}%
+                        </span>
                       </Badge>
                     )}
-                    <span className="mono text-[10px] text-txt-3 tabular-nums">
-                      {byLengthOnly ? `Δ${Math.round(m.lenDeltaM ?? 0)} m` : `${m.matched.length}✓`}
+                    <span className="mono text-[10px] text-txt-3 tabular-nums inline-flex items-center gap-0.5">
+                      {byLengthOnly ? (
+                        <span title="length delta">{`Δ${Math.round(m.lenDeltaM ?? 0)} m`}</span>
+                      ) : (
+                        <>
+                          {m.matched.length}
+                          <Check size={11} strokeWidth={2} aria-hidden />
+                          <span className="sr-only">features matched</span>
+                        </>
+                      )}
                     </span>
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 mono text-[10px] text-txt-3 tabular-nums">
@@ -178,8 +196,9 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
                     )}
                   </div>
                   {!byLengthOnly && m.matched.length > 0 && (
-                    <p className="mt-1 text-[10px] text-ok/90 leading-snug">
-                      ✓ {m.matched.map((f) => FEATURE_DEFS[f].label).join(' · ')}
+                    <p className="mt-1 text-[10px] text-ok/90 leading-snug flex items-start gap-1">
+                      <Check size={11} strokeWidth={2} aria-hidden className="mt-[1px] shrink-0" />
+                      <span>{m.matched.map((f) => FEATURE_DEFS[f].label).join(' · ')}</span>
                     </p>
                   )}
                 </li>

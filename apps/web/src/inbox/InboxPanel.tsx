@@ -83,7 +83,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
         <span className="font-label uppercase tracking-[0.8px] text-[11px] text-txt-1">
           Inbox{' '}
           {unread > 0 && (
-            <span className="ml-1 mono text-[10px] px-1.5 py-0.5 rounded-full bg-alert text-white font-semibold">
+            <span className="ml-1 mono text-[10px] px-1.5 py-0.5 rounded-sm bg-alert text-white font-semibold">
               {unread}
             </span>
           )}
@@ -214,7 +214,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
               type="button"
               onClick={() => setChannel((cur) => (cur === c ? null : c))}
               aria-pressed={channel === c}
-              className={`mono text-[10px] px-1.5 py-0.5 rounded-full border ${
+              className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
                 channel === c ? 'border-accent-line text-accent bg-accent-dim' : 'border-line text-txt-3 hover:text-txt-1'
               }`}
             >

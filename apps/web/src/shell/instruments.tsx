@@ -117,11 +117,11 @@ export function ScoreBar({ pct }: { pct: number }): JSX.Element {
 // ── status badge (.badge) ───────────────────────────────────────────────────
 export type BadgeTone = 'alert' | 'warn' | 'accent' | 'mag' | 'ok' | 'neutral';
 const BADGE_TONE: Record<BadgeTone, string> = {
-  alert: 'text-[#ffc9c5] bg-alert-bg border border-[rgba(255,90,82,0.38)]',
-  warn: 'text-[#fcd9a0] bg-warn-bg border border-[rgba(245,165,36,0.38)]',
-  accent: 'text-[#9cc2ff] bg-accent-dim border border-accent-line',
-  mag: 'text-[#f0a8f8] bg-mag-dim border border-mag-line',
-  ok: 'text-ok bg-[rgba(54,211,153,0.1)] border border-[rgba(54,211,153,0.32)]',
+  alert: 'text-alert-fg bg-alert-bg border border-alert-line',
+  warn: 'text-warn-fg bg-warn-bg border border-warn-line',
+  accent: 'text-accent-fg bg-accent-dim border border-accent-line',
+  mag: 'text-mag-fg bg-mag-dim border border-mag-line',
+  ok: 'text-ok bg-ok-bg border border-ok-line',
   neutral: 'text-txt-3 border border-line',
 };
 export function Badge({
@@ -157,7 +157,7 @@ export function KVRow({ k, v, warn = false }: { k: string; v: ReactNode; warn?: 
   return (
     <>
       <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-2">{k}</span>
-      <span className={`mono text-right min-w-0 break-words ${warn ? 'text-[#ffb3ae]' : 'text-txt-0'}`}>{v}</span>
+      <span className={`mono text-right min-w-0 break-words ${warn ? 'text-alert-fg' : 'text-txt-0'}`}>{v}</span>
     </>
   );
 }
@@ -195,7 +195,7 @@ export function Btn({
         'mono tracking-[0.3px] rounded-sm border transition-colors disabled:opacity-40',
         size === 'sm' ? 'text-[10px] px-2 py-1' : 'text-[10px] px-[10px] py-[6px]',
         tone === 'accent'
-          ? 'border-accent-line bg-accent-dim text-[#9cc2ff] hover:text-accent'
+          ? 'border-accent-line bg-accent-dim text-accent-fg hover:text-accent'
           : 'border-line-2 bg-bg-2 text-txt-1 hover:border-accent-line',
         className,
       ].join(' ')}
@@ -329,8 +329,8 @@ export function Brand({ name = 'VELOCITY', version }: { name?: string; version?:
 // is unclassified); warn = exercise/notional; alert = handling warning.
 const CAVEAT_TONE: Record<'neutral' | 'warn' | 'alert', string> = {
   neutral: 'text-txt-2 border-line-2',
-  warn:    'text-[#fcd9a0] border-[rgba(245,165,36,0.38)] bg-warn-bg',
-  alert:   'text-[#ffc9c5] border-[rgba(255,90,82,0.38)] bg-alert-bg',
+  warn:    'text-warn-fg border-warn-line bg-warn-bg',
+  alert:   'text-alert-fg border-alert-line bg-alert-bg',
 };
 export function Caveat({
   level = 'UNCLAS//FOUO',

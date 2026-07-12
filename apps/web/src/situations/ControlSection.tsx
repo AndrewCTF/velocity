@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { Widget, Btn, SectionLabel, MicroLabel } from '../shell/instruments.js';
+import { toast } from '../shell/toast.js';
 import { getDrawController } from '../globe/draw.js';
 import { flyToPosition } from '../globe/camera.js';
 import {
@@ -44,6 +45,15 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
     void loadControl();
   }, []);
 
+  // facId is seeded before loadControl resolves; if the loaded factions don't
+  // include the seed ('blue' or a since-removed id), re-point it at the first
+  // real faction so drawn zones/lines are filed under an existing faction.
+  useEffect(() => {
+    if (factions.length > 0 && !factions.some((f) => f.id === facId)) {
+      setFacId(factions[0]!.id);
+    }
+  }, [factions, facId]);
+
   const draw = getDrawController();
   const noDraw = draw == null;
   const lbl = (): string | undefined => label.trim() || undefined;
@@ -60,7 +70,8 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
         conditions: cond(),
         ring: ring.map((p) => [p.lon, p.lat]),
       });
-      setStatus('area added ✓');
+      setStatus(null);
+      toast.ok('Area added');
     });
   };
 
@@ -69,16 +80,17 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
     setStatus('click vertices; right-click / Finish to commit the front line…');
     draw.drawPolyline((verts) => {
       addLine({ status: lineStatus, label: lbl(), coords: verts.map((v) => [v.lon, v.lat]) });
-      setStatus('front line added ✓');
+      setStatus(null);
+      toast.ok('Front line added');
     });
   };
 
   const doImport = (text: string): void => {
     const r = importGeoJSON(text);
     if (r.zones + r.lines === 0) {
-      setStatus(`import: nothing added — ${r.errors[0] ?? 'no polygons/lines found'}`);
+      toast.warn(`Import: nothing added — ${r.errors[0] ?? 'no polygons/lines found'}`);
     } else {
-      setStatus(`imported ${r.zones} area(s), ${r.lines} line(s)${r.errors.length ? ` · ${r.errors.length} skipped` : ''} ✓`);
+      toast.ok(`Imported ${r.zones} area(s), ${r.lines} line(s)${r.errors.length ? ` · ${r.errors.length} skipped` : ''}`);
     }
   };
 
@@ -93,9 +105,9 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
     setBusy(true);
     const r = await saveControl();
     setBusy(false);
-    setStatus(
-      r.ok ? 'saved ✓' : r.status === 401 || r.status === 403 ? 'sign in to persist (local-only)' : `save failed (${r.status})`,
-    );
+    if (r.ok) toast.ok('Saved');
+    else if (r.status === 401 || r.status === 403) toast.warn('Sign in to persist (local-only)');
+    else toast.error(`Save failed (${r.status})`);
   };
 
   const flyToZone = (ring: [number, number][]): void => {
@@ -124,7 +136,7 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
               facId === f.id ? 'border-accent-line bg-accent-dim text-txt-0' : 'border-line text-txt-2 hover:text-txt-0'
             }`}
           >
-            <span style={{ color: f.color }}>■</span>
+            <span style={{ color: f.color }} aria-hidden>■</span>
             {f.name}
           </button>
         ))}
@@ -215,7 +227,7 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
       <div className="mt-2 max-h-[180px] overflow-auto space-y-0.5">
         {zones.map((z) => (
           <div key={z.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-            <span style={{ color: factionColor(factions, z.factionId) }} className="text-[10px]">▧</span>
+            <span style={{ color: factionColor(factions, z.factionId) }} className="text-[10px]" aria-hidden>▧</span>
             <button type="button" onClick={() => flyToZone(z.ring)} className="flex-1 text-left text-[10px] text-txt-1 mono truncate">
               area{z.label ? ` · ${z.label}` : ''}{z.status === 'contested' ? ' · contested' : ''}
             </button>
@@ -224,7 +236,7 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
         ))}
         {lines.map((l) => (
           <div key={l.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-            <span className="text-[10px] text-txt-2">{l.status === 'contested' ? '┄' : '──'}</span>
+            <span className="text-[10px] text-txt-2" aria-hidden>{l.status === 'contested' ? '┄' : '──'}</span>
             <span className="flex-1 text-[10px] text-txt-1 mono truncate">
               front line{l.label ? ` · ${l.label}` : ''}{l.status === 'contested' ? ' · contested' : ''}
             </span>

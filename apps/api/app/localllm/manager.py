@@ -26,8 +26,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -103,6 +105,15 @@ def models_root(settings: Settings | None = None) -> Path:
 _STATE_FILENAME = ".manager_state.json"
 
 
+# The install registry lives in-memory + a small JSON sidecar, mutated from
+# worker threads (routes call set_active/set_hot/delete via asyncio.to_thread).
+# Without serialization two concurrent read-mutate-write cycles lose one of the
+# updates; the file write must also be atomic so a crash mid-write can't leave a
+# truncated (unparseable) sidecar. One process-global lock guards every
+# read-mutate-write below; _save_state does temp-file + os.replace.
+_STATE_LOCK = threading.Lock()
+
+
 def _state_path(root: Path) -> Path:
     return root / _STATE_FILENAME
 
@@ -127,7 +138,27 @@ def _load_state(root: Path) -> dict[str, Any]:
 
 
 def _save_state(root: Path, state: dict[str, Any]) -> None:
-    _state_path(root).write_text(json.dumps(state))
+    """Atomic write: serialize to a temp file in the same dir, then os.replace
+    (rename is atomic on the same filesystem) so a reader/crash never sees a
+    half-written sidecar."""
+    p = _state_path(root)
+    tmp = p.with_name(f"{p.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp.write_text(json.dumps(state))
+        os.replace(tmp, p)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _mutate_state(root: Path, fn) -> dict[str, Any]:
+    """Serialized read-mutate-write. ``fn(state)`` mutates in place and returns
+    whatever the caller wants to read back; the whole cycle holds
+    ``_STATE_LOCK`` so concurrent callers can't lose an update."""
+    with _STATE_LOCK:
+        st = _load_state(root)
+        result = fn(st)
+        _save_state(root, st)
+        return result
 
 
 def _tier_for_repo(repo_id: str) -> str | None:
@@ -203,6 +234,25 @@ def delete_model(key: str) -> None:
     """
     if not _KEY_RE.match(key):
         raise HTTPException(status_code=404, detail="unknown model key")
+    # Claim the key for deletion atomically: reject if a download is in flight,
+    # otherwise mark it in `_DELETING` under the same lock start_download uses to
+    # register a job, so no writer can slip into the directory mid-wipe.
+    with _JOBS_LOCK:
+        if _running_job_for_key_locked(key) is not None:
+            raise HTTPException(
+                status_code=409, detail="a download for this model is in progress; cannot delete"
+            )
+        _DELETING.add(key)
+    try:
+        _delete_model_files(key)
+    finally:
+        with _JOBS_LOCK:
+            _DELETING.discard(key)
+
+
+def _delete_model_files(key: str) -> None:
+    """Filesystem wipe for ``delete_model``; caller has already claimed *key* in
+    ``_DELETING`` so no concurrent download can write into the directory."""
     root = models_root().resolve()
     target = root / key
     if target.is_symlink():  # checked BEFORE resolve() — never follow it anywhere
@@ -245,18 +295,14 @@ def delete_model(key: str) -> None:
 
 
 def _drop_active_refs(key: str) -> None:
-    root = models_root()
-    st = _load_state(root)
-    changed = False
-    for role in ("main", "selection"):
-        if st["active"].get(role) == key:
-            st["active"][role] = None
-            changed = True
-    if key in st["hot"]:
-        st["hot"].remove(key)
-        changed = True
-    if changed:
-        _save_state(root, st)
+    def _apply(st: dict[str, Any]) -> None:
+        for role in ("main", "selection"):
+            if st["active"].get(role) == key:
+                st["active"][role] = None
+        if key in st["hot"]:
+            st["hot"].remove(key)
+
+    _mutate_state(models_root(), _apply)
 
 
 # ── active / hot roles ────────────────────────────────────────────────────────
@@ -273,28 +319,33 @@ def get_hot() -> list[str]:
 def set_active(role: str, key: str | None) -> dict[str, str | None]:
     if role not in ("main", "selection"):
         raise HTTPException(status_code=422, detail="role must be 'main' or 'selection'")
-    if key is not None and key not in _installed_keys():
-        raise HTTPException(status_code=404, detail="unknown model key")
-    root = models_root()
-    st = _load_state(root)
-    st["active"][role] = key
-    _save_state(root, st)
-    return dict(st["active"])
+
+    # Validate the key is installed INSIDE the state critical section: a
+    # concurrent delete_model drops its state refs under the same lock, so
+    # checking outside would let a delete land between validation and write and
+    # resurrect a dead key into active.main.
+    def _apply(st: dict[str, Any]) -> dict[str, str | None]:
+        if key is not None and key not in _installed_keys():
+            raise HTTPException(status_code=404, detail="unknown model key")
+        st["active"][role] = key
+        return dict(st["active"])
+
+    return _mutate_state(models_root(), _apply)
 
 
 def set_hot(key: str, hot: bool) -> list[str]:
-    if key not in _installed_keys():
-        raise HTTPException(status_code=404, detail="unknown model key")
-    root = models_root()
-    st = _load_state(root)
-    hot_set = set(st["hot"])
-    if hot:
-        hot_set.add(key)
-    else:
-        hot_set.discard(key)
-    st["hot"] = sorted(hot_set)
-    _save_state(root, st)
-    return list(st["hot"])
+    def _apply(st: dict[str, Any]) -> list[str]:
+        if key not in _installed_keys():
+            raise HTTPException(status_code=404, detail="unknown model key")
+        hot_set = set(st["hot"])
+        if hot:
+            hot_set.add(key)
+        else:
+            hot_set.discard(key)
+        st["hot"] = sorted(hot_set)
+        return list(st["hot"])
+
+    return _mutate_state(models_root(), _apply)
 
 
 # ── download jobs ─────────────────────────────────────────────────────────────
@@ -311,6 +362,10 @@ class Job:
     bytes_done: int = 0
     progress_pct: float = 0.0
     error: str | None = None
+    # True only when the download's files were checked against an upstream
+    # sha256; False when the repo published no lfs.sha256 for the matched files
+    # (nothing to check against — the bytes are accepted but unverified).
+    verified: bool = False
     created: float = field(default_factory=time.time)
 
     def as_dict(self) -> dict[str, Any]:
@@ -320,6 +375,7 @@ class Job:
             "bytes_done": self.bytes_done,
             "bytes_total": self.bytes_total,
             "error": self.error,
+            "verified": self.verified,
             "key": self.key if self.status == "done" else None,
         }
 
@@ -327,21 +383,59 @@ class Job:
 _JOBS: dict[str, Job] = {}
 _MAX_JOBS = 100
 
+_ACTIVE_JOB_STATUSES = ("queued", "downloading", "verifying")
+
+# `_JOBS` is read (dedup / delete-guard) and written (register / prune) from
+# worker threads (routes call these via ``asyncio.to_thread``) as well as from
+# the running loop. Without one lock over every access, a bare ``for`` over
+# ``_JOBS.values()`` can raise "dict changed size during iteration", and the
+# in-flight dedup check-then-register is a TOCTOU: two concurrent POSTs both
+# pass the check before either inserts, spawning two writers into one dir.
+_JOBS_LOCK = threading.Lock()
+
+# Keys currently being wiped by ``delete_model``. Guarded by ``_JOBS_LOCK`` (the
+# same lock the download dedup uses) so a delete and a start_download can never
+# straddle each other: delete adds the key here BEFORE releasing the lock to
+# wipe the directory, and start_download's atomic check-and-register refuses any
+# key in this set. Without it, a start_download could register + begin writing
+# into the directory between delete's running-job check and its rmdir.
+_DELETING: set[str] = set()
+
+
+def _running_job_for_key_locked(key: str) -> Job | None:
+    """``_running_job_for_key`` body; caller MUST hold ``_JOBS_LOCK``."""
+    for j in _JOBS.values():
+        if j.key == key and j.status in _ACTIVE_JOB_STATUSES:
+            return j
+    return None
+
+
+def _running_job_for_key(key: str) -> Job | None:
+    """The in-flight download job (if any) targeting *key* — used to dedup a
+    second download of the same model and to refuse deleting a model whose
+    bytes are still landing."""
+    with _JOBS_LOCK:
+        return _running_job_for_key_locked(key)
+
 
 def get_job(job_id: str) -> dict[str, Any] | None:
-    job = _JOBS.get(job_id)
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
     return job.as_dict() if job else None
 
 
-def _prune_jobs() -> None:
-    if len(_JOBS) <= _MAX_JOBS:
-        return
-    finished = sorted(
-        (j for j in _JOBS.values() if j.status in ("done", "error")),
-        key=lambda j: j.created,
-    )
-    for j in finished[: len(_JOBS) - _MAX_JOBS]:
-        _JOBS.pop(j.job_id, None)
+def _prune_jobs(keep: str | None = None) -> None:
+    """Evict oldest finished jobs over the cap. *keep* shields one job_id — the
+    just-errored placeholder a deduped caller may still be about to poll."""
+    with _JOBS_LOCK:
+        if len(_JOBS) <= _MAX_JOBS:
+            return
+        finished = sorted(
+            (j for j in _JOBS.values() if j.status in ("done", "error") and j.job_id != keep),
+            key=lambda j: j.created,
+        )
+        for j in finished[: len(_JOBS) - _MAX_JOBS]:
+            _JOBS.pop(j.job_id, None)
 
 
 def _matched_files(repo_id: str, quant: str) -> list[dict[str, Any]]:
@@ -425,11 +519,26 @@ async def _run_job(job: Job, sha256_by_file: dict[str, str]) -> None:
     monitor.cancel()
 
     job.status = "verifying"
-    ok = await asyncio.to_thread(_verify_sha256, target_dir, sha256_by_file)
-    if not ok:
-        job.status = "error"
-        job.error = "sha256 verification failed"
-        return
+    if sha256_by_file:
+        ok = await asyncio.to_thread(_verify_sha256, target_dir, sha256_by_file)
+        if not ok:
+            job.status = "error"
+            job.error = "sha256 verification failed"
+            return
+        job.verified = True
+    else:
+        # The repo published no lfs.sha256 for the matched files, so there is
+        # nothing to check the bytes against. Accept the download (upstream is
+        # the unsloth-org allowlist + HF TLS) but flag it unverified rather than
+        # silently implying it passed a digest check.
+        job.verified = False
+        log.warning(
+            "download %s (%s %s): no upstream sha256 to verify against; "
+            "accepting unverified",
+            job.key,
+            job.repo_id,
+            job.quant,
+        )
 
     size_bytes = await asyncio.to_thread(
         lambda: sum(
@@ -454,28 +563,59 @@ async def start_download(repo_id: str, quant: str) -> str:
     validate_repo_id(repo_id)
     validate_quant(quant)
 
-    matched = await asyncio.to_thread(_matched_files, repo_id, quant)
-    if not matched:
-        raise HTTPException(
-            status_code=404,
-            detail=f"no .gguf files matching quant {quant!r} found for {repo_id}",
-        )
-    total_bytes = sum(m["size"] for m in matched)
-
-    root = models_root()
-    disk_free = await asyncio.to_thread(lambda: shutil.disk_usage(root).free)
-    if total_bytes * _DISK_PREFLIGHT_MARGIN > disk_free:
-        needed_gb = total_bytes * _DISK_PREFLIGHT_MARGIN / 1e9
-        free_gb = disk_free / 1e9
-        raise HTTPException(
-            status_code=507,
-            detail=f"insufficient disk space: need ~{needed_gb:.1f}GB free, have {free_gb:.1f}GB",
-        )
-
+    # In-flight dedup: a second POST for a model already downloading returns the
+    # existing job instead of spawning a second snapshot_download into the same
+    # directory (two writers racing over the same .gguf files). Check-and-reserve
+    # is ONE atomic step under _JOBS_LOCK — a queued placeholder is registered
+    # before the (slow) HF preflight so a racing POST dedups against it rather
+    # than passing a stale check. The placeholder is dropped if preflight fails.
     key = key_for(repo_id, quant)
     job_id = uuid.uuid4().hex
-    job = Job(job_id=job_id, repo_id=repo_id, quant=quant, key=key, bytes_total=total_bytes)
-    _JOBS[job_id] = job
+    job = Job(job_id=job_id, repo_id=repo_id, quant=quant, key=key)
+    with _JOBS_LOCK:
+        if key in _DELETING:
+            raise HTTPException(
+                status_code=409,
+                detail="this model is being deleted; retry the download once it completes",
+            )
+        existing = _running_job_for_key_locked(key)
+        if existing is not None:
+            return existing.job_id
+        _JOBS[job_id] = job
+
+    try:
+        matched = await asyncio.to_thread(_matched_files, repo_id, quant)
+        if not matched:
+            raise HTTPException(
+                status_code=404,
+                detail=f"no .gguf files matching quant {quant!r} found for {repo_id}",
+            )
+        total_bytes = sum(m["size"] for m in matched)
+
+        root = models_root()
+        disk_free = await asyncio.to_thread(lambda: shutil.disk_usage(root).free)
+        if total_bytes * _DISK_PREFLIGHT_MARGIN > disk_free:
+            needed_gb = total_bytes * _DISK_PREFLIGHT_MARGIN / 1e9
+            free_gb = disk_free / 1e9
+            raise HTTPException(
+                status_code=507,
+                detail=(
+                    f"insufficient disk space: need ~{needed_gb:.1f}GB free, "
+                    f"have {free_gb:.1f}GB"
+                ),
+            )
+    except BaseException as exc:
+        # Do NOT pop the placeholder: a second caller may have deduped against it
+        # and be polling this job_id — popping would 404 them. Mark it errored so
+        # the poll sees the preflight failure and the normal prune lifecycle
+        # reclaims it, while the first caller still gets the raised HTTP error.
+        with _JOBS_LOCK:
+            job.status = "error"
+            job.error = str(getattr(exc, "detail", None) or exc)
+        _prune_jobs(keep=job.job_id)
+        raise
+
+    job.bytes_total = total_bytes
     sha_map = {m["filename"]: m["sha256"] for m in matched if m["sha256"]}
     asyncio.create_task(_run_job(job, sha_map))
     _prune_jobs()

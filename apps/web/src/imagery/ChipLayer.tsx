@@ -429,7 +429,7 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
   if (!focus) return null;
 
   return (
-    <div className="absolute bottom-3 right-3 z-[1400] w-[232px] pointer-events-auto">
+    <div className="absolute bottom-3 right-3 z-[var(--z-overlay)] w-[232px] pointer-events-auto">
       <Widget
         title="Focused imagery"
         action={

@@ -284,6 +284,133 @@ def test_check_url_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
         control.check_url("http://evil.example/x")  # refused
 
 
+def test_check_url_blocks_link_local_metadata() -> None:
+    # The cloud-metadata IP (169.254.169.254) and its /16 are refused even
+    # though localhost/private LAN stay open.
+    with pytest.raises(WorkflowError) as exc:
+        control.check_url("http://169.254.169.254/latest/meta-data/")
+    assert exc.value.status_code == 403
+    with pytest.raises(WorkflowError):
+        control.check_url("http://169.254.1.2/x")
+    control.check_url("http://127.0.0.1:9010/command")  # localhost still fine
+    control.check_url("http://192.168.1.50/command")  # private LAN still fine
+
+
+def test_check_url_link_local_allowed_when_explicitly_allowlisted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WORKFLOWS_HTTP_ALLOW_HOSTS", "169.254.169.254")
+    control.check_url("http://169.254.169.254/x")  # operator opted in → allowed
+
+
+def _fake_getaddrinfo(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, str]) -> None:
+    """Pin socket.getaddrinfo so a hostname resolves to a chosen IP — models a
+    DNS-rebinding server that answered differently at request time."""
+    import socket as _socket
+
+    def fake(host, *a, **kw):
+        ip = mapping[host]
+        return [(_socket.AF_INET, _socket.SOCK_STREAM, 0, "", (ip, 0))]
+
+    monkeypatch.setattr(control.socket, "getaddrinfo", fake)
+
+
+def test_pin_http_url_blocks_dns_rebinding_to_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A DNS name that (re)resolves to the link-local/metadata range at request
+    time is blocked by _pin_http_url even though check_url passed earlier."""
+    _fake_getaddrinfo(monkeypatch, {"rebind.evil.example": "169.254.169.254"})
+    url, headers, blocked = control._pin_http_url("http://rebind.evil.example/latest/meta-data/", {})
+    assert blocked is not None and "link-local" in blocked
+
+
+def test_pin_http_url_pins_benign_name_to_ip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A benign http DNS name is pinned to its validated IP with the original
+    hostname carried in the Host header, so httpx cannot re-resolve elsewhere."""
+    _fake_getaddrinfo(monkeypatch, {"control.local.example": "192.168.1.50"})
+    url, headers, blocked = control._pin_http_url("http://control.local.example:9010/command", {})
+    assert blocked is None
+    assert url == "http://192.168.1.50:9010/command"
+    assert headers["Host"] == "control.local.example:9010"
+
+
+def test_pin_http_url_leaves_ip_literals_and_https(monkeypatch: pytest.MonkeyPatch) -> None:
+    # IP literal → nothing to rebind, untouched.
+    assert control._pin_http_url("http://192.168.1.50/x", {}) == ("http://192.168.1.50/x", {}, None)
+    # https → hostname preserved for cert validation (documented residual risk).
+    assert control._pin_http_url("https://host.example/x", {}) == ("https://host.example/x", {}, None)
+
+
+def test_pin_http_url_skips_allowlisted_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WORKFLOWS_HTTP_ALLOW_HOSTS", "trusted.example")
+    assert control._pin_http_url("http://trusted.example/x", {}) == (
+        "http://trusted.example/x",
+        {},
+        None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_send_turns_rebind_block_into_row_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rebind detected at send time fails just that row (HttpResult error),
+    preserving send's never-raises / per-row isolation contract."""
+    _fake_getaddrinfo(monkeypatch, {"rebind.evil.example": "169.254.169.254"})
+    res = await control.send("GET", "http://rebind.evil.example/x", headers={})
+    assert res.ok is False and res.status is None
+    assert res.error is not None and "link-local" in res.error
+
+
+def test_control_client_does_not_follow_redirects() -> None:
+    # check_url validates only the original URL, so the shared client must not
+    # chase a 3xx (which could hop to the link-local/metadata range).
+    assert control._client().follow_redirects is False
+
+
+@pytest.mark.asyncio
+async def test_redirect_to_metadata_is_not_followed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 302 to 169.254.169.254 must NOT be followed — the metadata endpoint is
+    never reached and its body never returned; the caller sees the raw 3xx."""
+    import httpx
+
+    hops: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        hops.append(str(request.url))
+        if request.url.host == "evil.example":
+            return httpx.Response(
+                302, headers={"location": "http://169.254.169.254/latest/meta-data/"}
+            )
+        return httpx.Response(200, text="INSTANCE-CREDENTIALS")
+
+    # Build a client whose redirect policy MIRRORS the real one, so this test
+    # fails if the follow_redirects fix is ever reverted to True.
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=control._client().follow_redirects,
+    )
+    monkeypatch.setattr(control, "_CLIENT", client)
+    try:
+        res = await control.send("GET", "http://evil.example/x", headers={})
+    finally:
+        await client.aclose()
+
+    assert res.status == 302
+    assert len(hops) == 1  # only the original host was contacted
+    assert all("169.254" not in h for h in hops)
+    assert "INSTANCE-CREDENTIALS" not in (res.text or "")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_5xx_is_not_dispatched(monkeypatch: pytest.MonkeyPatch) -> None:
+    # An HTTP 500 has error=None but is a rejection — dispatched must be False.
+    rec = _Recorder(control.HttpResult(status=500, ok=False, json=None, text="boom", error=None))
+    monkeypatch.setattr(control, "send", rec)
+    res = await control.dispatch(
+        "http://h/x", {"type": "drone.command"}, budget=[10], preview=False
+    )
+    assert res["dispatched"] is False
+    assert res["status"] == 500
+
+
 def test_kill_switch_forces_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WORKFLOWS_CONTROL_ENABLED", "0")
     assert control.control_enabled() is False

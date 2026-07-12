@@ -22,15 +22,28 @@ real drone uplink is the operator pointing a block at THEIR OWN control server.
 Wire contract (what your control server must accept) is documented in
 ``docs/workflows-control-blocks.md``; every envelope is a single JSON object
 POSTed with ``content-type: application/json``.
+
+DNS rebinding: ``check_url`` resolves a hostname to enforce the link-local
+guard, but ``httpx`` re-resolves at request time, so a rebinding DNS name could
+pass validation then resolve to 169.254.169.254 on the real request. For plain
+``http://`` URLs ``send`` closes this by resolving once, re-checking the guard
+on the resolved IPs, then pinning the connection to the validated IP (URL host
+rewritten to the IP, ``Host`` header set to the original name). ``https://``
+keeps the hostname in the URL because certificate validation needs it, leaving a
+residual rebinding window for https — accepted because the cloud-metadata
+endpoints this guard targets are http, not https.
 """
 
 from __future__ import annotations
 
+import asyncio
+import ipaddress
 import os
+import socket
 import time
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -57,7 +70,11 @@ def _client() -> httpx.AsyncClient:
         _CLIENT = httpx.AsyncClient(
             headers={"User-Agent": "osint-console-workflows/0.1"},
             transport=httpx.AsyncHTTPTransport(local_address="0.0.0.0", retries=0),
-            follow_redirects=True,
+            # NEVER follow redirects: check_url validates only the ORIGINAL URL,
+            # so a 3xx to the cloud-metadata range (169.254.169.254) would
+            # otherwise bypass the link-local guard. A redirect surfaces to the
+            # caller as a 3xx status instead of being chased.
+            follow_redirects=False,
         )
     return _CLIENT
 
@@ -90,6 +107,32 @@ def _allow_hosts() -> set[str] | None:
     return {h.strip().lower() for h in raw.split(",") if h.strip()}
 
 
+def _is_link_local(host: str) -> bool:
+    """True if *host* is, or resolves to, an IPv4 link-local address
+    (169.254.0.0/16 — the cloud-metadata range, incl. 169.254.169.254). Kept
+    deliberately narrow: this is the one range a benign single-operator tool
+    never legitimately targets, and the one that leaks instance credentials.
+    Localhost/private LAN are intentionally NOT blocked (the operator's control
+    server is routinely on 127.0.0.1 or the LAN — see the module docstring)."""
+    candidates: list[str] = []
+    try:
+        ipaddress.ip_address(host)
+        candidates.append(host)
+    except ValueError:
+        try:
+            candidates = [ai[4][0] for ai in socket.getaddrinfo(host, None)]
+        except OSError:
+            return False  # unresolvable — let the actual request fail/blocked elsewhere
+    for addr in candidates:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if isinstance(ip, ipaddress.IPv4Address) and ip in ipaddress.ip_network("169.254.0.0/16"):
+            return True
+    return False
+
+
 def check_url(url: str) -> None:
     """Validate scheme (http/https only) and enforce the optional host
     allowlist. Raises ``WorkflowError`` naming the problem; never returns a
@@ -101,11 +144,22 @@ def check_url(url: str) -> None:
     if not parts.hostname:
         raise WorkflowError(422, f"url has no host: {url!r}")
     allow = _allow_hosts()
-    if allow is not None and parts.hostname.lower() not in allow:
+    host_lower = parts.hostname.lower()
+    if allow is not None and host_lower not in allow:
         raise WorkflowError(
             403,
             f"host {parts.hostname!r} is not in WORKFLOWS_HTTP_ALLOW_HOSTS "
             f"({', '.join(sorted(allow))})",
+        )
+    # Block the cloud-metadata / link-local range (169.254.0.0/16) unless the
+    # operator explicitly allowlisted this exact host — that endpoint hands out
+    # instance credentials and is never a legitimate control target. Everything
+    # else (localhost, private LAN, public) stays open per the BYO posture.
+    if (allow is None or host_lower not in allow) and _is_link_local(parts.hostname):
+        raise WorkflowError(
+            403,
+            f"host {parts.hostname!r} resolves to the link-local/metadata range "
+            "(169.254.0.0/16), which is blocked",
         )
 
 
@@ -120,6 +174,61 @@ def auth_headers(auth_env: str) -> dict[str, str]:
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}"}
+
+
+def _pin_http_url(url: str, headers: dict[str, str]) -> tuple[str, dict[str, str], str | None]:
+    """Close the DNS-rebinding gap for plain ``http://`` DNS-name URLs.
+
+    ``check_url`` resolved the host once at validation time, but ``httpx``
+    re-resolves at request time — a rebinding name could answer with a benign IP
+    then flip to 169.254.169.254. Resolve ONCE here, re-check the link-local
+    guard on the resolved IPs, and pin the connection to the validated IP by
+    rewriting the URL host while preserving the original hostname in the ``Host``
+    header. IP-literal hosts (nothing to rebind) and allowlisted hosts (operator
+    opt-in) pass through untouched; ``https://`` passes through so TLS cert
+    validation still sees the hostname (residual risk documented in the module
+    docstring).
+
+    Never raises: a detected rebind is returned as the third element so ``send``
+    can turn it into a per-row ``HttpResult(error=...)`` instead of aborting the
+    whole run (the ``send`` never-raises contract). Runs blocking DNS, so call
+    it off the event loop (``asyncio.to_thread``)."""
+    parts = urlsplit(url)
+    if parts.scheme != "http" or not parts.hostname:
+        return url, headers, None
+    try:
+        ipaddress.ip_address(parts.hostname)
+        return url, headers, None  # already an IP literal — nothing to rebind
+    except ValueError:
+        pass
+    allow = _allow_hosts()
+    if allow is not None and parts.hostname.lower() in allow:
+        return url, headers, None  # operator explicitly trusts this host
+    try:
+        resolved = sorted({ai[4][0] for ai in socket.getaddrinfo(parts.hostname, None)})
+    except OSError:
+        return url, headers, None  # unresolvable — let the request itself fail
+    for addr in resolved:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if isinstance(ip, ipaddress.IPv4Address) and ip in ipaddress.ip_network("169.254.0.0/16"):
+            return (
+                url,
+                headers,
+                f"host {parts.hostname!r} resolved to the link-local/metadata range "
+                f"({addr}); blocked as a DNS-rebinding attempt",
+            )
+    pin = next((a for a in resolved if ":" not in a), resolved[0] if resolved else None)
+    if pin is None:
+        return url, headers, None
+    netloc = f"[{pin}]" if ":" in pin else pin
+    if parts.port is not None:
+        netloc = f"{netloc}:{parts.port}"
+    pinned = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    host_header = parts.hostname if parts.port is None else f"{parts.hostname}:{parts.port}"
+    return pinned, {**headers, "Host": host_header}, None
 
 
 # ── the one network call (monkeypatched in tests) ────────────────────────────
@@ -157,6 +266,11 @@ async def send(
     transport/timeout error becomes ``HttpResult(error=...)`` so a single bad
     endpoint fails just its row, not the whole run. This is the seam tests
     replace to assert envelopes without real network."""
+    # Off-thread: _pin_http_url does blocking DNS; a hanging resolver must stall
+    # only this row, never the event loop.
+    url, headers, blocked = await asyncio.to_thread(_pin_http_url, url, headers)
+    if blocked is not None:
+        return HttpResult(status=None, ok=False, json=None, text="", error=blocked)
     try:
         resp = await _client().request(
             method.upper(),
@@ -201,7 +315,7 @@ async def request(
     shared per-run budget, then sends. Returns a normalized dict the block
     parses into rows."""
     method = method.upper()
-    check_url(url)
+    await asyncio.to_thread(check_url, url)  # blocking DNS off the event loop
     if (preview and method not in SAFE_METHODS) or (
         method not in SAFE_METHODS and not control_enabled()
     ):
@@ -244,7 +358,7 @@ async def dispatch(
     Dry-run on preview OR when the kill-switch is off — the envelope is still
     returned so the editor shows exactly what WOULD be sent. Spends one unit of
     the shared per-run budget."""
-    check_url(url)
+    await asyncio.to_thread(check_url, url)  # blocking DNS off the event loop
     if preview or not control_enabled():
         return {
             "dispatched": False,
@@ -262,7 +376,11 @@ async def dispatch(
     budget[0] -= 1
     headers = {"content-type": "application/json", **auth_headers(auth_env)}
     res = await send("POST", url, headers=headers, json_body=envelope, timeout_s=timeout_s)
-    out: dict[str, Any] = {"dispatched": res.error is None, "dry_run": False, "request": envelope}
+    # "dispatched" must mean the control server ACCEPTED the command, not merely
+    # that the socket didn't error: a 5xx/4xx has error=None but is a rejection,
+    # so key off res.ok (2xx) — a downstream block branching on `dispatched`
+    # would otherwise treat a failed uplink as a success.
+    out: dict[str, Any] = {"dispatched": res.ok, "dry_run": False, "request": envelope}
     out.update(res.summary())
     return out
 

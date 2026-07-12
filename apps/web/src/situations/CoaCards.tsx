@@ -22,8 +22,8 @@ interface Coa {
 const LIK_TONE: Record<Likelihood, BadgeTone> = { high: 'alert', med: 'warn', low: 'neutral' };
 const SIDE_BAR: Record<Side, string> = { enemy: 'var(--alert)', friendly: 'var(--accent-line)' };
 const SIDE_LABEL: Record<Side, { text: string; cls: string }> = {
-  enemy: { text: 'Possible enemy COAs', cls: 'text-[#ffb3ae]' },
-  friendly: { text: 'Possible friendly COAs', cls: 'text-[#9cc2ff]' },
+  enemy: { text: 'Possible enemy COAs', cls: 'text-alert-fg' },
+  friendly: { text: 'Possible friendly COAs', cls: 'text-accent' },
 };
 
 let _seq = 0;
@@ -139,7 +139,7 @@ export function CoaCards({ situationId }: { situationId: string }): JSX.Element 
         <Caveat level="HYPOTHETICAL" note="model estimate over linked evidence" tone="warn" />
         <span className="flex-1" />
         <Btn size="sm" tone="accent" disabled={busy} onClick={() => void propose()}>
-          {busy ? 'Proposing…' : '⚙ Propose COAs'}
+          {busy ? 'Proposing…' : 'Propose COAs'}
         </Btn>
       </div>
       {note && <p className="text-[10px] text-warn">{note}</p>}

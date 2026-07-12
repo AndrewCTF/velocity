@@ -74,6 +74,7 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
     let ws: WebSocket | null = null;
     let closed = false;
     let saveTimer: number | undefined;
+    let reconnectTimer: number | undefined;
 
     const roster = (): CollabPeer[] =>
       Array.from(awareness.getStates().entries()).map(([clientId, st]) => {
@@ -140,6 +141,7 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
     });
 
     const connect = () => {
+      if (closed) return; // effect torn down while a reconnect was pending
       const sock = new WebSocket(
         withWsKey(`${wsBase()}/ws/collab?doc=${encodeURIComponent(docId)}`),
       );
@@ -152,7 +154,7 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
       };
       sock.onclose = () => {
         setOnline(false);
-        if (!closed) window.setTimeout(connect, 1500);
+        if (!closed) reconnectTimer = window.setTimeout(connect, 1500);
       };
       sock.onmessage = (ev: MessageEvent<ArrayBuffer>) => {
         const buf = new Uint8Array(ev.data);
@@ -169,6 +171,7 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
     return () => {
       closed = true;
       if (saveTimer) window.clearTimeout(saveTimer);
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
       doc.off('update', onDocUpdate);
       awareness.off('update', onAwareUpdate);
       awareness.destroy();

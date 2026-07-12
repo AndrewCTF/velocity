@@ -2,6 +2,7 @@
 // Triggers fire into the Alerts rail + ticker (WatchboxLayer evaluator).
 
 import { useState } from 'react';
+import { Circle, Pencil, X } from 'lucide-react';
 import { Widget, Btn, SectionLabel, MicroLabel } from '../shell/instruments.js';
 import { getDrawController } from '../globe/draw.js';
 import { useWatchboxes, type WatchRule } from './watchboxStore.js';
@@ -30,7 +31,7 @@ export function WatchboxPanel(): JSX.Element {
     setStatus('click centre, then click the edge to set the AOI radius…');
     draw.drawCircle((c, rKm) => {
       add({ label: label.trim() || `AOI ${wbs.length + 1}`, center: c, radiusKm: +rKm.toFixed(2), rule });
-      setStatus(`watchbox armed ✓ (${rKm.toFixed(1)} km · ${rule})`);
+      setStatus(`Watchbox armed (${rKm.toFixed(1)} km · ${rule})`);
     });
   };
 
@@ -57,8 +58,9 @@ export function WatchboxPanel(): JSX.Element {
           <input className={selectCls} placeholder="e.g. NAMED AREA OF INTEREST" value={label} onChange={(e) => setLabel(e.target.value)} />
         </label>
         <div className="mt-2">
-          <Btn tone="accent" onClick={drawAoi} disabled={noDraw} className="w-full justify-center">
-            ⊙ Draw AOI on map
+          <Btn tone="accent" onClick={drawAoi} disabled={noDraw} className="w-full justify-center gap-1.5">
+            <Circle size={12} strokeWidth={1.75} aria-hidden />
+            Draw AOI on map
           </Btn>
         </div>
         {noDraw && <MicroLabel>map not ready</MicroLabel>}
@@ -112,7 +114,7 @@ export function WatchboxPanel(): JSX.Element {
               </div>
             ) : (
               <div key={w.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-                <span className="text-[10px]" style={{ color: '#f5a524' }}>⊙</span>
+                <Circle size={11} strokeWidth={1.75} className="shrink-0 text-warn-fg" aria-hidden />
                 <span className="flex-1 text-[10px] text-txt-1 mono truncate">
                   {w.label} · {w.rule} · {w.radiusKm}km
                 </span>
@@ -121,16 +123,18 @@ export function WatchboxPanel(): JSX.Element {
                   onClick={() => setEditId(w.id)}
                   className="text-[11px] leading-none text-txt-3 hover:text-accent px-1 opacity-0 group-hover:opacity-100"
                   aria-label="Edit watchbox"
+                  title="Edit watchbox"
                 >
-                  ✎
+                  <Pencil size={12} strokeWidth={1.75} aria-hidden />
                 </button>
                 <button
                   type="button"
                   onClick={() => remove(w.id)}
                   className="text-[11px] leading-none text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"
                   aria-label="Delete watchbox"
+                  title="Delete watchbox"
                 >
-                  ✕
+                  <X size={12} strokeWidth={1.75} aria-hidden />
                 </button>
               </div>
             ),

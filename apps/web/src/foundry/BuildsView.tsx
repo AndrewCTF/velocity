@@ -1,7 +1,9 @@
+import { Hammer } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useFoundry } from '../state/foundry.js';
 import { Badge, Btn, Toggle } from '../shell/instruments.js';
 import { useConfirm } from '../shell/Modal.js';
+import { InlineAlert } from '../shell/InlineAlert.js';
 import { useFoundryNav } from './nav.js';
 import { useFoundryPoll } from './useFoundryPoll.js';
 import {
@@ -131,12 +133,12 @@ export function BuildsView(): JSX.Element {
 
   // Fast 5s poll while a build is running (nested inside the app-visibility
   // gate via useFoundryPoll's parent — this just tightens the cadence).
+  const anyRunning = builds.some((b) => b.status === 'running');
   useEffect(() => {
-    const anyRunning = builds.some((b) => b.status === 'running');
     if (!anyRunning) return;
     const id = window.setInterval(() => void loadBuilds(), 5000);
     return () => window.clearInterval(id);
-  }, [builds, loadBuilds]);
+  }, [anyRunning, loadBuilds]);
 
   const tfName = (id: string | null): string => {
     if (!id) return '—';
@@ -209,7 +211,7 @@ export function BuildsView(): JSX.Element {
                   <tr className="border-t border-line bg-bg-0">
                     <td colSpan={7} className="px-3 py-2.5 space-y-2">
                       {b.error && (
-                        <div className="rounded-sm border border-[rgba(255,90,82,0.38)] bg-alert-bg px-2 py-1.5 text-[11px] text-[#ffc9c5]">{b.error}</div>
+                        <InlineAlert tone="alert">{b.error}</InlineAlert>
                       )}
                       {b.input_versions && Object.keys(b.input_versions).length > 0 && (
                         <div>
@@ -233,7 +235,7 @@ export function BuildsView(): JSX.Element {
         </table>
         {filtered.length === 0 && (
           <div className="p-4">
-            <EmptyState icon="⧉" title={builds.length === 0 ? 'No builds yet' : 'No builds match'} hint={builds.length === 0 ? 'Runs appear here once you build a transform or the whole pipeline.' : 'Adjust the filters above.'} />
+            <EmptyState icon={Hammer} title={builds.length === 0 ? 'No builds yet' : 'No builds match'} hint={builds.length === 0 ? 'Runs appear here once you build a transform or the whole pipeline.' : 'Adjust the filters above.'} />
           </div>
         )}
       </div>

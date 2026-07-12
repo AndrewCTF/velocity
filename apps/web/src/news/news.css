@@ -49,7 +49,7 @@
   font-family: var(--sans); font-weight: 800; font-size: clamp(34px, 6vw, 58px);
   letter-spacing: -0.03em; color: var(--ink); display: inline-flex; align-items: center; gap: 10px;
 }
-.vn-brand mark { background: var(--brand); color: #fff; padding: 0 12px; border-radius: 3px; }
+.vn-brand mark { background: var(--brand); color: var(--paper); padding: 0 12px; border-radius: 3px; }
 .vn-tagline { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 6px; letter-spacing: 0.08em; text-transform: uppercase; }
 
 /* ── category nav ───────────────────────────────────────────────────────── */
@@ -153,7 +153,7 @@
 .vn-box.facts { border-left: 3px solid var(--ink); }
 .vn-wrong-item { padding: 9px 0; border-top: 1px solid var(--rule); font-size: 14px; line-height: 1.5; }
 .vn-wrong-item:first-of-type { border-top: 0; }
-.vn-tech { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--flag); color: #fff; padding: 2px 7px; border-radius: 2px; margin-right: 8px; }
+.vn-tech { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--flag); color: var(--paper); padding: 2px 7px; border-radius: 2px; margin-right: 8px; }
 .vn-src { font-weight: 700; color: var(--ink); }
 .vn-box.act ul, .vn-box.facts ul { margin: 0; padding-left: 18px; }
 .vn-box.act li, .vn-box.facts li { font-size: 15px; line-height: 1.55; margin-bottom: 7px; }

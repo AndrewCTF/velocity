@@ -211,7 +211,14 @@ def approach_capability(detail: dict[str, Any] | None) -> dict[str, Any]:
     """
     detail = detail or {}
     runways = [r for r in detail.get("runways") or [] if not r.get("closed")]
-    cats = sorted({str(c) for r in runways for c in (r.get("ils_category_le"), r.get("ils_category_he")) if c})
+    cats = sorted(
+        {
+            str(c)
+            for r in runways
+            for c in (r.get("ils_category_le"), r.get("ils_category_he"))
+            if c
+        }
+    )
     ils = bool(detail.get("ils_present") or cats)
     lighted = any(r.get("lighted") for r in runways)
     lengths = [r.get("length_ft") for r in runways if isinstance(r.get("length_ft"), (int, float))]
@@ -495,7 +502,8 @@ def facility_bbox_features(
             "category": r.get("category") or "",
             "subcategory": r.get("subcategory") or "",
         }
-        for extra in ("fuel", "capacity_mw", "operator", "component", "operational_status", "status"):
+        extras = ("fuel", "capacity_mw", "operator", "component", "operational_status", "status")
+        for extra in extras:
             if r.get(extra) not in (None, ""):
                 props[extra] = r[extra]
         features.append(

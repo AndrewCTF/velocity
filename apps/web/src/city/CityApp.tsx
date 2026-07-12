@@ -7,6 +7,7 @@
 // (input + object URL), a pasted URL, or a deep link into the existing
 // satellite-AOI training flow in Reconstruction Studio (no training happens
 // here — CLAUDE.md "find the reuse first").
+import { RotateCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { Btn, Widget, Badge } from '../shell/instruments.js';
@@ -210,8 +211,8 @@ export function CityApp(): JSX.Element {
             title="RECON JOBS"
             count={doneJobs.length}
             action={
-              <Btn size="sm" onClick={() => void fetchJobs()} disabled={jobsLoading} title="Refresh">
-                {jobsLoading ? '…' : '↻'}
+              <Btn size="sm" onClick={() => void fetchJobs()} disabled={jobsLoading} title="Refresh" aria-label="Refresh">
+                <RotateCw size={13} strokeWidth={1.75} className={jobsLoading ? 'animate-spin' : ''} />
               </Btn>
             }
           >

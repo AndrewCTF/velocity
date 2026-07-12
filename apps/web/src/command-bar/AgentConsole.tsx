@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDown, X } from 'lucide-react';
 import type * as Cesium from 'cesium';
 import {
   useAlerts,
@@ -418,7 +419,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
           requestAnimationFrame(() => inputRef.current?.focus());
         }}
         aria-label="Open analyst agent"
-        className="fixed bottom-3 right-3 z-40 flex items-center gap-2 mono text-[13px] px-4 py-2.5 rounded-md border border-accent-line text-accent"
+        className="fixed bottom-3 right-3 z-[var(--z-dock)] flex items-center gap-2 mono text-[13px] px-4 py-2.5 rounded-md border border-accent-line text-accent"
         style={{ background: 'rgba(9,12,18,0.95)' }}
       >
         <span className="w-2 h-2 bg-accent rotate-45" /> Agent
@@ -427,8 +428,8 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   }
 
   const containerCls = isMobile
-    ? 'fixed inset-0 z-[1100] flex flex-col'
-    : 'absolute left-1/2 -translate-x-1/2 bottom-4 z-[25] flex flex-col';
+    ? 'fixed inset-0 z-[var(--z-overlay)] flex flex-col'
+    : 'absolute left-1/2 -translate-x-1/2 bottom-4 z-[var(--z-dock)] flex flex-col';
   const containerStyle = isMobile
     ? { background: 'rgba(9,12,18,0.98)' }
     : {
@@ -447,7 +448,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
         <div className="flex items-center gap-2.5 px-2.5 py-2 border-b border-line-2 bg-bg-1 shrink-0">
           <span className="mono text-accent text-[11px]">▸</span>
           <span className="mono text-[11px] tracking-[1px] text-txt-1">ANALYST</span>
-          <span className="mono text-[10px] tracking-[0.6px] uppercase text-[#9cc2ff] border border-accent-line bg-accent-dim rounded-sm px-1.5 py-px">
+          <span className="mono text-[10px] tracking-[0.6px] uppercase text-accent-fg border border-accent-line bg-accent-dim rounded-sm px-1.5 py-px">
             {phase === 'gathering' ? 'tool loop' : phase === 'synthesizing' ? 'reasoning' : phase === 'done' ? 'plan mode' : 'analyst'}
           </span>
           {meta?.model && (
@@ -470,9 +471,10 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
             type="button"
             onClick={collapse}
             aria-label="Close analyst console"
+            title={isMobile ? 'Close' : 'Minimize'}
             className="mono text-[12px] text-txt-3 border border-line rounded-sm w-[24px] h-[22px] flex items-center justify-center hover:text-txt-1"
           >
-            {isMobile ? '✕' : '⤓'}
+            {isMobile ? <X size={13} strokeWidth={1.75} aria-hidden /> : <ChevronDown size={13} strokeWidth={1.75} aria-hidden />}
           </button>
         </div>
       )}
@@ -488,7 +490,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
           )}
 
           {error && (
-            <div className="border border-[rgba(255,90,82,0.32)] bg-alert-bg rounded-sm px-3 py-2 text-[11px] text-[#ffc9c5]">
+            <div className="border border-alert-line bg-alert-bg rounded-sm px-3 py-2 text-[11px] text-alert-fg">
               {error}
             </div>
           )}
@@ -513,24 +515,18 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                   // distinct rule + verb so it never reads like a read-only tool.
                   <div
                     key={r.id}
-                    className="rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-[1.5]"
-                    style={{
-                      border: r.action.ok
-                        ? '1px solid rgba(245,165,36,0.35)'
-                        : '1px solid rgba(255,90,82,0.32)',
-                      background: r.action.ok
-                        ? 'linear-gradient(180deg, rgba(245,165,36,0.06), transparent)'
-                        : 'rgba(255,90,82,0.06)',
-                    }}
+                    className={`rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-[1.5] border ${
+                      r.action.ok ? 'border-warn-line bg-warn-bg' : 'border-alert-line bg-alert-bg'
+                    }`}
                   >
-                    <span className={`mono ${r.action.ok ? 'text-[#fcd9a0]' : 'text-[#ffc9c5]'}`}>
-                      {r.action.ok ? '✎ action' : '✕ action'} · {r.action.name}
+                    <span className={`mono ${r.action.ok ? 'text-warn-fg' : 'text-alert-fg'}`}>
+                      {r.action.ok ? 'action' : 'action failed'} · {r.action.name}
                     </span>
                     {r.action.targetId && (
                       <span className="mono text-txt-3"> → {r.action.targetId}</span>
                     )}
                     {r.action.error && (
-                      <div className="text-[10px] text-[#ffc9c5] mt-0.5">{r.action.error}</div>
+                      <div className="text-[10px] text-alert-fg mt-0.5">{r.action.error}</div>
                     )}
                     {r.action.ok && (
                       <span className="mono text-[10px] text-txt-4 ml-1.5">audited · logged</span>
@@ -544,8 +540,8 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                     className="rounded-sm my-1 px-3 py-2 text-[11px] leading-[1.5]"
                     style={{ border: '1px solid var(--accent-line)', background: 'var(--accent-dim)' }}
                   >
-                    <div className="mono text-[10px] tracking-[0.7px] uppercase text-[#9cc2ff] mb-1">
-                      ? clarification needed
+                    <div className="mono text-[10px] tracking-[0.7px] uppercase text-accent-fg mb-1">
+                      Clarification needed
                     </div>
                     <div className="text-txt-1">{r.clarification.question}</div>
                     {r.clarification.options.length > 0 && (
@@ -569,28 +565,24 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                   // styling as an action row so it reads as a governed write.
                   <div
                     key={r.id}
-                    className="rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-[1.5]"
-                    style={{
-                      border: '1px solid rgba(245,165,36,0.35)',
-                      background: 'linear-gradient(180deg, rgba(245,165,36,0.06), transparent)',
-                    }}
+                    className="rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-[1.5] border border-warn-line bg-warn-bg"
                   >
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="mono text-[#fcd9a0]">⏸ proposed · {r.proposal.action}</span>
+                      <span className="mono text-warn-fg">Proposed · {r.proposal.action}</span>
                       <span className="mono text-[10px] text-txt-4">conf {r.proposal.confidence.toFixed(2)}</span>
                       {r.proposal.state === 'pending' ? (
                         <span className="flex gap-1.5 ml-auto">
                           <button
                             type="button"
                             onClick={() => void decide(r.proposal!.id, 'approve')}
-                            className="mono text-[10px] text-[#fcd9a0] border border-accent-line rounded-sm px-2 py-0.5 hover:text-accent hover:border-accent"
+                            className="mono text-[10px] text-warn-fg border border-accent-line rounded-sm px-2 py-0.5 hover:text-accent hover:border-accent"
                           >
                             Approve
                           </button>
                           <button
                             type="button"
                             onClick={() => void decide(r.proposal!.id, 'reject')}
-                            className="mono text-[10px] text-[#ffc9c5] border border-line rounded-sm px-2 py-0.5 hover:border-[rgba(255,90,82,0.5)]"
+                            className="mono text-[10px] text-alert-fg border border-line rounded-sm px-2 py-0.5 hover:border-alert-line"
                           >
                             Reject
                           </button>
@@ -601,7 +593,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                             r.proposal.state === 'approved'
                               ? 'text-ok'
                               : r.proposal.state === 'error'
-                                ? 'text-[#ffc9c5]'
+                                ? 'text-alert-fg'
                                 : 'text-txt-3'
                           }`}
                         >
@@ -616,7 +608,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                 ) : (
                   <div key={`${r.id}-${r.tool}`} className="text-[10.5px] leading-[1.5]">
                     <div className="grid items-baseline gap-2" style={{ gridTemplateColumns: '14px 1fr auto' }}>
-                      <span className={`mono text-center ${r.status === 'ok' ? 'text-ok' : 'text-accent'}`}>
+                      <span aria-hidden className={`mono text-center ${r.status === 'ok' ? 'text-ok' : 'text-accent'}`}>
                         {r.status === 'ok' ? '✓' : '⟳'}
                       </span>
                       <span className="mono text-txt-1">
@@ -649,16 +641,10 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
               )}
 
               {result.recommended_detection?.rule && (
-                <div
-                  className="relative rounded-sm my-2.5 px-3 py-2.5 pl-3.5"
-                  style={{
-                    border: '1px solid rgba(245,165,36,0.35)',
-                    background: 'linear-gradient(180deg, rgba(245,165,36,0.06), transparent)',
-                  }}
-                >
+                <div className="relative rounded-sm my-2.5 px-3 py-2.5 pl-3.5 border border-warn-line bg-warn-bg">
                   <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-warn" />
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="mono text-[10px] tracking-[0.7px] uppercase text-[#fcd9a0]">⚡ Detection proposed</span>
+                    <span className="mono text-[10px] tracking-[0.7px] uppercase text-warn-fg">Detection proposed</span>
                     {result.recommended_detection.scope && (
                       <span className="mono text-[10px] tracking-[0.5px] uppercase text-txt-3 ml-auto truncate max-w-[55%]" title={result.recommended_detection.scope}>
                         {result.recommended_detection.scope}
@@ -666,8 +652,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                     )}
                   </div>
                   <div
-                    className="mono text-[10px] leading-[1.55] text-[#ecd9b2] rounded-sm px-2.5 py-2"
-                    style={{ background: '#0b0905', border: '1px solid rgba(245,165,36,0.2)' }}
+                    className="mono text-[10px] leading-[1.55] text-warn-fg rounded-sm px-2.5 py-2 border border-warn-line bg-bg-0"
                   >
                     {result.recommended_detection.rule}
                   </div>
@@ -687,7 +672,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                         onClick={() => flyToFinding(f)}
                         disabled={!f.centroid}
                         title={f.centroid ? 'fly to incident' : undefined}
-                        className="grid items-baseline gap-2 py-1.5 text-left border-b border-[rgba(255,255,255,0.035)] hover:bg-bg-2/50 disabled:cursor-default"
+                        className="grid items-baseline gap-2 py-1.5 text-left border-b border-line hover:bg-bg-2/50 disabled:cursor-default"
                         style={{ gridTemplateColumns: 'auto 1fr auto' }}
                       >
                         <span className="mono text-[10px] text-txt-3">{f.id.slice(0, 8)}</span>
@@ -749,14 +734,14 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
       {!isMobile && (
         <div className="flex items-center gap-2 px-2.5 py-1.5 border-t border-line overflow-hidden shrink-0">
           <span className="mono text-[10px] tracking-[0.6px] uppercase text-txt-4">Standing</span>
-          <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-full px-2 py-[3px] whitespace-nowrap">
+          <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-sm px-2 py-[3px] whitespace-nowrap">
             <StatusDot tone={worstSev} />alerts <b className="text-txt-1 font-medium">{alerts.length}</b>
           </span>
-          <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-full px-2 py-[3px] whitespace-nowrap">
+          <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-sm px-2 py-[3px] whitespace-nowrap">
             AOI <b className="text-txt-1 font-medium">{activeAoi ? activeAoi.name : 'global'}</b>
           </span>
           {totalFeeds > 0 && (
-            <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-full px-2 py-[3px] whitespace-nowrap">
+            <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-sm px-2 py-[3px] whitespace-nowrap">
               <StatusDot tone={greenFeeds === totalFeeds ? 'green' : 'amber'} />feeds{' '}
               <b className="text-txt-1 font-medium">{greenFeeds}/{totalFeeds}</b>
             </span>

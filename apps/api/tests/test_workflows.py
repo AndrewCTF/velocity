@@ -379,6 +379,23 @@ async def test_op_python_wall_timeout_kill() -> None:
     assert time.monotonic() - t0 < 5.0
 
 
+async def test_python_exec_output_over_cap_fails_fast_not_timeout() -> None:
+    """A block returning >5MB must fail with the cap error QUICKLY — the parent
+    kills the child once the cap is breached instead of letting proc.wait()
+    block on a full pipe until the wall timeout (which would surface a wrong
+    'timed out' error after the full timeout)."""
+    import time
+
+    # ~6MB of row data → serialized JSON exceeds the 5MB stdout cap.
+    code = 'def run(rows, memory):\n    return [{"blob": "x" * 6_000_000}]\n'
+    t0 = time.monotonic()
+    with pytest.raises(python_exec.PythonExecError) as exc:
+        await python_exec.run_python_block(code, [], {}, timeout_s=30)
+    elapsed = time.monotonic() - t0
+    assert "cap" in str(exc.value)
+    assert elapsed < 15.0, f"cap breach should fail fast, took {elapsed:.1f}s"
+
+
 async def test_python_exec_timeout_s_clamped_to_max() -> None:
     # A request for a timeout above MAX_TIMEOUT_S is clamped, not honored —
     # proven directly against python_exec (the engine forwards whatever the

@@ -69,6 +69,22 @@ def test_un_series_shape(client, monkeypatch):
     assert [p["year"] for p in s["series"]] == [2018, 2020]
 
 
+def test_un_non_dict_body_degrades(client, monkeypatch):
+    # Upstream sometimes returns a bare list on error; .get("data") on it used
+    # to raise AttributeError and 500 the route. It must degrade instead.
+    async def fake_get(self, url, **kwargs):
+        return httpx.Response(200, json=[], request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    from app.upstream import cache
+
+    cache.invalidate("un:840:SI_POV_DAY1")
+    r = client.get("/api/country/USA/un", params={"series": "SI_POV_DAY1"})
+    assert r.status_code == 200
+    (s,) = r.json()["series"]
+    assert s["series"] == []
+
+
 def test_malformed_indicator_rejected(client):
     assert (
         client.get("/api/country/USA/worldbank", params={"indicators": "evil;drop"}).status_code
@@ -89,6 +105,38 @@ def test_upstream_failure_degrades_per_series(client, monkeypatch):
     assert r.status_code == 200
     (ind,) = r.json()["indicators"]
     assert ind["unavailable"] is True and ind["series"] == []
+
+
+def test_wb_sem_is_per_loop_and_reused():
+    """The World Bank semaphore is one-per-loop, reused within a loop, and keyed
+    by the loop object (WeakKeyDictionary) so entries drop when a loop dies —
+    no id(loop)-reuse collision resurrecting a semaphore bound to a dead loop."""
+    import asyncio
+
+    async def get_sem():
+        return country_stats._wb_sem()
+
+    loop1 = asyncio.new_event_loop()
+    try:
+        s1a = loop1.run_until_complete(get_sem())
+        s1b = loop1.run_until_complete(get_sem())
+        assert s1a is s1b  # reused within one loop
+    finally:
+        loop1.close()
+
+    loop2 = asyncio.new_event_loop()
+    try:
+        s2 = loop2.run_until_complete(get_sem())
+        assert s2 is not s1a  # a different loop gets its own semaphore
+    finally:
+        loop2.close()
+
+    import gc
+
+    del loop1
+    gc.collect()
+    # The dead loop's entry is weakly held, so it does not linger forever.
+    assert len(country_stats._WB_SEMS) <= 1
 
 
 def test_manifest_ids_wellformed():

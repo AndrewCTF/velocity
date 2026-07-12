@@ -41,11 +41,12 @@ export function CollabPanel({ docId = 'shared-notes' }: { docId?: string }) {
     <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <span
+          aria-hidden
           style={{
             width: 8,
             height: 8,
             borderRadius: 8,
-            background: online ? '#4ade80' : '#ef4444',
+            background: online ? 'var(--ok)' : 'var(--alert)',
             display: 'inline-block',
           }}
         />

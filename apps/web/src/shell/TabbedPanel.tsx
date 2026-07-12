@@ -211,7 +211,7 @@ function MenuChooser({
             aria-hidden="true"
             tabIndex={-1}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 z-40 cursor-default"
+            className="fixed inset-0 z-[var(--z-dropdown)] cursor-default"
           />
           <ul
             role="listbox"
@@ -219,7 +219,7 @@ function MenuChooser({
             onKeyDown={(e) => {
               if (e.key === 'Escape') setOpen(false);
             }}
-            className="absolute left-0 right-0 top-full z-50 max-h-[60vh] overflow-y-auto border-b border-x border-line-2 bg-bg-1 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.8)]"
+            className="absolute left-0 right-0 top-full z-[var(--z-dropdown)] max-h-[60vh] overflow-y-auto border-b border-x border-line-2 bg-bg-1 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.8)]"
           >
             {tabs.map((t) => {
               const isActive = t.id === active?.id;

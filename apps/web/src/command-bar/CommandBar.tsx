@@ -429,7 +429,7 @@ function AlertTicker({ onOpen }: { onOpen?: () => void }): JSX.Element {
             alert
           </span>
           <span className="mono text-[10px] text-txt-4 tabular-nums shrink-0">{total}</span>
-          <span className={`mono text-[11px] truncate ${SEV_COLOR[top.severity] ?? 'text-[#ffc9c5]'}`}>
+          <span className={`mono text-[11px] truncate ${SEV_COLOR[top.severity] ?? 'text-alert-fg'}`}>
             [{top.severity}] {top.message}
           </span>
         </>

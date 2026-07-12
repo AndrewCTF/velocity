@@ -2,6 +2,7 @@
 // for keys, there now"). Also surfaces the current plan and links out to the
 // full account dashboard (limits / renew / alerts) on the marketing site.
 import { useEffect, useState } from 'react';
+import { RotateCcw } from 'lucide-react';
 import { apiFetch } from '../transport/http.js';
 import { KeysPanel } from './KeysPanel.js';
 import { useDashboardMode, type DashboardMode } from '../state/dashboardMode.js';
@@ -46,7 +47,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
 
   return (
     <div
-      className="fixed inset-0 z-[2000] flex items-start justify-center bg-black/60 backdrop-blur-sm pt-[8vh]"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-start justify-center bg-black/60 backdrop-blur-sm pt-[8vh]"
       onClick={onClose}
     >
       <div
@@ -121,9 +122,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
               resetOnboarding();
               window.location.reload();
             }}
-            className="block w-full text-center mt-3.5 mono text-[10px] px-2 py-1.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
+            className="flex w-full items-center justify-center gap-1.5 mt-3.5 mono text-[10px] px-2 py-1.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
           >
-            Replay welcome tour ↻
+            <RotateCcw size={12} strokeWidth={1.75} aria-hidden /> Replay welcome tour
           </button>
 
           <a

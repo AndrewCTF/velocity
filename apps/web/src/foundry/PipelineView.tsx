@@ -1,3 +1,4 @@
+import { GitBranch } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useFoundry,
@@ -10,6 +11,7 @@ import {
 } from '../state/foundry.js';
 import { Badge, Btn } from '../shell/instruments.js';
 import { Drawer, useConfirm } from '../shell/Modal.js';
+import { InlineAlert } from '../shell/InlineAlert.js';
 import { useFoundryNav } from './nav.js';
 import { useFoundryPoll } from './useFoundryPoll.js';
 import { EmptyState, Field, ViewHeader, controlCls } from './ui.js';
@@ -286,8 +288,8 @@ function TransformEditor({ editing, onDone }: { editing: Transform | null; onDon
     >
       <div className="space-y-3">
         {mutError && (
-          <div className="rounded-sm border border-[rgba(255,90,82,0.38)] bg-alert-bg px-2.5 py-2 text-[11px] text-[#ffc9c5]" data-testid="transform-error">
-            {mutError}
+          <div data-testid="transform-error">
+            <InlineAlert tone="alert">{mutError}</InlineAlert>
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
@@ -556,7 +558,7 @@ export function PipelineView(): JSX.Element {
             </svg>
             {laid.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center p-6">
-                <EmptyState icon="⋔" title="No pipeline yet" hint="Upload a dataset, then author a transform — its lineage graph draws here." />
+                <EmptyState icon={GitBranch} title="No pipeline yet" hint="Upload a dataset, then author a transform — its lineage graph draws here." />
               </div>
             )}
           </div>

@@ -118,6 +118,10 @@ export class AisWsAdapter implements LayerAdapter {
     };
     ws.onerror = () => {
       this.props.ctx.reportStatus({ status: 'red', note: 'websocket error' });
+      // A half-open error may never emit a close event on its own, leaving the
+      // feed dead with no retry. Force close(); onclose then schedules the
+      // reconnect (browsers fire at most one close, so no double-scheduling).
+      ws.close();
     };
   }
 

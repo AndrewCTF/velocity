@@ -338,8 +338,8 @@ export function PatternOfLifeCard({
       {baselineAnoms.length > 0 && (
         <ul className="mb-2.5 space-y-1">
           {baselineAnoms.slice(0, 6).map((a, i) => (
-            <li key={i} className="mono text-[10px] text-[#fcd9a0] leading-snug">
-              ▲ {a}
+            <li key={i} className="mono text-[10px] text-warn-fg leading-snug">
+              <span aria-hidden>▲</span> {a}
             </li>
           ))}
         </ul>

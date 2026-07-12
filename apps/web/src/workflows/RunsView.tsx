@@ -1,6 +1,8 @@
+import { ListChecks } from 'lucide-react';
 import { Fragment, useEffect, useState } from 'react';
 import { useWorkflows } from '../state/workflows.js';
 import { Badge } from '../shell/instruments.js';
+import { InlineAlert } from '../shell/InlineAlert.js';
 import { useWorkflowsNav } from './nav.js';
 import { useWorkflowsPoll } from './useWorkflowsPoll.js';
 import {
@@ -100,10 +102,14 @@ export function RunsView(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // Default to the first workflow once the list loads, if nothing is picked yet.
+  // Default pick once the list loads, if nothing is chosen yet. Honor a
+  // deep-linked WORKFLOW id (EditorView.select passes a workflow id, not a run
+  // id — getRun 404s on it above) before falling back to the first workflow.
   useEffect(() => {
-    if (!workflowId && workflows.length > 0) setWorkflowId(workflows[0]?.id ?? '');
-  }, [workflowId, workflows]);
+    if (workflowId || workflows.length === 0) return;
+    const deep = selectedId && workflows.some((w) => w.id === selectedId) ? selectedId : null;
+    setWorkflowId(deep ?? workflows[0]?.id ?? '');
+  }, [workflowId, workflows, selectedId]);
 
   // Fetch runs the moment a workflow becomes selected (default pick, deep
   // link, or manual dropdown change) — the poll below only refreshes an
@@ -117,13 +123,14 @@ export function RunsView(): JSX.Element {
     if (workflowId) await loadRuns(workflowId);
   });
 
-  // Fast 5s poll while a run is in flight.
+  // Fast 5s poll while a run is in flight. Depend on the derived boolean, not
+  // the runs array (a fresh ref each poll would recreate the interval every tick).
+  const anyRunning = runs.some((r) => r.status === 'running' || r.status === 'queued');
   useEffect(() => {
-    const anyRunning = runs.some((r) => r.status === 'running' || r.status === 'queued');
     if (!anyRunning || !workflowId) return;
     const id = window.setInterval(() => void loadRuns(workflowId), 5000);
     return () => window.clearInterval(id);
-  }, [runs, workflowId, loadRuns]);
+  }, [anyRunning, workflowId, loadRuns]);
 
   const nameOf = (id: string): string => workflows.find((w) => w.id === id)?.name ?? id;
 
@@ -149,7 +156,7 @@ export function RunsView(): JSX.Element {
       {error && <p className="text-[11px] text-alert">{error}</p>}
 
       {!workflowId && (
-        <EmptyState icon="⧉" title="No workflow selected" hint="Pick a workflow above, or trigger a Run from the editor to land here." />
+        <EmptyState icon={ListChecks} title="No workflow selected" hint="Pick a workflow above, or trigger a Run from the editor to land here." />
       )}
 
       {workflowId && (
@@ -180,9 +187,7 @@ export function RunsView(): JSX.Element {
                     <tr className="border-t border-line bg-bg-0">
                       <td colSpan={5} className="px-3 py-2.5 space-y-2.5">
                         {r.error && (
-                          <div className="rounded-sm border border-[rgba(255,90,82,0.38)] bg-alert-bg px-2 py-1.5 text-[11px] text-[#ffc9c5]">
-                            {r.error}
-                          </div>
+                          <InlineAlert tone="alert">{r.error}</InlineAlert>
                         )}
                         <LogView lines={r.log} className="max-h-56" />
                         <OutputTables output={r.output} />
@@ -196,7 +201,7 @@ export function RunsView(): JSX.Element {
           {runs.length === 0 && (
             <div className="p-4">
               <EmptyState
-                icon="⧉"
+                icon={ListChecks}
                 title="No runs yet"
                 hint={`Runs appear here once you trigger "${nameOf(workflowId)}" manually or via a schedule.`}
               />

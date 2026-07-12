@@ -31,7 +31,7 @@ export function BriefPanel(): JSX.Element {
       .map((f) => `<tr><td>${esc(f.label)}</td><td style="text-align:right">${f.status}</td></tr>`)
       .join('');
     const alertRows = topAlerts
-      .map((a) => `<tr><td>${a.severity}</td><td>${esc(a.message)}</td><td>${new Date(a.t).toISOString().slice(11, 19)}Z</td></tr>`)
+      .map((a) => `<tr><td>${esc(a.severity)}</td><td>${esc(a.message)}</td><td>${esc(new Date(a.t).toISOString().slice(11, 19))}Z</td></tr>`)
       .join('');
     return `<!doctype html><html><head><meta charset="utf-8"><title>Situation brief ${now}</title>
 <style>body{font:13px/1.5 system-ui,sans-serif;color:#111;max-width:760px;margin:32px auto;padding:0 16px}

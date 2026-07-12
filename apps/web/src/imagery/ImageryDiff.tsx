@@ -91,7 +91,7 @@ export function ImageryDiffPopup(): JSX.Element | null {
   const { open, aoi, close } = useImageryDiff();
   if (!open || !aoi) return null;
   return (
-    <div className="fixed z-[1000] left-1/2 top-20 -translate-x-1/2 w-[360px] rounded-md border border-line-2 bg-bg-1/95 backdrop-blur shadow-2xl p-3">
+    <div className="fixed z-[var(--z-modal)] left-1/2 top-20 -translate-x-1/2 w-[360px] rounded-md border border-line-2 bg-bg-1/95 backdrop-blur shadow-2xl p-3">
       <div className="flex items-center justify-between mb-2">
         <span className="mono text-[10px] tracking-[0.6px] uppercase text-txt-2">Imagery diff</span>
         <Btn size="sm" onClick={close}>

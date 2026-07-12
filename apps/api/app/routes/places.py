@@ -93,7 +93,13 @@ async def places_bases(
 async def places_infrastructure(
     response: Response,
     bbox: str | None = Query(None, description="minLon,minLat,maxLon,maxLat"),
-    category: str | None = Query(None, description="power|nuclear|water_treatment|desalination|datacenter|telecom_hub|ground_station|telescope|launch"),
+    category: str | None = Query(
+        None,
+        description=(
+            "power|nuclear|water_treatment|desalination|datacenter|telecom_hub|"
+            "ground_station|telescope|launch"
+        ),
+    ),
     limit: int = Query(2000, ge=1, le=20000),
 ) -> dict[str, Any]:
     """Critical-infrastructure facilities inside the bbox as GeoJSON

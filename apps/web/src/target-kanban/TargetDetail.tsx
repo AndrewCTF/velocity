@@ -83,7 +83,7 @@ export function TargetDetail({ viewer }: { viewer?: Cesium.Viewer | null }): JSX
     <div className="w-[240px] shrink-0 h-full min-h-0 overflow-y-auto pl-2 border-l border-line space-y-2">
       <div className="flex items-center gap-2">
         <SectionLabel title="Target detail" className="flex-1" />
-        {locked ? <Badge tone="alert">🔒 locked</Badge> : <Badge tone="ok">cleared</Badge>}
+        {locked ? <Badge tone="alert">locked</Badge> : <Badge tone="ok">cleared</Badge>}
       </div>
 
       {/* classification banner — per-target caveat (image 4: "SP GOLDEN WARRIOR") */}
@@ -91,7 +91,7 @@ export function TargetDetail({ viewer }: { viewer?: Cesium.Viewer | null }): JSX
         value={entry.classification}
         onChange={(e) => setClassification(entry.entityId, e.target.value)}
         spellCheck={false}
-        className="w-full bg-warn-bg border border-[rgba(245,165,36,0.5)] rounded-sm mono text-[10px] uppercase tracking-[0.6px] text-[#fcd9a0] text-center px-2 py-1"
+        className="w-full bg-warn-bg border border-warn-line rounded-sm mono text-[10px] uppercase tracking-[0.6px] text-warn-fg text-center px-2 py-1"
         title="Per-target classification caveat"
       />
 

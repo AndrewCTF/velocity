@@ -1,3 +1,4 @@
+import { Hammer } from 'lucide-react';
 import { useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { useFoundry, type Build } from '../state/foundry.js';
@@ -130,7 +131,7 @@ export function HomeView(): JSX.Element {
             </table>
             {(!summary || summary.recent_builds.length === 0) && (
               <div className="p-4">
-                <EmptyState icon="⧉" title="No builds yet" hint="Author a transform and run it — builds show up here with row counts and status." />
+                <EmptyState icon={Hammer} title="No builds yet" hint="Author a transform and run it — builds show up here with row counts and status." />
               </div>
             )}
           </div>

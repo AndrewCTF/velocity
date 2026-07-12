@@ -1,3 +1,4 @@
+import { CheckCircle2, Table2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   useFoundry,
@@ -293,15 +294,23 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
 
   useEffect(() => { setOffset(0); setVersion(undefined); }, [dataset.id]);
   useEffect(() => {
-    void getRows(dataset.id, version, PAGE_SIZE, offset).then(setRows);
-    void getStats(dataset.id, version).then(setStats);
-    void getVersions(dataset.id).then(setVersions);
+    // Guard against a stale page winning: switching dataset resets offset in the
+    // same commit, so an in-flight fetch for the old id/offset must not land.
+    let cancelled = false;
+    void getRows(dataset.id, version, PAGE_SIZE, offset).then((r) => { if (!cancelled) setRows(r); });
+    void getStats(dataset.id, version).then((r) => { if (!cancelled) setStats(r); });
+    void getVersions(dataset.id).then((r) => { if (!cancelled) setVersions(r); });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset.id, version, offset]);
   useEffect(() => {
-    if (tab === 'deadletter') void getDeadLetter(dataset.id).then(setDeadLetter);
-    if (tab === 'lineage') void getColumnLineage(dataset.id).then(setLineage);
-    if (tab === 'docs') void getDatasetDocs(dataset.id).then(setDocs);
+    // Same guard for the tab sub-fetches — dataset A's rows must never render
+    // under dataset B when selection changes mid-flight.
+    let cancelled = false;
+    if (tab === 'deadletter') void getDeadLetter(dataset.id).then((r) => { if (!cancelled) setDeadLetter(r); });
+    if (tab === 'lineage') void getColumnLineage(dataset.id).then((r) => { if (!cancelled) setLineage(r); });
+    if (tab === 'docs') void getDatasetDocs(dataset.id).then((r) => { if (!cancelled) setDocs(r); });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, dataset.id]);
 
@@ -462,7 +471,7 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
         {tab === 'deadletter' && (
           <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
             {deadLetter.length === 0 ? (
-              <div className="p-4"><EmptyState icon="✓" title="No quarantined rows" hint="Rows that raise during a filter/derive in the last build land here instead of failing the whole build." /></div>
+              <div className="p-4"><EmptyState icon={CheckCircle2} title="No quarantined rows" hint="Rows that raise during a filter/derive in the last build land here instead of failing the whole build." /></div>
             ) : (
               <table className="w-full border-collapse">
                 <thead><tr className={tableHeadCls()}><Th>Step</Th><Th>Error</Th><Th>Row</Th></tr></thead>
@@ -470,7 +479,7 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
                   {deadLetter.map((e, i) => (
                     <tr key={i} className={rowCls}>
                       <td className="px-2.5 py-1.5"><Badge tone="warn">{e.step_type}</Badge></td>
-                      <td className={`${cellMono} text-[#ffb3ae] text-[10px]`}>{e.error}</td>
+                      <td className={`${cellMono} text-alert-fg text-[10px]`}>{e.error}</td>
                       <td className={`${cellMono} text-txt-3 text-[10px] truncate max-w-[280px]`}>{JSON.stringify(e.row)}</td>
                     </tr>
                   ))}
@@ -594,7 +603,7 @@ export function DatasetsView(): JSX.Element {
             );
           })}
           {filtered.length === 0 && (
-            <div className="p-4"><EmptyState icon="▤" title="No datasets" hint="Upload a CSV, JSON, or NDJSON file to create your first dataset." /></div>
+            <div className="p-4"><EmptyState icon={Table2} title="No datasets" hint="Upload a CSV, JSON, or NDJSON file to create your first dataset." /></div>
           )}
         </div>
       </div>
@@ -605,7 +614,7 @@ export function DatasetsView(): JSX.Element {
           <DatasetDetail dataset={selected} />
         ) : (
           <div className="h-full flex items-center justify-center p-8">
-            <EmptyState icon="▤" title="Select a dataset" hint="Pick one from the list, or upload a file to create a new dataset." />
+            <EmptyState icon={Table2} title="Select a dataset" hint="Pick one from the list, or upload a file to create a new dataset." />
           </div>
         )}
       </div>

@@ -174,12 +174,16 @@ export function installSpotlight(viewer: Cesium.Viewer): () => void {
   let lastPaint = 0;
   let lastResolve = 0;
   const off = viewer.scene.preUpdate.addEventListener(() => {
-    if (currentId && !entityRef) {
+    // Re-resolve on a throttle: picks up a drone that appears after selection
+    // AND drops a stale ref whose entity was removed from its data source
+    // (findEntity returns undefined once gone), so we never paint a frozen
+    // ghost spotlight at the last known position.
+    if (currentId) {
       const now = performance.now();
       if (now - lastResolve > 250) {
         lastResolve = now;
         const t = findEntity(currentId);
-        if (t && isSimDrone(t, currentId)) entityRef = t;
+        entityRef = t && isSimDrone(t, currentId) ? t : null;
       }
     }
     if (!active()) return;

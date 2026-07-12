@@ -5,6 +5,7 @@
 // workspace: the same header rhythm, the same controls, the same health
 // language, in both light and dark themes. No hardcoded hex — tokens only.
 
+import type { LucideIcon } from 'lucide-react';
 import type { ChangeEvent, CSSProperties, ReactNode } from 'react';
 import { Badge, type BadgeTone } from '../shell/instruments.js';
 import type { Build } from '../state/foundry.js';
@@ -166,10 +167,10 @@ export function TypeChip({ type }: { type: string }): JSX.Element {
 }
 
 // ── empty / call-to-action state ─────────────────────────────────────────────
-export function EmptyState({ icon, title, hint, action }: { icon?: string; title: string; hint?: string; action?: ReactNode }): JSX.Element {
+export function EmptyState({ icon: Ico, title, hint, action }: { icon?: LucideIcon; title: string; hint?: string; action?: ReactNode }): JSX.Element {
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-line-2 bg-bg-1/50 px-6 py-10 text-center">
-      {icon && <div aria-hidden className="text-[22px] text-txt-4">{icon}</div>}
+      {Ico && <Ico aria-hidden className="h-6 w-6 text-txt-4" strokeWidth={1.5} />}
       <div className="text-[12px] text-txt-1">{title}</div>
       {hint && <div className="text-[11px] text-txt-3 max-w-[380px]">{hint}</div>}
       {action && <div className="mt-1">{action}</div>}
@@ -192,7 +193,7 @@ export function LogView({ lines, className = '' }: { lines: string[]; className?
                 <td className="select-none text-right align-top pr-2 pl-2 py-[1px] mono text-[10px] text-txt-4 tabular-nums w-[1%] whitespace-nowrap border-r border-line">
                   {i + 1}
                 </td>
-                <td className={`pl-2 pr-2 py-[1px] mono text-[10.5px] whitespace-pre-wrap ${err ? 'text-[#ffb3ae]' : 'text-txt-2'}`}>
+                <td className={`pl-2 pr-2 py-[1px] mono text-[10.5px] whitespace-pre-wrap ${err ? 'text-alert-fg' : 'text-txt-2'}`}>
                   {line}
                 </td>
               </tr>
@@ -295,7 +296,7 @@ export function FilterChips<T extends string>({
             className={[
               'mono text-[10px] uppercase tracking-[0.4px] px-2 py-1 rounded-sm border transition-colors',
               on
-                ? 'border-accent-line bg-accent-dim text-[#9cc2ff]'
+                ? 'border-accent-line bg-accent-dim text-accent-fg'
                 : empty
                   ? 'border-line text-txt-4'
                   : 'border-line-2 text-txt-2 hover:border-accent-line hover:text-txt-0',
@@ -303,7 +304,7 @@ export function FilterChips<T extends string>({
           >
             {o.label}
             {o.count != null && (
-              <span className={`ml-1.5 tabular-nums ${on ? 'text-[#9cc2ff]' : 'text-txt-4'}`}>
+              <span className={`ml-1.5 tabular-nums ${on ? 'text-accent-fg' : 'text-txt-4'}`}>
                 {o.count}
               </span>
             )}

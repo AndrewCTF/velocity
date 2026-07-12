@@ -61,6 +61,25 @@ def test_entity_airport_malformed_id_400(client: TestClient) -> None:
     assert r.status_code == 400
 
 
+def test_entity_airport_excludes_closed_runways_from_proxies(monkeypatch) -> None:
+    # runway_count / max_runway_length_ft are usable-capacity proxies and must
+    # skip closed runways — matching approach_capability, which filters them.
+    import asyncio
+
+    from app import places
+    from app.routes import entity
+
+    monkeypatch.setattr(places, "airport_by_code", lambda code: {"icao": "ZTST", "name": "T"})
+    monkeypatch.setattr(places, "airport_detail", lambda icao: {"runways": [
+        {"length_ft": 8000, "lighted": True},
+        {"length_ft": 14000, "closed": True},
+    ]})
+    out = asyncio.run(entity._enrich_airport("ZTST"))
+    assert out["runway_count"] == 1
+    assert out["max_runway_length_ft"] == 8000
+    assert len(out["runways"]) == 2  # full list still surfaced, closed included
+
+
 # ── port: ────────────────────────────────────────────────────────────────
 
 

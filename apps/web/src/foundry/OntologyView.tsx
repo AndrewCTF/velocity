@@ -1,3 +1,4 @@
+import { Boxes } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useFoundry, type Binding, type SyncResult } from '../state/foundry.js';
 import { Badge, Btn, Toggle } from '../shell/instruments.js';
@@ -223,7 +224,7 @@ export function OntologyView(): JSX.Element {
           <Badge tone="accent">updated {syncAll.agg.updated}</Badge>
           {syncAll.agg.skipped > 0 && <span className="text-txt-3">skipped {syncAll.agg.skipped}</span>}
           {syncAll.agg.errors.length > 0 && <Badge tone="alert">{syncAll.agg.errors.length} error(s)</Badge>}
-          <button type="button" onClick={() => setSyncAll(null)} className="ml-auto text-txt-3 hover:text-txt-0">✕</button>
+          <button type="button" onClick={() => setSyncAll(null)} className="ml-auto text-txt-3 hover:text-txt-0" aria-label="Dismiss" title="Dismiss">✕</button>
         </div>
       )}
 
@@ -234,7 +235,7 @@ export function OntologyView(): JSX.Element {
         {bindings.length === 0 && (
           <div className="lg:col-span-2">
             <EmptyState
-              icon="◈"
+              icon={Boxes}
               title="No bindings yet"
               hint="The loop: upload a dataset → author a transform → bind the output here → sync to land its rows in the ontology graph (the same graph as the live feeds)."
               action={<Btn tone="accent" onClick={() => setEditorOpen(true)}>+ New binding</Btn>}

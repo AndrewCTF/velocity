@@ -8,6 +8,7 @@ import { type CSSProperties, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { LEVELS } from '../security/classification.js';
 import { MarkingBadge } from '../security/MarkingBadge.js';
+import { InlineAlert } from '../shell/InlineAlert.js';
 
 interface ExtractedEntity {
   id: string;
@@ -121,7 +122,7 @@ export function ExtractPanel({ situationId }: { situationId?: string }) {
           Commit to graph
         </button>
       </div>
-      {error && <div style={{ color: '#ef4444' }}>{error}</div>}
+      {error && <InlineAlert tone="alert">{error}</InlineAlert>}
       {result && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

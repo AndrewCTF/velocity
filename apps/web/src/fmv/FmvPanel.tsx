@@ -15,6 +15,7 @@
 // When no sim drone is selected, it shows an empty-state message.
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { Check, X, Download } from 'lucide-react';
 import * as Cesium from 'cesium';
 import { Widget, KV, KVRow, Caveat, Btn, MicroLabel, SectionLabel, Toggle } from '../shell/instruments.js';
 import { useSelection } from '../state/stores.js';
@@ -296,25 +297,22 @@ function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapsho
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', paddingTop: '62%', background: '#05070b', borderRadius: 3, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+    <div className="relative w-full aspect-[256/159] overflow-hidden rounded-[3px] border border-white/[0.07] bg-[#05070b]">
       <canvas
         ref={canvasRef}
         width={512}
         height={318}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+        className="absolute inset-0 w-full h-full"
       />
       <button
         type="button"
         onClick={exportBurned}
+        aria-label="Export this frame with detections burned in (PNG)"
         title="Export this frame with detections burned in (PNG)"
-        style={{
-          position: 'absolute', top: 4, left: 4, zIndex: 2,
-          fontFamily: '"IBM Plex Mono", monospace', fontSize: '9px', textTransform: 'uppercase',
-          letterSpacing: '0.4px', padding: '2px 6px', color: '#cdd6e2',
-          background: 'rgba(8,10,15,0.7)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 2, cursor: 'pointer',
-        }}
+        className="absolute top-1 left-1 z-[2] inline-flex items-center gap-1 mono text-[9px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-[2px] text-txt-1 bg-black/70 border border-white/20 cursor-pointer"
       >
-        ⤓ Frame
+        <Download size={11} strokeWidth={1.75} aria-hidden />
+        Frame
       </button>
       {/* Soak heatmap (confirmed-detection density) beneath the boxes */}
       {soak && (
@@ -659,7 +657,7 @@ function DetectionTriageWidget({ dets }: { dets: Detection[] }): JSX.Element {
             const st = statusOf(d.id);
             return (
               <li key={d.id} className="flex items-center gap-2 py-1.5">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CLS_COLOR[d.cls] ?? '#fff' }} />
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CLS_COLOR[d.cls] ?? '#fff' }} aria-hidden />
                 <span className="mono text-[11px] text-txt-1 flex-1 uppercase tracking-[0.4px]">
                   {d.cls} <span className="text-txt-3">{Math.round(d.conf * 100)}%</span>
                 </span>
@@ -671,15 +669,19 @@ function DetectionTriageWidget({ dets }: { dets: Detection[] }): JSX.Element {
                       type="button"
                       onClick={() => confirm(d.id, d.bbox.x + d.bbox.w / 2, d.bbox.y + d.bbox.h / 2)}
                       className="mono text-[10px] uppercase px-1.5 py-0.5 rounded-sm border border-line text-ok hover:border-ok"
+                      aria-label={`Confirm ${d.cls} detection`}
+                      title="Confirm detection"
                     >
-                      ✓
+                      <Check size={12} strokeWidth={2} aria-hidden />
                     </button>
                     <button
                       type="button"
                       onClick={() => dismiss(d.id)}
                       className="mono text-[10px] uppercase px-1.5 py-0.5 rounded-sm border border-line text-alert hover:border-alert"
+                      aria-label={`Dismiss ${d.cls} detection`}
+                      title="Dismiss detection"
                     >
-                      ✕
+                      <X size={12} strokeWidth={2} aria-hidden />
                     </button>
                   </>
                 )}

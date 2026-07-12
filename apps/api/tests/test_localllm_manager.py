@@ -418,6 +418,256 @@ def test_get_job_unknown_returns_none() -> None:
     assert manager.get_job("does-not-exist") is None
 
 
+async def test_start_download_dedups_in_flight_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A second download of a model already in flight returns the SAME job id
+    instead of spawning a second snapshot_download into the same dir."""
+    _fake_hf_api(
+        monkeypatch,
+        [SimpleNamespace(rfilename="model-UD-Q4_K_XL.gguf", size=10, lfs=None)],
+    )
+    started = {"n": 0}
+
+    def slow_snapshot_download(**kw):
+        started["n"] += 1
+        import time as _t
+
+        _t.sleep(0.2)  # keep the job in "downloading" long enough to race a 2nd POST
+        target = Path(kw["local_dir"])
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "model-UD-Q4_K_XL.gguf").write_bytes(b"0123456789")
+
+    monkeypatch.setattr(manager, "snapshot_download", slow_snapshot_download)
+
+    job_id_1 = await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    job_id_2 = await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    assert job_id_1 == job_id_2  # deduped, not a second job
+
+    import asyncio
+
+    job = manager._JOBS[job_id_1]
+    for _ in range(200):
+        if job.status in ("done", "error"):
+            break
+        await asyncio.sleep(0.01)
+    assert job.status == "done", job.error
+    assert started["n"] == 1  # snapshot_download ran exactly once
+
+
+async def test_delete_model_refuses_while_download_running() -> None:
+    """A model whose bytes are still landing cannot be deleted (409)."""
+    key = _install_fake_model()
+    # Plant a live download job targeting the same key.
+    job = manager.Job(
+        job_id="j1",
+        repo_id="unsloth/Qwen3.5-9B-GGUF",
+        quant="UD-Q4_K_XL",
+        key=key,
+        status="downloading",
+    )
+    manager._JOBS[job.job_id] = job
+    with pytest.raises(HTTPException) as exc:
+        manager.delete_model(key)
+    assert exc.value.status_code == 409
+    # A finished job no longer blocks deletion.
+    job.status = "done"
+    manager.delete_model(key)
+    assert key not in {m["key"] for m in manager.list_installed()}
+
+
+async def test_delete_model_blocks_racing_download_via_deleting_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """delete_model must hold the key in _DELETING across the wipe so a
+    start_download racing between the running-job check and the rmdir is
+    rejected (409) instead of writing into the directory being deleted."""
+    key = _install_fake_model()
+    _fake_hf_api(
+        monkeypatch,
+        [SimpleNamespace(rfilename="model-UD-Q4_K_XL.gguf", size=10, lfs=None)],
+    )
+    # A key claimed for deletion rejects a racing start_download with 409.
+    manager._DELETING.add(key)
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+        assert exc.value.status_code == 409
+    finally:
+        manager._DELETING.discard(key)
+    # And delete_model releases the guard in finally even on wipe error.
+    boom = _install_fake_model()
+
+    def raise_wipe(k: str) -> None:
+        raise RuntimeError("wipe blew up")
+
+    monkeypatch.setattr(manager, "_delete_model_files", raise_wipe)
+    with pytest.raises(RuntimeError):
+        manager.delete_model(boom)
+    assert boom not in manager._DELETING
+
+
+async def test_start_download_concurrent_dedups_to_single_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Concurrent (not merely sequential) POSTs for the same model register
+    exactly ONE job — the check-and-reserve is atomic, so a second caller
+    racing the first through the (slow) HF preflight dedups against the queued
+    placeholder instead of spawning a second download."""
+    import asyncio
+
+    def slow_matched_files(repo_id, quant):  # noqa: ARG001
+        import time as _t
+
+        _t.sleep(0.15)  # widen the check→register window both callers race
+        return [{"filename": "model-UD-Q4_K_XL.gguf", "size": 10, "sha256": None}]
+
+    monkeypatch.setattr(manager, "_matched_files", slow_matched_files)
+
+    def fake_snapshot_download(**kw):
+        target = Path(kw["local_dir"])
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "model-UD-Q4_K_XL.gguf").write_bytes(b"0123456789")
+
+    monkeypatch.setattr(manager, "snapshot_download", fake_snapshot_download)
+
+    ids = await asyncio.gather(
+        manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL"),
+        manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL"),
+    )
+    assert ids[0] == ids[1], "concurrent starts must dedup to one job id"
+    # Only the reserved job (and no orphan placeholder) is registered.
+    key = manager.key_for("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    jobs_for_key = [j for j in manager._JOBS.values() if j.key == key]
+    assert len(jobs_for_key) == 1
+
+    job = manager._JOBS[ids[0]]
+    for _ in range(200):
+        if job.status in ("done", "error"):
+            break
+        await asyncio.sleep(0.01)
+    assert job.status == "done", job.error
+
+
+async def test_start_download_drops_placeholder_on_preflight_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 404/507 preflight failure must mark the placeholder job status='error'
+    (so a deduped second caller polling that job_id sees the failure instead of a
+    404) rather than pop it — and it must no longer count as a running job."""
+    _fake_hf_api(
+        monkeypatch,
+        [SimpleNamespace(rfilename="model-Q8_0.gguf", size=1000, lfs=None)],
+    )
+    with pytest.raises(HTTPException) as exc:
+        await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    assert exc.value.status_code == 404
+    key = manager.key_for("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    jobs = [j for j in manager._JOBS.values() if j.key == key]
+    assert len(jobs) == 1
+    assert jobs[0].status == "error"
+    assert jobs[0].error
+    # An errored placeholder is not "running": it must neither dedup a future
+    # start nor block deletion.
+    assert manager._running_job_for_key(key) is None
+
+
+def test_running_job_for_key_survives_concurrent_mutation() -> None:
+    """_running_job_for_key must not raise "dict changed size during iteration"
+    while other threads register/pop jobs — reads and writes share _JOBS_LOCK."""
+    import threading
+
+    key = manager.key_for("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    stop = threading.Event()
+
+    def churn() -> None:
+        i = 0
+        while not stop.is_set():
+            jid = f"j{i}"
+            with manager._JOBS_LOCK:
+                manager._JOBS[jid] = manager.Job(
+                    job_id=jid, repo_id="unsloth/x", quant="q", key=f"{i:012d}"[:12]
+                )
+            with manager._JOBS_LOCK:
+                manager._JOBS.pop(jid, None)
+            i += 1
+
+    t = threading.Thread(target=churn)
+    t.start()
+    try:
+        for _ in range(2000):
+            manager._running_job_for_key(key)  # must never raise
+    finally:
+        stop.set()
+        t.join()
+
+
+def test_set_active_validates_installed_under_lock() -> None:
+    """Regression for the resurrection race: set_active must reject a key that
+    is not installed even though the check now lives inside the state lock."""
+    with pytest.raises(HTTPException) as exc:
+        manager.set_active("main", "abcabcabcabc")
+    assert exc.value.status_code == 404
+
+
+async def test_download_without_upstream_sha_is_unverified(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No lfs.sha256 published → the download is accepted but flagged
+    verified:false rather than silently passing verification."""
+    _fake_hf_api(
+        monkeypatch,
+        [SimpleNamespace(rfilename="model-UD-Q4_K_XL.gguf", size=10, lfs=None)],
+    )
+
+    def fake_snapshot_download(**kw):
+        target = Path(kw["local_dir"])
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "model-UD-Q4_K_XL.gguf").write_bytes(b"0123456789")
+
+    monkeypatch.setattr(manager, "snapshot_download", fake_snapshot_download)
+
+    import asyncio
+
+    job_id = await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    job = manager._JOBS[job_id]
+    for _ in range(200):
+        if job.status in ("done", "error"):
+            break
+        await asyncio.sleep(0.01)
+    assert job.status == "done", job.error
+    assert manager.get_job(job_id)["verified"] is False
+
+
+async def test_download_with_matching_sha_is_verified(monkeypatch: pytest.MonkeyPatch) -> None:
+    import hashlib as _h
+
+    payload = b"verified-payload"
+    sha = _h.sha256(payload).hexdigest()
+    _fake_hf_api(
+        monkeypatch,
+        [
+            SimpleNamespace(
+                rfilename="model-UD-Q4_K_XL.gguf", size=len(payload), lfs=SimpleNamespace(sha256=sha)
+            )
+        ],
+    )
+
+    def fake_snapshot_download(**kw):
+        target = Path(kw["local_dir"])
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "model-UD-Q4_K_XL.gguf").write_bytes(payload)
+
+    monkeypatch.setattr(manager, "snapshot_download", fake_snapshot_download)
+
+    import asyncio
+
+    job_id = await manager.start_download("unsloth/Qwen3.5-9B-GGUF", "UD-Q4_K_XL")
+    job = manager._JOBS[job_id]
+    for _ in range(200):
+        if job.status in ("done", "error"):
+            break
+        await asyncio.sleep(0.01)
+    assert job.status == "done", job.error
+    assert manager.get_job(job_id)["verified"] is True
+
+
 # ── models_root ───────────────────────────────────────────────────────────────
 
 

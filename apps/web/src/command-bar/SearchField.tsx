@@ -149,7 +149,7 @@ export function SearchField({ viewer }: Props): JSX.Element {
       />
       {open && results.length > 0 && (
         <div
-          className="absolute z-50 top-full mt-1 left-0 w-[420px] bg-bg-1 border border-line rounded-md max-h-[60vh] overflow-y-auto"
+          className="absolute z-[var(--z-dropdown)] top-full mt-1 left-0 w-[420px] max-w-[92vw] bg-bg-1 border border-line rounded-md max-h-[60vh] overflow-y-auto"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.5)',
@@ -178,8 +178,8 @@ export function SearchField({ viewer }: Props): JSX.Element {
         </div>
       )}
       {open && q.trim() && results.length === 0 && (
-        <div className="absolute z-50 top-full mt-1 left-0 w-[420px] bg-bg-1 border border-line rounded-md px-3 py-2 micro">
-          no match
+        <div className="absolute z-[var(--z-dropdown)] top-full mt-1 left-0 w-[420px] max-w-[92vw] bg-bg-1 border border-line rounded-md px-3 py-2 micro">
+          No match
         </div>
       )}
     </div>

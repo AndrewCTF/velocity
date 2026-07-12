@@ -16,6 +16,8 @@ import { CameraCard } from './CameraCard.js';
 import { CaptureCard } from './CaptureCard.js';
 import type { Alert } from '@osint/shared';
 import { apiFetch } from '../transport/http.js';
+import { toast } from '../shell/toast.js';
+import { Flag, Crosshair, BellRing } from 'lucide-react';
 import {
   SectionLabel,
   Badge,
@@ -165,9 +167,26 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   // Sim entities are notional — there is no backend /api/entity row, so the
   // enrichment fetch would just 404. Detect via the live property bag.
   const isSim = snap?.properties?.['sim'] === true || (snap?.kind?.startsWith('sim-') ?? false);
+  // Fetch once per selected id. The callsign hint is derived from the async
+  // snapshot and typically arrives ~1s AFTER selection, so re-running on every
+  // hint change would blank the card (setEnrichment(null)) and double-fetch.
+  // Instead: fetch on id change (with the hint if it's already available), and
+  // refetch ONLY the first time a hint arrives to improve a hint-less fetch —
+  // never blanking the card in that case.
+  const enrichStateRef = useRef<{ id: string | null; hadHint: boolean }>({ id: null, hadHint: false });
   useEffect(() => {
-    setEnrichment(null);
-    if (!id || isSim) return;
+    if (!id || isSim) {
+      setEnrichment(null);
+      enrichStateRef.current = { id: null, hadHint: false };
+      return;
+    }
+    const prev = enrichStateRef.current;
+    const idChanged = prev.id !== id;
+    // Same id, and either we already fetched with a hint or none has arrived to
+    // improve the first fetch → nothing to do (no refetch, no blank).
+    if (!idChanged && (prev.hadHint || !callsignHint)) return;
+    if (idChanged) setEnrichment(null);
+    enrichStateRef.current = { id, hadHint: Boolean(callsignHint) };
     setEnrichLoading(true);
     const aborter = new AbortController();
     fetchEnrichment(id, aborter.signal, { callsign: callsignHint })
@@ -459,8 +478,9 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
 // Three operator verbs over the selected entity, each POSTing to /api/actions/{name}
 // via the shared apiFetch wrapper (Supabase Bearer / X-API-Key). The backend
 // validates the params (Pydantic), mutates the ontology + side effect, and writes
-// an audit row; we surface the receipt or the error inline (no global toast system
-// exists, so feedback is local per-button — mirrors KeysPanel's busy/err idiom).
+// an audit row; each button keeps its own busy/ok/error pill for at-a-glance
+// state and also raises a global toast (shell/toast) so the receipt/error is
+// announced once, consistently with the rest of the app.
 //
 //   flag_entity     — {target_id, note, severity}        (ontology only)
 //   nominate_target — {target_id, priority, note}        (→ target_board)
@@ -494,14 +514,16 @@ function ActionsCard({
       </p>
       <div className="flex flex-wrap gap-2 mt-1.5">
         <ActionButton
-          label="⚑ Flag"
+          label="Flag"
+          icon={<Flag size={12} strokeWidth={1.75} aria-hidden />}
           action="flag_entity"
           params={{ target_id: id, note: '', severity: 3 }}
           promoteProps={promoteProps}
           doneLabel="Flagged"
         />
         <ActionButton
-          label="◎ Nominate target"
+          label="Nominate target"
+          icon={<Crosshair size={12} strokeWidth={1.75} aria-hidden />}
           action="nominate_target"
           params={{ target_id: id, priority: 3, note: '' }}
           promoteProps={promoteProps}
@@ -509,7 +531,8 @@ function ActionsCard({
         />
         {pos && (
           <ActionButton
-            label="⌂ Add watch"
+            label="Add watch"
+            icon={<BellRing size={12} strokeWidth={1.75} aria-hidden />}
             action="add_watch"
             params={{
               target_id: id,
@@ -538,12 +561,14 @@ const PROMOTE_TRIGGER: Record<
 // (400 = Pydantic errors array; 502/503 = store unavailable text).
 function ActionButton({
   label,
+  icon,
   action,
   params,
   promoteProps,
   doneLabel,
 }: {
   label: string;
+  icon?: JSX.Element;
   action: 'flag_entity' | 'nominate_target' | 'add_watch';
   params: Record<string, unknown>;
   promoteProps: Record<string, unknown>;
@@ -586,14 +611,18 @@ function ActionButton({
         body: JSON.stringify(params),
       });
       if (!r.ok) {
+        const text = await actionErrorText(r);
         setPhase('error');
-        setMsg(await actionErrorText(r));
+        setMsg(text);
+        toast.error(`${label}: ${text}`);
         return;
       }
       setPhase('ok');
+      toast.ok(doneLabel);
     } catch {
       setPhase('error');
       setMsg('network error');
+      toast.error(`${label}: network error`);
     }
   };
 
@@ -603,17 +632,26 @@ function ActionButton({
         size="sm"
         disabled={phase === 'running'}
         onClick={() => void run()}
-        className={
+        className={`gap-1.5 ${
           phase === 'ok'
-            ? 'border-[rgba(54,211,153,0.5)] text-ok'
+            ? 'border-ok-line text-ok'
             : phase === 'error'
-              ? 'border-[rgba(255,90,82,0.5)] text-alert'
+              ? 'border-alert-line text-alert'
               : ''
-        }
+        }`}
         {...(msg ? { title: msg } : {})}
       >
-        {phase === 'running' ? '…' : phase === 'ok' ? `✓ ${doneLabel}` : label}
+        {phase === 'running' ? (
+          '…'
+        ) : (
+          <>
+            {icon}
+            {phase === 'ok' ? doneLabel : label}
+          </>
+        )}
       </Btn>
+      {/* Persistent inline error — the toast auto-dismisses after 4s, but a
+          failed governed action must stay visible until the operator retries. */}
       {phase === 'error' && msg && (
         <span className="mono text-[10px] text-alert leading-tight max-w-[140px] truncate" title={msg}>
           {msg}
@@ -787,7 +825,9 @@ function Header({
 
   return (
     <header className="flex items-start gap-3">
-      <IconTile color={cat.color}>{cat.glyph}</IconTile>
+      <IconTile color={cat.color}>
+        <span aria-hidden>{cat.glyph}</span>
+      </IconTile>
       <div className="min-w-0 flex-1">
         <div className="mono text-[10px] tracking-[0.03em] text-txt-2 truncate" title={idParts.join(' · ')}>
           {idParts.join(' · ')}

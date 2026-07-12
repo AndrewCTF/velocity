@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type CSSProperties } from 'react';
+import { X } from 'lucide-react';
 import type { TabDef } from './TabbedPanel.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { useIsMobile } from './useIsMobile.js';
@@ -263,10 +264,10 @@ export function ConsoleShell({
                   <button
                     type="button"
                     onClick={() => setActiveId(null)}
-                    className="mono text-[12px] text-txt-2 px-2 py-1"
+                    className="mono text-[12px] text-txt-2 px-2 py-1 flex items-center gap-1"
                     aria-label="Close panel"
                   >
-                    ✕ Close
+                    <X size={13} strokeWidth={1.75} aria-hidden /> Close
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto">

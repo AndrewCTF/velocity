@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { X } from 'lucide-react';
 import { Icon, type IconName } from '../normal/Icon.js';
 
 // Left icon rail (design §6.1 grammar #3/#4). A 44px column of icons; clicking one
@@ -49,7 +50,7 @@ export function LeftIconRail({
         <Icon name={it.icon} className="w-[18px] h-[18px]" />
         {on && <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-accent rounded-r-sm" />}
         {it.badge != null && it.badge > 0 && (
-          <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-[3px] rounded-full bg-alert text-white text-[10px] leading-[14px] text-center font-semibold">
+          <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-[3px] rounded-sm bg-alert text-white text-[10px] leading-[14px] text-center font-semibold">
             {it.badge > 99 ? '99+' : it.badge}
           </span>
         )}
@@ -59,8 +60,9 @@ export function LeftIconRail({
 
   return (
     <div className="relative h-full" role="toolbar" aria-label={ariaLabel}>
-      {/* 44px icon column (in flow) */}
-      <div className="w-11 h-full flex flex-col items-center bg-bg-1 py-1">
+      {/* 44px icon column (in flow). Scrolls internally when the item list is
+          taller than the viewport (short screens) so no icon is clipped. */}
+      <div className="w-11 h-full min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center bg-bg-1 py-1">
         {primary.map(btn)}
         {more.length > 0 && <div className="my-1 h-px w-6 bg-line-2" />}
         {more.map(btn)}
@@ -79,9 +81,10 @@ export function LeftIconRail({
               type="button"
               onClick={() => setOpen(null)}
               aria-label="Close panel"
-              className="text-txt-3 hover:text-txt-0 text-[13px] leading-none px-1"
+              title="Close"
+              className="text-txt-3 hover:text-txt-0 text-[13px] leading-none px-1 flex items-center"
             >
-              ✕
+              <X size={13} strokeWidth={1.75} aria-hidden />
             </button>
           </div>
           <div className="flex-1 min-h-0 overflow-auto">{active.content}</div>

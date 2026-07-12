@@ -96,7 +96,7 @@ export function InvestigatePanel(): JSX.Element {
           aria-pressed={companyMode}
           title="Search a free-text company/org name (SEC, sanctions, registries, ownership) instead of classifying the target"
           onClick={() => setCompanyMode((v) => !v)}
-          style={{ ...btnStyle, background: companyMode ? 'var(--accent, #3b82f6)' : btnStyle.background }}
+          style={{ ...btnStyle, background: companyMode ? 'var(--accent)' : btnStyle.background }}
         >
           Company
         </button>

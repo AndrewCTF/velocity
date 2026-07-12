@@ -55,7 +55,7 @@ export function KeysPanel(): JSX.Element {
   }, [load]);
 
   if (loading) return <p className="micro text-txt-3">loading keys…</p>;
-  if (error) return <p className="micro text-amber-400">{error}</p>;
+  if (error) return <p className="micro text-alert-fg">{error}</p>;
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -126,7 +126,7 @@ function KeyRow({
         <span
           className={`mono text-[10px] uppercase tracking-[0.6px] px-1.5 py-0.5 rounded-sm border ${
             provider.wired
-              ? 'text-emerald-400 border-emerald-700/60'
+              ? 'text-ok border-ok-line'
               : 'text-txt-3 border-line'
           }`}
           title={provider.wired ? 'Used by a live layer' : 'Stored securely; wiring pending'}
@@ -143,7 +143,7 @@ function KeyRow({
             type="button"
             disabled={busy}
             onClick={() => void remove()}
-            className="mono text-[10px] px-2 py-0.5 border border-line rounded-sm text-txt-2 hover:border-rose-500 hover:text-rose-400 disabled:opacity-50"
+            className="mono text-[10px] px-2 py-0.5 border border-line rounded-sm text-txt-2 hover:border-alert-line hover:text-alert-fg disabled:opacity-50"
           >
             Remove
           </button>
@@ -171,7 +171,7 @@ function KeyRow({
           </button>
         </div>
       )}
-      {err && <p className="mono text-[10px] text-rose-400 mt-1">{err}</p>}
+      {err && <p className="mono text-[10px] text-alert-fg mt-1">{err}</p>}
     </div>
   );
 }

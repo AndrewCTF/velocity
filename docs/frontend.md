@@ -31,26 +31,44 @@ Depth via layering (border-opacity + faint top-edge highlight), **not** drop sha
 
 ## 3. Design tokens
 
+Source of truth is `apps/web/src/theme/tokens.css` (dark `:root` + a
+`[data-theme='light']` override); Tailwind exposes each token as a utility in
+`tailwind.config.js`. The palette is **warm ink** — an amber-shifted dark grey
+lifted well off black, with a soft sky-steel accent — not the old cool-blue.
+
 ```css
 :root {
-  /* substrate */
-  --bg-0:#0b0e14; --bg-1:#0d1117; --bg-2:#11161f; --bg-3:#161c27;
-  --line:rgba(255,255,255,0.08); --line-2:rgba(255,255,255,0.15);
-  /* text */
-  --txt-0:#e6edf3; --txt-1:#c9d4e0; --txt-2:#8b98a8; --txt-3:#5f6b7a; --txt-4:#3a4452;
-  /* accent (interactive/selection) */
-  --accent:#2dd4bf; --accent-dim:rgba(45,212,191,0.12); --accent-line:rgba(45,212,191,0.4);
-  /* SEMANTIC — threat state ONLY */
-  --warn:#f59e0b; --warn-bg:rgba(245,158,11,0.10);
-  --alert:#ef4444; --alert-bg:rgba(239,68,68,0.12);
-  --ok:#34d399;
-  /* radii */
-  --r-sm:4px; --r-md:8px; --r-lg:12px;
+  /* substrate — warm dark ink */
+  --bg-0:#191817; --bg-1:#201f1d; --bg-2:#282623; --bg-3:#322f2b; --bg-4:#3f3b36;
+  --line:rgba(255,246,234,0.08); --line-2:rgba(255,246,234,0.15);
+  /* text — warm greys */
+  --txt-0:#f5f2ed; --txt-1:#c0b9ae; --txt-2:#8e8880; --txt-3:#6a645b; --txt-4:#494440;
+  /* accent (interactive/focus) — soft sky-steel blue */
+  --accent:#6fb1dd; --accent-dim:rgba(111,177,221,0.14); --accent-line:rgba(111,177,221,0.45);
+  --accent-fg:#9cc2ff; /* lightened accent text on --accent-dim */
+  /* SEMANTIC — threat state ONLY. Each family: base / -bg tint / -line / -fg text */
+  --warn:#f5a524; --warn-bg:rgba(245,165,36,0.12); --warn-line:rgba(245,165,36,0.38); --warn-fg:#fcd9a0;
+  --alert:#ff5a52; --alert-bg:rgba(255,90,82,0.13); --alert-line:rgba(255,90,82,0.38); --alert-fg:#ffc9c5;
+  --ok:#4ed3a1; --ok-bg:rgba(78,211,161,0.12); --ok-line:rgba(78,211,161,0.35);
+  /* magenta — selection / correlation lineage (matches globe polyline family) */
+  --mag:#e25bef; --mag-dim:rgba(226,91,239,0.14); --mag-line:rgba(226,91,239,0.5); --mag-fg:#f0a8f8;
+  --sev-low:#cdc9c0;
+  /* radii — hard-cornered, instrument-grade */
+  --r-sm:2px; --r-md:3px; --r-lg:5px;
+  /* z-scale — map<rail<dock<overlay<dropdown<modal<wizard<toast (0/100/200/400/500/600/700/800) */
   --font-mono:'IBM Plex Mono',monospace; --font-sans:'Inter',sans-serif;
 }
 ```
 
-Type scale: 10px mono (micro-labels, units), 11px (IDs, ticker), 12px (body/secondary), 13–14px (entity names, headings). Weights 400/500 only. **Sentence case everywhere** except machine codes (UNCLAS, MMSI). Letter-spacing 0.5px on mono micro-labels.
+Type scale (tokens `--fs-body/-dense/-caption`, floor 10px): 10px mono
+(micro-labels, units), 11px (IDs, ticker), 12px (body/secondary), 13–14px
+(entity names, headings). Weights 400/500/600. **Sentence case everywhere**
+except machine codes (UNCLAS, MMSI). Letter-spacing 0.5px on mono micro-labels.
+
+Shared feedback primitives live in `src/shell/`: `InlineAlert`
+(tone=info|warn|alert|ok) for inline rows and `toast.ok/warn/error()` +
+`<ToastHost/>` for transient notifications — both token-driven; do not
+hand-copy the tint classes.
 
 ---
 
