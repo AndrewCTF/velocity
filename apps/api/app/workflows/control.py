@@ -59,7 +59,11 @@ def _client() -> httpx.AsyncClient:
         _CLIENT = httpx.AsyncClient(
             headers={"User-Agent": "osint-console-workflows/0.1"},
             transport=httpx.AsyncHTTPTransport(local_address="0.0.0.0", retries=0),
-            follow_redirects=True,
+            # NEVER follow redirects: check_url validates only the ORIGINAL URL,
+            # so a 3xx to the cloud-metadata range (169.254.169.254) would
+            # otherwise bypass the link-local guard. A redirect surfaces to the
+            # caller as a 3xx status instead of being chased.
+            follow_redirects=False,
         )
     return _CLIENT
 

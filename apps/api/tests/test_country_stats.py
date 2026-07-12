@@ -107,6 +107,38 @@ def test_upstream_failure_degrades_per_series(client, monkeypatch):
     assert ind["unavailable"] is True and ind["series"] == []
 
 
+def test_wb_sem_is_per_loop_and_reused():
+    """The World Bank semaphore is one-per-loop, reused within a loop, and keyed
+    by the loop object (WeakKeyDictionary) so entries drop when a loop dies —
+    no id(loop)-reuse collision resurrecting a semaphore bound to a dead loop."""
+    import asyncio
+
+    async def get_sem():
+        return country_stats._wb_sem()
+
+    loop1 = asyncio.new_event_loop()
+    try:
+        s1a = loop1.run_until_complete(get_sem())
+        s1b = loop1.run_until_complete(get_sem())
+        assert s1a is s1b  # reused within one loop
+    finally:
+        loop1.close()
+
+    loop2 = asyncio.new_event_loop()
+    try:
+        s2 = loop2.run_until_complete(get_sem())
+        assert s2 is not s1a  # a different loop gets its own semaphore
+    finally:
+        loop2.close()
+
+    import gc
+
+    del loop1
+    gc.collect()
+    # The dead loop's entry is weakly held, so it does not linger forever.
+    assert len(country_stats._WB_SEMS) <= 1
+
+
 def test_manifest_ids_wellformed():
     for i in country_stats.WB_INDICATORS:
         assert all(c.isalnum() or c == "." for c in i["id"])

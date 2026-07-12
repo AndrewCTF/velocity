@@ -303,6 +303,46 @@ def test_check_url_link_local_allowed_when_explicitly_allowlisted(
     control.check_url("http://169.254.169.254/x")  # operator opted in → allowed
 
 
+def test_control_client_does_not_follow_redirects() -> None:
+    # check_url validates only the original URL, so the shared client must not
+    # chase a 3xx (which could hop to the link-local/metadata range).
+    assert control._client().follow_redirects is False
+
+
+@pytest.mark.asyncio
+async def test_redirect_to_metadata_is_not_followed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 302 to 169.254.169.254 must NOT be followed — the metadata endpoint is
+    never reached and its body never returned; the caller sees the raw 3xx."""
+    import httpx
+
+    hops: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        hops.append(str(request.url))
+        if request.url.host == "evil.example":
+            return httpx.Response(
+                302, headers={"location": "http://169.254.169.254/latest/meta-data/"}
+            )
+        return httpx.Response(200, text="INSTANCE-CREDENTIALS")
+
+    # Build a client whose redirect policy MIRRORS the real one, so this test
+    # fails if the follow_redirects fix is ever reverted to True.
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=control._client().follow_redirects,
+    )
+    monkeypatch.setattr(control, "_CLIENT", client)
+    try:
+        res = await control.send("GET", "http://evil.example/x", headers={})
+    finally:
+        await client.aclose()
+
+    assert res.status == 302
+    assert len(hops) == 1  # only the original host was contacted
+    assert all("169.254" not in h for h in hops)
+    assert "INSTANCE-CREDENTIALS" not in (res.text or "")
+
+
 @pytest.mark.asyncio
 async def test_dispatch_5xx_is_not_dispatched(monkeypatch: pytest.MonkeyPatch) -> None:
     # An HTTP 500 has error=None but is a rejection — dispatched must be False.

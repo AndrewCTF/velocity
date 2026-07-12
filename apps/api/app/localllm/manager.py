@@ -304,10 +304,14 @@ def get_hot() -> list[str]:
 def set_active(role: str, key: str | None) -> dict[str, str | None]:
     if role not in ("main", "selection"):
         raise HTTPException(status_code=422, detail="role must be 'main' or 'selection'")
-    if key is not None and key not in _installed_keys():
-        raise HTTPException(status_code=404, detail="unknown model key")
 
+    # Validate the key is installed INSIDE the state critical section: a
+    # concurrent delete_model drops its state refs under the same lock, so
+    # checking outside would let a delete land between validation and write and
+    # resurrect a dead key into active.main.
     def _apply(st: dict[str, Any]) -> dict[str, str | None]:
+        if key is not None and key not in _installed_keys():
+            raise HTTPException(status_code=404, detail="unknown model key")
         st["active"][role] = key
         return dict(st["active"])
 
@@ -315,10 +319,9 @@ def set_active(role: str, key: str | None) -> dict[str, str | None]:
 
 
 def set_hot(key: str, hot: bool) -> list[str]:
-    if key not in _installed_keys():
-        raise HTTPException(status_code=404, detail="unknown model key")
-
     def _apply(st: dict[str, Any]) -> list[str]:
+        if key not in _installed_keys():
+            raise HTTPException(status_code=404, detail="unknown model key")
         hot_set = set(st["hot"])
         if hot:
             hot_set.add(key)
@@ -367,31 +370,47 @@ _MAX_JOBS = 100
 
 _ACTIVE_JOB_STATUSES = ("queued", "downloading", "verifying")
 
+# `_JOBS` is read (dedup / delete-guard) and written (register / prune) from
+# worker threads (routes call these via ``asyncio.to_thread``) as well as from
+# the running loop. Without one lock over every access, a bare ``for`` over
+# ``_JOBS.values()`` can raise "dict changed size during iteration", and the
+# in-flight dedup check-then-register is a TOCTOU: two concurrent POSTs both
+# pass the check before either inserts, spawning two writers into one dir.
+_JOBS_LOCK = threading.Lock()
 
-def _running_job_for_key(key: str) -> Job | None:
-    """The in-flight download job (if any) targeting *key* — used to dedup a
-    second download of the same model and to refuse deleting a model whose
-    bytes are still landing."""
+
+def _running_job_for_key_locked(key: str) -> Job | None:
+    """``_running_job_for_key`` body; caller MUST hold ``_JOBS_LOCK``."""
     for j in _JOBS.values():
         if j.key == key and j.status in _ACTIVE_JOB_STATUSES:
             return j
     return None
 
 
+def _running_job_for_key(key: str) -> Job | None:
+    """The in-flight download job (if any) targeting *key* — used to dedup a
+    second download of the same model and to refuse deleting a model whose
+    bytes are still landing."""
+    with _JOBS_LOCK:
+        return _running_job_for_key_locked(key)
+
+
 def get_job(job_id: str) -> dict[str, Any] | None:
-    job = _JOBS.get(job_id)
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
     return job.as_dict() if job else None
 
 
 def _prune_jobs() -> None:
-    if len(_JOBS) <= _MAX_JOBS:
-        return
-    finished = sorted(
-        (j for j in _JOBS.values() if j.status in ("done", "error")),
-        key=lambda j: j.created,
-    )
-    for j in finished[: len(_JOBS) - _MAX_JOBS]:
-        _JOBS.pop(j.job_id, None)
+    with _JOBS_LOCK:
+        if len(_JOBS) <= _MAX_JOBS:
+            return
+        finished = sorted(
+            (j for j in _JOBS.values() if j.status in ("done", "error")),
+            key=lambda j: j.created,
+        )
+        for j in finished[: len(_JOBS) - _MAX_JOBS]:
+            _JOBS.pop(j.job_id, None)
 
 
 def _matched_files(repo_id: str, quant: str) -> list[dict[str, Any]]:
@@ -521,33 +540,43 @@ async def start_download(repo_id: str, quant: str) -> str:
 
     # In-flight dedup: a second POST for a model already downloading returns the
     # existing job instead of spawning a second snapshot_download into the same
-    # directory (two writers racing over the same .gguf files).
+    # directory (two writers racing over the same .gguf files). Check-and-reserve
+    # is ONE atomic step under _JOBS_LOCK — a queued placeholder is registered
+    # before the (slow) HF preflight so a racing POST dedups against it rather
+    # than passing a stale check. The placeholder is dropped if preflight fails.
     key = key_for(repo_id, quant)
-    existing = _running_job_for_key(key)
-    if existing is not None:
-        return existing.job_id
-
-    matched = await asyncio.to_thread(_matched_files, repo_id, quant)
-    if not matched:
-        raise HTTPException(
-            status_code=404,
-            detail=f"no .gguf files matching quant {quant!r} found for {repo_id}",
-        )
-    total_bytes = sum(m["size"] for m in matched)
-
-    root = models_root()
-    disk_free = await asyncio.to_thread(lambda: shutil.disk_usage(root).free)
-    if total_bytes * _DISK_PREFLIGHT_MARGIN > disk_free:
-        needed_gb = total_bytes * _DISK_PREFLIGHT_MARGIN / 1e9
-        free_gb = disk_free / 1e9
-        raise HTTPException(
-            status_code=507,
-            detail=f"insufficient disk space: need ~{needed_gb:.1f}GB free, have {free_gb:.1f}GB",
-        )
-
     job_id = uuid.uuid4().hex
-    job = Job(job_id=job_id, repo_id=repo_id, quant=quant, key=key, bytes_total=total_bytes)
-    _JOBS[job_id] = job
+    job = Job(job_id=job_id, repo_id=repo_id, quant=quant, key=key)
+    with _JOBS_LOCK:
+        existing = _running_job_for_key_locked(key)
+        if existing is not None:
+            return existing.job_id
+        _JOBS[job_id] = job
+
+    try:
+        matched = await asyncio.to_thread(_matched_files, repo_id, quant)
+        if not matched:
+            raise HTTPException(
+                status_code=404,
+                detail=f"no .gguf files matching quant {quant!r} found for {repo_id}",
+            )
+        total_bytes = sum(m["size"] for m in matched)
+
+        root = models_root()
+        disk_free = await asyncio.to_thread(lambda: shutil.disk_usage(root).free)
+        if total_bytes * _DISK_PREFLIGHT_MARGIN > disk_free:
+            needed_gb = total_bytes * _DISK_PREFLIGHT_MARGIN / 1e9
+            free_gb = disk_free / 1e9
+            raise HTTPException(
+                status_code=507,
+                detail=f"insufficient disk space: need ~{needed_gb:.1f}GB free, have {free_gb:.1f}GB",
+            )
+    except BaseException:
+        with _JOBS_LOCK:
+            _JOBS.pop(job_id, None)
+        raise
+
+    job.bytes_total = total_bytes
     sha_map = {m["filename"]: m["sha256"] for m in matched if m["sha256"]}
     asyncio.create_task(_run_job(job, sha_map))
     _prune_jobs()

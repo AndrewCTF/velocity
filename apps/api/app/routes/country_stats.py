@@ -13,6 +13,7 @@ nulls stay null, nothing interpolated.
 from __future__ import annotations
 
 import json
+import weakref
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -28,20 +29,23 @@ _TTL = 86400.0
 # api.worldbank.org rate-limits by IP and STALLS (accepts the connection,
 # never responds) after a burst — hit live 2026-07-12 firing 16 indicators in
 # parallel. Keep upstream concurrency polite; the 24h cache absorbs the rest.
-_WB_SEMS: dict[int, Any] = {}
+# Per-loop semaphore, keyed by the loop OBJECT via a WeakKeyDictionary: an
+# asyncio primitive binds to the loop it is first awaited on, so a single
+# module-global would raise "attached to a different loop" when reused across
+# event loops (e.g. per-test loops). Keying by the object (not ``id(loop)``)
+# means entries are dropped when a loop is GC'd — no unbounded leak, and no
+# id-reuse collision resurrecting a semaphore bound to a dead loop.
+_WB_SEMS: "weakref.WeakKeyDictionary[Any, Any]" = weakref.WeakKeyDictionary()
 
 
 def _wb_sem():
-    # Keyed by running loop id: an asyncio primitive binds to the loop it is
-    # first awaited on, so a single module-global would raise "attached to a
-    # different loop" when reused across event loops (e.g. per-test loops).
     import asyncio
 
-    loop = asyncio.get_event_loop()
-    sem = _WB_SEMS.get(id(loop))
+    loop = asyncio.get_running_loop()
+    sem = _WB_SEMS.get(loop)
     if sem is None:
         sem = asyncio.Semaphore(4)
-        _WB_SEMS[id(loop)] = sem
+        _WB_SEMS[loop] = sem
     return sem
 
 # Curated World Bank indicator manifest — id, human label, unit hint.
