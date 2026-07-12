@@ -13,26 +13,35 @@ keeps recording position history to your own disk for as long as you give it
 room, with a scrubber to rewind to any past moment. No account, no API key,
 nobody who can paywall, filter or cut off your archive.
 
+And once you've found something worth keeping, it stays evidence: a
+chain-of-custody **evidence locker** hashes every capture (a URL snapshot, an
+upload, a feed freeze) with SHA-256 and an append-only custody log, then rolls a
+case up into a self-contained **HTML / PPTX report** where every claim carries
+its provenance. All of it keyless, all of it on your disk.
+
 It also runs as an MCP server, so an AI agent can query the same live feeds
 instead of guessing from its training cut-off — everything it returns is
 labelled as automated output, not sold as "AI insight."
 
-**[Live demo](https://projectvelocity.org)** · [Quick start](#quick-start) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
+**[Live demo](https://projectvelocity.org)** · [Quick start](#quick-start) · [The apps](#the-apps) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#tests)
+[![Version](https://img.shields.io/badge/build-v0.9.2-blue.svg)](#phase-status)
+[![Tests](https://img.shields.io/badge/tests-1539%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
-  <img src="docs/img/tour.gif" alt="Velocity: overview, zoom, and clicking an aircraft" width="880">
+  <img src="docs/media/hero-main.jpeg" alt="Velocity: one 3D globe fusing live aircraft, vessels and incidents worldwide" width="900">
 </p>
 
-> **Before you get excited:** it's a single-analyst tool, most operational
-> state (incidents, AOIs) lives in memory and restart clears it — only the
-> position-history archive persists to disk. AIS is densest over Northern
+> **Before you get excited:** it's a single-analyst tool. Live *derived* state —
+> the current incident list, AOI selections, watch-officer briefs — lives in
+> memory and clears on restart; what you deliberately keep is durable (see
+> [Scope and limits](#scope-and-limits)): the position-history archive, the
+> local ontology store (objects, case files, situations) and the evidence
+> locker's custody chain all persist to disk. AIS is densest over Northern
 > Europe (global coverage is sparser and terrestrial-biased), and the 3D
-> satellite mode is a VRAM hog. Full caveats in
-> [Scope and limits](#scope-and-limits).
+> satellite mode is a VRAM hog.
 
 ## Prerequisites
 
@@ -76,8 +85,9 @@ out where things live; you can pull it back up whenever from **⚙ Settings**.
 
 ![Replay scrubber: coverage chip and archived-history strip over the live globe](docs/media/replay-scrubber.png)
 
-That strip along the bottom is the archive: drag it back an hour, a day, as
-far as your history goes, and the globe rewinds to that exact moment.
+That strip along the bottom is the archive — here it reads *recording since
+yesterday · 2.3 GB · 12.7 million fixes*. Drag it back an hour, a day, as far as
+your history goes, and the globe rewinds to that exact moment.
 
 > **Local (open) mode.** The compute-heavy endpoints — the LLM-backed Reports
 > tabs, recon, and OSINT enrichment — *fail closed* on a keyless box so a
@@ -86,8 +96,8 @@ far as your history goes, and the globe rewinds to that exact moment.
 > is loopback-only), so those features work out of the box and the UI shows an
 > open-mode banner. Configure `API_KEY` or Supabase in `.env` and real auth
 > takes over (the flag becomes irrelevant). For an internet-facing box use
-> `docker-compose.prod.yml`, which leaves the flag unset. Evidence capture, the
-> globe, replay, and all keyless feeds never needed the flag.
+> `docker-compose.prod.yml`, which leaves the flag unset. The globe, replay,
+> evidence capture, and all keyless feeds never needed the flag.
 
 <details>
 <summary><b>Local dev without Docker</b></summary>
@@ -103,29 +113,67 @@ Set `VITE_API_URL` if the backend isn't on `http://localhost:8000`. If you set
 rides along as `X-API-Key` on every call.
 </details>
 
+## The apps
+
+Velocity isn't one mega-dashboard; it's a workspace of twelve apps that all
+share the same selection and time context, so switching never loses the object
+you had selected. The top bar groups them:
+
+| Group | Apps | What they're for |
+| --- | --- | --- |
+| **Live** | Map · Sim | The Cesium globe (always mounted behind everything else) and a browser war-game overlay. |
+| **Analyze** | Explorer · Graph · Investigate · Targeting · Video · Country | Filter the live object store, grow a link-analysis graph, run digital OSINT (domains/people/wallets), a notional kill-chain board, FMV/ground recon, and per-country World-Bank/UN stat dossiers. |
+| **Data** | Foundry · Workflows | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor. |
+| **Product** | Reports | Case files, watch-officer briefs, dossiers, and case→report export. |
+| **3D** | City 3D | Gaussian-splat city scenes built from a keyless satellite AOI. |
+
+The rest of this README tours the ones you'll live in. Everything below is a
+real screenshot of the current build (v0.9.2), not a mockup.
+
 ## Take the tour
 
 **1. The whole planet, live.** Thousands of aircraft plus vessels, satellites,
 quakes and more on one Cesium globe. Every aircraft and ship renders as its
-category icon, coloured and rotated to its heading.
+category icon, coloured and rotated to its heading; dense areas cluster into
+count badges you can drill into.
 
-![Global view of the Velocity globe with live air traffic](docs/img/globe.png)
+![Global view of the Velocity globe with live air, sea and incident traffic](docs/media/hero-world.png)
 
-**2. Zoom anywhere.** Drag into a region and traffic, labels and coastlines
-fill in. Here's Europe and the Med: a few thousand aircraft at a glance, plus
-the layer rail on the left (toggle aircraft, vessels, jamming, quakes, …) and
-the timeline along the bottom.
+**2. Zoom anywhere, toggle everything.** Drag into a region and traffic, labels
+and coastlines fill in. The left rail is the whole intel stack in one tree — air,
+maritime, space, ground hazards, signals and 14 infrastructure layers — each
+with its live count. A right-side map toolbar adds the analyst verbs on top of
+the globe: **measure** a running great-circle distance, **area-select** a box
+and search every object inside it, **annotate** with dropped markers, or **move**
+a marker — plus one-click camera reset and zoom.
 
-![Europe and the Mediterranean, dense live air traffic](docs/img/europe.png)
+![The layer tree over a live European air picture, air/maritime/space/hazards toggles with counts](docs/media/panels/rail-layers.png)
 
-**3. Click anything.** Select an aircraft or vessel and the panel on the right
-fills with its dossier: position, a track-history sparkline, GPS integrity, and
-the raw fields, while a magenta line traces its recent track on the globe. Click
-empty space and it clears.
+**3. Click anything.** Select an aircraft or vessel and the right panel fills
+with its dossier: identity, kinematics, the flight/route, ACARS, a
+pattern-of-life baseline, GPS integrity and the raw fields — while a magenta
+line traces its recent track on the globe. An **AI assessment** block (labelled,
+and grounded in the observed track) summarises what the dossier fields imply.
+Click empty space and it all clears.
 
-![Selected aircraft with dossier panel and magenta track](docs/img/entity-panel.png)
+![Selected C-17 with full dossier panel and magenta track over Germany](docs/media/panels/inspector-selection.png)
 
-**4. Airspace, bases, ports and airports — operational context, still keyless.**
+**4. Or query the whole store at once.** The Explorer app is every live object
+in one filterable, sortable table — tens of thousands of tracks across vessels,
+aircraft and quakes, each tagged with the feed it came from and how long ago it
+was seen. Facet it, save the search, export the result to CSV.
+
+![Explorer: 69,065 live objects in one filterable table, tagged by source](docs/media/ui-explorer.png)
+
+**5. Chokepoints and AOIs, watched continuously.** A curated library of the
+world's maritime chokepoints — Hormuz, Bab-el-Mandeb, Malacca, the Taiwan
+Strait, the English Channel, undersea-cable corridors — each with live transit
+counts and the daily oil-flow figures that make it matter. Standing detections
+fire against them in the background.
+
+![Global chokepoint watch: Hormuz, Malacca, Dover and cable corridors with live transit counts](docs/media/panels/rail-chokepoints.png)
+
+**6. Airspace, bases, ports and airports — operational context, still keyless.**
 Toggle the TFR/Airspace layer and live FAA temporary flight restrictions draw as
 real polygons, coloured by reason with their altitude bands. Alongside them:
 7,183 military bases (air, naval and army, from Wikidata), NGA NAVAREA broadcast
@@ -137,39 +185,64 @@ category, and a LiveATC linkout. A basemap picker swaps between eight keyless
 map styles (Esri imagery/topo/dark, OpenTopoMap, USGS, Sentinel-2 cloudless…),
 each probed live before it's offered.
 
-![TFR polygons, military bases and the enriched port dossier over the US](docs/media/places-airspace.jpeg)
+![TFR polygons and the enriched seaport dossier over the US](docs/media/places-airspace.jpeg)
 
-**5. Space, with real physics.** ~16k satellites from CelesTrak, propagated
+**7. Space, with real physics.** ~16k satellites from CelesTrak, propagated
 in-browser with actual SGP4 orbital mechanics and enriched from SATCAT with
 owner, launch date, radar cross-section and orbit class.
 
 ![The globe wrapped in the live satellite constellation](docs/media/hero-satellites.png)
 
-**6. The watch officer writes the brief.** Every two minutes an autonomous
-watch officer fuses jamming, dark vessels, military air activity and conflict
-events into ranked, cited incidents — "vessels went dark near reported
-activity", "spoofed tracks co-located with an AIS gap" — each with a *slew to*
-button that flies the globe there. Actionable incidents are auto-promoted into
-the investigation graph, so the ontology fills itself on a fresh keyless boot
-with no operator setup.
+**8. The watch officer works the inbox.** An autonomous watch officer fuses
+jamming, dark vessels, military air activity and conflict events into ranked,
+cited alerts — GPS spoofing, jamming cells, dark-vessel candidates — each with an
+`[inferred]` reasoning line and a one-click *slew to*. It runs `detect_deception`
+and `deep_analyze` against the live picture, so the inbox fills itself on a fresh
+keyless boot with no operator setup.
 
-![Watch-officer intel brief: ranked, cited cross-domain incidents](docs/media/ui-briefs.png)
+![Watch-officer inbox: 100 alerts with spoofing/jamming/dark-vessel badges and inferred reasoning](docs/media/panels/rail-inbox.png)
 
-**7. Bring your own data — the Foundry tab.** Upload a CSV/JSON/NDJSON, shape it
+**9. …and writes the brief.** Every couple of minutes it promotes the
+convergences — "vessels went dark near reported activity", "spoofed tracks
+co-located with an AIS gap" — into ranked incident cards with a written, cited
+summary and a *slew to* button. Actionable incidents are auto-promoted into the
+investigation graph, so the ontology grows itself.
+
+![Watch-officer intel brief: ranked, cited cross-domain incidents with slew-to](docs/media/ui-briefs.png)
+
+**10. Keep it as evidence.** Anything worth keeping goes into the
+chain-of-custody **evidence locker**: capture a URL snapshot, upload a file, grab
+a screenshot, or freeze the current feed state, and each artifact is hashed with
+SHA-256, written to `./data/evidence`, and logged to an append-only custody
+chain in the local ontology store. Attach it to a situation, re-verify the hash
+any time, or roll a whole case into a signed hash-of-hashes manifest. Fully
+keyless. From there, **Reports** exports the case (see [Export](#export)) as a
+JSON bundle, a self-contained HTML report with per-claim provenance footnotes,
+or a PPTX brief — with any AI narrative confined to a clearly labelled block.
+
+**11. Tear the workspace apart.** Any right-rail panel detaches into a
+free-floating, draggable, resizable window over the globe — put the dossier on
+one screen, the layer tree on another, keep the map clear. Positions persist for
+the session.
+
+![A detached, dragged panel floating over the globe alongside the map toolbar](docs/media/ui-detach-toolbar.png)
+
+**12. Bring your own data — the Foundry tab.** Upload a CSV/JSON/NDJSON, shape it
 through a governed pipeline (13 transform steps: filter, derive, join, aggregate,
-window, pivot, dedup, cast, regex…), gate every version with data-health checks
-(freshness SLAs, schema-drift, uniqueness…), and bind it into the same ontology
-graph as the live feeds. Lineage, immutable versions with rollback, and a
-dead-letter for rows that fail a transform all come along.
+union, window, pivot, dedup, cast, sort…), gate every version with data-health
+checks (freshness SLAs, schema-drift, uniqueness…), and bind it into the same
+ontology graph as the live feeds. Lineage, immutable versions with rollback, and
+a dead-letter for rows that fail a transform all come along; the pipeline graph
+flags exactly which outputs went stale.
 
-![Foundry lineage pipeline — datasets, transforms, stale-aware DAG](docs/media/foundry-pipeline-new.png)
+![Foundry lineage pipeline — three flows, raw→transform→derived, two outputs flagged stale](docs/media/foundry-pipeline-new.png)
 
-**8. Automate it — the Workflows tab.** A node-graph editor over the same live
-feeds and ontology: wire sources (aircraft, vessels, quakes, alerts, datasets)
-through sandboxed Python/SQL/LLM transform blocks into sinks (alerts, ontology
-objects, datasets, persistent memory), then run it on a schedule. Control
-blocks can reach outward too — webhooks to your own server, or a MAVLink
-bridge for drone tasking that rehearses log-only without a vehicle.
+**13. Automate it — the Workflows tab.** A node-graph editor over the same live
+feeds and ontology: wire sources (aircraft, vessels, quakes, alerts, datasets,
+ontology, countries) through sandboxed Python/SQL/LLM transform blocks into sinks
+(alerts, ontology objects, datasets, persistent memory), then run it on a
+schedule. Control blocks can reach outward too — webhooks to your own server, or
+a MAVLink bridge for drone tasking that rehearses log-only without a vehicle.
 
 ![A Workflows DAG: live aircraft through Python and SQL into an alert](docs/media/workflows-dag.png)
 
@@ -187,14 +260,16 @@ A few things worth knowing up front, because I'd rather you read them here than
 be annoyed later:
 
 - It's built for one analyst. One optional API key, no accounts or roles.
-- Most *operational* state — incidents, AOI selections, watch-officer briefs —
-  lives in memory and clears on backend restart; durable storage for that
-  layer is Phase 2. Position history is different: it's a SQLite store on disk
-  (`./data/history.db`), and the Docker Compose volume means it now survives
-  `docker compose down` and container restarts, not just the process. The dev
-  compose sets `HISTORY_RETENTION_HOURS=48` (2 days) so that holds out of the
-  box, with no `.env` required; set `ARCHIVE_MODE=1` (the production compose
-  profile does this by default, with a 5 GB starting budget via
+- **What persists vs what clears.** Durable on disk: the position-history
+  archive (SQLite at `./data/history.db`), the local ontology store — ontology
+  objects, case files, situations (`intel/ontology_local.py`) — and the evidence
+  locker (blobs under `./data/evidence`, custody chain in the ontology store's
+  append-only `assertions` table). Volatile, and cleared on backend restart: the
+  live incident list, transient AOI selections, and generated watch-officer
+  briefs. The Docker Compose volumes mean the durable stores survive
+  `docker compose down`, not just a process restart. The dev compose sets
+  `HISTORY_RETENTION_HOURS=48` (2 days) out of the box; set `ARCHIVE_MODE=1` (the
+  production compose profile does, with a 5 GB starting budget via
   `HISTORY_DISK_BUDGET_GB`) to size the archive against your disk instead of a
   fixed time window.
 - AIS runs keyless and global (~33k vessels, MMSI-deduped across ShipXplorer,
@@ -210,6 +285,9 @@ be annoyed later:
   warning and sit idle rather than crash the backend, so you lose their extra
   coverage, not the app. Run bare-metal (`bash scripts/run-api.sh`) for full
   sidecar coverage.
+- Some **Analyze** apps are notional by design — the Targeting kill-chain board
+  and the Video/FMV sensor HUD carry a "NOTIONAL // SIMULATED" banner and are
+  driven by the Sim overlay, not a live weapons or ISR feed.
 - The 3D satellite view will eat your VRAM. The default 2D dark map runs on a
   laptop; check [System requirements](#system-requirements) before switching the
   heavy mode on.
@@ -230,17 +308,18 @@ Rough live numbers off a running backend; they move around through the day:
 | Fused incidents | correlation-driven | the correlation engine |
 | Satellites | ~16k, SATCAT-enriched | CelesTrak |
 | Airspace (TFRs) | live restriction polygons | FAA |
-| Military bases | 7,183 | Wikidata |
+| Military bases | 7,183 (+1,330 MIRTA/Wikidata) | Wikidata + DIA MIRTA |
 | Naval broadcast warnings | ~800 plotted points | NGA NAVAREA |
 | Ports | 3,804, with harbour detail | NGA World Port Index |
 | Airports | runways + ILS + frequencies + live METAR | FAA NASR, NOAA, LiveATC |
 | Earthquakes | ~250/day | USGS + EMSC |
 | News + fact-check | ~370 articles | publisher RSS |
 | Internet outages | country level | IODA, Cloudflare |
-| Submarine cables | 715 | TeleGeography |
+| Submarine cables | ~700 | TeleGeography |
 | Conflict events | ~1.5k live | GDELT, EONET, ACLED |
 | Wildfires | VIIRS hotspots | NASA FIRMS (needs a key) |
 | 3D war damage, imagery, webcams | varies | Sentinel, GIBS, OSM |
+| Per-country toolkits | 53 countries | open-data / registries / sanctions links |
 
 Optional keys, if you want more reach: AISStream for global AIS, an OpenSky
 login for a bigger ADS-B budget, `FIRMS_MAP_KEY` for fires, an ACLED key for
@@ -267,7 +346,8 @@ It exposes 22 tools over `app.mcp_server` (a representative slice below; run
 | `lookup_aircraft(ident)` | One aircraft by ICAO24 or callsign + integrity/threat assessment. |
 | `query_vessels` | AIS vessels in an area, classified; `dark_only` for dark-vessel candidates. |
 | `anomalies` | Fused report: emergencies, jamming hotspots, dark vessels, alerts + a triage threat level. |
-| `list_focus_areas` / `data_sources` | Active priority AOIs / feed health. |
+| `detect_deception` / `locate_emitter` | Flag spoofed/co-located tracks; triangulate a jamming source from degraded-integrity aircraft. |
+| `whats_changed` / `incident_history` | Delta since a timestamp; the incident timeline for an area. |
 | `deep_analyze(question, lat?, lon?)` | Gathers the relevant intel JSON and has a **reasoning model** reason over it (DeepSeek when configured, else a local Ollama model), so heavy analysis stays off the agent's context and only the conclusion returns. |
 
 Every tool returns compact, bounded JSON (counts, grids, ≤50-item samples), so
@@ -277,6 +357,12 @@ of each list plus a `<field>_total`) or **`detail='long'`** (the full bundle), s
 an agent sweeps in `short` and drills in `long`. Area-primary loading means the
 agent's region of interest stays fresh and dense even while the global firehose is
 being rate-limited; the rest of the world keeps streaming from the sticky snapshot.
+
+The same fusion powers the in-app **AI selection brief**: click an entity and
+`POST /api/ai/selection/brief` fuses its registry enrichment and pattern-of-life
+dossier into a selection-tier model prompt for a Gotham-style inference — every
+claim cites the dossier field it came from, and it degrades to the raw props if
+no model is configured.
 
 ### Install as a Claude Code plugin (skill + commands + agent)
 
@@ -346,11 +432,21 @@ error; Ollama down falls back to raw intel JSON.
 
 ## Export
 
+Two ways out, for two jobs:
+
+**The live picture.**
 `GET /api/export?fmt=geojson|csv|kml&kinds=aircraft,vessels&bbox=min_lon,min_lat,max_lon,max_lat&limit=N`
-downloads the current live picture (the same snapshot the globe renders) as
-**GeoJSON** (QGIS / kepler.gl / Leaflet), **CSV** (spreadsheets), or **KML**
-(Google Earth). `bbox` clips to a viewport; `kinds` is comma-separated (default
-`aircraft`); `limit` caps features; vessels are best-effort.
+downloads the current snapshot the globe renders as **GeoJSON** (QGIS /
+kepler.gl / Leaflet), **CSV** (spreadsheets), or **KML** (Google Earth). `bbox`
+clips to a viewport; `kinds` is comma-separated (default `aircraft`); `limit`
+caps features; vessels are best-effort.
+
+**A finished case.**
+`POST /api/situations/{id}/export?fmt=json|html|pptx` walks a situation's
+children, its sourced assertions and every attached piece of evidence into a
+shareable artifact: a self-describing **JSON** bundle, a self-contained **HTML**
+report with a provenance footnote on each claim, or a **PPTX** brief. Any AI-written
+narrative is confined to one labelled block — the rest is your cited evidence.
 
 ## System requirements
 
@@ -389,24 +485,35 @@ VPS or the same box, and it isn't the bottleneck.
 ## Stack
 
 - **Frontend**: Vite + React 18 + TypeScript + CesiumJS + MapLibre GL JS v5.24 + Tailwind + Zustand
-- **Backend**: FastAPI (Python 3.12) + httpx + websockets. Live Phase 1 state is in-process (bounded observation store + disk tile cache); the position-track replay archive persists to SQLite, on a Docker volume in Compose, with a rolling window by default or an open-ended disk-budgeted archive via `ARCHIVE_MODE`
+- **Backend**: FastAPI (Python 3.12) + httpx + websockets. Live *derived* state
+  is in-process (bounded observation store + disk tile cache); durable state —
+  the position-track replay archive, the ontology store (objects / case files /
+  situations) and the evidence locker's custody chain — persists to SQLite, on
+  Docker volumes in Compose, with a rolling window by default or an open-ended
+  disk-budgeted archive via `ARCHIVE_MODE`
 - **Agent access**: Model Context Protocol server (`app.mcp_server`, MCP SDK) + optional local Ollama analysis
-- **Data (Phase 2, planned)**: PostgreSQL 16 + PostGIS + TimescaleDB hypertables + Redis. A SQLite position store backs replay today; the observation store migrates per plan §locked-decisions #5
+- **Data (Phase 2, planned)**: PostgreSQL 16 + PostGIS + TimescaleDB hypertables + Redis. SQLite backs replay + the ontology today; the observation store migrates per plan §locked-decisions #5
 - **Infra**: Docker Compose, nginx reverse proxy
 
 ## Layout
 
 ```
 osint/
-├── apps/web/                 # React + Cesium console
+├── apps/web/                 # React + Cesium console (12-app workspace)
+│   └── src/
+│       ├── globe/            # Cesium globe, layers, map toolbar (measure/area/annotate)
+│       ├── entity-panel/     # right-rail dossier / inspector
+│       ├── evidence/         # chain-of-custody evidence locker UI
+│       ├── foundry/          # FOUNDRY surface (datasets, pipeline DAG, builds, ontology)
+│       └── shell/            # app switcher + detachable floating panels
 ├── apps/api/                 # FastAPI backend
 │   └── app/
-│       ├── intel/            # agent-facing analytics + local ontology store
+│       ├── intel/            # agent-facing analytics, local ontology store, evidence, case export
 │       ├── foundry/          # BYO-data layer: datasets, transforms, builds, checks, binding
 │       ├── routes/intel.py   # /api/intel/* deep-query JSON API
+│       ├── routes/evidence.py# /api/evidence/* capture / verify / attach / manifest
 │       ├── routes/foundry.py # /api/foundry/* datasets/pipelines/checks/bindings
 │       └── mcp_server.py     # Model Context Protocol server
-├── apps/web/src/foundry/     # FOUNDRY console surface (datasets, pipeline DAG, builds, ontology)
 ├── packages/shared/          # Shared TS types (LayerDescriptor, Observation)
 ├── docs/                     # design notes, decisions.md, foundry-plan.md
 └── infra/                    # Docker, nginx, db init
@@ -415,9 +522,11 @@ osint/
 ## Tests
 
 ```bash
+# from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 1539 passed + 1 skipped
 pnpm -r test                          # vitest (web, shared)
-cd apps/api && .venv/bin/pytest -q     # api: unit + route + intel/MCP degradation tests
 pnpm -r typecheck
+bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot
 # manual MCP integration drivers (need backend on :8000):
 #   apps/api/.venv/bin/python tests/mcp_client_check.py   # stdio handshake
 #   apps/api/.venv/bin/python tests/mcp_full_check.py     # tools end-to-end + Ollama
@@ -443,12 +552,14 @@ above). Legend: ✅ shipped · 🚧 in progress
   briefs and auto-populates the ontology graph from them, a keyless
   infra/domain OSINT layer, a places/airspace layer (FAA TFR polygons,
   military bases, NGA naval warnings, World Port Index port detail, NASR/METAR
-  airport enrichment, an 8-way keyless basemap picker), a photo-geolocation
-  pipeline (content inference + satellite 3DGS pose), a City 3D Gaussian-splat
-  viewer, optional local-GPU (Ollama) inference, and a first-run onboarding
-  tour. More sensors and deeper analysis are ongoing.
+  airport enrichment, an 8-way keyless basemap picker), a **chain-of-custody
+  evidence locker** and **case→report export** (JSON/HTML/PPTX with per-claim
+  provenance), a globe map toolbar (measure/area-select/annotate) and detachable
+  floating panels, a photo-geolocation pipeline, a City 3D Gaussian-splat viewer,
+  optional local-GPU (Ollama) inference, and a first-run onboarding tour. More
+  sensors and deeper analysis are ongoing.
 - 🚧 **Phase 5** — Foundry: a keyless, local, single-operator take on Palantir
-  Foundry's data-integration loop. Upload → transform (governed step DSL with
+  Foundry's data-integration loop. Upload → transform (governed 13-step DSL with
   lineage) → build (dependency DAG, staleness, cycle rejection) → data-health
   checks → bind into the local ontology graph. In: immutable versions +
   rollback, row-level quarantine/dead-letter, freshness/schema-drift SLAs,
@@ -461,9 +572,9 @@ above). Legend: ✅ shipped · 🚧 in progress
   datasets, ontology, countries), transforms (`op.python`/`op.sql`/`op.llm`
   sandboxed subprocesses, `op.geo`, `op.http`, `op.steps`), sinks (alert,
   ontology, dataset, persistent memory), and **external-actuation control
-  blocks** that reach out of the platform: `op.http`/`control.webhook` to any
-  server, and `control.drone`/`control.device` to command a UAV or hardware via
-  a JSON envelope. A first-class **MAVLink bridge** (`app.mavlink_bridge`,
+  blocks** that reach out of the platform: `control.webhook` to any server, and
+  `control.drone`/`control.device` to command a UAV or hardware via a JSON
+  envelope. A first-class **MAVLink bridge** (`app.mavlink_bridge`,
   ArduPilot/PX4, log-only without a vehicle so you can rehearse) ships in-repo.
   See [`docs/workflows-control-blocks.md`](./docs/workflows-control-blocks.md).
 
