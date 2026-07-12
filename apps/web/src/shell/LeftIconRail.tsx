@@ -60,8 +60,9 @@ export function LeftIconRail({
 
   return (
     <div className="relative h-full" role="toolbar" aria-label={ariaLabel}>
-      {/* 44px icon column (in flow) */}
-      <div className="w-11 h-full flex flex-col items-center bg-bg-1 py-1">
+      {/* 44px icon column (in flow). Scrolls internally when the item list is
+          taller than the viewport (short screens) so no icon is clipped. */}
+      <div className="w-11 h-full min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center bg-bg-1 py-1">
         {primary.map(btn)}
         {more.length > 0 && <div className="my-1 h-px w-6 bg-line-2" />}
         {more.map(btn)}

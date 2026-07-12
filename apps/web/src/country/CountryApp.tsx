@@ -96,6 +96,8 @@ function flagEmoji(iso2: string | undefined | null): string {
 
 // Compact number: 1.2T / 340M / 12.3 — trims trailing ".0".
 function formatCompact(v: number): string {
+  v = Number(v);
+  if (!Number.isFinite(v)) return '—';
   const abs = Math.abs(v);
   const fmt = (n: number, suffix: string): string => {
     const s = n >= 100 ? n.toFixed(0) : n.toFixed(1).replace(/\.0$/, '');

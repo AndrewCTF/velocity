@@ -319,25 +319,25 @@ def test_pin_http_url_blocks_dns_rebinding_to_metadata(monkeypatch: pytest.Monke
     """A DNS name that (re)resolves to the link-local/metadata range at request
     time is blocked by _pin_http_url even though check_url passed earlier."""
     _fake_getaddrinfo(monkeypatch, {"rebind.evil.example": "169.254.169.254"})
-    with pytest.raises(WorkflowError) as exc:
-        control._pin_http_url("http://rebind.evil.example/latest/meta-data/", {})
-    assert exc.value.status_code == 403
+    url, headers, blocked = control._pin_http_url("http://rebind.evil.example/latest/meta-data/", {})
+    assert blocked is not None and "link-local" in blocked
 
 
 def test_pin_http_url_pins_benign_name_to_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     """A benign http DNS name is pinned to its validated IP with the original
     hostname carried in the Host header, so httpx cannot re-resolve elsewhere."""
     _fake_getaddrinfo(monkeypatch, {"control.local.example": "192.168.1.50"})
-    url, headers = control._pin_http_url("http://control.local.example:9010/command", {})
+    url, headers, blocked = control._pin_http_url("http://control.local.example:9010/command", {})
+    assert blocked is None
     assert url == "http://192.168.1.50:9010/command"
-    assert headers["Host"] == "control.local.example"
+    assert headers["Host"] == "control.local.example:9010"
 
 
 def test_pin_http_url_leaves_ip_literals_and_https(monkeypatch: pytest.MonkeyPatch) -> None:
     # IP literal → nothing to rebind, untouched.
-    assert control._pin_http_url("http://192.168.1.50/x", {}) == ("http://192.168.1.50/x", {})
+    assert control._pin_http_url("http://192.168.1.50/x", {}) == ("http://192.168.1.50/x", {}, None)
     # https → hostname preserved for cert validation (documented residual risk).
-    assert control._pin_http_url("https://host.example/x", {}) == ("https://host.example/x", {})
+    assert control._pin_http_url("https://host.example/x", {}) == ("https://host.example/x", {}, None)
 
 
 def test_pin_http_url_skips_allowlisted_host(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -345,7 +345,18 @@ def test_pin_http_url_skips_allowlisted_host(monkeypatch: pytest.MonkeyPatch) ->
     assert control._pin_http_url("http://trusted.example/x", {}) == (
         "http://trusted.example/x",
         {},
+        None,
     )
+
+
+@pytest.mark.asyncio
+async def test_send_turns_rebind_block_into_row_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rebind detected at send time fails just that row (HttpResult error),
+    preserving send's never-raises / per-row isolation contract."""
+    _fake_getaddrinfo(monkeypatch, {"rebind.evil.example": "169.254.169.254"})
+    res = await control.send("GET", "http://rebind.evil.example/x", headers={})
+    assert res.ok is False and res.status is None
+    assert res.error is not None and "link-local" in res.error
 
 
 def test_control_client_does_not_follow_redirects() -> None:

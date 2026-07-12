@@ -36,6 +36,7 @@ endpoints this guard targets are http, not https.
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import os
 import socket
@@ -175,7 +176,7 @@ def auth_headers(auth_env: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _pin_http_url(url: str, headers: dict[str, str]) -> tuple[str, dict[str, str]]:
+def _pin_http_url(url: str, headers: dict[str, str]) -> tuple[str, dict[str, str], str | None]:
     """Close the DNS-rebinding gap for plain ``http://`` DNS-name URLs.
 
     ``check_url`` resolved the host once at validation time, but ``httpx``
@@ -186,41 +187,48 @@ def _pin_http_url(url: str, headers: dict[str, str]) -> tuple[str, dict[str, str
     header. IP-literal hosts (nothing to rebind) and allowlisted hosts (operator
     opt-in) pass through untouched; ``https://`` passes through so TLS cert
     validation still sees the hostname (residual risk documented in the module
-    docstring)."""
+    docstring).
+
+    Never raises: a detected rebind is returned as the third element so ``send``
+    can turn it into a per-row ``HttpResult(error=...)`` instead of aborting the
+    whole run (the ``send`` never-raises contract). Runs blocking DNS, so call
+    it off the event loop (``asyncio.to_thread``)."""
     parts = urlsplit(url)
     if parts.scheme != "http" or not parts.hostname:
-        return url, headers
+        return url, headers, None
     try:
         ipaddress.ip_address(parts.hostname)
-        return url, headers  # already an IP literal — nothing to rebind
+        return url, headers, None  # already an IP literal — nothing to rebind
     except ValueError:
         pass
     allow = _allow_hosts()
     if allow is not None and parts.hostname.lower() in allow:
-        return url, headers  # operator explicitly trusts this host
+        return url, headers, None  # operator explicitly trusts this host
     try:
         resolved = sorted({ai[4][0] for ai in socket.getaddrinfo(parts.hostname, None)})
     except OSError:
-        return url, headers  # unresolvable — let the request itself fail
+        return url, headers, None  # unresolvable — let the request itself fail
     for addr in resolved:
         try:
             ip = ipaddress.ip_address(addr)
         except ValueError:
             continue
         if isinstance(ip, ipaddress.IPv4Address) and ip in ipaddress.ip_network("169.254.0.0/16"):
-            raise WorkflowError(
-                403,
+            return (
+                url,
+                headers,
                 f"host {parts.hostname!r} resolved to the link-local/metadata range "
                 f"({addr}); blocked as a DNS-rebinding attempt",
             )
     pin = next((a for a in resolved if ":" not in a), resolved[0] if resolved else None)
     if pin is None:
-        return url, headers
+        return url, headers, None
     netloc = f"[{pin}]" if ":" in pin else pin
     if parts.port is not None:
         netloc = f"{netloc}:{parts.port}"
     pinned = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
-    return pinned, {**headers, "Host": parts.hostname}
+    host_header = parts.hostname if parts.port is None else f"{parts.hostname}:{parts.port}"
+    return pinned, {**headers, "Host": host_header}, None
 
 
 # ── the one network call (monkeypatched in tests) ────────────────────────────
@@ -258,7 +266,11 @@ async def send(
     transport/timeout error becomes ``HttpResult(error=...)`` so a single bad
     endpoint fails just its row, not the whole run. This is the seam tests
     replace to assert envelopes without real network."""
-    url, headers = _pin_http_url(url, headers)
+    # Off-thread: _pin_http_url does blocking DNS; a hanging resolver must stall
+    # only this row, never the event loop.
+    url, headers, blocked = await asyncio.to_thread(_pin_http_url, url, headers)
+    if blocked is not None:
+        return HttpResult(status=None, ok=False, json=None, text="", error=blocked)
     try:
         resp = await _client().request(
             method.upper(),
@@ -303,7 +315,7 @@ async def request(
     shared per-run budget, then sends. Returns a normalized dict the block
     parses into rows."""
     method = method.upper()
-    check_url(url)
+    await asyncio.to_thread(check_url, url)  # blocking DNS off the event loop
     if (preview and method not in SAFE_METHODS) or (
         method not in SAFE_METHODS and not control_enabled()
     ):
@@ -346,7 +358,7 @@ async def dispatch(
     Dry-run on preview OR when the kill-switch is off — the envelope is still
     returned so the editor shows exactly what WOULD be sent. Spends one unit of
     the shared per-run budget."""
-    check_url(url)
+    await asyncio.to_thread(check_url, url)  # blocking DNS off the event loop
     if preview or not control_enabled():
         return {
             "dispatched": False,

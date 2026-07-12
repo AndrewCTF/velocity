@@ -607,6 +607,7 @@ async def start_download(repo_id: str, quant: str) -> str:
         with _JOBS_LOCK:
             job.status = "error"
             job.error = str(getattr(exc, "detail", None) or exc)
+        _prune_jobs()
         raise
 
     job.bytes_total = total_bytes
