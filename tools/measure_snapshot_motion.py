@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure how many aircraft in the live snapshot actually MOVE — the ground
-truth for the "planes don't move" report. Run on the box that serves prod (the
-droplet) via the api venv, from apps/api:
+truth for the "planes don't move" report. Run on the box that serves prod via
+the api venv, from apps/api:
 
     cd apps/api && .venv/bin/python ../../tools/measure_snapshot_motion.py
 

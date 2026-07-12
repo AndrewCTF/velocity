@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import * as Cesium from 'cesium';
 import { useAppView, APP_META } from '../state/appView.js';
 import { InvestigationCanvas } from '../graph/InvestigationCanvas.js';
+import { InvestigatePanel } from '../osint/InvestigatePanel.js';
 import { TargetKanbanPanel } from '../target-kanban/TargetKanbanPanel.js';
 import { VideoApp } from '../fmv/VideoApp.js';
 import { ReportsApp } from '../reports/ReportsApp.js';
@@ -25,6 +26,9 @@ export function AppSurface({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
       break;
     case 'graph':
       node = <InvestigationCanvas />;
+      break;
+    case 'investigate':
+      node = <InvestigatePanel />;
       break;
     case 'targeting':
       node = <TargetKanbanPanel viewer={viewer} />;

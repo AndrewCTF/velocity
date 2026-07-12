@@ -74,6 +74,7 @@ from app.routes import cyber as cyber_routes
 from app.routes import entity as entity_routes
 from app.routes import eq as eq_routes
 from app.routes import events as events_routes
+from app.routes import evidence as evidence_routes
 from app.routes import export as export_routes
 from app.routes import extract as extract_routes
 from app.routes import firms as firms_routes
@@ -461,6 +462,7 @@ def create_app() -> FastAPI:
     app.include_router(news_routes_mod.router)
     app.include_router(history_routes.router)
     app.include_router(export_routes.router)
+    app.include_router(evidence_routes.router)
     app.include_router(keys_routes.router)
     app.include_router(alert_rules_routes.router)
     app.include_router(targets_routes.router)

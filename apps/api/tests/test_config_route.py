@@ -21,6 +21,7 @@ def test_returns_runtime_config_with_camel_case_keys(client: TestClient) -> None
         "features",
         "classification",
         "buildId",
+        "openMode",
     }
     assert body["cesiumIonToken"] == "test-ion-token"
     # googleApiKey is a client-side Maps key (referrer-restricted), like the ion
@@ -29,6 +30,12 @@ def test_returns_runtime_config_with_camel_case_keys(client: TestClient) -> None
     assert body["classification"] == "UNCLAS"
     assert body["buildId"] == "test"
     assert body["features"] == {"enableGoogle3D": False}
+    # openMode = keyless AND ALLOW_UNAUTHENTICATED. The conftest env sets
+    # ALLOW_UNAUTHENTICATED=1 with no API_KEY/Supabase, so it is deterministically
+    # True — assert the VALUE, not just the type, or an inverted computation
+    # (dropping the `not`) would silently pass while the UI's open-mode banner
+    # stops showing on a public box.
+    assert body["openMode"] is True
 
 
 def test_features_toggle_is_present_even_when_false(client: TestClient) -> None:

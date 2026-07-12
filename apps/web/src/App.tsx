@@ -35,7 +35,6 @@ import { IntelPanel } from './entity-panel/IntelPanel.js';
 import { InvestigationCanvas } from './graph/InvestigationCanvas.js';
 import { useInvestigation } from './graph/investigationStore.js';
 import { ExtractPanel } from './extract/ExtractPanel.js';
-import { InvestigatePanel } from './osint/InvestigatePanel.js';
 import { CountriesPanel } from './osint/CountriesPanel.js';
 import { CollabPanel } from './collab/CollabPanel.js';
 import { HistogramPanel } from './explorer/HistogramPanel.js';
@@ -47,6 +46,7 @@ import { FmvPanel } from './fmv/FmvPanel.js';
 import { Timeline } from './timeline/Timeline.js';
 import { GlobeCanvas } from './globe/GlobeCanvas.js';
 import { GlobeOverlays } from './globe/GlobeOverlays.js';
+import { GlobeToolbar } from './globe/GlobeToolbar.js';
 import { GlobeTheater } from './globe/GlobeTheater.js';
 import { AgentConsole } from './command-bar/AgentConsole.js';
 import { LayerRegistry } from './registry/LayerRegistry.js';
@@ -70,7 +70,6 @@ import { ErrorBoundary } from './shell/ErrorBoundary.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext.js';
 import { isSupabaseConfigured } from './transport/supabase.js';
-import { resetToTopDown } from './globe/camera.js';
 import { apiFetch, backendWsUrl, withWsKey } from './transport/http.js';
 
 export function App(): JSX.Element {
@@ -189,7 +188,6 @@ export function App(): JSX.Element {
       { id: 'chokepoints', icon: 'route', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} />, group: 'more' },
       { id: 'acars', icon: 'signal', label: 'ACARS', content: <AcarsPanel />, group: 'more' },
       { id: 'extract', icon: 'file', label: 'Extract', content: <ExtractPanel />, group: 'more' },
-      { id: 'investigate', icon: 'search', label: 'Investigate', content: <InvestigatePanel />, group: 'more' },
       { id: 'countries', icon: 'globe', label: 'Countries', content: <CountriesPanel />, group: 'more' },
       { id: 'allsources', icon: 'sliders', label: 'All sources', content: <LayerRail registry={registry} viewer={viewer} />, group: 'more' },
       { id: 'filters', icon: 'filter', label: 'Filters', content: <HistogramPanel viewer={viewer} />, group: 'more' },
@@ -255,9 +253,10 @@ export function App(): JSX.Element {
                   block globe interaction. */}
               <GlobeTheater viewer={viewer} />
               <GlobeOverlays viewer={viewer} />
-              <GlobeControls viewer={viewer} />
+              <GlobeToolbar viewer={viewer} />
               <CopControl viewer={viewer} registry={registry} />
               <AuthNotice />
+              <OpenModeBanner open={Boolean(config.openMode)} />
               <AgentConsole viewer={viewer} />
               <Omnibar viewer={viewer} registry={registry} />
               <ContextMenu />
@@ -281,25 +280,8 @@ export function App(): JSX.Element {
     </>
   );
 }
-
-// Floating globe controls. A reset-to-top-down button (removes camera tilt /
-// "side view" without losing the analyst's location) — the most-requested
-// orientation control.
-export function GlobeControls({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | null {
-  if (!viewer) return null;
-  return (
-    <div className="absolute bottom-3 right-3 z-[var(--z-dock)] flex flex-col gap-1.5">
-      <button
-        type="button"
-        title="Reset to top-down (nadir) view"
-        onClick={() => resetToTopDown(viewer)}
-        className="mono text-[10px] px-2 py-1 border border-line rounded-sm bg-bg-1/90 text-txt-1 hover:border-accent-line hover:text-accent"
-      >
-        ⊕ Top-down
-      </button>
-    </div>
-  );
-}
+// (Reset-to-top-down now lives in the right-side GlobeToolbar alongside the map
+// tools, replacing the old standalone bottom-right GlobeControls button.)
 
 // ── Shared named COP (common operational picture) — Track D2 ────────────────
 // Save the current operational picture (camera viewport + enabled layers +
@@ -621,6 +603,51 @@ function wsBase(): string {
 // of claiming the globe is blank. Only renders when auth is configured AND the
 // first session check has resolved to "no user".
 const FEED_FRESH_MS = 60_000;
+
+// Open-mode banner: shown when the backend is keyless AND ALLOW_UNAUTHENTICATED
+// is on (the single-box docker default), so the compute/LLM endpoints are served
+// to anyone. Dismissible per-browser — the point is a one-time "you're running
+// open" heads-up, not a nag. An operator who wanted auth sets API_KEY/Supabase.
+const OPEN_MODE_DISMISS_KEY = 'velocity.openModeDismissed';
+
+export function OpenModeBanner({ open }: { open: boolean }): JSX.Element | null {
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(OPEN_MODE_DISMISS_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  if (!open || dismissed) return null;
+  const close = (): void => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(OPEN_MODE_DISMISS_KEY, '1');
+    } catch {
+      /* storage disabled — banner just reappears next load */
+    }
+  };
+  return (
+    <div className="absolute inset-x-0 bottom-2 z-[var(--z-dock)] flex justify-center px-3 pointer-events-none">
+      <div className="pointer-events-auto flex items-center gap-2 bg-bg-1/95 border border-warn rounded-sm px-3 py-1.5 shadow-lg max-w-xl">
+        <span className="mono text-[10px] uppercase tracking-[0.6px] text-warn">Open mode</span>
+        <span className="text-[11px] text-txt-2 leading-snug">
+          Compute/LLM endpoints are served without authentication (keyless +
+          ALLOW_UNAUTHENTICATED). Fine for a trusted local box; set API_KEY or Supabase
+          before exposing it.
+        </span>
+        <button
+          type="button"
+          onClick={close}
+          className="mono text-[10px] text-txt-3 hover:text-txt-0 px-1"
+          aria-label="Dismiss open-mode banner"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function AuthNotice(): JSX.Element | null {
   const { user, loading } = useAuth();

@@ -59,6 +59,60 @@ from app.ingest.opensky import OpenSkyTokenManager, fetch_states, states_to_geoj
 from app.routes.aviation import _token_manager
 from app.upstream import cache, get_client
 
+# orjson serializes the ~14k-feature world blob ~9x faster than stdlib json
+# (measured 43ms -> 5ms on a real snapshot), which matters because
+# `_build_hot_blob` re-serializes it every ~1s in a worker thread on a 2-vCPU
+# host. This is NOT the ORJSONResponse path that pyproject dropped — we build
+# raw bytes by hand here. Optional so the app still boots if the wheel is
+# absent (test envs, odd platforms); `_dumps_compact` falls back to json, and
+# also falls back per-call if orjson rejects a value stdlib json would accept.
+try:
+    import orjson  # type: ignore
+except ImportError:  # pragma: no cover - orjson is a declared dep in prod
+    orjson = None  # type: ignore
+
+# isal (Intel ISA-L) compresses the world blob ~4-9x faster than stdlib gzip
+# (55ms -> ~10ms at level 2). Its max level (3) can't match gzip level 6's
+# ratio, so the payload grows ~19% (915KB -> ~1.09MB); the operator accepted
+# that trade — this box is CPU-bound harder than it is egress-bound. Output is
+# a standard RFC-1952 gzip stream, so Content-Encoding: gzip and the frontend
+# inflater are unchanged. Optional with a stdlib-gzip fallback.
+try:
+    from isal import igzip as _igzip  # type: ignore
+except ImportError:  # pragma: no cover - isal is a declared dep in prod
+    _igzip = None  # type: ignore
+
+# isal level 2 is the accepted CPU/size balance (see benchmark in commit msg).
+_BLOB_GZIP_LEVEL = 2
+
+
+def _dumps_compact(obj: Any) -> bytes:
+    """Serialize to compact JSON bytes, orjson when available else stdlib json.
+
+    orjson emits the tightest separators by default (no spaces), matching
+    json.dumps(separators=(",", ":")). Byte content is equivalent for our
+    plain-dict FeatureCollection, so the blob/ETag semantics are unchanged.
+    """
+    if orjson is not None:
+        try:
+            return orjson.dumps(obj)
+        except TypeError:
+            pass  # non-finite float / exotic type — let stdlib json handle it
+    return json.dumps(obj, separators=(",", ":")).encode()
+
+
+def _gzip_blob(raw: bytes) -> bytes:
+    """Gzip the world blob with isal when available, else stdlib gzip level 6.
+
+    Both emit standard gzip; only speed/ratio differ. The fallback keeps the
+    original 915KB payload if isal is absent (test envs), so behavior degrades
+    gracefully rather than changing size unpredictably.
+    """
+    if _igzip is not None:
+        return _igzip.compress(raw, compresslevel=_BLOB_GZIP_LEVEL)
+    return gzip.compress(raw, compresslevel=6)
+
+
 router = APIRouter(tags=["adsb"])
 
 # Cap concurrent upstream ADS-B fetches across the global fan-out. Cell-level
@@ -1516,8 +1570,8 @@ def _build_hot_blob(snap: dict[str, Any]) -> tuple[bytes, str]:
     guardrail (tests/test_adsb_viewport_stable.py) is unchanged — only relocated.
     """
     decimated = viewport_filter(snap, None, None, None, None, _WORLD_LIMIT)
-    raw = json.dumps(decimated, separators=(",", ":")).encode()
-    blob = gzip.compress(raw, compresslevel=6)
+    raw = _dumps_compact(decimated)
+    blob = _gzip_blob(raw)
     etag = hashlib.md5(blob).hexdigest()  # noqa: S324 — cache validator, not security
     return blob, etag
 

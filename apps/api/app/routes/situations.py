@@ -25,15 +25,17 @@ action.
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app import llm
 from app.config import get_settings
+from app.intel import case_export
 from app.intel.ontology import Link, Object, get_registry
 from app.keys import UserCtx, current_user_or_local
 
@@ -237,6 +239,63 @@ async def link_child(
     # while the link above carries the provenance of *why* it was pulled in.
     await reg.assert_props(body.dst, {}, source="analyst:situation")
     return link
+
+
+# ── case → report export (P2) ─────────────────────────────────────────────────
+
+
+class ExportIn(BaseModel):
+    fmt: Literal["html", "json", "pptx"] = "html"
+    # Optional, already human-edited AI draft. Rendered ONLY inside a visibly
+    # AI-labeled block (case_export.AI_LABEL) — the accepted-AI-use red line.
+    narrative: str | None = Field(default=None, max_length=40000)
+
+
+_EXPORT_MEDIA = {
+    "html": "text/html; charset=utf-8",
+    "json": "application/json",
+    "pptx": case_export._PPTX_MEDIA,
+}
+_EXPORT_EXT = {"html": "html", "json": "json", "pptx": "pptx"}
+
+
+@router.post("/api/situations/{sit_id:path}/export")
+async def export_situation(
+    sit_id: str, body: ExportIn, ctx: UserCtx = Depends(current_user_or_local)
+) -> Response:
+    """Walk a situation's linked children + sourced assertions + attached
+    evidence into a shareable case report. Every claim carries a provenance
+    footnote; every exhibit is content-addressed. See app/intel/case_export.py."""
+    reg = get_registry(ctx, get_settings())
+    obj = await reg.get(sit_id)
+    if obj is None or (obj.props or {}).get("kind") != _SITUATION_KIND:
+        raise HTTPException(status_code=404, detail="situation not found")
+
+    bundle = await case_export.build_bundle(ctx, sit_id, settings=get_settings())
+    # ASCII-safe slug for the Content-Disposition filename (a client-set id with
+    # non-Latin-1 chars would otherwise raise UnicodeEncodeError at the ASGI
+    # layer → HTTP 500). Ids are normally ascii; this just guarantees it.
+    slug = re.sub(r"[^A-Za-z0-9._-]", "_", sit_id) or "case"
+
+    if body.fmt == "json":
+        content: str | bytes = json.dumps(bundle, ensure_ascii=False, indent=2)
+    elif body.fmt == "html":
+        content = case_export.render_html(bundle, narrative=body.narrative)
+    else:  # pptx
+        pptx = case_export.render_pptx(bundle, narrative=body.narrative)
+        if pptx is None:
+            raise HTTPException(status_code=503, detail="pptx unavailable")
+        content = pptx
+
+    return Response(
+        content=content,
+        media_type=_EXPORT_MEDIA[body.fmt],
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="case-{slug}.{_EXPORT_EXT[body.fmt]}"'
+            )
+        },
+    )
 
 
 # ── grounded COA proposal ─────────────────────────────────────────────────────────

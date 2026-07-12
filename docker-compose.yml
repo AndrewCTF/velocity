@@ -28,6 +28,15 @@ services:
       # up` with no .env copied — the code default is 168h (7 days); 48h only
       # applies automatically if .env.example got copied to .env.
       HISTORY_RETENTION_HOURS: 48
+      # Single-box DEV default: serve the compute/LLM endpoints on a keyless
+      # boot instead of 503-ing them. Without this the advertised quickstart
+      # hits dead Reports tabs and any LLM-backed feature. Safe here because
+      # this stack is loopback-only and explicitly "do NOT expose to the
+      # internet" (see banner above). A .env with API_KEY/Supabase makes this
+      # irrelevant (real auth takes over). The UI shows an open-mode banner.
+      # For a hardened deployment (docker-compose.prod.yml) leave it UNSET so
+      # compute endpoints fail closed until a credential is configured.
+      ALLOW_UNAUTHENTICATED: 1
     volumes:
       # bind-mount source so code changes hot-reload without rebuilding the image
       - ./apps/api/app:/srv/app

@@ -17,7 +17,8 @@ import { CaptureCard } from './CaptureCard.js';
 import type { Alert } from '@osint/shared';
 import { apiFetch } from '../transport/http.js';
 import { toast } from '../shell/toast.js';
-import { Flag, Crosshair, BellRing } from 'lucide-react';
+import { Flag, Crosshair, BellRing, ShieldCheck } from 'lucide-react';
+import { useEvidence } from '../evidence/evidenceStore.js';
 import {
   SectionLabel,
   Badge,
@@ -46,6 +47,7 @@ import { SituationPanel } from '../situations/SituationPanel.js';
 import { OsintEntityPanel } from '../osint/OsintEntityPanel.js';
 import { useProjection } from '../globe/ProjectionLayer.js';
 import { useFov } from '../globe/FovLayer.js';
+import { useSettings } from '../state/settings.js';
 import { resolveAircraftFamily, aircraftSilhouette, vesselSilhouette } from './silhouettes.js';
 import { useChip } from '../imagery/chipStore.js';
 import { useInvestigation } from '../graph/investigationStore.js';
@@ -82,6 +84,9 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   const [enrichment, setEnrichment] = useState<Enrichment | null>(null);
   const [enrichLoading, setEnrichLoading] = useState(false);
   const [track, setTrack] = useState(tracks.get(id ?? ''));
+  // Client-side layout pref: whether the AI-assessment card sits at the top of
+  // the card stack (seen first) or the bottom. Rendered in exactly one place.
+  const aiPosition = useSettings((s) => s.selectionAiPosition);
   // Receipt-side freshness: wall-clock ms of the last time this entity's fix
   // (position or observation time) actually CHANGED on our side — that is the
   // honest "Last refresh", distinct from the AIS/ADS-B observation time.
@@ -229,6 +234,18 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
     return <OsintEntityPanel id={id} />;
   }
 
+  // The AI-assessment card renders in exactly one slot, chosen by the
+  // selectionAiPosition preference (top under the profile, or bottom of the
+  // stack). Defined once here so both slots stay identical.
+  const aiCard = (
+    <AiAssessmentCard
+      id={id}
+      kind={snap?.kind ?? ''}
+      properties={snap?.properties ?? {}}
+      {...(snap?.position ? { altM: snap.position.alt } : {})}
+    />
+  );
+
   return (
     <div className="p-4 space-y-5">
       {isSim && (
@@ -240,6 +257,8 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
         enrichment={enrichment}
         lastRefreshMs={lastRefreshRef.current}
       />
+
+      {aiPosition === 'top' && aiCard}
 
       <ProfileCard enrichment={enrichment} snap={snap} />
 
@@ -389,13 +408,6 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
 
       <PatternOfLifeCard id={id} kind={snap?.kind ?? ''} viewer={viewer ?? null} />
 
-      <AiAssessmentCard
-        id={id}
-        kind={snap?.kind ?? ''}
-        properties={snap?.properties ?? {}}
-        {...(snap?.position ? { altM: snap.position.alt } : {})}
-      />
-
       <DossierNarrativeCard id={id} kind={snap?.kind ?? ''} />
 
       {snap?.kind === 'vessel' && (
@@ -470,6 +482,8 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
             }
           : {})}
       />
+
+      {aiPosition === 'bottom' && aiCard}
     </div>
   );
 }
@@ -545,8 +559,62 @@ function ActionsCard({
             doneLabel="Watching"
           />
         )}
+        <PreserveEvidenceButton id={id} snap={snap} />
       </div>
     </section>
+  );
+}
+
+// "Preserve as evidence" — notarize a moment of the live world (roadmap P1).
+// Freezes the selected entity's current state (id + live props + position) into
+// a content-addressed, hash-verified evidence object. Unique to a self-hosted
+// archive: nobody else can attest to a moment of the live feed from your store.
+function PreserveEvidenceButton({
+  id,
+  snap,
+}: {
+  id: string;
+  snap: PanelSnapshot | null;
+}): JSX.Element {
+  const [phase, setPhase] = useState<ActionPhase>('idle');
+  const freeze = useEvidence((s) => s.captureFeedFreeze);
+
+  useEffect(() => {
+    setPhase('idle');
+  }, [id]);
+
+  const run = async (): Promise<void> => {
+    setPhase('running');
+    const snapshot: Record<string, unknown> = {
+      ...(snap?.properties ?? {}),
+      name: snap?.name ?? null,
+      kind: snap?.kind ?? null,
+      position: snap?.position ?? null,
+      frozen_at: new Date().toISOString(),
+    };
+    const obj = await freeze(id, snapshot, 'preserved from globe selection');
+    if (obj) {
+      setPhase('ok');
+      toast.ok('Preserved as evidence');
+    } else {
+      setPhase('error');
+      toast.error('Preserve failed');
+    }
+  };
+
+  return (
+    <Btn
+      size="sm"
+      tone="accent"
+      disabled={phase === 'running'}
+      onClick={() => void run()}
+      title="Notarize this entity's current live state as hash-verified evidence"
+    >
+      <span className="inline-flex items-center gap-1">
+        <ShieldCheck size={12} strokeWidth={1.75} aria-hidden />
+        {phase === 'ok' ? 'Preserved' : phase === 'running' ? 'Preserving…' : 'Preserve'}
+      </span>
+    </Btn>
   );
 }
 

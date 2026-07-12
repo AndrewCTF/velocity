@@ -1,17 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl, { type Map as MapLibreMap, type LngLatBoundsLike } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Protocol } from 'pmtiles';
-import { layers as pmLayers, namedFlavor } from '@protomaps/basemaps';
 import type { LayerDescriptor } from '@osint/shared';
-
-// Register the pmtiles:// protocol ONCE so MapLibre can range-read a local
-// PMTiles archive (no tile server, no per-tile request). BSD-3, fully offline.
-maplibregl.addProtocol('pmtiles', new Protocol().tile);
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useFeeds, useSelection } from '../state/stores.js';
 import { useAoi } from '../state/aoi.js';
-import { apiFetch } from '../transport/http.js';
+import { apiFetch, backendUrl } from '../transport/http.js';
 import { tracks } from '../intel/tracks.js';
 
 interface Props {
@@ -21,37 +15,36 @@ interface Props {
 // Minimal MapLibre v5 mirror. Same LayerRegistry, but rendering via MapLibre's
 // own GeoJSON source / layer primitives. We poll each GeoJSON endpoint with
 // the same TTL the registry advertises and update the source data in place
-// (no removeAll churn). Carto Dark Matter style via vector tiles is too
-// heavy here, so we use the same /tiles/basemap raster tiles wired as a
-// MapLibre raster source.
+// (no removeAll churn).
 export function MapLibreCanvas({ registry }: Props): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [ready, setReady] = useState(false);
   const activeAoi = useAoi((s) => s.active);
 
-  // High-fidelity dark VECTOR basemap from a LOCAL PMTiles file (Protomaps planet
-  // region, ODbL/OSM) rendered client-side with the Protomaps dark style (BSD-3).
-  // Crisp at every zoom from one local file; zero external/tile-server requests.
-  // ponytail: label (symbol) layers dropped — they need local glyph PBFs to stay
-  // offline; geometry (land/water/roads/buildings) renders crisp without glyphs.
-  // Add bundled glyphs later to restore labels.
+  // GLOBAL dark raster basemap, proxied + disk-cached by the backend — the same
+  // keyless Carto Dark Matter tiles the 3D globe renders (GlobeCanvas
+  // buildDarkBasemap), deep-zoom to 22. A previous build wired a LOCAL PMTiles
+  // vector file here, but that archive only covered Greater London
+  // (bounds -0.51,51.28 → 0.33,51.69) so the map went blank everywhere else on
+  // Earth. One global source keeps /2d usable at any AOI.
   const styleDef = useMemo(() => {
-    const all = pmLayers('protomaps', namedFlavor('dark'), { lang: 'en' });
     return {
       version: 8,
-      // Local glyph PBFs (Noto Sans, OFL) → labels render fully offline.
+      // Local glyph PBFs (Noto Sans, OFL) → any symbol labels render offline.
       glyphs: '/fonts/{fontstack}/{range}.pbf',
       sources: {
-        protomaps: {
-          type: 'vector',
-          url: 'pmtiles:///basemap/region.pmtiles',
-          attribution: '© OpenStreetMap',
+        basemap: {
+          type: 'raster',
+          tiles: [backendUrl('/tiles/basemap/{z}/{x}/{y}.png')],
+          tileSize: 256,
+          maxzoom: 22,
+          attribution: '© OpenStreetMap contributors, © CARTO',
         },
       },
       layers: [
         { id: 'bg', type: 'background', paint: { 'background-color': '#0a0e14' } },
-        ...all,
+        { id: 'basemap', type: 'raster', source: 'basemap' },
       ],
     } as unknown as maplibregl.StyleSpecification;
   }, []);
@@ -80,6 +73,9 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       setReady(true);
     });
     mapRef.current = map;
+    if (import.meta.env.DEV) {
+      (window as unknown as { __mlmap: MapLibreMap }).__mlmap = map;
+    }
     return () => {
       map.remove();
       mapRef.current = null;
@@ -191,7 +187,9 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
           layout: {
             'text-field': '{point_count_abbreviated}',
             'text-size': 10,
-            'text-font': ['Open Sans Bold'] as unknown as string[],
+            // Only Noto Sans PBFs are bundled under /fonts (see glyphs above);
+            // 'Open Sans *' 404s and the count renders invisible.
+            'text-font': ['Noto Sans Medium'] as unknown as string[],
           },
           paint: { 'text-color': '#0b0e14' },
         });

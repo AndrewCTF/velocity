@@ -1,22 +1,11 @@
 import { useEffect } from 'react';
 import { useContextMenu } from './contextMenuStore.js';
-import { useChip } from '../imagery/chipStore.js';
-import { useWatchboxes } from '../watchbox/watchboxStore.js';
-import { useAnnotations } from '../annotations/annotationStore.js';
-import { useSituations } from '../situations/situationStore.js';
-import { useSelection } from '../state/stores.js';
-import { useImageryDiff } from '../imagery/imageryDiffStore.js';
-import { useGround } from '../ground/groundStore.js';
-import { useGeoScope } from '../state/geoScope.js';
+import { pointActions } from './mapActions.js';
 
 // Unified map right-click menu. Pure wiring — every action dispatches to an
-// existing store/feature at the clicked ground point. Opened by GlobeCanvas on a
+// existing store/feature at the clicked ground point (shared with the AREA-box
+// readout via mapActions.ts so the two never drift). Opened by GlobeCanvas on a
 // right-click over empty ground (an entity right-click still opens search-around).
-
-interface Item {
-  label: string;
-  run: () => void | Promise<void>;
-}
 
 export function ContextMenu(): JSX.Element | null {
   const { open, x, y, lat, lon, close } = useContextMenu();
@@ -38,56 +27,7 @@ export function ContextMenu(): JSX.Element | null {
 
   if (!open) return null;
 
-  const items: Item[] = [
-    {
-      label: 'Collect imagery here',
-      run: () =>
-        useChip.getState().setFocus({ entityId: `aoi:${lat.toFixed(3)},${lon.toFixed(3)}`, lat, lon, radiusKm: 4 }),
-    },
-    {
-      label: 'Ground recon here',
-      // Opens the Ground tab: street photos + weather + area chip, and (desktop)
-      // CUDA detection + traffic sim. openAt bumps openSeq so App brings the tab
-      // forward; the panel fetches /api/ground/nearby for a 2 km radius.
-      run: () => useGround.getState().openAt({ lat, lon, radiusKm: 2 }),
-    },
-    {
-      label: 'Imagery diff here',
-      run: () => useImageryDiff.getState().openAt({ lat, lon }),
-    },
-    {
-      label: 'Search objects nearby (50 km)',
-      // Geo search-around (§6.4): scope the Explorer app's live object query to a
-      // radius around this point. App switches to Explorer on the scope change.
-      run: () =>
-        useGeoScope.getState().setScope({ lat, lon, radiusKm: 50, label: `${lat.toFixed(2)}, ${lon.toFixed(2)}` }),
-    },
-    {
-      label: 'Geosearch',
-      // Omnibar listens for Cmd/Ctrl+K itself — toggle it open.
-      run: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })),
-    },
-    {
-      label: 'Create watchbox',
-      run: () =>
-        useWatchboxes.getState().add({ label: `Watchbox ${lat.toFixed(1)},${lon.toFixed(1)}`, center: { lat, lon }, radiusKm: 25, rule: 'enter' }),
-    },
-    {
-      label: 'Add annotation',
-      run: () => useAnnotations.getState().add({ kind: 'point', threat: 'unknown', label: 'Marker', coords: [[lon, lat]] }),
-    },
-    {
-      label: 'Copy coordinates',
-      run: () => navigator.clipboard?.writeText(`${lat.toFixed(5)},${lon.toFixed(5)}`),
-    },
-    {
-      label: 'Create situation here',
-      run: async () => {
-        const id = await useSituations.getState().create({ name: `Situation ${lat.toFixed(1)},${lon.toFixed(1)}`, centroid: { lat, lon } });
-        useSelection.getState().select(id);
-      },
-    },
-  ];
+  const items = pointActions(lat, lon);
 
   // Clamp so the menu never overflows the viewport.
   const W = 220;

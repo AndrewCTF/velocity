@@ -9,7 +9,20 @@ import * as Cesium from 'cesium';
 
 export type LatLon = { lat: number; lon: number };
 
-type Mode = 'idle' | 'point' | 'polyline' | 'circle' | 'polygon';
+type Mode = 'idle' | 'point' | 'polyline' | 'circle' | 'polygon' | 'rect';
+
+/** Live geometry snapshot pushed to a progress listener on every change — lets a
+ *  UI (e.g. the map-tools toolbar) show a running distance / bounds while drawing
+ *  without reaching into controller internals. */
+export interface DrawProgress {
+  mode: Mode;
+  /** Committed vertices so far (polyline/polygon). */
+  verts: readonly LatLon[];
+  /** Live cursor position (the un-committed rubber-band point), if any. */
+  cursor: LatLon | null;
+  /** Circle/rect anchor (centre or first corner), if any. */
+  center: LatLon | null;
+}
 
 const DRAFT = Cesium.Color.fromCssColorString('#4fa0d8'); // --accent
 
@@ -52,6 +65,10 @@ export interface DrawController {
   drawCircle(onDone: (center: LatLon, radiusKm: number) => void): void;
   /** Multi-click closed polygon (≥3 verts); finish()/right-click commits the ring. */
   drawPolygon(onDone: (ring: LatLon[]) => void): void;
+  /** Click one corner, move, click the opposite corner to commit an axis-aligned box. */
+  drawRect(onDone: (a: LatLon, b: LatLon) => void): void;
+  /** Subscribe to live geometry while a draw op is in progress (null to clear). */
+  setProgressListener(cb: ((p: DrawProgress) => void) | null): void;
   /** Commit an in-progress polyline (≥2 vertices) — for a UI "Finish" button. */
   finish(): void;
   /** Abort any in-progress op and clear the draft. */
@@ -85,9 +102,15 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
   let polyCb: ((v: LatLon[]) => void) | null = null;
   let circleCb: ((c: LatLon, r: number) => void) | null = null;
   let polygonCb: ((ring: LatLon[]) => void) | null = null;
+  let rectCb: ((a: LatLon, b: LatLon) => void) | null = null;
+  let progressCb: ((p: DrawProgress) => void) | null = null;
   const verts: LatLon[] = [];
   let center: LatLon | null = null;
   let cursor: LatLon | null = null;
+
+  const emitProgress = (): void => {
+    progressCb?.({ mode, verts: [...verts], cursor, center });
+  };
 
   const pick = (screen: Cesium.Cartesian2): LatLon | null => {
     const cart = viewer.camera.pickEllipsoid(screen, viewer.scene.globe.ellipsoid);
@@ -110,7 +133,9 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
     polyCb = null;
     circleCb = null;
     polygonCb = null;
+    rectCb = null;
     clearDraft();
+    emitProgress();
   };
 
   const polyPositions = (): Cesium.Cartesian3[] => {
@@ -169,6 +194,35 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
     });
   };
 
+  const rectCorners = (): [LatLon, LatLon] | null => {
+    if (!center || !cursor) return null;
+    return [center, cursor];
+  };
+
+  const addRectDraft = (): void => {
+    draftDs.entities.add({
+      id: '__draw_rect',
+      polygon: {
+        hierarchy: new Cesium.CallbackProperty(() => {
+          const cc = rectCorners();
+          if (!cc) return new Cesium.PolygonHierarchy([]);
+          const [a, b] = cc;
+          const ring = [
+            Cesium.Cartesian3.fromDegrees(a.lon, a.lat),
+            Cesium.Cartesian3.fromDegrees(b.lon, a.lat),
+            Cesium.Cartesian3.fromDegrees(b.lon, b.lat),
+            Cesium.Cartesian3.fromDegrees(a.lon, b.lat),
+          ];
+          return new Cesium.PolygonHierarchy(ring);
+        }, false),
+        material: DRAFT.withAlpha(0.1),
+        outline: true,
+        outlineColor: DRAFT,
+        height: 0,
+      },
+    });
+  };
+
   handler.setInputAction((e: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
     if (mode === 'idle') return;
     const p = pick(e.position);
@@ -179,11 +233,13 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
       cb?.(p);
     } else if (mode === 'polyline' || mode === 'polygon') {
       verts.push(p);
+      emitProgress();
       viewer.scene.requestRender();
     } else if (mode === 'circle') {
       if (!center) {
         center = p;
         cursor = p;
+        emitProgress();
         viewer.scene.requestRender();
       } else {
         const r = haversineKm(center, p);
@@ -192,14 +248,27 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
         reset();
         cb?.(c, r);
       }
+    } else if (mode === 'rect') {
+      if (!center) {
+        center = p;
+        cursor = p;
+        emitProgress();
+        viewer.scene.requestRender();
+      } else {
+        const a = center;
+        const cb = rectCb;
+        reset();
+        cb?.(a, p);
+      }
     }
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   handler.setInputAction((e: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
-    if (mode !== 'polyline' && mode !== 'circle' && mode !== 'polygon') return;
+    if (mode !== 'polyline' && mode !== 'circle' && mode !== 'polygon' && mode !== 'rect') return;
     const p = pick(e.endPosition);
     if (!p) return;
     cursor = p;
+    emitProgress();
     viewer.scene.requestRender();
   }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
@@ -248,6 +317,15 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
       mode = 'polygon';
       polygonCb = onDone;
       addPolygonDraft();
+    },
+    drawRect(onDone) {
+      reset();
+      mode = 'rect';
+      rectCb = onDone;
+      addRectDraft();
+    },
+    setProgressListener(cb) {
+      progressCb = cb;
     },
     finish,
     cancel() {

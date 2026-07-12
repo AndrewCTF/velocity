@@ -54,12 +54,17 @@ if TYPE_CHECKING:  # runtime import lives in get_registry (module cycle)
 # "country" / "resource" joined the country-OSINT catalog
 # (docs/country-osint-spec.md) — app/osint/country_catalog.py::build_graph
 # mints country:<code> -> resource:<code>:<slug> -> domain:<host>.
+# "evidence" joined 2026-07-12 P1 evidence locker
+# (docs/roadmap-practitioners-2026-07.md) — app/intel/evidence.py mints
+# evidence:<sha256> content-addressed capture objects. Listing uses props.kind
+# (like situation), so evidence objects set it in props too.
 ObjectKind = Literal[
     "aircraft", "vessel", "incident", "sim",
     "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
     "person", "username", "investigation",
     "url", "wallet", "tx", "file",
     "country", "resource",
+    "evidence",
     "object",
 ]
 
@@ -70,6 +75,7 @@ _KNOWN_KINDS: frozenset[str] = frozenset(
         "person", "username", "investigation",
         "url", "wallet", "tx", "file",
         "country", "resource",
+        "evidence",
         "object",
     )
 )

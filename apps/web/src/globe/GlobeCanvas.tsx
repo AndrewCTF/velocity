@@ -25,6 +25,7 @@ import { installDetections } from './DetectLayer.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { prewarmIcons } from './icons.js';
 import { perfOnRender } from './perf.js';
+import { presetKnobs } from './qualityPresets.js';
 import { setCameraMoving } from './cameraMotion.js';
 import { hasRenderNeed } from './renderNeeds.js';
 import { ChipLayer } from '../imagery/ChipLayer.js';
@@ -539,12 +540,14 @@ export function GlobeCanvas({
     toIdle();
     // §5.2.4 during-motion degrade: coarsen terrain/imagery + drop FXAA while the
     // camera moves (invisible mid-pan), restore at settle. Cheap fill-rate win on
-    // top of the resolutionScale drop.
-    const MOTION_SSE = 3.2;
-    const IDLE_SSE = 2.0;
+    // top of the resolutionScale drop. The idle/motion screen-space-error targets
+    // come from the map-quality preset (globe/qualityPresets.ts) so the operator
+    // can trade tile detail for FPS on a weak GPU; 'high' reproduces the old
+    // hardcoded 2.0 / 3.2.
     const setMotionQuality = (motion: boolean): void => {
       if (viewer.isDestroyed()) return;
-      scene.globe.maximumScreenSpaceError = motion ? MOTION_SSE : IDLE_SSE;
+      const k = presetKnobs(useSettings.getState().mapQuality);
+      scene.globe.maximumScreenSpaceError = motion ? k.motionSSE : k.idleSSE;
       const fx = scene.postProcessStages?.fxaa;
       if (fx) fx.enabled = !motion;
     };
@@ -569,11 +572,18 @@ export function GlobeCanvas({
     };
     viewer.camera.moveStart.addEventListener(onMoveStart);
     viewer.camera.moveEnd.addEventListener(onMoveEnd);
-    // Live: re-apply when the operator drags the sharpness/FPS slider, and when
-    // the window moves to a monitor of a different DPR.
-    const unsubRenderScale = useSettings.subscribe(toIdle);
+    // Live: re-apply when the operator changes the quality preset / sharpness
+    // slider, and when the window moves to a monitor of a different DPR. Preset
+    // changes also shift the idle screen-space-error, so re-apply that too (the
+    // camera is idle when settings change; a mid-pan change is corrected at the
+    // next moveEnd via setMotionQuality(false)).
+    const applyQualitySettings = (): void => {
+      toIdle();
+      setMotionQuality(false);
+    };
+    const unsubRenderScale = useSettings.subscribe(applyQualitySettings);
     window.addEventListener('resize', toIdle);
-    scene.globe.maximumScreenSpaceError = 2.0;
+    scene.globe.maximumScreenSpaceError = presetKnobs(useSettings.getState().mapQuality).idleSSE;
     scene.globe.preloadSiblings = false;
     // Terrain+imagery tile cache. Kept at the Cesium default (100): an earlier
     // bump to 1000 pushed VRAM the wrong way (these tiles are GPU textures, not

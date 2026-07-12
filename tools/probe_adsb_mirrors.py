@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Probe keyless ADS-B aircraft.json mirrors for reachability + freshness.
 
-Run from the SAME egress the backend uses (the droplet 167.99.149.34) — a
+Run from the SAME egress the backend uses (the prod backend host) — a
 datacenter IP gets Cloudflare-blocked where a home IP isn't (adsb.lol 451,
 airplanes.live/adsb.fi 403), so "works here" on a laptop can still fail in prod.
 
@@ -23,7 +23,7 @@ import sys
 import urllib.error
 import urllib.request
 
-# Force IPv4 — this egress (and the droplet) has broken IPv6; an AAAA-first
+# Force IPv4 — this egress (and the prod backend host) has broken IPv6; an AAAA-first
 # connect hangs/fails and masks a perfectly reachable host as URLError. The
 # backend's httpx client pins IPv4 (local_address 0.0.0.0); match it here.
 _orig_getaddrinfo = socket.getaddrinfo

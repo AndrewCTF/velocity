@@ -65,6 +65,47 @@ def test_two_assertions_from_two_sources_coexist() -> None:
     asyncio.run(run())
 
 
+def test_size_cap_prune_preserves_custody() -> None:
+    """The soft byte-cap prune (_maybe_enforce_size_cap) must never delete
+    prop='custody' rows — the evidence locker's append-only legal record — even
+    though evidence is captured once and its custody rows carry the OLDEST
+    observed_at, so an unguarded oldest-10% prune would drop them first. Mirrors
+    the per-object cap exclusion proven by test_custody_survives_assertion_cap."""
+    from app.intel import ontology_local as OL
+
+    async def run() -> None:
+        # max_bytes=1 forces the size check to always fire a drop.
+        reg = SqliteRegistry(
+            UserCtx("local", ""),
+            Settings(supabase_url="", ontology_db_max_bytes=1),
+        )
+        oid = "evidence:sizecap"
+        await reg.upsert(Object(id=oid, props={"kind": "evidence"}))
+        for i in range(6):  # custody: oldest timestamps
+            await reg.assert_props(
+                oid, {"custody": {"n": i}}, source=f"custody:x{i}",
+                observed_at="2000-01-01T00:00:00Z",
+            )
+        for i in range(40):  # newer noisy non-custody assertions
+            await reg.assert_props(
+                oid, {"noise": i}, source="feed",
+                observed_at="2026-01-01T00:00:00Z",
+            )
+        assert len(await reg.get_assertions(oid, prop="custody", limit=100)) == 6
+
+        OL._next_size_check = 0.0  # bypass the once-an-hour / 500-write gate
+        con = OL._connect(reg.s)
+        try:
+            reg._maybe_enforce_size_cap(con)
+        finally:
+            con.close()
+
+        assert len(await reg.get_assertions(oid, prop="custody", limit=100)) == 6
+        assert len(await reg.get_assertions(oid, prop="noise", limit=100)) < 40
+
+    asyncio.run(run())
+
+
 # ── upsert semantics: wholesale blob + assertion diff ─────────────────────────
 
 

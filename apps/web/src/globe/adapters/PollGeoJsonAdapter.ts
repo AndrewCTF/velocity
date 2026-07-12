@@ -38,6 +38,7 @@ import { VesselClusterPrimitive } from './VesselClusterPrimitive.js';
 import { tracks } from '../../intel/tracks.js';
 import { aircraftDedup } from '../../intel/registry.js';
 import { isMobileDevice } from '../../shell/device.js';
+import { presetKnobs } from '../qualityPresets.js';
 import { useSelection, useFilters } from '../../state/stores.js';
 import { useSettings } from '../../state/settings.js';
 import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
@@ -107,6 +108,13 @@ const SYNC_ALL_CEILING_MS = 24;
 // active (a filter toggle must re-evaluate every icon's dim). Vessels are
 // untouched — they glide via SampledPositionProperty and stay time-sliced.
 const AIRCRAFT_POS_EPSILON_M = 8; // ≈ ADS-B position noise floor; below this = didn't move
+// Same idea for the world-freeze vessel branch: an anchored/moored/re-reporting
+// ship whose fix moved less than this didn't visibly move at world zoom, so its
+// restyle (styleFn + billboard GPU write) can be skipped like the aircraft
+// teleport path. 25 m covers AIS lat/lon quantisation + at-anchor swing; the
+// freeze branch only runs above VESSEL_GLIDE_FREEZE_ALTITUDE_M where 25 m is
+// sub-pixel, and glide+restyle resume on zoom-in so any held rotation corrects.
+const VESSEL_FREEZE_POS_EPSILON_M = 25;
 
 // ── FlightRadar24-style dead-reckoning (operator opt-in 2026-06-28) ──────────
 // OFF by default; gated entirely on `useSettings().aircraftDeadReckon`. The
@@ -168,13 +176,14 @@ const VESSEL_GLIDE_FREEZE_ALTITUDE_M = 2_000_000; // 2,000 km
 // that grazes the boundary doesn't thrash ~6k SampledPositionProperty re-evals.
 const VESSEL_FREEZE_HYSTERESIS_M = 250_000; // 250 km
 
-// World-view render cap for vessels. The keyless feed returns ~21k vessels; at
-// world view they collapse into cluster bubbles anyway, so a deterministic
-// stable subset (djb2-keyed — same ships persist across polls, no churn) keeps
-// the per-poll O(n) apply + render bounded. Lifts when zoomed in past the
-// freeze altitude. No operator minimum exists for vessels (unlike the ≥8000
-// aircraft invariant), so this is safe to cap.
-const VESSEL_WORLD_CAP = 6000;
+// World-view render cap for vessels comes from the map-quality preset
+// (globe/qualityPresets.ts: vesselCap — 6000 high / 4000 balanced / 2000
+// performance). The keyless feed returns ~21k vessels; at world view they
+// collapse into cluster bubbles anyway, so a deterministic stable subset (djb2-
+// keyed — same ships persist across polls, no churn) keeps the per-poll O(n)
+// apply + render bounded. Lifts when zoomed in past the freeze altitude. No
+// operator minimum exists for vessels (unlike the ≥8000 aircraft invariant), so
+// this is safe to cap.
 
 
 // Initial great-circle bearing (deg, 0=N) from point 1 to point 2. Used as a
@@ -313,8 +322,22 @@ function djb2(s: string): string {
 // 2k aircraft (12k+ entities = the overheating). Cap EACH layer to a STABLE
 // subset — keyed by a hash of the feature id so the SAME contacts persist across
 // polls (a random per-poll subset would churn the upsert and freeze motion, see
-// CLAUDE.md world-view decimation lesson). Desktop is uncapped (Infinity).
+// CLAUDE.md world-view decimation lesson). Sanctioned mobile cap = 2000.
 const MOBILE_LAYER_CAP = isMobileDevice() ? 2000 : Number.POSITIVE_INFINITY;
+
+// Effective per-layer render cap = the sanctioned mobile cap AND the map-quality
+// preset's non-aircraft layer cap (Infinity except under 'performance', where a
+// weak DESKTOP GPU also gets the stable-subset decimation). AIRCRAFT stay exempt
+// on desktop — the operator invariant requires the desktop world view to carry
+// ≥ 8000 aircraft; only the separately-sanctioned mobile cap touches them. A
+// desktop that still can't cope is what the low-end 2D suggestion is for.
+function effectiveLayerCap(styleKind: string): number {
+  const presetLayer =
+    styleKind === 'aircraft' && !isMobileDevice()
+      ? Number.POSITIVE_INFINITY
+      : presetKnobs(useSettings.getState().mapQuality).layerCap;
+  return Math.min(MOBILE_LAYER_CAP, presetLayer);
+}
 
 function stableSubset(feats: Feature[], cap: number): Feature[] {
   if (feats.length <= cap) return feats;
@@ -935,12 +958,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // Bound the world-view vessel set (they cluster at this zoom anyway). djb2-
     // keyed stableSubset → the same ships persist across polls, so the upsert-by-id
     // never churns. Lifts when zoomed in past the freeze altitude.
-    let cap = MOBILE_LAYER_CAP;
+    let cap = effectiveLayerCap(this.props.styleKind);
     if (
       this.props.styleKind === 'vessel' &&
       this.props.ctx.viewer.camera.positionCartographic.height > VESSEL_GLIDE_FREEZE_ALTITUDE_M
     ) {
-      cap = Math.min(cap, VESSEL_WORLD_CAP);
+      cap = Math.min(cap, presetKnobs(useSettings.getState().mapQuality).vesselCap);
     }
     const capped = incoming.length > cap ? stableSubset(incoming, cap) : incoming;
     this.pendingFeats = capped.slice(0, MAX_PER_LAYER);
@@ -1226,6 +1249,17 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           // ~9 FPS. Still real-data-only (no synthesis). Glide resumes when the
           // camera drops below VESSEL_GLIDE_FREEZE_ALTITUDE_M (the next poll, or
           // immediately via reconcileGlideForZoom on zoom-out).
+          const prev = currentValue<Cesium.Cartesian3>(existing.position);
+          if (prev && Cesium.Cartesian3.distance(prev, newPos) < VESSEL_FREEZE_POS_EPSILON_M) {
+            // Position unchanged (anchored/moored/re-reporting vessel). Mirror the
+            // aircraft teleport skip: STILL refresh the property bag so freshness
+            // counters + facet fields stay LIVE, but skip the EXPENSIVE restyle
+            // (styleFn + dim recompute + billboard GPU write) — the icon didn't
+            // move at world zoom so its pixels don't need touching. Held rotation
+            // is sub-pixel here and corrects on zoom-in when glide+restyle resume.
+            this.refreshBag(existing, props);
+            continue;
+          }
           existing.position = new Cesium.ConstantPositionProperty(newPos);
         } else if (isTrackable) {
           // Stationary-entity bypass: if the new position is within 100m of

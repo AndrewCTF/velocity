@@ -18,6 +18,7 @@ import { useSituations, type Severity, type Status, type Situation } from './sit
 import { useSelection } from '../state/stores.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { apiFetch } from '../transport/http.js';
+import { toast } from '../shell/toast.js';
 import { CoaCards } from './CoaCards.js';
 import { ImageryDiff } from '../imagery/ImageryDiff.js';
 import { AiAssessmentCard } from '../entity-panel/AiAssessmentCard.js';
@@ -312,6 +313,64 @@ function IntelTab({ objects }: { objects: OntObject[] }): JSX.Element {
   );
 }
 
+type ExportFmt = 'html' | 'json' | 'pptx';
+
+const EXPORT_EXT: Record<ExportFmt, string> = { html: 'html', json: 'json', pptx: 'pptx' };
+
+function ExportCard({ sit }: { sit: Situation }): JSX.Element {
+  const [busy, setBusy] = useState<ExportFmt | null>(null);
+
+  const run = (fmt: ExportFmt): void => {
+    setBusy(fmt);
+    void (async () => {
+      try {
+        const r = await apiFetch(`/api/situations/${encodeURIComponent(sit.id)}/export`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fmt }),
+        });
+        if (!r.ok) {
+          toast.error(r.status === 503 ? 'PPTX engine unavailable' : `export failed (${r.status})`);
+          return;
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `case-${sit.id.replace(/:/g, '_')}.${EXPORT_EXT[fmt]}`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.ok(`exported ${fmt.toUpperCase()}`);
+      } catch {
+        toast.error('export failed (network)');
+      } finally {
+        setBusy(null);
+      }
+    })();
+  };
+
+  return (
+    <Widget title="Export dossier">
+      <p className="text-[10px] text-txt-3 mb-2">
+        Walks this case's linked entities, their sourced assertions, and attached
+        evidence into a report where every claim carries a provenance footnote and
+        every exhibit is content-addressed.
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Btn size="sm" tone="accent" disabled={busy !== null} onClick={() => run('html')}>
+          {busy === 'html' ? '…' : 'HTML'}
+        </Btn>
+        <Btn size="sm" disabled={busy !== null} onClick={() => run('json')}>
+          {busy === 'json' ? '…' : 'JSON bundle'}
+        </Btn>
+        <Btn size="sm" disabled={busy !== null} onClick={() => run('pptx')}>
+          {busy === 'pptx' ? '…' : 'PPTX'}
+        </Btn>
+      </div>
+    </Widget>
+  );
+}
+
 function ReportingTab({
   sit,
   update,
@@ -330,6 +389,7 @@ function ReportingTab({
           className="w-full bg-bg-2 border border-line rounded-sm px-2 py-1.5 text-[11px] text-txt-1 leading-snug resize-y focus:outline-none focus:border-accent-line"
         />
       </Widget>
+      <ExportCard sit={sit} />
       <Widget title="Courses of action">
         <CoaCards situationId={sit.id} />
       </Widget>

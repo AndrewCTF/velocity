@@ -478,6 +478,17 @@ class Settings(BaseSettings):
     # roadmap pins ~2000 as the starting cap. 0 disables.
     ontology_max_assertions_per_object: int = 2000
 
+    # ── Evidence locker (P1, docs/roadmap-practitioners-2026-07.md) ──
+    # Chain-of-custody capture blobs (content-addressed by SHA-256). Same
+    # relative-to-CWD ./data idiom as the SQLite stores above, so it lands on
+    # the existing osint_data volume automatically; created 0700 on first use.
+    # The evidence OBJECTS (hash, timestamp, method, custody log) live in the
+    # ontology store; only the immutable blob bytes live here, named by hash.
+    evidence_dir: str = "./data/evidence"  # EVIDENCE_DIR
+    # Hard cap on a single captured/uploaded blob (bytes). Protects the volume
+    # from an accidental multi-GB upload. 0 disables the cap.
+    evidence_max_blob_bytes: int = 200_000_000  # ~200 MB
+
     # ── Foundry substrate (docs/foundry-plan.md) ──
     # BYO-data datasets/transforms/builds/bindings/schedules store. Local
     # SQLite next to ontology.db/history.db — same bounding philosophy (row

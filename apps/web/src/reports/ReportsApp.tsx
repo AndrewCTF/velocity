@@ -6,6 +6,7 @@ import { IntelPanel } from '../entity-panel/IntelPanel.js';
 import { NewsPanel } from '../news-panel/NewsPanel.js';
 import { CollabPanel } from '../collab/CollabPanel.js';
 import { MetricsPanel } from '../metrics/MetricsPanel.js';
+import { EvidencePanel } from '../evidence/EvidencePanel.js';
 import { BriefPanel } from './BriefPanel.js';
 
 // Reports app (design §6.1) — the reporting/analysis surfaces that used to be
@@ -15,6 +16,7 @@ export function ReportsApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
   const tabs: TabDef[] = useMemo(
     () => [
       { id: 'situations', label: 'Case files', content: <SituationsPanel viewer={viewer} /> },
+      { id: 'evidence', label: 'Evidence', content: <EvidencePanel /> },
       { id: 'brief', label: 'Brief', content: <BriefPanel /> },
       { id: 'intel', label: 'Intel brief', content: <IntelPanel viewer={viewer} /> },
       { id: 'metrics', label: 'Metrics', content: <MetricsPanel /> },

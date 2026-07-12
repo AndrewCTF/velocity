@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { GripVertical } from 'lucide-react';
 import * as Cesium from 'cesium';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useSim, useAlerts } from '../state/stores.js';
@@ -152,6 +153,33 @@ export function SimulationOverlay({
   const [econ, setEcon] = useState<EconImpact | null>(null);
   const [reason, setReason] = useState<SimReasonResult | null>(null);
   const [reasonLoading, setReasonLoading] = useState(false);
+
+  // Draggable position. Defaults clear of the top command bar (y≈76) and to the
+  // RIGHT of the icon rail + an open left flyout (x≈360) so the controls never
+  // sit on top of the left bar. Null until first drag → uses the default below.
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const onDragDown = (e: ReactPointerEvent): void => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    e.preventDefault();
+    const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    const startX = pos?.x ?? rect.left;
+    const startY = pos?.y ?? rect.top;
+    const px = e.clientX;
+    const py = e.clientY;
+    const move = (ev: PointerEvent): void => {
+      const x = Math.max(4, Math.min(window.innerWidth - 80, startX + (ev.clientX - px)));
+      const y = Math.max(72, Math.min(window.innerHeight - 40, startY + (ev.clientY - py)));
+      setPos({ x, y });
+    };
+    const up = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.style.userSelect = '';
+    };
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
 
   useEffect(() => {
     if (!active || !viewer || viewer.isDestroyed()) return;
@@ -333,7 +361,20 @@ export function SimulationOverlay({
   const ready = ptA != null && ptB != null;
 
   return (
-    <div className="absolute top-12 left-3 md:left-[304px] z-[var(--z-overlay)] w-[300px] max-h-[calc(100%-6rem)] overflow-y-auto pointer-events-auto space-y-2.5 rounded-md border border-line bg-bg-0/90 backdrop-blur-sm p-2 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]">
+    <div
+      className="absolute z-[var(--z-overlay)] w-[300px] max-h-[calc(100%-6rem)] overflow-y-auto pointer-events-auto rounded-md border border-line bg-bg-0/95 backdrop-blur-sm shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]"
+      style={pos ? { left: pos.x, top: pos.y } : { left: 360, top: 76 }}
+    >
+      {/* Drag handle — grab to reposition so the panel never has to sit on the
+          left bar. */}
+      <div
+        onPointerDown={onDragDown}
+        className="flex items-center gap-1.5 px-2 h-6 border-b border-line-2 bg-bg-1/80 cursor-grab active:cursor-grabbing select-none sticky top-0 z-10"
+      >
+        <GripVertical size={12} strokeWidth={1.75} className="text-txt-3" aria-hidden />
+        <span className="font-label uppercase tracking-[0.9px] text-[10px] text-txt-2">Simulation controls</span>
+      </div>
+      <div className="space-y-2.5 p-2">
       <Widget
         title="Simulation"
         action={
@@ -644,6 +685,7 @@ export function SimulationOverlay({
           )}
         </Widget>
       )}
+      </div>
     </div>
   );
 }

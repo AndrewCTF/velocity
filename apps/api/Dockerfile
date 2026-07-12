@@ -5,9 +5,24 @@
 # the Cloudflare container registry.
 FROM python:3.12-slim
 
+# jemalloc: WITHOUT this the container runs under glibc malloc, whose per-arena
+# hoarding of the snapshot loop's churn (6-12 MB feed parses + a ~1 MB blob
+# re-serialized/gzipped every ~1s across the ~80-thread executor) ratchets RSS
+# into the tens of GB — the measured ~54 GB thrash that scripts/run-api.sh
+# exists to prevent. python:3.12-slim installs it at the same multiarch path
+# used by the dev host. LD_PRELOAD is set as ENV so it is in effect before
+# uvicorn's first malloc (the allocator can't be swapped after that). The Node/
+# Chromium sidecars scrub LD_PRELOAD from their child env (adsb_sidecar.py),
+# so this never reaches Chrome's zygote.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libjemalloc2 \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 \
+    MALLOC_CONF=background_thread:true,dirty_decay_ms:10000,muzzy_decay_ms:10000 \
     # Velocity runs as a paid/commercial SaaS — default the backend to the
     # commercial-legal source set. The gateway still overrides per request via
     # the X-Velocity-Tier header (free sessions get the NC firehoses).

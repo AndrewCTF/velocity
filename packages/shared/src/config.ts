@@ -12,4 +12,8 @@ export interface RuntimeConfig {
   };
   classification: string; // banner label, e.g. 'UNCLAS'
   buildId: string;
+  // True when the backend is keyless AND ALLOW_UNAUTHENTICATED is on, so the
+  // compute/LLM endpoints are served without auth. The UI shows an open-mode
+  // banner. Optional for backward compatibility with older backends.
+  openMode?: boolean;
 }

@@ -24,6 +24,7 @@ export function SelectionInferenceBlock({
   onChanged: () => void;
 }): JSX.Element {
   const setSetting = useSettings((s) => s.set);
+  const aiPosition = useSettings((s) => s.selectionAiPosition);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -83,6 +84,25 @@ export function SelectionInferenceBlock({
         When ON, clicking an aircraft/vessel/place shows a short AI assessment in the entity
         panel, using a faster model separate from the main routing model.
       </p>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3">Panel position</span>
+        <div className="flex rounded-sm border border-line overflow-hidden">
+          {(['top', 'bottom'] as const).map((pos) => (
+            <button
+              key={pos}
+              type="button"
+              onClick={() => setSetting('selectionAiPosition', pos)}
+              aria-pressed={aiPosition === pos}
+              className={`mono text-[10px] px-2 py-0.5 capitalize ${
+                aiPosition === pos ? 'bg-accent-dim text-accent' : 'text-txt-2 hover:text-txt-1'
+              }`}
+            >
+              {pos}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {selectionEnabled && (
         <>

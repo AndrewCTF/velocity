@@ -176,8 +176,12 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
         </div>
       </div>
 
-      {/* category legend — top-left, clears the 296px rail (desktop only) */}
-      <div className="hidden md:flex absolute left-[312px] top-[14px] flex-col gap-1 text-[10px] text-txt-3">
+      {/* category legend — top-left, hugs the live left rail (icon rail = 44px,
+          resizable rail otherwise) via --rail-left-w so it never leaves a gap. */}
+      <div
+        className="hidden md:flex absolute flex-col gap-1 text-[10px] text-txt-3"
+        style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)', top: 14 }}
+      >
         {LEGEND.map((l) => (
           <span key={l.label} className="flex items-center gap-1.5">
             <i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: l.color }} />
@@ -186,10 +190,10 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
         ))}
       </div>
 
-      {/* compass — top-right, rotates with camera heading */}
+      {/* compass — top-right, rotates with camera heading; hugs the live right rail */}
       <div
-        className="hidden md:flex absolute right-[352px] top-[14px] w-[34px] h-[34px] border border-line rounded-full items-center justify-center text-[10px] text-txt-2"
-        style={{ background: 'rgba(8,10,15,0.5)' }}
+        className="hidden md:flex absolute w-[34px] h-[34px] border border-line rounded-full items-center justify-center text-[10px] text-txt-2"
+        style={{ background: 'rgba(8,10,15,0.5)', right: 'calc(var(--rail-right-w, 360px) + 12px)', top: 14 }}
         title={`heading ${headingDeg.toFixed(0)}°`}
       >
         <span style={{ transform: `rotate(${-headingDeg}deg)`, display: 'inline-block' }}>N</span>
@@ -197,7 +201,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
 
       {/* scale bar — bottom-left above the coords */}
       {scale && (
-        <div className="hidden md:block absolute left-[312px] bottom-[62px]">
+        <div className="hidden md:block absolute bottom-[62px]" style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)' }}>
           <div
             className="h-[5px]"
             style={{
@@ -212,7 +216,10 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       )}
 
       {/* cursor + selection coordinates — bottom-left */}
-      <div className="hidden md:block absolute left-[312px] bottom-[14px] text-[10px] text-txt-2 leading-[1.7]">
+      <div
+        className="hidden md:block absolute bottom-[14px] text-[10px] text-txt-2 leading-[1.7]"
+        style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)' }}
+      >
         <div>
           cursor{' '}
           <span className="text-txt-1">
@@ -225,8 +232,11 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
         </div>
       </div>
 
-      {/* projection / center / zoom — bottom-right */}
-      <div className="hidden md:block absolute right-[352px] bottom-[14px] text-[10px] text-txt-3 tracking-[0.5px] text-right leading-[1.7]">
+      {/* projection / center / zoom — bottom-right, hugs the live right rail */}
+      <div
+        className="hidden md:block absolute bottom-[14px] text-[10px] text-txt-3 tracking-[0.5px] text-right leading-[1.7]"
+        style={{ right: 'calc(var(--rail-right-w, 360px) + 12px)' }}
+      >
         <div>
           center{' '}
           <span className="text-txt-2">

@@ -15,6 +15,8 @@ import { labelFor } from './labelStyle.js';
 import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
 import { apiFetch } from '../../transport/http.js';
 import { isMobileDevice } from '../../shell/device.js';
+import { useSettings } from '../../state/settings.js';
+import { presetKnobs } from '../qualityPresets.js';
 import { setRenderNeed } from '../renderNeeds.js';
 
 interface Props {
@@ -35,7 +37,15 @@ interface OmmRecord {
 
 // Hard cap to keep the frame budget healthy; phones get a quarter (per-sat SGP4
 // + a billboard each is heavy on mobile GPUs).
-const MAX_SATS = isMobileDevice() ? 1000 : 4000;
+// Satellite count ceiling. The desktop cap comes from the map-quality preset
+// (globe/qualityPresets.ts: maxSats — 4000 high / 2500 balanced / 1200
+// performance); phones stay clamped to 1000 regardless (per-sat SGP4 + a
+// billboard each is heavy on mobile GPUs). Read per fetch so a preset change
+// takes effect on the next refresh.
+function maxSats(): number {
+  const preset = presetKnobs(useSettings.getState().mapQuality).maxSats;
+  return isMobileDevice() ? Math.min(1000, preset) : preset;
+}
 
 // Orbit sampling. We DON'T reassign a position every tick (that teleports the
 // icon once per tick); instead we propagate a short rolling WINDOW of fixes per
@@ -197,7 +207,7 @@ export class SatelliteAdapter implements LayerAdapter {
         return;
       }
       const j = (await r.json()) as { items: OmmRecord[] };
-      const items = (j.items ?? []).slice(0, MAX_SATS);
+      const items = (j.items ?? []).slice(0, maxSats());
       const descriptorId = this.props.ctx.descriptor.id;
       const next = new Map<string, { l1: string; l2: string; name: string; norad: string }>();
       for (const rec0 of items) {

@@ -10,6 +10,7 @@ import pytest
 
 from app import llm
 from app import upstream as upstream_mod
+from app.routes import ai_selection as ais
 
 
 @pytest.fixture(autouse=True)
@@ -172,6 +173,120 @@ def test_selection_brief_uses_a_max_tokens_floor_that_survives_a_thinking_preamb
     assert seen["max_tokens"] >= 512
 
 
+def test_selection_brief_fuses_aircraft_enrichment_into_prompt(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A real ICAO24 id must pull the registry + dossier enrichment and fold it
+    into the model prompt (ENRICHMENT block), so the assessment is grounded in
+    identity/route/pattern-of-life — not just the ~6 self-reported fields."""
+    from app.intel import dossier as dossier_mod
+    from app.routes import entity
+
+    async def _fake_enrich(icao24, callsign=None):  # noqa: ANN001, ANN202
+        return {
+            "registration": "N12345",
+            "type": "Boeing 737-800",
+            "operator": "United Airlines",
+            "origin": {"iata": "SFO", "municipality": "San Francisco"},
+            "destination": {"iata": "JFK", "municipality": "New York"},
+        }
+
+    async def _fake_dossier(ident):  # noqa: ANN001, ANN202
+        return {
+            "found": True,
+            "source": "adsb_mil",
+            "gnss_degraded": True,
+            "squawk": "7700",
+            "track": {"profile": "loiter-then-dash", "gap_count": 2, "speed_kn": {"avg": 3, "max": 480}},
+            "assessment": "EMERGENCY squawk 7700",
+            "in_incidents": [{"threat_level": "high", "narrative": "SAM activity nearby"}],
+        }
+
+    monkeypatch.setattr(entity, "_enrich_aircraft", _fake_enrich)
+    monkeypatch.setattr(dossier_mod, "aircraft_dossier", _fake_dossier)
+
+    seen = {}
+
+    async def _capture(messages, *, tier="fast", max_tokens=1024, label="", **kw):  # noqa: ANN001, ANN003
+        seen["user"] = messages[-1]["content"]
+        seen["system"] = messages[0]["content"]
+        return llm.LlmResult(text="ok", model="m", backend="llamacpp")
+
+    monkeypatch.setattr(llm, "chat", _capture)
+    r = client.post(
+        "/api/ai/selection/brief",
+        json={"kind": "aircraft", "id": "aircraft:a1b2c3", "props": {"callsign": "UAL123"}},
+    )
+    assert r.status_code == 200
+    user = seen["user"]
+    assert "ENRICHMENT" in user
+    assert "N12345" in user and "United Airlines" in user
+    assert "SFO" in user and "JFK" in user
+    assert "loiter-then-dash" in user
+    assert "7700" in user  # emergency squawk surfaced
+    assert "SAM activity nearby" in user  # live incident membership
+    assert "ENRICHMENT" in seen["system"]
+
+
+def test_selection_brief_fuses_static_entity_enrichment(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fixed entity (quake) pulls its registry enrichment into the prompt,
+    but list/blob fields are dropped so only scalar context survives."""
+    from app.routes import entity
+
+    async def _fake_quake(qid):  # noqa: ANN001, ANN202
+        return {
+            "kind": "quake",
+            "id": qid,
+            "mag": 6.4,
+            "place": "120km SW of Reykjavik",
+            "depth_km": 10.0,
+            "tsunami": True,
+            "url": "https://earthquake.usgs.gov/x",  # heavy key → dropped
+            "history": [1, 2, 3],  # list → dropped
+        }
+
+    monkeypatch.setattr(entity, "_enrich_quake", _fake_quake)
+    seen = {}
+
+    async def _capture(messages, *, tier="fast", max_tokens=1024, label="", **kw):  # noqa: ANN001, ANN003
+        seen["user"] = messages[-1]["content"]
+        return llm.LlmResult(text="ok", model="m", backend="llamacpp")
+
+    monkeypatch.setattr(llm, "chat", _capture)
+    r = client.post(
+        "/api/ai/selection/brief",
+        json={"kind": "quake", "id": "quake:us7000abcd", "props": {}},
+    )
+    assert r.status_code == 200
+    user = seen["user"]
+    assert "ENRICHMENT" in user
+    assert "120km SW of Reykjavik" in user and "6.4" in user
+    assert "earthquake.usgs.gov" not in user  # heavy url key dropped
+    assert '"history"' not in user  # list field dropped
+
+
+def test_selection_brief_no_enrichment_for_synthetic_id(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An id that isn't a real ICAO24/MMSI resolves to no enrichment — the
+    prompt carries no ENRICHMENT block and no upstream is touched."""
+    seen = {}
+
+    async def _capture(messages, *, tier="fast", max_tokens=1024, label="", **kw):  # noqa: ANN001, ANN003
+        seen["user"] = messages[-1]["content"]
+        return llm.LlmResult(text="ok", model="m", backend="llamacpp")
+
+    monkeypatch.setattr(llm, "chat", _capture)
+    r = client.post(
+        "/api/ai/selection/brief",
+        json={"kind": "aircraft", "id": "AC-synthetic-1", "props": {}},
+    )
+    assert r.status_code == 200
+    assert "ENRICHMENT" not in seen["user"]
+
+
 def test_selection_brief_clamps_long_string_props(client, monkeypatch: pytest.MonkeyPatch) -> None:
     seen_user_msg = {}
 
@@ -180,10 +295,17 @@ def test_selection_brief_clamps_long_string_props(client, monkeypatch: pytest.Mo
         return llm.LlmResult(text="ok", model="m", backend="llamacpp")
 
     monkeypatch.setattr(llm, "chat", _capture)
-    long_val = "y" * 800  # under the 4KB total cap but over the per-string clamp
+    max_len = ais._MAX_STRING_LEN
+    long_val = "y" * (max_len + 300)  # over the per-string clamp, under the byte cap
     r = client.post(
         "/api/ai/selection/brief",
         json={"kind": "aircraft", "id": "AC-clamp-1", "props": {"note": long_val}},
     )
     assert r.status_code == 200
-    assert len(seen_user_msg["content"]) < len(long_val) + 200
+    content = seen_user_msg["content"]
+    # The clamp must actually truncate: the full value must not survive verbatim,
+    # and no run longer than the clamp bound may remain. A no-op clamp (or one
+    # whose bound was raised past the input) fails the first assertion; these
+    # bounds track _MAX_STRING_LEN so the test can't silently go slack again.
+    assert long_val not in content
+    assert "y" * (max_len + 1) not in content

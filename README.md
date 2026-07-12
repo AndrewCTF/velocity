@@ -79,6 +79,16 @@ out where things live; you can pull it back up whenever from **⚙ Settings**.
 That strip along the bottom is the archive: drag it back an hour, a day, as
 far as your history goes, and the globe rewinds to that exact moment.
 
+> **Local (open) mode.** The compute-heavy endpoints — the LLM-backed Reports
+> tabs, recon, and OSINT enrichment — *fail closed* on a keyless box so a
+> public deployment can't be made to spend GPU/credits by an anonymous caller.
+> The dev `docker compose up` sets `ALLOW_UNAUTHENTICATED=1` for you (the stack
+> is loopback-only), so those features work out of the box and the UI shows an
+> open-mode banner. Configure `API_KEY` or Supabase in `.env` and real auth
+> takes over (the flag becomes irrelevant). For an internet-facing box use
+> `docker-compose.prod.yml`, which leaves the flag unset. Evidence capture, the
+> globe, replay, and all keyless feeds never needed the flag.
+
 <details>
 <summary><b>Local dev without Docker</b></summary>
 

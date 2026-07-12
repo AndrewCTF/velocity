@@ -7,6 +7,12 @@ import { apiFetch } from '../transport/http.js';
 import { KeysPanel } from './KeysPanel.js';
 import { useDashboardMode, type DashboardMode } from '../state/dashboardMode.js';
 import { useSettings } from '../state/settings.js';
+import {
+  MAP_QUALITIES,
+  QUALITY_LABELS,
+  presetKnobs,
+  type MapQuality,
+} from '../globe/qualityPresets.js';
 import { resetOnboarding } from '../onboarding/Onboarding.js';
 import { LocalAiSection } from './localAi/LocalAiSection.js';
 
@@ -98,7 +104,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
           <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
             Display
           </div>
-          <RenderQualitySlider />
+          <MapQualityPreset />
+          <div className="mt-2">
+            <RenderQualitySlider />
+          </div>
           <div className="mt-2">
             <GovernorToggle />
           </div>
@@ -344,6 +353,52 @@ function LocalAiToggle(): JSX.Element {
         <span className="text-accent">{reason}</span>.
       </div>
     </button>
+  );
+}
+
+// Map quality preset — the one control most users want for "make the 3D map
+// smoother". Bundles resolution + terrain detail + vessel/satellite/layer caps
+// (globe/qualityPresets.ts). Picking a preset also writes renderPixelCap to the
+// preset's resolution so the fine-tune slider below stays in sync; the slider
+// then lets a power user nudge resolution over the preset if they want.
+function MapQualityPreset(): JSX.Element {
+  const q = useSettings((s) => s.mapQuality);
+  const set = useSettings((s) => s.set);
+  const choose = (next: MapQuality): void => {
+    set('mapQuality', next);
+    set('renderPixelCap', presetKnobs(next).pixelCap);
+  };
+  return (
+    <div className="w-full rounded-sm border border-line px-2.5 py-2">
+      <div className="mono text-[11px] font-medium text-txt-1 mb-2">Map quality</div>
+      <div className="flex gap-1.5" role="radiogroup" aria-label="Map quality preset">
+        {MAP_QUALITIES.map((id) => {
+          const on = q === id;
+          const meta = QUALITY_LABELS[id];
+          return (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => choose(id)}
+              className={`flex-1 text-left rounded-sm border px-2 py-1.5 transition-colors ${
+                on
+                  ? 'border-accent-line bg-accent-dim text-txt-0'
+                  : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+              }`}
+            >
+              <div className="mono text-[11px] font-medium">{meta.label}</div>
+              <div className="mono text-[9px] text-txt-3 mt-0.5 leading-tight">{meta.hint}</div>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mono text-[10px] text-txt-3 mt-1.5 leading-snug">
+        Lower quality renders fewer pixels, coarser terrain and fewer vessels/satellites for a
+        higher frame rate. On a weak GPU choose Performance. Aircraft coverage is unaffected.
+      </div>
+    </div>
   );
 }
 

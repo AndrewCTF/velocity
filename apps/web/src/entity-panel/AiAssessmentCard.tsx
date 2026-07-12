@@ -78,10 +78,15 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Latest props available at fetch time without re-triggering the debounce
-  // on every feed tick (the effect below depends on `id`, not `properties`).
-  const propsRef = useRef({ properties, altM });
-  propsRef.current = { properties, altM };
+  // Latest kind/props available at fetch time without re-triggering the
+  // debounce on every feed tick (the effect below depends on `id`, not these).
+  // `kind` MUST come from here, not the render closure: on a fresh selection the
+  // parent resets its snapshot to null before the scene tick repopulates it, so
+  // the render that arms the debounce can carry kind='' (or the prior entity's
+  // kind). Sending kind='' fails the backend's min_length=1 check → 422. Reading
+  // it from the ref at fire time uses whatever the latest render settled on.
+  const propsRef = useRef({ kind, properties, altM });
+  propsRef.current = { kind, properties, altM };
 
   const run = (bypassCache: boolean, signal: AbortSignal): void => {
     if (!bypassCache) {
@@ -95,7 +100,9 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
     setLoading(true);
     setErr(null);
     const body = {
-      kind,
+      // Backend requires a non-empty kind (min_length=1); fall back so an
+      // entity with no 'kind' prop still yields a valid request, not a 422.
+      kind: propsRef.current.kind || kind || 'entity',
       id,
       props: compactSelectionProps(propsRef.current.properties, propsRef.current.altM),
     };

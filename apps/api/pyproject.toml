@@ -8,11 +8,17 @@ license = { text = "AGPL-3.0-or-later" }
 # migrates to a hypertable per plan §locked-decisions #5). Their client libs
 # (sqlalchemy/asyncpg/redis/apscheduler) were removed from Phase 1 deps
 # because nothing imports them — re-add alongside the actual integration.
-# orjson was likewise dropped: FastAPI serializes annotated returns straight
-# to JSON bytes via pydantic-core and deprecates ORJSONResponse.
+# orjson is NOT used as ORJSONResponse (FastAPI serializes annotated returns
+# via pydantic-core and deprecates it); it is used directly in routes/adsb.py
+# `_build_hot_blob` to serialize the ~14k-feature world blob every ~1s ~9x
+# faster than stdlib json. The import there is optional with a json fallback.
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.6",
+  "orjson>=3.10",
+  # isal (ISA-L) gzip for the world blob — see routes/adsb.py `_gzip_blob`.
+  # Optional import there falls back to stdlib gzip if the wheel is absent.
+  "isal>=1.6",
   "pydantic>=2.9.0",
   "pydantic-settings>=2.5.0",
   "httpx>=0.27.2",

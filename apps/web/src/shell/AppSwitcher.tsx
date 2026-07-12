@@ -6,6 +6,7 @@ import {
   Flag,
   Globe,
   Radar,
+  Search,
   Table2,
   Video,
   Waypoints,
@@ -20,6 +21,7 @@ const APP_ICONS: Record<AppId, LucideIcon> = {
   map: Globe,
   explorer: Table2,
   graph: Waypoints,
+  investigate: Search,
   targeting: Crosshair,
   video: Video,
   sim: Radar,
@@ -56,24 +58,25 @@ export function AppSwitcher(): JSX.Element {
           {group.apps.map((id: AppId) => {
             const active = id === app;
             const Ico = APP_ICONS[id];
+            // Icon-forward to keep the 42px bar uncluttered: only the ACTIVE app
+            // shows its label (so you always see where you are); the rest are
+            // icon-only with the name + hint on hover. This is what keeps a
+            // 12-app switcher from overflowing the top bar (operator: too crowded).
             return (
               <button
                 key={id}
                 type="button"
                 onClick={() => setApp(id)}
-                title={APP_META[id].hint}
+                title={`${APP_META[id].label} — ${APP_META[id].hint}`}
                 aria-current={active ? 'page' : undefined}
-                className={`relative px-3 h-full flex items-center gap-1.5 font-label uppercase tracking-[0.9px] text-[11px] transition-colors ${
-                  active
-                    ? 'text-txt-0'
-                    : 'text-txt-3 hover:text-txt-1'
+                aria-label={APP_META[id].label}
+                className={`relative h-full flex items-center gap-1.5 font-label uppercase tracking-[0.9px] text-[11px] transition-colors ${
+                  active ? 'px-2.5 text-txt-0 bg-bg-2/60' : 'px-2 text-txt-3 hover:text-txt-1 hover:bg-bg-2/40'
                 }`}
               >
-                <Ico aria-hidden className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                {APP_META[id].label}
-                {active && (
-                  <span className="absolute left-2 right-2 bottom-0 h-[2px] bg-accent rounded-t-sm" />
-                )}
+                <Ico aria-hidden className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                {active && <span className="whitespace-nowrap">{APP_META[id].label}</span>}
+                {active && <span className="absolute left-2 right-2 bottom-0 h-[2px] bg-accent rounded-t-sm" />}
               </button>
             );
           })}

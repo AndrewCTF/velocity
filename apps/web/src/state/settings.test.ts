@@ -32,11 +32,13 @@ describe('settings store', () => {
     useSettings.getState().set('aircraftDeadReckon', true);
     expect(useSettings.getState().aircraftDeadReckon).toBe(true);
     expect(JSON.parse(localStorage.getItem('velocity.settings')!)).toEqual({
+      mapQuality: 'high',
       aircraftDeadReckon: true,
       renderPixelCap: 2,
       continuousRenderGovernor: false,
       selectionAiEnabled: false,
       selectionAiModel: null,
+      selectionAiPosition: 'top',
     });
   });
 

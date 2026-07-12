@@ -557,8 +557,13 @@ class SqliteRegistry(_GraphWalk):
         cap = int(self.s.ontology_max_assertions_per_object)
         if cap <= 0:
             return
+        # Chain-of-custody events (prop='custody', evidence locker) are the
+        # append-only legal record — never trim them, and don't let them count
+        # toward the cap that bounds noisy feed props. For every other object
+        # this excludes nothing (they have no 'custody' assertions).
         (count,) = con.execute(
-            "SELECT COUNT(*) FROM assertions WHERE user_id=? AND object_id=?",
+            "SELECT COUNT(*) FROM assertions"
+            " WHERE user_id=? AND object_id=? AND prop!='custody'",
             (self.ctx.user_id, object_id),
         ).fetchone()
         excess = count - cap
@@ -566,6 +571,7 @@ class SqliteRegistry(_GraphWalk):
             con.execute(
                 "DELETE FROM assertions WHERE id IN ("
                 " SELECT id FROM assertions WHERE user_id=? AND object_id=?"
+                " AND prop!='custody'"
                 " ORDER BY observed_at ASC, id ASC LIMIT ?)",
                 (self.ctx.user_id, object_id, excess),
             )
@@ -593,12 +599,21 @@ class SqliteRegistry(_GraphWalk):
             return
         if size <= max_bytes:
             return
-        (total,) = con.execute("SELECT COUNT(*) FROM assertions").fetchone()
+        # Never trim prop='custody' — the evidence locker's append-only legal
+        # record (mirrors the per-object cap above). Evidence is captured once
+        # and never re-touched, so its custody rows carry the OLDEST observed_at
+        # and would otherwise be the first thing this oldest-10% prune deletes.
+        # If the DB is over-cap on custody rows alone, nothing is trimmed here
+        # (the operator must raise ontology_db_max_bytes or archive) — the
+        # legal record wins over the soft byte cap by design.
+        (total,) = con.execute(
+            "SELECT COUNT(*) FROM assertions WHERE prop!='custody'"
+        ).fetchone()
         drop = max(1, total // 10)
         con.execute(
             "DELETE FROM assertions WHERE id IN ("
-            " SELECT id FROM assertions ORDER BY observed_at ASC, id ASC"
-            " LIMIT ?)",
+            " SELECT id FROM assertions WHERE prop!='custody'"
+            " ORDER BY observed_at ASC, id ASC LIMIT ?)",
             (drop,),
         )
         con.commit()

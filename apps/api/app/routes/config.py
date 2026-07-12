@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.auth import _auth_enabled
 from app.config import Settings, get_settings
 
 router = APIRouter(tags=["config"])
@@ -28,6 +29,10 @@ class RuntimeConfig(BaseModel):
     features: Features
     classification: str
     build_id: str = Field(..., alias="buildId")
+    # True when this box is keyless AND ALLOW_UNAUTHENTICATED is on — i.e. the
+    # compute/LLM endpoints are served to anyone. The UI shows an open-mode
+    # banner so an operator is never surprised that a public box spends compute.
+    open_mode: bool = Field(False, alias="openMode")
 
     model_config = {"populate_by_name": True}
 
@@ -40,4 +45,5 @@ def get_config(settings: Settings = Depends(get_settings)) -> RuntimeConfig:
         features=Features(enableGoogle3D=settings.enable_google_3d),
         classification=settings.classification,
         buildId=settings.build_id,
+        openMode=(not _auth_enabled(settings) and settings.allow_unauthenticated),
     )

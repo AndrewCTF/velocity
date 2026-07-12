@@ -644,6 +644,66 @@ roadmap's demand ranking.
   contact still only fires on ENTER/EXIT transitions, so this is bounded by
   the existing no-spam geofence design, not a new gap).
 
+## Evidence locker + case→report export (2026-07-12)
+
+Roadmap `docs/roadmap-practitioners-2026-07.md` P1+P2. The investigation loop
+worked until you had to *prove* something: you could flag/promote entities and
+build Situations, but nothing turned a case into a checkable document, and there
+was no chain-of-custody capture primitive. Both now exist, backend-first.
+
+- **Evidence = content-addressed ontology objects.** `app/intel/evidence.py`
+  mints `evidence:<sha256>` where the SHA-256 is over the exact captured bytes
+  at ingest — the hash IS the identity, so a mutated blob cannot masquerade as
+  the original (its id changes). Immutable blob bytes live under
+  `settings.evidence_dir` (`./data/evidence`, on the existing `osint_data`
+  volume), sharded by the first two hex chars, written atomically
+  (`.partial`→rename). The object (metadata + custody) lives in the ontology
+  store; `props.kind="evidence"` so `list_by_kind` sees it (same convention as
+  `situation`). `evidence` was added to `ObjectKind`/`_KNOWN_KINDS` in
+  `intel/ontology.py`.
+- **Custody rides the assertions table.** Every custody event (created,
+  re-observed, linked, …) is one append-only assertion under the `custody` prop
+  via `assert_props` — the substrate was built for exactly this; do NOT rebuild.
+  The materialized blob keeps only the latest event; the chain is
+  `get_assertions(id, prop="custody")`. Because the object id is the content
+  hash, the ingest fact survives even if the per-object assertion cap
+  (`ontology_max_assertions_per_object`, 2000) ever trims old custody rows.
+- **Capture paths** (`routes/evidence.py`, all keyless — evidence capture is
+  deliberately NOT an `is_compute_path` prefix so a bare `docker compose up`
+  preserves evidence without `ALLOW_UNAUTHENTICATED`): URL fetch (stores the raw
+  response bytes + status + selected headers; full headless render+screenshot is
+  a documented stretch, per the kill criterion), file upload (hash + original
+  bytes preserved), base64 screenshot attach, and **feed-freeze** (canonical
+  JSON of an entity's live state → notarize a moment of the live world; unique
+  to a self-hosted archive). The blob route re-verifies the hash and **409s on
+  tamper** rather than serving bad evidence.
+- **Case → report** (`app/intel/case_export.py`, named to avoid the unrelated
+  entity-pattern-of-life `intel/dossier.py`): `POST
+  /api/situations/{id}/export?fmt=html|json|pptx` walks the situation's 1-hop
+  children, their sourced assertions, and attached evidence into a report where
+  **every claim carries a provenance footnote** ("asserted by <source> at
+  <observed_at>") and every exhibit shows its SHA-256 + a hash-of-hashes
+  manifest. The HTML claim tables are driven purely off assertions (source +
+  observed_at are non-null columns), so the "zero unfootnoted claims" invariant
+  holds by construction. PPTX reuses python-pptx (503 if absent, mirroring
+  `report_pptx`). Optional AI narrative is rendered ONLY inside the
+  `AI_LABEL` block — the accepted-AI-use red line (labeled draft + human
+  sign-off) is enforced at render, not trusted to the caller.
+- **Attach** links `situation --evidence--> evidence:<sha>` (mirrors
+  `situations.link_child`), so `traverse(depth=1)` surfaces exhibits in the
+  situation detail and the export walks them.
+- Guards: `tests/test_evidence.py` (12 — hash/custody/tamper/dedup/feed-freeze/
+  manifest + full route surface incl. an offline URL capture) and
+  `tests/test_case_export.py` (9 — bundle/every-claim-footnoted/AI-label/PPTX +
+  routes). Baseline 1507 → 1533. `conftest._isolate_evidence_dir` points the
+  blob dir at a temp dir per test (route handlers read the cached
+  `get_settings()`, so this mirrors `override_db_path`).
+- Not done (named): `evidence_of` inversion in `actions.py:191` left alone (its
+  own incident→target semantic, own tests — out of this slice's scope); URL
+  capture is byte-faithful but not a rendered screenshot; server-side LLM
+  drafting is client-driven (frontend generates + human edits, export only
+  renders the labeled result) so export stays deterministic + keyless.
+
 ## Lessons from past sessions (post-mortems)
 
 ### Never claim coverage/parity without a measurement

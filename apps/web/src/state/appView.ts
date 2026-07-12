@@ -13,6 +13,7 @@ export type AppId =
   | 'map'
   | 'explorer'
   | 'graph'
+  | 'investigate'
   | 'targeting'
   | 'video'
   | 'sim'
@@ -26,6 +27,7 @@ export const APP_IDS: readonly AppId[] = [
   'map',
   'explorer',
   'graph',
+  'investigate',
   'targeting',
   'video',
   'sim',
@@ -43,6 +45,11 @@ export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'glo
   map: { label: 'Map', hint: 'Live geospatial COP (globe)', chrome: 'globe' },
   explorer: { label: 'Explorer', hint: 'Filter / aggregate the live object store', chrome: 'globe' },
   graph: { label: 'Graph', hint: 'Link analysis + search-around', chrome: 'globe' },
+  investigate: {
+    label: 'Investigate',
+    hint: 'Digital OSINT: domains, people, usernames, companies',
+    chrome: 'globe',
+  },
   targeting: { label: 'Targeting', hint: 'Kill-chain board (notional)', chrome: 'globe' },
   video: { label: 'Video', hint: 'FMV + ground recon + detections', chrome: 'globe' },
   sim: { label: 'Sim', hint: 'Browser war-game overlay', chrome: 'globe' },
@@ -76,7 +83,7 @@ export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'glo
 // appView.test.ts).
 export const APP_GROUPS: readonly { id: string; label: string; apps: readonly AppId[] }[] = [
   { id: 'live', label: 'Live', apps: ['map', 'sim'] },
-  { id: 'analyze', label: 'Analyze', apps: ['explorer', 'graph', 'targeting', 'video', 'country'] },
+  { id: 'analyze', label: 'Analyze', apps: ['explorer', 'graph', 'investigate', 'targeting', 'video', 'country'] },
   { id: 'data', label: 'Data', apps: ['foundry', 'workflows'] },
   { id: 'product', label: 'Product', apps: ['reports'] },
   { id: '3d', label: '3D', apps: ['city'] },

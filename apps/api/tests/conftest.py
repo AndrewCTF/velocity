@@ -120,6 +120,19 @@ def _isolate_alert_rules_db(tmp_path: Path) -> Iterator[None]:
     alert_rules_local.override_db_path(None)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_evidence_dir(tmp_path: Path) -> Iterator[None]:
+    """Point the evidence-locker blob dir at a per-test temp dir (mirrors the
+    ontology/foundry isolation) — route handlers resolve ``evidence_dir`` via
+    the cached ``get_settings()``, so without this every capture test would
+    write ``./data/evidence`` into the repo and see other tests' blobs."""
+    from app.intel import evidence as evidence_mod
+
+    evidence_mod.override_evidence_dir(str(tmp_path / "evidence"))
+    yield
+    evidence_mod.override_evidence_dir(None)
+
+
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     app = create_app()
