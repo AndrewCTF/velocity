@@ -74,7 +74,7 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
 
   return (
     <div
-      className="fixed inset-0 z-[2400] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[var(--z-wizard)] flex items-center justify-center bg-black/70 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Local AI setup"

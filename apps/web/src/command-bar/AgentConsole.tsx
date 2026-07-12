@@ -427,7 +427,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   }
 
   const containerCls = isMobile
-    ? 'fixed inset-0 z-[1100] flex flex-col'
+    ? 'fixed inset-0 z-[var(--z-overlay)] flex flex-col'
     : 'absolute left-1/2 -translate-x-1/2 bottom-4 z-[25] flex flex-col';
   const containerStyle = isMobile
     ? { background: 'rgba(9,12,18,0.98)' }

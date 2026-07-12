@@ -193,7 +193,7 @@ export function LogView({ lines, className = '' }: { lines: string[]; className?
                 <td className="select-none text-right align-top pr-2 pl-2 py-[1px] mono text-[10px] text-txt-4 tabular-nums w-[1%] whitespace-nowrap border-r border-line">
                   {i + 1}
                 </td>
-                <td className={`pl-2 pr-2 py-[1px] mono text-[10.5px] whitespace-pre-wrap ${err ? 'text-[#ffb3ae]' : 'text-txt-2'}`}>
+                <td className={`pl-2 pr-2 py-[1px] mono text-[10.5px] whitespace-pre-wrap ${err ? 'text-alert-fg' : 'text-txt-2'}`}>
                   {line}
                 </td>
               </tr>
@@ -296,7 +296,7 @@ export function FilterChips<T extends string>({
             className={[
               'mono text-[10px] uppercase tracking-[0.4px] px-2 py-1 rounded-sm border transition-colors',
               on
-                ? 'border-accent-line bg-accent-dim text-[#9cc2ff]'
+                ? 'border-accent-line bg-accent-dim text-accent-fg'
                 : empty
                   ? 'border-line text-txt-4'
                   : 'border-line-2 text-txt-2 hover:border-accent-line hover:text-txt-0',
@@ -304,7 +304,7 @@ export function FilterChips<T extends string>({
           >
             {o.label}
             {o.count != null && (
-              <span className={`ml-1.5 tabular-nums ${on ? 'text-[#9cc2ff]' : 'text-txt-4'}`}>
+              <span className={`ml-1.5 tabular-nums ${on ? 'text-accent-fg' : 'text-txt-4'}`}>
                 {o.count}
               </span>
             )}

@@ -287,7 +287,7 @@ export function App(): JSX.Element {
 export function GlobeControls({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | null {
   if (!viewer) return null;
   return (
-    <div className="absolute bottom-3 right-3 z-[1200] flex flex-col gap-1.5">
+    <div className="absolute bottom-3 right-3 z-[var(--z-dock)] flex flex-col gap-1.5">
       <button
         type="button"
         title="Reset to top-down (nadir) view"
@@ -548,7 +548,7 @@ export function CopControl({
   if (!viewer) return null;
 
   return (
-    <div className="absolute bottom-3 right-[112px] z-[1200] flex flex-col items-end gap-1.5">
+    <div className="absolute bottom-3 right-[112px] z-[var(--z-dock)] flex flex-col items-end gap-1.5">
       {open && (
         <div className="mono text-[10px] w-[212px] border border-line rounded-sm bg-bg-1/95 text-txt-1 shadow-xl p-2 flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
@@ -635,7 +635,7 @@ export function AuthNotice(): JSX.Element | null {
   // chip so the affordance is still there without the misleading copy.
   if (hasLiveData) {
     return (
-      <div className="absolute top-10 right-3 z-[1500] flex justify-end pointer-events-none">
+      <div className="absolute top-10 right-3 z-[var(--z-dock)] flex justify-end pointer-events-none">
         <Link
           to="/login"
           className="pointer-events-auto bg-bg-1/90 border border-accent-line rounded-sm px-2.5 py-1 text-[11px] font-medium text-accent shadow-lg hover:text-txt-0 hover:border-accent"
@@ -649,7 +649,7 @@ export function AuthNotice(): JSX.Element | null {
   // No data reached the globe yet — the auth-gated hosted case. Make the real
   // reason explicit with a one-click path to sign in.
   return (
-    <div className="absolute inset-x-0 top-10 z-[1500] flex justify-center px-3 pointer-events-none">
+    <div className="absolute inset-x-0 top-10 z-[var(--z-dock)] flex justify-center px-3 pointer-events-none">
       <div className="pointer-events-auto bg-bg-1/95 border border-accent-line rounded-md px-4 py-3 shadow-xl max-w-sm text-center">
         <p className="text-txt-0 text-[13px] font-semibold">Sign in to load live data</p>
         <p className="text-txt-2 text-[11px] mt-1 leading-snug">
@@ -713,7 +713,7 @@ export function ModeSurface({ viewer, registry }: { viewer: Cesium.Viewer | null
   const c = cfg[mode];
   return (
     <div
-      className={`absolute z-[1300] flex flex-col border border-line-2 rounded-md shadow-2xl overflow-hidden ${c.box}`}
+      className={`absolute z-[var(--z-overlay)] flex flex-col border border-line-2 rounded-md shadow-2xl overflow-hidden ${c.box}`}
       style={{ background: 'rgba(9,12,18,0.97)', ...(c.railDocked && { left: railLeft }) }}
     >
       <div className="flex items-center justify-between px-3 h-9 flex-none border-b border-line-2 bg-bg-1">

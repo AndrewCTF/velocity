@@ -333,7 +333,7 @@ export function SimulationOverlay({
   const ready = ptA != null && ptB != null;
 
   return (
-    <div className="absolute top-12 left-3 md:left-[304px] z-[1400] w-[300px] max-h-[calc(100%-6rem)] overflow-y-auto pointer-events-auto space-y-2.5 rounded-md border border-line bg-bg-0/90 backdrop-blur-sm p-2 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]">
+    <div className="absolute top-12 left-3 md:left-[304px] z-[var(--z-overlay)] w-[300px] max-h-[calc(100%-6rem)] overflow-y-auto pointer-events-auto space-y-2.5 rounded-md border border-line bg-bg-0/90 backdrop-blur-sm p-2 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]">
       <Widget
         title="Simulation"
         action={

@@ -30,14 +30,25 @@
   /* SEMANTIC — threat state ONLY */
   --warn: #f5a524;
   --warn-bg: rgba(245, 165, 36, 0.12);
+  --warn-line: rgba(245, 165, 36, 0.38);
+  /* warn "foreground" — the lightened text hue used on a --warn-bg tint (a raw
+     --warn is too saturated to read as body text). */
+  --warn-fg: #fcd9a0;
   --alert: #ff5a52;
   --alert-bg: rgba(255, 90, 82, 0.13);
+  --alert-line: rgba(255, 90, 82, 0.38);
+  --alert-fg: #ffc9c5;
   --ok: #4ed3a1;
+  --ok-bg: rgba(78, 211, 161, 0.12);
+  --ok-line: rgba(78, 211, 161, 0.35);
+  /* accent "foreground" — lightened accent text on an --accent-dim tint. */
+  --accent-fg: #9cc2ff;
   /* magenta — selection / correlation lineage (matches the globe selection
      polyline family; distinct from the blue interactive accent). */
   --mag: #e25bef;
   --mag-dim: rgba(226, 91, 239, 0.14);
   --mag-line: rgba(226, 91, 239, 0.5);
+  --mag-fg: #f0a8f8;
   /* Low severity — kept distinct from the selection accent so a "low" alert
      badge doesn't read as "selected". Mirrors --txt-1. */
   --sev-low: #cdc9c0;
@@ -61,16 +72,21 @@
   --sh-2: 0 6px 22px rgba(0, 0, 0, 0.5);
   --sh-pop: 0 18px 50px rgba(0, 0, 0, 0.6);
 
-  /* ── z-scale (design §6.2) — exactly SIX named layers replacing 19 ad-hoc
-     values across two scales. Chrome must reference these, never a bare z-[NNN].
-     Ordering IS the contract: a slide-over triage surface (--z-modal) sits ABOVE
-     a full-screen workspace (--z-overlay), which fixes the AlertsPanel-buried-
-     under-SimulationOverlay bug by construction. */
+  /* ── z-scale (design §6.2) — named layers replacing the ad-hoc z-[NNN] values
+     that had drifted into a parallel 1000–2500 scale. Chrome must reference
+     these, never a bare z-[NNN]. Ordering IS the contract:
+       map < rail < dock < overlay < dropdown < modal < wizard < toast
+     A slide-over triage surface (--z-modal) sits ABOVE a full-screen workspace
+     (--z-overlay), which fixes the AlertsPanel-buried-under-SimulationOverlay
+     bug by construction. First-run gates (--z-wizard) sit above ordinary modals
+     so onboarding is never occluded; toasts are always on top. */
   --z-map: 0; /* the Cesium canvas + on-map overlays anchored to it */
   --z-rail: 100; /* docked edge rails + their flyouts */
-  --z-dock: 200; /* docked helpers floating over the map */
+  --z-dock: 200; /* docked helpers / control chrome floating over the map */
   --z-overlay: 400; /* full-screen mode/workspace surfaces, sim overlay */
+  --z-dropdown: 500; /* context menus, tab flyouts — above workspace surfaces */
   --z-modal: 600; /* slide-overs, dialogs, alerts triage, command palette */
+  --z-wizard: 700; /* first-run gates: onboarding tour + AI setup wizard */
   --z-toast: 800; /* transient toasts — always on top */
 
   /* ── type scale with a FLOOR (design §6.2 — nothing below 10px). Migrate the
@@ -114,10 +130,30 @@
   --accent: #2575c0;
   --accent-dim: rgba(37, 117, 192, 0.12);
   --accent-line: rgba(37, 117, 192, 0.4);
+  /* accent/threat "foreground" hues — darkened for legibility on the pale tints */
+  --accent-fg: #1d5aa0;
   --warn: #b7791f;
+  --warn-bg: rgba(183, 121, 31, 0.12);
+  --warn-line: rgba(183, 121, 31, 0.4);
+  --warn-fg: #8a5a0d;
   --alert: #d8392f;
+  --alert-bg: rgba(216, 57, 47, 0.12);
+  --alert-line: rgba(216, 57, 47, 0.4);
+  --alert-fg: #a51f16;
   --ok: #1f9d6b;
+  --ok-bg: rgba(31, 157, 107, 0.12);
+  --ok-line: rgba(31, 157, 107, 0.35);
   --mag: #b13fc4;
+  --mag-dim: rgba(177, 63, 196, 0.12);
+  --mag-line: rgba(177, 63, 196, 0.45);
+  --mag-fg: #8a2b9c;
+  /* low severity mirrors --txt-1 (see :root note) */
+  --sev-low: #33414f;
+  /* classification banner — readable on light chrome */
+  --cls-unclas-bg: #d6f0e0;
+  --cls-unclas-fg: #1f7a44;
+  --cls-exercise-bg: #f6e6c0;
+  --cls-exercise-fg: #8a6410;
 }
 
 html,

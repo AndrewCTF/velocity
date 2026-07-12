@@ -143,13 +143,13 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
     <>
       <button
         type="button"
-        className="fixed inset-0 z-[1450] bg-black/40 backdrop-blur-[1px] cursor-default"
+        className="fixed inset-0 z-[var(--z-modal)] bg-black/40 backdrop-blur-[1px] cursor-default"
         onClick={onClose}
         aria-label="Close alerts"
       />
       <aside
         ref={dialogRef}
-        className="fixed top-[46px] bottom-[170px] right-0 z-[1460] w-full max-w-[460px] bg-bg-1 border-l border-line-2 rounded-l-md flex flex-col"
+        className="fixed top-[46px] bottom-[170px] right-0 z-[var(--z-modal)] w-full max-w-[460px] bg-bg-1 border-l border-line-2 rounded-l-md flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-label="Alerts"

@@ -46,7 +46,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
 
   return (
     <div
-      className="fixed inset-0 z-[2000] flex items-start justify-center bg-black/60 backdrop-blur-sm pt-[8vh]"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-start justify-center bg-black/60 backdrop-blur-sm pt-[8vh]"
       onClick={onClose}
     >
       <div
