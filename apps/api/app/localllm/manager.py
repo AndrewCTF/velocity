@@ -424,12 +424,14 @@ def get_job(job_id: str) -> dict[str, Any] | None:
     return job.as_dict() if job else None
 
 
-def _prune_jobs() -> None:
+def _prune_jobs(keep: str | None = None) -> None:
+    """Evict oldest finished jobs over the cap. *keep* shields one job_id — the
+    just-errored placeholder a deduped caller may still be about to poll."""
     with _JOBS_LOCK:
         if len(_JOBS) <= _MAX_JOBS:
             return
         finished = sorted(
-            (j for j in _JOBS.values() if j.status in ("done", "error")),
+            (j for j in _JOBS.values() if j.status in ("done", "error") and j.job_id != keep),
             key=lambda j: j.created,
         )
         for j in finished[: len(_JOBS) - _MAX_JOBS]:
@@ -607,7 +609,7 @@ async def start_download(repo_id: str, quant: str) -> str:
         with _JOBS_LOCK:
             job.status = "error"
             job.error = str(getattr(exc, "detail", None) or exc)
-        _prune_jobs()
+        _prune_jobs(keep=job.job_id)
         raise
 
     job.bytes_total = total_bytes
