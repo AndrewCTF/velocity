@@ -102,7 +102,9 @@ async def ucdp_events(version: str = DEFAULT_VERSION) -> dict[str, Any]:
                             "date_start": ev.get("date_start"),
                             "country": ev.get("country"),
                             "where": ev.get("where_description"),
-                            "label": f"{side_a} vs {side_b} · {VIOLENCE_TYPES.get(tov, 'violence')}",
+                            "label": (
+                                f"{side_a} vs {side_b} · {VIOLENCE_TYPES.get(tov, 'violence')}"
+                            ),
                         },
                     }
                 )

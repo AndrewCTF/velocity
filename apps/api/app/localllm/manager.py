@@ -599,7 +599,10 @@ async def start_download(repo_id: str, quant: str) -> str:
             free_gb = disk_free / 1e9
             raise HTTPException(
                 status_code=507,
-                detail=f"insufficient disk space: need ~{needed_gb:.1f}GB free, have {free_gb:.1f}GB",
+                detail=(
+                    f"insufficient disk space: need ~{needed_gb:.1f}GB free, "
+                    f"have {free_gb:.1f}GB"
+                ),
             )
     except BaseException as exc:
         # Do NOT pop the placeholder: a second caller may have deduped against it

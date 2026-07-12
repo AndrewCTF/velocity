@@ -35,7 +35,7 @@ _TTL = 86400.0
 # event loops (e.g. per-test loops). Keying by the object (not ``id(loop)``)
 # means entries are dropped when a loop is GC'd — no unbounded leak, and no
 # id-reuse collision resurrecting a semaphore bound to a dead loop.
-_WB_SEMS: "weakref.WeakKeyDictionary[Any, Any]" = weakref.WeakKeyDictionary()
+_WB_SEMS: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
 
 
 def _wb_sem():
@@ -64,14 +64,22 @@ WB_INDICATORS: list[dict[str, str]] = [
     {"id": "SP.DYN.LE00.IN", "label": "Life expectancy at birth", "unit": "years"},
     {"id": "SL.UEM.TOTL.ZS", "label": "Unemployment", "unit": "% of labor force"},
     {"id": "NE.EXP.GNFS.ZS", "label": "Exports of goods and services", "unit": "% of GDP"},
-    {"id": "BX.KLT.DINV.CD.WD", "label": "Foreign direct investment, net inflows", "unit": "current US$"},
+    {
+        "id": "BX.KLT.DINV.CD.WD",
+        "label": "Foreign direct investment, net inflows",
+        "unit": "current US$",
+    },
     {"id": "EN.ATM.CO2E.PC", "label": "CO2 emissions", "unit": "t per capita"},
 ]
 
 # Curated UNSD SDG series (seriesCode, label).
 UN_SERIES: list[dict[str, str]] = [
     {"id": "SI_POV_DAY1", "label": "Population below intl. poverty line (SDG 1.1.1)", "unit": "%"},
-    {"id": "SH_DYN_MORT", "label": "Under-5 mortality rate (SDG 3.2.1)", "unit": "per 1,000 live births"},
+    {
+        "id": "SH_DYN_MORT",
+        "label": "Under-5 mortality rate (SDG 3.2.1)",
+        "unit": "per 1,000 live births",
+    },
     {"id": "SE_ADT_LITRT", "label": "Adult literacy rate (SDG 4.6)", "unit": "%"},
     {"id": "EG_ELC_ACCS", "label": "Access to electricity (SDG 7.1.1)", "unit": "%"},
     {"id": "VC_IHR_PSRC", "label": "Intentional homicide rate (SDG 16.1.1)", "unit": "per 100,000"},
@@ -123,7 +131,9 @@ async def country_indicators() -> dict[str, Any]:
 @router.get("/api/country/{iso3}/worldbank")
 async def country_worldbank(
     iso3: str,
-    indicators: str | None = Query(None, description="comma-joined WB indicator ids; default = curated manifest"),
+    indicators: str | None = Query(
+        None, description="comma-joined WB indicator ids; default = curated manifest"
+    ),
     years: int = Query(15, ge=1, le=60),
 ) -> dict[str, Any]:
     """World Bank time-series for one country. Values are WB's own; a series
@@ -151,7 +161,8 @@ async def country_worldbank(
                     )
                 body = r.json()
             except Exception as e:  # noqa: BLE001 — one bad series never fails the country
-                return {"id": ind, "unavailable": True, "note": f"{type(e).__name__}: {e}"[:120], "series": []}
+                note = f"{type(e).__name__}: {e}"[:120]
+                return {"id": ind, "unavailable": True, "note": note, "series": []}
             if not isinstance(body, list) or len(body) < 2 or not isinstance(body[1], list):
                 return {"id": ind, "unavailable": True, "note": "wb: no data", "series": []}
             series = [
@@ -188,7 +199,9 @@ async def country_worldbank(
 @router.get("/api/country/{iso3}/un")
 async def country_un(
     iso3: str,
-    series: str | None = Query(None, description="comma-joined UNSD SDG series codes; default = curated set"),
+    series: str | None = Query(
+        None, description="comma-joined UNSD SDG series codes; default = curated set"
+    ),
 ) -> dict[str, Any]:
     """UNSD SDG series for one country (matched by M49 numeric area code)."""
     row = _resolve_iso3(iso3)
@@ -212,7 +225,8 @@ async def country_un(
                 )
                 body = r.json()
             except Exception as e:  # noqa: BLE001
-                return {"id": code, "unavailable": True, "note": f"{type(e).__name__}: {e}"[:120], "series": []}
+                note = f"{type(e).__name__}: {e}"[:120]
+                return {"id": code, "unavailable": True, "note": note, "series": []}
             data = body.get("data") if isinstance(body, dict) else None
             pts = [
                 {"year": d.get("timePeriodStart"), "value": d.get("value")}
