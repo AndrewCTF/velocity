@@ -12,6 +12,11 @@ import type { AdapterCtx, LayerAdapter } from './types.js';
 // glyph. Glyph + colour dispatch lives in ./eventStyle.ts (icons in
 // ../eventIcons.ts), mirroring the aircraft/vessel styles.ts split.
 //
+// When a feature carries `radius_m` (location uncertainty / plausible impact
+// area in meters), the SAME entity also gets a translucent ground ellipse in
+// the event's severity colour, so a strike/attack reads as an area, not just a
+// pin. Static geometry only (no CallbackProperty) — requestRenderMode friendly.
+//
 // Upsert by a STABLE composite key (centroid+domains) because the brief mints a
 // fresh random `id` every poll — keying on it would churn every entity each
 // refresh.
@@ -26,11 +31,44 @@ interface Area {
   color: string;
   pulse: boolean;
   label: string;
+  /** Uncertainty / plausible-area radius in meters, null when absent/invalid. */
+  radiusM: number | null;
 }
 
 function round(n: number, p = 2): number {
   const f = 10 ** p;
   return Math.round(n * f) / f;
+}
+
+// Cap on a plausible event area: anything beyond 120 km is country/region-level
+// geocoding noise — an ellipse that size would smear half a map, so it renders
+// as a bare glyph instead.
+const MAX_RADIUS_M = 120_000;
+
+/** Validate a backend `radius_m` value: finite, > 0, <= 120 km — else null. */
+function uncertaintyRadiusM(v: unknown): number | null {
+  const n = typeof v === 'string' ? parseFloat(v) : (v as number);
+  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
+  if (n <= 0 || n > MAX_RADIUS_M) return null;
+  return n;
+}
+
+// Translucent severity-coloured uncertainty disc on the same entity as the
+// glyph. Ground-clamped the same way as the jamming/TFR polygons in
+// PollGeoJsonAdapter.applyStyle (height 0 + TERRAIN classification). Constant
+// properties only — never a CallbackProperty (requestRenderMode invariant).
+function uncertaintyEllipse(radiusM: number, color: string): Cesium.EllipseGraphics {
+  const c = Cesium.Color.fromCssColorString(color);
+  return new Cesium.EllipseGraphics({
+    semiMajorAxis: radiusM,
+    semiMinorAxis: radiusM,
+    material: new Cesium.ColorMaterialProperty(c.withAlpha(0.14)),
+    outline: true,
+    outlineColor: c.withAlpha(0.5),
+    outlineWidth: 1,
+    height: 0,
+    classificationType: Cesium.ClassificationType.TERRAIN,
+  });
 }
 
 // Best-effort geocode of one IODA event. CAIDA's event geometry is not
@@ -63,7 +101,7 @@ function iodaPoint(
   return { lon, lat, name, score };
 }
 
-function buildAreas(kind: AreaKind, json: unknown): Area[] {
+export function buildAreas(kind: AreaKind, json: unknown): Area[] {
   const j = (json ?? {}) as Record<string, unknown>;
   if (kind === 'conflict') {
     // Real GDELT armed-conflict events (GeoJSON points). GDELT places many
@@ -71,7 +109,10 @@ function buildAreas(kind: AreaKind, json: unknown): Area[] {
     // (keep the strongest, sum the mentions) to stop a smear of stacked discs +
     // labels, then only LABEL the prominent ones so text stays readable.
     const feats = (j.features as Record<string, unknown>[]) ?? [];
-    const cells = new Map<string, { lon: number; lat: number; ment: number; root: string; label: string }>();
+    const cells = new Map<
+      string,
+      { lon: number; lat: number; ment: number; root: string; label: string; rad: number | null }
+    >();
     for (const f of feats) {
       const g = (f.geometry as { coordinates?: [number, number] }) ?? {};
       const c = g.coordinates;
@@ -79,10 +120,11 @@ function buildAreas(kind: AreaKind, json: unknown): Area[] {
       const p = (f.properties as Record<string, unknown>) ?? {};
       const ment = typeof p.mentions === 'number' ? p.mentions : 1;
       const root = String(p.root ?? '');
+      const rad = uncertaintyRadiusM(p.radius_m);
       const cellKey = `${round(c[0], 1)}|${round(c[1], 1)}`;
       const prev = cells.get(cellKey);
       if (!prev) {
-        cells.set(cellKey, { lon: c[0], lat: c[1], ment, root, label: String(p.label ?? 'armed clash') });
+        cells.set(cellKey, { lon: c[0], lat: c[1], ment, root, label: String(p.label ?? 'armed clash'), rad });
       } else {
         prev.ment += ment;
         if (ment > 0 && String(p.label ?? '').length) {
@@ -90,6 +132,8 @@ function buildAreas(kind: AreaKind, json: unknown): Area[] {
           if (ment >= prev.ment - ment) prev.label = String(p.label);
         }
         if (root === '20') prev.root = '20';
+        // merged cell keeps the LARGEST plausible area of its member events
+        if (rad != null) prev.rad = prev.rad == null ? rad : Math.max(prev.rad, rad);
       }
     }
     return [...cells.entries()].map(([cellKey, v]): Area => {
@@ -104,6 +148,7 @@ function buildAreas(kind: AreaKind, json: unknown): Area[] {
         // Only the prominent cells get a text label (keeps the map readable).
         // strip the per-event "(Nx)" the backend baked in, show the merged total.
         label: v.ment >= 6 ? `${v.label.replace(/\s*\(\d+x\)\s*$/, '')} (${v.ment}x)`.slice(0, 80) : '',
+        radiusM: v.rad,
       };
     });
   }
@@ -125,6 +170,7 @@ function buildAreas(kind: AreaKind, json: unknown): Area[] {
           color: sym.color,
           pulse: sym.pulse,
           label: `${level.toUpperCase()} · ${narrative}`.slice(0, 80),
+          radiusM: uncertaintyRadiusM(inc.radius_m),
         };
       })
       .filter((a): a is Area => a != null);
@@ -144,6 +190,8 @@ function buildAreas(kind: AreaKind, json: unknown): Area[] {
         color: sym.color,
         pulse: sym.pulse,
         label: `INTERNET OUTAGE · ${p.name}${p.score ? ` (${Math.round(p.score)})` : ''}`,
+        // IODA events carry no meaningful point-uncertainty radius.
+        radiusM: null,
       };
     })
     .filter((a): a is Area => a != null);
@@ -231,6 +279,18 @@ export class AreaAdapter implements LayerAdapter {
         );
         if (existing.billboard) existing.billboard.image = new Cesium.ConstantProperty(image);
         if (existing.label) existing.label.text = new Cesium.ConstantProperty(a.label);
+        // Upsert the uncertainty ellipse in place: add/replace when radius_m
+        // (re)appears or changes, drop it when the feature loses it. Replacing
+        // the whole EllipseGraphics only on a radius change avoids a geometry
+        // rebuild on every poll for the steady case.
+        const prevR = existing.ellipse?.semiMajorAxis?.getValue(Cesium.JulianDate.now()) as
+          | number
+          | undefined;
+        if (a.radiusM == null) {
+          if (existing.ellipse) existing.ellipse = undefined;
+        } else if (prevR !== a.radiusM) {
+          existing.ellipse = uncertaintyEllipse(a.radiusM, a.color);
+        }
         continue;
       }
       // High-intensity events breathe (billboard scale) instead of a pulsing
@@ -256,6 +316,8 @@ export class AreaAdapter implements LayerAdapter {
           scaleByDistance: new Cesium.NearFarScalar(3.0e5, 1.0, 1.2e7, 0.5),
         },
       };
+      // Plausible-area disc under the glyph when the backend supplied radius_m.
+      if (a.radiusM != null) opts.ellipse = uncertaintyEllipse(a.radiusM, a.color);
       // Label only the prominent events (low-intensity cells stay a bare glyph
       // so the map doesn't smear into a wall of text).
       if (a.label) {

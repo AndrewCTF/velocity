@@ -21,6 +21,14 @@ import {
 const inputCls =
   'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-none focus:border-accent-line';
 
+// Faction palette — literal hexes aligned to the dark-theme token values in
+// theme/tokens.css (--accent, --alert, --ok, --warn, --mag, --accent-fg).
+// Literal because faction colours are persisted in the control store and parsed
+// by Cesium (Color.fromCssColorString / hatchMaterial) in globe/ControlLayer.ts,
+// where var() cannot resolve; the globe canvas stays dark in both themes, so
+// the dark values are the right ones.
+const FACTION_PALETTE = ['#6fb1dd', '#ff5a52', '#4ed3a1', '#f5a524', '#e25bef', '#9cc2ff'];
+
 export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
   const factions = useControl((s) => s.factions);
   const zones = useControl((s) => s.zones);
@@ -145,8 +153,7 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
           onClick={() => {
             const name = window.prompt('New faction name');
             if (name?.trim()) {
-              const palette = ['#38bdf8', '#ef4444', '#4ade80', '#facc15', '#c084fc', '#f59e0b'];
-              setFacId(addFaction(name.trim(), palette[factions.length % palette.length]!));
+              setFacId(addFaction(name.trim(), FACTION_PALETTE[factions.length % FACTION_PALETTE.length]!));
             }
           }}
           className="text-[10px] mono px-1.5 py-1 rounded-sm border border-line text-txt-3 hover:text-accent"

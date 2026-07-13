@@ -4,11 +4,17 @@
 // owner so the two surfaces stay visually identical.
 import type { GroundDetection } from './types.js';
 
+// Literal hexes required — colorFor() output is also embedded in SVG data-URI
+// billboards (globe/CaptureLayer.ts), where CSS var() cannot resolve. person
+// and bus are aligned to the token palette (--alert / --accent in
+// theme/tokens.css); the remaining classes are deliberate extended hues (the
+// token palette has no orange/violet/teal/yellow) kept for distinguishability
+// over video.
 const CLS_COLOR: Record<string, string> = {
-  person: '#ef4444',
+  person: '#ff5a52', // --alert
   car: '#facc15',
   truck: '#fb923c',
-  bus: '#38bdf8',
+  bus: '#6fb1dd', // --accent
   motorcycle: '#a78bfa',
   bicycle: '#a78bfa',
   boat: '#5eead4',

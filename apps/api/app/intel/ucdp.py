@@ -31,6 +31,33 @@ _PAGESIZE = 1000
 # type_of_violence per UCDP codebook.
 VIOLENCE_TYPES = {1: "state-based conflict", 2: "non-state conflict", 3: "one-sided violence"}
 
+# where_prec (UCDP codebook location precision) → approximate uncertainty
+# radius in metres, so the frontend can draw an area instead of a bare pin.
+# 6 (country-only) and 7 (international waters/estimate) are too coarse for a
+# meaningful area — no radius is fabricated for them.
+_WHERE_PREC_RADIUS_M: dict[int, float] = {
+    1: 2000.0,
+    2: 25000.0,
+    3: 40000.0,
+    4: 90000.0,
+    5: 100000.0,
+}
+
+
+def parse_where_prec(value: Any) -> int | None:
+    """Defensive int parse of UCDP ``where_prec`` (missing/garbage → None)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def radius_for_where_prec(value: Any) -> float | None:
+    """Uncertainty radius in metres for a ``where_prec`` code; None when the
+    precision is absent or too coarse (never fabricated)."""
+    prec = parse_where_prec(value)
+    return _WHERE_PREC_RADIUS_M.get(prec) if prec is not None else None
+
 
 async def ucdp_events(version: str = DEFAULT_VERSION) -> dict[str, Any]:
     """UCDP GED candidate events as GeoJSON. Empty + ``unavailable`` without a
@@ -81,6 +108,7 @@ async def ucdp_events(version: str = DEFAULT_VERSION) -> dict[str, Any]:
                 side_a = str(ev.get("side_a") or "Unknown")
                 side_b = str(ev.get("side_b") or "Unknown")
                 tov = ev.get("type_of_violence")
+                where_prec = parse_where_prec(ev.get("where_prec"))
                 features.append(
                     {
                         "type": "Feature",
@@ -102,6 +130,10 @@ async def ucdp_events(version: str = DEFAULT_VERSION) -> dict[str, Any]:
                             "date_start": ev.get("date_start"),
                             "country": ev.get("country"),
                             "where": ev.get("where_description"),
+                            # Location precision → uncertainty area (metres);
+                            # radius_m is None when precision is unknown/coarse.
+                            "where_prec": where_prec,
+                            "radius_m": radius_for_where_prec(where_prec),
                             "label": (
                                 f"{side_a} vs {side_b} · {VIOLENCE_TYPES.get(tov, 'violence')}"
                             ),

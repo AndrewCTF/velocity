@@ -49,8 +49,28 @@ _C_A1, _C_A2 = 6, 16
 _C_A1CC, _C_A2CC = 7, 17
 _C_CODE, _C_ROOT = 26, 28
 _C_GOLD, _C_MENT = 30, 31
+_C_GEOTYPE = 51  # ActionGeo_Type: 1=country 2=US state 3=US city 4=world city 5=world state
 _C_LAT, _C_LON = 56, 57
 _C_URL = 60
+
+# ActionGeo_Type → approximate uncertainty radius in metres. City-level
+# (3/4) is tight; state-level (2/5) is broad; country-level (1) or unknown is
+# too coarse for a meaningful area — no radius is fabricated for it.
+_GEO_TYPE_RADIUS_M: dict[int, float] = {3: 8000.0, 4: 8000.0, 2: 60000.0, 5: 60000.0}
+
+
+def parse_geo_type(row: list[str]) -> int | None:
+    """Defensive read of ActionGeo_Type from an export row (short/garbage → None)."""
+    try:
+        return int(row[_C_GEOTYPE])
+    except (IndexError, TypeError, ValueError):
+        return None
+
+
+def radius_for_geo_type(geo_type: int | None) -> float | None:
+    """Uncertainty radius in metres for an ActionGeo_Type code; None for
+    country-level or unknown precision (never fabricated)."""
+    return _GEO_TYPE_RADIUS_M.get(geo_type) if geo_type is not None else None
 
 _GDELT_BASE = "http://data.gdeltproject.org/gdeltv2"
 _MAX_FEATURES = 1500
@@ -148,6 +168,7 @@ async def conflict_events(hours: int = 6) -> dict[str, Any]:
                 a1 = (c[_C_A1] or "").title() or "Unknown"
                 a2 = (c[_C_A2] or "").title() or "Unknown"
                 what = _label(c[_C_CODE], c[_C_ROOT])
+                geo_type = parse_geo_type(c)
                 features.append({
                     "type": "Feature",
                     "geometry": {"type": "Point", "coordinates": [lon, lat]},
@@ -163,6 +184,10 @@ async def conflict_events(hours: int = 6) -> dict[str, Any]:
                         "mentions": ment,
                         "day": c[_C_DAY],
                         "url": c[_C_URL],
+                        # ActionGeo precision → uncertainty area (metres);
+                        # radius_m is None for country-level/unknown geocoding.
+                        "geo_type": geo_type,
+                        "radius_m": radius_for_geo_type(geo_type),
                         # Label the map draws: "RUSSIA → UKRAINE · air strike (12x)".
                         "label": f"{a1} → {a2} · {what} ({ment}x)",
                     },

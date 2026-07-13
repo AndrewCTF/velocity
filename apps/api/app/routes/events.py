@@ -24,6 +24,26 @@ from app.upstream import cache, get_client
 
 router = APIRouter(tags=["events"])
 
+# ACLED geo_precision codebook value → approximate uncertainty radius in
+# metres (1 = exact town, 2 = part of region, 3 = larger region/provincial
+# capital). Unknown/missing precision → no radius — never fabricated.
+_ACLED_PREC_RADIUS_M: dict[int, float] = {1: 3000.0, 2: 25000.0, 3: 75000.0}
+
+
+def parse_geo_precision(value: Any) -> int | None:
+    """Defensive int parse of ACLED ``geo_precision`` (missing/garbage → None)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def radius_for_geo_precision(value: Any) -> float | None:
+    """Uncertainty radius in metres for an ACLED ``geo_precision`` code; None
+    when the precision is absent or unmapped."""
+    prec = parse_geo_precision(value)
+    return _ACLED_PREC_RADIUS_M.get(prec) if prec is not None else None
+
 EONET_CATEGORIES = {
     "wildfires",
     "volcanoes",
@@ -206,6 +226,7 @@ async def _load_acled(settings: Settings, days: int = 7) -> dict[str, Any]:
                 lat = float(row["latitude"])
             except (KeyError, ValueError):
                 continue
+            geo_precision = parse_geo_precision(row.get("geo_precision"))
             feats.append(
                 {
                     "type": "Feature",
@@ -222,6 +243,10 @@ async def _load_acled(settings: Settings, days: int = 7) -> dict[str, Any]:
                         "date": row.get("event_date"),
                         "source": "acled",
                         "kind": "event",
+                        # Location precision → uncertainty area (metres);
+                        # radius_m is None when precision is unknown.
+                        "geo_precision": geo_precision,
+                        "radius_m": radius_for_geo_precision(geo_precision),
                     },
                 }
             )

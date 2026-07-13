@@ -56,7 +56,15 @@ WB_INDICATORS: list[dict[str, str]] = [
     {"id": "NY.GDP.MKTP.KD.ZG", "label": "GDP growth", "unit": "% annual"},
     {"id": "FP.CPI.TOTL.ZG", "label": "Inflation (CPI)", "unit": "% annual"},
     {"id": "MS.MIL.XPND.GD.ZS", "label": "Military expenditure", "unit": "% of GDP"},
+    {"id": "MS.MIL.XPND.CD", "label": "Military expenditure", "unit": "current US$"},
+    {
+        "id": "MS.MIL.XPND.ZS",
+        "label": "Military expenditure",
+        "unit": "% of government expenditure",
+    },
     {"id": "MS.MIL.TOTL.P1", "label": "Armed forces personnel", "unit": "people"},
+    {"id": "MS.MIL.MPRT.KD", "label": "Arms imports (SIPRI TIV)", "unit": "constant 1990 US$"},
+    {"id": "MS.MIL.XPRT.KD", "label": "Arms exports (SIPRI TIV)", "unit": "constant 1990 US$"},
     {"id": "EG.ELC.ACCS.ZS", "label": "Access to electricity", "unit": "% of population"},
     {"id": "EG.USE.ELEC.KH.PC", "label": "Electric power consumption", "unit": "kWh per capita"},
     {"id": "IT.NET.USER.ZS", "label": "Internet users", "unit": "% of population"},
@@ -148,6 +156,21 @@ async def country_worldbank(
             raise HTTPException(400, f"malformed indicator id {ind!r}")
 
     iso3u = str(row["alpha-3"])
+    results = await load_worldbank(iso3u, ids, years)
+    return {
+        "iso3": iso3u,
+        "name": row.get("name"),
+        "source": "worldbank-api-v2",
+        "indicators": results,
+    }
+
+
+async def load_worldbank(iso3u: str, ids: list[str], years: int) -> list[dict[str, Any]]:
+    """Fetch World Bank time-series for one country's indicators (24h cache each,
+    Semaphore(4)-throttled). Reusable by the brief route so it fuses the SAME
+    values the ``/worldbank`` endpoint serves. One bad series never fails the
+    country — it comes back ``unavailable`` with an empty ``series``."""
+    manifest = {i["id"]: i for i in WB_INDICATORS}
 
     async def load_one(ind: str) -> dict[str, Any]:
         key = f"wb:{iso3u}:{ind}:{years}"
@@ -188,12 +211,7 @@ async def country_worldbank(
     import asyncio
 
     results = await asyncio.gather(*[load_one(i) for i in ids])
-    return {
-        "iso3": iso3u,
-        "name": row.get("name"),
-        "source": "worldbank-api-v2",
-        "indicators": list(results),
-    }
+    return list(results)
 
 
 @router.get("/api/country/{iso3}/un")
@@ -256,3 +274,60 @@ async def country_un(
         "source": "unstats-sdg-api",
         "series": list(results),
     }
+
+
+@router.get("/api/country/{iso3}/profile")
+async def country_profile(iso3: str) -> dict[str, Any]:
+    """Leadership + military structure for one country from Wikidata (keyless).
+
+    ``{iso3, name, source: "wikidata", leadership: [{role, person, position,
+    start, image}], military_branches: [str, …], unavailable?}``. Current
+    office-holders are picked latest-start-wins (Wikidata often omits end-dates,
+    so a missing end does NOT imply incumbency). Degrades to ``unavailable:
+    True`` when SPARQL times out / 429s — never 500."""
+    row = _resolve_iso3(iso3)
+    from app.intel import country_profile as cp
+
+    return await cp.fetch_profile(str(row["alpha-3"]), name=row.get("name"))
+
+
+@router.get("/api/country/{iso3}/security")
+async def country_security(
+    iso3: str,
+    hours: int = Query(24, ge=1, le=168),
+) -> dict[str, Any]:
+    """Per-country security picture fused from GDELT conflict, UCDP GED and the
+    military installation reference dataset (15 min cache). Country matching is
+    best-effort and each source's caveat rides in ``sources``/``notes`` — GDELT
+    has no country field (heuristic actor-name match), UCDP is token-gated,
+    installation coverage is US-only. Never 500."""
+    row = _resolve_iso3(iso3)
+    from app.intel import country_profile as cp
+
+    return await cp.country_security(str(row["alpha-3"]), name=row.get("name"), hours=hours)
+
+
+@router.get("/api/country/{iso3}/brief")
+async def country_brief(iso3: str) -> dict[str, Any]:
+    """LLM all-source country assessment (markdown) fusing latest World Bank
+    indicator values, Wikidata leadership and the fused security counts (10 min
+    cache). Degrades to ``{ok: False, reason}`` when no LLM backend answers —
+    never 500, never a fabricated brief."""
+    row = _resolve_iso3(iso3)
+    iso3u = str(row["alpha-3"])
+    import asyncio
+
+    from app.intel import country_profile as cp
+
+    wb, profile, security = await asyncio.gather(
+        load_worldbank(iso3u, [i["id"] for i in WB_INDICATORS], 15),
+        cp.fetch_profile(iso3u, name=row.get("name")),
+        cp.country_security(iso3u, name=row.get("name"), hours=24),
+    )
+    return await cp.country_brief(
+        iso3u,
+        row.get("name"),
+        {"indicators": wb},
+        profile,
+        security,
+    )

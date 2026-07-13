@@ -422,8 +422,10 @@ export const defaultLayers: readonly LayerDescriptor[] = [
   // ── CONFLICT / CYBER ─────────────────────────────────────────────────
   // REAL armed-conflict events from GDELT 2.0 (keyless): fights, air strikes,
   // shelling, bombings, mass violence — actual war (Ukraine/Russia, Gaza, Sudan,
-  // …), refreshed every 15 min, rendered as red AREAS with "ACTOR → ACTOR ·
-  // event (Nx)" labels. This is the headline conflict layer; default ON.
+  // …), refreshed every 15 min, rendered as category glyph billboards with
+  // "ACTOR → ACTOR · event (Nx)" labels on the prominent ones, plus a
+  // translucent uncertainty ellipse when the feature carries radius_m.
+  // This is the headline conflict layer; default ON.
   {
     id: 'conflict.gdelt.live',
     group: 'conflict',

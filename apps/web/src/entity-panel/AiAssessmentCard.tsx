@@ -9,7 +9,15 @@ import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { useSettings } from '../state/settings.js';
 import { Badge } from '../shell/instruments.js';
+import { Markdown } from '../shell/Markdown.js';
 import type { SelectionBriefResponse } from '../settings/localAi/types.js';
+
+// The backend is gaining an `enrichment` field on the selection-brief response
+// ("full" | "partial" | "skipped"); older backends omit it. Read it through a
+// widened view of the shared contract type so its absence stays valid.
+type BriefWithEnrichment = SelectionBriefResponse & {
+  enrichment?: 'full' | 'partial' | 'skipped';
+};
 
 const DEBOUNCE_MS = 500;
 const CACHE_TTL_MS = 60_000;
@@ -184,12 +192,18 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
           {err && <p className="mono text-[10px] text-alert">{err}</p>}
           {data && (
             <>
-              <p className="text-[11px] text-txt-1 leading-snug">{data.text}</p>
+              <Markdown text={data.text} />
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="mono text-[10px] text-txt-2 break-all min-w-0">{data.model}</span>
                 <span className="mono text-[10px] text-txt-3">{data.backend}</span>
                 <span className="mono text-[10px] text-txt-3 tabular-nums">{data.latency_ms.toFixed(0)}ms</span>
                 {data.cached && <Badge tone="neutral">cached</Badge>}
+                {(data as BriefWithEnrichment).enrichment === 'partial' && (
+                  <Badge tone="neutral">partial context</Badge>
+                )}
+                {(data as BriefWithEnrichment).enrichment === 'skipped' && (
+                  <Badge tone="neutral">no context</Badge>
+                )}
                 <button
                   type="button"
                   onClick={refresh}

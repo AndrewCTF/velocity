@@ -18,6 +18,7 @@ import {
   Toggle,
   type BadgeTone,
 } from '../shell/instruments.js';
+import { Markdown } from '../shell/Markdown.js';
 import type { Alert } from '@osint/shared';
 
 async function fetchJammingAlerts(): Promise<Alert[]> {
@@ -292,7 +293,10 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
           <div className="space-y-2">
             {heroIncident && heroTone && (
               <Hero tone={heroTone} title={`${heroIncident.threat_level} · ${heroIncident.domains.join(' + ')}`}>
-                <p className="text-[11px] text-txt-1 leading-snug">{heroIncident.narrative}</p>
+                {/* Narratives are deterministic templates today, but this is the
+                    prose surface where fused/LLM incident text lands — render
+                    markdown. The one-line Changes diff below stays a plain <p>. */}
+                <Markdown text={heroIncident.narrative} />
                 {heroIncident.emitter_estimate && (
                   <p className="mono text-[10px] text-warn mt-1.5 tabular-nums">
                     emitter ≈ {heroIncident.emitter_estimate.lat.toFixed(2)},
@@ -335,7 +339,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
                     {inc.domains.join(' + ')}
                   </span>
                 </div>
-                <p className="text-[11px] text-txt-1 leading-snug mt-1.5">{inc.narrative}</p>
+                <Markdown text={inc.narrative} className="mt-1.5" />
                 {inc.emitter_estimate && (
                   <p className="mono text-[10px] text-warn mt-1 tabular-nums">
                     emitter ≈ {inc.emitter_estimate.lat.toFixed(2)},{inc.emitter_estimate.lon.toFixed(2)} ±

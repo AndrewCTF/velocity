@@ -54,6 +54,8 @@ def test_selection_brief_happy_path(client, monkeypatch: pytest.MonkeyPatch) -> 
     assert body["model"] == "model.gguf"
     assert body["cached"] is False
     assert isinstance(body["latency_ms"], int)
+    # Synthetic id → no enrichment path attempted, and the response says so.
+    assert body["enrichment"] == "skipped"
     assert calls["n"] == 1
 
 
@@ -70,6 +72,8 @@ def test_selection_brief_second_call_within_ttl_is_cached(
     assert r1.json()["cached"] is False
     assert r2.json()["cached"] is True
     assert r2.json()["text"] == r1.json()["text"]
+    # A cached hit keeps whatever enrichment status it was built with.
+    assert r2.json()["enrichment"] == r1.json()["enrichment"]
     assert calls["n"] == 1  # second call served from cache, no second llm.chat
 
 
@@ -157,8 +161,9 @@ def test_selection_brief_uses_a_max_tokens_floor_that_survives_a_thinking_preamb
     """A reasoning-tier local model spends part of its budget on a thinking
     preamble even with thinking disabled at the request level (template
     quirks vary) — 300 wasn't enough headroom to survive that and still
-    answer, so the floor must be raised. 512 is the floor picked; assert the
-    route passes AT LEAST that, not some regressed lower value."""
+    answer, so the floor must be raised. 768 is the floor picked (preamble +
+    the 3-6 sentence structured brief); assert the route passes AT LEAST
+    that, not some regressed lower value."""
     seen = {}
 
     async def _capture(messages, *, tier="fast", max_tokens=1024, label="", **kw):  # noqa: ANN001, ANN003
@@ -170,7 +175,7 @@ def test_selection_brief_uses_a_max_tokens_floor_that_survives_a_thinking_preamb
         "/api/ai/selection/brief", json={"kind": "aircraft", "id": "AC-tokens-1", "props": {}}
     )
     assert r.status_code == 200
-    assert seen["max_tokens"] >= 512
+    assert seen["max_tokens"] >= 768
 
 
 def test_selection_brief_fuses_aircraft_enrichment_into_prompt(
@@ -226,6 +231,7 @@ def test_selection_brief_fuses_aircraft_enrichment_into_prompt(
     assert "7700" in user  # emergency squawk surfaced
     assert "SAM activity nearby" in user  # live incident membership
     assert "ENRICHMENT" in seen["system"]
+    assert r.json()["enrichment"] == "full"  # both attempted sources returned
 
 
 def test_selection_brief_fuses_static_entity_enrichment(
@@ -265,6 +271,7 @@ def test_selection_brief_fuses_static_entity_enrichment(
     assert "120km SW of Reykjavik" in user and "6.4" in user
     assert "earthquake.usgs.gov" not in user  # heavy url key dropped
     assert '"history"' not in user  # list field dropped
+    assert r.json()["enrichment"] == "full"
 
 
 def test_selection_brief_no_enrichment_for_synthetic_id(
@@ -285,6 +292,58 @@ def test_selection_brief_no_enrichment_for_synthetic_id(
     )
     assert r.status_code == 200
     assert "ENRICHMENT" not in seen["user"]
+    assert r.json()["enrichment"] == "skipped"
+
+
+def test_selection_brief_partial_when_one_enrichment_source_fails(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One of the two attempted aircraft sources blowing up must not raise —
+    the brief still runs on what survived, and the response reports the
+    degradation as enrichment:"partial" (not "full", not an exception)."""
+    from app.intel import dossier as dossier_mod
+    from app.routes import entity
+
+    async def _fake_enrich(icao24, callsign=None):  # noqa: ANN001, ANN202
+        return {"registration": "N12345", "operator": "United Airlines"}
+
+    async def _boom_dossier(ident):  # noqa: ANN001, ANN202
+        raise RuntimeError("positions DB unavailable")
+
+    monkeypatch.setattr(entity, "_enrich_aircraft", _fake_enrich)
+    monkeypatch.setattr(dossier_mod, "aircraft_dossier", _boom_dossier)
+
+    fake, _calls = _fake_chat()
+    monkeypatch.setattr(llm, "chat", fake)
+    r = client.post(
+        "/api/ai/selection/brief",
+        json={"kind": "aircraft", "id": "aircraft:a1b2c3", "props": {}},
+    )
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    assert r.json()["enrichment"] == "partial"
+
+
+def test_selection_brief_skipped_when_context_gather_fails_outright(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole fusion layer failing (or hitting the 4s timeout — same except
+    path in _safe_context) must never break the brief: it runs on the raw
+    props alone and reports enrichment:"skipped"."""
+
+    async def _boom(kind, eid, props):  # noqa: ANN001, ANN202
+        raise RuntimeError("enrichment substrate down")
+
+    monkeypatch.setattr(ais, "_gather_context", _boom)
+    fake, _calls = _fake_chat()
+    monkeypatch.setattr(llm, "chat", fake)
+    r = client.post(
+        "/api/ai/selection/brief",
+        json={"kind": "aircraft", "id": "aircraft:a1b2c3", "props": {}},
+    )
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    assert r.json()["enrichment"] == "skipped"
 
 
 def test_selection_brief_clamps_long_string_props(client, monkeypatch: pytest.MonkeyPatch) -> None:
