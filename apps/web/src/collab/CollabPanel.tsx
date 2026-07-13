@@ -11,7 +11,9 @@ import { useCollabDoc } from './useCollabDoc.js';
 
 export function CollabPanel({ docId = 'shared-notes' }: { docId?: string }) {
   const { doc, peers, online } = useCollabDoc(docId, {
-    user: { name: 'analyst', color: '#38bdf8' },
+    // Literal hex, not var(): this colour is serialized into Yjs awareness and
+    // shipped to peers as a raw string. Value = --accent (theme/tokens.css).
+    user: { name: 'analyst', color: '#6fb1dd' },
   });
   const [text, setText] = useState('');
   const ytextRef = useRef<Y.Text | null>(null);
@@ -62,8 +64,10 @@ export function CollabPanel({ docId = 'shared-notes' }: { docId?: string }) {
               fontSize: 11,
               padding: '1px 6px',
               borderRadius: 10,
-              background: p.color ?? '#334155',
-              color: '#fff',
+              background: p.color ?? 'var(--bg-4)',
+              // Token text colour so the fallback chip stays readable when the
+              // light theme flips --bg-4 to a pale grey.
+              color: 'var(--txt-0)',
             }}
           >
             {p.name ?? `#${p.clientId}`}

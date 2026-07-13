@@ -101,12 +101,14 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1540 passed + 1 skipped** (the skip is the opt-in live probe;
-  measured 2026-07-12 on branch rot-fixes-launch-plan after the rot-fix wave
-  — dead vessel probe, compose loopback binding, email-channel rejection —
-  up from 1539 after the evidence-locker hardening wave, 1536 after the
-  selection-brief enrichment-fusion wave, 1533 after the evidence-locker +
-  case-export wave, 1507 after the bug-fix wave (PR #38) and 1294 on
+  Baseline: **1630 passed + 1 skipped** (the skip is the opt-in live probe;
+  measured 2026-07-13 on branch intel-depth-polish after the real-place
+  strike-areas wave — geoBoundaries admin-polygon resolver + feed iso3/
+  shape_level enrichment + AreaAdapter polygon rendering — up from 1583
+  after the intel-depth wave, 1540 after the rot-fix wave, 1539 after the
+  evidence-locker hardening wave, 1536 after the selection-brief
+  enrichment-fusion wave, 1533 after the evidence-locker + case-export wave,
+  1507 after the bug-fix wave (PR #38) and 1294 on
   w5-places-airspace-enrichment).
   Never commit below the baseline you inherited; update this number when you raise it.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
@@ -118,6 +120,10 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Upstreams: adsb.lol 451s non-browser UAs; airplanes.live throttles with
   HTTP 200+text; firehose URLs dead from datacenter egress; OpenSky is the
   breadth source; CelesTrak 403-rate-limits bursts (2 h cache).
+- Wikidata SPARQL (country leadership): query-shape traps are documented in
+  `intel/country_profile.py` — a global rdfs:label join or `P279*` with a
+  non-constant class 504s; label service needs a language fallback chain;
+  serialize queries (bursts 429). Don't "simplify" the query.
 - Playwright: pass FUNCTIONS to `page.evaluate`, never strings. Headless
   cannot measure GPU fps — verify fps on hardware or say unverified. Live
   DEV globals: `window.__viewer` / `__Cesium` / `__useSelection`.

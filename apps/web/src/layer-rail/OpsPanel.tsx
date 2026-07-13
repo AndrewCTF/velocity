@@ -25,11 +25,13 @@ import { useReducedMotion } from '../shell/useReducedMotion.js';
 import { useEntityStats, setStatsViewer, acquireStats } from '../globe/entityStats.js';
 
 // Each chokepoint gets a small category-toned dot so the list scans fast.
+// Token refs (the consumer is CSS style.background), one distinct hue per
+// category, theme-aware in both light and dark.
 const CATEGORY_DOT: Record<Chokepoint['category'], string> = {
-  maritime: '#38bdf8',
-  aviation: '#facc15',
-  cable: '#c084fc',
-  'air-corridor': '#5eead4',
+  maritime: 'var(--accent)',
+  aviation: 'var(--warn)',
+  cable: 'var(--mag)',
+  'air-corridor': 'var(--ok)',
 };
 
 // Live in-AOI contact counts come from the shared entity-stats sampler

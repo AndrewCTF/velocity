@@ -289,8 +289,9 @@ export class LayerCompositor {
     if (d.id.startsWith('mil.cop.')) {
       return new MilSymbolAdapter({ ctx });
     }
-    // Conflict-incident areas (fusion brief) and internet-outage areas (IODA) —
-    // translucent severity-coloured ellipses + labels, NOT point icons.
+    // Conflict events (GDELT), fused incidents, and internet outages (IODA) —
+    // category glyph billboards (+ label for prominent ones), plus a translucent
+    // severity-coloured uncertainty ellipse when the feature carries radius_m.
     if (
       d.id.startsWith('intel.incidents') ||
       d.id.startsWith('cyber.ioda') ||

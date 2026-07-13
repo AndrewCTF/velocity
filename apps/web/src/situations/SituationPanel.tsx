@@ -29,12 +29,13 @@ const SEV_TONE: Record<Severity, BadgeTone> = {
   med: 'accent',
   low: 'neutral',
 };
-// Hex for the header glyph tile, keyed to severity (mirrors the alert/warn tokens).
+// Colour for the header glyph tile, keyed to severity. Token refs (the consumer
+// is IconTile's CSS style.color), so both themes resolve correctly.
 const SEV_COLOR: Record<Severity, string> = {
-  critical: '#ff5a52',
-  high: '#f5a524',
-  med: '#5b9dff',
-  low: '#64748b',
+  critical: 'var(--alert)',
+  high: 'var(--warn)',
+  med: 'var(--accent)',
+  low: 'var(--sev-low)',
 };
 const STATUS_DOT: Record<Status, string> = {
   active: 'red',

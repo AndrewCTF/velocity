@@ -79,6 +79,7 @@ from app.routes import export as export_routes
 from app.routes import extract as extract_routes
 from app.routes import firms as firms_routes
 from app.routes import foundry as foundry_routes
+from app.routes import geo_shapes as geo_shapes_routes
 from app.routes import geocode as geocode_routes
 from app.routes import ground as ground_routes
 from app.routes import health as health_routes
@@ -472,6 +473,7 @@ def create_app() -> FastAPI:
     app.include_router(recon_routes.router)
     app.include_router(route_routes.router)
     app.include_router(conflict_routes.router)
+    app.include_router(geo_shapes_routes.router)
     app.include_router(simulation_routes.router)
     # Typed ontology spine (read) + governed write-back actions — the semantic
     # layer the kanban, alerts, and agent compose on (Track A1/C1).

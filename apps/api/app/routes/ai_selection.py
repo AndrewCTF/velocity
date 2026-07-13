@@ -45,12 +45,13 @@ _CONTEXT_TIMEOUT_S = 4.0
 # Keep the fused context compact so the small, fast selection-tier model isn't
 # swamped — a long narrative field would crowd out the reasoning budget.
 _MAX_CONTEXT_STRING = 240
-# Floor is well above the 2-4 sentence answer this brief actually needs — a
+# Floor is well above the 3-6 sentence answer this brief actually needs — a
 # reasoning-tier local model (Qwen3 family etc.) spends some of its budget on
 # a thinking preamble even with `chat_template_kwargs.enable_thinking: false`
 # sent (see app.llm._llamacpp_chat/_vllm_chat), so 300 wasn't enough headroom
-# to survive that preamble and still answer; 512 is.
-_MAX_TOKENS = 512
+# to survive that preamble and still answer; 768 leaves room for both the
+# preamble and the longer structured markdown brief.
+_MAX_TOKENS = 768
 
 
 class BriefIn(BaseModel):
@@ -201,7 +202,9 @@ def _static_context(enrich: Any) -> dict[str, Any]:
     return _compact(picked)
 
 
-async def _gather_context(kind: str, eid: str, props: dict[str, Any]) -> dict[str, Any]:
+async def _gather_context(
+    kind: str, eid: str, props: dict[str, Any]
+) -> tuple[dict[str, Any], str]:
     """Fuse the platform's existing enrichment substrate for the selected entity
     so the brief is grounded in registry identity, flight route, flag state,
     reverse-geocoded location, pattern-of-life and live incident membership —
@@ -210,9 +213,15 @@ async def _gather_context(kind: str, eid: str, props: dict[str, Any]) -> dict[st
     Reuses the same enrichment the EntityPanel already fetches (routes.entity's
     ``_enrich_aircraft``/``_enrich_vessel``, all cached) plus the dossier
     (intel.dossier, local store + positions DB). Every layer is best-effort:
-    any failure or timeout yields no context, never an error, so the brief
-    always still runs on the raw props alone. Returns ``{}`` for kinds without
-    an enrichment path (or an id that doesn't resolve to a real identifier).
+    any failure yields thinner context, never an error, so the brief always
+    still runs on the raw props alone.
+
+    Returns ``(context, status)`` where status reports enrichment health so the
+    caller can tell a genuinely thin brief from a degraded one:
+    - ``"full"``    — every attempted source returned;
+    - ``"partial"`` — at least one attempted source failed;
+    - ``"skipped"`` — nothing attempted (no enrichment path for the kind, or an
+      id that doesn't resolve to a real identifier).
     """
     # The globe sends the entity id as "<kind>:<raw>" (e.g. "aircraft:a1b2c3");
     # recover the bare registry identifier. Some callers pass a bare id — accept
@@ -239,6 +248,9 @@ async def _gather_context(kind: str, eid: str, props: dict[str, Any]) -> dict[st
         _enrich_vessel,
     )
 
+    def _pair_status(*results: Any) -> str:
+        return "partial" if any(isinstance(r, BaseException) for r in results) else "full"
+
     try:
         if k == "aircraft" and ICAO24_RE.match(raw):
             callsign = props.get("callsign")
@@ -248,44 +260,49 @@ async def _gather_context(kind: str, eid: str, props: dict[str, Any]) -> dict[st
                 aircraft_dossier(raw),
                 return_exceptions=True,
             )
-            return _aircraft_context(enrich, dossier)
+            return _aircraft_context(enrich, dossier), _pair_status(enrich, dossier)
         if k == "vessel" and MMSI_RE.match(raw):
             enrich, dossier = await asyncio.gather(
                 _enrich_vessel(raw, get_settings()),
                 vessel_dossier(raw),
                 return_exceptions=True,
             )
-            return _vessel_context(enrich, dossier)
+            return _vessel_context(enrich, dossier), _pair_status(enrich, dossier)
         # Fixed entities — a single cached local/registry lookup, no dossier.
         if k == "quake" and QUAKE_ID_RE.match(raw):
-            return _static_context(await _enrich_quake(raw))
+            return _static_context(await _enrich_quake(raw)), "full"
         if k == "airport" and AIRPORT_CODE_RE.match(raw):
-            return _static_context(await _enrich_airport(raw))
+            return _static_context(await _enrich_airport(raw)), "full"
         if k == "port" and PORT_WPI_RE.match(raw):
-            return _static_context(await _enrich_port(raw))
+            return _static_context(await _enrich_port(raw)), "full"
         if k in ("facility", "military"):
-            return _static_context(_enrich_facility(k, raw))
+            return _static_context(_enrich_facility(k, raw)), "full"
         if k == "satellite" and SAT_NORAD_RE.match(raw):
-            return _static_context(await _enrich_satellite(raw))
+            return _static_context(await _enrich_satellite(raw)), "full"
         # A globe-clicked satellite id carries its layer descriptor as the head
         # and the NORAD id in a ":sat:<id>" tail — recover it (mirrors the
         # entity route's own fallback).
         tail = SAT_TAIL_RE.search(eid)
         if tail:
-            return _static_context(await _enrich_satellite(tail.group(1)))
+            return _static_context(await _enrich_satellite(tail.group(1))), "full"
     except Exception:  # noqa: BLE001 — enrichment is additive; never break the brief
-        return {}
-    return {}
+        # An attempted source blew up outside the gather's return_exceptions
+        # net (static-kind lookup, or setup after dispatch matched).
+        return {}, "partial"
+    return {}, "skipped"
 
 
-async def _safe_context(kind: str, eid: str, props: dict[str, Any]) -> dict[str, Any]:
-    """`_gather_context` under a hard timeout; returns {} on timeout/any error."""
+async def _safe_context(
+    kind: str, eid: str, props: dict[str, Any]
+) -> tuple[dict[str, Any], str]:
+    """`_gather_context` under a hard timeout; on timeout or any error the
+    brief runs on the raw props alone and the status reports "skipped"."""
     try:
         return await asyncio.wait_for(
             _gather_context(kind, eid, props), timeout=_CONTEXT_TIMEOUT_S
         )
     except Exception:  # noqa: BLE001 — timeout or any enrichment failure → no context
-        return {}
+        return {}, "skipped"
 
 
 @router.post("/api/ai/selection/brief")
@@ -314,16 +331,17 @@ async def post_selection_brief(
         nonlocal computed
         computed = True
         props_json = json.dumps(_clamp_props(body.props), default=str, separators=(",", ":"))
-        context = await _safe_context(body.kind, body.id, body.props)
+        context, enrichment_status = await _safe_context(body.kind, body.id, body.props)
         system = (
-            "You are an OSINT watch assistant. Give a 2-4 sentence assessment of "
-            f"this {body.kind}, noting anything anomalous in the data. You are "
-            "given the entity's live self-reported fields and, when available, an "
-            "ENRICHMENT block fused from registries, flight-route/flag lookups, "
-            "reverse-geocoding, pattern-of-life and live incident membership — "
-            "use it to identify and ground the assessment. Do not speculate "
-            "beyond the data given; if the enrichment and the live data conflict, "
-            "say so."
+            "You are a senior OSINT watch analyst briefing a watch floor. "
+            f"Write 3-6 sentences of markdown about this {body.kind} (bold key "
+            "identifiers), in this order: what it is; what it is doing now "
+            "(position, track, speed from the live fields); anomalies or "
+            "notable pattern-of-life from the ENRICHMENT block when present; "
+            "end with a one-line assessment. Ground every claim in the data "
+            "provided. If nothing stands out, say 'no anomalies evident' — "
+            "never invent one, and never speculate about intent. If the "
+            "enrichment conflicts with the live data, say so."
         )
         user = f"{body.kind} {body.id}:\n{props_json}"
         if context:
@@ -345,6 +363,10 @@ async def post_selection_brief(
             "model": res.model,
             "backend": res.backend,
             "latency_ms": latency_ms,
+            # Enrichment-fusion health for this brief — "full" | "partial" |
+            # "skipped" — so the frontend can tell a genuinely thin brief from
+            # a degraded one. Cached hits keep the status they were built with.
+            "enrichment": enrichment_status,
         }
 
     payload = await upstream.cache.get_or_fetch(cache_key, _CACHE_TTL_S, _load)
