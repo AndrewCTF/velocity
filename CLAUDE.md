@@ -101,12 +101,13 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1539 passed + 1 skipped** (the skip is the opt-in live probe;
-  measured 2026-07-12 on branch infra-country-facility-wave after the
-  bug-hunt fix wave — evidence-locker SSRF/XSS/tamper-export/custody-prune
-  hardening — up from 1536 after the selection-brief enrichment-fusion wave,
-  1533 after the evidence-locker + case-export wave, 1507 after the bug-fix
-  wave (PR #38) and 1294 on w5-places-airspace-enrichment).
+  Baseline: **1540 passed + 1 skipped** (the skip is the opt-in live probe;
+  measured 2026-07-12 on branch rot-fixes-launch-plan after the rot-fix wave
+  — dead vessel probe, compose loopback binding, email-channel rejection —
+  up from 1539 after the evidence-locker hardening wave, 1536 after the
+  selection-brief enrichment-fusion wave, 1533 after the evidence-locker +
+  case-export wave, 1507 after the bug-fix wave (PR #38) and 1294 on
+  w5-places-airspace-enrichment).
   Never commit below the baseline you inherited; update this number when you raise it.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
   = typecheck + lint + web unit + api tests in one command.

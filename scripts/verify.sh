@@ -75,19 +75,14 @@ EOF
 
   step "vessel count" "$PY" - <<'EOF'
 import json
-import os
 import urllib.request
 
-headers = {}
-if os.environ.get("OSINT_PROBE_KEY"):
-    headers["X-API-Key"] = os.environ["OSINT_PROBE_KEY"]
-req = urllib.request.Request("http://127.0.0.1:8000/api/ais/global?limit=50000", headers=headers)
-try:
-    with urllib.request.urlopen(req, timeout=30) as r:
-        n = len(json.load(r).get("features", []))
-    print(f"vessels: {n}")
-except Exception as exc:  # endpoint name may differ per deployment
-    print(f"vessel probe skipped: {exc}")
+# AIS has no HTTP snapshot route (vessels are WS-push via /ws/ais); the keyless
+# /api/status endpoint carries the unified store's live vessel_count instead.
+with urllib.request.urlopen("http://127.0.0.1:8000/api/status", timeout=30) as r:
+    body = json.load(r)
+assert "vessel_count" in body, "/api/status lost its vessel_count field"
+print(f"vessels: {body['vessel_count']} ({body.get('parked_count', 0)} parked)")
 EOF
 
   step "sidecar health" bash -c '

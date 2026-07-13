@@ -69,6 +69,17 @@ def test_create_rejects_bad_channel(client: TestClient) -> None:
     assert r.status_code == 400
 
 
+def test_create_rejects_email_until_a_sender_exists(client: TestClient) -> None:
+    # "email" used to be accepted and then silently never delivered (nothing
+    # sends it). Accepted-but-dead is worse than an honest 400 at creation.
+    r = client.post(
+        "/api/alerts/rules",
+        json={"label": "x", "lat": 1, "lon": 2, "channel": "email"},
+    )
+    assert r.status_code == 400
+    assert "not implemented" in r.json()["detail"]
+
+
 def test_create_rejects_discord_without_sink_url(client: TestClient) -> None:
     r = client.post(
         "/api/alerts/rules",

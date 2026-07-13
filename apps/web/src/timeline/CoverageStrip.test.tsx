@@ -1,9 +1,8 @@
 // Component tests for the coverage heat-strip. apiFetch is mocked at the
 // transport boundary (mirrors CountriesPanel.test.tsx / OsintEntityPanel.test.tsx),
-// routed by URL — no real network involved. The backend for
-// GET /api/history/coverage is being built in a parallel slice, so these tests
-// exercise the frontend purely against the documented response shape
-// (docs/replay-flagship-plan.md §2).
+// routed by URL — no real network involved. The GET /api/history/coverage
+// backend is live (routes/history.py); these tests exercise the frontend
+// against its response shape (docs/replay-flagship-plan.md §2).
 
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

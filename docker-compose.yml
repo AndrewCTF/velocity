@@ -31,9 +31,10 @@ services:
       # Single-box DEV default: serve the compute/LLM endpoints on a keyless
       # boot instead of 503-ing them. Without this the advertised quickstart
       # hits dead Reports tabs and any LLM-backed feature. Safe here because
-      # this stack is loopback-only and explicitly "do NOT expose to the
-      # internet" (see banner above). A .env with API_KEY/Supabase makes this
-      # irrelevant (real auth takes over). The UI shows an open-mode banner.
+      # nginx publishes on 127.0.0.1 only (see the ports mapping below) and
+      # the stack is explicitly "do NOT expose to the internet" (banner
+      # above). A .env with API_KEY/Supabase makes this irrelevant (real
+      # auth takes over). The UI shows an open-mode banner.
       # For a hardened deployment (docker-compose.prod.yml) leave it UNSET so
       # compute endpoints fail closed until a credential is configured.
       ALLOW_UNAUTHENTICATED: 1
@@ -85,7 +86,11 @@ services:
     image: nginx:1.27-alpine
     runtime: runc
     ports:
-      - "8080:80"
+      # Loopback only: this dev stack runs with ALLOW_UNAUTHENTICATED=1, so a
+      # bare "8080:80" would hand open-mode compute routes (LLM, Workflows
+      # dispatch) to the whole LAN. Override to "8080:80" deliberately — or
+      # use docker-compose.prod.yml, which fails closed without a credential.
+      - "127.0.0.1:8080:80"
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:

@@ -704,6 +704,34 @@ was no chain-of-custody capture primitive. Both now exist, backend-first.
   drafting is client-driven (frontend generates + human edits, export only
   renders the labeled result) so export stays deterministic + keyless.
 
+## Rot-fix wave: dead probe, compose binding, email channel (2026-07-12)
+
+Findings from the same-day state-of-project audit
+(`docs/audits/2026-07-12-state-of-project.md`), all small and behavioral:
+
+- **verify.sh `--live` vessel probe was dead since birth**: it GET
+  `/api/ais/global`, which has never existed (AIS is WS-push only,
+  `routes/ais.py`), so its bare `except` printed "skipped" on every run — a
+  guard that could never fire. Now reads keyless `/api/status`
+  `vessel_count` (the unified store's live count) and FAILS if the field
+  disappears. Lesson repeated from the Supabase-backend deletion: a probe
+  that can only skip is not a probe.
+- **docker-compose.yml published nginx on all interfaces** while its own
+  comment justified `ALLOW_UNAUTHENTICATED: 1` as "loopback-only". Now
+  `127.0.0.1:8080:80`; exposing wider is a deliberate operator override or
+  `docker-compose.prod.yml` (which fails closed). Open-mode compute routes
+  (LLM, Workflows dispatch) were LAN-reachable on any `docker compose up`
+  before this.
+- **`email` alert channel rejected at creation** (400 with an explicit
+  message) instead of accepted-and-never-delivered — closes the "Not done"
+  named in the 2026-07-11 keyless-alerts entry the honest direction until a
+  sender exists. Guard: `test_alert_rules.py::
+  test_create_rejects_email_until_a_sender_exists`. Baseline 1539 → 1540.
+- NOT changed, deliberately: watch-officer in-memory briefs (docstring
+  documents restart-rederivation and `incident_store` diff state is also
+  process-memory, so the story holds — the audit's first draft misread this
+  as rot); replay interpolation; anything guarded above.
+
 ## Lessons from past sessions (post-mortems)
 
 ### Never claim coverage/parity without a measurement

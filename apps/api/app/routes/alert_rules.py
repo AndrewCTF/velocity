@@ -12,10 +12,10 @@ a minimum severity + a delivery channel. Two backends, selected by the same
     cloud project can still define + persist a watch rule (W3, 2026-07-11:
     docs/decisions.md).
 
-``channel`` now includes ``discord`` / ``webhook`` (a ``sink_url`` — a Discord
-webhook URL or a generic endpoint) alongside the existing ``inapp`` / ``email``;
-delivery is performed by the watch evaluator (``intel/watch.py``), not this
-route — this module is CRUD-only.
+``channel`` is ``inapp`` / ``discord`` / ``webhook`` (the latter two take a
+``sink_url`` — a Discord webhook URL or a generic endpoint); delivery is
+performed by the watch evaluator (``intel/watch.py``), not this route — this
+module is CRUD-only. ``email`` is rejected at creation until a sender exists.
 """
 
 from __future__ import annotations
@@ -39,7 +39,9 @@ KINDS = {
 # discord/webhook deliver a firing to a sink_url; the watch evaluator does the
 # actual POST (see intel/watch.py::_deliver_sinks) reusing the Workflows
 # control.py HTTP primitive — no new client, no new dependency.
-CHANNELS = {"inapp", "email", "discord", "webhook"}
+# "email" is deliberately absent: nothing sends email yet, and a rule that
+# silently never delivers is worse than a 400 at creation (2026-07-12).
+CHANNELS = {"inapp", "discord", "webhook"}
 
 
 def _use_local(s: Settings) -> bool:
@@ -76,6 +78,11 @@ def _validate(body: AlertRuleIn) -> None:
     bad = [k for k in body.kinds if k not in KINDS]
     if bad:
         raise HTTPException(status_code=400, detail=f"unknown kinds: {bad}")
+    if body.channel == "email":
+        raise HTTPException(
+            status_code=400,
+            detail="email delivery is not implemented yet — use 'discord' or 'webhook'",
+        )
     if body.channel not in CHANNELS:
         raise HTTPException(status_code=400, detail="unknown channel")
     if body.channel in ("discord", "webhook"):
