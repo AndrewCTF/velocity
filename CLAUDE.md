@@ -47,6 +47,19 @@ Refresh / motion:
   Sanctioned opt-in exceptions — do NOT delete as regressions:
   `aircraftDeadReckon` toggle (OFF default) and `continuousRenderGovernor`
   toggle (OFF default), both in `state/settings.ts`. → `docs/decisions.md`
+- With `aircraftDeadReckon` ON the motion model is ANALYTIC
+  (`globe/adapters/deadReckon.ts`): `pos(t) = advance(anchor, track_deg,
+  velocity_ms * max(0, t - t0))`. Speed is EXACTLY the reported `velocity_ms`
+  and it can NEVER reverse — both structural, both operator requirements
+  (2026-07-14). Never ease/interpolate TOWARD a fix (makes speed arbitrary +
+  glides backwards); never fit velocity from consecutive fixes (only 13.5% land
+  within ±10% of reported). → `globe/adapters/deadReckon.test.ts`
+- The snapshot union is FRESHEST-OBSERVATION-wins (`seen_at - seen_pos_s`), not
+  merge-order — a cached tier must never clobber a fresher fix — and a fix that
+  flies a fast airborne contact backwards along its own `track_deg` is dropped.
+  Raw `seen_pos_s` is the age at UPSTREAM serve time and a cached tier reports
+  it as fresh forever; never compare it across tiers.
+  → `tests/test_adsb_no_reverse.py`
 - Position-unchanged SKIP still refreshes the entity PropertyBag; only the
   restyle is skipped. Vessels keep their `SampledPositionProperty` glide.
 - `requestRenderMode: true` + `maximumRenderTimeChange: 0` in GlobeCanvas
@@ -101,22 +114,12 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1662 passed + 1 skipped** (the skip is the opt-in live probe;
-  measured 2026-07-14 on branch ui-typography-wcag-sidebar after the AI-workspace
-  wave — dedicated AI hub app (agent + Watch Officer + engine/models), Watch
-  Officer status/elaborate routes, sharper selection-brief prompt, and
-  end-to-end AI-route tests — up from 1645 after the keyless
-  data-layers wave — 12 new feeds (hazards/env/oceans/space-weather/energy-infra/
-  aviation) wired across route + MCP + globe layer + ontology, up from 1630 after
-  the real-place
-  strike-areas wave — geoBoundaries admin-polygon resolver + feed iso3/
-  shape_level enrichment + AreaAdapter polygon rendering — up from 1583
-  after the intel-depth wave, 1540 after the rot-fix wave, 1539 after the
-  evidence-locker hardening wave, 1536 after the selection-brief
-  enrichment-fusion wave, 1533 after the evidence-locker + case-export wave,
-  1507 after the bug-fix wave (PR #38) and 1294 on
-  w5-places-airspace-enrichment).
-  Never commit below the baseline you inherited; update this number when you raise it.
+  Baseline: **1675 passed + 1 skipped** (skip = opt-in live probe; measured
+  2026-07-14, branch ui-typography-wcag-sidebar, aircraft predicted-motion
+  wave). Never commit below the baseline you inherited. When you raise it,
+  update the number/date/wave here and move the displaced line to
+  `docs/decisions.md#backend-test-baseline-history` — this bullet stays a
+  three-line fact, not a changelog.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
   = typecheck + lint + web unit + api tests in one command.
 - Boot: `bash scripts/run-api.sh` from repo ROOT (:8000, jemalloc preload —
@@ -139,6 +142,14 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 One file, one owner — serialize edits to shared files. A subagent touching
 `styles.ts`, `PollGeoJsonAdapter`, `tracks.ts` dedup, or `requestRenderMode`
 must preserve the invariants above (the guards fail loud regardless).
+
+Match model to judgment density, not prestige (operator directive 2026-07-14;
+sunset when default routing catches up): breadth exploration and signature
+extraction go to Explore/Plan agents on the inherited/default model — haiku
+handles "return the exact def lines, file:line, NOT FOUND if absent" fine.
+Pin a heavy model (opus/fable) only for judgment-dense stages — adversarial
+review, invariant-adjacent design, debugging that resists you — and say why.
+Never default every subagent to the biggest model.
 
 ## Verification before claiming done
 

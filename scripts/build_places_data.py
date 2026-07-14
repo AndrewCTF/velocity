@@ -127,6 +127,26 @@ def _to_bool01(v: str) -> bool:
     return str(v or "").strip() == "1"
 
 
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def _scrub_pii(v: str | None) -> str | None:
+    """Drop contact addresses out of upstream free-text fields.
+
+    Upstream operator/owner strings carry named individuals' work emails (WRI
+    GPPD `owner`, SatNOGS station `name`). We redistribute this file, so the
+    addresses come out; the organisation name they are embedded in stays.
+    """
+    if not v:
+        return None
+    out = _EMAIL_RE.sub("", v)
+    out = re.sub(r"[(<\[]\s*[)>\]]", "", out)  # brackets left empty by the cut
+    out = re.sub(r"\s+([)>\]])", r"\1", out)  # space the cut left before a bracket
+    out = re.sub(r"\s*[-–—,;]\s*(?=$|[-–—,;])", "", out)
+    out = re.sub(r"\s{2,}", " ", out).strip(" \t-–—,;")
+    return out or None
+
+
 def load_airports_csv(path: Path) -> list[dict[str, str]]:
     with path.open(encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
@@ -511,7 +531,7 @@ def build_power_plants(cache_dir: Path) -> list[dict[str, Any]]:
                         "iso3": str(row.get("country") or "").strip(),
                         "capacity_mw": cap,
                         "commissioning_year": int(float(year_raw)) if year_raw else None,
-                        "owner": str(row.get("owner") or "").strip() or None,
+                        "owner": _scrub_pii(str(row.get("owner") or "").strip()),
                         "source": "wri-gppd-v1.3",
                     }
                 )
@@ -534,7 +554,7 @@ def build_satnogs_stations(cache_dir: Path) -> list[dict[str, Any]]:
                 "id": f"satnogs-{s.get('id')}",
                 "category": "ground_station",
                 "subcategory": "satellite ground station (SatNOGS)",
-                "name": str(s.get("name") or f"SatNOGS {s.get('id')}"),
+                "name": _scrub_pii(str(s.get("name") or "")) or f"SatNOGS {s.get('id')}",
                 "lat": float(lat),
                 "lon": float(lon),
                 "altitude_m": s.get("altitude"),

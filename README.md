@@ -43,6 +43,15 @@ labelled as automated output, not sold as "AI insight."
 > Europe (global coverage is sparser and terrestrial-biased), and the 3D
 > satellite mode is a VRAM hog.
 
+> **Use at your own risk.** No warranty; the authors take no responsibility for
+> your use of this tool or the data it pulls. Velocity scrapes third-party
+> sources that have not authorised it — **their** terms bind **you**, the
+> requests come from **your** IP, and rate limits, bans, and legal exposure are
+> yours to absorb. Feeds are often incomplete, delayed, or spoofed, and the AI
+> summaries can be confidently wrong. Not for safety-of-life, navigation, or any
+> use where being wrong hurts someone. Read [`DISCLAIMER.md`](./DISCLAIMER.md)
+> before you run it.
+
 ## Prerequisites
 
 Honestly, not much. There are two ways to run it, pick whichever you're set up for:
@@ -587,3 +596,7 @@ carries its own licenses**; several feeds are non-commercial / academic (e.g.
 ACLED, adsb.fi, OpenSky). See [`NOTICE`](./NOTICE) for per-source attribution and
 terms, and verify each upstream's current terms before any commercial or
 redistributive use.
+
+No warranty, and no liability for how you collect or use the data — see
+[`DISCLAIMER.md`](./DISCLAIMER.md), which also covers scraping, upstream terms,
+personal data, and prohibited uses.

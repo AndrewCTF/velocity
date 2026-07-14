@@ -10,12 +10,16 @@ grant select on public.subscriptions to authenticated;
 grant select on public.tier_limits  to anon, authenticated;
 ```
 
-## 2. Give andrew@andrewyong.dev the max tier (enterprise)
+## 2. Give an operator the max tier (enterprise)
+
+Look the id up first — never paste a real user id into a doc or a ticket.
 
 ```sql
+select id, email from auth.users where email = 'operator@example.com';
+
 update public.subscriptions
 set tier = 'enterprise', status = 'active', trial_ends_at = null, updated_at = now()
-where user_id = 'b74ae853-c91c-4d08-afe4-ed798e09c203';
+where user_id = '<user-uuid>';
 ```
 
 ## 3. Verify
@@ -23,7 +27,7 @@ where user_id = 'b74ae853-c91c-4d08-afe4-ed798e09c203';
 ```sql
 select tier, status, public.effective_tier(user_id) as effective
 from public.subscriptions
-where user_id = 'b74ae853-c91c-4d08-afe4-ed798e09c203';
+where user_id = '<user-uuid>';
 -- expect: enterprise | active | enterprise
 ```
 
