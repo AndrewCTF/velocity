@@ -1,0 +1,42 @@
+/* Inspector reflow — when the operator widens the right rail, the dossier card
+   stack should USE the width (two columns) instead of stretching one cramped
+   column. Pure CSS: the rail is a `container`, and the EntityPanel stack opts in
+   with `.ep-stack`. No JS width plumbing — the rail's own inline width drives the
+   container query. Added 2026-07-13 with the "extend the sidebar to see all the
+   info" usability pass. `.ep-stack` owns ALL vertical rhythm (no Tailwind
+   space-y-*, which fights CSS columns). */
+
+/* The right rail aside becomes the query container (named so unrelated nested
+   containers can't accidentally match). ConsoleShell tags it `data-rail="right"`. */
+[data-rail='right'] {
+  container-type: inline-size;
+  container-name: inspector;
+}
+
+/* Single-column (default): stack cards with a consistent gap. */
+.ep-stack > * + * {
+  margin-top: 20px;
+}
+
+/* At a genuine reading width, flow cards into two columns. Cards keep their own
+   borders/spacing; `break-inside: avoid` keeps a card whole. The Header, any
+   SIMULATED caveat, and the AI card stay full-width (`.ep-span`) so the primary
+   identity + assessment read across the top, not split mid-thought. */
+@container inspector (min-width: 500px) {
+  .ep-stack {
+    column-count: 2;
+    column-gap: 16px;
+  }
+  /* Reset the single-column top-margin; columns use per-card bottom margin so a
+     card never starts flush against the top of the second column. */
+  .ep-stack > * + * {
+    margin-top: 0;
+  }
+  .ep-stack > * {
+    break-inside: avoid;
+    margin-bottom: 16px;
+  }
+  .ep-stack > .ep-span {
+    column-span: all;
+  }
+}

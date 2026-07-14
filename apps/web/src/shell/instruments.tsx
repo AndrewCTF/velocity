@@ -9,7 +9,10 @@
 import type { CSSProperties, ReactNode } from 'react';
 
 // ── section divider label (.seclbl) ────────────────────────────────────────
-// Mono 9px uppercase title, a hairline that fills the row, optional count.
+// Section title + optional count. Sentence case (frontend.md §type-scale
+// mandates "sentence case everywhere except machine codes"); the old
+// uppercase + 0.09em tracking read as "AI-dashboard" chrome. A hair more weight
+// carries the structural role now that it isn't shouting in caps.
 export function SectionLabel({
   title,
   count,
@@ -23,7 +26,7 @@ export function SectionLabel({
 }): JSX.Element {
   return (
     <div className={`flex items-center justify-between gap-2 ${className}`} style={style}>
-      <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">{title}</span>
+      <span className="text-[12px] font-semibold text-txt-1">{title}</span>
       {count !== undefined && count !== '' && (
         <span className="mono text-[11px] text-txt-3 tabular-nums">{count}</span>
       )}
@@ -34,7 +37,7 @@ export function SectionLabel({
 // ── micro caps label (.lbl) ─────────────────────────────────────────────────
 export function MicroLabel({ children, className = '' }: { children: ReactNode; className?: string }): JSX.Element {
   return (
-    <span className={`text-[10px] font-medium tracking-[0.08em] uppercase text-txt-2 ${className}`}>{children}</span>
+    <span className={`text-[11px] font-medium tracking-[0.06em] uppercase text-txt-2 ${className}`}>{children}</span>
   );
 }
 
@@ -135,7 +138,7 @@ export function Badge({
 }): JSX.Element {
   return (
     <span
-      className={`mono text-[10px] tracking-[0.6px] uppercase px-[7px] py-[3px] rounded-sm whitespace-nowrap ${BADGE_TONE[tone]} ${className}`}
+      className={`mono text-[11px] tracking-[0.5px] uppercase px-[7px] py-[3px] rounded-sm whitespace-nowrap ${BADGE_TONE[tone]} ${className}`}
     >
       {children}
     </span>
@@ -146,7 +149,7 @@ export function Badge({
 export function KV({ children, className = '' }: { children: ReactNode; className?: string }): JSX.Element {
   return (
     <div
-      className={`grid items-baseline gap-x-3 gap-y-[5px] text-[10.5px] ${className}`}
+      className={`grid items-baseline gap-x-3 gap-y-[5px] text-[12px] ${className}`}
       style={{ gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)' }}
     >
       {children}
@@ -154,9 +157,11 @@ export function KV({ children, className = '' }: { children: ReactNode; classNam
   );
 }
 export function KVRow({ k, v, warn = false }: { k: string; v: ReactNode; warn?: boolean }): JSX.Element {
+  // Field key = sentence-case label voice (readable, not shouted); the VALUE
+  // keeps the mono/tabular machine voice so figures still align and scan.
   return (
     <>
-      <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-2">{k}</span>
+      <span className="text-[11px] text-txt-2">{k}</span>
       <span className={`mono text-right min-w-0 break-words ${warn ? 'text-alert-fg' : 'text-txt-0'}`}>{v}</span>
     </>
   );
@@ -193,7 +198,7 @@ export function Btn({
       aria-label={ariaLabel ?? title}
       className={[
         'mono tracking-[0.3px] rounded-sm border transition-colors disabled:opacity-40',
-        size === 'sm' ? 'text-[10px] px-2 py-1' : 'text-[10px] px-[10px] py-[6px]',
+        size === 'sm' ? 'text-[11px] px-2 py-1' : 'text-[11px] px-[10px] py-[6px]',
         tone === 'accent'
           ? 'border-accent-line bg-accent-dim text-accent-fg hover:text-accent'
           : 'border-line-2 bg-bg-2 text-txt-1 hover:border-accent-line',
@@ -233,7 +238,7 @@ export function Hero({
     >
       <span className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: c.bar }} />
       <div className="flex items-center gap-2 mb-2">
-        <span className="mono text-[10px] tracking-[0.8px] uppercase" style={{ color: c.t }}>
+        <span className="mono text-[11px] tracking-[0.7px] uppercase" style={{ color: c.t }}>
           {title}
         </span>
       </div>
@@ -317,7 +322,7 @@ export function Brand({ name = 'VELOCITY', version }: { name?: string; version?:
     <div className="flex items-center gap-2 mono font-semibold tracking-[1.5px] text-[12px] text-txt-0">
       <span className="w-2 h-2 bg-accent rotate-45 shrink-0" />
       {name}
-      {version && <span className="font-normal tracking-[0.5px] text-[10px] text-txt-3">{version}</span>}
+      {version && <span className="font-normal tracking-[0.5px] text-[11px] text-txt-3">{version}</span>}
     </div>
   );
 }
@@ -343,7 +348,7 @@ export function Caveat({
 }): JSX.Element {
   return (
     <span
-      className={`inline-flex items-center gap-[5px] mono text-[10px] tracking-[0.7px] uppercase px-[6px] py-[2px] rounded-sm border whitespace-nowrap ${CAVEAT_TONE[tone]}`}
+      className={`inline-flex items-center gap-[5px] mono text-[11px] tracking-[0.6px] uppercase px-[6px] py-[2px] rounded-sm border whitespace-nowrap ${CAVEAT_TONE[tone]}`}
     >
       {level}
       {note && (
