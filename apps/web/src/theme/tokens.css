@@ -14,12 +14,15 @@
   --line: rgba(255, 246, 234, 0.08);
   --line-2: rgba(255, 246, 234, 0.15);
 
-  /* text — warm greys, a real contrast ramp */
+  /* text — warm greys, a real contrast ramp. WCAG-AA pass (2026-07-13): every
+     tier now clears 4.5:1 on both bg-1 and the lighter card bg-2, including the
+     muted txt-3/txt-4 tiers that previously failed (2.81:1 / 1.71:1) and were
+     carrying live text. txt-2 lifted to open headroom for a descending ramp. */
   --txt-0: #f5f2ed;
   --txt-1: #c0b9ae;
-  --txt-2: #8e8880;
-  --txt-3: #6a645b;
-  --txt-4: #494440;
+  --txt-2: #a8a29c;
+  --txt-3: #96908a;
+  --txt-4: #948e88;
 
   /* accent — soft sky-steel blue (interactive / focus / active). Lighter than
      the old cobalt so it sits comfortably on the warmer substrate. */
@@ -89,11 +92,12 @@
   --z-wizard: 700; /* first-run gates: onboarding tour + AI setup wizard */
   --z-toast: 800; /* transient toasts — always on top */
 
-  /* ── type scale with a FLOOR (design §6.2 — nothing below 10px). Migrate the
-     205 sub-10px literals onto these; captions are the smallest allowed. */
-  --fs-body: 12px; /* default body / row text */
-  --fs-dense: 11px; /* dense tabular rows */
-  --fs-caption: 10px; /* captions, eyebrows, section labels — the FLOOR */
+  /* ── type scale with a FLOOR (WCAG-AA legibility pass 2026-07-13 — nothing
+     below 11px; the old 10px floor read as "AI-dashboard" density and pushed
+     muted text below AA). Migrate sub-11px literals onto these. */
+  --fs-body: 13px; /* default body / row text */
+  --fs-dense: 12px; /* dense tabular rows */
+  --fs-caption: 11px; /* captions, eyebrows, machine codes — the FLOOR */
 
   /* classification banner (§6.2 hex amnesty) — the marking chrome, tokenized so
      it's no longer hardcoded green literals scattered in ConsoleShell. */
@@ -125,8 +129,10 @@
   --txt-0: #10151c;
   --txt-1: #33414f;
   --txt-2: #5d6776;
-  --txt-3: #8b95a2;
-  --txt-4: #aab2bd;
+  /* txt-3/txt-4 darkened to clear AA on white AND the pale card bg-2 (were
+     3.04:1 / 2.14:1 — both failed while carrying live text). See contrast.test.ts */
+  --txt-3: #636d79;
+  --txt-4: #66707c;
   --accent: #2575c0;
   --accent-dim: rgba(37, 117, 192, 0.12);
   --accent-line: rgba(37, 117, 192, 0.4);
@@ -164,7 +170,7 @@ body,
   background: var(--bg-0);
   color: var(--txt-0);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums; /* numerics don't jitter */
@@ -207,8 +213,8 @@ body,
 /* micro-label utility — frontend.md §3 */
 .micro {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.5px;
+  font-size: 11px; /* WCAG floor 2026-07-13 — was 10px */
+  letter-spacing: 0.4px;
   color: var(--txt-3);
   text-transform: uppercase;
 }

@@ -810,3 +810,42 @@ Human-style commit messages; a global commit-msg hook strips AI attribution.
 Write what was measured ("union climbs to ~14k"), not marketing ("now
 global"). Repo root tidy: no dev screenshots committed, docs under `docs/`,
 app art is SVG in code.
+
+### Typography & WCAG-AA legibility pass (2026-07-13)
+Operator feedback: the UI "looks AI", newcomers/older users struggle, the
+sidebar won't extend to show all the info, and WCAG rules aren't followed.
+Three findings, all fixed surgically (not a rebuild):
+
+1. **"Looks AI" was the type system, not the face.** Body was 11px on a 10px
+   floor with uppercase 0.8px-tracked eyebrow labels applied nearly everywhere
+   (~1,368 literals). Inter stays (Stripe/GitHub ship it). The floor went to
+   11px (`--fs-body 13 / -dense 12 / -caption 11`; html/body 13px), and the two
+   STRUCTURAL instrument primitives — `SectionLabel` and `KVRow` keys — became
+   sentence case (`shell/instruments.tsx`). This actually enforces the existing
+   `frontend.md` spec ("sentence case everywhere except machine codes"), which
+   the code had drifted from. `MicroLabel`/`Badge`/`Caveat` KEEP mono-caps —
+   they are the sanctioned machine/status voice (MMSI, UNCLAS, units). The
+   ~203 inline `uppercase tracking-[…]` leaf sites (LayerRail groups, Foundry,
+   Inbox, …) are a deliberate phase-2 follow-up, not done here.
+2. **WCAG-AA contrast.** Only `--txt-3`/`--txt-4` failed, in BOTH themes (dark
+   2.81:1 / 1.71:1; light 3.04:1 / 2.14:1) while carrying LIVE text (not just
+   disabled controls, so not WCAG-exempt). The whole muted ramp (`--txt-2/3/4`)
+   was re-solved to clear 4.5:1 on both bg-1 and the lighter card bg-2, keeping
+   a monotonic txt-0>1>2>3>4 ramp. Guarded by `theme/contrast.test.ts` (parses
+   tokens.css, asserts AA per tier per theme) — the executable invariant.
+3. **Sidebar "extend to see all the info".** The right rail always resized
+   (260–680px) but had no visible affordance and the EntityPanel didn't reflow.
+   Added: a visible + keyboard-operable resize grip (`RailResizer`, WAI-ARIA
+   separator: arrows/Home/End), an in-rail header with a **Wide** toggle
+   (snaps to a 560px reading width) and a **Detach** button that pops the
+   inspector into a floating window — reusing the existing `floatingPanels`
+   store + `FloatingPanel` (same substrate the left rail uses). Right-rail width
+   lifted into `state/railWidth.ts` (still persists `csl.rightW`, still
+   publishes `--rail-right-w`). At ≥500px content the EntityPanel card stack
+   reflows to two columns via a pure `@container` query (`theme/reflow.css`,
+   `.ep-stack`/`.ep-span`) — no JS width plumbing. Verified live: sentence-case
+   cards, wide-mode 2-col, detach, light-theme all screenshotted.
+
+Known follow-ups (not regressions): the right rail bg is still a hardcoded dark
+`RAIL_BG` (not tokenized) so light theme shows light text on a dark rail;
+phase-2 leaf-site sentence-case sweep.

@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type CSSProperties } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
+import { X, PanelRightClose, PanelLeftClose, PanelRightOpen } from 'lucide-react';
 import type { TabDef } from './TabbedPanel.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { useIsMobile } from './useIsMobile.js';
 import { StatusDot, MicroLabel } from './instruments.js';
+import { FloatingPanel } from './FloatingPanel.js';
 import { useConnection, useFeeds, useTime, useSim } from '../state/stores.js';
+import { useRailWidth, RIGHT_MIN, RIGHT_MAX } from '../state/railWidth.js';
+import { useFloatingPanels } from '../state/floatingPanels.js';
+
+// Stable id for the inspector's detached-window rect in the floatingPanels store.
+const INSPECTOR_PANEL_ID = 'inspector';
 
 // Desktop: five-zone layout (frontend.md §4) — 42px command bar, globe with a
 // 296px left rail + 336px right rail absolutely over it, 158px timeline footer.
@@ -45,13 +52,12 @@ const ICON_RAIL_W = 44;
 
 const RAIL_BG = 'rgba(8,10,15,0.95)';
 
-// Resizable rails — widths persist to localStorage, clamped to sane bounds.
+// Resizable rails — widths persist to localStorage, clamped to sane bounds. The
+// LEFT rail keeps its local width state; the RIGHT rail's bounds (RIGHT_MIN/MAX)
+// and value now live in state/railWidth.ts (shared with the in-rail Wide toggle).
 const LS_LEFT = 'csl.leftW';
-const LS_RIGHT = 'csl.rightW';
 const LEFT_MIN = 220;
 const LEFT_MAX = 620;
-const RIGHT_MIN = 260;
-const RIGHT_MAX = 680;
 const clampN = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
 function readW(key: string, def: number): number {
   try {
@@ -64,18 +70,26 @@ function readW(key: string, def: number): number {
 
 // Thin draggable edge on a rail's INNER border. Drag updates the width live; the
 // listeners attach to window so the drag survives the cursor leaving the handle.
+// Keyboard-operable (WAI-ARIA window-splitter pattern): focus it and use the
+// arrows / Home / End so a mouse isn't required. A visible grip-dot column on
+// hover/focus fixes the old "invisible 5px strip nobody knew was draggable".
+const KEY_STEP = 16;
 function RailResizer({
   side,
+  width,
   set,
 }: {
   side: 'left' | 'right';
+  width: number;
   set: (w: number) => void;
 }): JSX.Element {
+  const lo = side === 'left' ? LEFT_MIN : RIGHT_MIN;
+  const hi = side === 'left' ? LEFT_MAX : RIGHT_MAX;
   const onDown = (e: ReactPointerEvent): void => {
     e.preventDefault();
     const move = (ev: PointerEvent): void => {
       const raw = side === 'left' ? ev.clientX : window.innerWidth - ev.clientX;
-      set(clampN(raw, side === 'left' ? LEFT_MIN : RIGHT_MIN, side === 'left' ? LEFT_MAX : RIGHT_MAX));
+      set(clampN(raw, lo, hi));
     };
     const up = (): void => {
       window.removeEventListener('pointermove', move);
@@ -86,15 +100,40 @@ function RailResizer({
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   };
+  const onKey = (e: ReactKeyboardEvent): void => {
+    // On the RIGHT rail the panel grows toward the screen's left edge, so
+    // ArrowLeft = wider; the left rail is the mirror. Home/End jump to bounds.
+    const grow = side === 'left' ? KEY_STEP : -KEY_STEP;
+    let next: number | null = null;
+    if (e.key === 'ArrowLeft') next = width - grow;
+    else if (e.key === 'ArrowRight') next = width + grow;
+    else if (e.key === 'Home') next = lo;
+    else if (e.key === 'End') next = hi;
+    if (next !== null) {
+      e.preventDefault();
+      set(clampN(next, lo, hi));
+    }
+  };
   return (
     <div
       onPointerDown={onDown}
+      onKeyDown={onKey}
       role="separator"
       aria-orientation="vertical"
       aria-label={`Resize ${side} panel`}
-      title="Drag to resize"
-      className={`absolute top-0 bottom-0 ${side === 'left' ? 'right-0' : 'left-0'} w-[5px] cursor-col-resize z-30 hover:bg-accent-line/50 active:bg-accent-line/70`}
-    />
+      aria-valuenow={Math.round(width)}
+      aria-valuemin={lo}
+      aria-valuemax={hi}
+      tabIndex={0}
+      title="Drag, or focus and use arrow keys, to resize"
+      className={`group absolute top-0 bottom-0 ${side === 'left' ? 'right-0' : 'left-0'} w-[7px] cursor-col-resize z-30 flex items-center justify-center hover:bg-accent-line/40 focus-visible:bg-accent-line/50 focus:outline-none`}
+    >
+      {/* grip dots — subtle until hover/focus, then clearly a handle */}
+      <span
+        aria-hidden
+        className="h-7 w-[3px] rounded-full bg-txt-4 opacity-40 group-hover:opacity-90 group-focus-visible:opacity-100 transition-opacity"
+      />
+    </div>
   );
 }
 
@@ -117,7 +156,17 @@ export function ConsoleShell({
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [leftW, setLeftW] = useState(() => clampN(readW(LS_LEFT, 296), LEFT_MIN, LEFT_MAX));
-  const [rightW, setRightW] = useState(() => clampN(readW(LS_RIGHT, 360), RIGHT_MIN, RIGHT_MAX));
+  // Right-rail width lives in a store (state/railWidth.ts) so the in-rail Wide
+  // toggle and the resizer share one source; the store owns clamp + persistence.
+  const rightW = useRailWidth((s) => s.rightW);
+  const setRightW = useRailWidth((s) => s.setRightW);
+  const toggleWide = useRailWidth((s) => s.toggleWide);
+  const wide = useRailWidth((s) => s.rightW) >= 520;
+  // Inspector detach — reuses the same floating-window substrate the left rail
+  // uses (state/floatingPanels.ts + FloatingPanel). Presence of the id === floating.
+  const inspectorFloating = useFloatingPanels((s) => Boolean(s.panels[INSPECTOR_PANEL_ID]));
+  const detachInspector = useFloatingPanels((s) => s.detach);
+  const redockInspector = useFloatingPanels((s) => s.redock);
   useEffect(() => {
     try {
       localStorage.setItem(LS_LEFT, String(leftW));
@@ -125,13 +174,6 @@ export function ConsoleShell({
       /* ignore */
     }
   }, [leftW]);
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_RIGHT, String(rightW));
-    } catch {
-      /* ignore */
-    }
-  }, [rightW]);
 
   const timelinePanel: TabDef = { id: 'timeline', label: 'Timeline', content: bottom };
   const mobilePanels: TabDef[] =
@@ -234,19 +276,62 @@ export function ConsoleShell({
                 style={{ background: RAIL_BG, width: leftW }}
               >
                 {left}
-                <RailResizer side="left" set={setLeftW} />
+                <RailResizer side="left" width={leftW} set={setLeftW} />
               </aside>
             )}
-            {right && (
+            {right && !inspectorFloating && (
               <aside
+                data-rail="right"
                 className={`absolute right-0 top-0 bottom-0 border-l border-line-2 overflow-hidden z-20 flex-col ${bleed ? 'hidden' : 'flex'}`}
                 aria-label="Selection"
                 style={{ background: RAIL_BG, width: rightW }}
               >
-                {right}
-                <RailResizer side="right" set={setRightW} />
+                {/* rail header — Wide + Detach live where the operator looks, so the
+                    resize/expand affordances aren't hidden behind a 7px edge. */}
+                <div className="flex items-center justify-end gap-0.5 h-7 shrink-0 px-1.5 border-b border-line-2">
+                  <button
+                    type="button"
+                    onClick={toggleWide}
+                    aria-pressed={wide}
+                    aria-label={wide ? 'Collapse inspector to default width' : 'Widen inspector for two-column detail'}
+                    title={wide ? 'Collapse to default width' : 'Widen — two-column detail'}
+                    className="text-txt-3 hover:text-txt-0 px-1 h-5 flex items-center rounded-sm hover:bg-bg-3"
+                  >
+                    {wide ? (
+                      <PanelRightClose size={14} strokeWidth={1.75} aria-hidden />
+                    ) : (
+                      <PanelLeftClose size={14} strokeWidth={1.75} aria-hidden />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => detachInspector(INSPECTOR_PANEL_ID, { w: Math.max(rightW, 420) })}
+                    aria-label="Detach inspector into a floating window"
+                    title="Detach — pop out into a movable window"
+                    className="text-txt-3 hover:text-accent px-1 h-5 flex items-center rounded-sm hover:bg-bg-3"
+                  >
+                    <PanelRightOpen size={14} strokeWidth={1.75} aria-hidden />
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-auto">{right}</div>
+                <RailResizer side="right" width={rightW} set={setRightW} />
               </aside>
             )}
+            {/* Detached inspector — same content node, floated free over the globe.
+                Portalled to <body> so the rail's stacking context can't clip it. */}
+            {right && inspectorFloating &&
+              createPortal(
+                <FloatingPanel
+                  id={INSPECTOR_PANEL_ID}
+                  title="Selection"
+                  onClose={() => redockInspector(INSPECTOR_PANEL_ID)}
+                >
+                  <div data-rail="right" className="h-full overflow-auto">
+                    {right}
+                  </div>
+                </FloatingPanel>,
+                document.body,
+              )}
           </>
         )}
 

@@ -247,18 +247,25 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   );
 
   return (
-    <div className="p-4 space-y-5">
+    // ep-stack: single column by default; reflows to two columns when the rail is
+    // widened (theme/reflow.css @container). ep-span keeps identity + assessment
+    // full-width across the top so they never split mid-thought.
+    <div className="p-4 ep-stack">
       {isSim && (
-        <Caveat level="SIMULATED" note="notional war-game entity — not a real contact" tone="warn" />
+        <div className="ep-span">
+          <Caveat level="SIMULATED" note="notional war-game entity — not a real contact" tone="warn" />
+        </div>
       )}
-      <Header
-        snap={snap}
-        id={id}
-        enrichment={enrichment}
-        lastRefreshMs={lastRefreshRef.current}
-      />
+      <div className="ep-span">
+        <Header
+          snap={snap}
+          id={id}
+          enrichment={enrichment}
+          lastRefreshMs={lastRefreshRef.current}
+        />
+      </div>
 
-      {aiPosition === 'top' && aiCard}
+      {aiPosition === 'top' && <div className="ep-span">{aiCard}</div>}
 
       <ProfileCard enrichment={enrichment} snap={snap} />
 

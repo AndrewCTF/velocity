@@ -60,7 +60,7 @@ export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
       }
     >
       <div className="space-y-2">
-        <Caveat level="ANALYTIC ASSESSMENT" note="grounded in observed track" tone="warn" />
+        <Caveat level="ANALYTIC ASSESSMENT" note="grounded" tone="warn" />
         {!data && (
           <p className="text-[10.5px] text-txt-3">
             Reasoning model summarises this entity's observed pattern-of-life. Every claim cites the

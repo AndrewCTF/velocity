@@ -60,10 +60,16 @@ lifted well off black, with a soft sky-steel accent — not the old cool-blue.
 }
 ```
 
-Type scale (tokens `--fs-body/-dense/-caption`, floor 10px): 10px mono
-(micro-labels, units), 11px (IDs, ticker), 12px (body/secondary), 13–14px
-(entity names, headings). Weights 400/500/600. **Sentence case everywhere**
-except machine codes (UNCLAS, MMSI). Letter-spacing 0.5px on mono micro-labels.
+Type scale (tokens `--fs-body/-dense/-caption`, floor **11px** — raised from
+10px in the 2026-07-13 WCAG/legibility pass): 11px mono (micro-labels, units,
+machine codes), 12px (dense tabular rows, field keys), 13px (body/secondary),
+13–15px (entity names, headings). Weights 400/500/600. **Sentence case
+everywhere** except machine codes (UNCLAS, MMSI, ICAO24) — this is enforced by
+the shared instrument primitives (`SectionLabel`, `KVRow` keys are sentence
+case; `MicroLabel`/`Badge`/`Caveat` keep mono-caps for the machine voice). Do
+NOT reintroduce blanket `uppercase tracking-[…]` on structural labels; it reads
+as templated "AI-dashboard" chrome. Muted text tiers (`--txt-2/3/4`) are pinned
+to WCAG-AA (4.5:1 on both bg-1 and card bg-2) by `theme/contrast.test.ts`.
 
 Shared feedback primitives live in `src/shell/`: `InlineAlert`
 (tone=info|warn|alert|ok) for inline rows and `toast.ok/warn/error()` +
