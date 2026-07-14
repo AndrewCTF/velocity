@@ -56,6 +56,7 @@ from app.routes import adsb as adsb_routes
 from app.routes import ai as ai_routes
 from app.routes import ai_models as ai_models_routes
 from app.routes import ai_selection as ai_selection_routes
+from app.routes import airhazards as airhazards_routes
 from app.routes import airspace as airspace_routes
 from app.routes import ais as ais_routes
 from app.routes import alert_rules as alert_rules_routes
@@ -72,6 +73,7 @@ from app.routes import countries as countries_routes
 from app.routes import country_stats as country_stats_routes
 from app.routes import cyber as cyber_routes
 from app.routes import entity as entity_routes
+from app.routes import env as env_routes
 from app.routes import eq as eq_routes
 from app.routes import events as events_routes
 from app.routes import evidence as evidence_routes
@@ -82,15 +84,18 @@ from app.routes import foundry as foundry_routes
 from app.routes import geo_shapes as geo_shapes_routes
 from app.routes import geocode as geocode_routes
 from app.routes import ground as ground_routes
+from app.routes import hazards as hazards_routes
 from app.routes import health as health_routes
 from app.routes import history as history_routes
 from app.routes import imagery as imagery_routes
+from app.routes import infra as infra_routes
 from app.routes import intel as intel_routes
 from app.routes import jamming as jamming_routes
 from app.routes import keys as keys_routes
 from app.routes import maps as maps_routes
 from app.routes import maritime as maritime_routes
 from app.routes import news as news_routes_mod
+from app.routes import oceans as oceans_routes
 from app.routes import ontology as ontology_routes
 from app.routes import osint as osint_routes
 from app.routes import places as places_routes
@@ -102,6 +107,7 @@ from app.routes import seismic as seismic_routes
 from app.routes import simulation as simulation_routes
 from app.routes import situations as situations_routes
 from app.routes import space as space_routes
+from app.routes import spacewx as spacewx_routes
 from app.routes import status as status_routes
 from app.routes import targets as targets_routes
 from app.routes import tiles as tiles_routes
@@ -444,6 +450,14 @@ def create_app() -> FastAPI:
     app.include_router(space_routes.router)
     app.include_router(weather_routes.router)
     app.include_router(cyber_routes.router)
+    # 2026-07-14 data-layers wave: 12 keyless feeds across hazards / env / oceans /
+    # space-weather / energy-infra / aviation. See docs/data-layers-wave-2026-07-14-plan.md.
+    app.include_router(hazards_routes.router)
+    app.include_router(env_routes.router)
+    app.include_router(oceans_routes.router)
+    app.include_router(spacewx_routes.router)
+    app.include_router(infra_routes.router)
+    app.include_router(airhazards_routes.router)
     app.include_router(entity_routes.router)
     app.include_router(alerts_routes.router)
     app.include_router(tiles_routes.router)

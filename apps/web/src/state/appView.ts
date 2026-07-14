@@ -11,6 +11,7 @@ import { create } from 'zustand';
 
 export type AppId =
   | 'map'
+  | 'ai'
   | 'explorer'
   | 'graph'
   | 'investigate'
@@ -25,6 +26,7 @@ export type AppId =
 
 export const APP_IDS: readonly AppId[] = [
   'map',
+  'ai',
   'explorer',
   'graph',
   'investigate',
@@ -43,6 +45,11 @@ export const APP_IDS: readonly AppId[] = [
 // collapses the footer row and hides the right rail while it is active.
 export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'globe' | 'full' }> = {
   map: { label: 'Map', hint: 'Live geospatial COP (globe)', chrome: 'globe' },
+  ai: {
+    label: 'AI',
+    hint: 'Analyst agent, automated watch & alerts, local models — one place',
+    chrome: 'full',
+  },
   explorer: { label: 'Explorer', hint: 'Filter / aggregate the live object store', chrome: 'globe' },
   graph: { label: 'Graph', hint: 'Link analysis + search-around', chrome: 'globe' },
   investigate: {
@@ -83,6 +90,7 @@ export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'glo
 // appView.test.ts).
 export const APP_GROUPS: readonly { id: string; label: string; apps: readonly AppId[] }[] = [
   { id: 'live', label: 'Live', apps: ['map', 'sim'] },
+  { id: 'ai', label: 'AI', apps: ['ai'] },
   { id: 'analyze', label: 'Analyze', apps: ['explorer', 'graph', 'investigate', 'targeting', 'video', 'country'] },
   { id: 'data', label: 'Data', apps: ['foundry', 'workflows'] },
   { id: 'product', label: 'Product', apps: ['reports'] },

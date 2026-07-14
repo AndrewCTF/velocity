@@ -65,6 +65,9 @@ ObjectKind = Literal[
     "url", "wallet", "tx", "file",
     "country", "resource",
     "evidence",
+    # 2026-07-14 data-layers wave — keyless feed object kinds.
+    "disaster", "fireperim", "cyclone", "volcano", "radiation", "airquality",
+    "buoy", "chokepoint", "relief", "powerplant", "sigmet", "aurora",
     "object",
 ]
 
@@ -76,6 +79,9 @@ _KNOWN_KINDS: frozenset[str] = frozenset(
         "url", "wallet", "tx", "file",
         "country", "resource",
         "evidence",
+        # 2026-07-14 data-layers wave — keyless feed object kinds.
+        "disaster", "fireperim", "cyclone", "volcano", "radiation", "airquality",
+        "buoy", "chokepoint", "relief", "powerplant", "sigmet", "aurora",
         "object",
     )
 )

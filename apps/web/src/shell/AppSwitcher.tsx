@@ -7,6 +7,7 @@ import {
   Globe,
   Radar,
   Search,
+  Sparkles,
   Table2,
   Video,
   Waypoints,
@@ -19,6 +20,7 @@ import { useAppView, APP_GROUPS, APP_META, type AppId } from '../state/appView.j
 // UI-free. Exhaustive Record: adding an app without an icon fails typecheck.
 const APP_ICONS: Record<AppId, LucideIcon> = {
   map: Globe,
+  ai: Sparkles,
   explorer: Table2,
   graph: Waypoints,
   investigate: Search,

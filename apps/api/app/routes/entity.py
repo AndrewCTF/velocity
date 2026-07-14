@@ -57,6 +57,23 @@ SAT_NORAD_RE = re.compile(r"^\d{1,9}$")
 # TAIL instead of its head. This regex also matches a clean "satellite:NNNNN"
 # or "sat:NNNNN" id if some other caller ever uses that scheme directly.
 SAT_TAIL_RE = re.compile(r":sat:(\d{1,9})$")
+# 2026-07-14 data-layers wave: feed object ids are `<kind>:<rawid>`; the raw part
+# can carry hyphens/dots/colons (chokepoint slugs, sigmet/aurora composite ids).
+FEED_ID_RE = re.compile(r"^[A-Za-z0-9_.:\-]{1,96}$")
+_FEED_SOURCES: dict[str, str] = {
+    "disaster": "/api/hazards/gdacs",
+    "fireperim": "/api/hazards/fire-perimeters",
+    "cyclone": "/api/hazards/cyclones",
+    "volcano": "/api/hazards/volcanoes",
+    "radiation": "/api/hazards/radiation",
+    "relief": "/api/hazards/reliefweb",
+    "airquality": "/api/env/air-quality",
+    "buoy": "/api/maritime/buoys",
+    "chokepoint": "/api/maritime/chokepoints",
+    "aurora": "/api/weather/swpc/space",
+    "powerplant": "/api/infra/powerplants",
+    "sigmet": "/api/aviation/sigmet",
+}
 
 # ── ITU-R M.585 MMSI MID → flag country (top maritime flag states + key MIDs).
 # Maps the first 3 digits of an MMSI to ISO country / flag of registry. Not
@@ -283,6 +300,10 @@ async def entity(
         return await _enrich_satellite(raw)
     if kind in ("facility", "military"):
         return _enrich_facility(kind, raw)
+    if kind in _FEED_SOURCES:
+        if not FEED_ID_RE.match(raw):
+            raise HTTPException(400, "malformed feed object id")
+        return _enrich_feed(kind, raw)
     # See the SAT_TAIL_RE comment above: a globe-clicked satellite entity id
     # carries the layer descriptor as its head, not a "satellite:"/"sat:"
     # kind — recover the NORAD id from the id's tail before giving up.
@@ -759,6 +780,29 @@ async def _enrich_quake(qid: str) -> dict[str, Any]:
         }
 
     return await cache.get_or_fetch(key, 600.0, load)
+
+
+# ── 2026-07-14 data-layers wave feeds ────────────────────────────────────
+def _enrich_feed(kind: str, raw: str) -> dict[str, Any]:
+    """Resolve a keyless-feed object id to a linked-in descriptor.
+
+    The clicked map feature already carries the object's full live attributes; this
+    endpoint confirms the kind, names the source layer, and anchors the id so the
+    correlations index (`/api/correlations/<kind:id>`) and the ontology graph
+    (the kind is registered in `_KNOWN_KINDS`) can relate it to everything else.
+    """
+    return {
+        "kind": kind,
+        "id": f"{kind}:{raw}",
+        "source": _FEED_SOURCES[kind],
+        "enrichment": {
+            "note": (
+                f"Live object from the {kind} layer. Full attributes ride on the map "
+                "feature; related cross-domain activity is at /api/correlations/"
+                f"{kind}:{raw}."
+            ),
+        },
+    }
 
 
 # ── airports ─────────────────────────────────────────────────────────────

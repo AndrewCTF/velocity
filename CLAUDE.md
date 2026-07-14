@@ -101,8 +101,14 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1630 passed + 1 skipped** (the skip is the opt-in live probe;
-  measured 2026-07-13 on branch intel-depth-polish after the real-place
+  Baseline: **1662 passed + 1 skipped** (the skip is the opt-in live probe;
+  measured 2026-07-14 on branch ui-typography-wcag-sidebar after the AI-workspace
+  wave — dedicated AI hub app (agent + Watch Officer + engine/models), Watch
+  Officer status/elaborate routes, sharper selection-brief prompt, and
+  end-to-end AI-route tests — up from 1645 after the keyless
+  data-layers wave — 12 new feeds (hazards/env/oceans/space-weather/energy-infra/
+  aviation) wired across route + MCP + globe layer + ontology, up from 1630 after
+  the real-place
   strike-areas wave — geoBoundaries admin-polygon resolver + feed iso3/
   shape_level enrichment + AreaAdapter polygon rendering — up from 1583
   after the intel-depth wave, 1540 after the rot-fix wave, 1539 after the

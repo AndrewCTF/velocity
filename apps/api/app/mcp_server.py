@@ -783,6 +783,93 @@ async def data_sources() -> dict[str, Any]:
     return await _get("/api/intel/sources")
 
 
+# ── 2026-07-14 data-layers wave: 12 keyless feeds ────────────────────────────
+# Each is a GeoJSON FeatureCollection whose Feature ids are `<kind>:<rawid>`, so
+# an agent can pivot from any hit to /api/entity/<id> and /api/correlations/<id>.
+
+
+@mcp.tool()
+async def disaster_alerts(detail: str = "short") -> dict[str, Any]:
+    """GDACS severity-scored global disasters (earthquake/cyclone/flood/volcano/
+    drought/wildfire), each Green/Orange/Red by modelled impact."""
+    return shape(await _get("/api/hazards/gdacs"), detail)
+
+
+@mcp.tool()
+async def fire_perimeters(detail: str = "short") -> dict[str, Any]:
+    """Active wildfire burn-area polygons (NIFC/WFIGS) — the AREA behind FIRMS
+    hotspot points, with incident name + size in acres."""
+    return shape(await _get("/api/hazards/fire-perimeters"), detail)
+
+
+@mcp.tool()
+async def tropical_cyclones(detail: str = "short") -> dict[str, Any]:
+    """Active tropical cyclones (NHC) with center fix, classification, intensity
+    and pressure."""
+    return shape(await _get("/api/hazards/cyclones"), detail)
+
+
+@mcp.tool()
+async def volcanoes(detail: str = "short") -> dict[str, Any]:
+    """Smithsonian GVP Holocene volcanoes — location, type, elevation, last
+    eruption year."""
+    return shape(await _get("/api/hazards/volcanoes"), detail)
+
+
+@mcp.tool()
+async def radiation(detail: str = "short") -> dict[str, Any]:
+    """Recent Safecast crowd radiation measurements (value + unit + location) —
+    a nuclear-incident detection layer."""
+    return shape(await _get("/api/hazards/radiation"), detail)
+
+
+@mcp.tool()
+async def relief_disasters(detail: str = "short") -> dict[str, Any]:
+    """ReliefWeb active humanitarian disasters, geocoded to the affected country."""
+    return shape(await _get("/api/hazards/reliefweb"), detail)
+
+
+@mcp.tool()
+async def air_quality(detail: str = "short") -> dict[str, Any]:
+    """Air quality (US AQI + PM2.5/PM10) sampled across major world cities —
+    a proxy for industrial activity, smoke drift, and chemical release."""
+    return shape(await _get("/api/env/air-quality"), detail)
+
+
+@mcp.tool()
+async def marine_buoys(detail: str = "short") -> dict[str, Any]:
+    """NDBC marine buoy observations — wave height, wind, pressure, water temp."""
+    return shape(await _get("/api/maritime/buoys"), detail)
+
+
+@mcp.tool()
+async def maritime_chokepoints(detail: str = "short") -> dict[str, Any]:
+    """Vessel congestion at named straits (Hormuz/Suez/Malacca/Bosphorus/…),
+    derived live from the AIS union: vessel + stationary counts per chokepoint."""
+    return shape(await _get("/api/maritime/chokepoints"), detail)
+
+
+@mcp.tool()
+async def space_weather(detail: str = "short") -> dict[str, Any]:
+    """SWPC space weather — solar X-ray flares, active alerts, and the auroral
+    oval. The causal layer under GPS/HF degradation."""
+    return shape(await _get("/api/weather/swpc/space"), detail)
+
+
+@mcp.tool()
+async def power_plants(detail: str = "short") -> dict[str, Any]:
+    """WRI global power plants (≥200 MW) — name, fuel, capacity, country. Static
+    energy-infra targets to correlate strikes/outages against."""
+    return shape(await _get("/api/infra/powerplants"), detail)
+
+
+@mcp.tool()
+async def aviation_sigmet(detail: str = "short") -> dict[str, Any]:
+    """AIRMET/SIGMET hazard polygons (turbulence, icing, IFR, volcanic ash,
+    convective) constraining the aircraft layer."""
+    return shape(await _get("/api/aviation/sigmet"), detail)
+
+
 # ── deep analysis (DeepSeek reasoner, Ollama fallback) ────────────────────────
 
 _SYS_PROMPT = (

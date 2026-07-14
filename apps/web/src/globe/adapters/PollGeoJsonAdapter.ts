@@ -7,6 +7,8 @@ import {
   cameraStyle,
   facilityStyle,
   fireStyle,
+  hazardPolygonStyle,
+  hazardStyle,
   jammingPolygonStyle,
   portStyle,
   quakeStyle,
@@ -249,6 +251,8 @@ export type StyleKind =
   | 'base'
   | 'warning'
   | 'facility'
+  | 'hazard'
+  | 'hazardpoly'
   | 'generic';
 
 interface Props {
@@ -1427,9 +1431,18 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     polygon?: PolygonGeometry,
   ): void {
     // Polygon geometry path: jamming cells + TFR airspace restrictions.
-    if (polygon && (this.props.styleKind === 'jamming' || this.props.styleKind === 'tfr')) {
+    if (
+      polygon &&
+      (this.props.styleKind === 'jamming' ||
+        this.props.styleKind === 'tfr' ||
+        this.props.styleKind === 'hazardpoly')
+    ) {
       const { fillColor, outlineColor, alpha } =
-        this.props.styleKind === 'tfr' ? tfrPolygonStyle(props) : jammingPolygonStyle(props);
+        this.props.styleKind === 'tfr'
+          ? tfrPolygonStyle(props)
+          : this.props.styleKind === 'hazardpoly'
+            ? hazardPolygonStyle(props)
+            : jammingPolygonStyle(props);
       const outerRing = polygon.coordinates[0] ?? [];
       // Flatten [lon, lat] pairs into the flat array Cesium.Cartesian3.fromDegreesArray expects.
       const flat = outerRing.flatMap(([pLon, pLat]) => [pLon, pLat]);
@@ -1452,6 +1465,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           opts.label = labelFor(labelText);
           opts.name = labelText;
         }
+      } else if (this.props.styleKind === 'hazardpoly') {
+        const labelText =
+          (props['name'] as string | undefined) ?? (props['hazard'] as string | undefined);
+        if (labelText) opts.name = labelText;
       }
       return;
     }
@@ -1627,6 +1644,22 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           opts.label = labelFor(labelText);
           opts.name = labelText;
         }
+        break;
+      }
+      case 'hazard': {
+        // 2026-07-14 keyless data-layers wave — disaster/cyclone/volcano/
+        // radiation/relief/chokepoint/buoy/airquality/aurora. Category tile SVG
+        // dispatched on props.kind. Global layers (no zoom-gate DDC): counts are
+        // in the hundreds, cheap to keep resident.
+        const s = hazardStyle(props);
+        opts.billboard = {
+          image: s.imageUri,
+          scale: s.scale,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        };
+        const name = props['name'];
+        if (typeof name === 'string' && name.length > 0) opts.name = name;
         break;
       }
       default:

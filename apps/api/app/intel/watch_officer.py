@@ -33,6 +33,29 @@ _CYCLE_S = 120.0
 _MAX_BRIEFS = 100
 _ACTIONABLE = {"high", "elevated"}
 
+# Human-readable roster of the automated responses the loop can run, surfaced in
+# the UI so the operator can see what the officer will DO on a hit — not just
+# that it files a brief. Keep in sync with ``_playbook``.
+PLAYBOOKS: tuple[dict[str, str], ...] = (
+    {
+        "id": "dark-vessel-sar",
+        "trigger": "dark-vessel convergence",
+        "action": "task SAR imagery at the centroid (tip-and-cue)",
+    },
+    {
+        "id": "promote-incident",
+        "trigger": "high/elevated incident",
+        "action": "mint a tracked incident object in the ontology",
+    },
+)
+
+# Live telemetry so the surface can show the officer is actually running, not a
+# dead panel. Updated every sweep by ``run_once``; read by ``status()``.
+_SWEEPS = 0
+_TOTAL_FILED = 0
+_LAST_SWEEP_AT: float | None = None
+_LAST_FILED_AT: float | None = None
+
 # Same shared local identity Foundry's build-runner / workflow scheduler
 # default to (keys.py:172's keyless fallback) — this loop runs headless, with
 # no request/caller ctx. See docs/ontology-autopopulation-plan.md §2.
@@ -107,6 +130,10 @@ async def run_once() -> int:
         log.debug("watch_officer: brief failed: %s", exc)
         return 0
 
+    global _SWEEPS, _TOTAL_FILED, _LAST_SWEEP_AT, _LAST_FILED_AT
+    _SWEEPS += 1
+    _LAST_SWEEP_AT = time.time()
+
     incs = br.get("incidents") or []
     by_key = {incident_key(i): i for i in incs}
     diff = incident_store.record(_SCOPE, incs)
@@ -138,6 +165,8 @@ async def run_once() -> int:
 
     _evict_if_full()
     if filed:
+        _TOTAL_FILED += filed
+        _LAST_FILED_AT = time.time()
         log.info("watch_officer: filed %d brief(s); %d open", filed, len(_BRIEFS))
     return filed
 
@@ -145,6 +174,34 @@ async def run_once() -> int:
 def list_briefs() -> list[dict[str, Any]]:
     """Open briefs, newest first."""
     return sorted(_BRIEFS.values(), key=lambda b: b["created"], reverse=True)
+
+
+def get_brief(bid: str) -> dict[str, Any] | None:
+    """One open brief by its id, or None if unknown/expired."""
+    for b in _BRIEFS.values():
+        if b["id"] == bid:
+            return b
+    return None
+
+
+def status() -> dict[str, Any]:
+    """Live telemetry for the surface: is the loop running, its cadence, how many
+    sweeps/briefs it has produced, and the roster of playbooks it can fire."""
+    by_level: dict[str, int] = {}
+    for b in _BRIEFS.values():
+        lvl = str(b.get("threat_level") or "?")
+        by_level[lvl] = by_level.get(lvl, 0) + 1
+    return {
+        "running": _STARTED,
+        "cycle_s": _CYCLE_S,
+        "sweeps": _SWEEPS,
+        "open": len(_BRIEFS),
+        "by_level": by_level,
+        "total_filed": _TOTAL_FILED,
+        "last_sweep_at": _LAST_SWEEP_AT,
+        "last_filed_at": _LAST_FILED_AT,
+        "playbooks": list(PLAYBOOKS),
+    }
 
 
 def _drop(bid: str) -> bool:
@@ -167,7 +224,12 @@ def ack(bid: str) -> bool:
 
 
 def reset_state() -> None:
+    global _SWEEPS, _TOTAL_FILED, _LAST_SWEEP_AT, _LAST_FILED_AT
     _BRIEFS.clear()
+    _SWEEPS = 0
+    _TOTAL_FILED = 0
+    _LAST_SWEEP_AT = None
+    _LAST_FILED_AT = None
 
 
 # ── background task lifecycle (mirrors intel.watch.start / stop) ─────────────────
