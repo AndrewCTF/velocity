@@ -33,6 +33,7 @@ import {
   vesselSilhouette,
 } from '../../entity-panel/silhouettes.js';
 import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
+import { ingestFix, projectAt, type DrFix, type DrState } from './deadReckon.js';
 import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { perfSetDrain } from '../perf.js';
 import { isCameraMoving, cameraMovingForMs } from '../cameraMotion.js';
@@ -121,45 +122,43 @@ const VESSEL_FREEZE_POS_EPSILON_M = 25;
 // ── FlightRadar24-style dead-reckoning (operator opt-in 2026-06-28) ──────────
 // OFF by default; gated entirely on `useSettings().aircraftDeadReckon`. The
 // default aircraft path TELEPORTS to each real fix and forbids extrapolation
-// (CLAUDE.md). When the operator opts in, we feed each REAL fix into ONE
-// persistent SampledPositionProperty per aircraft and let Cesium's linear
-// interpolator carry the icon between fixes AND continue PAST the newest fix
-// along the last real segment's velocity (`ExtrapolationType.EXTRAPOLATE`,
-// capped at DEAD_RECKON_MAX_S then HOLD). This is the FR24 effect.
+// (CLAUDE.md). When the operator opts in, each REAL fix becomes a motion ANCHOR
+// and the icon's position is a pure function of that anchor + the clock:
 //
-// The FIRST cut re-created a fresh 2-sample property anchored at a fake
-// 90s-projected point every poll. That lost the trajectory and re-anchored to
-// "now" each time, so a stale RE-SENT fix (the feed repeats the last position
-// until a fresh one lands) snapped the icon BACK and reversed it. The fix:
-// keep the samples, derive velocity from REAL consecutive fixes (so a resend =
-// no new sample = the glide simply continues), and only add a sample when the
-// reported position actually moved (`drLastReal` gate in drain()). Positions
-// while ON are ESTIMATED, not observed; a map badge says so.
-// Glide tuning. Two segments per fix: (1) EASE from the current rendered position
-// TO the new real fix over ~the last inter-fix gap (converges on truth, no snap),
-// then (2) FORWARD-PROJECT past it along the contact's OWN reported track_deg at
-// velocity_ms for DR_PROJECT_HORIZON_S, then HOLD — so the icon keeps moving
-// through a signal gap instead of freezing at the last fix. The FIRST cut
-// extrapolated a velocity DERIVED from consecutive noisy fixes and overshot, then
-// snapped back; projecting along the REPORTED heading/speed stays close to truth,
-// so the next fix only nudges it (segment 1 absorbs the small correction). A
-// later cut dropped projection entirely (HOLD only) — that fixed the snap but
-// froze contacts with no fresh fix, the "keep planes moving doesn't" report. See
-// deadReckonSample().
-const DR_MIN_GLIDE_S = 1.5;
-const DR_MAX_GLIDE_S = 30;
-const DR_MAX_SPEED_MS = 600; // clamp apparent glide speed so a big gap can't streak
-const DR_FUTURE_ISO = '2100-01-01T00:00:00Z';
-// Forward-projection horizon (s): past the newest REAL fix the icon keeps gliding
-// along the reported track_deg at velocity_ms for this long, THEN holds. This is
-// what makes "keep planes moving" actually keep a contact moving during a signal
-// gap (the previous HOLD-only glide converged on the last fix and froze). 120 s
-// comfortably spans the observed <=20 s inter-fix gaps, so a live contact is
-// always mid-projection when its next fix lands — continuous motion — while a
-// contact that TRULY lost signal coasts for ~2 min then holds instead of flying
-// off forever. Positions here are ESTIMATED (the PredictedMotionBadge says so).
-const DR_PROJECT_HORIZON_S = 120;
-const DR_MIN_PROJECT_SPEED_MS = 5; // below this a contact is parked → don't project
+//     position(t) = advance(anchor, track_deg, velocity_ms * max(0, t - t0))
+//
+// The model lives in deadReckon.ts (pure + unit-tested); this file only supplies
+// fixes and owns the Cesium property. Positions while ON are ESTIMATED, not
+// observed — the PredictedMotionBadge says so.
+//
+// REWRITTEN 2026-07-14 against two operator requirements: the icon must move at
+// the ACTUAL reported speed, and must NEVER go in reverse. Both are now
+// structural (see deadReckon.ts), and the sampled-glide history below is exactly
+// why — do not reintroduce any of it:
+//   - Cut 1 re-created a 2-sample property anchored at a fake 90 s-projected
+//     point every poll, so a resent fix snapped the icon BACK.
+//   - Cut 2 derived velocity from consecutive noisy fixes → overshoot + snap-back.
+//     (Measured 2026-07-14: only 13.5% of consecutive fix pairs give a speed
+//     within ±10% of the reported velocity_ms. Never fit velocity from fixes.)
+//   - Cut 3 dropped projection entirely (HOLD only) → contacts froze between
+//     fixes: the "keep planes moving doesn't" report.
+//   - Cut 4 (this rewrite's predecessor) EASED from the rendered position to the
+//     new fix over the inter-fix gap, then projected past it. That glide's
+//     apparent speed was dist/gap — arbitrary, NOT velocity_ms (requirement 1
+//     broken) — and when a stale fix landed behind the icon it GLIDED backwards
+//     over up to 30 s (requirement 2 broken). This is what the operator saw.
+//
+// The `drLastReal` gate in drain() stays load-bearing: only a fix whose reported
+// position actually MOVED becomes a new anchor. The feed repeats the last
+// position until a fresh one lands, and its seen_pos_s does not always grow with
+// it, so re-anchoring on a resend would restart the projection from the old
+// position — snapping the icon backwards.
+//
+// NOTE: the reverse the operator reported was ALSO being fed by the backend —
+// the snapshot tier merge served fixes that regressed along track (measured 9.2%
+// of airborne moves, median -3.8 km). Fixed in routes/adsb.py (_merge_raw_into
+// freshest-wins + the _regresses guard). No frontend model can fix a feed that
+// moves aircraft backwards; both halves are required.
 
 // Camera altitude (m) above which vessel glide is FROZEN. WHY: vessels glide via
 // SampledPositionProperty, which Cesium re-evaluates every frame the clock
@@ -416,104 +415,80 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // contacts every poll.
   private lastTrackPushMs = new Map<string, number>();
   // Dead-reckon only: last REAL fix position per id (Cartesian). Used to detect
-  // a resent/stale fix (same position) so we DON'T re-glide to a place the icon
-  // already reached.
+  // a resent/stale fix (same position) so we DON'T re-anchor on it. This gate is
+  // load-bearing: the feed repeats the last position until a fresh one lands, and
+  // its `seen_pos_s` does NOT always grow with it. Re-anchoring on a resend would
+  // restart the projection from the OLD position — i.e. snap the icon backwards.
   private drLastReal = new Map<string, Cesium.Cartesian3>();
-  // Dead-reckon only: sim-clock time of each id's last REAL fix, to size the
-  // glide duration (≈ the gap between fixes → continuous motion that arrives at
-  // truth just as the next fix lands).
-  private drLastT = new Map<string, Cesium.JulianDate>();
+  // Dead-reckon only: per-contact motion anchor (see deadReckon.ts). The icon's
+  // position is a pure function of this + the clock, so it always moves at the
+  // reported ground speed along the reported track, and never backwards.
+  private drState = new Map<string, DrState>();
+  // Dead-reckon only: the CallbackPositionProperty per id. Kept so a new fix
+  // mutates the anchor a live property already reads, rather than swapping the
+  // property (which would re-dirty the entity every poll).
+  private drProp = new Map<string, Cesium.CallbackPositionProperty>();
+  // Fixed origin for sim-clock→seconds. JulianDate.secondsDifference against a
+  // stable epoch keeps the motion model in plain seconds; the epoch cancels out.
+  private drEpoch: Cesium.JulianDate | null = null;
 
-  // FR24-style glide: ease the icon from where it currently renders TO the new
-  // REAL fix over ~the last inter-fix gap. Reuses the entity's SampledPosition-
-  // Property; drops any not-yet-reached future samples first so the new glide
-  // starts cleanly from the current position (no kink back toward the old
-  // target). HOLD past the newest fix — never extrapolate, so never overshoot.
-  private deadReckonSample(
-    existing: Cesium.Entity | undefined,
-    id: string,
-    t0: Cesium.JulianDate,
-    newPos: Cesium.Cartesian3,
-    trackDeg: number | null,
-    velocityMs: number | null,
-  ): Cesium.SampledPositionProperty {
-    let sampled =
-      existing && existing.position instanceof Cesium.SampledPositionProperty
-        ? existing.position
-        : undefined;
-    // Where the icon is RIGHT NOW (sim-clock time), to start the glide from.
-    let cur: Cesium.Cartesian3 | undefined;
-    if (existing && existing.position) {
-      try {
-        cur = existing.position.getValue(t0) as Cesium.Cartesian3 | undefined;
-      } catch {
-        cur = undefined;
-      }
-    }
-    if (!sampled) {
-      sampled = new Cesium.SampledPositionProperty();
-      sampled.setInterpolationOptions({
-        interpolationAlgorithm: Cesium.LinearApproximation,
-        interpolationDegree: 1,
-      });
-      sampled.forwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
-      sampled.backwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
-    } else {
-      // Drop the prior glide's unreached future samples so we don't first head
-      // to the old target and then to the new one.
-      sampled.removeSamples(
-        new Cesium.TimeInterval({
-          start: t0,
-          stop: Cesium.JulianDate.fromIso8601(DR_FUTURE_ISO),
-          isStartIncluded: false,
-          isStopIncluded: true,
-        }),
-      );
-    }
-    const lastT = this.drLastT.get(id);
-    let glideS = lastT
-      ? Math.min(
-          Math.max(Math.abs(Cesium.JulianDate.secondsDifference(t0, lastT)), DR_MIN_GLIDE_S),
-          DR_MAX_GLIDE_S,
-        )
-      : DR_MIN_GLIDE_S;
-    if (cur) {
-      glideS = Math.max(glideS, Cesium.Cartesian3.distance(cur, newPos) / DR_MAX_SPEED_MS);
-      sampled.addSample(t0, cur); // bridge: start from where the icon is now
-    }
-    const arrive = Cesium.JulianDate.addSeconds(t0, glideS, new Cesium.JulianDate());
-    sampled.addSample(arrive, newPos);
-    // FR24 forward projection: continue PAST the real fix along the reported
-    // heading at the reported ground speed for DR_PROJECT_HORIZON_S, then HOLD
-    // (forwardExtrapolationType). This is what keeps a contact MOVING through a
-    // signal gap — without it the glide converged on the last fix and froze.
-    // Using the contact's OWN track+speed (not a fit) keeps the estimate close to
-    // truth, so the next real fix only nudges it (no overshoot/snap-back). A new
-    // fix clears this sample via removeSamples above and re-projects from truth.
-    if (trackDeg != null && velocityMs != null && velocityMs > DR_MIN_PROJECT_SPEED_MS) {
-      const dist = velocityMs * DR_PROJECT_HORIZON_S;
-      const brg = Cesium.Math.toRadians(trackDeg);
-      const enu = Cesium.Transforms.eastNorthUpToFixedFrame(newPos);
-      const local = new Cesium.Cartesian3(Math.sin(brg) * dist, Math.cos(brg) * dist, 0);
-      const projected = Cesium.Matrix4.multiplyByPoint(enu, local, new Cesium.Cartesian3());
-      sampled.addSample(
-        Cesium.JulianDate.addSeconds(arrive, DR_PROJECT_HORIZON_S, new Cesium.JulianDate()),
-        projected,
-      );
-    }
-    this.drLastT.set(id, t0.clone());
-    // Bound memory: keep only the last 5 min.
-    const cutoff = Cesium.JulianDate.addSeconds(t0, -300, new Cesium.JulianDate());
-    sampled.removeSamples(
-      new Cesium.TimeInterval({
-        start: Cesium.JulianDate.fromIso8601('1970-01-01T00:00:00Z'),
-        stop: cutoff,
-        isStartIncluded: true,
-        isStopIncluded: false,
-      }),
-    );
-    return sampled;
+  /** Sim-clock JulianDate → seconds since this adapter's epoch. */
+  private drSecs(t: Cesium.JulianDate): number {
+    if (!this.drEpoch) this.drEpoch = t.clone();
+    return Cesium.JulianDate.secondsDifference(t, this.drEpoch);
   }
+
+  // FR24-style dead-reckoning: hand the fix to the motion model (deadReckon.ts)
+  // and let the icon's position be a pure function of the anchor + the clock.
+  //
+  // The property is a CallbackPositionProperty rather than a SampledPosition-
+  // Property because the motion is ANALYTIC, not sampled: there is nothing to
+  // interpolate between. That is what makes the two operator requirements
+  // structural rather than tuned — the icon moves at exactly `velocity_ms` along
+  // exactly `track_deg`, and cannot move backwards. The old sampled glide eased
+  // from the current render position TO the new fix over the inter-fix gap, so its
+  // apparent speed was dist/gap (arbitrary, unrelated to velocity_ms) and a stale
+  // fix landing behind the icon was GLIDED to — the reported reverse.
+  private deadReckonPosition(
+    id: string,
+    t: Cesium.JulianDate,
+    fix: DrFix,
+  ): Cesium.CallbackPositionProperty {
+    this.drState.set(id, ingestFix(this.drState.get(id), fix, this.drSecs(t)));
+    let prop = this.drProp.get(id);
+    if (!prop) {
+      // isConstant=false: Cesium must re-evaluate every frame the clock advances.
+      prop = new Cesium.CallbackPositionProperty((time, result) => {
+        const s = this.drState.get(id);
+        if (!s || !time) return undefined;
+        const p = projectAt(s, this.drSecs(time));
+        return Cesium.Cartesian3.fromRadians(p.lonRad, p.latRad, s.altM, undefined, result);
+      }, false) as Cesium.CallbackPositionProperty;
+      this.drProp.set(id, prop);
+    }
+    return prop;
+  }
+
+  /** Build a motion-model fix from a feed feature's property bag. */
+  private drFixFrom(props: Record<string, unknown>, lon: number, lat: number, alt: number): DrFix {
+    // Position age = now - (seen_at - seen_pos_s). seen_at is when the BACKEND
+    // received the body; seen_pos_s is how old the position already was inside
+    // it. Same derivation the track-trail push uses.
+    const seenAt = props['seen_at'];
+    const seenPos = props['seen_pos_s'];
+    const obsSec =
+      typeof seenAt === 'number' ? seenAt - (typeof seenPos === 'number' ? seenPos : 0) : null;
+    return {
+      lonDeg: lon,
+      latDeg: lat,
+      altM: alt,
+      trackDeg: typeof props['track_deg'] === 'number' ? props['track_deg'] : null,
+      speedMs: typeof props['velocity_ms'] === 'number' ? props['velocity_ms'] : null,
+      ageS: obsSec != null ? Math.max(0, Date.now() / 1000 - obsSec) : 0,
+      onGround: props['on_ground'] === true,
+    };
+  }
+
   // Absolute wall-clock target (ms) for the next poll. The grid scheduler books
   // ticks against this fixed timeline so cadence stays steady regardless of how
   // long each poll's fetch + render took. 0 = uninitialised (set on first tick).
@@ -760,7 +735,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     this.lastPos.clear();
     this.lastTrackPushMs.clear();
     this.drLastReal.clear();
-    this.drLastT.clear();
+    this.drState.clear();
+    this.drProp.clear();
     this.primRenderer?.destroy();
     this.primRenderer = null;
     this.vesselCluster?.destroy();
@@ -1215,13 +1191,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
               this.refreshBag(existing, props);
               continue;
             } else {
-              existing.position = this.deadReckonSample(
-                existing,
+              existing.position = this.deadReckonPosition(
                 id,
-                this.props.ctx.viewer.clock.currentTime.clone(),
-                newPos,
-                typeof props['track_deg'] === 'number' ? props['track_deg'] : null,
-                typeof props['velocity_ms'] === 'number' ? props['velocity_ms'] : null,
+                this.props.ctx.viewer.clock.currentTime,
+                this.drFixFrom(props, lon, lat, alt ?? 0),
               );
               this.drLastReal.set(id, newPos.clone());
             }
@@ -1348,13 +1321,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         const opts: Cesium.Entity.ConstructorOptions = {
           id,
           position: deadReckon
-            ? this.deadReckonSample(
-                undefined,
+            ? this.deadReckonPosition(
                 id,
-                this.props.ctx.viewer.clock.currentTime.clone(),
-                newPos,
-                typeof props['track_deg'] === 'number' ? props['track_deg'] : null,
-                typeof props['velocity_ms'] === 'number' ? props['velocity_ms'] : null,
+                this.props.ctx.viewer.clock.currentTime,
+                this.drFixFrom(props, lon, lat, alt ?? 0),
               )
             : newPos,
           properties: props,
@@ -1410,7 +1380,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         this.lastPos.delete(oldId);
         this.lastTrackPushMs.delete(oldId);
         this.drLastReal.delete(oldId);
-        this.drLastT.delete(oldId);
+        this.drState.delete(oldId);
+        this.drProp.delete(oldId);
         const icao = this.ownedIcao.get(oldId);
         if (icao) {
           aircraftDedup.release(icao, layerIdForPrune);

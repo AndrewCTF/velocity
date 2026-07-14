@@ -732,6 +732,31 @@ Findings from the same-day state-of-project audit
   process-memory, so the story holds — the audit's first draft misread this
   as rot); replay interpolation; anything guarded above.
 
+## Backend test baseline history
+
+The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
+three-line fact there. One line per wave, newest first — when the CLAUDE.md
+number changes, the displaced line lands here.
+
+- **1675 +1 skip** — 2026-07-14, ui-typography-wcag-sidebar: aircraft
+  predicted-motion wave (freshest-observation snapshot union + along-track
+  no-reverse guards, `test_adsb_no_reverse.py`).
+- **1662** — 2026-07-14: AI-workspace wave (dedicated AI hub app — agent +
+  Watch Officer + engine/models; Watch Officer status/elaborate routes;
+  sharper selection-brief prompt; end-to-end AI-route tests).
+- **1645** — 2026-07-14: keyless data-layers wave (12 new feeds:
+  hazards/env/oceans/space-weather/energy-infra/aviation, wired across
+  route + MCP + globe layer + ontology).
+- **1630** — real-place strike-areas wave (geoBoundaries admin-polygon
+  resolver + feed iso3/shape_level enrichment + AreaAdapter polygons).
+- **1583** — intel-depth wave (2026-07-13).
+- **1540** — rot-fix wave (2026-07-12).
+- **1539** — evidence-locker hardening wave.
+- **1536** — selection-brief enrichment-fusion wave.
+- **1533** — evidence-locker + case-export wave (2026-07-12).
+- **1507** — bug-fix wave (PR #38, 2026-07-12).
+- **1294** — w5-places-airspace-enrichment (2026-07-11).
+
 ## Lessons from past sessions (post-mortems)
 
 ### Never claim coverage/parity without a measurement
@@ -849,3 +874,89 @@ Three findings, all fixed surgically (not a rebuild):
 Known follow-ups (not regressions): the right rail bg is still a hardcoded dark
 `RAIL_BG` (not tokenized) so light theme shows light text on a dark rail;
 phase-2 leaf-site sentence-case sweep.
+
+### Aircraft predicted motion: exact speed, never reverse (2026-07-14)
+
+Operator: *"the predicted motion speed must be the actual speed, not faster or
+slower, and the plane sometime goes in reverse, that is not accepted. this must
+be on par with flight radar 24 level."*
+
+Two independent defects, one in each half of the stack. Both had to be fixed —
+no frontend motion model can fix a feed that moves aircraft backwards.
+
+**Backend: the tier merge was last-writer-wins.** `_build_snapshot` merged
+OpenSky → feeds → firehose → grid, and `_merge_raw_into` overwrote
+unconditionally; its docstring stated the assumption outright ("caller orders
+sources so the freshest source is merged last"). That assumption is inverted:
+tier 3 serves `_FIREHOSE_RAW`, a cache that only changes when a pull SUCCEEDS
+and **never expires**, and from this egress the only reachable firehose verb
+(adsb.lol `/v2/point`, since airplanes.live and adsb.lol `/v2/all-with-pos`
+404 and adsb.fi 403) takes **>60 s** to download. So a minutes-old fix
+overwrote the 0.1 s-old sidecar fix on every 1 s cycle, and flipped back
+whenever an aircraft fell outside the firehose's smaller (~8-9k vs ~20k)
+coverage. Measured on `/api/adsb/global`, warm: **9.2% of airborne moves
+regressed along the aircraft's own `track_deg`** (median **-3.8 km**, worst
+**-161 km**), 5,531 distinct aircraft in 60 s.
+
+Note `seen_pos_s` is the age at UPSTREAM serve time, so a cached tier reports
+0.3 s forever. The only cross-tier-comparable stamp is
+`seen_at - seen_pos_s` (`_feat_obs_at`) — it ages a cache honestly, because
+`_seen_at` is stamped once at pull time. `_readsb_feeds` already folds
+`slice_age` in for exactly this reason WITHIN the feeds tier; the top-level
+merge had no equivalent. Fixed: freshest-observation-wins (order-independent),
+plus a `_regresses` guard that drops a fix flying a fast airborne contact
+backwards, plus rearming `_FIREHOSE_NEXT_TRY` on success (only the failure path
+armed it, so a working firehose was re-downloaded every tick against a host
+CLAUDE.md documents as rate-limiting). → `tests/test_adsb_no_reverse.py`.
+Result: 9.2% → **1.09%**.
+
+Freshness only overrides order where it is KNOWN — if neither side carries a
+stamp, tier order still decides (that is what `test_grid_overlay_wins_conflict`
+pins, and it is right: the grid IS fresher than a daily OpenSky cache).
+
+**Frontend: the glide had no relationship to the reported speed.** The old
+`deadReckonSample` EASED from the rendered position to the new fix over the
+inter-fix gap, so apparent speed was `dist/gap` — arbitrary — and when a stale
+fix landed behind the icon it GLIDED backwards over up to 30 s. Measured live
+in the browser: **only 80.2% of rendered steps were within ±1% of the reported
+`velocity_ms` (p05 = -68%, i.e. planes crawling at a third of their true
+speed), 5.64% of steps went backwards, and 65.7% of backward episodes lasted
+more than one frame — visibly flying in reverse.**
+
+Replaced by an analytic anchor model (`globe/adapters/deadReckon.ts`, pure +
+unit-tested):
+
+    position(t) = advance(anchor, track_deg, velocity_ms * max(0, t - t0))
+
+`advance` steps along WGS84 using the local radii of curvature, so |dP/dt| ==
+`velocity_ms` EXACTLY; `max(0, …)` makes along-track distance monotonically
+non-decreasing, so it cannot reverse even if the clock is scrubbed. Rendered
+via `CallbackPositionProperty` — the motion is analytic, there is nothing to
+interpolate. Measured live after: **98.1% within ±1% (p50 error 0.0000, p95
+0.05%), reverse 0.034% (166× fewer), and exactly ONE episode lasting >1 frame.**
+
+Supporting decisions, all load-bearing:
+- **Never fit velocity from consecutive fixes.** Measured: only **13.5%** of
+  consecutive same-source fix pairs give a great-circle speed within ±10% of
+  the reported `velocity_ms` (median error +47%); `seen_at - seen_pos_s` is far
+  too coarse a timebase to differentiate. `velocity_ms`/`track_deg` are the
+  aircraft's OWN downlinked GNSS values — authoritative. Positions are the noisy
+  signal. (This killed both an earlier velocity-fit cut AND a playout-buffer
+  design that would have interpolated between real fixes.)
+- **Anchor at the fix's observation time**, not receipt, so an aged fix renders
+  already carried forward.
+- **A lone backward fix is IGNORED** (`DR_BACK_TOLERATE`); only consecutive
+  agreement re-anchors backwards. This is a tolerance, not a veto — a real
+  reposition still corrects in ~18 s at the measured 6 s cadence.
+- **Stale fixes are NOT projected** (`DR_MAX_FIX_AGE_S = 45`): position age is
+  p50 2.9 s but p90 68.9 s / p95 183.8 s (the OpenSky breadth tier, a
+  once-per-UTC-day cache). Flying a 3-minute-old fix forward invents ~45 km.
+  Those contacts hold — but they still get the backward guard
+  (`DR_FROZEN_BACK_M`), because a frozen contact mirrors the feed verbatim and
+  that was the LAST source of sustained reverse (runs of up to 12 frames).
+- On-ground/parked contacts are exempt from every backward guard — pushback is
+  literally backwards.
+
+Do NOT reintroduce any easing/interpolation toward a fix: that is what made the
+speed arbitrary and the reverse visible. The default TELEPORT path is unchanged
+and still forbids extrapolation. → `globe/adapters/deadReckon.test.ts`.

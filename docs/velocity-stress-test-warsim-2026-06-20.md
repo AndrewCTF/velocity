@@ -17,7 +17,7 @@
 | Cloud LLMs | **configured + working** | primary **minimax** (`minimaxai/minimax-m3`, NVIDIA endpoint), **deepseek** (`deepseek-reasoner`/`-chat`) |
 | History DB | 6.4 GB, **task_running:true** | `positions` table, 31.6 M rows |
 | MCP `osint-geoint` | connected to this session | HTTP client → `API_BASE=http://localhost:8000` |
-| Supabase | project `dagqceedkxxvvbhmewca` | password grant for `andrew@andrewyong.dev` → **JWT issued, role `authenticated`** ✅ |
+| Supabase | the prod project | password grant for the operator account → **JWT issued, role `authenticated`** ✅ |
 
 **Auth reality:** the local backend has no `SUPABASE_JWT_SECRET`/`API_KEY` configured, so it is effectively **keyless** — `require_api_key` passes with no token (e.g. `/api/sim/reason` returned 200 with no auth), and a *valid* prod Supabase JWT is **not** honoured locally (`/api/keys` → 401 "sign-in required" even with andrew's token). The commercial auth/tier gate therefore only exists on the deployed backend; it cannot be exercised against this local instance.
 
@@ -207,7 +207,7 @@ adsb/global (8 MB, ~17 k aircraft, 0.38 s), maritime (digitraffic/keyless/snapsh
 
 ## 8. Auth & security
 
-- **Local:** keyless; the prod Supabase JWT is *not* validated locally → commercial gating untestable here. The password grant for `andrew@andrewyong.dev` succeeded against the prod Supabase project (role `authenticated`, 1 h token), so the **live login path works**; only the local backend ignores it.
+- **Local:** keyless; the prod Supabase JWT is *not* validated locally → commercial gating untestable here. The password grant for the operator account succeeded against the prod Supabase project (role `authenticated`, 1 h token), so the **live login path works**; only the local backend ignores it.
 - **Supabase advisors (security):**
   - `public.rls_auto_enable()` is **`SECURITY DEFINER` and `EXECUTE`-able by `anon`** via `/rest/v1/rpc/rls_auto_enable` → privilege-escalation surface. Revoke EXECUTE or switch to `SECURITY INVOKER`.
   - **Leaked-password protection disabled** (no HaveIBeenPwned check).
@@ -225,7 +225,7 @@ The intel engine is honest about these, but they directly limit the persona:
 
 ---
 
-## 10. Frontend (live Playwright, authenticated as `andrew@andrewyong.dev`)
+## 10. Frontend (live Playwright, authenticated as the operator account)
 
 Driven headless at 1600×1000, no code edited. Screenshots saved to project root `01..09-*.png` (untracked/gitignored local evidence).
 

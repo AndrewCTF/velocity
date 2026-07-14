@@ -9,7 +9,11 @@ declare const process: { env: Record<string, string | undefined> };
 // localhost so a bare `pnpm dev` against `uvicorn app.main:app` works with
 // zero configuration — the old `api:8000` default only resolved inside the
 // compose network and broke every request outside it.
-const apiTarget = process.env['VITE_API_URL'] ?? 'http://localhost:8000';
+// Pin 127.0.0.1, not `localhost`: in some containers (GitHub Codespaces) the
+// dev proxy's Node process resolves `localhost` to IPv6 `::1` first, but uvicorn
+// binds IPv4 only → ECONNREFUSED, surfacing in the browser as a bare
+// "NetworkError" on /api/config. Same trap the Tauri path pins around.
+const apiTarget = process.env['VITE_API_URL'] ?? 'http://127.0.0.1:8000';
 const wsTarget = apiTarget.replace(/^http/, 'ws');
 
 // Hardened local/desktop profile: VELOCITY_DESKTOP=1 injects a strict CSP that

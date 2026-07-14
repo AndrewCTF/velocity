@@ -4,6 +4,12 @@ Copyright 2026 Velocity contributors
 This product is licensed under the GNU Affero General Public License, Version 3.0 (see LICENSE).
 The AGPL-3.0 license covers Velocity's SOURCE CODE ONLY.
 
+NO WARRANTY, AND NO LIABILITY FOR YOUR USE OF THIS SOFTWARE OR THE DATA IT
+RETRIEVES. Some data is obtained by SCRAPING sources that have not authorised,
+endorsed, or partnered with this project; doing so may breach their terms. You
+run it, so the requests, the rate limits, the bans, and the legal exposure are
+yours. See DISCLAIMER.md — read it before running or redistributing.
+
 Velocity consumes data from third-party upstream feeds, EACH UNDER ITS OWN
 LICENSE AND TERMS. The code license does not relicense that data. Before any
 commercial or redistributive use, verify each upstream's CURRENT terms — some

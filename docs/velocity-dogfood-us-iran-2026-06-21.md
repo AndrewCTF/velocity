@@ -1,7 +1,7 @@
 # Velocity (projectvelocity.org) — US–Iran dogfood + feature audit
 
 **Date:** 2026-06-21 (~00:00–00:15 UTC)
-**Operator persona:** conflict journalist, account `andrew@andrewyong.dev` (tier reported `enterprise`, status `active`).
+**Operator persona:** conflict journalist, the operator account (tier reported `enterprise`, status `active`).
 **Surface tested:** the **hosted** product only — the live website, `https://projectvelocity.org/api/*` through the Cloudflare Worker with the account's Supabase JWT, and the **hosted** MCP at `https://projectvelocity.org/mcp` (JSON-RPC over streamable-HTTP). The local `uv run` MCP variant was **not** used, per the brief.
 **Scenario:** US–Iran war + peace-deal coverage — ADS-B + maritime activity over the Strait of Hormuz / Persian Gulf / Iran; GPS jamming; drone & invasion simulations; satellite imagery; SAR→3D reconstruction; the agent/MCP.
 

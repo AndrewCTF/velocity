@@ -39,7 +39,7 @@ import hashlib
 import json
 import threading
 import time
-from math import cos, radians
+from math import cos, radians, sin, sqrt
 from typing import Any
 
 import httpx
@@ -893,6 +893,12 @@ async def _opensky_cached() -> dict[str, Any] | None:
 # raw list instantly. Downstream `_merge_with_previous` (180s) ages out a stale
 # cached firehose if the host later goes dark.
 _FIREHOSE_DEAD_SKIP_S = 30.0
+# Re-pull cadence after a SUCCESSFUL pull. Without this only the failure path
+# armed _FIREHOSE_NEXT_TRY, so a working firehose was re-kicked on every fan-out
+# tick — a back-to-back 5-6MB download loop against a host CLAUDE.md documents as
+# rate-limiting bursts. The tier is breadth, not freshness (the 1s feeds own
+# freshness), so a 15s cadence loses nothing.
+_FIREHOSE_OK_INTERVAL_S = 15.0
 _FIREHOSE_NEXT_TRY: float = 0.0
 _FIREHOSE_RAW: list[dict[str, Any]] = []  # last good raw aircraft list
 _FIREHOSE_REFRESH_TASK: asyncio.Task[None] | None = None
@@ -906,6 +912,7 @@ async def _firehose_refresh_once() -> None:
     fh = await _try_firehose()
     if fh:
         _FIREHOSE_RAW = fh
+        _FIREHOSE_NEXT_TRY = time.monotonic() + _FIREHOSE_OK_INTERVAL_S
     else:
         _FIREHOSE_NEXT_TRY = time.monotonic() + _FIREHOSE_DEAD_SKIP_S
 
@@ -1197,13 +1204,71 @@ async def _readsb_feeds() -> list[dict[str, Any]]:
     return [v[1] for v in best.values()]
 
 
+def _feat_obs_at(f: dict[str, Any]) -> float | None:
+    """Wall-clock time this feature's POSITION was actually observed, or None.
+
+    `seen_at` = when WE received the body; `seen_pos_s` = how old the position
+    already was INSIDE it. Their difference is the only stamp comparable ACROSS
+    tiers, because it ages a cached tier honestly: the firehose serves
+    `_FIREHOSE_RAW` (stamped `_seen_at` once, at pull time) until the next
+    successful pull, so its features get older as the cache sits, while a
+    1 s-cadence feed re-stamps `_seen_at` every pull and stays fresh.
+
+    Comparing raw `seen_pos_s` instead is the trap: it is the age at UPSTREAM
+    serve time, so a slow/cached tier reports 0.3 s forever no matter how long
+    the body has been sitting in our cache.
+    """
+    p = f.get("properties") or {}
+    seen_at = p.get("seen_at")
+    if not isinstance(seen_at, (int, float)):
+        return None
+    sp = p.get("seen_pos_s")
+    return float(seen_at) - (float(sp) if isinstance(sp, (int, float)) else 0.0)
+
+
 def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]]) -> None:
     """Convert raw aggregator aircraft dicts → features and union into by_id,
-    overwriting any existing entry for the same id (caller orders sources so the
-    freshest source is merged last)."""
+    keeping the FRESHEST OBSERVATION per id.
+
+    Was: overwrite unconditionally, relying on the caller to merge the freshest
+    tier last. That ordering assumption is what made aircraft fly BACKWARDS.
+    Tier 3 (firehose) serves a CACHED list — `_FIREHOSE_RAW` only changes when a
+    pull SUCCEEDS and never expires — and from this egress the only reachable
+    firehose verb (adsb.lol /v2/point) takes >60 s to download, so a
+    minutes-old fix overwrote the 0.1 s-old sidecar fix on every 1 s cycle. It
+    then flipped back whenever an aircraft fell outside the firehose's smaller
+    (~8-9k vs ~20k) coverage → position alternated stale↔live = visible reverse.
+    Measured before this change: 9.2% of airborne moves regressed along the
+    aircraft's own track_deg (median -3.8 km, worst -161 km).
+
+    Comparing observation time makes the union ORDER-INDEPENDENT — the same
+    freshest-wins rule `_readsb_feeds` already applies WITHIN the feeds tier.
+    An id nobody has yet is always taken, so breadth is unchanged.
+
+    Freshness only overrides tier order where it is actually KNOWN. Every real
+    tier stamps `_seen_at` at pull time (`_pull_one_feed`, `_try_firehose`,
+    `_grid_fanout`) and OpenSky stamps `seen_at`/`seen_pos_s` as it renders, so
+    in production the comparison always governs. When NEITHER side carries a
+    stamp there is no freshness signal to act on, and merge order is the only
+    remaining editorial signal (the caller orders tiers fresher-last), so we keep
+    the historical last-writer-wins. An unstamped newcomer never displaces a
+    stamped incumbent — that would be trading a known age for an unknown one.
+    """
     for f in _aircraft_geojson(raw).get("features") or []:
         fid = f.get("id")
-        if fid is not None:
+        if fid is None:
+            continue
+        cur = by_id.get(fid)
+        if cur is None:
+            by_id[fid] = f
+            continue
+        new_obs = _feat_obs_at(f)
+        cur_obs = _feat_obs_at(cur)
+        if new_obs is None and cur_obs is None:
+            by_id[fid] = f  # no freshness signal either side → tier order decides
+        elif new_obs is None:
+            continue  # unjudgeable → don't displace a stamped incumbent
+        elif cur_obs is None or new_obs > cur_obs:
             by_id[fid] = f
 
 
@@ -1371,6 +1436,71 @@ async def _do_global_fanout() -> dict[str, Any]:
     return {"type": "FeatureCollection", "features": list(by_id.values())}
 
 
+# Along-track regression guard. An AIRBORNE aircraft cannot move backwards along
+# its own reported track_deg; when the served position does, it is upstream noise
+# (a stale tier winning a cycle), and the icon visibly flies in reverse — which the
+# operator rejects outright. So a new fix that puts a fast, airborne contact more
+# than _BACKWARD_REJECT_M BEHIND the last SERVED one is dropped and the previous
+# fix is held. Same idea as tracks.ts's time-regression guard on the trail
+# polyline, applied one layer earlier so every consumer (globe, MCP, brief) sees a
+# monotone track.
+#
+# 250 m: a real forward step is ~250 m per 1 s cycle at 250 m/s and ADS-B position
+# noise is ~10-30 m, so 250 m of REVERSE is unphysical. Turning is safe too — the
+# projection only goes negative past 90° of turn, which needs ~30 s at a 3°/s
+# standard rate, and _BACKWARD_MAX_HOLD_S releases the hold well before that.
+_BACKWARD_REJECT_M = 250.0
+_BACKWARD_MIN_SPEED_MS = 60.0
+# Escape hatch: never hold a rejected position for longer than this. If the fix we
+# are holding ages past it we accept whatever upstream says, so a genuine
+# reposition/reacquisition (or a corrected bad fix) still lands instead of the
+# guard pinning a contact to a wrong spot forever.
+_BACKWARD_MAX_HOLD_S = 30.0
+# WGS84 radii of curvature — local N/E metres per radian. Exact enough that the
+# along-track projection is metre-accurate over a single fix interval.
+_WGS84_A = 6378137.0
+_WGS84_E2 = 6.69437999014e-3
+
+
+def _along_track_delta_m(prev_f: dict[str, Any], new_f: dict[str, Any]) -> float | None:
+    """Signed along-track metres from prev's position to new's, projected on
+    prev's reported track. Negative = the contact moved BACKWARD."""
+    try:
+        pc = (prev_f.get("geometry") or {}).get("coordinates") or []
+        nc = (new_f.get("geometry") or {}).get("coordinates") or []
+        trk = (prev_f.get("properties") or {}).get("track_deg")
+        if len(pc) < 2 or len(nc) < 2 or not isinstance(trk, (int, float)):
+            return None
+        lat = radians(float(pc[1]))
+        s = sin(lat)
+        w2 = 1.0 - _WGS84_E2 * s * s
+        m_rad = _WGS84_A * (1.0 - _WGS84_E2) / (w2 * sqrt(w2))  # meridional
+        n_rad = _WGS84_A / sqrt(w2)  # prime vertical
+        d_north = radians(float(nc[1]) - float(pc[1])) * m_rad
+        d_east = radians(float(nc[0]) - float(pc[0])) * n_rad * cos(lat)
+        t = radians(float(trk))
+        return d_north * cos(t) + d_east * sin(t)
+    except (TypeError, ValueError):
+        return None
+
+
+def _regresses(prev_f: dict[str, Any], new_f: dict[str, Any], now: float) -> bool:
+    """True when new_f moves a fast, airborne contact BACKWARD along its own
+    track vs the last served fix — i.e. the new fix should be dropped."""
+    p = prev_f.get("properties") or {}
+    n = new_f.get("properties") or {}
+    if p.get("on_ground") or n.get("on_ground"):
+        return False
+    v = p.get("velocity_ms")
+    if not isinstance(v, (int, float)) or v < _BACKWARD_MIN_SPEED_MS:
+        return False
+    prev_obs = _feat_obs_at(prev_f)
+    if prev_obs is None or now - prev_obs > _BACKWARD_MAX_HOLD_S:
+        return False  # holding too long → accept upstream
+    d = _along_track_delta_m(prev_f, new_f)
+    return d is not None and d < -_BACKWARD_REJECT_M
+
+
 def _merge_with_previous(
     new_fc: dict[str, Any], prev_fc: dict[str, Any], max_age_s: float = 180.0
 ) -> dict[str, Any]:
@@ -1388,11 +1518,25 @@ def _merge_with_previous(
     (~30 s) plus several missed OpenSky pulls (15 s pacing + backoff) —
     shorter windows made oceanic OpenSky-only contacts flicker."""
     now = time.time()
+    prev_by_id: dict[Any, dict[str, Any]] = {}
+    for f in prev_fc.get("features") or []:
+        fid = f.get("id")
+        if fid is not None:
+            prev_by_id[fid] = f
     by_id: dict[Any, dict[str, Any]] = {}
     for f in new_fc.get("features") or []:
         fid = f.get("id")
-        if fid is not None:
-            by_id[fid] = f
+        if fid is None:
+            continue
+        # Hold the last SERVED fix when the new one would fly the contact
+        # backwards along its own track (see _regresses). The live tiers keep
+        # delivering FORWARD fixes, so only the regressing ones are dropped and
+        # the contact keeps advancing — it does not freeze.
+        prev = prev_by_id.get(fid)
+        if prev is not None and _regresses(prev, f, now):
+            by_id[fid] = prev
+            continue
+        by_id[fid] = f
     for f in prev_fc.get("features") or []:
         fid = f.get("id")
         if fid is None or fid in by_id:
