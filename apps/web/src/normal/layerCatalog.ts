@@ -1,6 +1,6 @@
 // Curated Map-layers catalog for the Normal dashboard's Palantir-Gotham left rail.
 //
-// The registry has 34 layers, many of which are redundant SOURCE feeds for the same
+// The registry has 46 layers, many of which are redundant SOURCE feeds for the same
 // capability (5 aviation feeds, 10 maritime feeds incl. 6 regional SAR windows). Showing
 // every source as its own row is the "too detailed / which sources" clutter the operator
 // rejected. This catalog groups them into a small set of clean domain FOLDERS, each with a
@@ -41,6 +41,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Military', icon: 'jet', layerIds: ['aviation.adsb.live.mil'] },
       { label: 'Emergency', icon: 'warning', layerIds: ['aviation.adsb.live.emergencies'] },
       { label: 'TFR / Airspace', icon: 'warning', layerIds: ['airspace.tfr'] },
+      { label: 'SIGMET / AIRMET', icon: 'warning', layerIds: ['aviation.sigmet'] },
     ],
   },
   {
@@ -65,6 +66,8 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       },
       { label: 'Parking mode', icon: 'anchor', layerIds: ['maritime.parked'] },
       { label: 'Naval warnings', icon: 'warning', layerIds: ['maritime.warnings'] },
+      { label: 'Marine buoys', icon: 'anchor', layerIds: ['maritime.buoys'] },
+      { label: 'Chokepoint congestion', icon: 'ship', layerIds: ['maritime.chokepoints'] },
     ],
   },
   {
@@ -76,6 +79,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Starlink', icon: 'satellite', layerIds: ['space.celestrak.starlink'] },
       { label: 'GPS', icon: 'satellite', layerIds: ['space.celestrak.gps'] },
       { label: 'Visual', icon: 'satellite', layerIds: ['space.celestrak.visual'] },
+      { label: 'Space weather / aurora', icon: 'satellite', layerIds: ['weather.spacewx.aurora'] },
     ],
   },
   {
@@ -89,7 +93,14 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
         layerIds: ['hazards.usgs.quakes', 'hazards.emsc.quakes'],
       },
       { label: 'Fires', icon: 'fire', layerIds: ['hazards.nasa.firms'] },
+      { label: 'Wildfire perimeters', icon: 'fire', layerIds: ['hazards.fireperimeters'] },
       { label: 'Natural events', icon: 'warning', layerIds: ['hazards.nasa.eonet'] },
+      { label: 'Disaster alerts (GDACS)', icon: 'warning', layerIds: ['hazards.gdacs'] },
+      { label: 'Tropical cyclones', icon: 'warning', layerIds: ['hazards.cyclones'] },
+      { label: 'Volcanoes', icon: 'warning', layerIds: ['hazards.volcanoes'] },
+      { label: 'Humanitarian disasters', icon: 'warning', layerIds: ['hazards.reliefweb'] },
+      { label: 'Radiation', icon: 'warning', layerIds: ['hazards.radiation'] },
+      { label: 'Air quality', icon: 'signal', layerIds: ['env.airquality'] },
       { label: 'Weather alerts', icon: 'warning', layerIds: ['hazards.nws.alerts'] },
       { label: 'GPS jamming', icon: 'signal', layerIds: ['env.jamming.nacp'] },
     ],
@@ -123,6 +134,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Military bases', icon: 'shield', layerIds: ['places.bases'] },
       { label: 'Military installations (MIRTA)', icon: 'shield', layerIds: ['military.installations'] },
       { label: 'Power plants', icon: 'signal', layerIds: ['infra.power'] },
+      { label: 'Power plants (WRI global)', icon: 'signal', layerIds: ['infra.powerplants'] },
       { label: 'Nuclear facilities', icon: 'warning', layerIds: ['infra.nuclear'] },
       { label: 'Water / desalination', icon: 'network', layerIds: ['infra.water', 'infra.desalination'] },
       { label: 'Datacenters', icon: 'network', layerIds: ['infra.datacenters'] },

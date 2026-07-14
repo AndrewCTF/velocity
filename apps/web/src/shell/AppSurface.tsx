@@ -11,6 +11,7 @@ import { FoundryApp } from '../foundry/FoundryApp.js';
 import { WorkflowsApp } from '../workflows/WorkflowsApp.js';
 import { CityApp } from '../city/CityApp.js';
 import { CountryApp } from '../country/CountryApp.js';
+import { AiHubApp } from '../ai/AiHubApp.js';
 
 // AppSurface (design §6.1) — the non-Map apps render as a full surface over the
 // globe (which stays mounted behind for instant return + shared selection). Map +
@@ -21,6 +22,9 @@ export function AppSurface({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
 
   let node: ReactNode;
   switch (app) {
+    case 'ai':
+      node = <AiHubApp viewer={viewer} />;
+      break;
     case 'explorer':
       node = <ExplorerApp viewer={viewer} />;
       break;

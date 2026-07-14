@@ -123,7 +123,7 @@ def test_selection_brief_409_when_disabled(client) -> None:
 
 
 def test_selection_brief_413_oversized_props(client) -> None:
-    big = {"blob": "x" * 5000}
+    big = {"blob": "x" * 7000}
     r = client.post(
         "/api/ai/selection/brief", json={"kind": "aircraft", "id": "AC-big-1", "props": big}
     )

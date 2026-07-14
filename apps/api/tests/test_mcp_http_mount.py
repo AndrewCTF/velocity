@@ -95,8 +95,10 @@ def test_mcp_http_handshake_lists_all_tools(keyed: str) -> None:
         names = {t["name"] for t in listing["result"]["tools"]}
         # The README/landing advertise this count; keep it in lock-step so a
         # tool added/removed without updating the marketing copy trips a test.
-        assert len(names) == 22, sorted(names)
+        # 22 core + 12 keyless-feed tools (2026-07-14 data-layers wave).
+        assert len(names) == 34, sorted(names)
         assert {"get_situation", "intel_brief", "query_aircraft", "deep_analyze"} <= names
+        assert {"disaster_alerts", "maritime_chokepoints", "space_weather"} <= names
 
 
 def test_mcp_endpoint_rejects_without_token(keyed: str) -> None:
@@ -108,7 +110,7 @@ def test_mcp_endpoint_rejects_without_token(keyed: str) -> None:
 
 def test_mcp_fails_closed_when_auth_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     # The backend origin is publicly resolvable; /mcp must refuse (503), not
-    # serve all 22 tools open, when no credential source is configured.
+    # serve all tools open, when no credential source is configured.
     monkeypatch.setattr(auth, "_auth_enabled", lambda s: False)
     app = create_app()
     with TestClient(app) as c:

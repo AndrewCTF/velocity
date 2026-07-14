@@ -33,7 +33,11 @@ from app.keys import UserCtx, current_user_or_local
 router = APIRouter(tags=["ai-selection"])
 
 _CACHE_TTL_S = 60.0
-_MAX_PROPS_BYTES = 4096
+# Widened from 4096: modern local selection-tier models (Qwen3/Llama-3 8B class)
+# comfortably take a larger grounding payload, and the globe can carry richer
+# per-entity props (extra ADS-B/AIS fields) worth briefing over. Still a hard
+# ceiling so one pathological blob can't dominate the context window.
+_MAX_PROPS_BYTES = 6144
 _MAX_STRING_LEN = 500
 # Hard ceiling on how long the enrichment fusion may take before the brief
 # gives up and runs on the raw props alone. The registry/route/reverse-geo
@@ -43,8 +47,10 @@ _MAX_STRING_LEN = 500
 # lookup) so a slow upstream never delays the assessment.
 _CONTEXT_TIMEOUT_S = 4.0
 # Keep the fused context compact so the small, fast selection-tier model isn't
-# swamped — a long narrative field would crowd out the reasoning budget.
-_MAX_CONTEXT_STRING = 240
+# swamped — a long narrative field would crowd out the reasoning budget. 320
+# (up from 240) lets a full pattern-of-life assessment or incident narrative
+# survive without truncation while still bounding any single field.
+_MAX_CONTEXT_STRING = 320
 # Floor is well above the 3-6 sentence answer this brief actually needs — a
 # reasoning-tier local model (Qwen3 family etc.) spends some of its budget on
 # a thinking preamble even with `chat_template_kwargs.enable_thinking: false`
@@ -334,14 +340,20 @@ async def post_selection_brief(
         context, enrichment_status = await _safe_context(body.kind, body.id, body.props)
         system = (
             "You are a senior OSINT watch analyst briefing a watch floor. "
-            f"Write 3-6 sentences of markdown about this {body.kind} (bold key "
-            "identifiers), in this order: what it is; what it is doing now "
-            "(position, track, speed from the live fields); anomalies or "
-            "notable pattern-of-life from the ENRICHMENT block when present; "
-            "end with a one-line assessment. Ground every claim in the data "
-            "provided. If nothing stands out, say 'no anomalies evident' — "
-            "never invent one, and never speculate about intent. If the "
-            "enrichment conflicts with the live data, say so."
+            f"Write 3-6 sentences of markdown about this {body.kind} (bold the "
+            "key identifiers), in this order: (1) what it is — identity from the "
+            "registry/ENRICHMENT block; (2) what it is doing now — position, "
+            "track, speed, altitude/heading from the live fields; (3) anomalies "
+            "or notable pattern-of-life drawn from the ENRICHMENT block "
+            "(emergency squawks, AIS/ADS-B gaps, GNSS degradation, incident "
+            "membership, route deviation) when present; (4) close with a bold "
+            "one-line assessment tagged with a threat read — "
+            "**Threat: routine | watch | elevated | high**. "
+            "Ground every claim in the data provided and cite the concrete "
+            "numbers and ids. If nothing stands out, say 'no anomalies evident' "
+            "and tag Threat: routine — never invent an anomaly, and never "
+            "speculate about intent beyond the evidence. If the ENRICHMENT "
+            "conflicts with the live data, say so explicitly."
         )
         user = f"{body.kind} {body.id}:\n{props_json}"
         if context:

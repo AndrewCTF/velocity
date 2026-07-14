@@ -132,6 +132,24 @@ export const FACILITY_LAYER_IDS: ReadonlySet<string> = new Set([
   'military.installations',
 ]);
 
+// 2026-07-14 keyless data-layers wave. Point hazards/sensors → the category-tile
+// 'hazard' style; fire perimeters + SIGMET areas → the filled 'hazardpoly' style.
+export const HAZARD_POINT_LAYER_IDS: ReadonlySet<string> = new Set([
+  'hazards.gdacs',
+  'hazards.cyclones',
+  'hazards.volcanoes',
+  'hazards.radiation',
+  'hazards.reliefweb',
+  'env.airquality',
+  'maritime.buoys',
+  'maritime.chokepoints',
+  'weather.spacewx.aurora',
+]);
+export const HAZARD_POLY_LAYER_IDS: ReadonlySet<string> = new Set([
+  'hazards.fireperimeters',
+  'aviation.sigmet',
+]);
+
 function placesBboxQuery(viewer: Cesium.Viewer): () => string | null {
   return () => {
     // Viewer torn down (HMR / dashboard switch) while a poll timer is pending.
@@ -353,9 +371,15 @@ export class LayerCompositor {
                   ? 'base'
                   : d.id === 'maritime.warnings'
                     ? 'warning'
-                    : FACILITY_LAYER_IDS.has(d.id)
-                      ? 'facility'
-                      : styleFromEmits(d.emits);
+                    : HAZARD_POLY_LAYER_IDS.has(d.id)
+                      ? 'hazardpoly'
+                      : HAZARD_POINT_LAYER_IDS.has(d.id)
+                        ? 'hazard'
+                        : d.id === 'infra.powerplants'
+                          ? 'facility'
+                          : FACILITY_LAYER_IDS.has(d.id)
+                            ? 'facility'
+                            : styleFromEmits(d.emits);
       const ttl = d.refresh.ttlSec ?? 30;
       // A phone can't render/upsert the full ~13k world view every ~2 s (it
       // overheats and the main thread is too busy to interpolate, so planes

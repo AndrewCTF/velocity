@@ -132,9 +132,9 @@ describe('registry: airspace.tfr / places.bases / maritime.warnings descriptors'
 });
 
 describe('StyleKind dispatch reaches the new cases', () => {
-  it('the polygon path is widened to accept tfr alongside jamming', () => {
+  it('the polygon path is widened to accept tfr + hazardpoly alongside jamming', () => {
     expect(ADAPTER_SRC).toMatch(
-      /this\.props\.styleKind === 'jamming' \|\| this\.props\.styleKind === 'tfr'/,
+      /styleKind === 'jamming' \|\|[\s\S]*?styleKind === 'tfr'[\s\S]*?styleKind === 'hazardpoly'/,
     );
   });
 

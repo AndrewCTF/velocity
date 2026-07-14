@@ -9,6 +9,7 @@ import { LoginPage } from './auth/LoginPage.js';
 import { SignupPage } from './auth/SignupPage.js';
 import { SettingsModal } from './settings/SettingsModal.js';
 import { useSettings } from './state/settings.js';
+import { useAppView, APP_META } from './state/appView.js';
 import { VelocityNewsPage } from './news/VelocityNewsPage.js';
 import { StoryView } from './news/StoryView.js';
 import { Onboarding, hasOnboarded } from './onboarding/Onboarding.js';
@@ -107,8 +108,14 @@ function TopBar(): JSX.Element | null {
 function PredictedMotionBadge(): JSX.Element | null {
   const loc = useLocation();
   const on = useSettings((s) => s.aircraftDeadReckon);
+  const activeApp = useAppView((s) => s.app);
   if (!on) return null;
   if (loc.pathname !== '/' && !loc.pathname.startsWith('/2d')) return null;
+  // The badge annotates aircraft on the globe. A full-surface app (AI, Foundry,
+  // Workflows, City, Country) covers the globe, so the badge is meaningless
+  // there — and worse, the app surface clips its 427px width down to a stray
+  // "● Pr" at the left edge. Hide it whenever the globe isn't the active view.
+  if (loc.pathname === '/' && APP_META[activeApp].chrome === 'full') return null;
   // The console home ("/") has a ~158px timeline footer; sit above it so the badge
   // never overlaps the lane labels. The 2D route has a clear bottom.
   const bottomClass = loc.pathname === '/' ? 'bottom-[172px]' : 'bottom-2';

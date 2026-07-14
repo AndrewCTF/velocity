@@ -627,3 +627,103 @@ export function facilityStyle(props: Record<string, unknown>): { imageUri: strin
     scale: 0.95,
   };
 }
+
+// ── Keyless data-layers wave (2026-07-14) — point hazards + sensors ──────────
+// One 'hazard' StyleKind dispatched on props.kind (disaster/cyclone/volcano/
+// radiation/relief/chokepoint/buoy/airquality/aurora), same rounded-tile idiom
+// as facilityStyle. Air-quality tints by US AQI band; chokepoint by congestion.
+const HAZARD_COLORS: Record<string, string> = {
+  disaster: '#f97316', // orange
+  cyclone: '#a855f7', // purple
+  volcano: '#b45309', // brown
+  radiation: '#facc15', // yellow
+  relief: '#38bdf8', // sky
+  chokepoint: '#2dd4bf', // teal
+  buoy: '#60a5fa', // blue
+  airquality: '#22c55e', // green (overridden by AQI band)
+  aurora: '#34d399', // emerald
+};
+
+function aqiColor(aqi: number | null): string {
+  if (aqi === null) return '#9ca3af';
+  if (aqi <= 50) return '#22c55e';
+  if (aqi <= 100) return '#eab308';
+  if (aqi <= 150) return '#f97316';
+  if (aqi <= 200) return '#ef4444';
+  if (aqi <= 300) return '#a855f7';
+  return '#7f1d1d';
+}
+
+function hazardGlyph(kind: string): string {
+  switch (kind) {
+    case 'radiation': // trefoil
+      return '<circle cx="12" cy="12" r="1.8" fill="#1a1400"/><path d="M12 12 5.8 8.4A7 7 0 0 1 12 5v7z" fill="#1a1400"/><path d="M12 12 18.2 8.4A7 7 0 0 0 12 5v7z" fill="#1a1400"/><path d="M12 12 12 19a7 7 0 0 0 6.2-3.6L12 12z" fill="#1a1400"/>';
+    case 'volcano': // mountain with plume
+      return '<path d="M5 19 10 9l1.5 2.5L14 9l5 10z" fill="#1a0f00"/><circle cx="12" cy="6" r="1.4" fill="#1a0f00"/>';
+    case 'cyclone': // spiral swirl
+      return '<path d="M12 6a6 6 0 1 1-5.2 3M12 18a6 6 0 0 1 5.2-3" stroke="#160020" stroke-width="1.8" fill="none" stroke-linecap="round"/><circle cx="12" cy="12" r="1.6" fill="#160020"/>';
+    case 'relief': // humanitarian cross
+      return '<path d="M10 5h4v5h5v4h-5v5h-4v-5H5v-4h5z" fill="#052436"/>';
+    case 'buoy': // buoy circle + antenna
+      return '<circle cx="12" cy="14" r="4" fill="#04213f"/><path d="M12 10V5" stroke="#04213f" stroke-width="1.6" stroke-linecap="round"/>';
+    case 'chokepoint': // gate / narrowing
+      return '<path d="M6 5v14M18 5v14" stroke="#032b26" stroke-width="2" stroke-linecap="round"/><path d="M9 9l3 3-3 3M15 9l-3 3 3 3" stroke="#032b26" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
+    case 'aurora': // wavy band
+      return '<path d="M4 14q4-6 8 0t8 0" stroke="#022c22" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M4 17q4-6 8 0t8 0" stroke="#022c22" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
+    case 'airquality': // haze dots
+      return '<circle cx="8" cy="10" r="1.5" fill="#062b16"/><circle cx="13" cy="9" r="1.5" fill="#062b16"/><circle cx="16" cy="13" r="1.5" fill="#062b16"/><circle cx="10" cy="14" r="1.5" fill="#062b16"/>';
+    default: // disaster + fallback: exclamation triangle
+      return '<path d="M12 4 21 20H3z" fill="#1a1000"/><path d="M12 10v5" stroke="#f97316" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="17.5" r="1" fill="#f97316"/>';
+  }
+}
+
+function hazardSvg(kind: string, tile: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    ${hazardGlyph(kind)}
+  </svg>`;
+}
+
+export function hazardStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
+  const kind = String(props['kind'] ?? '').toLowerCase();
+  let tile = HAZARD_COLORS[kind] ?? '#f97316';
+  let cacheKey = `hazard:${kind}`;
+  if (kind === 'airquality') {
+    const aqi = props['us_aqi'];
+    tile = aqiColor(typeof aqi === 'number' ? aqi : null);
+    cacheKey = `hazard:aq:${tile}`;
+  } else if (kind === 'disaster' || kind === 'cyclone') {
+    // Alert level (GDACS) tints the tile red when the modelled impact is high.
+    const alert = String(props['alert'] ?? '').toLowerCase();
+    if (alert === 'red') tile = '#ef4444';
+    else if (alert === 'orange') tile = '#f97316';
+    cacheKey = `hazard:${kind}:${alert || 'x'}`;
+  } else if (kind === 'chokepoint') {
+    const c = String(props['congestion'] ?? '').toLowerCase();
+    if (c === 'high') tile = '#ef4444';
+    else if (c === 'elevated') tile = '#f59e0b';
+    cacheKey = `hazard:choke:${c || 'x'}`;
+  }
+  return {
+    imageUri: cachedIcon(cacheKey, () => placeDataUri(hazardSvg(kind, tile))),
+    scale: 0.9,
+  };
+}
+
+// Fire perimeters + SIGMET/AIRMET areas — filled polygons. Colour by hazard.
+export function hazardPolygonStyle(props: Record<string, unknown>): {
+  fillColor: string;
+  outlineColor: string;
+  alpha: number;
+} {
+  const kind = String(props['kind'] ?? '').toLowerCase();
+  if (kind === 'fireperim') return { fillColor: '#ef4444', outlineColor: '#f97316', alpha: 0.35 };
+  const hazard = String(props['hazard'] ?? '').toUpperCase();
+  const hex =
+    hazard.includes('CONV') ? '#ef4444'
+    : hazard.includes('ASH') ? '#a855f7'
+    : hazard.includes('ICE') ? '#38bdf8'
+    : hazard.includes('TURB') ? '#f59e0b'
+    : '#f97316';
+  return { fillColor: hex, outlineColor: hex, alpha: 0.28 };
+}
