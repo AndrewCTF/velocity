@@ -188,8 +188,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             (log.warning if rss > 8_000 else log.info)("RSS %d MB", rss)
 
     trim_task = asyncio.create_task(_malloc_trim_loop())
-    # Bound here, not at its create_task below: `finally` runs even if an earlier
-    # start() raises, and would NameError on an unbound handle.
+    # Bound here, not at their create_task below: `finally` runs even if an
+    # earlier start() raises, and would NameError on an unbound handle.
+    adsb_supervise_task: asyncio.Task[None] | None = None
     ais_supervise_task: asyncio.Task[None] | None = None
     try:
         if background:
@@ -203,6 +204,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import adsb_sidecar  # noqa: PLC0415
 
             await adsb_sidecar.start()
+            # Same reason as the AIS twin below: start() runs once, so a sidecar
+            # that dies later would stay dead until the next restart and the feed
+            # tier would silently fall back to the OpenSky floor.
+            adsb_supervise_task = asyncio.create_task(
+                adsb_sidecar.supervise(), name="adsb_sidecar_supervise"
+            )
             # AIS twin: a second headless Chromium clears VesselFinder's
             # Cloudflare gate and serves ~21k vessels worldwide as localhost
             # vessels.json (the only keyless GLOBAL AIS). Spawn it here; the
@@ -394,6 +401,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # browser process group). No-op if it never started / already gone.
             from app import adsb_sidecar  # noqa: PLC0415
 
+            # Cancel supervision BEFORE stop(), or it races the teardown and
+            # respawns the sidecar we are killing.
+            if adsb_supervise_task is not None:
+                adsb_supervise_task.cancel()
+                try:
+                    await adsb_supervise_task
+                except asyncio.CancelledError:
+                    pass
             await adsb_sidecar.stop()
             # Tear down the VesselFinder AIS sidecar (its own browser tree).
             from app import ais_sidecar  # noqa: PLC0415

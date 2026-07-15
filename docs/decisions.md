@@ -745,9 +745,10 @@ The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
 three-line fact there. One line per wave, newest first — when the CLAUDE.md
 number changes, the displaced line lands here.
 
-- **1708 +1 skip** — 2026-07-15, platform-hardening-and-copy-pass: AIS
-  cache-freshness wave (frozen `:8093` union refused instead of republished as
-  live, sidecar reuse/supervision/kill-escalation, honest AIS status feed).
+- **1719 +1 skip** — 2026-07-15, platform-hardening-and-copy-pass: sidecar
+  freshness+supervision wave (frozen `:8093` union refused instead of
+  republished as live, honest AIS status feed, both sidecars supervised on a
+  liveness trigger with adopt/evict + SIGKILL escalation).
 - **1696 +1 skip** — 2026-07-15, platform-hardening-and-copy-pass:
   security-hardening wave (unauthenticated `/api/workflows` code-exec closed via
   the compute fail-closed gate, `/mcp` rate limit, `op.http` strict-SSRF opt-in,
@@ -822,17 +823,48 @@ Two structural traps this exposed, both fixed the same day:
   SIGTERM and ignored it (measured: still LISTENing 12 s later, gone 2 s after
   SIGKILL) — every pid now routes through the escalating `_kill_pid`.
 
-  **`adsb_sidecar` (`:8090`) is still UNSUPERVISED — deliberately, not by
-  oversight.** Do not port `supervise()` to it without thinking: its
-  `_already_healthy()` requires `total > 0`, so a cold sidecar warming its first
-  scrape reads UNHEALTHY, and a naive supervisor would respawn-storm the
-  platform's most critical feed (the ≥8 000 floor, `ADSB_SIDECAR_ONLY=1`); its
-  `start()` also does not evict a port holder, so a respawn against a wedged
-  survivor just EADDRINUSEs. Both need fixing together, with the aircraft floor
-  verified live.
+  **`adsb_sidecar` (`:8090`) is supervised too** — done in a second pass, once
+  the two hazards that made a naive port dangerous were resolved (see below).
 
 Guards: `tests/test_ais_keyless.py` (stamp + refuse), `tests/test_ais_sidecar_reuse.py`
 (reuse/supervise/escalate), `tests/test_status.py` (honest AIS feed).
+
+### Supervising the tar1090 sidecar: liveness ≠ has-data (2026-07-15)
+The `:8090` follow-up to the above. Supervising the platform's most critical feed
+(≥8 000 floor, `ADSB_SIDECAR_ONLY=1`) looks like a copy of the AIS loop and is
+not — two hazards had to be resolved first, and both come down to one idea:
+**`_serving()` (liveness) and `_already_healthy()` (liveness + aircraft) are
+different questions and must never collapse into one predicate.**
+
+1. **Restart trigger = NOT SERVING. Never `total > 0`.** index.js binds its HTTP
+   port BEFORE browser init (a deliberate fix: sequential init-before-serve once
+   hung `:8090` >70 s on one bad tab). So a healthy sidecar clearing Cloudflare
+   answers with `total: 0` for ~20-60 s. Measured on a real kill→respawn cycle:
+   `total=0` at t+10 s and t+20 s, then 19 448 → 20 096 by t+100 s. A supervisor
+   triggering on `total > 0` would have killed the browser mid-clear at t+10 s
+   and stormed forever. Liveness is unambiguous from the sidecar's first ms.
+2. **`start()` must ADOPT a warming holder, not evict it.** Eviction gated on
+   "not serving" only. A holder that IS serving but has no aircraft is a sidecar
+   mid-warm (the fast-restart case — exactly how the AIS twin lost `:8093`);
+   killing it throws away a good sidecar, and spawning a duplicate onto the held
+   port just EADDRINUSEs and dies, leaving neither. A holder that is NOT serving
+   is wedged or foreign and must go, or it EADDRINUSEs the replacement.
+
+Deliberately NOT supervised: a sidecar that is up but DRY. Its read loop re-inits
+a dead page every `READ_MS` and relaunches a crashed browser itself, so
+respawning the process would throw that self-heal away and buy another Cloudflare
+clear. If it answers, it is working or already healing.
+
+`stop()` had the same escalation gap as the AIS twin (SIGKILL only inside
+`if proc is not None`, so a reused pid got a SIGTERM it could ignore) — every pid
+now routes through the escalating `_kill_pid`.
+
+Proven live: SIGKILL `:8090` → supervisor logged `not serving — restarting` →
+respawned in 22 s → 20 050 aircraft at 0.6 s age, floor OK. Exactly 1 restart
+logged, exactly 1 feeder process: no storm, no duplicate.
+→ `tests/test_adsb_sidecar_supervise.py` (the storm + adopt/evict guards; both
+verified by mutation — swapping `_serving()` for `_already_healthy()` fails the
+warming tests).
 
 **The transferable rule:** any tier that can serve a CACHE must publish the age
 of the data, not the age of the response, and its consumer must refuse it past a
