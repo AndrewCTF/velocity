@@ -738,9 +738,12 @@ The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
 three-line fact there. One line per wave, newest first — when the CLAUDE.md
 number changes, the displaced line lands here.
 
-- **1687 +1 skip** — 2026-07-15, aircraft-motion-exact-speed-no-reverse:
-  dashboard-copy wave (house prose style for model output that renders in the
-  dashboard, `test_prose_style.py`).
+- **1696 +1 skip** — 2026-07-15, platform-hardening-and-copy-pass:
+  security-hardening wave (unauthenticated `/api/workflows` code-exec closed via
+  the compute fail-closed gate, `/mcp` rate limit, `op.http` strict-SSRF opt-in,
+  workflows.db + alert_rules.db retention caps).
+- **1687 +1 skip** — 2026-07-15, dashboard-copy wave (house prose style for
+  model output that renders in the dashboard, `test_prose_style.py`).
 - **1675 +1 skip** — 2026-07-14, ui-typography-wcag-sidebar: aircraft
   predicted-motion wave (freshest-observation snapshot union + along-track
   no-reverse guards, `test_adsb_no_reverse.py`).
