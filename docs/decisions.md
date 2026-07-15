@@ -822,6 +822,15 @@ Two structural traps this exposed, both fixed the same day:
   SIGTERM and ignored it (measured: still LISTENing 12 s later, gone 2 s after
   SIGKILL) — every pid now routes through the escalating `_kill_pid`.
 
+  **`adsb_sidecar` (`:8090`) is still UNSUPERVISED — deliberately, not by
+  oversight.** Do not port `supervise()` to it without thinking: its
+  `_already_healthy()` requires `total > 0`, so a cold sidecar warming its first
+  scrape reads UNHEALTHY, and a naive supervisor would respawn-storm the
+  platform's most critical feed (the ≥8 000 floor, `ADSB_SIDECAR_ONLY=1`); its
+  `start()` also does not evict a port holder, so a respawn against a wedged
+  survivor just EADDRINUSEs. Both need fixing together, with the aircraft floor
+  verified live.
+
 Guards: `tests/test_ais_keyless.py` (stamp + refuse), `tests/test_ais_sidecar_reuse.py`
 (reuse/supervise/escalate), `tests/test_status.py` (honest AIS feed).
 
