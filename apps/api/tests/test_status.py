@@ -44,6 +44,72 @@ def test_status_degraded_when_thin(client: TestClient, monkeypatch: pytest.Monke
     assert adsb_feed["status"] == "degraded"
 
 
+def _ais_feed(client: TestClient) -> dict:
+    return next(f for f in client.get("/api/status").json()["feeds"] if "keyless" in f["name"])
+
+
+def test_status_ais_does_not_undersell_global_coverage(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The keyless AIS feed is worldwide and must not claim otherwise.
+
+    It described a global union as "Northern Europe only (Norway + Baltic)" for
+    ten days after ShipXplorer + MyShipTracking landed (2026-07-05) — while
+    serving 56k vessels, ~46k of them from exactly those two global sources.
+    """
+    _patch_snapshot(monkeypatch, 9000, 3.0)
+    detail = _ais_feed(client)["detail"]
+    assert "Northern Europe only" not in detail
+    assert "worldwide" in detail
+
+
+def test_status_ais_reports_a_stale_sidecar_instead_of_staying_green(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Green while a wedged feeder replays a 27-minute-old union is the bug.
+
+    2026-07-15: /api/status read green + "58012 vessels" while 21944 of them were
+    frozen positions from a sidecar that had lost the site 27 minutes earlier.
+    """
+    _patch_snapshot(monkeypatch, 9000, 3.0)
+    from app import ais_keyless
+
+    monkeypatch.setattr(
+        ais_keyless,
+        "stats",
+        lambda: {
+            "shipxplorer_enabled": True,
+            "myshiptracking_sidecar_enabled": True,
+            "myshiptracking_vessels": 0,
+            "myshiptracking_stale_s": 1631,
+        },
+    )
+    feed = _ais_feed(client)
+    assert feed["status"] == "degraded"
+    assert "1631s-old" in feed["detail"]
+
+
+def test_status_ais_does_not_name_a_source_that_is_reporting_nothing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_snapshot(monkeypatch, 9000, 3.0)
+    from app import ais_keyless
+
+    monkeypatch.setattr(
+        ais_keyless,
+        "stats",
+        lambda: {
+            "shipxplorer_enabled": True,
+            "myshiptracking_sidecar_enabled": True,
+            "myshiptracking_vessels": 0,
+            "myshiptracking_stale_s": 0,
+        },
+    )
+    detail = _ais_feed(client)["detail"]
+    assert "MyShipTracking is not reporting" in detail
+    assert "deduped across ShipXplorer plus" in detail  # not "...and MyShipTracking plus"
+
+
 def test_status_never_500s_on_snapshot_error(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

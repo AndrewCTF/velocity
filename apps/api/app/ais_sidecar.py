@@ -35,6 +35,7 @@ raises into lifespan.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -63,7 +64,9 @@ _NODE_MODULES = _TOOLS / "adsb-globe-feeder" / "node_modules"
 class _Sidecar:
     """One headless-browser vessel feeder process (node ``index.js``)."""
 
-    def __init__(self, name: str, dirname: str, port: int, is_enabled, extra_env=None):
+    def __init__(
+        self, name: str, dirname: str, port: int, is_enabled, extra_env=None, max_age_s=None
+    ):
         self.name = name
         self.dir = _TOOLS / dirname
         self.index = self.dir / "index.js"
@@ -71,6 +74,7 @@ class _Sidecar:
         self.base = f"http://127.0.0.1:{port}"
         self.health = f"{self.base}/health"
         self.is_enabled = is_enabled  # () -> bool
+        self.max_age_s = max_age_s  # () -> float | None; oldest union we'll adopt
         self.extra_env = extra_env or {}
         self._proc: asyncio.subprocess.Process | None = None
         # pid of a sidecar we REUSED (not spawned) — tracked so stop() can still
@@ -95,16 +99,56 @@ class _Sidecar:
     async def _already_healthy(self) -> bool:
         """Another sidecar (prior boot, manual run) already serving? Reuse it.
 
-        Healthy means the HTTP server is up — NOT that vessels have landed yet
-        (the first world-grid scrape takes ~15-30s and the poller tolerates an
-        empty union), so we accept any 200 /health.
+        Healthy means the HTTP server is up AND its union is not ancient — NOT
+        that vessels have landed yet (the first world-grid scrape takes ~15-30s,
+        reports ``age_s: null``, and the poller tolerates an empty union).
+
+        The age check is why this isn't just ``status_code == 200``: when the
+        site blocks a feeder's browser it keeps answering /health 200 and keeps
+        serving its last scrape forever (2026-07-15: a 27-minute-old union, still
+        200). Adopting that re-inherits a frozen tier that no backend restart can
+        clear, because every restart reuses it again. Too old → respawn instead.
         """
         try:
             async with httpx.AsyncClient(timeout=2.0) as c:
                 r = await c.get(self.health)
-                return r.status_code == 200
-        except Exception:  # noqa: BLE001 — nothing on the port
+                if r.status_code != 200:
+                    return False
+                cap = self.max_age_s() if self.max_age_s else None
+                if cap is None:
+                    return True
+                age = (r.json() or {}).get("age_s")
+                if isinstance(age, (int, float)) and age > cap:
+                    log.warning(
+                        "ais sidecar %s on %s is serving a %ds-old union (cap %gs) — "
+                        "replacing it instead of reusing",
+                        self.name, self.base, int(age), cap,
+                    )
+                    return False
+                return True
+        except Exception:  # noqa: BLE001 — nothing on the port / unparseable health
             return False
+
+    async def _kill_pid(self, pid: int) -> None:
+        """SIGTERM, then SIGKILL if it is still holding the port.
+
+        A feeder wedged on a dead browser does NOT die on SIGTERM (measured
+        2026-07-15: still LISTENing on :8093 12s after `kill`, gone 2s after
+        `kill -9`), and a survivor blocks the replacement's bind.
+        """
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        for _ in range(6):
+            await asyncio.sleep(0.5)
+            if self._port_holder_pid() != pid:
+                return
+        log.warning("ais sidecar %s pid %s ignored SIGTERM — SIGKILL", self.name, pid)
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
     async def start(self) -> None:
         if not self.index.exists():
@@ -117,6 +161,16 @@ class _Sidecar:
                 self.name, self.base, self._reuse_pid,
             )
             return
+        # Unhealthy but possibly still LISTENing (a wedged feeder we just refused
+        # in _already_healthy). It would EADDRINUSE the replacement, so evict it
+        # first — otherwise the frozen one outlives every restart.
+        holder = self._port_holder_pid()
+        if holder is not None:
+            log.warning(
+                "ais sidecar %s: evicting unhealthy pid %s holding %s",
+                self.name, holder, self.base,
+            )
+            await self._kill_pid(holder)
 
         env = {
             **os.environ,
@@ -188,20 +242,14 @@ class _Sidecar:
             return
         log.info("stopping ais sidecar %s pids=%s", self.name, pids)
 
-        for pid in pids:
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+        # _kill_pid escalates per pid. The escalation used to hang off
+        # `if proc is not None`, so a REUSED sidecar (proc is None) only ever got
+        # SIGTERM — and a wedged feeder ignores it, keeping the port and getting
+        # re-adopted on the next boot. Every pid gets the same treatment now.
+        await asyncio.gather(*(self._kill_pid(pid) for pid in pids))
         if proc is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await asyncio.wait_for(proc.wait(), timeout=5.0)
-            except (TimeoutError, Exception):  # noqa: BLE001 — escalate
-                for pid in pids:
-                    try:
-                        os.kill(pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
 
 
 _SIDECARS: list[_Sidecar] = [
@@ -211,6 +259,9 @@ _SIDECARS: list[_Sidecar] = [
         int(os.environ.get("AIS_MYSHIPTRACKING_SIDECAR_PORT", "8093")),
         lambda: get_settings().ais_myshiptracking_sidecar_enabled,
         extra_env={"READ_MS": os.environ.get("AIS_MYSHIPTRACKING_SIDECAR_READ_MS", "30000")},
+        # Same cap the poller uses to refuse a stale union — a feeder whose union
+        # the poller won't publish is not one worth adopting.
+        max_age_s=lambda: get_settings().ais_myshiptracking_sidecar_max_age_s,
     ),
     _Sidecar(
         "marinetraffic",
@@ -234,6 +285,37 @@ async def start() -> None:
     for sc in _SIDECARS:
         if sc.is_enabled():
             await sc.start()
+
+
+async def supervise(interval_s: float = 60.0) -> None:
+    """Re-``start()`` any enabled feeder that has stopped serving. Runs forever.
+
+    ``start()`` only ever ran once, at lifespan boot, so a feeder that died after
+    boot stayed dead until the next backend restart — the poller just backed off
+    against a closed port forever and the tier went silently empty. It has bitten
+    twice: the ADS-B twin on :8090, and on 2026-07-15 the MyShipTracking feeder,
+    when a restart's start() ADOPTED the outgoing backend's sidecar (still
+    listening, health 200) moments before that backend's stop() killed it.
+
+    _already_healthy is the whole test, so this also recovers a feeder that is up
+    but wedged on a stale union — start() evicts the port holder and respawns.
+    A warming feeder (age_s null) reads healthy and is left alone, so this never
+    fights the first world sweep.
+    """
+    while True:
+        await asyncio.sleep(interval_s)
+        for sc in _SIDECARS:
+            if not sc.is_enabled():
+                continue
+            try:
+                if await sc._already_healthy():
+                    continue
+                log.warning("ais sidecar %s not serving on %s — restarting", sc.name, sc.base)
+                await sc.start()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # noqa: BLE001 — supervision must never die
+                log.warning("ais sidecar %s supervise error: %s", sc.name, e)
 
 
 async def stop() -> None:

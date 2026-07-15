@@ -85,6 +85,17 @@ Cadence / backend:
 - AIS = ShipXplorer direct httpx (needs `Referer`/`Origin`) + MyShipTracking
   sidecar `:8093`, MMSI-deduped. SHIP_ID-keyed feeders (MarineTraffic,
   VesselFinder) must never run alongside an MMSI source.
+- The vessel store is LAST-WRITE-WINS (`ObservationStore.add_many` assigns
+  `_latest[id]` unconditionally), so an optimistic `Observation.t` is a
+  CORRECTNESS bug, not a rounding one: it steals the MMSI from a live source AND
+  pins itself in retention. A tier that can serve a CACHE must publish the age of
+  the DATA, never the age of the response — the `:8093` sidecar carries
+  `last_good`/`age_s`, the poller stamps `t` from `last_good` and REFUSES a union
+  older than 180 s (going silent lets frozen fixes age out). `ais_sidecar`
+  supervises every feeder: `start()` alone ran once at boot, and a wedged feeder
+  answers `/health` 200 forever, so it must be aged out and evicted, not adopted.
+  → `tests/test_ais_keyless.py`, `tests/test_ais_sidecar_reuse.py`,
+  `docs/decisions.md` (2026-07-15 post-mortem)
 - Satellites: `/api/space/gp` requests `FORMAT=tle` (JSON variant → 0 sats);
   client SGP4 via `SampledPositionProperty` is real physics, exempt from the
   no-synthesis rule; propagation stays chunked. → `tests/test_invariants.py`
@@ -134,9 +145,9 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1696 passed + 1 skipped** (skip = opt-in live probe; measured
-  2026-07-15, branch platform-hardening-and-copy-pass, security-hardening +
-  dashboard-copy waves). Never commit below the baseline you inherited. When you raise it,
+  Baseline: **1708 passed + 1 skipped** (skip = opt-in live probe; measured
+  2026-07-15, branch platform-hardening-and-copy-pass, AIS cache-freshness
+  wave). Never commit below the baseline you inherited. When you raise it,
   update the number/date/wave here and move the displaced line to
   `docs/decisions.md#backend-test-baseline-history` — this bullet stays a
   three-line fact, not a changelog.

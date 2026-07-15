@@ -147,14 +147,21 @@ Executable guards (fail loud instead of relying on prose):
   the handler's `Query(...)` defaults reach `viewport_filter` and 500 ("'>' not
   supported between instances of 'Query'"). This broke the jamming layer.
   Guarded by `tests/test_invariants.py`.
-- Vessel breadth: two GLOBAL MMSI-keyed sources run together and dedup
-  (freshest-wins on `vessel:<mmsi>`):
+- Vessel breadth: two GLOBAL MMSI-keyed sources run together and dedup on
+  `vessel:<mmsi>` — LAST-WRITE-WINS, not freshest-wins (see the 2026-07-15
+  post-mortem below; `ObservationStore.add_many` assigns `_latest[id]`
+  unconditionally). Every publisher must therefore stamp an HONEST `t`; an
+  optimistic one both steals the MMSI and pins itself in retention:
   1. **ShipXplorer** — DIRECT httpx, NO browser (`app.ais_keyless._run_shipxplorer`,
      `data.shipxplorer.com/live` world bbox @ zoom 6, ~32k incl. satellite AIS,
      measured 2026-07-05). Needs browser-ish `Referer`/`Origin` headers or it
      500s; NOT Cloudflare-gated. Cheapest source (one ~190 KB request/poll).
+     Polled live, so wall-clock `t` is honest for it.
   2. **MyShipTracking headless-browser sidecar** (`tools/ais-myshiptracking-feeder`,
-     `:8093/vessels.json`, ~22k measured 2026-07-05), polled every 30 s.
+     `:8093/vessels.json`, ~22k measured 2026-07-05), polled every 30 s. Serves a
+     CACHE: `/vessels.json` carries `last_good`/`age_s` and the poller stamps `t`
+     from `last_good`, refusing any union older than
+     `ais_myshiptracking_sidecar_max_age_s` (180 s).
   `app.ais_sidecar` also registers MarineTraffic `:8092` (SHIP_ID-keyed,
   Cloudflare-throttled) + VesselFinder `:8091` — SHIP_ID-keyed feeders must NOT
   run alongside an MMSI source (different id namespace → double-renders). Only
@@ -738,6 +745,9 @@ The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
 three-line fact there. One line per wave, newest first — when the CLAUDE.md
 number changes, the displaced line lands here.
 
+- **1708 +1 skip** — 2026-07-15, platform-hardening-and-copy-pass: AIS
+  cache-freshness wave (frozen `:8093` union refused instead of republished as
+  live, sidecar reuse/supervision/kill-escalation, honest AIS status feed).
 - **1696 +1 skip** — 2026-07-15, platform-hardening-and-copy-pass:
   security-hardening wave (unauthenticated `/api/workflows` code-exec closed via
   the compute fail-closed gate, `/mcp` rate limit, `op.http` strict-SSRF opt-in,
@@ -764,6 +774,70 @@ number changes, the displaced line lands here.
 - **1294** — w5-places-airspace-enrichment (2026-07-11).
 
 ## Lessons from past sessions (post-mortems)
+
+### A cached tier that stamps wall-clock time is immortal AND wins (2026-07-15)
+The exact ADS-B `seen_pos_s` lesson recorded in *Aircraft predicted motion*
+above ("a cached tier reports 0.3 s forever"), repeated in the AIS path ten days
+after that fix landed. Found by reading `/tmp/ais-sidecar-myshiptracking.log`,
+not by any alarm — nothing was red.
+
+The MyShipTracking feeder's browser lost the site at 12:54 UTC. By design it
+replays its last good world sweep (`pump()` keeps `latest` when a sweep is below
+the vessel floor), and `/vessels.json` served that union under `now =
+Date.now()` — the SERVE time. `_publish_myshiptracking` then stamped
+`t=time.time()` on all 22 837 of them, every 30 s, forever. Measured before the
+fix, 27 minutes in:
+
+- Two `:8093` pulls 45 s apart: `now` advanced 45.1 s, **0 of 22 837 vessels
+  moved**. `/health` said `age_s: 868` — the honest stamp existed and nobody
+  read it.
+- **21 944 of 57 174 vessels (38%) in `/api/maritime/snapshot` were the frozen
+  cache**, every position matching it exactly, served as live.
+- ShipXplorer — live, global, MMSI-keyed — won **0** of the MMSIs the frozen
+  tier carried. Because `ObservationStore.add_many` is last-write-wins and the
+  30 s poller always wrote last with a fresh `t`, the stale tier deterministically
+  clobbered the live one, and the fresh `t` meant retention never evicted it.
+- `/api/status` read **green**, "58012 vessels": the AIS feed had no age check
+  (ADS-B has `aircraft_age_s`), and the other sources' real vessels hid the hole.
+
+Three defects, one story — a freshness signal that existed but was dropped at
+every boundary. Fixed: `/vessels.json` carries `last_good`/`age_s`; the poller
+stamps `t` from `last_good` and REFUSES a union older than 180 s (going silent
+lets the frozen fixes age out so live sources retake the MMSI); `/api/status`
+degrades and says so.
+
+Two structural traps this exposed, both fixed the same day:
+- **`_already_healthy` accepted any 200.** A wedged feeder answers 200 forever,
+  so every restart re-adopted the frozen tier — no restart could clear it. It
+  now refuses a union older than the poller's cap and evicts the port holder.
+  (`age_s: null` = warming, still healthy — never fight the first sweep.)
+- **Nothing supervised the sidecars.** `start()` ran once at lifespan boot, so a
+  feeder that died later stayed dead until the next restart with the tier
+  silently empty — the same trap already known for the ADS-B twin on `:8090`.
+  It bit again here: a restart's `start()` ADOPTED the outgoing backend's
+  sidecar (still listening, health 200) moments before that backend's `stop()`
+  killed it. `ais_sidecar.supervise()` now re-`start()`s any enabled feeder that
+  stops serving (proven live: SIGKILL → respawned in 44 s). Related: `stop()`
+  only escalated to SIGKILL for a SPAWNED child, so a reused wedged pid got
+  SIGTERM and ignored it (measured: still LISTENing 12 s later, gone 2 s after
+  SIGKILL) — every pid now routes through the escalating `_kill_pid`.
+
+Guards: `tests/test_ais_keyless.py` (stamp + refuse), `tests/test_ais_sidecar_reuse.py`
+(reuse/supervise/escalate), `tests/test_status.py` (honest AIS feed).
+
+**The transferable rule:** any tier that can serve a CACHE must publish the age
+of the data, not the age of the response, and its consumer must refuse it past a
+cap. `now` at the serve boundary is not a freshness signal. When a store is
+last-write-wins, an optimistic timestamp is a correctness bug, not a rounding
+one.
+
+STILL LATENT, by choice — the VesselFinder (`:8091`) and MarineTraffic (`:8092`)
+feeders carry the identical `lastGood` + 180 s replay pattern, and
+`_publish_vesselfinder` / `_publish_marinetraffic` still stamp `t=now`. Both are
+OFF by default so neither can bite today; enabling either without porting the
+`last_good` + cap fix re-opens exactly this bug. (`_publish_shipxplorer` also
+stamps `t=now` and is fine — it is a live direct poll with no cache behind it,
+which is the distinction that matters: cache → honest age, live fetch → `now`.)
 
 ### Never claim coverage/parity without a measurement
 A session called the keyless AIS firehose "global" in code, commit, and

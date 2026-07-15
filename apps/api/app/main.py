@@ -188,6 +188,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             (log.warning if rss > 8_000 else log.info)("RSS %d MB", rss)
 
     trim_task = asyncio.create_task(_malloc_trim_loop())
+    # Bound here, not at its create_task below: `finally` runs even if an earlier
+    # start() raises, and would NameError on an unbound handle.
+    ais_supervise_task: asyncio.Task[None] | None = None
     try:
         if background:
             # Headless-browser tar1090 sidecar: a real Chromium clears the
@@ -209,6 +212,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import ais_sidecar  # noqa: PLC0415
 
             await ais_sidecar.start()
+            # start() runs once; a feeder that dies (or wedges on a stale union)
+            # after boot would otherwise stay dead until the next restart, with the
+            # tier silently empty. Supervise it for the life of the process.
+            ais_supervise_task = asyncio.create_task(
+                ais_sidecar.supervise(), name="ais_sidecar_supervise"
+            )
             # MAVLink bridge: the drone control server the Workflows control.drone
             # block talks to. OFF unless mavlink_bridge_enabled; log-only without a
             # MAVLINK_CONNECT endpoint. Best-effort — never blocks boot.
@@ -389,6 +398,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # Tear down the VesselFinder AIS sidecar (its own browser tree).
             from app import ais_sidecar  # noqa: PLC0415
 
+            # Cancel supervision BEFORE stop(), or it races the teardown and
+            # respawns the feeder we are killing.
+            if ais_supervise_task is not None:
+                ais_supervise_task.cancel()
+                try:
+                    await ais_supervise_task
+                except asyncio.CancelledError:
+                    pass
             await ais_sidecar.stop()
             # Tear down the MAVLink bridge (no-op if it never started).
             from app import mavlink_sidecar  # noqa: PLC0415

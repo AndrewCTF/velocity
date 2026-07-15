@@ -54,6 +54,10 @@ _stats: dict[str, Any] = {
     "vesselfinder_vessels": 0,
     "marinetraffic_vessels": 0,
     "myshiptracking_vessels": 0,
+    # Age of the sidecar union we last REFUSED, 0 while it is publishing. Non-zero
+    # means the feeder's browser is wedged and its ~22k global MMSIs are absent
+    # from the union by design, not by accident.
+    "myshiptracking_stale_s": 0,
     "shipxplorer_vessels": 0,
 }
 
@@ -463,7 +467,9 @@ async def _run_marinetraffic_sidecar() -> None:
 # ── MyShipTracking headless sidecar (keyless GLOBAL, MMSI-keyed primary) ────────
 
 
-def _publish_myshiptracking(vessels: list[dict[str, Any]]) -> int:
+def _publish_myshiptracking(
+    vessels: list[dict[str, Any]], obs_t: float | None = None
+) -> int:
     """Bulk-load MyShipTracking sidecar vessels into the observation store.
 
     Same bulk (add_many) contract as the other sidecars. Unlike MarineTraffic,
@@ -473,8 +479,14 @@ def _publish_myshiptracking(vessels: list[dict[str, Any]]) -> int:
     backfilled from the cross-source cache when another feed has typed that MMSI
     (MyShipTracking's row type code is its own taxonomy, not the AIS numeric type
     the icon dispatch expects, so we don't guess it).
+
+    ``obs_t`` is the sidecar's ``last_good`` — when its last world sweep actually
+    landed. Pass it: the sidecar keeps serving the previous union when the site
+    blocks it, so wall-clock ``now`` would stamp a frozen cache as a live fix and
+    it would then out-rank real fixes AND never age out of retention. None (a
+    pre-``last_good`` sidecar) falls back to now.
     """
-    now = time.time()
+    now = obs_t if obs_t is not None else time.time()
     batch: list[Observation] = []
     for v in vessels:
         try:
@@ -511,6 +523,23 @@ def _publish_myshiptracking(vessels: list[dict[str, Any]]) -> int:
     return len(batch)
 
 
+def _myshiptracking_stale_age(body: dict[str, Any], cap: float) -> float | None:
+    """Age of the sidecar's union, but only when it is too old to publish.
+
+    The feeder keeps serving its last successful world sweep when the site stops
+    answering its browser, and its ``now`` is the SERVE time — so a wedged sidecar
+    advertises an hour-old union as current. ``last_good`` is the honest stamp.
+
+    Returns None (→ publish) when the union is within ``cap``, or when the sidecar
+    predates ``last_good`` and we genuinely cannot tell its age.
+    """
+    last_good = body.get("last_good")
+    if not isinstance(last_good, (int, float)) or last_good <= 0:
+        return None
+    age = time.time() - float(last_good)
+    return age if age > cap else None
+
+
 async def _run_myshiptracking_sidecar() -> None:
     s = get_settings()
     interval = s.ais_myshiptracking_sidecar_interval_s
@@ -521,9 +550,28 @@ async def _run_myshiptracking_sidecar() -> None:
         try:
             r = await client.get(url, timeout=60.0)
             if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
-                vessels = (r.json().get("vessels")) or []
-                n = _publish_myshiptracking(vessels)
-                _stats["myshiptracking_vessels"] = n
+                body = r.json()
+                vessels = body.get("vessels") or []
+                stale = _myshiptracking_stale_age(body, s.ais_myshiptracking_sidecar_max_age_s)
+                if stale is not None:
+                    # The sidecar's browser lost the site and is replaying its last
+                    # union. Go SILENT rather than republish it: the store keys on
+                    # vessel:<mmsi>, so a stale global tier would overwrite the live
+                    # fix ShipXplorer/AISStream/Digitraffic just wrote for that same
+                    # MMSI, and re-stamping it every poll would pin it in retention
+                    # forever. Silence lets the frozen fixes age out and the live
+                    # sources take the MMSI back.
+                    _stats["myshiptracking_vessels"] = 0
+                    _stats["myshiptracking_stale_s"] = int(stale)
+                    log.warning(
+                        "myshiptracking sidecar stale (%ds old, cap %gs) — not publishing "
+                        "%d cached vessels",
+                        int(stale), s.ais_myshiptracking_sidecar_max_age_s, len(vessels),
+                    )
+                else:
+                    n = _publish_myshiptracking(vessels, body.get("last_good"))
+                    _stats["myshiptracking_vessels"] = n
+                    _stats["myshiptracking_stale_s"] = 0
                 backoff = interval
             else:
                 backoff = min(backoff * 2, 300.0)

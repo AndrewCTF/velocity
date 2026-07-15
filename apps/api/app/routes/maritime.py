@@ -254,12 +254,20 @@ async def digitraffic_vessels(
 
 
 # ── unified live vessel snapshot (all sources, accumulated 24/7) ─────────────
-# store.latest("vessel") is the freshest fix per MMSI across EVERY AIS source
-# (Digitraffic, Kystverket/Kystdatahuset, AISStream) within the store's retention
-# window. Because it ACCUMULATES, a rate-limited keyed stream still builds a large
-# deduped set over time — this is the "more data, 24/7" feed. The background
-# poller below keeps the keyless REST sources flowing into the store even with no
-# browser connected, so the snapshot stays warm and grows.
+# store.latest("vessel") is the LAST-WRITTEN fix per MMSI across EVERY AIS source
+# (Digitraffic, Kystverket/Kystdatahuset, AISStream, ShipXplorer, MyShipTracking)
+# within the store's retention window. Because it ACCUMULATES, a rate-limited keyed
+# stream still builds a large deduped set over time — this is the "more data, 24/7"
+# feed. The background poller below keeps the keyless REST sources flowing into the
+# store even with no browser connected, so the snapshot stays warm and grows.
+#
+# NOT freshest-wins: ObservationStore.add_many assigns _latest[id] unconditionally,
+# so for a contested MMSI the last writer of the poll cycle wins, whatever its `t`.
+# That is survivable only while every writer stamps a HONEST `t` — a source that
+# stamps wall-clock `now` over a cached fix both wins the MMSI and pins itself in
+# retention forever (2026-07-15: a wedged MyShipTracking sidecar froze 21944 of
+# 57174 vessels this way; see ais_keyless._myshiptracking_stale_age). Feeding this
+# store an optimistic timestamp is therefore a correctness bug, not a rounding one.
 
 
 def _obs_to_vessel_feature(o: Observation) -> dict[str, Any]:

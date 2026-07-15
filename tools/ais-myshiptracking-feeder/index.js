@@ -229,7 +229,17 @@ async function main() {
     if (req.url.startsWith('/vessels.json')) {
       res.setHeader('content-type', 'application/json');
       res.setHeader('access-control-allow-origin', '*');
-      res.end(JSON.stringify({ now: Date.now() / 1000, vessels: latest.vessels }));
+      // last_good is the wall-clock of the scrape these positions came from, NOT
+      // the serve time. When the site blocks us the union below is kept verbatim
+      // (see pump()), so `now` alone would advertise a frozen cache as fresh
+      // forever and the poller would stamp hour-old fixes as live — the same
+      // cached-tier trap as ADS-B seen_pos_s. Serve the honest age with the data.
+      res.end(JSON.stringify({
+        now: Date.now() / 1000,
+        last_good: latest.lastGood ? latest.lastGood / 1000 : null,
+        age_s: latest.lastGood ? ((Date.now() - latest.lastGood) / 1000) | 0 : null,
+        vessels: latest.vessels,
+      }));
     } else if (req.url.startsWith('/health')) {
       res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify({
