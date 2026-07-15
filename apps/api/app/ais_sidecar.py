@@ -81,8 +81,18 @@ class _Sidecar:
         # tear it down across a backend restart (saves a ~15s browser respawn).
         self._reuse_pid: int | None = None
 
+    async def _port_holder_pid_async(self) -> int | None:
+        """:meth:`_port_holder_pid` off the event loop.
+
+        It shells out to `ss` (~30 ms, up to its 3 s timeout under load). Harmless
+        while it only ran at boot, but supervise() reaches it at RUNTIME via
+        _kill_pid and this loop drives the 1 s ADS-B snapshot cycle.
+        """
+        return await asyncio.to_thread(self._port_holder_pid)
+
     def _port_holder_pid(self) -> int | None:
-        """pid holding our port (best-effort, via ss). None if free."""
+        """pid holding our port (best-effort, via ss). None if free. BLOCKING —
+        call via :meth:`_port_holder_pid_async` from the event loop."""
         try:
             out = subprocess.run(
                 ["ss", "-ltnp"], capture_output=True, text=True, timeout=3
@@ -142,7 +152,7 @@ class _Sidecar:
             return
         for _ in range(6):
             await asyncio.sleep(0.5)
-            if self._port_holder_pid() != pid:
+            if await self._port_holder_pid_async() != pid:
                 return
         log.warning("ais sidecar %s pid %s ignored SIGTERM — SIGKILL", self.name, pid)
         try:
@@ -155,7 +165,7 @@ class _Sidecar:
             log.warning("ais sidecar %s index not found at %s — skipping", self.name, self.index)
             return
         if await self._already_healthy():
-            self._reuse_pid = self._port_holder_pid()
+            self._reuse_pid = await self._port_holder_pid_async()
             log.info(
                 "ais sidecar %s already up on %s — reusing pid %s",
                 self.name, self.base, self._reuse_pid,
@@ -164,7 +174,7 @@ class _Sidecar:
         # Unhealthy but possibly still LISTENing (a wedged feeder we just refused
         # in _already_healthy). It would EADDRINUSE the replacement, so evict it
         # first — otherwise the frozen one outlives every restart.
-        holder = self._port_holder_pid()
+        holder = await self._port_holder_pid_async()
         if holder is not None:
             log.warning(
                 "ais sidecar %s: evicting unhealthy pid %s holding %s",
