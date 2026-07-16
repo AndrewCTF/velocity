@@ -26,7 +26,7 @@ labelled as automated output, not sold as "AI insight."
 **[Live demo](https://projectvelocity.org)** · [Quick start](#quick-start) · [The apps](#the-apps) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/release-v1.0.0-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
+[![Version](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
 [![Tests](https://img.shields.io/badge/tests-1719%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
