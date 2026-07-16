@@ -188,6 +188,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             (log.warning if rss > 8_000 else log.info)("RSS %d MB", rss)
 
     trim_task = asyncio.create_task(_malloc_trim_loop())
+    # Bound here, not at their create_task below: `finally` runs even if an
+    # earlier start() raises, and would NameError on an unbound handle.
+    adsb_supervise_task: asyncio.Task[None] | None = None
+    ais_supervise_task: asyncio.Task[None] | None = None
     try:
         if background:
             # Headless-browser tar1090 sidecar: a real Chromium clears the
@@ -200,6 +204,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import adsb_sidecar  # noqa: PLC0415
 
             await adsb_sidecar.start()
+            # Same reason as the AIS twin below: start() runs once, so a sidecar
+            # that dies later would stay dead until the next restart and the feed
+            # tier would silently fall back to the OpenSky floor.
+            adsb_supervise_task = asyncio.create_task(
+                adsb_sidecar.supervise(), name="adsb_sidecar_supervise"
+            )
             # AIS twin: a second headless Chromium clears VesselFinder's
             # Cloudflare gate and serves ~21k vessels worldwide as localhost
             # vessels.json (the only keyless GLOBAL AIS). Spawn it here; the
@@ -209,6 +219,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import ais_sidecar  # noqa: PLC0415
 
             await ais_sidecar.start()
+            # start() runs once; a feeder that dies (or wedges on a stale union)
+            # after boot would otherwise stay dead until the next restart, with the
+            # tier silently empty. Supervise it for the life of the process.
+            ais_supervise_task = asyncio.create_task(
+                ais_sidecar.supervise(), name="ais_sidecar_supervise"
+            )
             # MAVLink bridge: the drone control server the Workflows control.drone
             # block talks to. OFF unless mavlink_bridge_enabled; log-only without a
             # MAVLINK_CONNECT endpoint. Best-effort — never blocks boot.
@@ -385,10 +401,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # browser process group). No-op if it never started / already gone.
             from app import adsb_sidecar  # noqa: PLC0415
 
+            # Cancel supervision BEFORE stop(), or it races the teardown and
+            # respawns the sidecar we are killing.
+            if adsb_supervise_task is not None:
+                adsb_supervise_task.cancel()
+                try:
+                    await adsb_supervise_task
+                except asyncio.CancelledError:
+                    pass
             await adsb_sidecar.stop()
             # Tear down the VesselFinder AIS sidecar (its own browser tree).
             from app import ais_sidecar  # noqa: PLC0415
 
+            # Cancel supervision BEFORE stop(), or it races the teardown and
+            # respawns the feeder we are killing.
+            if ais_supervise_task is not None:
+                ais_supervise_task.cancel()
+                try:
+                    await ais_supervise_task
+                except asyncio.CancelledError:
+                    pass
             await ais_sidecar.stop()
             # Tear down the MAVLink bridge (no-op if it never started).
             from app import mavlink_sidecar  # noqa: PLC0415

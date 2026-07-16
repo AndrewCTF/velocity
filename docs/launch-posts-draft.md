@@ -334,7 +334,7 @@ side is where most of the interesting problems live:
   faked motion) fed from CelesTrak TLEs.
 - **A local ontology** in SQLite: append-only assertions with provenance,
   detectors, dossiers — the investigation layer.
-- ~1500 pytest tests gating a set of hard invariants (the feed quirks above are
+- ~1700 pytest tests gating a set of hard invariants (the feed quirks above are
   each pinned by a guard test, because every one of them regressed at least once).
 
 Keyless by default; runs on one box via docker compose. It's opinionated

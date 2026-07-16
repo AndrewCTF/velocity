@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { haversineKm, pointInRing } from './draw.js';
+import * as Cesium from 'cesium';
+import { createDrawController, haversineKm, pointInRing } from './draw.js';
 
 describe('haversineKm', () => {
   it('is zero for the same point', () => {
@@ -46,5 +47,44 @@ describe('pointInRing', () => {
     ];
     expect(pointInRing({ lat: 0, lon: 1 }, arrow)).toBe(true); // inside the notch base
     expect(pointInRing({ lat: 0, lon: 4 }, arrow)).toBe(false); // in the concave gap
+  });
+});
+
+describe('createDrawController teardown', () => {
+  // Minimal viewer stub exposing only what createDrawController touches (same
+  // approach as HistoryPlayback.test.ts). `destroyed` flips to model the real
+  // unmount order: GlobeCanvas destroys the viewer, then the toolbar's effect
+  // cleanup still calls cancel() on the controller it captured.
+  // destroy() drops the widget the `scene` getter reads through, exactly as
+  // Cesium's Viewer.destroy() does — so an unguarded viewer.scene here throws
+  // the same "Cannot read properties of undefined (reading 'scene')" the real
+  // teardown threw. Without that, this stub would pass an unguarded clearDraft.
+  function fakeViewer(): { viewer: Cesium.Viewer; destroy: () => void } {
+    let widget: { scene: unknown } | undefined = {
+      scene: { canvas: document.createElement('canvas'), requestRender: () => undefined },
+    };
+    const viewer = {
+      dataSources: { add: () => undefined, remove: () => true },
+      get scene() {
+        return (widget as { scene: unknown }).scene;
+      },
+      isDestroyed: () => widget === undefined,
+    } as unknown as Cesium.Viewer;
+    return { viewer, destroy: () => (widget = undefined) };
+  }
+
+  it('cancel() after the viewer is destroyed does not throw', () => {
+    const { viewer, destroy } = fakeViewer();
+    const c = createDrawController(viewer);
+    c.drawPolyline(() => undefined);
+    destroy();
+    expect(() => c.cancel()).not.toThrow();
+  });
+
+  it('dispose() after the viewer is destroyed does not throw', () => {
+    const { viewer, destroy } = fakeViewer();
+    const c = createDrawController(viewer);
+    destroy();
+    expect(() => c.dispose()).not.toThrow();
   });
 });

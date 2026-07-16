@@ -8,6 +8,7 @@ decode), the Kystdatahuset GeoJSON parse, and the shared publish_vessel path
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -178,6 +179,51 @@ def test_publish_myshiptracking_bulk_loads_store(monkeypatch: pytest.MonkeyPatch
     assert o0.source == "myshiptracking" and o0.emits_kind == "vessel"
     assert o0.attrs["mmsi"] == 985380302 and o0.attrs["name"] == "ULT ZODIAC 02"
     assert o0.attrs["sog"] == 4.7 and o0.attrs["cog"] == 147.6
+
+
+def test_publish_myshiptracking_stamps_sidecar_scrape_time_not_wall_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The sidecar's union is only as fresh as its last good world sweep.
+
+    Stamping wall-clock `now` on a replayed scrape makes an hour-old fix look
+    live, so it out-ranks the real fix another AIS feed holds for the same MMSI
+    and never ages out of the store's retention window.
+    """
+    captured: list = []
+    monkeypatch.setattr(ais_firehose.store, "add_many", lambda batch: captured.extend(batch))
+    scraped_at = time.time() - 120.0
+    K._publish_myshiptracking([{"mmsi": 985380302, "lat": 77.49, "lon": 18.19}], scraped_at)
+    assert captured[0].t == scraped_at
+    # No scrape time (pre-last_good sidecar) still falls back to wall clock.
+    captured.clear()
+    K._publish_myshiptracking([{"mmsi": 985380302, "lat": 77.49, "lon": 18.19}])
+    assert captured[0].t == pytest.approx(time.time(), abs=5.0)
+
+
+def test_myshiptracking_stale_union_is_refused_not_republished() -> None:
+    """A wedged feeder replays its last union forever — it must not be published.
+
+    Regression: on 2026-07-15 the feeder lost the site, served a 868s-old union
+    with a fresh `now`, and the poller stamped `t=now` on every one. 21944 of
+    57174 vessels in /api/maritime/snapshot were frozen 14-minute-old positions
+    served as live, and ShipXplorer (live, global) won ZERO of the MMSIs the
+    frozen tier carried.
+    """
+    cap = 180.0
+    now = time.time()
+    # Fresh sweep → publish.
+    assert K._myshiptracking_stale_age({"last_good": now - 30.0}, cap) is None
+    # Wedged feeder replaying an old sweep → refuse, and report the real age.
+    stale = K._myshiptracking_stale_age({"last_good": now - 868.0}, cap)
+    assert stale is not None and 860.0 < stale < 880.0
+    # `now` is the SERVE time and is fresh even when wedged — it must not be
+    # mistaken for the scrape time.
+    assert K._myshiptracking_stale_age({"now": now, "last_good": now - 868.0}, cap) is not None
+    # A sidecar predating `last_good` can't be aged — publish rather than blank
+    # the tier on an upgrade skew.
+    assert K._myshiptracking_stale_age({"now": now}, cap) is None
+    assert K._myshiptracking_stale_age({"last_good": None}, cap) is None
 
 
 def test_parse_shipxplorer_decodes_list_wrapper() -> None:

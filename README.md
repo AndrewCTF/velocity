@@ -26,8 +26,8 @@ labelled as automated output, not sold as "AI insight."
 **[Live demo](https://projectvelocity.org)** · [Quick start](#quick-start) · [The apps](#the-apps) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/build-v0.9.2-blue.svg)](#phase-status)
-[![Tests](https://img.shields.io/badge/tests-1687%20passing-brightgreen.svg)](#tests)
+[![Version](https://img.shields.io/badge/release-v1.0.0-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
+[![Tests](https://img.shields.io/badge/tests-1719%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
@@ -78,8 +78,8 @@ run without a single API key. Keys only ever add reach; see
 Docker is the short road. It brings up the API, the web app and nginx together:
 
 ```bash
-git clone https://github.com/AndrewCTF/osint-geospatial-console.git
-cd osint-geospatial-console
+git clone https://github.com/AndrewCTF/velocity.git
+cd velocity
 cp .env.example .env       # optional, leave it empty and it still works
 docker compose up          # api + web + nginx on :8080
 ```
@@ -92,7 +92,7 @@ archive instead of the default rolling window; see
 [Scope and limits](#scope-and-limits)). The first time in, a short tour points
 out where things live; you can pull it back up whenever from **⚙ Settings**.
 
-![Replay scrubber: coverage chip and archived-history strip over the live globe](docs/media/replay-scrubber.png)
+![Replay scrubber: the coverage chip reading "recording since 2026-07-14 · 14.9 GB · 83,093,167 fixes" and the archived-history strip over the live globe](docs/media/replay-scrubber.jpeg)
 
 That strip along the bottom is the archive — here it reads *recording since
 yesterday · 2.3 GB · 12.7 million fixes*. Drag it back an hour, a day, as far as
@@ -146,7 +146,7 @@ quakes and more on one Cesium globe. Every aircraft and ship renders as its
 category icon, coloured and rotated to its heading; dense areas cluster into
 count badges you can drill into.
 
-![Global view of the Velocity globe with live air, sea and incident traffic](docs/media/hero-world.png)
+![Global view of the Velocity globe with live air, sea and incident traffic](docs/media/hero-world.jpeg)
 
 **2. Zoom anywhere, toggle everything.** Drag into a region and traffic, labels
 and coastlines fill in. The left rail is the whole intel stack in one tree — air,
@@ -156,7 +156,7 @@ the globe: **measure** a running great-circle distance, **area-select** a box
 and search every object inside it, **annotate** with dropped markers, or **move**
 a marker — plus one-click camera reset and zoom.
 
-![The layer tree over a live European air picture, air/maritime/space/hazards toggles with counts](docs/media/panels/rail-layers.png)
+![The layer tree over a live European air picture, air/maritime/space/hazards toggles with counts](docs/media/panels/rail-layers.jpeg)
 
 **3. Click anything.** Select an aircraft or vessel and the right panel fills
 with its dossier: identity, kinematics, the flight/route, ACARS, a
@@ -165,14 +165,14 @@ line traces its recent track on the globe. An **AI assessment** block (labelled,
 and grounded in the observed track) summarises what the dossier fields imply.
 Click empty space and it all clears.
 
-![Selected C-17 with full dossier panel and magenta track over Germany](docs/media/panels/inspector-selection.png)
+![A selected Boeing 787-9 on the JFK to Rome run, its full dossier panel open and its magenta track drawn across the Bay of Biscay](docs/media/panels/inspector-selection.jpeg)
 
 **4. Or query the whole store at once.** The Explorer app is every live object
 in one filterable, sortable table — tens of thousands of tracks across vessels,
 aircraft and quakes, each tagged with the feed it came from and how long ago it
 was seen. Facet it, save the search, export the result to CSV.
 
-![Explorer: 69,065 live objects in one filterable table, tagged by source](docs/media/ui-explorer.png)
+![Explorer: every live object in one filterable table, faceted by kind and tagged by source](docs/media/ui-explorer.png)
 
 **5. Chokepoints and AOIs, watched continuously.** A curated library of the
 world's maritime chokepoints — Hormuz, Bab-el-Mandeb, Malacca, the Taiwan
@@ -180,7 +180,7 @@ Strait, the English Channel, undersea-cable corridors — each with live transit
 counts and the daily oil-flow figures that make it matter. Standing detections
 fire against them in the background.
 
-![Global chokepoint watch: Hormuz, Malacca, Dover and cable corridors with live transit counts](docs/media/panels/rail-chokepoints.png)
+![Global chokepoint watch: Hormuz, Bab-el-Mandeb, Suez, Panama and Malacca with their daily transit and oil-flow figures](docs/media/panels/rail-chokepoints.jpeg)
 
 **6. Airspace, bases, ports and airports — operational context, still keyless.**
 Toggle the TFR/Airspace layer and live FAA temporary flight restrictions draw as
@@ -200,7 +200,7 @@ each probed live before it's offered.
 in-browser with actual SGP4 orbital mechanics and enriched from SATCAT with
 owner, launch date, radar cross-section and orbit class.
 
-![The globe wrapped in the live satellite constellation](docs/media/hero-satellites.png)
+![The globe wrapped in the live satellite constellation](docs/media/hero-satellites.jpeg)
 
 **8. The watch officer works the inbox.** An autonomous watch officer fuses
 jamming, dark vessels, military air activity and conflict events into ranked,
@@ -209,7 +209,7 @@ cited alerts — GPS spoofing, jamming cells, dark-vessel candidates — each wi
 and `deep_analyze` against the live picture, so the inbox fills itself on a fresh
 keyless boot with no operator setup.
 
-![Watch-officer inbox: 100 alerts with spoofing/jamming/dark-vessel badges and inferred reasoning](docs/media/panels/rail-inbox.png)
+![Watch-officer inbox: queued alerts carrying spoofing, jamming and dark-vessel badges alongside the reasoning behind each one](docs/media/panels/rail-inbox.jpeg)
 
 **9. …and writes the brief.** Every couple of minutes it promotes the
 convergences — "vessels went dark near reported activity", "spoofed tracks
@@ -234,7 +234,7 @@ free-floating, draggable, resizable window over the globe — put the dossier on
 one screen, the layer tree on another, keep the map clear. Positions persist for
 the session.
 
-![A detached, dragged panel floating over the globe alongside the map toolbar](docs/media/ui-detach-toolbar.png)
+![A detached, dragged panel floating over the globe alongside the map toolbar](docs/media/ui-detach-toolbar.jpeg)
 
 **12. Bring your own data — the Foundry tab.** Upload a CSV/JSON/NDJSON, shape it
 through a governed pipeline (13 transform steps: filter, derive, join, aggregate,
@@ -244,7 +244,7 @@ ontology graph as the live feeds. Lineage, immutable versions with rollback, and
 a dead-letter for rows that fail a transform all come along; the pipeline graph
 flags exactly which outputs went stale.
 
-![Foundry lineage pipeline — three flows, raw→transform→derived, two outputs flagged stale](docs/media/foundry-pipeline-new.png)
+![Foundry lineage pipeline: raw datasets on the left feeding five transforms into derived outputs, with raw, derived and stale colour-coded](docs/media/foundry-pipeline-new.png)
 
 **13. Automate it — the Workflows tab.** A node-graph editor over the same live
 feeds and ontology: wire sources (aircraft, vessels, quakes, alerts, datasets,

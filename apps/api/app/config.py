@@ -391,6 +391,12 @@ class Settings(BaseSettings):
     ais_myshiptracking_sidecar_enabled: bool = True
     ais_myshiptracking_sidecar_url: str = "http://127.0.0.1:8093/vessels.json"
     ais_myshiptracking_sidecar_interval_s: float = 30.0
+    # Refuse a sidecar union older than this. The feeder replays its last good
+    # scrape when the site blocks its browser, so without a cap one wedged
+    # sidecar pins ~22k stale global MMSIs over every live AIS source. Matches
+    # the feeder's own 180s "stalled → reload" threshold: past that it has
+    # already given up on the union it is still serving.
+    ais_myshiptracking_sidecar_max_age_s: float = 180.0
 
     # MAVLink bridge sidecar (app.mavlink_sidecar → `python -m app.mavlink_bridge`).
     # The first-class control server the Workflows `control.drone` block points

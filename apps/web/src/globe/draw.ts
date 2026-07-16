@@ -120,10 +120,14 @@ export function createDrawController(viewer: Cesium.Viewer): DrawController {
   };
 
   const clearDraft = (): void => {
-    draftDs.entities.removeAll();
     verts.length = 0;
     center = null;
     cursor = null;
+    // Unmount order is not ours: the toolbar's cleanup runs cancel() → reset() →
+    // here, and GlobeCanvas may already have destroyed the viewer, which nulls
+    // its widget — reading viewer.scene then throws, out of a React destructor.
+    if (viewer.isDestroyed()) return;
+    draftDs.entities.removeAll();
     viewer.scene.requestRender();
   };
 

@@ -85,6 +85,27 @@ Cadence / backend:
 - AIS = ShipXplorer direct httpx (needs `Referer`/`Origin`) + MyShipTracking
   sidecar `:8093`, MMSI-deduped. SHIP_ID-keyed feeders (MarineTraffic,
   VesselFinder) must never run alongside an MMSI source.
+- The vessel store is LAST-WRITE-WINS (`ObservationStore.add_many` assigns
+  `_latest[id]` unconditionally), so an optimistic `Observation.t` is a
+  CORRECTNESS bug, not a rounding one: it steals the MMSI from a live source AND
+  pins itself in retention. A tier that can serve a CACHE must publish the age of
+  the DATA, never the age of the response — the `:8093` sidecar carries
+  `last_good`/`age_s`, the poller stamps `t` from `last_good` and REFUSES a union
+  older than 180 s (going silent lets frozen fixes age out). A wedged AIS feeder
+  answers `/health` 200 forever, so it must be aged out and evicted, not adopted.
+  → `tests/test_ais_keyless.py`, `tests/test_ais_sidecar_reuse.py`,
+  `docs/decisions.md` (2026-07-15 post-mortem)
+- Both sidecars are SUPERVISED (`adsb_sidecar.supervise()` / `ais_sidecar.supervise()`,
+  lifespan tasks cancelled BEFORE `stop()` or they respawn the teardown).
+  `start()` alone runs once at boot, so a feeder dying later left the tier
+  silently empty until the next restart. For `:8090` the trigger is LIVENESS
+  (`_serving()`) and never `_already_healthy()` (`total > 0`): index.js binds the
+  port before browser init, so a healthy sidecar reads 0 aircraft for ~20-60 s
+  while clearing Cloudflare and a `total > 0` trigger respawn-storms the ≥8 000
+  feed. Same split governs `start()`: adopt a holder that IS serving (mid-warm),
+  evict only one that holds the port WITHOUT serving (it EADDRINUSEs the
+  replacement). A dry-but-serving sidecar self-heals internally — leave it.
+  → `tests/test_adsb_sidecar_supervise.py`, `tests/test_ais_sidecar_reuse.py`
 - Satellites: `/api/space/gp` requests `FORMAT=tle` (JSON variant → 0 sats);
   client SGP4 via `SampledPositionProperty` is real physics, exempt from the
   no-synthesis rule; propagation stays chunked. → `tests/test_invariants.py`
@@ -134,9 +155,9 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1696 passed + 1 skipped** (skip = opt-in live probe; measured
-  2026-07-15, branch platform-hardening-and-copy-pass, security-hardening +
-  dashboard-copy waves). Never commit below the baseline you inherited. When you raise it,
+  Baseline: **1719 passed + 1 skipped** (skip = opt-in live probe; measured
+  2026-07-15, branch platform-hardening-and-copy-pass, sidecar
+  freshness+supervision wave). Never commit below the baseline you inherited. When you raise it,
   update the number/date/wave here and move the displaced line to
   `docs/decisions.md#backend-test-baseline-history` — this bullet stays a
   three-line fact, not a changelog.

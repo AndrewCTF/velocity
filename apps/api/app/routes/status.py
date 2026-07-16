@@ -53,10 +53,29 @@ async def status() -> dict[str, Any]:
     except Exception:  # noqa: BLE001 — never let vessels break status
         vessels = 0
 
+    ais_stats = ais_keyless.stats()
     keyless_ais_on = bool(
         ais_firehose.stats().get("enabled")
-        or ais_keyless.stats().get("kystdatahuset_enabled")
-        or ais_keyless.stats().get("digitraffic_mqtt_enabled")
+        or ais_stats.get("kystdatahuset_enabled")
+        or ais_stats.get("digitraffic_mqtt_enabled")
+        # The two GLOBAL keyless sources count too — without them this read
+        # "no keyless AIS" while ~46k of the ~56k vessels came from exactly here.
+        or ais_stats.get("shipxplorer_enabled")
+        or ais_stats.get("myshiptracking_sidecar_enabled")
+    )
+    # Non-zero while the MyShipTracking feeder's browser has lost the site: the
+    # poller then refuses its replayed union, so its ~22k global MMSIs drop out
+    # BY DESIGN. Surface it — a third of the vessel layer going missing is not a
+    # green feed, and the count alone can't show it (the rest of the union hides
+    # the hole).
+    mst_stale_s = int(ais_stats.get("myshiptracking_stale_s") or 0)
+    # Enabled but landing nothing — the site is blocking its browser, or it is
+    # still warming its first sweep. The union stays honest either way (the other
+    # sources carry it), so this annotates the detail rather than reddening the
+    # feed. Naming a source that is contributing zero would be the same overclaim
+    # this feed used to make when it called a global union "Northern Europe only".
+    mst_dry = bool(ais_stats.get("myshiptracking_sidecar_enabled")) and not int(
+        ais_stats.get("myshiptracking_vessels") or 0
     )
 
     feeds = [
@@ -70,9 +89,19 @@ async def status() -> dict[str, Any]:
         ),
         _feed(
             "AIS vessels — keyless",
-            keyless_ais_on and vessels > 0,
-            f"{vessels} vessels ({parked} parked, long-retained) — Northern Europe "
-            "only (Norway + Baltic). Global AIS needs an AISStream key (BYOK).",
+            keyless_ais_on and vessels > 0 and not mst_stale_s,
+            f"{vessels} vessels ({parked} parked, long-retained) · worldwide, "
+            "MMSI-deduped across ShipXplorer"
+            + ("" if mst_dry else " and MyShipTracking")
+            + " plus the Norway and Baltic regional feeds"
+            + (
+                f" · MyShipTracking is replaying a {mst_stale_s}s-old scrape and is "
+                "held out of the union until it recovers"
+                if mst_stale_s
+                else " · MyShipTracking is not reporting"
+                if mst_dry
+                else ""
+            ),
             count=vessels,
         ),
         _feed(
