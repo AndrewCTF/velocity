@@ -1158,3 +1158,55 @@ Three traps found while doing it, all of which look like copy and are not:
 Rule that falls out: **trace a string to a render before rewriting it.** Also
 kept intact: the evidence locker's forensic warnings (`hash MISMATCH: blob
 altered or missing`) and every `'—'` null placeholder.
+
+### v1.0.0, and the repo is now `velocity` (2026-07-16)
+
+Operator: *"execute first item first"* — the first item being the launch, which
+two prior audits (2026-07-12, 2026-07-15) both named their #1 recommendation and
+which sat at 0% executed with 33 stars, 0 tags and 0 releases.
+
+**The version was fiction in two directions.** Every manifest said `0.1.0`; the
+README badge said `build-v0.9.2`; the app chrome rendered `VELOCITY v0.9.2`
+(`command-bar/CommandBar.tsx:61`). No tag named either. Operator chose
+**v1.0.0** over matching the badge: 1,719 backend tests, thirteen apps, and a
+one-command self-host is not a 0.1, and `0.1.0` reads as "toy" to the
+self-hoster audience the launch is for. Bumped in `package.json`,
+`apps/web/package.json`, `apps/api/pyproject.toml` and the app brand.
+
+**Deliberately NOT bumped:** `apps/desktop` (its own `package.json`,
+`tauri.conf.json`, `Cargo.toml`), `tools/*` feeders, `packages/shared` — all
+stay `0.1.0`. The v1.0.0 artifact is the API + web console; the Tauri shell is
+not built into this release, and the feeders version independently. If a later
+release ships the desktop app, bump it then and say so here.
+
+**Renamed `osint-geospatial-console` → `velocity`.** The product, the README,
+the docs and all eleven launch drafts say "Velocity"; the URL said something
+else, at the exact moment the links go out. GitHub 301-redirects the old URL, so
+nothing breaks. Re-aligned the three places that name the repo — README Quick
+Start clone/cd, `DISCLAIMER.md` issues link, plugin manifest `repository` —
+which is the same alignment the 2026-07-11 entry above made in the other
+direction. That older entry keeps its now-stale name on purpose: it is history,
+not instruction.
+
+**Trap, cost ~25 min: you cannot shoot the README images headless.** The
+capture ran under `--use-gl=swiftshader` and every frame was unusable — the
+software renderer matches the `WEAK_RENDERER` regex in `shell/device.ts:28`,
+which grades the device `low`, so `globe/LowEndBanner.tsx` fires "Low-end
+graphics detected … Switch to 2D" *into the frame* and the status bar reads
+`1FPS`. A hero image advertising 1 FPS is worse than no hero image. Shoot
+README media **headed on `DISPLAY=:0`**, which gets the real card — verified
+`ANGLE (NVIDIA GeForce RTX 5090)` — with `env -u LD_PRELOAD -u MALLOC_CONF`
+(jemalloc in Chrome's env is fatal, same reason the sidecars scrub it).
+4K = viewport 1920x1080 at `deviceScaleFactor: 2`, which renders true
+3840x2160 rather than upscaling 1440p. This is a capture rule, not a code
+invariant, so it carries no guard: the check is that a human looks at the file.
+
+Two corrections worth keeping, because both cost time to a wrong first guess.
+**The banner only suggests 2D, it never switches.** `sceneMode` defaults to
+`'3D'` (`state/stores.ts:98`) and is not persisted; the `2D DARK` in the
+top bar is the *basemap picker* (`ImageryMode '2d-dark'`, the Carto dark
+tiles), a different axis from `SceneMode`. Reading that chip as "the globe
+fell back to 2D" sends you hunting a fallback that does not exist. **A wide
+hero needs nadir pitch:** at 16,000 km Earth's angular radius is only ~16°, so
+a `-55°` pitch aims the camera into empty space and renders a black frame that
+looks exactly like a broken globe.

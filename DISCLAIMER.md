@@ -87,4 +87,4 @@ case, you do not have permission to use this project.
 
 Found personal data in this repository that should not be here, or a connector
 that breaches an upstream's terms? Open an issue and it will be removed —
-[github.com/AndrewCTF/osint-geospatial-console/issues](https://github.com/AndrewCTF/osint-geospatial-console/issues).
+[github.com/AndrewCTF/velocity/issues](https://github.com/AndrewCTF/velocity/issues).

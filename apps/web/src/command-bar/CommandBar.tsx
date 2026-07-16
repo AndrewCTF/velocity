@@ -58,7 +58,7 @@ export function CommandBar({
     <div className="flex h-full items-stretch">
       {/* brand mark */}
       <div className={CELL}>
-        <Brand name="VELOCITY" version="v0.9.2" />
+        <Brand name="VELOCITY" version="v1.0.0" />
       </div>
 
       {/* unified search */}

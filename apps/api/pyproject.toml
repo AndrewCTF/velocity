@@ -1,6 +1,6 @@
 [project]
 name = "osint-api"
-version = "0.1.0"
+version = "1.0.0"
 description = "OSINT geospatial console — FastAPI backend"
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
