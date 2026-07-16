@@ -61,8 +61,12 @@ export function CoverageStrip({ windowHours, onCoverage }: Props): JSX.Element {
     let aborter: AbortController | null = null;
     const clampedWindow = Math.min(MAX_WINDOW_HOURS, Math.max(1, Math.round(windowHours)));
     const bucketHours = autoBucketHours(clampedWindow);
+    // A coverage query over a large archive can take far longer than POLL_MS
+    // (measured: 73 s over 78 M fixes for a 168 h window). Aborting the
+    // in-flight request on every tick meant it could never finish, so the chip
+    // sat on its fallback text forever. Let a slow query run; skip the tick.
     const tick = async () => {
-      aborter?.abort();
+      if (aborter) return;
       aborter = new AbortController();
       try {
         const r = await apiFetch(
@@ -76,6 +80,8 @@ export function CoverageStrip({ windowHours, onCoverage }: Props): JSX.Element {
         }
       } catch {
         /* keep last coverage — degrade to the fallback text/empty strip */
+      } finally {
+        aborter = null;
       }
     };
     void tick();

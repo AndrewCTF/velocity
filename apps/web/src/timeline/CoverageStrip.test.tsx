@@ -4,7 +4,7 @@
 // backend is live (routes/history.py); these tests exercise the frontend
 // against its response shape (docs/replay-flagship-plan.md §2).
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoverageStrip, type Coverage } from './CoverageStrip.js';
 
@@ -86,5 +86,42 @@ describe('CoverageStrip', () => {
 
     const strip = await screen.findByRole('img', { name: /history coverage/i });
     expect(strip.querySelectorAll('rect').length).toBe(0);
+  });
+
+  // Regression: the poll used to abort the in-flight request at the top of
+  // every tick. On a real archive the coverage query runs far longer than
+  // POLL_MS (measured 73 s over 78 M fixes), so every tick killed the previous
+  // one and the strip never resolved — the chip sat on its fallback forever.
+  // A slow query must be allowed to finish.
+  it('lets a query slower than the poll interval finish instead of aborting it every tick', async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveFetch: ((r: Response) => void) | undefined;
+      mockedFetch.mockReturnValue(
+        new Promise<Response>((res) => {
+          resolveFetch = res;
+        }),
+      );
+      render(<CoverageStrip windowHours={168} />);
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+
+      // Several poll intervals elapse while the first request is still open.
+      await vi.advanceTimersByTimeAsync(5_000 * 4);
+
+      // No second request was issued, and nothing aborted the first.
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+      const [, init] = mockedFetch.mock.calls[0] as [string, { signal: AbortSignal }];
+      expect(init.signal.aborted).toBe(false);
+
+      // The slow response finally lands and is rendered.
+      await act(async () => {
+        resolveFetch?.(jsonResponse(COVERAGE));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const strip = screen.getByRole('img', { name: /history coverage/i });
+      expect(strip.querySelectorAll('rect').length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
