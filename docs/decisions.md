@@ -1159,6 +1159,53 @@ Rule that falls out: **trace a string to a render before rewriting it.** Also
 kept intact: the evidence locker's forensic warnings (`hash MISMATCH: blob
 altered or missing`) and every `'—'` null placeholder.
 
+### The coverage scan pinned the WAL: 49.6 GB of it (2026-07-16)
+
+Found while shooting the v1.0.0 screenshots: the dev API sat at **37 GB RSS**,
+holding :8000 without answering. It had been up 90 minutes.
+
+**The archive was 71 GB for 15 GB of data.** `data/history.db` 15.23 GB,
+`data/history.db-wal` **49.63 GB**. With the API stopped,
+`PRAGMA wal_checkpoint(TRUNCATE)` took 37.7 s and left db 16.27 GB, wal 0.00 GB
+— the database grew 1.04 GB, so **98 % of that WAL was redundant page versions
+that could never be checkpointed.**
+
+**Mechanism, and it is a feedback loop.** A WAL only checkpoints past its
+OLDEST live reader. `CoverageStrip` polls `/api/history/coverage` every 5 s;
+`coverage()` scanned the whole archive on every call and the scan outlived its
+own poll interval, so a read transaction was permanently open. The recorder
+writes continuously, so the WAL grew without bound. Then the loop closes: every
+page read must search the wal-index to find the newest version of that page, so
+a bigger WAL makes the scan *slower*, which holds the reader *longer*, which
+grows the WAL *faster*. That is why it ran away instead of settling — the same
+scan measured **73 s against the 49.6 GB WAL and 14.8 s once it was gone.**
+The "slow query" was a symptom, not the cause.
+
+Aborting the HTTP request never helped: it does not cancel the executor thread,
+so `run_in_executor` bursts piled up as concurrent scans, each its own reader.
+
+**Fix, both halves load-bearing.** `coverage()` caches per
+`(window_hours, bucket_hours)` for `_COVERAGE_TTL_S` (120 s) behind an
+`asyncio.Lock`, so the scan runs at most once per TTL and never twice at once;
+degraded results are not cached. `_connect()` sets
+`PRAGMA journal_size_limit=512 MB` so the file is truncated back after
+checkpoint whatever the read pattern does. The cache is a **correctness
+control, not a speed optimisation** — do not "optimise" it away.
+
+Proven live, replaying the workload that caused it (coverage every 5 s for
+2 min against the real 16 GB archive): WAL flat at **0 MB** (was 49.6 GB), RSS
+flat at **~660 MB** (was climbing 4-5 GB/min to a peak of 83 GB), first call
+14.8 s then ~0 ms cached.
+→ `tests/test_history.py::test_coverage_scan_is_cached_and_never_concurrent`,
+`::test_connect_bounds_the_wal_file`
+
+Ruled out on the way, so nobody re-walks it: the coverage query itself holds
+only ~73 MB (measured in isolation over 83.6 M rows); the tile cache is capped
+at 1 GB; jemalloc was correctly loaded with `background_thread:true`. The 37 GB
+was anonymous heap (`Pss_File` 108 MB), and it tracked the WAL — it has not
+recurred since, but the precise allocation path was never isolated, so treat
+"RSS is fixed" as empirical, not explained.
+
 ### v1.0.0, and the repo is now `velocity` (2026-07-16)
 
 Operator: *"execute first item first"* — the first item being the launch, which

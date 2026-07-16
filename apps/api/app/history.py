@@ -33,6 +33,14 @@ _RATE_LIMIT_SECS: float = 5.0        # minimum gap between writes for same id
 _RATE_LIMIT_DEG: float = 0.01        # OR ~1 km movement triggers immediate write
 _MAX_BUFFERED_IDS: int = 60_000      # FIFO-evict beyond this to keep RAM bounded
 _PRUNE_INTERVAL_S: float = 3600.0    # enforce retention at most once per hour
+_WAL_SIZE_LIMIT_BYTES: int = 512 * 1024**2  # truncate the WAL back to <=512 MB
+# Coverage aggregates the whole archive (83 M rows measured -> 73 s), so it
+# cannot be recomputed per poll: the replay bar asks every 5 s, and a query
+# that outlives its own poll interval means a read transaction is ALWAYS open.
+# That is what pinned the WAL. The numbers it feeds (recording-since, GB, fix
+# count, per-hour density) move slowly, so serve a cached answer and let the
+# scan run at most this often.
+_COVERAGE_TTL_S: float = 120.0
 
 # ── module-level state ─────────────────────────────────────────────────────────
 # _buffer: ordered list of rows pending flush
@@ -41,6 +49,10 @@ _buffer: list[tuple[str, str, float, float, float, float, str]] = []
 _last: collections.OrderedDict[str, tuple[float, float, float]] = collections.OrderedDict()
 _rows_written: int = 0
 _flush_task: asyncio.Task[None] | None = None
+# (window_hours, bucket_hours), computed_at, payload — see coverage() for why
+# this cache is a correctness control and not a speed optimisation.
+_coverage_cache: tuple[tuple[int, int], float, dict[str, Any]] | None = None
+_coverage_lock: asyncio.Lock = asyncio.Lock()
 _db_path: str | None = None          # resolved at start(); overridable in tests
 _db_path_override: str | None = None  # set by tests via override_db_path()
 # Phase 1: vessels we've already run through entity resolution this process, so
@@ -99,6 +111,14 @@ def _connect() -> sqlite3.Connection:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(path, check_same_thread=False)
     con.execute("PRAGMA journal_mode=WAL")
+    # A WAL only checkpoints past its OLDEST live reader. The recorder writes
+    # continuously, so one long-running read holds every frame written during
+    # it, and without a size limit the file is never truncated back after the
+    # checkpoint that finally clears it. Measured on the dev box: a 15.2 GB
+    # archive carrying a 49.6 GB WAL, of which a TRUNCATE checkpoint reclaimed
+    # 48.6 GB — 98 % of it redundant page versions pinned by readers. The limit
+    # bounds the file whatever the read pattern does.
+    con.execute(f"PRAGMA journal_size_limit={_WAL_SIZE_LIMIT_BYTES}")
     con.execute(
         """
         CREATE TABLE IF NOT EXISTS positions (
@@ -461,8 +481,37 @@ def _coverage_sync(window_hours: int, bucket_hours: int) -> dict[str, Any]:
 
 
 async def coverage(window_hours: int, bucket_hours: int) -> dict[str, Any]:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _coverage_sync, window_hours, bucket_hours)
+    """Cached: at most one scan per _COVERAGE_TTL_S, and never two at once.
+
+    Both bounds matter, and neither is about latency. The scan holds a read
+    transaction for its whole duration, and a WAL cannot checkpoint past its
+    oldest reader — so an uncached 73 s scan re-armed every 5 s kept a reader
+    permanently open and the WAL grew without limit (49.6 GB against a 15.2 GB
+    archive). The lock additionally stops a burst of callers each opening their
+    own concurrent scan: an HTTP client that gives up does NOT cancel the
+    executor thread it started, so aborted polls used to pile up server-side.
+    """
+    global _coverage_cache
+    key = (window_hours, bucket_hours)
+    now = time.time()
+    cached = _coverage_cache
+    if cached is not None and cached[0] == key and now - cached[1] < _COVERAGE_TTL_S:
+        return cached[2]
+
+    async with _coverage_lock:
+        # Re-check: a caller queued behind the lock is served by the scan that
+        # just finished rather than starting an identical one.
+        cached = _coverage_cache
+        now = time.time()
+        if cached is not None and cached[0] == key and now - cached[1] < _COVERAGE_TTL_S:
+            return cached[2]
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, _coverage_sync, window_hours, bucket_hours)
+        # Don't cache a degraded answer: a transient error would otherwise stick
+        # for the whole TTL.
+        if not result.get("degraded"):
+            _coverage_cache = (key, time.time(), result)
+        return result
 
 
 # ── prune ─────────────────────────────────────────────────────────────────────

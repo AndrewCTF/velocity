@@ -111,6 +111,7 @@ def _reset_module(tmp_db: str) -> None:
     H._last.clear()
     H._rows_written = 0
     H._flush_task = None
+    H._coverage_cache = None
     H.override_db_path(tmp_db)
 
 
@@ -530,6 +531,76 @@ async def test_coverage_shape_and_totals(tmp_path: pytest.TempPathFactory) -> No
     assert result["total_bytes"] > 0
     assert result["row_count"] == 3
     assert sum(b["count"] for b in result["buckets"]) == result["row_count"]
+
+
+@pytest.mark.asyncio
+async def test_coverage_scan_is_cached_and_never_concurrent(
+    tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The archive scan runs at most once per TTL, and never twice at once.
+
+    Regression: coverage() scanned on every call. The scan takes far longer
+    than the replay bar's 5 s poll (73 s over 83 M rows, measured), so a read
+    transaction was always open — and a WAL cannot checkpoint past its oldest
+    reader. The dev box ended up with a 49.6 GB WAL on a 15.2 GB archive, 98 %
+    of it reclaimable. Aborting the HTTP request does not cancel the executor
+    thread, so bursts piled up concurrently too. Both bounds are load-bearing.
+    """
+    db = str(tmp_path / "coverage_cache.db")
+    _reset_module(db)
+
+    now = time.time()
+    H._buffer.append(("aircraft", "aircraft:cache1", now - 60, 5.0, 50.0, 0.0, "{}"))
+    rows, H._buffer = H._buffer, []
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, H._flush_sync, rows)
+
+    calls = 0
+    real = H._coverage_sync
+    in_flight = 0
+    max_in_flight = 0
+
+    def counting(window_hours: int, bucket_hours: int) -> dict:
+        nonlocal calls, in_flight, max_in_flight
+        calls += 1
+        in_flight += 1
+        max_in_flight = max(max_in_flight, in_flight)
+        try:
+            time.sleep(0.05)  # stand in for the real multi-second scan
+            return real(window_hours, bucket_hours)
+        finally:
+            in_flight -= 1
+
+    monkeypatch.setattr(H, "_coverage_sync", counting)
+
+    # A burst of concurrent callers, as the replay bar produced.
+    results = await asyncio.gather(*(H.coverage(24, 1) for _ in range(8)))
+    assert calls == 1, f"expected one scan for a concurrent burst, got {calls}"
+    assert max_in_flight == 1, "scans must never overlap: an overlapping read pins the WAL"
+    assert all(r["row_count"] == 1 for r in results)
+
+    # Inside the TTL: still no new scan.
+    await H.coverage(24, 1)
+    assert calls == 1
+
+    # Past the TTL: the data is allowed to refresh.
+    monkeypatch.setattr(H, "_COVERAGE_TTL_S", 0.0)
+    await H.coverage(24, 1)
+    assert calls == 2
+
+
+def test_connect_bounds_the_wal_file(tmp_path: pytest.TempPathFactory) -> None:
+    """Every connection caps the WAL, so no read pattern can grow it unbounded."""
+    db = str(tmp_path / "wal_limit.db")
+    _reset_module(db)
+    try:
+        con = H._connect()
+        limit = con.execute("PRAGMA journal_size_limit").fetchone()[0]
+        con.close()
+        assert limit == H._WAL_SIZE_LIMIT_BYTES
+        assert 0 < limit <= 1024**3, "an unbounded/huge WAL limit defeats the point"
+    finally:
+        H.override_db_path(None)
 
 
 def test_coverage_route_returns_expected_keys(
