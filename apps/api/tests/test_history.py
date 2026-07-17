@@ -318,7 +318,7 @@ async def test_size_cap_ignores_reclaimable_free_pages(tmp_path: pytest.TempPath
     finally:
         con.close()
     in_use = (page_count - freelist) * page_size
-    file_size = os.path.getsize(db)
+    file_size = await loop.run_in_executor(None, os.path.getsize, db)
     assert freelist > 0, "prune must leave reclaimable free pages (auto_vacuum is off)"
     assert file_size > in_use, "the un-vacuumed file must exceed in-use bytes"
 
