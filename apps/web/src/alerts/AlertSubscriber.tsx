@@ -32,18 +32,19 @@ export function AlertSubscriber(): null {
       setWs('connecting');
       return () => {};
     }
-    // Settled and genuinely keyless: the backend's require_ws_key rejects
-    // before the upgrade completes, so the socket "closed before connection
-    // established" and the onclose/onerror backoff loop spams the console. Skip
-    // the WebSocket entirely — there's nothing to connect to.
-    if (!session && !hasStaticApiKey()) {
-      setWs('closed');
-      return () => {};
-    }
+    // Settled and keyless: an open-mode backend (ALLOW_UNAUTHENTICATED) accepts
+    // the upgrade without a key, an enforcing one rejects it before it opens.
+    // We can't tell which we're on from here, so try ONCE: adopt the socket if
+    // it opens, and if it dies before ever opening, stay closed with no retry
+    // loop (the old always-skip showed a permanent "LINK down" pill on every
+    // open-mode box; the pre-existing concern — onclose/onerror backoff spamming
+    // the console against an enforcing backend — only applies to retries).
+    const keylessProbe = !session && !hasStaticApiKey();
 
     let ws: WebSocket | null = null;
     let backoff = 1000;
     let stopped = false;
+    let everOpened = false;
 
     const connect = () => {
       if (stopped) return;
@@ -51,6 +52,7 @@ export function AlertSubscriber(): null {
       ws = new WebSocket(withWsKey('/ws/alerts'));
       ws.onopen = () => {
         backoff = 1000;
+        everOpened = true;
         setWs('open');
       };
       ws.onmessage = (ev) => {
@@ -65,6 +67,12 @@ export function AlertSubscriber(): null {
       ws.onclose = () => {
         if (stopped) return;
         setWs('closed');
+        // Keyless probe rejected before it ever opened: enforcing backend,
+        // nothing to reconnect to. One attempt, no backoff spam.
+        if (keylessProbe && !everOpened) {
+          stopped = true;
+          return;
+        }
         window.setTimeout(connect, backoff);
         backoff = Math.min(backoff * 2, 15_000);
       };

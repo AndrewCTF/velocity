@@ -31,8 +31,22 @@ labelled as automated output, not sold as "AI insight."
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
-  <img src="docs/media/hero-main.jpeg" alt="Velocity: one 3D globe fusing live aircraft, vessels and incidents worldwide" width="900">
+  <img src="docs/media/hero-replay.gif" alt="Live world view, fly-in to Europe, an aircraft selected with its owned track, then the last hour rewound on the replay scrubber" width="900">
 </p>
+<p align="center"><i>One take, real data: the live world → Europe → click an aircraft → its dossier and owned track → rewind the last hour.</i></p>
+
+The short version, against the trackers you already use (free tiers, as of
+July 2026):
+
+|  | History you can replay | Self-hosted | Account / API key | Who owns the archive |
+|---|---|---|---|---|
+| **Velocity** | Unlimited — bounded by your disk, scrubbable to any past moment | Yes | None | You |
+| Flightradar24 | 7 days on the free tier | No | Account | Them |
+| MarineTraffic | 24 hours free (down from 72) | No | Account | Them |
+| ADS-B Exchange | Free API tier discontinued | No | Paid API | Them |
+
+Live coverage is the same community feeder data everywhere; the columns above
+are the paywall. Each cell is checkable on the vendors' own pricing pages.
 
 > **Before you get excited:** it's a single-analyst tool. Live *derived* state —
 > the current incident list, AOI selections, watch-officer briefs — lives in

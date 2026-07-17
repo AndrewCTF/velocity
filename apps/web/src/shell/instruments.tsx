@@ -322,7 +322,11 @@ export function Brand({ name = 'VELOCITY', version }: { name?: string; version?:
     <div className="flex items-center gap-2 mono font-semibold tracking-[1.5px] text-[12px] text-txt-0">
       <span className="w-2 h-2 bg-accent rotate-45 shrink-0" />
       {name}
-      {version && <span className="font-normal tracking-[0.5px] text-[11px] text-txt-3">{version}</span>}
+      {version && (
+        <span className="hidden min-[1440px]:inline font-normal tracking-[0.5px] text-[11px] text-txt-3">
+          {version}
+        </span>
+      )}
     </div>
   );
 }
@@ -341,10 +345,13 @@ export function Caveat({
   level = 'UNCLAS//FOUO',
   note,
   tone = 'neutral',
+  noteClassName,
 }: {
   level?: string;
   note?: string;
   tone?: 'neutral' | 'warn' | 'alert';
+  /** Extra classes on the note segment, e.g. to hide it responsively. */
+  noteClassName?: string;
 }): JSX.Element {
   return (
     <span
@@ -352,10 +359,10 @@ export function Caveat({
     >
       {level}
       {note && (
-        <>
+        <span className={`inline-flex items-center gap-[5px] ${noteClassName ?? ''}`}>
           <span className="opacity-40">·</span>
           <span className="opacity-70">{note}</span>
-        </>
+        </span>
       )}
     </span>
   );
