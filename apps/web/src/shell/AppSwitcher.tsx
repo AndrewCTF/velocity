@@ -52,7 +52,7 @@ export function AppSwitcher(): JSX.Element {
         >
           <span
             aria-hidden
-            className="flex items-center justify-center px-[1px] font-label uppercase tracking-[0.5px] text-[8px] leading-none text-txt-4 select-none"
+            className="hidden min-[1440px]:flex items-center justify-center px-[1px] font-label uppercase tracking-[0.5px] text-[8px] leading-none text-txt-4 select-none"
             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
           >
             {group.label}

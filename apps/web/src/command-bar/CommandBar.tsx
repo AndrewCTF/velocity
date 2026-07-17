@@ -31,6 +31,12 @@ interface Props {
 // px-2 → 41px over; px-1.5 → 14px over; px-1 (+ the SysStats trim below) → fits
 // with ~26px margin. Keep it tight if you add a cell.
 const CELL = 'h-full flex items-center gap-2 px-1 border-r border-line';
+// Fixed cells must never wrap into a second line inside the 42px row (at
+// ~1600px the AGENT text used to wrap and overlap the clock). They keep their
+// intrinsic width; the alert ticker is the ONLY shrinkable cell (flex-1
+// min-w-0 + truncate). Narrower still and the row overflows into the header's
+// hidden-scrollbar horizontal scroll — the bar's height is fixed at every width.
+const FIXED_CELL = `${CELL} shrink-0 whitespace-nowrap`;
 
 export function CommandBar({
   viewer,
@@ -57,52 +63,52 @@ export function CommandBar({
   return (
     <div className="flex h-full items-stretch">
       {/* brand mark */}
-      <div className={CELL}>
+      <div className={FIXED_CELL}>
         <Brand name="VELOCITY" version="v1.0.1" />
       </div>
 
       {/* unified search */}
-      <div className={CELL}>
+      <div className={FIXED_CELL}>
         <SearchField viewer={viewer} />
       </div>
 
       {/* area-of-interest selector */}
-      <div className={CELL}>
+      <div className={FIXED_CELL}>
         <AoiSelector onPick={onPickAoi} />
       </div>
 
       {/* Basemap picker. '2d-dark' and '3d-sat' are keyless proxied stacks
           (ion token only adds OSM Buildings on top of 3d-sat); the rest are
           third-party imagery/topo basemaps streamed direct from the browser. */}
-      <div className={CELL}>
+      <div className={FIXED_CELL}>
         <BasemapPicker mode={imageryMode} onChange={setImageryMode} />
       </div>
 
       {/* simulation mode toggle — browser-side war-game overlay */}
-      <div className={CELL}>
+      <div className={FIXED_CELL}>
         <SimToggle />
       </div>
 
       {/* App switcher (design §6.1) — the primary top-level navigation. Map is the
           globe; Explorer/Graph/Targeting/Video/Sim/Reports take the main surface. */}
-      <div className="h-full flex items-stretch border-l border-line-2">
+      <div className="h-full flex items-stretch border-l border-line-2 shrink-0">
         <AppSwitcher />
       </div>
 
       {/* alert ticker — top alert in newest-first buffer; click opens panel.
           flex-1 so it spans the gap between the controls and the right cluster. */}
-      <div className={`${CELL} flex-1 min-w-0`}>
+      <div className={`${CELL} flex-1 min-w-0 overflow-hidden`}>
         <AlertTicker {...(onOpenAlerts ? { onOpen: onOpenAlerts } : {})} />
       </div>
 
       {/* AGENT indicator — opens the analyst console; shows the live cross-domain
           incident count from the real /api/intel/brief fusion. */}
-      <div className={CELL}>
+      <div className={FIXED_CELL}>
         <AgentIndicator />
       </div>
 
       {/* UTC clock — operator orientation */}
-      <div className={CELL}>
+      <div className={FIXED_CELL}>
         <span className="mono text-[11px] text-txt-2 tabular-nums" title="UTC">
           {now.toISOString().slice(11, 19)}Z
         </span>
@@ -112,13 +118,13 @@ export function CommandBar({
           When SIM mode is on the globe mixes in notional contacts, so the strip
           flips to a SIMULATED warning; otherwise it marks the keyless open-source
           feed posture. Reads only client-observable state (no fabricated tier). */}
-      <div className={CELL}>
+      <div className={FIXED_CELL}>
         <PostureCaveat classification={classification} />
       </div>
 
       {/* system stats — live entity total (real, from the viewer) + UTC tick
           source FPS, both genuinely measured. Last cell: no right divider. */}
-      <div className="h-full flex items-center gap-2 px-2">
+      <div className="h-full flex items-center gap-2 px-2 shrink-0 whitespace-nowrap">
         <SysStats viewer={viewer} />
       </div>
     </div>
@@ -139,7 +145,14 @@ function PostureCaveat({ classification }: { classification: string }): JSX.Elem
   if (simActive) {
     return <Caveat level={`${classification} // SIMULATED`} note="notional contacts" tone="warn" />;
   }
-  return <Caveat level={classification} note="keyless OSINT" tone="neutral" />;
+  return (
+    <Caveat
+      level={classification}
+      note="keyless OSINT"
+      tone="neutral"
+      noteClassName="hidden min-[1920px]:inline-flex"
+    />
+  );
 }
 
 /**
@@ -190,7 +203,9 @@ function AgentIndicator(): JSX.Element {
         <span className="text-txt-3">…</span>
       ) : count > 0 ? (
         <span className="text-txt-1">
-          <b className="font-medium">{count}</b> incidents · brief ready
+          <b className="font-medium">{count}</b>
+          <span className="hidden min-[1440px]:inline"> incidents</span>
+          <span className="hidden min-[1920px]:inline"> · brief ready</span>
         </span>
       ) : (
         <span className="text-txt-3">· quiet</span>
@@ -280,12 +295,12 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
         </span>
       )}
       {perf !== null && perf.rr > 0 && (
-        <span title="Real Cesium scene renders per second (governor metric)">
+        <span className="hidden min-[1920px]:inline" title="Real Cesium scene renders per second (governor metric)">
           <b className="text-txt-1 font-semibold">{perf.rr}</b>rr
         </span>
       )}
       {perf !== null && perf.dr > 0 && (
-        <span title="Last aircraft push-application (drain) cost, ms">
+        <span className="hidden min-[1920px]:inline" title="Last aircraft push-application (drain) cost, ms">
           <b className="text-txt-1 font-semibold">{perf.dr}</b>ms
         </span>
       )}

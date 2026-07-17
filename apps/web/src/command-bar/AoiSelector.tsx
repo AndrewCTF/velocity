@@ -43,11 +43,11 @@ export function AoiSelector({ onPick }: Props): JSX.Element {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="mono text-[11px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 hover:border-accent-line min-w-[180px] text-left flex items-center justify-between gap-2"
+        className="mono text-[11px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 hover:border-accent-line min-w-[110px] min-[1440px]:min-w-[180px] text-left flex items-center justify-between gap-2"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span>{active ? active.name : 'AOI · global'}</span>
+        <span className="truncate max-w-[130px] min-[1440px]:max-w-none">{active ? active.name : 'AOI · global'}</span>
         <span aria-hidden className="micro text-txt-3">▾</span>
       </button>
       {open && (

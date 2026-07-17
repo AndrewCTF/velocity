@@ -130,7 +130,7 @@ export function SearchField({ viewer }: Props): JSX.Element {
   };
 
   return (
-    <div ref={containerRef} className="relative w-80">
+    <div ref={containerRef} className="relative w-40 min-[1440px]:w-56 min-[1920px]:w-80">
       <input
         ref={inputRef}
         type="text"
