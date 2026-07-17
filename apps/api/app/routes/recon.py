@@ -670,29 +670,44 @@ def _job_dir(job_id: str) -> Path:
     return _JOBS_ROOT / job_id
 
 
+def _owned_job_dir(job_id: str, request: Request) -> Path:
+    """Job dir for a result download, enforcing ownership like get_job/job_events
+    do. While a job is tracked in _JOBS (the live multi-user case), a non-owner is
+    rejected so a leaked/guessed job id can't be used to pull another analyst's
+    reconstruction. A job evicted from memory has its on-disk dir removed too
+    (_drop_job), so "not in _JOBS" means a bad id or a restart-surviving artifact
+    whose owner record is gone — fall through to disk, the same best-effort the
+    metadata routes already degrade to post-restart."""
+    d = _job_dir(job_id)  # validates the hex token first
+    job = _JOBS.get(job_id)
+    if job is not None and job.get("owner", "local") != _owner_key(request):
+        raise HTTPException(404, "no such job")
+    return d
+
+
 @router.get("/jobs/{job_id}/result.ply")
-async def job_result(job_id: str) -> FileResponse:
-    ply = _job_dir(job_id) / "out" / "point_cloud.ply"
+async def job_result(job_id: str, request: Request) -> FileResponse:
+    ply = _owned_job_dir(job_id, request) / "out" / "point_cloud.ply"
     if not ply.exists():
         raise HTTPException(404, "result not ready")
     return FileResponse(str(ply), media_type="application/octet-stream", filename="point_cloud.ply")
 
 
 @router.get("/jobs/{job_id}/result.spz")
-async def job_result_spz(job_id: str) -> FileResponse:
+async def job_result_spz(job_id: str, request: Request) -> FileResponse:
     """Full-SH .spz (Niantic, ~10x smaller than .ply) — the streamed artifact for
     the in-app Spark viewer, so the WHOLE splat loads with no opacity cap."""
-    spz = _job_dir(job_id) / "out" / "point_cloud.spz"
+    spz = _owned_job_dir(job_id, request) / "out" / "point_cloud.spz"
     if not spz.exists():
         raise HTTPException(404, "spz not ready")
     return FileResponse(str(spz), media_type="application/octet-stream", filename="point_cloud.spz")
 
 
 @router.get("/jobs/{job_id}/camera.json")
-async def job_camera(job_id: str) -> dict[str, Any]:
+async def job_camera(job_id: str, request: Request) -> dict[str, Any]:
     """A good initial viewer camera (a real training viewpoint, in the splat's
     median-centered space) so the in-app viewer opens framed on the scene."""
-    cam = _initial_camera(_job_dir(job_id) / "sparse" / "0")
+    cam = _initial_camera(_owned_job_dir(job_id, request) / "sparse" / "0")
     if cam is None:
         raise HTTPException(404, "camera not ready")
     return cam

@@ -35,6 +35,29 @@ def test_unknown_job_404(client: TestClient) -> None:
     assert client.get("/api/recon/jobs/deadbeef/events").status_code == 404
 
 
+def test_result_download_denies_non_owner(monkeypatch) -> None:
+    # result.ply/spz/camera.json must be owner-scoped like get_job (issue #15), so
+    # a leaked/guessed job id can't pull another analyst's reconstruction while the
+    # job is still tracked in _JOBS.
+    import pytest
+    from fastapi import HTTPException
+
+    recon._JOBS["abcdef12"] = {"id": "abcdef12", "owner": "alice", "status": "done", "created": 0.0}
+    try:
+        monkeypatch.setattr(recon, "_owner_key", lambda req: "bob")
+        with pytest.raises(HTTPException) as e:
+            recon._owned_job_dir("abcdef12", None)  # type: ignore[arg-type]
+        assert e.value.status_code == 404
+        # The owner still gets the dir.
+        monkeypatch.setattr(recon, "_owner_key", lambda req: "alice")
+        assert str(recon._owned_job_dir("abcdef12", None)).endswith("abcdef12")  # type: ignore[arg-type]
+        # A job not tracked (evicted / restart-surviving artifact, no owner record
+        # left) falls through to disk — the metadata routes degrade the same way.
+        assert str(recon._owned_job_dir("beefcafe", None)).endswith("beefcafe")  # type: ignore[arg-type]
+    finally:
+        recon._JOBS.pop("abcdef12", None)
+
+
 def test_create_requires_files(client: TestClient) -> None:
     # File(...) is required → FastAPI 422 when absent.
     assert client.post("/api/recon/jobs").status_code == 422
