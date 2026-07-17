@@ -352,6 +352,51 @@ def test_binding_direct_registry_roundtrip() -> None:
     asyncio.run(run())
 
 
+def test_binding_resolve_preserves_foreign_object_props() -> None:
+    """Resolving onto a pre-existing object MERGES the binding's mapped props
+    instead of wholesale-replacing them. The upsert-wholesale contract makes the
+    binding authoritative only for foundry-MINTED objects; a sparse prop_map
+    synced onto a vessel another source minted must not wipe its name/flag/key."""
+    import asyncio
+
+    from app.foundry import binding as binding_mod
+    from app.foundry.store import FoundryStore
+    from app.intel.ontology import Object
+
+    async def run() -> None:
+        ctx = UserCtx("local", "")
+        reg = get_registry(ctx)
+        await reg.upsert(
+            Object(
+                id="vessel:w2res001",
+                kind="vessel",
+                props={"mmsi": "999000111", "name": "OLD_NAME", "flag": "NO"},
+            ),
+            source="ais",
+        )
+        store = FoundryStore()
+        ds = await store.create_dataset("resolve_merge_ds", "")
+        await store.add_version(
+            ds["id"],
+            [{"mmsi": "999000111", "cargo": "OIL"}],
+            [{"name": "mmsi", "type": "str"}, {"name": "cargo", "type": "str"}],
+            source="upload",
+        )
+        # prop_map maps only cargo (NOT the key column) — the sparse-blob case.
+        b = await store.create_binding(ds["id"], "vessel", "mmsi", {"cargo": "cargo"})
+        result = await binding_mod.sync_binding(store, b, ctx, resolve=True)
+        assert result["updated"] == 1  # resolved onto the pre-existing vessel
+
+        obj = await reg.get("vessel:w2res001")
+        assert obj is not None
+        assert obj.props["cargo"] == "OIL"  # binding's prop added
+        assert obj.props["name"] == "OLD_NAME"  # foreign props survived
+        assert obj.props["flag"] == "NO"
+        assert obj.props["mmsi"] == "999000111"  # the natural key survived
+
+    asyncio.run(run())
+
+
 def test_bindings_crud(client: TestClient) -> None:
     ds = client.post("/api/foundry/datasets", json={"name": "bind_crud_ds"}).json()
     r = client.post(
