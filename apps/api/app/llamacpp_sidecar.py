@@ -68,6 +68,7 @@ _proc: asyncio.subprocess.Process | None = None
 # browser never sees it — app.llm's _llamacpp_chat rung reads it via api_key().
 _api_key: str | None = None
 _hot_poll_task: asyncio.Task[None] | None = None
+_warm_task: asyncio.Task[None] | None = None  # background hot-model warm (best-effort)
 _known_hot: set[str] = set()
 
 
@@ -229,7 +230,7 @@ async def start() -> None:
     per-boot key, because a foreign process's key is unknown and unauthenticated
     chats would otherwise fail.
     """
-    global _proc, _api_key, _hot_poll_task, _known_hot
+    global _proc, _api_key, _hot_poll_task, _warm_task, _known_hot
     if not is_enabled():
         return
     settings = get_settings()
@@ -309,7 +310,7 @@ async def start() -> None:
             # each, sequential), freezing everything sequenced after it at boot
             # (adsb start_snapshot, the AIS feeders, the watch loops). They load on
             # demand via ensure_hot anyway, so the warm is a best-effort optimisation.
-            asyncio.create_task(_load_hot_models())
+            _warm_task = asyncio.create_task(_load_hot_models())
             _hot_poll_task = asyncio.create_task(_hot_poll_loop())
             return
         await asyncio.sleep(1.0)
@@ -321,10 +322,13 @@ async def start() -> None:
 async def stop() -> None:
     """Terminate llama-server (graceful SIGTERM, then SIGKILL). No-op if not
     ours / already gone."""
-    global _proc, _api_key, _hot_poll_task, _known_hot
+    global _proc, _api_key, _hot_poll_task, _warm_task, _known_hot
     if _hot_poll_task is not None:
         _hot_poll_task.cancel()
         _hot_poll_task = None
+    if _warm_task is not None:
+        _warm_task.cancel()
+        _warm_task = None
     _known_hot = set()
 
     proc, _proc = _proc, None

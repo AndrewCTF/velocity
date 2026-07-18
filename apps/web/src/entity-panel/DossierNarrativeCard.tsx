@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Widget, Btn, Badge, Caveat } from '../shell/instruments.js';
 import { apiFetch } from '../transport/http.js';
 
@@ -29,14 +29,18 @@ interface Props {
 export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
   const [data, setData] = useState<Narrative | null>(null);
   const [busy, setBusy] = useState(false);
+  const inflightRef = useRef<AbortController | null>(null);
 
   // Reset when the selection changes. This card instance persists across
   // selections (EntityPanel is toggled by display, never re-keyed), so without
   // this it would keep showing the previous contact's assessment with the button
-  // reading "↻ Regenerate" — every sibling card already resets on id.
+  // reading "↻ Regenerate" — every sibling card already resets on id. Also abort
+  // an in-flight Generate so a late response for the prior contact can't paint
+  // under the new one (matches AiAssessmentCard's inflightRef).
   useEffect(() => {
     setData(null);
     setBusy(false);
+    return () => inflightRef.current?.abort();
   }, [id, kind]);
 
   // Only aircraft / vessels have a pattern-of-life dossier to narrate.
@@ -44,18 +48,23 @@ export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
   const entityId = id.includes(':') ? id : `${kind}:${id}`;
 
   const generate = async (): Promise<void> => {
+    inflightRef.current?.abort();
+    const aborter = new AbortController();
+    inflightRef.current = aborter;
     setBusy(true);
     try {
       const r = await apiFetch(
         `/api/intel/dossier/narrative?entity_id=${encodeURIComponent(entityId)}`,
-        { method: 'POST' },
+        { method: 'POST', signal: aborter.signal },
       );
       const body = (await r.json().catch(() => null)) as Narrative | null;
+      if (aborter.signal.aborted) return;
       setData(body ?? { ok: false, error: 'Could not load the assessment.' });
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       setData({ ok: false, error: 'Could not load the assessment.' });
     } finally {
-      setBusy(false);
+      if (!aborter.signal.aborted) setBusy(false);
     }
   };
 
