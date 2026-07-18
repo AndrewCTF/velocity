@@ -49,37 +49,63 @@ def parse_og_image(html: str) -> str:
     return c.group(1).strip() if c else ""
 
 
-async def _is_public_url(url: str) -> bool:
-    """True only for an http(s) URL whose host resolves to public unicast IPs.
+async def _getaddrinfo(host: str, port: int | None) -> list:
+    """Thin wrapper over the loop resolver — a monkeypatch seam for tests."""
+    return await asyncio.get_event_loop().getaddrinfo(host, port)
 
-    Resolves the host (async, no blocking the loop) and rejects the request if
-    ANY resolved address is loopback/private/link-local/reserved/multicast —
-    the SSRF gate. A literal-IP host is parsed directly (no DNS, offline-safe).
+
+def _is_non_public(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return bool(
+        addr.is_private
+        or addr.is_loopback
+        or addr.is_link_local
+        or addr.is_reserved
+        or addr.is_multicast
+        or addr.is_unspecified
+    )
+
+
+async def _resolve_public(url: str) -> tuple[bool, str | None]:
+    """``(is_public, ip_to_pin)``. Resolve the host (async, no blocking the loop)
+    and reject the request if ANY resolved address is loopback / private /
+    link-local / reserved / multicast — the SSRF gate. The returned IP lets the
+    caller pin the http connection to the just-validated address, closing the
+    DNS-rebinding gap between this check and the fetch. It is None for a literal-IP
+    host (nothing to rebind, offline-safe).
     """
     p = urlparse(url)
     if p.scheme not in ("http", "https") or not p.hostname:
-        return False
+        return False, None
     try:
-        infos = await asyncio.get_event_loop().getaddrinfo(p.hostname, p.port or None)
+        ipaddress.ip_address(p.hostname)
+        literal = True
+    except ValueError:
+        literal = False
+    try:
+        infos = await _getaddrinfo(p.hostname, p.port or None)
     except Exception:  # noqa: BLE001 — unresolvable host → treat as unsafe
-        return False
+        return False, None
     if not infos:
-        return False
+        return False, None
+    resolved: list[str] = []
     for info in infos:
         try:
             addr = ipaddress.ip_address(info[4][0])
         except ValueError:
-            return False
-        if (
-            addr.is_private
-            or addr.is_loopback
-            or addr.is_link_local
-            or addr.is_reserved
-            or addr.is_multicast
-            or addr.is_unspecified
-        ):
-            return False
-    return True
+            return False, None
+        if _is_non_public(addr):
+            return False, None
+        resolved.append(info[4][0])
+    if literal:
+        return True, None  # a literal-IP host cannot be rebound — nothing to pin
+    pin = next((a for a in resolved if ":" not in a), resolved[0] if resolved else None)
+    return True, pin
+
+
+async def _is_public_url(url: str) -> bool:
+    """True only for an http(s) URL whose host resolves to public unicast IPs."""
+    ok, _ = await _resolve_public(url)
+    return ok
 
 
 async def fetch_og_image(url: str, timeout_s: float = 6.0) -> str:
@@ -99,11 +125,22 @@ async def fetch_og_image(url: str, timeout_s: float = 6.0) -> str:
         client = get_client()
         cur = url
         for _ in range(_MAX_REDIRECTS + 1):
-            if not await _is_public_url(cur):
+            ok, pin = await _resolve_public(cur)
+            if not ok:
                 break
+            p = urlparse(cur)
+            req_url = cur
+            headers = {"User-Agent": _UA}
+            # Pin the http connection to the IP we just validated so httpx cannot
+            # re-resolve to a rebound (metadata / internal) address between the
+            # check and the fetch. https keeps its hostname for cert validation —
+            # the same documented residual risk as workflows/control.py.
+            if pin is not None and p.scheme == "http":
+                host = f"[{pin}]" if ":" in pin else pin
+                req_url = p._replace(netloc=f"{host}:{p.port}" if p.port else host).geturl()
+                headers["Host"] = p.netloc
             r = await client.get(
-                cur, timeout=timeout_s, follow_redirects=False,
-                headers={"User-Agent": _UA},
+                req_url, timeout=timeout_s, follow_redirects=False, headers=headers,
             )
             loc = r.headers.get("location")
             if r.status_code in (301, 302, 303, 307, 308) and loc:
