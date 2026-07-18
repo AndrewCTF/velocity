@@ -745,9 +745,14 @@ The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
 three-line fact there. One line per wave, newest first — when the CLAUDE.md
 number changes, the displaced line lands here.
 
-- **1741 +1 skip** — 2026-07-18, overnight-hardening-2026-07-18: overnight
-  bug-hunt wave. Two audit rounds (security/backend/frontend, then
-  ontology/foundry/collab/recon/imagery). Fixed IPv6+mapped SSRF metadata bypass
+- **1745 +1 skip** — 2026-07-18, overnight-hardening-2026-07-18: overnight
+  bug-hunt wave. Three audit rounds (security/backend/frontend, then
+  ontology/foundry/collab/recon/imagery, then alerts/correlate/weather + the
+  remaining FE panels). Third round added: correlation ingest loops surviving a
+  non-JSON body (were killed permanently → blind to 7500/7600/7700 squawks),
+  weather/seismic/cams parse guards, a haversine domain-error clamp, a bounded
+  geofence-state dict, and three more cross-selection state leaks (CoaCards filing
+  a COA under the wrong situation, CountriesPanel, DatasetsView). Fixed IPv6+mapped SSRF metadata bypass
   in the workflow HTTP guard, replay-exit blanking the live globe, history
   byte-cap sizing off the un-vacuumed file, three entity-panel cross-selection
   state leaks, three feed-parser trust-boundary crashes, the `/api/imagery/splat`
