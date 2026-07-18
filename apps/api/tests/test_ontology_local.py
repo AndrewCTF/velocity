@@ -293,3 +293,26 @@ def test_promote_empty_props_still_mints_existence(client: TestClient) -> None:
     )
     assert r.status_code == 200
     assert client.get("/api/ontology/object/incident:i1").status_code == 200
+
+
+def test_size_cap_enforcement_swallows_db_error() -> None:
+    # _maybe_enforce_size_cap runs AFTER the caller's write has committed, so a
+    # lock contention during its VACUUM (a concurrent writer holds the DB) must
+    # not propagate and 500 an already-persisted write. Best-effort: swallow.
+    import sqlite3
+
+    from app.intel import ontology_local as OL
+    from app.keys import UserCtx
+
+    s = _S.model_copy(update={"ontology_db_max_bytes": 1})  # any real file exceeds 1 byte
+    reg = OL.SqliteRegistry(UserCtx("capbusy", ""), s)
+    asyncio.run(reg.upsert(Object(id="vessel:cap1", props={"a": 1})))  # populate the DB
+
+    OL._next_size_check = 0.0  # force the size check to run this call
+    OL._writes_since_check = 0
+
+    class _RaisingCon:
+        def execute(self, *_a: object, **_k: object) -> object:
+            raise sqlite3.OperationalError("database is locked")
+
+    reg._maybe_enforce_size_cap(_RaisingCon())  # type: ignore[arg-type]  # must NOT raise
