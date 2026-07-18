@@ -18,15 +18,25 @@ from app.upstream import cache, get_client
 router = APIRouter(tags=["weather"])
 
 
+def _json_or_502(r: Any, name: str) -> Any:
+    """A 200 with a non-JSON body (a CDN maintenance / rate-limit HTML page) would
+    raise out of the cache.get_or_fetch loader and 500 this keyless route. Parse
+    defensively and degrade to a 502 like a bad status instead."""
+    if r.status_code != 200:
+        raise HTTPException(502, f"{name} upstream {r.status_code}")
+    try:
+        return r.json()
+    except ValueError as e:
+        raise HTTPException(502, f"{name} non-JSON body") from e
+
+
 @router.get("/api/weather/swpc/kp")
 async def swpc_kp() -> dict[str, Any]:
     async def load() -> dict[str, Any]:
         r = await get_client().get(
             "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
         )
-        if r.status_code != 200:
-            raise HTTPException(502, f"swpc upstream {r.status_code}")
-        return {"series": r.json()}
+        return {"series": _json_or_502(r, "swpc")}
 
     return await cache.get_or_fetch("swpc:kp", 60.0, load)
 
@@ -59,9 +69,7 @@ async def openmeteo(
         r = await get_client().get(
             "https://api.open-meteo.com/v1/forecast", params=params
         )
-        if r.status_code != 200:
-            raise HTTPException(502, f"open-meteo upstream {r.status_code}")
-        return r.json()  # type: ignore[no-any-return]
+        return _json_or_502(r, "open-meteo")  # type: ignore[no-any-return]
 
     return await cache.get_or_fetch(key, 600.0, load)
 
@@ -95,9 +103,7 @@ async def metar(
             "https://aviationweather.gov/api/data/metar",
             params={"ids": ",".join(normalized), "format": "json"},
         )
-        if r.status_code != 200:
-            raise HTTPException(502, f"aviationweather upstream {r.status_code}")
-        return {"data": r.json()}
+        return {"data": _json_or_502(r, "aviationweather")}
 
     return await cache.get_or_fetch(key, 300.0, load)
 
@@ -110,9 +116,7 @@ async def nws_alerts() -> dict[str, Any]:
             "https://api.weather.gov/alerts/active",
             headers={"Accept": "application/geo+json"},
         )
-        if r.status_code != 200:
-            raise HTTPException(502, f"nws upstream {r.status_code}")
-        j = r.json()
+        j = _json_or_502(r, "nws")
         feats: list[dict[str, Any]] = []
         for f in j.get("features", []) or []:
             geom = f.get("geometry")

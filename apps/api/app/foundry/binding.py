@@ -116,8 +116,19 @@ async def sync_binding(
                 if len(candidates) == 1:
                     target_id = candidates[0]
             existing = await reg.get(target_id)
+            if existing is not None and target_id != object_id:
+                # Resolved onto a pre-existing object minted by another source:
+                # overlay our mapped props onto its blob so the wholesale-replace
+                # upsert (removals included, by contract) doesn't wipe the props
+                # this binding never owned — including the natural key when the
+                # author didn't map key_column. For a foundry-minted object
+                # (target_id == object_id) the binding IS the sole writer, so the
+                # sparse blob is authoritative and no merge is wanted.
+                merged = {**(existing.props or {}), **props}
+            else:
+                merged = props
             await reg.upsert(
-                Object(id=target_id, kind=binding["object_kind"], props=props),
+                Object(id=target_id, kind=binding["object_kind"], props=merged),
                 source=source,
             )
             if existing is None:

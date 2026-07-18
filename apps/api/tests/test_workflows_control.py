@@ -296,6 +296,23 @@ def test_check_url_blocks_link_local_metadata() -> None:
     control.check_url("http://192.168.1.50/command")  # private LAN still fine
 
 
+def test_check_url_blocks_ipv6_and_mapped_metadata() -> None:
+    # The IPv4-only guard let the IPv6 metadata surface through: AWS's IPv6 IMDS
+    # host (a ULA), IPv6 link-local, and the IPv4-mapped form of 169.254.169.254.
+    for url in (
+        "http://[fd00:ec2::254]/latest/meta-data/iam/security-credentials/",
+        "http://[fe80::1]/x",
+        "http://[::ffff:169.254.169.254]/x",
+    ):
+        with pytest.raises(WorkflowError) as exc:
+            control.check_url(url)
+        assert exc.value.status_code == 403
+    # A normal IPv6 ULA / loopback control server is NOT a metadata endpoint and
+    # stays reachable — the BYO posture (private LAN open) must not regress.
+    control.check_url("http://[fd12:3456:789a::1]/command")  # IPv6 ULA LAN host
+    control.check_url("http://[::1]:9010/command")  # IPv6 loopback
+
+
 def test_check_url_link_local_allowed_when_explicitly_allowlisted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -351,6 +368,19 @@ def test_pin_http_url_blocks_dns_rebinding_to_metadata(monkeypatch: pytest.Monke
     time is blocked by _pin_http_url even though check_url passed earlier."""
     _fake_getaddrinfo(monkeypatch, {"rebind.evil.example": "169.254.169.254"})
     url, headers, blocked = control._pin_http_url("http://rebind.evil.example/latest/meta-data/", {})
+    assert blocked is not None and "link-local" in blocked
+
+
+def test_pin_http_url_blocks_ipv6_metadata_rebinding(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A name that re-resolves to the AWS IPv6 IMDS host at request time is also
+    blocked — the pin guard is no longer IPv4-only."""
+    import socket as _socket
+
+    def fake(host, *a, **kw):
+        return [(_socket.AF_INET6, _socket.SOCK_STREAM, 0, "", ("fd00:ec2::254", 0, 0, 0))]
+
+    monkeypatch.setattr(control.socket, "getaddrinfo", fake)
+    url, headers, blocked = control._pin_http_url("http://rebind6.evil.example/latest/meta-data/", {})
     assert blocked is not None and "link-local" in blocked
 
 

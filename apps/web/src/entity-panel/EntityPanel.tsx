@@ -152,11 +152,19 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
     // mutated in place (stable ref), so we gate on length and hand TrackCard a
     // fresh slice on change. No more unconditional 1 Hz re-render here.
     let lastLen = -1;
+    let lastT = -1;
     const t = window.setInterval(() => {
-      const len = tracks.points(id);
-      if (len !== lastLen) {
+      const pts = tracks.get(id);
+      const len = pts.length;
+      // Gate on the newest fix's time too, not just length: the ring is capped
+      // at MAX_POINTS_PER_ENTITY, so once a contact reaches the cap shift()+push()
+      // keeps length constant forever and a length-only check would go silent —
+      // exactly when this interval is meant to keep the sparkline advancing.
+      const newestT = len > 0 ? pts[len - 1]!.t : -1;
+      if (len !== lastLen || newestT !== lastT) {
         lastLen = len;
-        setTrack(tracks.get(id).slice());
+        lastT = newestT;
+        setTrack(pts.slice());
       }
     }, 1000);
     return () => window.clearInterval(t);

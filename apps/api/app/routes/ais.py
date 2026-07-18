@@ -121,6 +121,12 @@ def _normalize(text: str) -> str | None:
     lon = meta.get("longitude")
     if mmsi is None or lat is None or lon is None:
         return None
+    try:
+        mmsi = int(mmsi)
+    except (TypeError, ValueError):
+        # A malformed MMSI must skip this one message, not raise out of the
+        # async-for and tear down the shared upstream socket for every client.
+        return None
     ship_name = (meta.get("ShipName") or "").strip() or None
 
     # Extract / cache the ITU ship type. ShipStaticData carries it; some
@@ -134,8 +140,8 @@ def _normalize(text: str) -> str | None:
         or meta.get("ShipType")
     )
     if candidate_type is not None:
-        _remember_ship_type(int(mmsi), candidate_type)
-    ship_type = _ship_type_by_mmsi.get(int(mmsi))
+        _remember_ship_type(mmsi, candidate_type)
+    ship_type = _ship_type_by_mmsi.get(mmsi)
 
     out: dict[str, Any] = {
         "kind": "vessel",

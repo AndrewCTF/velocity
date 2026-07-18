@@ -94,3 +94,22 @@ def test_metar_upstream_failure_502(monkeypatch):
     tc = _make_app(monkeypatch, status_code=503)
     r = tc.get("/api/weather/metar", params={"ids": "KJFK"})
     assert r.status_code == 502
+
+
+def test_json_or_502_degrades_non_json_body() -> None:
+    # A 200 + non-JSON body (a CDN maintenance / rate-limit HTML page) must become
+    # a 502, not raise out of the cache.get_or_fetch loader and 500 the route.
+    import pytest
+    from fastapi import HTTPException
+
+    from app.routes.weather import _json_or_502
+
+    class _R:
+        status_code = 200
+
+        def json(self) -> object:
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    with pytest.raises(HTTPException) as exc:
+        _json_or_502(_R(), "test")
+    assert exc.value.status_code == 502

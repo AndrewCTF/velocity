@@ -162,11 +162,15 @@ def _from_object(obj: Object) -> SavedMap | None:
         state = CopState.model_validate(props.get("state") or {})
     except Exception:  # noqa: BLE001 — a malformed blob loads as an empty picture
         state = CopState()
+    # updated_at is typed str | None; pydantic v2 raises on a non-string value, and
+    # props is a user-writable blob (POST /api/ontology/object is keyless), so a
+    # crafted int/dict here would 500 the whole list. Coerce anything non-str to None.
+    _upd = props.get("updated_at")
     return SavedMap(
         id=obj.id,
         name=str(props.get("name") or obj.id),
         state=state,
-        updated_at=props.get("updated_at"),
+        updated_at=_upd if isinstance(_upd, str) else None,
         created_at=obj.created_at,
     )
 

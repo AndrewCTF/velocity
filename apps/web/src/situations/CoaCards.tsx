@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge, Btn, Caveat, StatusDot, type BadgeTone } from '../shell/instruments.js';
 import { useSituations } from './situationStore.js';
 import { apiFetch } from '../transport/http.js';
@@ -33,6 +33,15 @@ export function CoaCards({ situationId }: { situationId: string }): JSX.Element 
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const linkChild = useSituations((s) => s.linkChild);
+
+  // Reset when the situation changes. SituationPanel/CoaCards persists across
+  // selections (it is not re-keyed), so without this a Verify click would file
+  // the PREVIOUS situation's proposed COA under the newly-selected one.
+  useEffect(() => {
+    setCoas([]);
+    setBusy(false);
+    setNote(null);
+  }, [situationId]);
 
   const propose = async (): Promise<void> => {
     setBusy(true);

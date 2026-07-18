@@ -532,30 +532,36 @@ def prune(retention_hours: int) -> int:
 
 
 def enforce_size_cap(max_bytes: int) -> int:
-    """Drop the oldest rows until the DB file is under *max_bytes*.
+    """Drop the oldest rows until the DB's IN-USE size is under *max_bytes*.
 
-    The on-disk file size only shrinks after a VACUUM, so we cannot delete-and-
-    measure in a loop. Instead we estimate the fraction of rows to drop from the
-    byte overage (with a 10 % margin) and delete that oldest slice in one pass;
-    the caller VACUUMs afterwards and the next hourly pass corrects any residue.
-    Returns the deleted row count. A max_bytes of 0 disables the cap.
+    Sizing off ``os.path.getsize`` would over-delete: a bare DELETE (this pass
+    runs right after ``prune``) leaves reclaimable free pages that the on-disk
+    file still counts because auto_vacuum is off, and the caller VACUUMs
+    immediately afterwards. We would then drop an extra oldest slice that the
+    VACUUM was about to hand back for free — chronically shortening the replay
+    window. So measure in-use bytes (page_count - freelist_count) * page_size,
+    which is what the file becomes after the VACUUM.
+
+    The size only shrinks on VACUUM, so we cannot delete-and-measure in a loop.
+    Instead we estimate the fraction of rows to drop from the byte overage (with
+    a 10 % margin) and delete that oldest slice in one pass; the next hourly pass
+    corrects any residue. Returns the deleted row count. max_bytes 0 disables it.
     """
     if max_bytes <= 0:
-        return 0
-    path = _resolved_db_path()
-    try:
-        size = os.path.getsize(path)
-    except OSError:
-        return 0
-    if size <= max_bytes:
         return 0
     try:
         con = _connect()
         try:
+            page_size = con.execute("PRAGMA page_size").fetchone()[0]
+            page_count = con.execute("PRAGMA page_count").fetchone()[0]
+            freelist = con.execute("PRAGMA freelist_count").fetchone()[0]
+            in_use = (page_count - freelist) * page_size
+            if in_use <= max_bytes:
+                return 0
             total = con.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
             if total <= 0:
                 return 0
-            over_frac = 1.0 - (max_bytes / size)
+            over_frac = 1.0 - (max_bytes / in_use)
             to_drop = min(total - 1, int(total * over_frac * 1.1) + 1)
             if to_drop <= 0:
                 return 0

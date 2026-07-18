@@ -494,7 +494,15 @@ async def _progress_monitor(job: Job, target_dir: Path) -> None:
 async def _run_job(job: Job, sha256_by_file: dict[str, str]) -> None:
     root = models_root()
     target_dir = root / job.key
-    target_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        # This ran before the try below, so a mkdir failure (disk full / not
+        # writable between the preflight and here) killed the fire-and-forget task
+        # with an unretrieved exception and left the job stuck in "queued" forever.
+        job.status = "error"
+        job.error = f"could not create model directory: {exc}"
+        return
     job.status = "downloading"
     monitor = asyncio.create_task(_progress_monitor(job, target_dir))
     try:

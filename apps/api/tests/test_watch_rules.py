@@ -66,3 +66,18 @@ def test_cue_maps_point_to_known_aoi():
     # Strait of Hormuz bbox is configured in sar_vessels.AOIS
     assert cue.aoi_for_point(56.6, 26.6) == "hormuz"
     assert cue.aoi_for_point(0.0, 0.0) is None
+
+
+def test_geofence_exit_pops_state_key() -> None:
+    # On exit the (rule, entity) key must be DROPPED, not stored as False: a False
+    # entry per distinct entity that ever transited an AOI grows _STATE.inside
+    # without bound over uptime. get(key, False) already treats absent as outside.
+    now = 1_000_000.0
+    rule = _rule("ais_gap", 56.6, 26.6)
+    inside = watch.candidates_from_tracks([_dark_track("vessel:1", 56.6, 26.6, now)], now)
+    watch.evaluate_rules([rule], inside)  # enter → key stored
+    assert watch._STATE.inside  # non-empty after enter
+    outside = watch.candidates_from_tracks([_dark_track("vessel:1", 0.0, 0.0, now)], now)
+    firings = watch.evaluate_rules([rule], outside)  # far outside the AOI → exit
+    assert any(f[2] == "exit" for f in firings)
+    assert watch._STATE.inside == {}  # key popped, not left as a False entry

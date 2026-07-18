@@ -57,6 +57,21 @@ def test_from_object_skips_non_situation_and_clamps_bad_enum() -> None:
     assert sit is not None and sit.severity == "med" and sit.status == "active"
 
 
+def test_from_object_tolerates_junk_radius_and_updated_at() -> None:
+    # props is a keyless user-writable blob (POST /api/ontology/object); a
+    # non-numeric radius_km or a non-string updated_at must degrade, not raise
+    # out of the list loop and 500 the whole /api/situations response.
+    sit = _from_object(
+        Object(
+            id="situation:x",
+            props={"kind": "situation", "radius_km": "abc", "updated_at": 123},
+        )
+    )
+    assert sit is not None
+    assert sit.radius_km == 50.0  # junk radius → default
+    assert sit.updated_at is None  # non-string updated_at → None
+
+
 # ── keyless-local route contract ─────────────────────────────────────────────────
 
 

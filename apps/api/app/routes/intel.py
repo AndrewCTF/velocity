@@ -15,6 +15,7 @@ intel bundle for it in a single round trip.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -618,6 +619,24 @@ _NARRATIVE_SYSTEM = llm.with_prose_style(
 # keeps the reason-tier cost off repeat selections without staleness mattering.
 _NARRATIVE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _NARRATIVE_TTL_S = 600.0
+_NARRATIVE_CACHE_MAX = 512
+# Total wall-clock bound on the reason-tier ladder — kept under Cloudflare's 100 s
+# edge limit so a stalled backend can't pin a worker into a 524 (llm.py notes the
+# calling route must cap this; the backends run sequentially, ~180 s each).
+_NARRATIVE_LLM_BUDGET_S = 85.0
+
+
+def _narrative_cache_put(entity_id: str, expires: float, payload: dict[str, Any]) -> None:
+    # Bound the cache: a stream of distinct entity ids (any MMSI/ICAO24) would
+    # otherwise grow this plain dict without limit. Drop expired entries first,
+    # then the soonest-expiring until under the cap, before inserting.
+    if len(_NARRATIVE_CACHE) >= _NARRATIVE_CACHE_MAX:
+        now = time.time()
+        for k in [k for k, (exp, _) in _NARRATIVE_CACHE.items() if exp <= now]:
+            del _NARRATIVE_CACHE[k]
+        while len(_NARRATIVE_CACHE) >= _NARRATIVE_CACHE_MAX:
+            del _NARRATIVE_CACHE[min(_NARRATIVE_CACHE, key=lambda k: _NARRATIVE_CACHE[k][0])]
+    _NARRATIVE_CACHE[entity_id] = (expires, payload)
 
 
 @router.post("/api/intel/dossier/narrative")
@@ -648,23 +667,33 @@ async def intel_dossier_narrative(entity_id: str = Query(...)) -> dict[str, Any]
     facts["track_points"] = len(doss.get("track") or [])
     user = "Dossier:\n" + json.dumps(facts, default=str)[:6000]
 
-    parsed, res = await llm.chat_json(
-        [
-            {"role": "system", "content": _NARRATIVE_SYSTEM},
-            {"role": "user", "content": user},
-        ],
-        tier="reason",
-        temperature=0.2,
-        max_tokens=900,
-    )
+    try:
+        parsed, res = await asyncio.wait_for(
+            llm.chat_json(
+                [
+                    {"role": "system", "content": _NARRATIVE_SYSTEM},
+                    {"role": "user", "content": user},
+                ],
+                tier="reason",
+                temperature=0.2,
+                max_tokens=900,
+            ),
+            timeout=_NARRATIVE_LLM_BUDGET_S,
+        )
+    except TimeoutError:
+        return {"ok": False, "error": "model unavailable", "model": None}
     if not res.ok or not isinstance(parsed, dict):
+        # DossierNarrativeCard renders a non-"model unavailable" error string
+        # verbatim, so passing res.error through leaks raw internals (e.g.
+        # "llamacpp call failed: ConnectError [Errno 111]") into the dashboard —
+        # against the copy rule. Return the clean sentinel; the detail is logged.
         return {
             "ok": False,
-            "error": res.error or "model unavailable",
+            "error": "model unavailable",
             "model": res.model,
         }
     payload = {"ok": True, "model": res.model, "backend": res.backend, **parsed}
-    _NARRATIVE_CACHE[entity_id] = (now + _NARRATIVE_TTL_S, payload)
+    _narrative_cache_put(entity_id, now + _NARRATIVE_TTL_S, payload)
     return payload
 
 

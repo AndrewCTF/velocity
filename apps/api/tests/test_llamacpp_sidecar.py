@@ -337,3 +337,21 @@ async def test_ensure_hot_unknown_key_no_op(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(sc.httpx, "AsyncClient", fail_client)
     await sc.ensure_hot("0" * 12)  # not installed — must not raise or call out
+
+
+def test_load_hot_models_survives_a_failed_warm(monkeypatch) -> None:
+    # The hot-model warm now runs in the background at boot, so one slow/failed
+    # model must not abort the rest or leave an unretrieved exception on the task.
+    import asyncio
+
+    calls: list[str] = []
+
+    async def _ensure(key: str) -> None:
+        calls.append(key)
+        if key == "bad":
+            raise RuntimeError("load timed out")
+
+    monkeypatch.setattr(sc.manager, "get_hot", lambda: ["good1", "bad", "good2"])
+    monkeypatch.setattr(sc, "ensure_hot", _ensure)
+    asyncio.run(sc._load_hot_models())  # must NOT raise
+    assert calls == ["good1", "bad", "good2"]  # all attempted despite the middle failure

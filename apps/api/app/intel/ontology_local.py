@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sqlite3
 import time
 from pathlib import Path
@@ -40,6 +41,8 @@ from app.intel.ontology import (
     kind_of,
 )
 from app.keys import UserCtx
+
+log = logging.getLogger(__name__)
 
 # ── DB path injection (for tests) ─────────────────────────────────────────────
 
@@ -526,14 +529,23 @@ class SqliteRegistry(_GraphWalk):
         and is kept — the roadmap guard requires two sources to coexist.
         """
         encoded = _canon(value)
+        is_removal = bool(isinstance(derivation, dict) and derivation.get("op") == "remove")
         last = con.execute(
-            "SELECT value, source FROM assertions"
+            "SELECT value, source, derivation FROM assertions"
             " WHERE user_id=? AND object_id=? AND prop=?"
             " ORDER BY observed_at DESC, id DESC LIMIT 1",
             (self.ctx.user_id, object_id, prop),
         ).fetchone()
         if last is not None and last[0] == encoded and last[1] == source:
-            return
+            # A removal tombstone encodes value=None as "null", the same as an
+            # explicit note=null write — but they are different facts, so the
+            # tombstone must not be deduped away against a prior null value (else
+            # the removal never lands in the append-only provenance trail). Only a
+            # true duplicate (same value, source, AND removal-ness) is dropped.
+            last_deriv = json.loads(last[2]) if last[2] else None
+            last_removal = bool(isinstance(last_deriv, dict) and last_deriv.get("op") == "remove")
+            if last_removal == is_removal:
+                return
         con.execute(
             "INSERT INTO assertions (user_id, object_id, prop, value, source,"
             " confidence, observed_at, valid_until, derivation)"
@@ -606,18 +618,25 @@ class SqliteRegistry(_GraphWalk):
         # If the DB is over-cap on custody rows alone, nothing is trimmed here
         # (the operator must raise ontology_db_max_bytes or archive) — the
         # legal record wins over the soft byte cap by design.
-        (total,) = con.execute(
-            "SELECT COUNT(*) FROM assertions WHERE prop!='custody'"
-        ).fetchone()
-        drop = max(1, total // 10)
-        con.execute(
-            "DELETE FROM assertions WHERE id IN ("
-            " SELECT id FROM assertions WHERE prop!='custody'"
-            " ORDER BY observed_at ASC, id ASC LIMIT ?)",
-            (drop,),
-        )
-        con.commit()
-        con.execute("VACUUM")
+        # Best-effort: this runs AFTER the caller's write already committed, so a
+        # lock contention here (a concurrent writer holds the DB during VACUUM,
+        # which needs an exclusive lock) must NOT surface as a 500 for a write that
+        # already persisted. Skip this cycle; the next gated attempt retries.
+        try:
+            (total,) = con.execute(
+                "SELECT COUNT(*) FROM assertions WHERE prop!='custody'"
+            ).fetchone()
+            drop = max(1, total // 10)
+            con.execute(
+                "DELETE FROM assertions WHERE id IN ("
+                " SELECT id FROM assertions WHERE prop!='custody'"
+                " ORDER BY observed_at ASC, id ASC LIMIT ?)",
+                (drop,),
+            )
+            con.commit()
+            con.execute("VACUUM")
+        except sqlite3.Error:
+            log.warning("ontology soft byte-cap enforcement skipped (db busy)", exc_info=True)
 
 
 # ── row → model ───────────────────────────────────────────────────────────────

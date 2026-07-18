@@ -121,8 +121,11 @@ async def digitraffic_snapshot() -> dict[str, Any]:
             coords = geom.get("coordinates") or []
             if len(coords) < 2:
                 continue
-            lon = float(coords[0])
-            lat = float(coords[1])
+            try:
+                lon = float(coords[0])
+                lat = float(coords[1])
+            except (TypeError, ValueError):
+                continue  # a null / non-numeric coordinate must not 500 the route
             p = f.get("properties") or {}
             # Digitraffic `sog` is already KNOTS; mask the AIS 102.3-kn "not
             # available" sentinel so it doesn't paint as a 102-knot ghost and

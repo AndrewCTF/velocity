@@ -81,13 +81,17 @@ async def _load_digitraffic() -> list[Cam]:
         preset_id = (presets[0] or {}).get("id")
         if not preset_id:
             continue
+        try:
+            lat, lon = float(coords[1]), float(coords[0])
+        except (TypeError, ValueError):
+            continue  # a station pending geolocation (null coords) must not 500 /api/cams
         station_id = str(props.get("id") or f.get("id") or preset_id)
         out.append(
             Cam(
                 id=f"digitraffic:{station_id}",
                 name=str(props.get("name") or station_id).replace("_", " "),
-                lat=float(coords[1]),
-                lon=float(coords[0]),
+                lat=lat,
+                lon=lon,
                 snapshot_url=_DIGITRAFFIC_IMG.format(preset=preset_id),
                 source="digitraffic",
                 attribution="Fintraffic / digitraffic.fi (CC BY 4.0)",

@@ -308,7 +308,10 @@ async def adsb_lol_point(
     async def load() -> dict[str, Any]:
         url = f"https://api.adsb.lol/v2/point/{lat}/{lon}/{radius_nm}"
         r = await get_client().get(url)
-        if r.status_code != 200:
+        # 200 + text/plain is how adsb.lol answers a rate limit; a bare r.json()
+        # there raises ValueError and 500s the route (cache.get_or_fetch does not
+        # wrap the loader). Treat a non-JSON body like a bad status → 502.
+        if r.status_code != 200 or "json" not in r.headers.get("content-type", "").lower():
             raise HTTPException(502, f"adsb.lol upstream {r.status_code}")
         j = r.json()
         return _aircraft_geojson(j.get("ac") or [])
@@ -2001,7 +2004,9 @@ async def adsb_fi_global() -> dict[str, Any]:
 
     async def load() -> dict[str, Any]:
         r = await get_client().get("https://opendata.adsb.fi/api/v2/snapshot")
-        if r.status_code != 200:
+        # 200 + text/plain rate-limit body would 500 the route on r.json(); treat
+        # a non-JSON body like a bad status → 502 (same guard as _parse_ac).
+        if r.status_code != 200 or "json" not in r.headers.get("content-type", "").lower():
             raise HTTPException(502, f"adsb.fi /snapshot {r.status_code}")
         j = r.json()
         return _aircraft_geojson(j.get("aircraft") or j.get("ac") or [])

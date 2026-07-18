@@ -430,7 +430,11 @@ def evaluate_rules(
                 if _meets_severity(r, cand.severity_rank):
                     firings.append((r, cand, "enter"))
             elif was_inside and not now_inside:
-                _STATE.inside[key] = False
+                # Drop the key rather than store False: get(key, False) already
+                # treats an absent key as "outside", so this is equivalent state but
+                # bounds _STATE.inside to entities CURRENTLY inside a geofence — a
+                # False entry per distinct entity that ever transited grows forever.
+                _STATE.inside.pop(key, None)
                 firings.append((r, cand, "exit"))
     return firings
 

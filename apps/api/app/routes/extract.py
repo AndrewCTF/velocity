@@ -11,6 +11,7 @@ audit row. ``commit=false`` returns a preview without writing.
 
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
 from typing import Any
@@ -29,6 +30,8 @@ from app.security import Principal, current_principal_or_local
 router = APIRouter(tags=["extract"])
 
 _MAX_TEXT = 40_000
+# Total wall-clock cap on the extraction ladder, under the 100 s edge limit.
+_EXTRACT_LLM_BUDGET_S = 90.0
 _ENTITY_TYPES = {
     "Person", "Organization", "Location", "Vessel", "Aircraft", "Event", "Document", "Other",
 }
@@ -92,15 +95,20 @@ _PROMPT = (
 async def _run_llm(text: str, token: str, uid: str) -> dict[str, Any]:
     bound = llm.bind_user(uid, token)
     try:
-        parsed, res = await llm.chat_json(
-            [
-                {"role": "system", "content": _PROMPT},
-                {"role": "user", "content": text},
-            ],
-            tier="fast",
-            max_tokens=2048,
-            label="doc-extract",
+        parsed, res = await asyncio.wait_for(
+            llm.chat_json(
+                [
+                    {"role": "system", "content": _PROMPT},
+                    {"role": "user", "content": text},
+                ],
+                tier="fast",
+                max_tokens=2048,
+                label="doc-extract",
+            ),
+            timeout=_EXTRACT_LLM_BUDGET_S,
         )
+    except TimeoutError:
+        parsed, res = None, None  # → the 502 below; never pin the worker past the edge
     finally:
         llm.reset_user(bound)
     if parsed is None:

@@ -745,6 +745,25 @@ The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
 three-line fact there. One line per wave, newest first — when the CLAUDE.md
 number changes, the displaced line lands here.
 
+- **1750 +1 skip** — 2026-07-18, overnight-hardening-2026-07-18: overnight
+  bug-hunt wave. Four audit rounds (security/backend/frontend, then
+  ontology/foundry/collab/recon/imagery, then alerts/correlate/weather + FE
+  panels, then the AI/LLM route + MCP layer). Third round added: correlation ingest loops surviving a
+  non-JSON body (were killed permanently → blind to 7500/7600/7700 squawks),
+  weather/seismic/cams parse guards, a haversine domain-error clamp, a bounded
+  geofence-state dict, and three more cross-selection state leaks (CoaCards filing
+  a COA under the wrong situation, CountriesPanel, DatasetsView). Fixed IPv6+mapped SSRF metadata bypass
+  in the workflow HTTP guard, replay-exit blanking the live globe, history
+  byte-cap sizing off the un-vacuumed file, three entity-panel cross-selection
+  state leaks, three feed-parser trust-boundary crashes, the `/api/imagery/splat`
+  compute fail-closed gap, situations/maps 500 on crafted ontology props, collab
+  clearance failing OPEN on an ACL-store hiccup, recon result downloads missing
+  the owner check, foundry join-fanout OOM + unhashable group keys, the foundry
+  SQL-console 500-on-bad-input, the news og:image SSRF rebinding TOCTOU, a
+  spurious 500 when the ontology soft-cap VACUUM hits a lock, and a dropped
+  removal-tombstone provenance gap. Round 4 (AI/LLM) also bounded the four
+  reason/fast-tier LLM routes under the 100 s edge budget (asyncio.wait_for) and
+  moved the llama.cpp hot-model warm off the boot path.
 - **1719 +1 skip** — 2026-07-15, platform-hardening-and-copy-pass: sidecar
   freshness+supervision wave (frozen `:8093` union refused instead of
   republished as live, honest AIS status feed, both sidecars supervised on a

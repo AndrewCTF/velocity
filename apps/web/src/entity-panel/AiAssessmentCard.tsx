@@ -96,6 +96,12 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
   const propsRef = useRef({ kind, properties, altM });
   propsRef.current = { kind, properties, altM };
 
+  // The manual "↻ refresh" runs outside the effect, so its AbortController must
+  // be tracked to be cancelled when the selection changes — otherwise a slow
+  // refresh for entity A resolves after B is selected and paints A's brief into
+  // B's card (the effect path is already covered by its own cleanup abort).
+  const inflightRef = useRef<AbortController | null>(null);
+
   const run = (bypassCache: boolean, signal: AbortSignal): void => {
     if (!bypassCache) {
       const cached = briefCache.get(id);
@@ -155,6 +161,7 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
     return () => {
       window.clearTimeout(timer);
       aborter.abort();
+      inflightRef.current?.abort(); // cancel any manual refresh still in flight
     };
     // Deliberately keyed on id + enabled only — see propsRef above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,7 +171,9 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
 
   const refresh = (): void => {
     briefCache.delete(id);
+    inflightRef.current?.abort();
     const aborter = new AbortController();
+    inflightRef.current = aborter;
     run(true, aborter.signal);
   };
 

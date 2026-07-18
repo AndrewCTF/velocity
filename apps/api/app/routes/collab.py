@@ -90,9 +90,18 @@ def _ws_token(ws: WebSocket) -> str:
     )
 
 
+class _AclUnavailable(Exception):
+    """A configured doc-ACL store could not be reached or parsed. The live
+    clearance gate must fail CLOSED here — an under-cleared user must not join a
+    classified doc's channel just because the store hiccuped."""
+
+
 async def _doc_acl(token: str, doc: str) -> tuple[int, list[str]] | None:
-    """A doc's (classification, compartments) via the definer RPC, or None if the
-    doc does not exist yet (new doc) / the store is unreachable."""
+    """A doc's (classification, compartments) via the definer RPC, or None when
+    there is no ACL to consult: no Supabase store configured (single-tenant
+    API-key auth), or the doc has no ACL row yet (a new doc being created).
+    Raises _AclUnavailable when a configured store cannot be reached or parsed —
+    that is distinct from "new doc" and must fail closed, not open."""
     s = get_settings()
     if not s.supabase_url:
         return None
@@ -106,13 +115,15 @@ async def _doc_acl(token: str, doc: str) -> tuple[int, list[str]] | None:
     try:
         async with _client() as c:
             r = await c.post(url, json={"p_doc": doc}, headers=headers)
-    except Exception:  # noqa: BLE001 — store down → fail closed below
-        return None
-    if r.status_code != 200:
-        return None
-    rows = r.json()
+        if r.status_code != 200:
+            raise _AclUnavailable(f"acl rpc {r.status_code}")
+        rows = r.json()
+    except _AclUnavailable:
+        raise
+    except Exception as e:  # noqa: BLE001 — transport error or non-JSON body
+        raise _AclUnavailable() from e
     if not rows:
-        return None
+        return None  # doc has no ACL row yet → a new doc being created
     row = rows[0]
     return int(row.get("classification") or 0), list(row.get("compartments") or [])
 
@@ -127,9 +138,12 @@ async def _collab_join_allowed(ws: WebSocket, doc: str) -> bool:
     p = await principal_for_token(_ws_token(ws))
     if p is None:
         return False
-    acl = await _doc_acl(p.token, doc)
+    try:
+        acl = await _doc_acl(p.token, doc)
+    except _AclUnavailable:
+        return False  # store hiccup: fail CLOSED, don't leak a classified doc
     if acl is None:
-        return True  # new doc (or store unreachable) — creating, allow
+        return True  # no ACL to consult (single-tenant / new doc) — allow
     level, comps = acl
     return clf.can_read(p.clearance, list(p.compartments), level, comps)
 

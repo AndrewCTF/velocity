@@ -128,6 +128,17 @@ def _to_object(sit_id: str, body: SituationIn, ts: str) -> Object:
     )
 
 
+def _safe_float(v: Any, default: float) -> float:
+    """Coerce an unconstrained prop value to a positive float, defaulting on junk.
+    props is a user-writable blob (POST /api/ontology/object is keyless), so a
+    non-numeric radius_km must degrade to the default, not 500 the whole list."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return default
+    return f if (f == f and f > 0) else default  # reject NaN / non-positive
+
+
 def _from_object(obj: Object) -> Situation | None:
     """Adapt an ontology Object back to a Situation, or ``None`` if it isn't one."""
     props = obj.props or {}
@@ -141,16 +152,17 @@ def _from_object(obj: Object) -> Situation | None:
     _sv, _stt = props.get("severity"), props.get("status")
     _sev = _sv if _sv in ("critical", "high", "med", "low") else "med"
     _st = _stt if _stt in ("active", "monitoring", "resolved", "archived") else "active"
+    _upd = props.get("updated_at")  # str | None field; a non-string value raises
     return Situation(
         id=obj.id,
         name=str(props.get("name") or obj.id),
         severity=_sev,  # type: ignore[arg-type]
         status=_st,  # type: ignore[arg-type]
         centroid=centroid,
-        radius_km=float(props.get("radius_km") or 50.0),
+        radius_km=_safe_float(props.get("radius_km"), 50.0),
         summary=str(props.get("summary") or ""),
         report=str(props.get("report") or ""),
-        updated_at=props.get("updated_at"),
+        updated_at=_upd if isinstance(_upd, str) else None,
         created_at=obj.created_at,
     )
 

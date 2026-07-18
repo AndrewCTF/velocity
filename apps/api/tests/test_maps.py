@@ -94,6 +94,16 @@ def test_from_object_tolerates_malformed_state() -> None:
     assert sm.state.layers == [] and sm.state.viewport is None
 
 
+def test_from_object_tolerates_non_string_updated_at() -> None:
+    from app.intel.ontology import Object
+
+    # updated_at is str | None; a crafted int (props is a keyless user blob) would
+    # raise a pydantic ValidationError and 500 the whole /api/maps list. Coerce to None.
+    obj = Object(id="map:x", props={"kind": "map", "name": "m", "state": {}, "updated_at": 123})
+    sm = _from_object(obj)
+    assert sm is not None and sm.updated_at is None
+
+
 # ── keyless-local route contract ─────────────────────────────────────────────────
 
 

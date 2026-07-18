@@ -6,7 +6,7 @@
 // so the country's linked graph (country: -has_resource-> resource: -hosted_at->
 // domain:) lands in the Investigation canvas.
 
-import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { useSelection } from '../state/stores.js';
@@ -87,18 +87,31 @@ export function CountriesPanel(): JSX.Element {
       .catch((e: unknown) => setListError(e instanceof Error ? e.message : String(e)));
   }, []);
 
+  const latestCodeRef = useRef<string | null>(null);
+
   function selectCountry(code: string): void {
+    latestCodeRef.current = code;
     setSelected(code);
     setDetail(null);
     setDetailError(null);
     setIngestResult(null);
     setIngestError(null);
     setDetailLoading(true);
+    // Guard every state write against the CURRENT selection: click France then
+    // Germany quickly and, if France resolves last, its detail would otherwise
+    // paint under a Germany selection and Ingest (keyed off `selected`) would act
+    // on Germany with France's resources on screen.
     apiFetch(`/api/osint/countries/${code}`)
       .then((r) => (r.ok ? (r.json() as Promise<CountryDetail>) : Promise.reject(new Error(String(r.status)))))
-      .then(setDetail)
-      .catch((e: unknown) => setDetailError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setDetailLoading(false));
+      .then((d) => {
+        if (latestCodeRef.current === code) setDetail(d);
+      })
+      .catch((e: unknown) => {
+        if (latestCodeRef.current === code) setDetailError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (latestCodeRef.current === code) setDetailLoading(false);
+      });
   }
 
   async function ingest(): Promise<void> {

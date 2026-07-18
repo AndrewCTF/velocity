@@ -24,7 +24,10 @@ async def quakes(range: Range = Query("day")) -> dict[str, Any]:
     async def fetch() -> dict[str, Any]:
         url = UPSTREAM.format(range=range)
         r = await get_client().get(url)
-        if r.status_code != 200:
+        # A non-JSON 200 (CDN error page / rate-limit body) would raise out of the
+        # cache.get_or_fetch loader and 500 this sacred keyless layer; treat it
+        # like a bad status → 502 so the quakes layer degrades, never crashes.
+        if r.status_code != 200 or "json" not in r.headers.get("content-type", "").lower():
             raise HTTPException(status_code=502, detail=f"upstream {r.status_code}")
         data = r.json()
         # USGS returns FeatureCollection — pass-through.

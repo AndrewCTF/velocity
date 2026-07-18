@@ -61,7 +61,12 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
   // Hide every other (live) data source so the replay reads cleanly; remember
   // exactly which we hid so clear() restores them and nothing else.
   function hideLive(): void {
-    hiddenLive = [];
+    // Re-entrant safe: a second load() (two Pattern-of-life clicks with no exit
+    // between) must not lose the saved set. If we skip already-hidden sources
+    // while hiddenLive is freshly emptied, restoreLive() later has nothing to
+    // un-hide and the live globe stays blank until reload. Restore first, then
+    // re-capture whatever is currently visible.
+    restoreLive();
     for (let i = 0; i < viewer.dataSources.length; i++) {
       const d = viewer.dataSources.get(i);
       if (d === ds || !d.show) continue;

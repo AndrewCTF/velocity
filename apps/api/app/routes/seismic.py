@@ -40,7 +40,12 @@ async def emsc(
             return {"type": "FeatureCollection", "features": []}
         if r.status_code != 200:
             raise HTTPException(502, f"emsc upstream {r.status_code}")
-        j = r.json()
+        try:
+            j = r.json()
+        except ValueError as e:
+            # A 200 + non-JSON body (maintenance/rate-limit HTML) must degrade to a
+            # 502, not raise out of the loader and 500 this keyless route.
+            raise HTTPException(502, "emsc non-JSON body") from e
         feats: list[dict[str, Any]] = []
         for ev in j.get("features", []):
             props = ev.get("properties", {})

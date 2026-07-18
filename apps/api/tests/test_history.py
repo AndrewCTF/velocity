@@ -288,6 +288,50 @@ async def test_size_cap_drops_oldest_keeps_newest(tmp_path: pytest.TempPathFacto
 
 
 @pytest.mark.asyncio
+async def test_size_cap_ignores_reclaimable_free_pages(tmp_path: pytest.TempPathFactory) -> None:
+    """enforce_size_cap sizes off in-use bytes, not the un-vacuumed file. A prune
+    frees pages but (auto_vacuum is off) leaves the file at its high-water mark
+    until the caller VACUUMs. Sizing off the raw file would drop an extra oldest
+    slice the VACUUM was about to reclaim for free — chronically shortening the
+    replay window. Those reclaimable pages must NOT trigger a delete."""
+    db = str(tmp_path / "freelist.db")
+    _reset_module(db)
+    now = time.time()
+    # 5000 rows spaced 60 s apart span ~83 h — plenty of pages to leave a freelist.
+    for i in range(5000):
+        H._buffer.append(
+            ("aircraft", f"aircraft:f{i}", now - (5000 - i) * 60, float(i % 90), 50.0, 0.0, "{}")
+        )
+    rows, H._buffer = H._buffer, []
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, H._flush_sync, rows)
+
+    # Prune all but the newest ~60 rows: frees pages without shrinking the file.
+    deleted = await loop.run_in_executor(None, H.prune, 1)
+    assert deleted > 4000, "prune should have removed most rows"
+
+    con = H._connect()
+    try:
+        page_size = con.execute("PRAGMA page_size").fetchone()[0]
+        page_count = con.execute("PRAGMA page_count").fetchone()[0]
+        freelist = con.execute("PRAGMA freelist_count").fetchone()[0]
+    finally:
+        con.close()
+    in_use = (page_count - freelist) * page_size
+    file_size = await loop.run_in_executor(None, os.path.getsize, db)
+    assert freelist > 0, "prune must leave reclaimable free pages (auto_vacuum is off)"
+    assert file_size > in_use, "the un-vacuumed file must exceed in-use bytes"
+
+    # A cap strictly between in-use and the raw file size. The fixed code sees
+    # in_use <= cap and drops nothing; the old getsize code saw file > cap and
+    # would have deleted a chunk of the surviving history.
+    cap = (in_use + file_size) // 2
+    assert H.enforce_size_cap(cap) == 0, "must not delete data that fits once free pages reclaim"
+    # The cap itself still works: below in-use, it drops the oldest rows.
+    assert H.enforce_size_cap(in_use // 2) > 0, "a cap below in-use must still drop rows"
+
+
+@pytest.mark.asyncio
 async def test_timeseries_distinct_counts_and_buckets(tmp_path: pytest.TempPathFactory) -> None:
     """count_timeseries buckets by time and counts DISTINCT ids per kind — the
     metrics-over-time (§8) source. A duplicate id in the same bucket collapses to 1."""

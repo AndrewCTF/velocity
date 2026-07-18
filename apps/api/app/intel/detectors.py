@@ -27,7 +27,10 @@ def haversine_nm(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     dphi = math.radians(lat2 - lat1)
     dlmb = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
-    return (2 * r_m * math.asin(math.sqrt(a))) * _NM_PER_M
+    # Clamp before asin: floating-point error can push sqrt(a) just past 1.0 for a
+    # near-antipodal pair, and math.asin(>1) raises a domain ValueError (same guard
+    # as correlate/rules.py:273). Uncaught here it drops the whole behavioral sweep.
+    return (2 * r_m * math.asin(min(1.0, math.sqrt(a)))) * _NM_PER_M
 
 
 def _in_bbox(lon: float, lat: float, bbox: Bbox | None) -> bool:

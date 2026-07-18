@@ -44,6 +44,11 @@ def test_compute_endpoint_fails_closed_when_keyless_and_not_opted_in(monkeypatch
         r = c.post("/api/recon/jobs")
         assert r.status_code == 503
         assert "ALLOW_UNAUTHENTICATED" in r.json()["detail"]
+        # /api/imagery/splat launches a GPU 3DGS job just like /api/recon, so it
+        # must fail closed too (it was missing from _COMPUTE_PREFIXES).
+        rs = c.post("/api/imagery/splat?lat=0&lon=0&date=2026-01-01")
+        assert rs.status_code == 503
+        assert "ALLOW_UNAUTHENTICATED" in rs.json()["detail"]
         # The middleware is SELECTIVE: a public/keyless route stays open.
         assert c.get("/api/health").status_code == 200
 

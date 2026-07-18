@@ -332,3 +332,43 @@ def test_query_limit_capped(client: TestClient) -> None:
     # limit above the hard cap (200) must 422 at the route boundary.
     with _patch_snapshot():
         assert client.get("/api/intel/aircraft", params={"limit": 5000}).status_code == 422
+
+
+def test_narrative_cache_is_bounded() -> None:
+    # A stream of distinct entity ids must not grow the dossier-narrative cache
+    # without limit (it had no eviction). _narrative_cache_put caps it.
+    from app.routes import intel
+
+    intel._NARRATIVE_CACHE.clear()
+    try:
+        far_future = 10.0**12  # nothing expires during the test
+        for i in range(intel._NARRATIVE_CACHE_MAX + 50):
+            intel._narrative_cache_put(f"vessel:{i}", far_future, {"ok": True})
+        assert len(intel._NARRATIVE_CACHE) <= intel._NARRATIVE_CACHE_MAX
+    finally:
+        intel._NARRATIVE_CACHE.clear()
+
+
+def test_dossier_narrative_bounds_a_stalled_model(monkeypatch) -> None:
+    # A stalled reason-tier backend must not pin the worker past the edge budget:
+    # the route wraps the LLM call in asyncio.wait_for and degrades to "model
+    # unavailable" on timeout. Shrink the budget so the test is fast.
+    import asyncio
+
+    from app.routes import intel
+
+    monkeypatch.setattr(intel, "_NARRATIVE_LLM_BUDGET_S", 0.05)
+
+    async def _hang(*_a: object, **_k: object) -> object:
+        await asyncio.sleep(5)  # longer than the budget → wait_for fires
+        return {}, None
+
+    async def _doss(_bare: str) -> dict:
+        return {"track": [], "id": "x"}
+
+    monkeypatch.setattr(intel.llm, "chat_json", _hang)
+    monkeypatch.setattr(intel.dossier, "vessel_dossier", _doss)
+    intel._NARRATIVE_CACHE.clear()
+
+    out = asyncio.run(intel.intel_dossier_narrative(entity_id="vessel:1"))
+    assert out["ok"] is False and out["error"] == "model unavailable"

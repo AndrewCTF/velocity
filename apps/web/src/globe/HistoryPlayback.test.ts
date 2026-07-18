@@ -137,6 +137,31 @@ describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point t
     }
   });
 
+  it('re-entrant load then exit restores the live layers — two Pattern-of-life clicks must not blank the globe', async () => {
+    const { viewer } = fakeViewer();
+    // Two live layers already on the globe when replay starts.
+    const live1 = { show: true } as unknown as Cesium.DataSource;
+    const live2 = { show: true } as unknown as Cesium.DataSource;
+    viewer.dataSources.add(live1);
+    viewer.dataSources.add(live2);
+
+    const controller = installHistoryPlayback(viewer);
+
+    await controller.load(WINDOW_SEC); // first Pattern-of-life click
+    expect(live1.show).toBe(false);
+    expect(live2.show).toBe(false);
+
+    // Second click with no "◼ exit" between — load() runs again while active.
+    await controller.load(WINDOW_SEC, 'aircraft:ABC123');
+    expect(live1.show).toBe(false); // still hidden during replay
+
+    controller.clear(); // "◼ exit"
+    // Pre-fix, the second load wiped the saved set and these stayed false — the
+    // whole live globe blanked until a page reload.
+    expect(live1.show).toBe(true);
+    expect(live2.show).toBe(true);
+  });
+
   it('interpolates a midpoint position for BOTH aircraft and vessel (glide, not teleport-hold) — the sanctioned replay motion (docs/decisions.md 2026-07-11)', async () => {
     const { viewer, getDs } = fakeViewer();
     const controller = installHistoryPlayback(viewer);

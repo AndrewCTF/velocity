@@ -68,3 +68,15 @@ def test_haversine_known_distance():
     # 1 degree of latitude ≈ 60 nm
     nm = detectors.haversine_nm(0.0, 0.0, 0.0, 1.0)
     assert 59.0 < nm < 61.0
+
+
+def test_haversine_nm_handles_antipodal_without_domain_error() -> None:
+    import math
+
+    from app.intel.detectors import haversine_nm
+
+    # Antipodal points sit at the asin(1.0) boundary; float error can push the
+    # argument just past 1.0, which the min(1.0, ...) clamp absorbs. Must return a
+    # finite ~half-circumference distance (~10,800 nm), never a domain ValueError.
+    d = haversine_nm(0.0, 0.0, 180.0, 0.0)
+    assert math.isfinite(d) and 10_000 < d < 11_000

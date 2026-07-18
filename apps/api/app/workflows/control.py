@@ -124,6 +124,37 @@ def _block_private() -> bool:
     )
 
 
+# AWS exposes IMDSv2 over IPv6 at this fixed unique-local address. It is a
+# credential-leaking metadata endpoint, not a generic LAN host, so it is blocked
+# even though general ULA (fc00::/7, the IPv6 equivalent of a private 192.168.x
+# LAN) stays reachable under the BYO posture.
+_AWS_IMDS_V6 = ipaddress.ip_address("fd00:ec2::254")
+
+
+def _unwrap_mapped(addr: Any) -> Any:
+    """Unwrap an IPv4-mapped / 6to4 / Teredo IPv6 literal to its embedded IPv4
+    (older CPython does not delegate a mapped literal to the is_* flags), so
+    ``::ffff:169.254.169.254`` classifies as the IPv4 it really is."""
+    if isinstance(addr, ipaddress.IPv6Address):
+        embedded = addr.ipv4_mapped or addr.sixtofour
+        if embedded is None and addr.teredo is not None:
+            embedded = addr.teredo[1]
+        if embedded is not None:
+            return embedded
+    return addr
+
+
+def _is_metadata_ip(addr: Any) -> bool:
+    """True for a cloud-metadata / link-local address in EITHER family: IPv4
+    169.254.0.0/16 (``is_link_local`` — covers 169.254.169.254 and the ECS
+    169.254.170.2 endpoint), IPv6 link-local fe80::/10, and the AWS IPv6 IMDS
+    host fd00:ec2::254. IPv4-mapped IPv6 forms are unwrapped first so
+    ``[::ffff:169.254.169.254]`` is caught. General private LAN / loopback stay
+    open (the BYO posture) — only the credential-leaking surface is blocked."""
+    addr = _unwrap_mapped(addr)
+    return bool(addr.is_link_local or addr == _AWS_IMDS_V6)
+
+
 def _ip_is_private(ip: str) -> bool:
     """True for any non-public address. IPv4-in-IPv6 encodings are unwrapped
     before classifying (older CPython does not delegate a mapped literal to the
@@ -132,12 +163,7 @@ def _ip_is_private(ip: str) -> bool:
         addr: Any = ipaddress.ip_address(ip)
     except ValueError:
         return True  # unparseable → treat as unsafe
-    if isinstance(addr, ipaddress.IPv6Address):
-        embedded = addr.ipv4_mapped or addr.sixtofour
-        if embedded is None and addr.teredo is not None:
-            embedded = addr.teredo[1]
-        if embedded is not None:
-            addr = embedded
+    addr = _unwrap_mapped(addr)
     return (
         addr.is_private
         or addr.is_loopback
@@ -163,12 +189,13 @@ def _resolves_private(host: str) -> bool:
 
 
 def _is_link_local(host: str) -> bool:
-    """True if *host* is, or resolves to, an IPv4 link-local address
-    (169.254.0.0/16 — the cloud-metadata range, incl. 169.254.169.254). Kept
-    deliberately narrow: this is the one range a benign single-operator tool
-    never legitimately targets, and the one that leaks instance credentials.
-    Localhost/private LAN are intentionally NOT blocked (the operator's control
-    server is routinely on 127.0.0.1 or the LAN — see the module docstring)."""
+    """True if *host* is, or resolves to, a cloud-metadata / link-local address
+    in either family (see ``_is_metadata_ip``: IPv4 169.254.0.0/16, IPv6
+    fe80::/10, and the AWS IPv6 IMDS host fd00:ec2::254). Kept deliberately
+    narrow: these are the ranges a benign single-operator tool never legitimately
+    targets, and the ones that leak instance credentials. Localhost/private LAN
+    are intentionally NOT blocked (the operator's control server is routinely on
+    127.0.0.1 or the LAN — see the module docstring)."""
     candidates: list[str] = []
     try:
         ipaddress.ip_address(host)
@@ -183,7 +210,7 @@ def _is_link_local(host: str) -> bool:
             ip = ipaddress.ip_address(addr)
         except ValueError:
             continue
-        if isinstance(ip, ipaddress.IPv4Address) and ip in ipaddress.ip_network("169.254.0.0/16"):
+        if _is_metadata_ip(ip):
             return True
     return False
 
@@ -282,7 +309,7 @@ def _pin_http_url(url: str, headers: dict[str, str]) -> tuple[str, dict[str, str
             ip = ipaddress.ip_address(addr)
         except ValueError:
             continue
-        if isinstance(ip, ipaddress.IPv4Address) and ip in ipaddress.ip_network("169.254.0.0/16"):
+        if _is_metadata_ip(ip):
             return (
                 url,
                 headers,

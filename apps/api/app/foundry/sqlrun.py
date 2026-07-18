@@ -63,10 +63,14 @@ def _guard_query(query: str) -> str:
 
 
 def _cell(value: Any) -> Any:
+    if isinstance(value, bool):  # bool is an int subclass — store as 0/1
+        return int(value)
+    if isinstance(value, int) and not (-(2**63) <= value < 2**63):
+        # SQLite INTEGER is signed 64-bit; a larger Python int (a 20-digit id)
+        # overflows executemany. Store the oversize value as text, don't crash.
+        return str(value)
     if value is None or isinstance(value, (int, float, str)):
         return value
-    if isinstance(value, bool):  # pragma: no cover - bool is int subclass
-        return int(value)
     try:
         return json.dumps(value, ensure_ascii=False, default=str)
     except (TypeError, ValueError):
@@ -83,7 +87,9 @@ def _load_table(conn: sqlite3.Connection, name: str, rows: list[dict[str, Any]])
                 cols.append(key)
     if not cols:
         cols = ["value"]
-    col_sql = ", ".join(f'"{c}"' for c in cols)
+    # Double any embedded quote so a column literally named a"b is a valid SQL
+    # identifier ("a""b") instead of malformed DDL that raises out of the load.
+    col_sql = ", ".join('"' + c.replace('"', '""') + '"' for c in cols)
     conn.execute(f'CREATE TABLE "{name}" ({col_sql})')
     placeholders = ", ".join("?" for _ in cols)
     conn.executemany(
@@ -109,8 +115,14 @@ def run_sql(
     conn = sqlite3.connect(":memory:")
     timer: threading.Timer | None = None
     try:
-        for name, rows in tables.items():
-            _load_table(conn, slug_ident(name), rows)
+        try:
+            for name, rows in tables.items():
+                _load_table(conn, slug_ident(name), rows)
+        except (sqlite3.Error, ValueError, OverflowError) as exc:
+            # Loading runs before the inner try below, so without this a malformed
+            # identifier or an out-of-range value would escape run_sql unwrapped
+            # and 500 the SQL route instead of returning a clean SqlError (4xx).
+            raise SqlError(f"could not load input table: {exc}") from exc
         conn.execute("PRAGMA query_only=ON")
         timer = threading.Timer(max(0.1, timeout_s), conn.interrupt)
         timer.start()

@@ -48,6 +48,21 @@ async def test_join_gate_new_doc_allowed(monkeypatch) -> None:
     assert await collab_mod._collab_join_allowed(_FakeWS(), "doc") is True  # type: ignore[arg-type]
 
 
+async def test_join_gate_fails_closed_when_acl_store_unavailable(monkeypatch) -> None:
+    # A store hiccup (RPC down / non-200 / non-JSON) must DENY the join — an
+    # under-cleared user must not slip into a classified doc during an outage.
+    # Previously _doc_acl returned None for a store error, indistinguishable from
+    # a brand-new doc, so the gate failed OPEN.
+    monkeypatch.setattr(collab_mod, "_auth_enabled", lambda s: True)
+    monkeypatch.setattr(collab_mod, "principal_for_token", _async(Principal("u", "tok", clearance=0)))
+
+    async def _raise(*a: object, **k: object) -> object:
+        raise collab_mod._AclUnavailable()
+
+    monkeypatch.setattr(collab_mod, "_doc_acl", _raise)
+    assert await collab_mod._collab_join_allowed(_FakeWS(), "doc") is False  # type: ignore[arg-type]
+
+
 async def test_join_gate_denies_no_principal(monkeypatch) -> None:
     monkeypatch.setattr(collab_mod, "_auth_enabled", lambda s: True)
     monkeypatch.setattr(collab_mod, "principal_for_token", _async(None))

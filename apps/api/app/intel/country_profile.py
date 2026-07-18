@@ -29,6 +29,7 @@ client would hang.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -42,6 +43,9 @@ _SPARQL = "https://query.wikidata.org/sparql"
 _PROFILE_TTL = 86400.0  # 24h — leadership/structure changes are rare
 _SECURITY_TTL = 900.0  # 15 min — matches the GDELT/UCDP layer cadence
 _BRIEF_TTL = 600.0  # 10 min
+# Total wall-clock cap on the brief ladder, under Cloudflare's 100 s edge limit —
+# the per-backend timeout_s below bounds each rung, this bounds their sum.
+_BRIEF_LLM_BUDGET_S = 90.0
 
 _MAX_BRANCHES = 12
 _MAX_EVENTS = 25
@@ -449,20 +453,26 @@ async def country_brief(
         }
         import json as _json
 
-        res = await llm.chat(
-            [
-                {"role": "system", "content": llm.with_prose_style(_BRIEF_SYS)},
-                {"role": "user", "content": _json.dumps(payload, ensure_ascii=False)},
-            ],
-            tier="fast",
-            max_tokens=900,
-            timeout_s=60.0,
-            label="country.brief",
-        )
+        try:
+            res = await asyncio.wait_for(
+                llm.chat(
+                    [
+                        {"role": "system", "content": llm.with_prose_style(_BRIEF_SYS)},
+                        {"role": "user", "content": _json.dumps(payload, ensure_ascii=False)},
+                    ],
+                    tier="fast",
+                    max_tokens=900,
+                    timeout_s=60.0,
+                    label="country.brief",
+                ),
+                timeout=_BRIEF_LLM_BUDGET_S,
+            )
+        except TimeoutError:
+            return {"ok": False, "reason": "no LLM backend configured", "iso3": iso3u, "name": name}
         if not res.ok:
             return {
                 "ok": False,
-                "reason": res.error or "no LLM backend configured",
+                "reason": "no LLM backend configured",
                 "iso3": iso3u,
                 "name": name,
             }

@@ -35,6 +35,50 @@ def test_unknown_job_404(client: TestClient) -> None:
     assert client.get("/api/recon/jobs/deadbeef/events").status_code == 404
 
 
+def test_result_download_denies_non_owner(monkeypatch) -> None:
+    # result.ply/spz/camera.json must be owner-scoped like get_job (issue #15), so
+    # a leaked/guessed job id can't pull another analyst's reconstruction while the
+    # job is still tracked in _JOBS.
+    import pytest
+    from fastapi import HTTPException
+
+    recon._JOBS["abcdef12"] = {"id": "abcdef12", "owner": "alice", "status": "done", "created": 0.0}
+    try:
+        monkeypatch.setattr(recon, "_owner_key", lambda req: "bob")
+        with pytest.raises(HTTPException) as e:
+            recon._owned_job_dir("abcdef12", None)  # type: ignore[arg-type]
+        assert e.value.status_code == 404
+        # The owner still gets the dir.
+        monkeypatch.setattr(recon, "_owner_key", lambda req: "alice")
+        assert str(recon._owned_job_dir("abcdef12", None)).endswith("abcdef12")  # type: ignore[arg-type]
+        # A job not tracked (evicted / restart-surviving artifact, no owner record
+        # left) falls through to disk — the metadata routes degrade the same way.
+        assert str(recon._owned_job_dir("beefcafe", None)).endswith("beefcafe")  # type: ignore[arg-type]
+    finally:
+        recon._JOBS.pop("abcdef12", None)
+
+
 def test_create_requires_files(client: TestClient) -> None:
     # File(...) is required → FastAPI 422 when absent.
     assert client.post("/api/recon/jobs").status_code == 422
+
+
+def test_register_sat_job_cleans_up_dir_on_missing_rpc(monkeypatch, tmp_path) -> None:
+    # A .tif without its rpc_*.txt sidecar raises 502 AFTER the job dir + chips are
+    # created but BEFORE the job is registered in _JOBS, so _evict_jobs could never
+    # reclaim it. The setup must clean up its own partial dir instead of leaking.
+    import pytest
+    from fastapi import HTTPException
+
+    sat_root = tmp_path / "sat"
+    jobs_root = tmp_path / "jobs"
+    (sat_root / "ds1").mkdir(parents=True)
+    (sat_root / "ds1" / "a.tif").write_bytes(b"II*\x00")  # a .tif, no rpc_a.txt beside it
+    jobs_root.mkdir()
+    monkeypatch.setattr(recon, "_SAT_ROOT", sat_root)
+    monkeypatch.setattr(recon, "_JOBS_ROOT", jobs_root)
+
+    with pytest.raises(HTTPException) as exc:
+        recon.register_sat_job("ds1")
+    assert exc.value.status_code == 502
+    assert list(jobs_root.iterdir()) == []  # no orphaned job dir left behind
