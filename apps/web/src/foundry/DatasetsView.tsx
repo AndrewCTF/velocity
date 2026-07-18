@@ -92,7 +92,18 @@ function ChecksSection({ datasetId }: { datasetId: string }): JSX.Element {
   const [severity, setSeverity] = useState<CheckSeverity>('warn');
 
   useEffect(() => {
-    void loadChecks(datasetId).then(() => void getCheckResults(datasetId).then(setResults));
+    // Guard against a superseded dataset landing last (A -> B -> A rapid switch),
+    // matching the cancelled-flag pattern the sibling effects in this file use.
+    let cancelled = false;
+    void loadChecks(datasetId).then(() => {
+      if (cancelled) return;
+      void getCheckResults(datasetId).then((r) => {
+        if (!cancelled) setResults(r);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId]);
 
