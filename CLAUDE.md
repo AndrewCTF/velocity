@@ -155,7 +155,7 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1745 passed + 1 skipped** (skip = opt-in live probe; measured
+  Baseline: **1747 passed + 1 skipped** (skip = opt-in live probe; measured
   2026-07-18, branch overnight-hardening-2026-07-18, overnight bug-hunt wave
   (SSRF/replay/history-cap/entity-panel/feed-guards + foundry/collab/recon/
   ontology + correlation-loop/weather/detector hardening)). Never commit below the baseline you inherited. When you raise it,

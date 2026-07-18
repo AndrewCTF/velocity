@@ -745,10 +745,10 @@ The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
 three-line fact there. One line per wave, newest first — when the CLAUDE.md
 number changes, the displaced line lands here.
 
-- **1745 +1 skip** — 2026-07-18, overnight-hardening-2026-07-18: overnight
-  bug-hunt wave. Three audit rounds (security/backend/frontend, then
-  ontology/foundry/collab/recon/imagery, then alerts/correlate/weather + the
-  remaining FE panels). Third round added: correlation ingest loops surviving a
+- **1747 +1 skip** — 2026-07-18, overnight-hardening-2026-07-18: overnight
+  bug-hunt wave. Four audit rounds (security/backend/frontend, then
+  ontology/foundry/collab/recon/imagery, then alerts/correlate/weather + FE
+  panels, then the AI/LLM route + MCP layer). Third round added: correlation ingest loops surviving a
   non-JSON body (were killed permanently → blind to 7500/7600/7700 squawks),
   weather/seismic/cams parse guards, a haversine domain-error clamp, a bounded
   geofence-state dict, and three more cross-selection state leaks (CoaCards filing
