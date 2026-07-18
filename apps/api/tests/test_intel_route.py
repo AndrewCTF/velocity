@@ -332,3 +332,18 @@ def test_query_limit_capped(client: TestClient) -> None:
     # limit above the hard cap (200) must 422 at the route boundary.
     with _patch_snapshot():
         assert client.get("/api/intel/aircraft", params={"limit": 5000}).status_code == 422
+
+
+def test_narrative_cache_is_bounded() -> None:
+    # A stream of distinct entity ids must not grow the dossier-narrative cache
+    # without limit (it had no eviction). _narrative_cache_put caps it.
+    from app.routes import intel
+
+    intel._NARRATIVE_CACHE.clear()
+    try:
+        far_future = 10.0**12  # nothing expires during the test
+        for i in range(intel._NARRATIVE_CACHE_MAX + 50):
+            intel._narrative_cache_put(f"vessel:{i}", far_future, {"ok": True})
+        assert len(intel._NARRATIVE_CACHE) <= intel._NARRATIVE_CACHE_MAX
+    finally:
+        intel._NARRATIVE_CACHE.clear()

@@ -676,3 +676,19 @@ def test_models_root_created_with_restrictive_perms() -> None:
     assert root.is_dir()
     mode = oct(os.stat(root).st_mode & 0o777)
     assert mode == oct(0o700)
+
+
+def test_run_job_errors_the_job_on_mkdir_failure(monkeypatch, tmp_path) -> None:
+    # mkdir ran before the try, so a failure killed the fire-and-forget task and
+    # left the job stuck in "queued". It must set status=error instead.
+    import asyncio
+
+    from app.localllm import manager
+
+    a_file = tmp_path / "afile"
+    a_file.write_text("x")  # a FILE — so (a_file / key).mkdir raises NotADirectoryError
+    monkeypatch.setattr(manager, "models_root", lambda: a_file)
+    job = manager.Job(job_id="j1", repo_id="unsloth/x", quant="Q4", key="k1")
+    asyncio.run(manager._run_job(job, {}))
+    assert job.status == "error"
+    assert "model directory" in (job.error or "")
