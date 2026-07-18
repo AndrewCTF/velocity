@@ -745,6 +745,18 @@ The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
 three-line fact there. One line per wave, newest first — when the CLAUDE.md
 number changes, the displaced line lands here.
 
+- **1741 +1 skip** — 2026-07-18, overnight-hardening-2026-07-18: overnight
+  bug-hunt wave. Two audit rounds (security/backend/frontend, then
+  ontology/foundry/collab/recon/imagery). Fixed IPv6+mapped SSRF metadata bypass
+  in the workflow HTTP guard, replay-exit blanking the live globe, history
+  byte-cap sizing off the un-vacuumed file, three entity-panel cross-selection
+  state leaks, three feed-parser trust-boundary crashes, the `/api/imagery/splat`
+  compute fail-closed gap, situations/maps 500 on crafted ontology props, collab
+  clearance failing OPEN on an ACL-store hiccup, recon result downloads missing
+  the owner check, foundry join-fanout OOM + unhashable group keys, the foundry
+  SQL-console 500-on-bad-input, the news og:image SSRF rebinding TOCTOU, a
+  spurious 500 when the ontology soft-cap VACUUM hits a lock, and a dropped
+  removal-tombstone provenance gap.
 - **1719 +1 skip** — 2026-07-15, platform-hardening-and-copy-pass: sidecar
   freshness+supervision wave (frozen `:8093` union refused instead of
   republished as live, honest AIS status feed, both sidecars supervised on a
