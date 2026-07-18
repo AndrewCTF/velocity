@@ -73,7 +73,7 @@ export function LeftIconRail({
     <div className="relative h-full" role="toolbar" aria-label={ariaLabel}>
       {/* 44px icon column (in flow). Scrolls internally when the item list is
           taller than the viewport (short screens) so no icon is clipped. */}
-      <div className="w-11 h-full min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center bg-bg-1 py-1">
+      <div className="w-11 h-full min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center bg-[var(--panel-bg)] py-1">
         {primary.map(btn)}
         {more.length > 0 && <div className="my-1 h-px w-6 bg-line-2" />}
         {more.map(btn)}
@@ -81,10 +81,10 @@ export function LeftIconRail({
       {/* flyout floats over the map to the right of the rail (design §6.1) */}
       {active && (
         <div
-          className="absolute left-full top-0 h-full w-[300px] bg-bg-1 border-r border-line-2 flex flex-col z-[var(--z-rail)] shadow-[6px_0_22px_-12px_rgba(0,0,0,0.6)]"
+          className="absolute left-full top-0 h-full w-[300px] bg-[var(--panel-bg)] border-r border-line-2 flex flex-col z-[var(--z-rail)] shadow-[6px_0_22px_-12px_rgba(0,0,0,0.6)]"
         >
           <div className="flex items-center justify-between px-3 h-8 shrink-0 border-b border-line-2">
-            <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-1 flex items-center gap-1.5">
+            <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-0 flex items-center gap-1.5">
               <Icon name={active.icon} className="w-3.5 h-3.5" />
               {active.label}
             </span>

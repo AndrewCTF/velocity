@@ -10,6 +10,10 @@
   --bg-2: #282623;
   --bg-3: #322f2b;
   --bg-4: #3f3b36;
+  /* left tool panels (icon rail + flyout) — a neutral dark grey, deliberately
+     cooler/greyer than the warm substrate so the panels read as their own
+     surface. Light theme keeps the white panel below. */
+  --panel-bg: #26282c;
   /* hairlines — warm white; a notch stronger since the lighter bg eats alpha */
   --line: rgba(255, 246, 234, 0.08);
   --line-2: rgba(255, 246, 234, 0.15);
@@ -124,6 +128,7 @@
   --bg-2: #f3f5f8;
   --bg-3: #e7ebf0;
   --bg-4: #d9dfe6;
+  --panel-bg: #ffffff;
   --line: rgba(15, 22, 32, 0.1);
   --line-2: rgba(15, 22, 32, 0.16);
   --txt-0: #10151c;

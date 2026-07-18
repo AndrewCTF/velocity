@@ -9,10 +9,11 @@
 import type { CSSProperties, ReactNode } from 'react';
 
 // ── section divider label (.seclbl) ────────────────────────────────────────
-// Section title + optional count. Sentence case (frontend.md §type-scale
-// mandates "sentence case everywhere except machine codes"); the old
-// uppercase + 0.09em tracking read as "AI-dashboard" chrome. A hair more weight
-// carries the structural role now that it isn't shouting in caps.
+// Section title + optional count, rendered as a styled header BAR so every
+// panel's sections read the same way as the Layers folder headers: a subtle
+// accent-tinted fill + a left accent edge + a bright title. Sentence case
+// (frontend.md §type-scale mandates "sentence case everywhere except machine
+// codes"); the old uppercase + 0.09em tracking read as "AI-dashboard" chrome.
 export function SectionLabel({
   title,
   count,
@@ -25,10 +26,17 @@ export function SectionLabel({
   style?: CSSProperties;
 }): JSX.Element {
   return (
-    <div className={`flex items-center justify-between gap-2 ${className}`} style={style}>
-      <span className="text-[12px] font-semibold text-txt-1">{title}</span>
+    <div
+      className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-sm border-l-[3px] ${className}`}
+      style={{
+        borderLeftColor: 'var(--accent)',
+        background: 'color-mix(in srgb, var(--accent) 12%, var(--panel-bg))',
+        ...style,
+      }}
+    >
+      <span className="text-[12px] font-semibold text-txt-0">{title}</span>
       {count !== undefined && count !== '' && (
-        <span className="mono text-[11px] text-txt-3 tabular-nums">{count}</span>
+        <span className="mono text-[11px] text-txt-2 tabular-nums">{count}</span>
       )}
     </div>
   );
