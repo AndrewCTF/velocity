@@ -217,7 +217,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
   ];
 
   return (
-    <div className="p-3 space-y-2.5">
+    <div className="p-3 space-y-3.5">
       <SectionLabel title="Layers" count={`${layers.length} REG`} />
 
       {/* Filter — find a layer without hunting through folders. */}
@@ -279,13 +279,13 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
             <button
               type="button"
               onClick={() => setCollapsed((c) => ({ ...c, [group]: !c[group] }))}
-              className="group flex items-center gap-1.5 w-full text-left border-t border-[rgba(255,255,255,0.06)] pt-1.5 hover:border-accent-line/40"
+              className="group flex items-center gap-1.5 w-full text-left border-t border-[rgba(255,255,255,0.1)] pt-3 hover:border-accent-line/40"
             >
               {/* Sequence number — Gotham numbered-group idiom */}
               <span className="mono text-[10px] tabular-nums text-txt-4 group-hover:text-accent shrink-0 w-[14px]">
                 {seq}
               </span>
-              <span className="mono text-[10px] tracking-[0.9px] uppercase text-txt-2 group-hover:text-accent">
+              <span className="mono text-[11px] font-semibold tracking-[0.11em] uppercase text-txt-1 group-hover:text-accent">
                 {GROUP_LABEL[group] ?? group}
               </span>
               <span className="flex-1 h-px bg-line" />
@@ -306,7 +306,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
               </span>
             </button>
             {!isCollapsed && (
-              <ul className="mt-0.5">
+              <ul className="mt-1.5">
                 {list.map((l) => {
                   const enabled = registry.isEnabled(l.id);
                   const feed = feeds[l.id];
@@ -316,14 +316,14 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                   return (
                     <li
                       key={l.id}
-                      className="py-[5px] border-b border-[rgba(255,255,255,0.035)]"
+                      className="py-2 border-b border-[rgba(255,255,255,0.07)]"
                     >
                       <div className="flex items-center gap-2">
                         <span
                           className={`h-[9px] w-[9px] rounded-sm shrink-0 ${STATUS_DOT[status] ?? 'bg-txt-3'}`}
                           aria-hidden="true"
                         />
-                        <span className="text-txt-1 text-[11px] flex-1 truncate" title={l.title}>
+                        <span className="text-txt-1 text-[12px] flex-1 truncate" title={l.title}>
                           {l.title}
                         </span>
                         {enabled && (
@@ -355,7 +355,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                           </span>
                         </div>
                       )}
-                      <div className="pl-[17px] mt-0.5">
+                      <div className="pl-[17px] mt-1">
                         <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3">
                           {l.auth} · {l.refresh.ttlSec ? `${l.refresh.ttlSec}s` : l.refresh.mode}
                         </span>

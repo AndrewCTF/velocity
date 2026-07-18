@@ -23,7 +23,7 @@ export function LayerCatalog({ registry }: { registry: LayerRegistry; viewer?: C
   useEffect(() => registry.subscribe(force), [registry]);
 
   return (
-    <div className="p-2 flex flex-col gap-1">
+    <div className="p-2 flex flex-col gap-2">
       {MAP_LAYER_FOLDERS.map((folder) => (
         <Folder key={folder.id} folder={folder} registry={registry} />
       ))}
@@ -36,7 +36,7 @@ function Folder({ folder, registry }: { folder: CatalogFolder; registry: LayerRe
   const { on, total } = folderCounts(registry, folder);
   return (
     <div className="rounded-sm border border-line/60 overflow-hidden">
-      <div className="flex items-center gap-1.5 px-2 h-8 bg-bg-1">
+      <div className="flex items-center gap-1.5 px-2 h-9 bg-bg-1">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -45,7 +45,7 @@ function Folder({ folder, registry }: { folder: CatalogFolder; registry: LayerRe
         >
           <Icon name={open ? 'chevron-down' : 'chevron-right'} className="w-3 h-3 shrink-0 text-txt-3" />
           <Icon name={folder.icon} className="w-3.5 h-3.5 shrink-0 text-txt-2" />
-          <span className="font-label uppercase tracking-[0.6px] text-[11px] truncate">{folder.label}</span>
+          <span className="font-label font-semibold uppercase tracking-[0.8px] text-[13px] truncate">{folder.label}</span>
         </button>
         <span className={`mono text-[10px] tabular-nums ${on > 0 ? 'text-accent' : 'text-txt-3'}`}>
           {on}/{total}
@@ -70,18 +70,26 @@ function Folder({ folder, registry }: { folder: CatalogFolder; registry: LayerRe
                 key={row.label}
                 type="button"
                 onClick={() => toggleRow(registry, row)}
-                className="flex items-center gap-2 w-full px-2.5 py-1.5 text-left hover:bg-bg-2 border-t border-line/40"
+                className={`flex items-center gap-2 w-full px-2.5 py-2 text-left border-t border-line/50 border-l-2 transition-colors ${
+                  en ? 'border-l-accent bg-accent-dim/30 hover:bg-accent-dim/50' : 'border-l-transparent hover:bg-bg-2'
+                }`}
                 aria-pressed={en}
               >
                 <span
                   className={`w-2 h-2 rounded-full shrink-0 ${en ? 'bg-accent' : 'bg-txt-4'}`}
                   style={en ? { boxShadow: '0 0 6px var(--accent)' } : undefined}
                 />
-                <Icon name={row.icon} className={`w-3.5 h-3.5 shrink-0 ${en ? 'text-txt-1' : 'text-txt-3'}`} />
-                <span className={`text-[11px] flex-1 truncate ${en ? 'text-txt-0' : 'text-txt-2'}`}>{row.label}</span>
-                <span className={`mono text-[10px] uppercase tracking-[0.4px] ${en ? 'text-accent' : 'text-txt-4'}`}>
-                  {en ? 'on' : 'off'}
+                <Icon name={row.icon} className={`w-4 h-4 shrink-0 ${en ? 'text-accent' : 'text-txt-3'}`} />
+                <span className={`text-[12px] flex-1 truncate ${en ? 'text-txt-0 font-medium' : 'text-txt-2'}`}>
+                  {row.label}
                 </span>
+                {en ? (
+                  <span className="mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-[1px] rounded-sm border border-accent-line bg-accent-dim text-accent shrink-0">
+                    on
+                  </span>
+                ) : (
+                  <span className="mono text-[10px] uppercase tracking-[0.4px] text-txt-4 shrink-0">off</span>
+                )}
               </button>
             );
           })}

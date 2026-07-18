@@ -119,8 +119,10 @@ function PredictedMotionBadge(): JSX.Element | null {
   // The console home ("/") has a ~158px timeline footer; sit above it so the badge
   // never overlaps the lane labels. The 2D route has a clear bottom.
   const bottomClass = loc.pathname === '/' ? 'bottom-[172px]' : 'bottom-2';
+  // Centered so it never sits under the left tool flyout (Layers/Feeds/etc.),
+  // which overlays the map's bottom-left corner where this used to pin.
   return (
-    <div className={`absolute ${bottomClass} left-2 z-[var(--z-dock)] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5`}>
+    <div className={`absolute ${bottomClass} left-1/2 -translate-x-1/2 z-[var(--z-dock)] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5`}>
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
       Predicted motion: aircraft positions estimated between ADS-B fixes
     </div>
