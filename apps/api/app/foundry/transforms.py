@@ -12,15 +12,26 @@ from __future__ import annotations
 import ast
 import calendar
 import functools
+import json
 import re
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from app.foundry.store import FoundryError
+from app.foundry.store import MAX_ROWS_PER_DATASET, FoundryError
 
 Row = dict[str, Any]
+
+
+def _hashable(v: Any) -> Any:
+    """A stable, hashable form of a possibly-nested cell value. group_by / join /
+    pivot keys can carry a JSON list or dict (NDJSON columns), which cannot be a
+    dict key — canonicalize those to a string so one nested value does not raise
+    TypeError and abort the whole build (these steps aren't row-quarantined)."""
+    if isinstance(v, (list, dict)):
+        return json.dumps(v, sort_keys=True, default=str)
+    return v
 
 # ── safe expression evaluator ─────────────────────────────────────────────────
 
@@ -565,11 +576,11 @@ def _step_join(rows: list[Row], step: dict[str, Any], provider: DatasetProvider)
     how = step.get("how", "left")
     index: dict[Any, list[Row]] = {}
     for rr in right_rows:
-        index.setdefault(rr.get(right_on), []).append(rr)
+        index.setdefault(_hashable(rr.get(right_on)), []).append(rr)
     right_cols = list(right_rows[0].keys()) if right_rows else []
     out: list[Row] = []
     for r in rows:
-        matches = index.get(r.get(on))
+        matches = index.get(_hashable(r.get(on)))
         if not matches:
             if how == "inner":
                 continue
@@ -579,6 +590,16 @@ def _step_join(rows: list[Row], step: dict[str, Any], provider: DatasetProvider)
             continue
         for match in matches:
             out.append({**match, **r})
+        # A low-cardinality join key fans out to len(left) * len(matches) rows and
+        # the dataset row cap is only checked AFTER run_steps returns — so bound
+        # the materialized product here, or a join OOMs the whole API before the
+        # cap ever runs. Checked per left-row (worst case one extra key's matches).
+        if len(out) > MAX_ROWS_PER_DATASET:
+            raise FoundryError(
+                422,
+                f"join fan-out exceeded the {MAX_ROWS_PER_DATASET} row cap "
+                "(low-cardinality join key?)",
+            )
     return out
 
 
@@ -587,7 +608,7 @@ def _step_aggregate(rows: list[Row], step: dict[str, Any]) -> list[Row]:
     aggs: dict[str, str] = step["aggs"]
     groups: dict[tuple[Any, ...], list[Row]] = {}
     for r in rows:
-        key = tuple(r.get(g) for g in group_by)
+        key = tuple(_hashable(r.get(g)) for g in group_by)
         groups.setdefault(key, []).append(r)
     out: list[Row] = []
     for key, members in groups.items():
@@ -767,7 +788,7 @@ def _step_pivot(rows: list[Row], step: dict[str, Any]) -> list[Row]:
     seen: set[str] = set()
     groups: dict[tuple[Any, ...], dict[str, list[Any]]] = {}
     for r in rows:
-        key = tuple(r.get(i) for i in index)
+        key = tuple(_hashable(r.get(i)) for i in index)
         pv = r.get(column)
         pvs = "" if pv is None else str(pv)
         if pvs not in seen:

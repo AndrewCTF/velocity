@@ -320,6 +320,47 @@ def test_step_join_multi_match_fans_out_rows() -> None:
     assert out_left_unmatched == [{"port": None, "id": 2, "country": "US"}]
 
 
+def test_step_join_fanout_is_capped(monkeypatch) -> None:
+    # A low-cardinality key fans out len(left) * len(matches) rows, and the
+    # dataset row cap is only checked AFTER run_steps — so the join itself must
+    # bound the product or it OOMs the API. Shrink the cap to make the test cheap.
+    from app.foundry import transforms as tf
+
+    monkeypatch.setattr(tf, "MAX_ROWS_PER_DATASET", 10)
+    right = [{"k": "x", "v": i} for i in range(8)]  # 8 matches for key "x"
+    left = [{"id": i, "k": "x"} for i in range(5)]  # 5 * 8 = 40 rows > 10
+    with pytest.raises(FoundryError) as exc:
+        run_steps(
+            [{"type": "join", "right": "r", "on": "k", "how": "left"}], left, lambda _: right
+        )
+    assert exc.value.status_code == 422
+    assert "fan-out" in exc.value.detail
+
+
+def test_step_aggregate_and_join_tolerate_nested_key_value() -> None:
+    # A group_by / join column carrying a JSON list is unhashable as a dict key;
+    # it must be canonicalized, not raise TypeError and abort the whole build.
+    rows = [
+        {"tags": ["a", "b"], "speed": 10},
+        {"tags": ["a", "b"], "speed": 20},
+        {"tags": ["c"], "speed": 5},
+    ]
+    out = run_steps(
+        [{"type": "aggregate", "group_by": ["tags"], "aggs": {"n": "count", "total": "sum:speed"}}],
+        rows,
+        _provider_empty,
+    )
+    assert len(out) == 2  # two distinct tag-lists → two groups, no crash
+    assert sorted(r["n"] for r in out) == [1, 2]
+    # The same nested value on both sides of a join still matches.
+    joined = run_steps(
+        [{"type": "join", "right": "r", "on": "tags", "how": "inner"}],
+        [{"id": 1, "tags": ["a", "b"]}],
+        lambda _: [{"tags": ["a", "b"], "region": "EU"}],
+    )
+    assert len(joined) == 1 and joined[0]["region"] == "EU"
+
+
 def test_step_union() -> None:
     def provider(dataset_id: str) -> list[dict]:
         return [{"id": 99, "name": "extra"}]
