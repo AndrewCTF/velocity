@@ -529,14 +529,23 @@ class SqliteRegistry(_GraphWalk):
         and is kept — the roadmap guard requires two sources to coexist.
         """
         encoded = _canon(value)
+        is_removal = bool(isinstance(derivation, dict) and derivation.get("op") == "remove")
         last = con.execute(
-            "SELECT value, source FROM assertions"
+            "SELECT value, source, derivation FROM assertions"
             " WHERE user_id=? AND object_id=? AND prop=?"
             " ORDER BY observed_at DESC, id DESC LIMIT 1",
             (self.ctx.user_id, object_id, prop),
         ).fetchone()
         if last is not None and last[0] == encoded and last[1] == source:
-            return
+            # A removal tombstone encodes value=None as "null", the same as an
+            # explicit note=null write — but they are different facts, so the
+            # tombstone must not be deduped away against a prior null value (else
+            # the removal never lands in the append-only provenance trail). Only a
+            # true duplicate (same value, source, AND removal-ness) is dropped.
+            last_deriv = json.loads(last[2]) if last[2] else None
+            last_removal = bool(isinstance(last_deriv, dict) and last_deriv.get("op") == "remove")
+            if last_removal == is_removal:
+                return
         con.execute(
             "INSERT INTO assertions (user_id, object_id, prop, value, source,"
             " confidence, observed_at, valid_until, derivation)"
