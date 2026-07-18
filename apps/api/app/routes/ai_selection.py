@@ -58,6 +58,9 @@ _MAX_CONTEXT_STRING = 320
 # to survive that preamble and still answer; 768 leaves room for both the
 # preamble and the longer structured markdown brief.
 _MAX_TOKENS = 768
+# Total wall-clock cap on the selection ladder so a stalled backend can't pin the
+# worker past the 100 s edge limit (the LLM call itself is otherwise unbounded).
+_SELECTION_LLM_BUDGET_S = 60.0
 
 
 class BriefIn(BaseModel):
@@ -360,15 +363,22 @@ async def post_selection_brief(
             context_json = json.dumps(context, default=str, separators=(",", ":"))
             user += f"\n\nENRICHMENT:\n{context_json}"
         started = time.monotonic()
-        res = await llm.chat(
-            [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            tier="selection",
-            max_tokens=_MAX_TOKENS,
-            label="ai.selection_brief",
-        )
+        try:
+            res = await asyncio.wait_for(
+                llm.chat(
+                    [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                    tier="selection",
+                    max_tokens=_MAX_TOKENS,
+                    label="ai.selection_brief",
+                ),
+                timeout=_SELECTION_LLM_BUDGET_S,
+            )
+        except TimeoutError as e:
+            raise HTTPException(status_code=502, detail="AI assessment unavailable") from e
         latency_ms = round((time.monotonic() - started) * 1000)
         if not res.ok:
-            raise HTTPException(status_code=502, detail=res.error or "selection brief failed")
+            # Never surface the raw backend error string to a client (copy rule).
+            raise HTTPException(status_code=502, detail="AI assessment unavailable")
         return {
             "ok": True,
             "text": res.text,

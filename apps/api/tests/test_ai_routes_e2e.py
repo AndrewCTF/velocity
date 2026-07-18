@@ -116,6 +116,29 @@ def test_selection_brief_access_path(client: TestClient, monkeypatch: pytest.Mon
     assert "ENRICHMENT" in seen["system"]
 
 
+def test_selection_brief_bounds_a_stalled_model(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A stalled backend must not pin the worker: the route wraps the LLM call in
+    # asyncio.wait_for and degrades to a 502, not a 524-after-the-client-left.
+    import asyncio
+
+    from app.routes import ai_selection
+
+    monkeypatch.setattr(ai_selection, "_SELECTION_LLM_BUDGET_S", 0.05)
+
+    async def _hang(*_a, **_k):  # noqa: ANN002, ANN003
+        await asyncio.sleep(5)  # longer than the budget → wait_for fires
+        return llm.LlmResult(text="x", model="m", backend="stub")
+
+    monkeypatch.setattr(llm, "chat", _hang)
+    r = client.post(
+        "/api/ai/selection/brief",
+        json={"kind": "aircraft", "id": "AC-hang", "props": {"callsign": "T"}},
+    )
+    assert r.status_code == 502
+
+
 # ── AI alerts: watch-officer briefs ──────────────────────────────────────────
 
 def test_watch_officer_briefs_access_path(client: TestClient) -> None:
