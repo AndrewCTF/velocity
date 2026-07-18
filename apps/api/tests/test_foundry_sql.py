@@ -108,3 +108,33 @@ def test_sql_max_rows_clamped(client: TestClient) -> None:
     )
     assert r.status_code == 200, r.text
     assert r.json()["ok"] is True
+
+
+def test_run_sql_tolerates_quoted_column_and_oversize_int() -> None:
+    # A column literally named a"b (valid JSON key) and an int > 2^63 (a 20-digit
+    # id) previously escaped run_sql as an unwrapped OperationalError / OverflowError
+    # and 500'd the route. Both must now load cleanly.
+    from app.foundry.sqlrun import run_sql
+
+    rows = [{'a"b': 1, "big": 10**25}]
+    out, _cols = run_sql("SELECT * FROM t", {"t": rows})
+    assert len(out) == 1
+    assert out[0]['a"b'] == 1
+    assert out[0]["big"] == str(10**25)  # oversize int stored as text, no overflow
+
+
+def test_run_sql_wraps_load_failure_as_sqlerror(monkeypatch) -> None:
+    # Any residual load-time sqlite failure must surface as SqlError (→ clean 4xx),
+    # never escape run_sql unwrapped (→ 500).
+    import sqlite3
+
+    import pytest
+
+    from app.foundry import sqlrun
+
+    def _boom(*_a: object, **_k: object) -> None:
+        raise sqlite3.OperationalError("boom")
+
+    monkeypatch.setattr(sqlrun, "_load_table", _boom)
+    with pytest.raises(sqlrun.SqlError):
+        sqlrun.run_sql("SELECT 1", {"t": [{"x": 1}]})
