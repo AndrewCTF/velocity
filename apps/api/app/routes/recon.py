@@ -314,16 +314,23 @@ def register_sat_job(
     job_id = uuid.uuid4().hex[:12]
     work = _JOBS_ROOT / job_id
     scene = work / "aoi"  # rpc_stereo reads *.tif + rpc_*.txt from ONE dir
-    scene.mkdir(parents=True, exist_ok=True)
-    for tif in tifs:
-        shutil.copy(tif, scene / tif.name)
-        rpc = aoi / ("rpc_" + tif.stem + ".txt")
-        if not rpc.exists():
-            hits = list(aoi.glob("*" + tif.stem + "*.txt"))
-            rpc = hits[0] if hits else None
-        if rpc is None:
-            raise HTTPException(502, f"missing RPC sidecar for {tif.name}")
-        shutil.copy(rpc, scene / ("rpc_" + tif.stem + ".txt"))
+    try:
+        scene.mkdir(parents=True, exist_ok=True)
+        for tif in tifs:
+            shutil.copy(tif, scene / tif.name)
+            rpc = aoi / ("rpc_" + tif.stem + ".txt")
+            if not rpc.exists():
+                hits = list(aoi.glob("*" + tif.stem + "*.txt"))
+                rpc = hits[0] if hits else None
+            if rpc is None:
+                raise HTTPException(502, f"missing RPC sidecar for {tif.name}")
+            shutil.copy(rpc, scene / ("rpc_" + tif.stem + ".txt"))
+    except Exception:
+        # The job isn't in _JOBS yet, so _evict_jobs can never reclaim this dir —
+        # remove the partial chips before surfacing the error, or every failed
+        # setup leaks disk that no TTL/LRU eviction touches.
+        shutil.rmtree(work, ignore_errors=True)
+        raise
     _JOBS[job_id] = _new_job_record(job_id, owner)
     asyncio.create_task(_pipeline_sat(job_id, gsd))
     return job_id, len(tifs)

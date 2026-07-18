@@ -61,3 +61,24 @@ def test_result_download_denies_non_owner(monkeypatch) -> None:
 def test_create_requires_files(client: TestClient) -> None:
     # File(...) is required → FastAPI 422 when absent.
     assert client.post("/api/recon/jobs").status_code == 422
+
+
+def test_register_sat_job_cleans_up_dir_on_missing_rpc(monkeypatch, tmp_path) -> None:
+    # A .tif without its rpc_*.txt sidecar raises 502 AFTER the job dir + chips are
+    # created but BEFORE the job is registered in _JOBS, so _evict_jobs could never
+    # reclaim it. The setup must clean up its own partial dir instead of leaking.
+    import pytest
+    from fastapi import HTTPException
+
+    sat_root = tmp_path / "sat"
+    jobs_root = tmp_path / "jobs"
+    (sat_root / "ds1").mkdir(parents=True)
+    (sat_root / "ds1" / "a.tif").write_bytes(b"II*\x00")  # a .tif, no rpc_a.txt beside it
+    jobs_root.mkdir()
+    monkeypatch.setattr(recon, "_SAT_ROOT", sat_root)
+    monkeypatch.setattr(recon, "_JOBS_ROOT", jobs_root)
+
+    with pytest.raises(HTTPException) as exc:
+        recon.register_sat_job("ds1")
+    assert exc.value.status_code == 502
+    assert list(jobs_root.iterdir()) == []  # no orphaned job dir left behind
