@@ -50,7 +50,9 @@ interface Props {
 
 const ICON_RAIL_W = 44;
 
-const RAIL_BG = 'rgba(8,10,15,0.95)';
+// Shared rail/panel surface. Neutral dark grey (theme-aware) so left and right
+// rails read as the same material; was a cool near-black.
+const RAIL_BG = 'var(--panel-bg)';
 
 // Resizable rails — widths persist to localStorage, clamped to sane bounds. The
 // LEFT rail keeps its local width state; the RIGHT rail's bounds (RIGHT_MIN/MAX)

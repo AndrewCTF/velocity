@@ -67,7 +67,7 @@ function Folder({ folder, registry }: { folder: CatalogFolder; registry: LayerRe
         >
           <Icon name={open ? 'chevron-down' : 'chevron-right'} className="w-3 h-3 shrink-0 text-white/60" />
           <Icon name={folder.icon} className="w-4 h-4 shrink-0 text-white" />
-          <span className="font-label font-semibold uppercase tracking-[0.8px] text-[13px] truncate text-white">
+          <span className="font-label font-bold uppercase tracking-[0.8px] text-[13px] truncate text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]">
             {folder.label}
           </span>
         </button>
@@ -102,7 +102,7 @@ function Folder({ folder, registry }: { folder: CatalogFolder; registry: LayerRe
               >
                 <span className={`w-2 h-2 rounded-full shrink-0 ${en ? 'bg-accent' : 'bg-txt-4'}`} />
                 <Icon name={row.icon} className={`w-4 h-4 shrink-0 ${en ? 'text-txt-1' : 'text-txt-3'}`} />
-                <span className={`text-[12px] flex-1 truncate ${en ? 'text-txt-0 font-medium' : 'text-txt-2'}`}>
+                <span className={`text-[12px] flex-1 truncate ${en ? 'text-txt-0 font-medium' : 'text-txt-1'}`}>
                   {row.label}
                 </span>
                 {en ? (
