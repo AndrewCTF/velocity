@@ -475,6 +475,28 @@ class Settings(BaseSettings):
     # history_max_bytes (documented, logged once at boot — never a silent no-op).
     history_disk_budget_gb: float = 0.0  # HISTORY_DISK_BUDGET_GB
 
+    # ── Cache-density knobs (store more useful replay per byte, same disk) ──
+    # These trade CPU (and, for decimation, old-data resolution) for density.
+    # All OFF by default so the current on-disk format/behaviour is unchanged.
+    #
+    # 1) Tiered resolution: beyond history_decimate_after_hours, thin each track
+    #    to one fix in every history_decimate_stride, deleting the rest in the
+    #    maintenance pass. 0 hours disables. Old data becomes coarse, so far more
+    #    time-span fits under the same byte cap. Recent data stays full-fidelity.
+    history_decimate_after_hours: int = 0  # 0 disables
+    history_decimate_stride: int = 4  # keep 1-in-N old fixes per id (>= 2)
+    # 2) Free-page reclaim: use INCREMENTAL auto_vacuum so deleted pages return to
+    #    the file continuously (a cheap PRAGMA incremental_vacuum each maintenance
+    #    pass) instead of a periodic full VACUUM — keeps the file from carrying
+    #    dead pages between hourly passes. Applies to a FRESH history.db; an
+    #    existing store converts on its next full VACUUM. 0/False keeps full VACUUM.
+    history_incremental_vacuum: bool = False
+    # 3) Compress the per-fix `extra` JSON blob (alt/squawk/… metadata) with zlib
+    #    before storing it. The blob is write-only today (no query reads it), so
+    #    this is a pure density win at write-CPU cost. A future reader must
+    #    zlib-decompress; see history._encode_extra / _decode_extra.
+    history_compress_extra: bool = False
+
     # ── Ontology local spine ──
     # Default (keyless) backend for the ontology: local SQLite next to
     # history.db. Objects keep a materialized props blob for frontend parity;

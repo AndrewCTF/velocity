@@ -19,6 +19,7 @@ import logging
 import os
 import sqlite3
 import time
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,32 @@ from app import memtier
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
+
+
+def _encode_extra(extra: dict[str, Any]) -> str | bytes:
+    """Encode the per-fix ``extra`` blob for storage. With
+    ``history_compress_extra`` on, zlib-compress the compact JSON (a pure density
+    win — the column is write-only today, so there is no read path to update);
+    otherwise store compact JSON text. A future reader must go through
+    ``_decode_extra``."""
+    raw = json.dumps(extra, separators=(",", ":"))
+    if get_settings().history_compress_extra:
+        return zlib.compress(raw.encode("utf-8"))
+    return raw
+
+
+def _decode_extra(value: Any) -> dict[str, Any]:
+    """Inverse of ``_encode_extra``, tolerant of a mixed column (rows written
+    before/after the flag flipped): a zlib blob is decompressed, plain text is
+    parsed, anything undecodable degrades to ``{}`` — never crash a reader."""
+    if value is None:
+        return {}
+    try:
+        if isinstance(value, (bytes, bytearray)):
+            return json.loads(zlib.decompress(bytes(value)).decode("utf-8"))
+        return json.loads(str(value))
+    except Exception:  # noqa: BLE001 — best-effort decode of a write-only blob
+        return {}
 
 # ── tunable constants ──────────────────────────────────────────────────────────
 _FLUSH_INTERVAL_S: float = 3.0       # background flush cadence
@@ -110,6 +137,12 @@ def _connect() -> sqlite3.Connection:
     path = _resolved_db_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(path, check_same_thread=False)
+    # auto_vacuum only takes on a FRESH db (or after a full VACUUM), and must be
+    # set before the first table is created — so issue it here, ahead of the
+    # CREATE TABLE below. On an existing store it is a no-op until the next full
+    # VACUUM converts it; the maintenance pass falls back to full VACUUM then.
+    if get_settings().history_incremental_vacuum:
+        con.execute("PRAGMA auto_vacuum=INCREMENTAL")
     con.execute("PRAGMA journal_mode=WAL")
     # A WAL only checkpoints past its OLDEST live reader. The recorder writes
     # continuously, so one long-running read holds every frame written during
@@ -164,7 +197,7 @@ def _buffer_point(
         _last.popitem(last=False)
 
     _last[entity_id] = (t, lon, lat)
-    _buffer.append((kind, entity_id, t, lon, lat, track, json.dumps(extra)))
+    _buffer.append((kind, entity_id, t, lon, lat, track, _encode_extra(extra)))
 
 
 # ── public ingest API ─────────────────────────────────────────────────────────
@@ -300,7 +333,17 @@ async def _maintenance_pass() -> None:
     settings = get_settings()
     hours = _clamped_retention_hours()
     size_cap = _size_cap_bytes(settings)
-    deleted = await loop.run_in_executor(None, prune, hours)
+    deleted = 0
+    # Tiered resolution (opt-in): thin OLD data first so the byte cap then bounds a
+    # denser, coarser tail rather than dropping whole recent slices.
+    if settings.history_decimate_after_hours > 0:
+        deleted += await loop.run_in_executor(
+            None,
+            decimate,
+            settings.history_decimate_after_hours,
+            max(2, settings.history_decimate_stride),
+        )
+    deleted += await loop.run_in_executor(None, prune, hours)
     deleted += await loop.run_in_executor(None, enforce_size_cap, size_cap)
     if deleted:
         # Archive mode skips the full-file VACUUM here on purpose: at archive
@@ -309,13 +352,13 @@ async def _maintenance_pass() -> None:
         # already ran above), so reclaiming disk space isn't needed until the
         # configured budget is hit.
         if not settings.archive_mode:
-            await loop.run_in_executor(None, _vacuum)
+            await loop.run_in_executor(None, _reclaim)
         log.info(
             "history: pruned %d rows (>%dh / >%d bytes)%s",
             deleted,
             hours,
             size_cap,
-            "" if settings.archive_mode else ", vacuumed",
+            "" if settings.archive_mode else ", reclaimed",
         )
 
 
@@ -531,6 +574,38 @@ def prune(retention_hours: int) -> int:
         return 0
 
 
+def decimate(after_hours: int, stride: int) -> int:
+    """Thin each track OLDER than *after_hours* to one fix in every *stride*,
+    deleting the rest; recent data (within the window) is untouched. Kept fixes
+    are evenly spaced along each track and always include the segment's first fix,
+    so a short old track keeps at least one point rather than vanishing. Returns
+    the deleted row count. Tiered resolution: far more time-span fits the byte
+    cap at the cost of old-data precision."""
+    if after_hours <= 0 or stride < 2:
+        return 0
+    cutoff = time.time() - after_hours * 3600
+    try:
+        con = _connect()
+        try:
+            cur = con.execute(
+                "DELETE FROM positions WHERE rowid IN ("
+                "  SELECT rowid FROM ("
+                "    SELECT rowid, ROW_NUMBER() OVER (PARTITION BY id ORDER BY t) AS rn"
+                "    FROM positions WHERE t < ?"
+                "  ) WHERE rn % ? != 1"
+                ")",
+                (cutoff, stride),
+            )
+            deleted = cur.rowcount
+            con.commit()
+            return deleted
+        finally:
+            con.close()
+    except Exception:  # noqa: BLE001
+        log.exception("history: decimate error")
+        return 0
+
+
 def enforce_size_cap(max_bytes: int) -> int:
     """Drop the oldest rows until the DB's IN-USE size is under *max_bytes*.
 
@@ -590,6 +665,33 @@ def _vacuum() -> None:
         con.close()
     except Exception:  # noqa: BLE001
         log.exception("history: vacuum error")
+
+
+def _reclaim() -> None:
+    """Return freed pages to the filesystem. In INCREMENTAL auto_vacuum mode
+    (history_incremental_vacuum, once the store was created/converted that way) a
+    PRAGMA incremental_vacuum reclaims the freelist cheaply without the full-file
+    rewrite; otherwise fall back to a full VACUUM. A bare DELETE alone leaves the
+    file at its high-water mark (the "10 GB history.db" bug)."""
+    if not get_settings().history_incremental_vacuum:
+        _vacuum()
+        return
+    try:
+        con = _connect()
+        try:
+            # 2 == INCREMENTAL. An existing non-auto_vacuum store reports 0 until a
+            # full VACUUM converts it, so do that once and let the next pass go
+            # incremental.
+            mode = con.execute("PRAGMA auto_vacuum").fetchone()[0]
+            if mode == 2:
+                con.execute("PRAGMA incremental_vacuum")
+                con.commit()
+            else:
+                con.execute("VACUUM")
+        finally:
+            con.close()
+    except Exception:  # noqa: BLE001
+        log.exception("history: reclaim error")
 
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────

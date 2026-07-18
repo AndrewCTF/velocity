@@ -660,3 +660,79 @@ def test_coverage_route_returns_expected_keys(
         assert set(body.keys()) >= {"recording_since", "total_bytes", "row_count", "buckets"}
     finally:
         H.override_db_path(None)
+
+
+def test_encode_decode_extra_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Plain mode → compact JSON text that round-trips.
+    enc = H._encode_extra({"alt": 1000, "sq": "7700"})
+    assert isinstance(enc, str)
+    assert H._decode_extra(enc) == {"alt": 1000, "sq": "7700"}
+    # Compressed mode → zlib bytes; still round-trips, and _decode_extra tolerates
+    # a mixed column (legacy text rows) and undecodable garbage.
+    monkeypatch.setenv("HISTORY_COMPRESS_EXTRA", "1")
+    get_settings.cache_clear()
+    try:
+        enc2 = H._encode_extra({"alt": 2000})
+        assert isinstance(enc2, (bytes, bytearray))
+        assert H._decode_extra(enc2) == {"alt": 2000}
+        assert H._decode_extra('{"legacy": true}') == {"legacy": True}
+        assert H._decode_extra(b"not-zlib-data") == {}
+    finally:
+        monkeypatch.delenv("HISTORY_COMPRESS_EXTRA", raising=False)
+        get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_decimate_thins_old_tracks_keeps_recent(tmp_path: pytest.TempPathFactory) -> None:
+    db = str(tmp_path / "dec.db")
+    _reset_module(db)
+    now = time.time()
+    loop = asyncio.get_running_loop()
+    rows = []
+    for i in range(20):  # d1: 20 OLD fixes (~2 days ago), 1 s apart
+        rows.append(("aircraft", "aircraft:d1", now - 2 * 86400 - (20 - i), float(i % 90), 50.0, 0.0, "{}"))
+    for i in range(5):  # d1: 5 RECENT fixes (now)
+        rows.append(("aircraft", "aircraft:d1", now - (5 - i), float(i % 90), 50.0, 0.0, "{}"))
+    for i in range(2):  # d2: a SHORT old track (2 fixes) — must not vanish
+        rows.append(("aircraft", "aircraft:d2", now - 2 * 86400 - (2 - i), 1.0, 51.0, 0.0, "{}"))
+    await loop.run_in_executor(None, H._flush_sync, rows)
+
+    deleted = await loop.run_in_executor(None, H.decimate, 24, 4)  # older than 24h → 1-in-4
+    assert deleted == 16  # d1: 20→5 (drop 15); d2: 2→1 (drop 1)
+
+    con = H._connect()
+    try:
+        old = con.execute("SELECT COUNT(*) FROM positions WHERE t < ? AND id='aircraft:d1'", (now - 86400,)).fetchone()[0]
+        recent = con.execute("SELECT COUNT(*) FROM positions WHERE t >= ?", (now - 86400,)).fetchone()[0]
+        d2 = con.execute("SELECT COUNT(*) FROM positions WHERE id='aircraft:d2'").fetchone()[0]
+    finally:
+        con.close()
+    assert recent == 5  # recent data untouched
+    assert old == 5  # old thinned to 1-in-4
+    assert d2 == 1  # short old track keeps its first fix, never fully deleted
+
+
+@pytest.mark.asyncio
+async def test_incremental_vacuum_mode_and_reclaim(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory
+) -> None:
+    db = str(tmp_path / "iv.db")
+    monkeypatch.setenv("HISTORY_INCREMENTAL_VACUUM", "1")
+    get_settings.cache_clear()
+    try:
+        _reset_module(db)
+        now = time.time()
+        loop = asyncio.get_running_loop()
+        rows = [("aircraft", f"aircraft:a{i}", now - i - 10, 0.0, 50.0, 0.0, "{}") for i in range(300)]
+        await loop.run_in_executor(None, H._flush_sync, rows)
+        con = H._connect()
+        try:
+            mode = con.execute("PRAGMA auto_vacuum").fetchone()[0]
+        finally:
+            con.close()
+        assert mode == 2  # fresh db created in INCREMENTAL auto_vacuum mode
+        await loop.run_in_executor(None, H.prune, 0)  # delete all → freelist pages
+        H._reclaim()  # incremental_vacuum path must not raise
+    finally:
+        monkeypatch.delenv("HISTORY_INCREMENTAL_VACUUM", raising=False)
+        get_settings.cache_clear()
