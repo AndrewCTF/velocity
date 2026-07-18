@@ -255,3 +255,37 @@ def test_store_high_cardinality_add_is_not_quadratic() -> None:
     elapsed = time.time() - t0
     assert len(store._latest) >= 50_000  # we really are past the old threshold
     assert elapsed < 5.0, f"60k distinct adds took {elapsed:.1f}s — O(n)-per-add regression"
+
+
+def test_mil_loop_survives_non_json_body(monkeypatch) -> None:
+    # airplanes.live throttles with HTTP 200 + text/plain (CLAUDE.md). r.json()
+    # then raises ValueError, which used to escape the httpx-only except and kill
+    # the (unrespawned) ingest loop — the platform goes blind to mil/emergency
+    # squawks until restart. The loop must catch it and keep polling.
+    from app.correlate import runner
+
+    async def run() -> None:
+        class _Resp:
+            status_code = 200
+
+            def json(self) -> object:
+                raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+        class _Client:
+            async def get(self, *_a: object, **_k: object) -> object:
+                return _Resp()
+
+        monkeypatch.setattr(runner, "get_client", lambda: _Client())
+
+        stop = asyncio.Event()
+        real_sleep = asyncio.sleep
+
+        async def _fake_sleep(_s: float) -> None:
+            stop.set()  # end the loop after its first error-surviving cycle
+            await real_sleep(0)
+
+        monkeypatch.setattr(runner.asyncio, "sleep", _fake_sleep)
+        # Must return cleanly; an uncaught ValueError would propagate and fail here.
+        await runner._mil_loop(stop)
+
+    asyncio.run(run())

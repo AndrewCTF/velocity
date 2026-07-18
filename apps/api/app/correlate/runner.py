@@ -108,7 +108,7 @@ async def _opensky_loop(stop: asyncio.Event) -> None:
             if e.response is not None and e.response.status_code == 429:
                 backoff = min(backoff * 2 + 30.0, 900.0)
             log.debug("opensky loop status: %s", e)
-        except httpx.HTTPError as e:
+        except Exception as e:  # noqa: BLE001 — never let one bad poll kill the loop
             log.debug("opensky loop transient: %s", e)
         await asyncio.sleep(30 + backoff)
 
@@ -173,7 +173,7 @@ async def _mil_loop(stop: asyncio.Event) -> None:
                 }
                 obs = _aircraft_obs_from_geojson(fc, "adsb_mil")
                 store.add_many(obs)
-        except httpx.HTTPError as e:
+        except Exception as e:  # noqa: BLE001 — never let one bad poll kill the loop
             log.debug("mil_loop transient: %s", e)
         await asyncio.sleep(30)
 
@@ -244,7 +244,7 @@ async def _quake_loop(stop: asyncio.Event) -> None:
                         )
                     if batch:
                         store.add_many(batch)
-        except httpx.HTTPError as e:
+        except Exception as e:  # noqa: BLE001 — never let one bad poll kill the loop
             log.debug("quake_loop transient: %s", e)
         await asyncio.sleep(120)
 
@@ -284,7 +284,7 @@ async def _emerg_loop(stop: asyncio.Event) -> None:
                 }
                 obs = _aircraft_obs_from_geojson(fc, "airplanes_live")
                 store.add_many(obs)
-        except httpx.HTTPError as e:
+        except Exception as e:  # noqa: BLE001 — never let one bad poll kill the loop
             log.debug("emerg loop transient: %s", e)
         await asyncio.sleep(30)
 
