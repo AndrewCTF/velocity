@@ -24,15 +24,18 @@ First actions:
   - ``add_watch``        — create a standing geofence ``alert_rules`` row (wraps the
                            same POST as ``routes/alert_rules.py``).
 
-Everything degrades gracefully when Supabase is unconfigured (the registry / REST
-calls raise 503 with the "store not configured" contract). The module imports with
-no side effects.
+The ontology mutation always lands (SQLite, local-first — see
+``docs/decisions.md#ontology-local-first-store-2026-07-07``). The audit append and
+the ``add_watch`` side effect fall back to a local SQLite store on a keyless boot
+(``action_log_local.py`` / ``alert_rules_local.py``); ``nominate_target``'s
+supplementary ``target_board`` reflection has no local store yet (deliberately
+deferred — see ``_handle_nominate_target``) and is skipped rather than sinking the
+whole action. The module imports with no side effects.
 """
 
 from __future__ import annotations
 
 import time
-import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -40,7 +43,9 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
 from app.config import Settings, get_settings
+from app.intel import action_log_local, alert_rules_local
 from app.intel.ontology import Link, Object, get_registry
+from app.intel.promotion import stable_id
 from app.keys import UserCtx, _client, _headers
 
 # ── audit log ─────────────────────────────────────────────────────────────────
@@ -77,8 +82,23 @@ async def _append_audit(
     silently 'succeed' (C1 is on the critical path, per the plan). The audit is
     the LAST step of every handler, so a 502 here means the mutation landed but
     the receipt didn't, which the caller can retry.
+
+    Keyless boot (no ``supabase_url``): there is no PostgREST ``action_log``
+    table (the Supabase ontology backend was deleted 2026-07-07 —
+    docs/decisions.md), so the row goes to the local-SQLite sink
+    (``action_log_local.py``, same idiom as ``ontology_local``/
+    ``alert_rules_local``) instead of 503ing. Still fail-hard: a local write
+    error is re-raised as the same 502, never swallowed.
     """
     row = audit_row(ctx, action, target_id, params)
+    if not s.supabase_url:
+        try:
+            await action_log_local.append_row(row)
+        except Exception as exc:  # noqa: BLE001 — fail-hard, never swallowed
+            raise HTTPException(
+                status_code=502, detail="could not write audit log"
+            ) from exc
+        return row
     async with _client() as c:
         r = await c.post(
             _action_log_url(s),
@@ -172,7 +192,11 @@ async def _handle_promote_incident(
     ctx: UserCtx, s: Settings, p: PromoteIncidentParams
 ) -> ActionResult:
     reg = get_registry(ctx, s)
-    incident_id = f"incident:{uuid.uuid4()}"
+    # Stable, deterministic id (promotion.py's helper, shared with the
+    # auto-promotion path) so approving the SAME target twice UPDATES one
+    # incident node instead of minting a duplicate — a fresh uuid4 per call
+    # cannot do that. See docs/decisions.md.
+    incident_id = stable_id("incident", p.target_id)
     # Ensure the source object exists, create the incident node, and wire the
     # promotion edge so the incident is reachable from the source and vice-versa.
     await reg.upsert(Object(id=p.target_id))
@@ -188,7 +212,10 @@ async def _handle_promote_incident(
         )
     )
     await reg.link(Link(src=p.target_id, dst=incident_id, rel="promoted_to"))
-    await reg.link(Link(src=incident_id, dst=p.target_id, rel="evidence_of"))
+    # Canonical direction per ontology.py KNOWN_RELS ("signal/track → incident
+    # it supports"): member entity → incident, matching promotion.py's
+    # auto-promote path. Was inverted here (incident → target) — fixed.
+    await reg.link(Link(src=p.target_id, dst=incident_id, rel="evidence_of"))
     audit = await _append_audit(ctx, s, "promote_incident", incident_id, p.model_dump())
     return ActionResult(
         action="promote_incident",
@@ -205,26 +232,35 @@ async def _handle_nominate_target(
     # (unique(user_id, entity_id) upserts, so re-nominating moves nothing). We
     # POST directly rather than calling the route handler to avoid the in-process
     # FastAPI dependency machinery.
-    if not s.supabase_url:
-        raise HTTPException(status_code=503, detail="Supabase is not configured")
-    board_url = s.supabase_url.rstrip("/") + "/rest/v1/target_board"
-    row = {
-        "user_id": ctx.user_id,
-        "entity_id": p.target_id,
-        "stage": "confirm",
-        "priority": p.priority,
-        "note": p.note,
-    }
-    headers = {
-        **_headers(ctx, s, write=True),
-        "Prefer": "resolution=merge-duplicates,return=representation",
-    }
-    async with _client() as c:
-        r = await c.post(board_url, json=row, headers=headers)
-    if r.status_code not in (200, 201):
-        raise HTTPException(status_code=502, detail="could not nominate target")
-    created = r.json()
-    target = created[0] if isinstance(created, list) and created else created
+    #
+    # Unlike alert_rules/action_log, target_board has NO local-SQLite fallback
+    # yet — routes/targets.py's own docstring documents this as deliberate
+    # ("the route answers 503, the store stays local": the frontend Kanban
+    # already keeps a working copy) and docs/decisions.md lists it as still-
+    # deferred Phase-4 territory. So on a keyless boot we skip this
+    # supplementary remote persistence rather than 503ing the WHOLE governed
+    # action — the ontology reflection + audit trail below are what's actually
+    # load-bearing for C1's "no unaudited action" contract.
+    target: dict[str, Any] | None = None
+    if s.supabase_url:
+        board_url = s.supabase_url.rstrip("/") + "/rest/v1/target_board"
+        row = {
+            "user_id": ctx.user_id,
+            "entity_id": p.target_id,
+            "stage": "confirm",
+            "priority": p.priority,
+            "note": p.note,
+        }
+        headers = {
+            **_headers(ctx, s, write=True),
+            "Prefer": "resolution=merge-duplicates,return=representation",
+        }
+        async with _client() as c:
+            r = await c.post(board_url, json=row, headers=headers)
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=502, detail="could not nominate target")
+        created = r.json()
+        target = created[0] if isinstance(created, list) and created else created
 
     # Reflect the nomination into the ontology so the board entry is a graph node.
     reg = get_registry(ctx, s)
@@ -249,12 +285,10 @@ async def _handle_nominate_target(
 async def _handle_add_watch(
     ctx: UserCtx, s: Settings, p: AddWatchParams
 ) -> ActionResult:
-    # Side effect: POST to the SAME alert_rules table routes/alert_rules.py owns.
-    if not s.supabase_url:
-        raise HTTPException(status_code=503, detail="Supabase is not configured")
-    rules_url = s.supabase_url.rstrip("/") + "/rest/v1/alert_rules"
-    row = {
-        "user_id": ctx.user_id,
+    # Side effect: create a standing geofence rule in the SAME store
+    # routes/alert_rules.py owns — local SQLite on a keyless boot (the exact
+    # ``_use_local`` predicate that route already uses), Supabase otherwise.
+    rule_body = {
         "label": p.label,
         "lat": p.lat,
         "lon": p.lon,
@@ -264,13 +298,18 @@ async def _handle_add_watch(
         "channel": "inapp",
         "enabled": True,
     }
-    headers = {**_headers(ctx, s, write=True), "Prefer": "return=representation"}
-    async with _client() as c:
-        r = await c.post(rules_url, json=row, headers=headers)
-    if r.status_code not in (200, 201):
-        raise HTTPException(status_code=502, detail="could not add watch")
-    created = r.json()
-    rule = created[0] if isinstance(created, list) and created else created
+    if not s.supabase_url:
+        rule = await alert_rules_local.create_rule(ctx.user_id, rule_body, settings=s)
+    else:
+        rules_url = s.supabase_url.rstrip("/") + "/rest/v1/alert_rules"
+        row = {**rule_body, "user_id": ctx.user_id}
+        headers = {**_headers(ctx, s, write=True), "Prefer": "return=representation"}
+        async with _client() as c:
+            r = await c.post(rules_url, json=row, headers=headers)
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=502, detail="could not add watch")
+        created = r.json()
+        rule = created[0] if isinstance(created, list) and created else created
 
     reg = get_registry(ctx, s)
     await reg.upsert(Object(id=p.target_id))

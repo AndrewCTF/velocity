@@ -9,8 +9,23 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from app.intel import cue, incidents, watch_officer
+import pytest
+
+from app.intel import agent, cue, incidents, watch_officer
 from app.intel.incident_store import incident_store
+
+
+@pytest.fixture(autouse=True)
+def _stub_agent(monkeypatch) -> None:
+    """Stub the tool-calling agent that run_once() now invokes per incident.
+
+    This file tests the loop's file/dedup/triage contract, not the LLM — the
+    real-agent wiring is covered by test_watch_officer_agent.py. Without this the
+    suite would drive the live local model once per incident (~72s each).
+    """
+    async def fake_run_agent(*a, **k):
+        yield {"type": "final", "assessment": "stub", "findings": [], "follow_up": []}
+    monkeypatch.setattr(agent, "run_agent", fake_run_agent)
 
 
 def _incident(level: str, domains: list[str], lon: float, lat: float) -> dict[str, Any]:
