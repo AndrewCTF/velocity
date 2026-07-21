@@ -9,6 +9,7 @@ import {
   Search,
   Sparkles,
   Table2,
+  TrendingUp,
   Video,
   Waypoints,
   Workflow,
@@ -32,6 +33,7 @@ const APP_ICONS: Record<AppId, LucideIcon> = {
   workflows: Workflow,
   city: Building2,
   country: Flag,
+  markets: TrendingUp,
 };
 
 // Top-bar app switcher (design §6.1 grammar #3 — app-plural, not a tab pile).

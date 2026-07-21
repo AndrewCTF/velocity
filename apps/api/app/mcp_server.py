@@ -870,6 +870,50 @@ async def aviation_sigmet(detail: str = "short") -> dict[str, Any]:
     return shape(await _get("/api/aviation/sigmet"), detail)
 
 
+# ── 2026-07-21 context+markets wave ──────────────────────────────────────────
+
+
+@mcp.tool()
+async def travel_advisories(detail: str = "short") -> dict[str, Any]:
+    """Official country-level travel advisories pooled from US State, UK FCDO,
+    and Australia Smartraveller — each country's highest reported level."""
+    return shape(await _get("/api/advisories"), detail)
+
+
+@mcp.tool()
+async def displacement(detail: str = "short") -> dict[str, Any]:
+    """UN OCHA HAPI country-level IDP and refugee figures, latest reporting
+    period per country."""
+    return shape(await _get("/api/displacement"), detail)
+
+
+@mcp.tool()
+async def nas_status(detail: str = "short") -> dict[str, Any]:
+    """FAA National Airspace System ground stops, ground delays, arrival/
+    departure delays, and airport closures, as points at the affected airport."""
+    return shape(await _get("/api/airspace/nas-status"), detail)
+
+
+@mcp.tool()
+async def climate_anomalies(detail: str = "short") -> dict[str, Any]:
+    """Temperature/precipitation anomalies (vs. a 5-year same-window baseline)
+    over conflict-dense country centroids."""
+    return shape(await _get("/api/climate/anomalies"), detail)
+
+
+@mcp.tool()
+async def markets_snapshot(detail: str = "short") -> dict[str, Any]:
+    """Batched keyless market quote snapshot: indices, commodities, fx, crypto."""
+    return shape(await _get("/api/markets/snapshot"), detail)
+
+
+@mcp.tool()
+async def market_stress(detail: str = "short") -> dict[str, Any]:
+    """Composite market-stress score from equity drawdown, gold/oil moves, USD
+    flight-to-safety, and BTC drawdown."""
+    return shape(await _get("/api/markets/stress"), detail)
+
+
 # ── deep analysis (DeepSeek reasoner, Ollama fallback) ────────────────────────
 
 _SYS_PROMPT = (

@@ -73,6 +73,9 @@ _FEED_SOURCES: dict[str, str] = {
     "aurora": "/api/weather/swpc/space",
     "powerplant": "/api/infra/powerplants",
     "sigmet": "/api/aviation/sigmet",
+    # 2026-07-21 context+markets wave.
+    "groundstop": "/api/airspace/nas-status",
+    "climate_anomaly": "/api/climate/anomalies",
 }
 
 # ── ITU-R M.585 MMSI MID → flag country (top maritime flag states + key MIDs).

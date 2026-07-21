@@ -12,6 +12,7 @@ import { WorkflowsApp } from '../workflows/WorkflowsApp.js';
 import { CityApp } from '../city/CityApp.js';
 import { CountryApp } from '../country/CountryApp.js';
 import { AiHubApp } from '../ai/AiHubApp.js';
+import { MarketsApp } from '../markets/MarketsApp.js';
 
 // AppSurface (design §6.1) — the non-Map apps render as a full surface over the
 // globe (which stays mounted behind for instant return + shared selection). Map +
@@ -54,6 +55,9 @@ export function AppSurface({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
       break;
     case 'country':
       node = <CountryApp />;
+      break;
+    case 'markets':
+      node = <MarketsApp />;
       break;
     default:
       node = null;

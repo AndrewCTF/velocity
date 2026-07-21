@@ -53,6 +53,7 @@ from app.ratelimit import ComputeRateLimitMiddleware
 from app.routes import acars as acars_routes
 from app.routes import actions as actions_routes
 from app.routes import adsb as adsb_routes
+from app.routes import advisories as advisories_routes
 from app.routes import ai as ai_routes
 from app.routes import ai_models as ai_models_routes
 from app.routes import ai_selection as ai_selection_routes
@@ -65,6 +66,7 @@ from app.routes import audit as audit_routes
 from app.routes import aviation as aviation_routes
 from app.routes import cables as cables_routes
 from app.routes import cams as cams_routes
+from app.routes import climate as climate_routes
 from app.routes import collab as collab_routes
 from app.routes import config as config_routes
 from app.routes import conflict as conflict_routes
@@ -72,6 +74,7 @@ from app.routes import correlations as correlations_routes
 from app.routes import countries as countries_routes
 from app.routes import country_stats as country_stats_routes
 from app.routes import cyber as cyber_routes
+from app.routes import displacement as displacement_routes
 from app.routes import entity as entity_routes
 from app.routes import env as env_routes
 from app.routes import eq as eq_routes
@@ -94,6 +97,8 @@ from app.routes import jamming as jamming_routes
 from app.routes import keys as keys_routes
 from app.routes import maps as maps_routes
 from app.routes import maritime as maritime_routes
+from app.routes import markets as markets_routes
+from app.routes import nas_status as nas_status_routes
 from app.routes import news as news_routes_mod
 from app.routes import oceans as oceans_routes
 from app.routes import ontology as ontology_routes
@@ -490,6 +495,14 @@ def create_app() -> FastAPI:
     app.include_router(spacewx_routes.router)
     app.include_router(infra_routes.router)
     app.include_router(airhazards_routes.router)
+    # 2026-07-21 context+markets wave: travel advisories, displacement, FAA NAS
+    # ground-stop status, conflict-zone climate anomalies, and market snapshots
+    # (see docs/decisions.md worldmonitor-gaps entries).
+    app.include_router(advisories_routes.router)
+    app.include_router(displacement_routes.router)
+    app.include_router(nas_status_routes.router)
+    app.include_router(climate_routes.router)
+    app.include_router(markets_routes.router)
     app.include_router(entity_routes.router)
     app.include_router(alerts_routes.router)
     app.include_router(tiles_routes.router)

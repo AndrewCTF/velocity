@@ -96,8 +96,10 @@ def test_mcp_http_handshake_lists_all_tools(keyed: str) -> None:
         # The README/landing advertise this count; keep it in lock-step so a
         # tool added/removed without updating the marketing copy trips a test.
         # 22 core + 12 keyless-feed tools (2026-07-14 data-layers wave)
-        # + news_brief (2026-07-21 news wave).
-        assert len(names) == 35, sorted(names)
+        # + news_brief (2026-07-21 news wave)
+        # + travel_advisories/displacement/nas_status/climate_anomalies/
+        #   markets_snapshot/market_stress (2026-07-21 context+markets wave).
+        assert len(names) == 41, sorted(names)
         assert {"get_situation", "intel_brief", "query_aircraft", "deep_analyze"} <= names
         assert {"disaster_alerts", "maritime_chokepoints", "space_weather"} <= names
 

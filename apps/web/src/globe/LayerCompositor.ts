@@ -144,6 +144,8 @@ export const HAZARD_POINT_LAYER_IDS: ReadonlySet<string> = new Set([
   'maritime.buoys',
   'maritime.chokepoints',
   'weather.spacewx.aurora',
+  'airspace.nasstatus',
+  'climate.anomalies',
 ]);
 export const HAZARD_POLY_LAYER_IDS: ReadonlySet<string> = new Set([
   'hazards.fireperimeters',

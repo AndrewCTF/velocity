@@ -42,6 +42,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Emergency', icon: 'warning', layerIds: ['aviation.adsb.live.emergencies'] },
       { label: 'TFR / Airspace', icon: 'warning', layerIds: ['airspace.tfr'] },
       { label: 'SIGMET / AIRMET', icon: 'warning', layerIds: ['aviation.sigmet'] },
+      { label: 'Ground stops (NAS)', icon: 'warning', layerIds: ['airspace.nasstatus'] },
     ],
   },
   {
@@ -100,6 +101,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Volcanoes', icon: 'warning', layerIds: ['hazards.volcanoes'] },
       { label: 'Humanitarian disasters', icon: 'warning', layerIds: ['hazards.reliefweb'] },
       { label: 'Radiation', icon: 'warning', layerIds: ['hazards.radiation'] },
+      { label: 'Climate anomalies', icon: 'warning', layerIds: ['climate.anomalies'] },
       { label: 'Air quality', icon: 'signal', layerIds: ['env.airquality'] },
       { label: 'Weather alerts', icon: 'warning', layerIds: ['hazards.nws.alerts'] },
       { label: 'GPS jamming', icon: 'signal', layerIds: ['env.jamming.nacp'] },

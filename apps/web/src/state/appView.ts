@@ -22,7 +22,8 @@ export type AppId =
   | 'foundry'
   | 'workflows'
   | 'city'
-  | 'country';
+  | 'country'
+  | 'markets';
 
 export const APP_IDS: readonly AppId[] = [
   'map',
@@ -38,6 +39,7 @@ export const APP_IDS: readonly AppId[] = [
   'workflows',
   'city',
   'country',
+  'markets',
 ];
 
 // chrome: 'globe' keeps the right inspector rail + timeline footer (apps designed
@@ -81,6 +83,11 @@ export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'glo
     hint: 'World Bank + UN statistics · OSINT resources',
     chrome: 'full',
   },
+  markets: {
+    label: 'Markets',
+    hint: 'Indices, commodities, FX, crypto · stress index · predictions',
+    chrome: 'full',
+  },
 };
 
 // Grouped clusters for the top-bar app switcher (design §6.1 overhaul): the
@@ -91,7 +98,11 @@ export const APP_META: Record<AppId, { label: string; hint: string; chrome: 'glo
 export const APP_GROUPS: readonly { id: string; label: string; apps: readonly AppId[] }[] = [
   { id: 'live', label: 'Live', apps: ['map', 'sim'] },
   { id: 'ai', label: 'AI', apps: ['ai'] },
-  { id: 'analyze', label: 'Analyze', apps: ['explorer', 'graph', 'investigate', 'targeting', 'video', 'country'] },
+  {
+    id: 'analyze',
+    label: 'Analyze',
+    apps: ['explorer', 'graph', 'investigate', 'targeting', 'video', 'country', 'markets'],
+  },
   { id: 'data', label: 'Data', apps: ['foundry', 'workflows'] },
   { id: 'product', label: 'Product', apps: ['reports'] },
   { id: '3d', label: '3D', apps: ['city'] },

@@ -212,6 +212,8 @@ describe('CountryApp', () => {
           ],
         });
       if (u.includes('/un')) return jsonResponse({ iso3: 'TST', name: 'Testland', m49: '999', source: 'unsd', series: [] });
+      if (u === '/api/advisories') return jsonResponse({ items: [], sources: [], unavailable: false });
+      if (u === '/api/displacement') return jsonResponse({ items: [], source: 'hapi.humdata.org', unavailable: true });
       return jsonResponse({});
     });
 
