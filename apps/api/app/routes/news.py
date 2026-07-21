@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -23,8 +24,12 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.news import analyze as news_analyze
+from app.news import brief as news_brief
+from app.news import history_local
+from app.news import images as news_images
 from app.news import sources as news_sources
 from app.news import store
+from app.news import verify as news_verify
 
 log = logging.getLogger(__name__)
 
@@ -230,16 +235,142 @@ async def news_factcheck(
         )
 
 
+_HISTORY_KINDS = ("edition", "analysis", "brief")
+
+
+@router.get("/api/news/brief")
+async def news_brief_route() -> Any:
+    """Latest assembled morning brief (top story per category + one synthesis
+    paragraph). Built by the background refresher on a ~20h cadence and served
+    straight from local history — never built on-demand by this route.
+    """
+    s = get_settings()
+    if not s.news_enabled:
+        return {"enabled": False}
+    row = await history_local.latest("brief")
+    if row is None:
+        return JSONResponse(status_code=404, content={"error": "no brief yet"})
+    return row["payload"]
+
+
+@router.get("/api/news/history")
+async def news_history(
+    kind: str = Query("edition"),
+    limit: int = Query(20, ge=1, le=50),
+) -> Any:
+    """Light index of recent local-history snapshots for ``kind``
+    (``edition`` | ``analysis`` | ``brief``). Payloads are excluded to keep the
+    list cheap — fetch the full latest payload via ``/api/news/edition``,
+    ``/api/news/analysis``, or ``/api/news/brief`` instead.
+    """
+    s = get_settings()
+    if not s.news_enabled:
+        return {"enabled": False}
+    if kind not in _HISTORY_KINDS:
+        return JSONResponse(
+            status_code=400,
+            content={"error": f"invalid kind: {kind!r}", "valid_kinds": list(_HISTORY_KINDS)},
+        )
+    rows = await history_local.list_snapshots(kind, limit=limit)
+    items = [
+        {
+            "id": r["id"],
+            "kind": r["kind"],
+            "created_utc": r["created_utc"],
+            "article_count": r["article_count"],
+            "verified_count": r["verified_count"],
+        }
+        for r in rows
+    ]
+    return {"items": items}
+
+
 # ── background refresher ────────────────────────────────────────────────────
+
+_IMAGE_ENRICH_LIMIT = 60
+_BRIEF_REFRESH_SEC = 20 * 3600  # ~20h cadence — a brief is a slow-moving digest
+
+
+def _brief_is_stale(latest_row: dict[str, Any] | None) -> bool:
+    """True when there is no brief snapshot yet, or its ``created_utc`` is
+    older than :data:`_BRIEF_REFRESH_SEC`. An unparseable timestamp is treated
+    as stale (rebuild rather than get stuck never refreshing)."""
+    if latest_row is None:
+        return True
+    created = latest_row.get("created_utc")
+    if not created:
+        return True
+    try:
+        created_dt = datetime.fromisoformat(created)
+    except ValueError:
+        return True
+    if created_dt.tzinfo is None:
+        created_dt = created_dt.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - created_dt).total_seconds() > _BRIEF_REFRESH_SEC
 
 
 async def refresh_once() -> dict[str, Any]:
-    """Fetch → analyze → cache (analysis), then best-effort build the edition."""
+    """Fetch → analyze → cache (analysis), then best-effort build the edition,
+    bias-verify it, backfill missing images, write-through both snapshots to
+    local history, and (on a ~20h cadence) assemble + persist a fresh brief.
+
+    Every stage past the base analysis is best-effort: a verify/image/history/
+    brief failure is logged and skipped, never re-raised — the in-memory
+    serving path (``/api/news/edition``, ``/api/news/analysis``) must keep
+    working even when local persistence or the verifier ensemble is down.
+    """
     result = await _refresh_analysis()
     try:
-        await _refresh_edition()
+        edition = await _refresh_edition()
     except Exception as exc:  # noqa: BLE001 — edition failure must not kill the loop
         log.warning("news edition build failed: %s", exc)
+        edition = None
+
+    if not edition or not edition.get("stories"):
+        return result
+
+    try:
+        edition = await news_verify.verify_edition(edition)
+        store.set_edition(edition)
+    except Exception as exc:  # noqa: BLE001 — verify failure serves the unverified edition
+        log.warning("news edition verify failed: %s", exc)
+
+    try:
+        await news_images.enrich_images(edition.get("stories") or [], limit=_IMAGE_ENRICH_LIMIT)
+    except Exception as exc:  # noqa: BLE001 — image enrichment is cosmetic, best-effort
+        log.warning("news image enrichment failed: %s", exc)
+
+    stories = edition.get("stories") or []
+    verified_count = sum(
+        1
+        for s in stories
+        if isinstance(s, dict) and (s.get("verification") or {}).get("status") == "verified-neutral"
+    )
+
+    try:
+        await history_local.append_snapshot(
+            "edition",
+            edition,
+            article_count=int(edition.get("article_count") or 0),
+            verified_count=verified_count,
+        )
+        await history_local.append_snapshot(
+            "analysis",
+            result,
+            article_count=len(store.get_articles()),
+            verified_count=verified_count,
+        )
+    except Exception as exc:  # noqa: BLE001 — a DB error must not break in-memory serving
+        log.warning("news history append failed: %s", exc)
+
+    try:
+        latest_brief = await history_local.latest("brief")
+        if _brief_is_stale(latest_brief):
+            b = await news_brief.build_brief(edition)
+            await history_local.append_snapshot("brief", b)
+    except Exception as exc:  # noqa: BLE001 — brief cadence is best-effort
+        log.warning("news brief build failed: %s", exc)
+
     return result
 
 

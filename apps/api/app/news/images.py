@@ -108,6 +108,52 @@ async def _is_public_url(url: str) -> bool:
     return ok
 
 
+async def enrich_images(
+    stories: list[dict],
+    *,
+    limit: int = 60,
+    concurrency: int = 6,
+) -> int:
+    """Best-effort fill of missing ``image`` fields across a batch of stories.
+
+    Bounded to the first ``limit`` stories that are actually missing an image
+    (never the whole corpus) and fetched under a semaphore of ``concurrency``.
+    A story's link is ``story["link"]`` if present, else the first proof URL
+    (mirrors :func:`app.news.brief._entry_for`'s fallback). Results are written
+    into the story dicts in place. Returns the count of stories filled.
+    """
+    targets: list[tuple[dict, str]] = []
+    for s in stories:
+        if not isinstance(s, dict) or s.get("image"):
+            continue
+        link = s.get("link")
+        if not link:
+            proofs = s.get("proofs") or []
+            if proofs and isinstance(proofs[0], dict):
+                link = proofs[0].get("url")
+        if not link:
+            continue
+        targets.append((s, str(link)))
+        if len(targets) >= limit:
+            break
+    if not targets:
+        return 0
+
+    sem = asyncio.Semaphore(concurrency)
+    filled = 0
+
+    async def _one(story: dict, link: str) -> None:
+        nonlocal filled
+        async with sem:
+            img = await fetch_og_image(link)
+        if img:
+            story["image"] = img
+            filled += 1
+
+    await asyncio.gather(*(_one(s, link) for s, link in targets))
+    return filled
+
+
 async def fetch_og_image(url: str, timeout_s: float = 6.0) -> str:
     """Fetch a page and pull its og:image. Cached; "" on any failure.
 

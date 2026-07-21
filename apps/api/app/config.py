@@ -269,6 +269,13 @@ class Settings(BaseSettings):
     # Pin the selection model resident (load-on-startup, exempt from the
     # router's LRU eviction) instead of loading it cold on first selection.
     llm_selection_hot: bool = False  # LLM_SELECTION_HOT
+    # Multi-model news-verification ensemble (A2): comma-separated installed
+    # model KEYS to fan a claim out to via `chat(local_model_key=...)`, the
+    # minimum number of models that must respond for a verdict to count, and
+    # the wall-clock budget for the whole ensemble round. "" → unconfigured.
+    news_verify_models: str = ""  # NEWS_VERIFY_MODELS
+    news_verify_min_models: int = 2  # NEWS_VERIFY_MIN_MODELS
+    news_verify_budget_s: int = 90  # NEWS_VERIFY_BUDGET_S
 
     # ── Human-in-the-loop action approval (HITL gate) ──
     # When ON (default), the intel agent's write-back actions become PROPOSALS the

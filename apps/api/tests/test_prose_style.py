@@ -16,7 +16,7 @@ import inspect
 
 from app import llm
 from app.intel import country_profile
-from app.news import analyze
+from app.news import analyze, brief, verify
 from app.routes import ai_selection, intel, watch_officer
 
 EM_DASH = "—"
@@ -100,3 +100,27 @@ def test_news_prompts_apply_style_before_the_injection_guard() -> None:
             assert line.index("with_prose_style") < line.index("_INJECTION_GUARD"), (
                 f"style rider must precede the injection guard: {line.strip()}"
             )
+
+
+def test_news_verify_prompts_end_with_injection_guard() -> None:
+    """verify.py's verifier + repair prompts, and brief.py's synthesis prompt,
+    apply the style rider before appending _INJECTION_GUARD, same ordering the
+    edition builder itself uses (see the analyze.py check above).
+
+    Source-level check on purpose: both system strings are built inline at the
+    call site from module constants, so there is no rendered string to import
+    and assert against.
+    """
+    for mod in (verify, brief):
+        src = inspect.getsource(mod)
+        assert "with_prose_style" in src, f"{mod.__name__} builds a prompt without the style rider"
+        assert "_INJECTION_GUARD" in src, f"{mod.__name__} builds a prompt without the injection guard"
+        # No call site may append the guard before the rider.
+        assert "_INJECTION_GUARD)" not in src.replace("with_prose_style(", ""), (
+            f"{mod.__name__}: something appended after the injection guard"
+        )
+        for line in src.splitlines():
+            if "_INJECTION_GUARD" in line and "with_prose_style" in line:
+                assert line.index("with_prose_style") < line.index("_INJECTION_GUARD"), (
+                    f"{mod.__name__}: style rider must precede the injection guard: {line.strip()}"
+                )

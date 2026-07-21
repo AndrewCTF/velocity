@@ -19,6 +19,13 @@ interface BiasFlag {
   technique?: string;
   evidence?: string;
 }
+// Second-pass verifier review (apps/api/app/news/verify.py) — only present
+// when a story was flagged by exactly one local verifier and repaired. Not
+// every analysis event carries this; render is a no-op when absent.
+interface BiasReview {
+  original?: { title?: string; neutral_summary?: string };
+  flags?: unknown;
+}
 interface RhetoricFlag {
   who?: string;
   claim?: string;
@@ -34,6 +41,7 @@ interface NewsEvent {
   propaganda_techniques?: string[];
   rhetoric_flags?: RhetoricFlag[];
   confidence?: number;
+  bias_review?: BiasReview;
 }
 interface Analysis {
   generated?: string | null;
@@ -338,6 +346,15 @@ export function NewsPanel(): JSX.Element {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {ev.bias_review?.original && (
+              <div className="border-l-2 border-warn/50 pl-2">
+                <MicroLabel className="text-warn">verifier revision</MicroLabel>
+                <p className="mono text-[10px] text-txt-3 leading-snug mt-1">
+                  Originally: {ev.bias_review.original.title ?? ev.bias_review.original.neutral_summary ?? '—'}
+                </p>
               </div>
             )}
 

@@ -1002,6 +1002,16 @@ async def fact_check(claim: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def news_brief(detail: str = "short") -> dict[str, Any]:
+    """Latest assembled morning brief: top story per category plus a short
+    synthesis paragraph tying the leads together. Built on a ~20h cadence by
+    the background news refresher, not on-demand — use ``news_analysis`` or
+    the edition route for the freshest per-story detail.
+    """
+    return shape(await _get("/api/news/brief"), detail)
+
+
+@mcp.tool()
 async def aoi_imagery(
     before: str,
     after: str,

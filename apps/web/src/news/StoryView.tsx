@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiFetch, backendUrl } from '../transport/http.js';
 import type { Edition, Story } from './types.js';
+import { STATUS_LABEL, STATUS_TONE } from './VelocityNewsPage.js';
 import './news.css';
 
 function highlight(text: string, quotes: string[]): (string | JSX.Element)[] {
@@ -69,7 +70,21 @@ export function StoryView(): JSX.Element {
               </span>
               <span className="vn-corr">{n} {n === 1 ? 'source corroborating' : 'sources corroborating'}</span>
               {story.confidence > 0 && <span>confidence {story.confidence.toFixed(2)}</span>}
+              {story.verification?.status && (
+                <span className={`vn-badge-chip vn-badge-${STATUS_TONE[story.verification.status] ?? 'neutral'}`}>
+                  {STATUS_LABEL[story.verification.status] ?? story.verification.status}
+                </span>
+              )}
             </div>
+
+            {story.bias_review?.original && (
+              <details className="vn-orig">
+                <summary>Originally: {story.bias_review.original.title || 'headline revised after review'}</summary>
+                {story.bias_review.original.neutral_summary && (
+                  <p className="vn-cap">{story.bias_review.original.neutral_summary}</p>
+                )}
+              </details>
+            )}
 
             {story.image && (
               <div className="vn-media vn-lead-media"><img src={story.image} alt="" /></div>

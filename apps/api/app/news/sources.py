@@ -26,6 +26,8 @@ class Source:
     url: str
     leaning: str
     region: str
+    category: str = "general"
+    tier: int = 1
 
 
 @dataclass
@@ -214,20 +216,54 @@ def _published_sort_key(a: Article) -> str:
     return a.published_iso or ""
 
 
+# Bounded so a 100+ feed register doesn't fire every fetch concurrently and
+# trip upstream throttling (the airplanes.live/ADS-B post-mortem pattern).
+_FETCH_CONCURRENCY = 16
+
+# Incremented once per fetch_all() call using the default feed set; decides
+# which half of the tier-2 register feeds are in rotation this cycle. Module
+# global, deterministic, no randomness so tests can assert on it.
+_fetch_cycle = 0
+
+
+def _select_register_feeds(cycle: int) -> list[Source]:
+    """Tier-1 register feeds every cycle; tier-2 feeds in a 2-way rotation."""
+    from app.news import feeds_register  # lazy import — avoids an import cycle
+
+    selected: list[Source] = []
+    for src in feeds_register.REGISTER:
+        if src.tier <= 1 or (hash(src.url) % 2) == (cycle % 2):
+            selected.append(src)
+    return selected
+
+
 async def fetch_all(
     timeout_s: float = 12.0,
     *,
     feeds: list[Source] | None = None,
 ) -> list[Article]:
-    """Fetch every feed concurrently, normalize, dedupe, newest-first, capped.
+    """Fetch every feed concurrently (bounded), normalize, dedupe, cap.
 
     The default feed set is the general world feeds PLUS :data:`CONFLICT_FEEDS`
-    so the war is always in the corpus. Per-feed failures are swallowed (logged)
-    so a single dead feed never blanks the whole batch. The total is capped at
+    PLUS the categorized :data:`app.news.feeds_register.REGISTER` (tier-2
+    entries rotate in/out per call so a 100+ feed register doesn't trip
+    upstream throttling). Per-feed failures are swallowed (logged) so a single
+    dead feed never blanks the whole batch. The total is capped at
     ``settings.news_max_items``.
     """
-    feeds = feeds if feeds is not None else (FEEDS + CONFLICT_FEEDS)
-    results = await asyncio.gather(*(_fetch_one(s, timeout_s) for s in feeds))
+    global _fetch_cycle
+    if feeds is None:
+        cycle = _fetch_cycle
+        _fetch_cycle += 1
+        feeds = FEEDS + CONFLICT_FEEDS + _select_register_feeds(cycle)
+
+    sem = asyncio.Semaphore(_FETCH_CONCURRENCY)
+
+    async def _bounded_fetch(source: Source) -> list[Article]:
+        async with sem:
+            return await _fetch_one(source, timeout_s)
+
+    results = await asyncio.gather(*(_bounded_fetch(s) for s in feeds))
 
     seen: set[str] = set()
     articles: list[Article] = []

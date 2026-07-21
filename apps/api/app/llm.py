@@ -711,13 +711,27 @@ async def _llamacpp_chat(
     temperature: float,
     max_tokens: int,
     timeout_s: float,
+    model_key: str | None = None,
 ) -> LlmResult:
     from app import llamacpp_sidecar  # noqa: PLC0415
 
     key = llamacpp_sidecar.api_key()
     if not key:
         return LlmResult(text=None, backend="llamacpp", error="llamacpp sidecar not running")
-    model = _installed_model_name(role)
+    if model_key is not None:
+        # Multi-model ensemble targeting (A2): bypass role resolution entirely
+        # and pin the payload model to this exact install key — same
+        # installed-check `_installed_model_name` does, but keyed by the
+        # caller's explicit choice instead of the active main/selection role.
+        from app.localllm import manager as local_manager  # noqa: PLC0415
+
+        if not any(m["key"] == model_key for m in local_manager.list_installed()):
+            return LlmResult(
+                text=None, backend="llamacpp", error=f"model {model_key!r} not installed"
+            )
+        model = model_key
+    else:
+        model = _installed_model_name(role)
     if not model:
         return LlmResult(text=None, backend="llamacpp", error=f"no active {role!r} model")
     host = get_settings().llamacpp_host.rstrip("/")
@@ -952,6 +966,7 @@ async def chat(
     fast: bool = False,
     label: str = "",
     tool_calls: int = 0,
+    local_model_key: str | None = None,
 ) -> LlmResult:
     """Run a chat completion. DeepSeek first, Ollama fallback.
 
@@ -963,6 +978,11 @@ async def chat(
         label: optional caller tag for observability (e.g. ``"agent.gather"``);
             does not affect the call.
         tool_calls: number of tool calls this turn carried, for observability.
+        local_model_key: force this call onto a SPECIFIC installed llama.cpp
+            model by install key (news-verification ensemble), bypassing
+            tier/role resolution and the tier/prefer_local/cloud ladder
+            entirely. Never falls back to a cloud backend — the caller
+            handles degradation.
 
     Every completion (success or failure) is logged best-effort to
     ``public.llm_calls`` for the bound user (see :func:`bind_user`); logging never
@@ -978,6 +998,7 @@ async def chat(
         json_mode=json_mode,
         ollama_model=ollama_model,
         fast=fast,
+        local_model_key=local_model_key,
     )
     _record_call(
         res,
@@ -999,9 +1020,35 @@ async def _run_chat(
     json_mode: bool,
     ollama_model: str,
     fast: bool,
+    local_model_key: str | None = None,
 ) -> LlmResult:
     """The backend ladder (MiniMax → DeepSeek → Ollama). No observability here so
     :func:`chat` records exactly one row per public call."""
+    # Multi-model ensemble targeting (A2): a specific install key short-circuits
+    # the whole tier/prefer_local/cloud ladder — route straight to the llamacpp
+    # rung with that key and return whatever it says, success or failure. Never
+    # falls through to Ollama or a cloud backend: a verifier call that silently
+    # landed on a DIFFERENT model (or the cloud) would corrupt the ensemble.
+    if local_model_key is not None:
+        engine = local_engine()
+        if engine != "llamacpp":
+            return LlmResult(
+                text=None,
+                backend=engine,
+                error=(
+                    "multi-model targeting requires the llamacpp engine "
+                    f"(resolved engine is {engine!r})"
+                ),
+            )
+        eff_timeout = timeout_s if timeout_s is not None else 90.0
+        return await _llamacpp_chat(
+            messages,
+            role="main",
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout_s=min(eff_timeout, 300.0),
+            model_key=local_model_key,
+        )
     # `fast=True` forces the quick chat model (DeepSeek-chat / Ollama) and skips
     # the slow MiniMax-M3 reasoner entirely — used for the agent's tool-routing
     # turns, where many cheap round-trips matter more than deep reasoning. The
@@ -1175,6 +1222,7 @@ async def chat_json(
     fast: bool = False,
     label: str = "",
     tool_calls: int = 0,
+    local_model_key: str | None = None,
 ) -> tuple[Any | None, LlmResult]:
     """Run ``chat`` and parse the reply as JSON. Returns ``(parsed_or_None, result)``.
 
@@ -1192,6 +1240,7 @@ async def chat_json(
         fast=fast,
         label=label,
         tool_calls=tool_calls,
+        local_model_key=local_model_key,
     )
     if not res.ok:
         return None, res

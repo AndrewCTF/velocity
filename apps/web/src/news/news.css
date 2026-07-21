@@ -162,16 +162,78 @@
 .vn-proofs .vn-when { color: var(--muted); margin-left: auto; }
 .vn-support img { width: 100%; border-radius: 4px; margin: 10px 0 4px; }
 
+/* ── verification badge + evidence popover ─────────────────────────────── */
+.vn-badge, .vn-badge-chip {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.04em; font-weight: 700; border-radius: 2px;
+  padding: 2px 6px; display: inline-block; line-height: 1.5;
+}
+.vn-badge { cursor: pointer; position: relative; }
+.vn-badge summary { list-style: none; }
+.vn-badge summary::-webkit-details-marker { display: none; }
+.vn-badge-ok { background: #e4f5ee; color: var(--verify); }
+.vn-badge-warn { background: #fdf0e4; color: #b1590f; }
+.vn-badge-alert { background: #fde5e5; color: var(--brand); }
+.vn-badge-neutral { background: var(--wash); color: var(--muted); }
+.vn-badge .vn-evidence {
+  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0;
+  min-width: 220px; max-width: 320px; background: var(--paper);
+  border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(17,20,24,0.14);
+  font-family: var(--sans); font-size: 12px; font-weight: 400;
+  color: var(--ink-2); text-transform: none; letter-spacing: normal;
+  line-height: 1.5;
+}
+.vn-badge .vn-evidence > div + div { margin-top: 4px; }
+
+/* ── daily-brief strip ─────────────────────────────────────────────────── */
+.vn-brief { padding: 18px 0 22px; border-bottom: 1px solid var(--rule); margin-bottom: 26px; }
+.vn-brief-text { font-family: var(--serif); font-size: 17px; line-height: 1.55; color: var(--ink-2); margin: 8px 0 8px; max-width: 84ch; }
+.vn-brief-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* ── rails: most-covered + latest ticker ───────────────────────────────── */
+.vn-rails { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
+.vn-rail { border: 1px solid var(--rule); border-radius: 4px; padding: 14px 16px; }
+.vn-rail-head { font-family: var(--sans); font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink); margin-bottom: 10px; }
+.vn-rail ol, .vn-rail ul { list-style: none; margin: 0; padding: 0; }
+.vn-rail li { border-top: 1px solid var(--rule); }
+.vn-rail li:first-child { border-top: 0; }
+.vn-rail a { display: flex; gap: 10px; padding: 9px 0; align-items: baseline; }
+.vn-rail-count {
+  font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--verify);
+  min-width: 16px; flex-shrink: 0;
+}
+.vn-rail-title { font-size: 14px; line-height: 1.4; color: var(--ink); flex: 1; }
+.vn-rail-latest a { flex-direction: column; align-items: stretch; gap: 3px; }
+.vn-rail-meta { display: flex; gap: 8px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.vn-src-chip { text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+
+/* ── BBC-style category block: lead image left, headlines right ───────── */
+.vn-catblock { display: grid; grid-template-columns: 1.4fr 1fr; gap: 30px; align-items: start; }
+.vn-catblock .vn-card { max-width: none; }
+.vn-headlist { list-style: none; margin: 0; padding: 0; }
+.vn-headlist li { border-top: 1px solid var(--rule); padding: 12px 0; }
+.vn-headlist li:first-child { border-top: 0; padding-top: 0; }
+.vn-headlist .vn-h { font-size: 16px; margin-bottom: 6px; }
+
+/* ── originally-published disclosure (bias review) ─────────────────────── */
+.vn-orig { margin: 4px 0 20px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.vn-orig summary { cursor: pointer; color: var(--flag); }
+.vn-orig p { margin: 8px 0 0; font-family: var(--sans); font-size: 13px; color: var(--ink-2); }
+
 /* ── responsive ────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .vn-hero { grid-template-columns: 1fr; gap: 22px; }
   .vn-grid { grid-template-columns: repeat(2, 1fr); }
   .vn-grid .vn-card.lead { grid-column: span 2; grid-row: auto; }
+  .vn-catblock { grid-template-columns: 1fr; }
+  .vn-rails { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .vn-grid { grid-template-columns: 1fr; }
   .vn-grid .vn-card.lead { grid-column: span 1; }
   .vn-side-item { grid-template-columns: 1fr 72px; }
+  .vn-badge .vn-evidence { left: auto; right: 0; max-width: 260px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .vn-media img, .vn-skel, .vn-live::before { transition: none; animation: none; }
