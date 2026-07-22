@@ -41,14 +41,15 @@ export function InvestigatePanel(): JSX.Element {
       });
       if (!r.ok) {
         const detail = await r.text();
-        // 401 = not signed in (persistence needs a real user); 400 = bad target;
-        // 503 = recon sidecar not configured.
+        // 400 = bad target; 503 = recon sidecar not configured (or, on a
+        // configured-but-unauthenticated deployment, the compute-path gate).
+        // Investigate/recon degrade to a local identity when keyless, so a
+        // 401 here means a real Supabase deployment needs sign-in — no
+        // special-cased copy, just the server's own detail.
         setError(
-          r.status === 401
-            ? 'Sign in to persist an investigation'
-            : r.status === 503
-              ? 'Deep recon needs the OSINT_RECON_SIDECAR_URL sidecar running'
-              : `${r.status}: ${detail.slice(0, 200)}`,
+          r.status === 503
+            ? 'Deep recon needs the OSINT_RECON_SIDECAR_URL sidecar running'
+            : `${r.status}: ${detail.slice(0, 200)}`,
         );
         return;
       }
