@@ -35,6 +35,7 @@ _COMPUTE_PREFIXES: tuple[str, ...] = (
     "/api/osint/investigate",        # LLM-backed OSINT orchestrator
     "/api/imagery/detect",           # YOLO detection subprocess
     "/api/imagery/splat",            # AOI chip → 3DGS reconstruction (GPU job)
+    "/api/imagery/aoi",              # AOI chip fetch (paid provider egress/cache)
     "/api/extract",                  # LLM entity extraction
     "/api/intel/agent",              # LLM analysis agent
     "/api/intel/investigate",        # LLM investigation
