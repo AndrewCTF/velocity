@@ -17,6 +17,7 @@ degrades to an empty result + a ``note``, mirroring ``app/osint/connectors.py``.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import quote
 
@@ -72,14 +73,25 @@ async def sec_edgar_company(name: str) -> dict[str, Any]:
         }
     top = hits[0] if isinstance(hits[0], dict) else {}
     src = top.get("_source") or {}
-    cik_raw = str(src.get("cik") or top.get("_id") or "").strip()
-    # cik may arrive as e.g. "0000320193" or embedded in the doc id; keep digits,
-    # then drop the zero-padding EDGAR uses internally (human CIKs omit it).
+    # EDGAR's real full-text-search shape has no "cik" field at all: the CIK
+    # lives in the plural "ciks" list, or embedded in a display_names string
+    # like "Tesla, Inc.  (TSLA)  (CIK 0001318605)". Fall back to the doc _id
+    # only as a last resort (it's an accession:file id, not a CIK).
+    display_names = src.get("display_names") or src.get("entity") or q
+    if isinstance(display_names, list):
+        display_names = display_names[0] if display_names else q
+    entity_name = str(display_names)
+    ciks = src.get("ciks")
+    cik_raw = str(ciks[0]) if isinstance(ciks, list) and ciks else ""
+    if not cik_raw:
+        m = re.search(r"CIK\s*(\d+)", entity_name)
+        cik_raw = m.group(1) if m else ""
+    if not cik_raw:
+        cik_raw = str(top.get("_id") or "")
+    # cik may arrive as e.g. "0000320193"; keep digits, then drop the
+    # zero-padding EDGAR uses internally (human CIKs omit it).
     cik_digits = "".join(c for c in cik_raw if c.isdigit())
     cik_digits = str(int(cik_digits)) if cik_digits else ""
-    entity_name = str(src.get("display_names") or src.get("entity") or q)
-    if isinstance(entity_name, list):
-        entity_name = entity_name[0] if entity_name else q
     if not cik_digits:
         return {
             "name": str(entity_name),
