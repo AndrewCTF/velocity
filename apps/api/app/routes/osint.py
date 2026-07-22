@@ -9,7 +9,9 @@ Two surfaces:
         ip and PERSIST the results as Object/Link rows into the caller's ontology
         (same pattern as ``routes/extract.py``: per-user, ACL-stamped, provenance
         in props, one audit row). The frontend then renders the graph via the
-        existing ``/api/ontology/search-around/{root}``. Requires a signed-in user.
+        existing ``/api/ontology/search-around/{root}``. Signed-in user when
+        Supabase is configured; degrades to the shared local identity on a
+        keyless boot (``current_user_or_local``), same as ontology/situations.
 
 New object ids (canonical ``kind:identifier``, kinds registered in
 ``intel/ontology.py``): ``domain:`` ``ip:`` ``cert:`` ``asn:`` ``service:``
@@ -38,7 +40,7 @@ from pydantic import BaseModel, Field
 from app.audit import audit
 from app.config import get_settings
 from app.intel.ontology import Link, Object, get_registry
-from app.keys import UserCtx, current_user
+from app.keys import UserCtx, current_user_or_local
 from app.osint import connectors as C
 from app.osint.fetch import classify_target
 from app.osint.sources import corp, crypto, infra, netblock, social, threat_feeds
@@ -795,7 +797,7 @@ async def _investigate_company(g: _Graph, name: str) -> dict[str, Any]:
 
 @router.post("/investigate", response_model=InvestigateResponse)
 async def investigate(
-    req: InvestigateRequest, ctx: UserCtx = Depends(current_user)
+    req: InvestigateRequest, ctx: UserCtx = Depends(current_user_or_local)
 ) -> InvestigateResponse:
     g = _Graph(ts=time.time())
 
@@ -864,7 +866,7 @@ class ReconRequest(BaseModel):
 
 @router.post("/recon", response_model=InvestigateResponse)
 async def recon(
-    req: ReconRequest, ctx: UserCtx = Depends(current_user)
+    req: ReconRequest, ctx: UserCtx = Depends(current_user_or_local)
 ) -> InvestigateResponse:
     """Run a GPL deep-recon tool via the sidecar and persist results into the graph.
 
