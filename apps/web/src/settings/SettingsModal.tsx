@@ -15,6 +15,7 @@ import {
 } from '../globe/qualityPresets.js';
 import { resetOnboarding } from '../onboarding/Onboarding.js';
 import { LocalAiSection } from './localAi/LocalAiSection.js';
+import { AlertRulesSection } from './AlertRulesSection.js';
 
 interface Me {
   email?: string;
@@ -119,6 +120,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
           <div className="mt-2.5">
             <LocalAiSection />
           </div>
+
+          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
+            Alert rules
+          </div>
+          <AlertRulesSection />
 
           <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
             API keys · bring your own
