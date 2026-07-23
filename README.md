@@ -23,11 +23,11 @@ It also runs as an MCP server, so an AI agent can query the same live feeds
 instead of guessing from its training cut-off — everything it returns is
 labelled as automated output, not sold as "AI insight."
 
-**[Live demo](https://projectvelocity.org)** · [Quick start](#quick-start) · [The apps](#the-apps) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
+[Quick start](#quick-start) · [The apps](#the-apps) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-1719%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-1887%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
@@ -283,14 +283,19 @@ A few things worth knowing up front, because I'd rather you read them here than
 be annoyed later:
 
 - It's built for one analyst. One optional API key, no accounts or roles.
-- **What persists vs what clears.** Durable on disk: the position-history
-  archive (SQLite at `./data/history.db`), the local ontology store — ontology
-  objects, case files, situations (`intel/ontology_local.py`) — and the evidence
-  locker (blobs under `./data/evidence`, custody chain in the ontology store's
-  append-only `assertions` table). Volatile, and cleared on backend restart: the
-  live incident list, transient AOI selections, and generated watch-officer
-  briefs. The Docker Compose volumes mean the durable stores survive
-  `docker compose down`, not just a process restart. The dev compose sets
+- **What persists vs what clears.** Durable on disk under `./data/`: the
+  position-history archive (SQLite at `./data/history.db`), the local ontology
+  store — ontology objects, case files, situations (`intel/ontology_local.py`,
+  `./data/ontology.db`) — plus separate SQLite files for Foundry, Workflows,
+  alert rules and cached news (`foundry.db`, `workflows.db`, `alert_rules.db`,
+  `news_history.db`), the evidence locker (blobs under `./data/evidence`,
+  custody chain in the ontology store's append-only `assertions` table), a disk
+  tile cache (`./data/tilecache`) and any downloaded local models
+  (`./data/models`). It's several files, not one — back up the whole `./data`
+  volume, not a single DB. Volatile, and cleared on backend restart: the live
+  incident list, transient AOI selections, and generated watch-officer briefs.
+  The Docker Compose volumes mean the durable stores survive `docker compose
+  down`, not just a process restart. The dev compose sets
   `HISTORY_RETENTION_HOURS=48` (2 days) out of the box; set `ARCHIVE_MODE=1` (the
   production compose profile does, with a 5 GB starting budget via
   `HISTORY_DISK_BUDGET_GB`) to size the archive against your disk instead of a
@@ -405,21 +410,21 @@ installer prints the exact commands for your OS: `bash
 plugin/osint-geoint/install.sh` (Linux/macOS, `-y` to register the MCP server) or
 `plugin\osint-geoint\install.ps1` (Windows, `-Run` to register).
 
-### Hosted: point your agent at the live endpoint
+### Point your agent at your own instance
 
-On the hosted platform the MCP server is mounted into the backend at `/mcp`
-(streamable-HTTP), so there's nothing to install or run. Register it with any
-MCP client using your Velocity access token:
+The MCP server is mounted into the backend at `/mcp` (streamable-HTTP), so
+once you're running Velocity yourself there's nothing extra to install to
+query it from an agent. Register it with any MCP client against your own
+host:
 
 ```bash
 claude mcp add --transport http osint-geoint \
-  https://projectvelocity.org/mcp \
+  http://localhost:8000/mcp \
   --header "Authorization: Bearer $VELOCITY_TOKEN"
 ```
 
-`$VELOCITY_TOKEN` is your signed-in Velocity (Supabase) access token; the
-gateway Worker verifies it and the backend re-checks it, so the endpoint is
-gated to your session.
+`$VELOCITY_TOKEN` is only required if you've set `API_KEY` on the backend; a
+keyless local instance needs no header at all.
 
 ### Self-host / develop
 
@@ -502,8 +507,11 @@ These tiers come from watching it actually run. 3D-sat genuinely wants a lot of
 VRAM, and the low-VRAM minimum only holds for the 2D-dark map; switch on 3D-sat
 and you'll want a discrete card with headroom.
 
-**Backend (server):** Python 3.12, ~1 GB RAM, outbound HTTPS. Runs on a small
-VPS or the same box, and it isn't the bottleneck.
+**Backend (server):** Python 3.12, outbound HTTPS, measured steady-state
+~3.2 GB backend RSS with the full feed set warm. Runs on a small VPS or the
+same box, and it isn't the frontend's bottleneck. The optional headless-Chrome
+coverage sidecars (ADS-B/AIS scraping tiers) cost several GB more each on top
+of that when enabled.
 
 ## Stack
 
@@ -546,7 +554,7 @@ osint/
 
 ```bash
 # from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
-OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 1687 passed + 1 skipped
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 1887 passed + 2 skipped
 pnpm -r test                          # vitest (web, shared)
 pnpm -r typecheck
 bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot
