@@ -83,7 +83,7 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
           </p>
         ) : (
           <p className="mono text-[10px] text-warn">
-            AIS length not broadcast. Verify visually (measure hull off the chip), or contact has no static AIS ID.
+            AIS length not broadcast. Verify visually (measure hull off the chip), or dark contact.
           </p>
         )}
 

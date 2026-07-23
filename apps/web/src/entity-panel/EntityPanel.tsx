@@ -778,10 +778,10 @@ async function actionErrorText(r: Response): Promise<string> {
 // The tile glyph + colour are resolved from the SAME aircraftStyle/vesselStyle
 // classification the map icon uses, so the panel always matches what's drawn on
 // the globe (no forked category logic). Each vessel/aircraft subtype gets its own
-// glyph; darkCandidate flips it to an alert-red diamond. That property means
-// "no static AIS name+type has been broadcast for this contact" — NOT that the
-// vessel went dark / stopped transmitting; a genuine transmission gap is a
-// separate, real thing (see AisGapCard, sourced from the dossier track).
+// glyph; darkCandidate flips it to an alert-red diamond. That property is set
+// by the Sentinel-1 SAR layer (sar_vessels.py): a radar target with no matching
+// AIS contact — an earned dark-vessel candidate, not merely a missing name
+// field. The AisGapCard below shows real transmission gaps from the dossier.
 function isDark(snap: PanelSnapshot | null): boolean {
   return snap?.properties?.['darkCandidate'] === true;
 }
@@ -824,7 +824,7 @@ interface Category {
 }
 function categoryOf(snap: PanelSnapshot | null): Category {
   const p = snap?.properties ?? {};
-  if (isDark(snap)) return { glyph: '◆', color: 'var(--alert)', label: 'no static AIS ID', tone: 'alert' };
+  if (isDark(snap)) return { glyph: '◆', color: 'var(--alert)', label: 'dark candidate', tone: 'alert' };
   if (snap?.kind === 'aircraft') {
     const s = aircraftStyle(p);
     return {

@@ -252,13 +252,10 @@ function pickVesselVisual(kind: VesselKind): { hex: string; iconKey: string; fac
 export function vesselStyle(props: Record<string, unknown>, opts: { darkCandidate?: boolean } = {}): VesselStyle {
   const cog = (props['cog'] as number | null) ?? (props['heading'] as number | null) ?? null;
   const sog = (props['sog'] as number | null) ?? null;
-  // darkCandidate comes either from the in-process AIS-gap tracker (opts) or,
-  // for the Sentinel-1 SAR layer, straight off the feature (true when a SAR
-  // target has no nearby AIS contact; null = AIS unknown) — that SAR case is a
-  // real absence signal. For the plain AIS feed (query_vessels), the same
-  // property key instead means "no static AIS name+type broadcast yet", which
-  // is NOT the same as "went dark"; the map glyph still calls it out in red
-  // (worth a closer look), the panel/legend copy should say so honestly.
+  // darkCandidate is set by the Sentinel-1 SAR layer (sar_vessels.py): a radar
+  // target with no nearby AIS contact (true = earned dark vessel; null = AIS
+  // unknown). A real absence signal, so the glyph calls it out in red. (opts
+  // is kept for a future in-process AIS-gap tracker; nothing feeds it today.)
   const dark = opts.darkCandidate ?? props['darkCandidate'] === true;
 
   // Read ITU ship-type code from any of the casings the upstream feeds use.

@@ -288,11 +288,8 @@ export const defaultLayers: readonly LayerDescriptor[] = [
   // Keyless vessel coverage for the Strait of Hormuz, where Digitraffic (Baltic
   // only) and AISStream (needs a key) show nothing. Sentinel-1 SAR detects
   // ship-sized backscatter targets regardless of AIS; targets with no nearby
-  // AIS report render as red dark-vessel diamonds (darkCandidate) — here that
-  // label is earned (a real SAR contact with no matching AIS transmission).
-  // The plain-AIS vessel feed reuses the same darkCandidate key for a weaker
-  // claim (no static name+type broadcast yet, not necessarily "went dark");
-  // see styles.ts vesselStyle for the split. Uses the operator's CDSE
+  // AIS report render as red dark-vessel diamonds (darkCandidate) — a real SAR
+  // contact with no matching AIS transmission. Uses the operator's CDSE
   // credentials. Detection is heavy (SAR fetch + CFAR) and Sentinel-1 revisits
   // are ~12h, so this polls slowly. Off by default; flip on from the LayerRail
   // when watching Hormuz.
