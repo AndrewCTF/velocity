@@ -9,6 +9,8 @@
 // render into the same map grid slot; only the globe (Map) is always mounted.
 import { create } from 'zustand';
 
+import { useSim } from './stores.js';
+
 export type AppId =
   | 'map'
   | 'ai'
@@ -144,5 +146,9 @@ export const useAppView = create<AppViewState>((set) => ({
   setApp: (app) => {
     persist(app);
     set({ app });
+    // Sim renders as an overlay gated by useSim.active (AppSurface returns null
+    // for 'sim'), so switching to the Sim tab must open the overlay — and
+    // leaving it must close it — or the tab looks dead.
+    useSim.getState().setActive(app === 'sim');
   },
 }));
