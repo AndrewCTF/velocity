@@ -158,7 +158,9 @@ def _parse_uk_fcdo(xml_text: str) -> list[Advisory]:
                 "source": "uk-fcdo",
                 "title": country,
                 "link": link,
-                "updated_utc": _to_iso_utc((entry.findtext(f"{_ATOM_NS}updated") or "").strip() or None),
+                "updated_utc": _to_iso_utc(
+                    (entry.findtext(f"{_ATOM_NS}updated") or "").strip() or None
+                ),
             }
         )
     return out

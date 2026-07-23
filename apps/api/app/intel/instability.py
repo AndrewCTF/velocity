@@ -16,8 +16,8 @@ renormalizes the remaining weights to sum to 1 (see ``_score_country``).
 
 | component          | weight | source(s)                                   |
 |--------------------|--------|----------------------------------------------|
-| armed_conflict     | 0.30   | GDELT ``conflict_events`` + UCDP ``ucdp_events`` (event counts, iso3) |
-| news_pressure      | 0.15   | latest news edition, stories tagged with the country (verified/contested weighted 2x) |
+| armed_conflict     | 0.30   | GDELT ``conflict_events`` + UCDP ``ucdp_events`` counts |
+| news_pressure      | 0.15   | latest edition's country-tagged stories (verified 2x) |
 | unrest_advisories  | 0.10   | ``advisories_summary()`` max level 1-4 (linear) |
 | displacement       | 0.10   | ``displacement_summary()`` idps+refugees (log scale) |
 | infra_disruption   | 0.15   | ``load_ioda()`` outage counts (jamming skipped, see below) |
@@ -363,7 +363,9 @@ async def score_all() -> list[dict[str, Any]]:
     # market_risk_off-only run would score nobody, and a live one would score
     # everybody off one global number.
     candidates: set[str] = set()
-    for counts in (conflict_counts, news_counts, adv_levels, disp_counts, infra_counts, hazard_counts):
+    for counts in (
+        conflict_counts, news_counts, adv_levels, disp_counts, infra_counts, hazard_counts,
+    ):
         if counts:
             candidates |= set(counts)
 
@@ -418,7 +420,10 @@ async def score_all() -> list[dict[str, Any]]:
             if total > 0:
                 normalized = max(
                     0.0,
-                    min(100.0, 100.0 * math.log10(total + 1.0) / math.log10(_DISPLACEMENT_CAP + 1.0)),
+                    min(
+                        100.0,
+                        100.0 * math.log10(total + 1.0) / math.log10(_DISPLACEMENT_CAP + 1.0),
+                    ),
                 )
             components.append(
                 {

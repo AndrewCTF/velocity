@@ -146,6 +146,16 @@ def _parse_quotes_csv(text: str) -> dict[str, dict[str, Any]]:
     """
     rows: dict[str, dict[str, Any]] = {}
     reader = csv.DictReader(io.StringIO(text))
+
+    def _num(raw: dict[str, Any], field: str) -> float | None:
+        v = (raw.get(field) or "").strip()
+        if not v or v == "N/D":
+            return None
+        try:
+            return float(v)
+        except ValueError:
+            return None
+
     for raw in reader:
         symbol = (raw.get("Symbol") or "").strip().lower()
         meta = _QUOTE_SYMBOLS.get(symbol)
@@ -153,17 +163,8 @@ def _parse_quotes_csv(text: str) -> dict[str, dict[str, Any]]:
             continue
         display, name, bucket = meta
 
-        def _num(field: str) -> float | None:
-            v = (raw.get(field) or "").strip()
-            if not v or v == "N/D":
-                return None
-            try:
-                return float(v)
-            except ValueError:
-                return None
-
-        close = _num("Close")
-        open_ = _num("Open")
+        close = _num(raw, "Close")
+        open_ = _num(raw, "Open")
         change_pct = None
         if close is not None and open_ not in (None, 0):
             change_pct = (close - open_) / open_ * 100
@@ -257,7 +258,9 @@ async def _history(symbol: str) -> list[dict[str, Any]] | None:
     return await _fred_history(series_id)
 
 
-async def _fred_quote_row(symbol: str, display: str, name: str, bucket: str) -> dict[str, Any] | None:
+async def _fred_quote_row(
+    symbol: str, display: str, name: str, bucket: str
+) -> dict[str, Any] | None:
     """Build one quote row from a FRED series' last two closes, or None if down."""
     series_id = _FRED_SYMBOL_SERIES.get(symbol)
     if series_id is None:
@@ -496,7 +499,9 @@ def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, x))
 
 
-def _equity_drawdown(spx_last: float | None, spx_30d_high: float | None) -> tuple[float, float] | None:
+def _equity_drawdown(
+    spx_last: float | None, spx_30d_high: float | None
+) -> tuple[float, float] | None:
     if not spx_last or not spx_30d_high or spx_30d_high <= 0:
         return None
     dd_pct = max(0.0, (spx_30d_high - spx_last) / spx_30d_high * 100)
@@ -590,7 +595,9 @@ def compute_stress(inputs: dict[str, float | None]) -> dict[str, Any]:
             ["oil_5d_pct"],
         ),
         "usd_flight": (
-            _usd_flight(inputs.get("usd_strength_eur_5d_pct"), inputs.get("usd_strength_jpy_5d_pct")),
+            _usd_flight(
+                inputs.get("usd_strength_eur_5d_pct"), inputs.get("usd_strength_jpy_5d_pct")
+            ),
             _WEIGHTS["usd_flight"],
             ["usd_strength_eur_5d_pct", "usd_strength_jpy_5d_pct"],
         ),

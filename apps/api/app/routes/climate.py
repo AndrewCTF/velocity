@@ -144,7 +144,7 @@ async def climate_anomalies() -> dict[str, Any]:
 
         countries, degraded = _country_centroids(conflict)
 
-        today = dt.datetime.now(dt.timezone.utc).date()
+        today = dt.datetime.now(dt.UTC).date()
         recent_start, recent_end = _date_window(today, _WINDOW_DAYS)
         recent_rows = await _fetch_window(countries, recent_start, recent_end)
 

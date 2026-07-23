@@ -75,8 +75,6 @@ def test_tier2_rotation_differs_across_cycles_tier1_stays_fixed(monkeypatch: pyt
     monkeypatch.setattr(sources, "_fetch_one", _fake_fetch_one)
     monkeypatch.setattr(sources, "_fetch_cycle", 0)
 
-    seen_feed_sets: list[set[str]] = []
-
     async def run_cycle() -> set[str]:
         # fetch_all builds the feed list internally; capture it by wrapping
         # _select_register_feeds so we see exactly what tier-2 rotation chose,
@@ -145,5 +143,5 @@ def test_random_register_feeds_are_live() -> None:
         return await asyncio.gather(*(_probe(s) for s in sample))
 
     counts = asyncio.run(_probe_all())
-    failures = [(s.name, c) for s, c in zip(sample, counts) if c < 1]
+    failures = [(s.name, c) for s, c in zip(sample, counts, strict=True) if c < 1]
     assert not failures, f"live probe found dead feed(s): {failures}"

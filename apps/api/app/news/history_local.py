@@ -79,7 +79,9 @@ async def _run(fn: Any) -> Any:
 
 def _check_kind(kind: str) -> None:
     if kind not in _VALID_KINDS:
-        raise ValueError(f"invalid news history kind: {kind!r} (expected one of {sorted(_VALID_KINDS)})")
+        raise ValueError(
+            f"invalid news history kind: {kind!r} (expected one of {sorted(_VALID_KINDS)})"
+        )
 
 
 def _row_to_dict(r: tuple) -> dict[str, Any]:

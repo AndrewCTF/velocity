@@ -244,7 +244,9 @@ def _coerce_verdict(item: dict) -> dict:
     confidence = item.get("confidence")
     return {
         "verdict": verdict,
-        "loaded_language": [str(x).strip() for x in (item.get("loaded_language") or []) if str(x).strip()],
+        "loaded_language": [
+            str(x).strip() for x in (item.get("loaded_language") or []) if str(x).strip()
+        ],
         "one_sided": bool(item.get("one_sided")),
         "unsupported_claims": [
             str(x).strip() for x in (item.get("unsupported_claims") or []) if str(x).strip()

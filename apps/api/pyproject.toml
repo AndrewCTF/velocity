@@ -85,6 +85,9 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.File"]
 "tests/mcp_*_check.py" = ["E501", "ASYNC210"]
 # Tests favour long, readable assertion + fixture lines over hard wrapping.
 "tests/*" = ["E501"]
+# The feed registry is a table of literal source URLs (87 of them past the
+# margin); wrapping URLs breaks grep-ability. The long lines ARE the data.
+"app/news/feeds_register.py" = ["E501"]
 # main.py imports the FastAPI app + routes AFTER the allocator (jemalloc/libc)
 # setup block runs — that ordering is deliberate (scripts/run-api.sh + the memory
 # guardrails depend on it), so module-level-import-not-at-top is expected here.
