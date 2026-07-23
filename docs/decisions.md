@@ -745,6 +745,19 @@ The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
 three-line fact there. One line per wave, newest first — when the CLAUDE.md
 number changes, the displaced line lands here.
 
+- **1750 +1 skip → 1916 +2 skip** — 2026-07-23, worldmonitor-gaps-2026-07:
+  persona-fix-wave. Turned the seven-persona feedback study
+  (`docs/user-feedback-personas-2026-07.md`) into fixes: identity-scoped
+  history (`GET /api/history/track`), keyless investigate/recon, wired the
+  Country Instability Index router+scorer, real JSON 404 for unmatched
+  `/api` and `/ws`, honest dark-candidate/inference labels, per-identity
+  (icao24/mmsi/callsign) watch rules, an alert-rule creation UI, country-brief
+  citations + source-URL passthrough + a country news card, `/api/eq` radius
+  filter, and a README truth-pass (dropped the dead demo link, corrected RAM,
+  storage and MCP-tool-count claims). Eight sonnet packages, each adversarially
+  reviewed; six review findings (a dark-candidate mislabel regression, a
+  self-defeating WB-rounding clamp, an em-dash copy slip, a 503-copy bug,
+  missing AOI validation, a /ws test gap) fixed as follow-ups.
 - **1750 +1 skip** — 2026-07-18, overnight-hardening-2026-07-18: overnight
   bug-hunt wave. Four audit rounds (security/backend/frontend, then
   ontology/foundry/collab/recon/imagery, then alerts/correlate/weather + FE
