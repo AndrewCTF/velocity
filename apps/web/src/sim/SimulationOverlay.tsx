@@ -3,6 +3,7 @@ import { GripVertical } from 'lucide-react';
 import * as Cesium from 'cesium';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useSim, useAlerts } from '../state/stores.js';
+import { useSettings } from '../state/settings.js';
 import { Widget, Btn, SectionLabel, KV, KVRow, MicroLabel, Badge, Toggle } from '../shell/instruments.js';
 import { SimController, type SimClock, type SimStats } from './SimController.js';
 import type { Alert } from '@osint/shared';
@@ -158,6 +159,10 @@ export function SimulationOverlay({
   // RIGHT of the icon rail + an open left flyout (x≈360) so the controls never
   // sit on top of the left bar. Null until first drag → uses the default below.
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  // Docked against the icon rail like the other left flyouts (the rail widens
+  // when labels are on, so track it). Drag still floats it if the user wants.
+  const leftRailExpanded = useSettings((s) => s.leftRailExpanded);
+  const dockLeft = leftRailExpanded ? 176 : 44;
   const onDragDown = (e: ReactPointerEvent): void => {
     if ((e.target as HTMLElement).closest('button')) return;
     e.preventDefault();
@@ -362,11 +367,16 @@ export function SimulationOverlay({
 
   return (
     <div
-      className="absolute z-[var(--z-overlay)] w-[300px] max-h-[calc(100%-6rem)] overflow-y-auto pointer-events-auto rounded-md border border-line bg-bg-0/95 backdrop-blur-sm shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]"
-      style={pos ? { left: pos.x, top: pos.y } : { left: 360, top: 76 }}
+      className="absolute z-[var(--z-overlay)] w-[300px] overflow-y-auto pointer-events-auto border-r border-line-2 bg-[var(--panel-bg)]"
+      // Docked left by default, filling the map area (below the 68px top bars,
+      // above the 158px timeline) like the other left flyouts. Drag → floats.
+      style={
+        pos
+          ? { left: pos.x, top: pos.y, maxHeight: 'calc(100% - 6rem)' }
+          : { left: dockLeft, top: 68, bottom: 158 }
+      }
     >
-      {/* Drag handle — grab to reposition so the panel never has to sit on the
-          left bar. */}
+      {/* Header. Docked by default; grab to float the panel if you'd rather. */}
       <div
         onPointerDown={onDragDown}
         className="flex items-center gap-1.5 px-2 h-6 border-b border-line-2 bg-bg-1/80 cursor-grab active:cursor-grabbing select-none sticky top-0 z-10"
