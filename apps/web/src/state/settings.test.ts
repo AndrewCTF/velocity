@@ -39,6 +39,7 @@ describe('settings store', () => {
       selectionAiEnabled: false,
       selectionAiModel: null,
       selectionAiPosition: 'top',
+      leftRailExpanded: false,
     });
   });
 
