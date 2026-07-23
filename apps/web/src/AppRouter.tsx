@@ -116,9 +116,10 @@ function PredictedMotionBadge(): JSX.Element | null {
   // there — and worse, the app surface clips its 427px width down to a stray
   // "● Pr" at the left edge. Hide it whenever the globe isn't the active view.
   if (loc.pathname === '/' && APP_META[activeApp].chrome === 'full') return null;
-  // The console home ("/") has a ~158px timeline footer; sit above it so the badge
-  // never overlaps the lane labels. The 2D route has a clear bottom.
-  const bottomClass = loc.pathname === '/' ? 'bottom-[172px]' : 'bottom-2';
+  // The console home ("/") stacks a ~158px timeline footer AND the AgentConsole's
+  // resting slash-hints row above it; sit clear of BOTH so the badge never lands
+  // in the console's text band. The 2D route has a clear bottom.
+  const bottomClass = loc.pathname === '/' ? 'bottom-[280px]' : 'bottom-2';
   // Centered so it never sits under the left tool flyout (Layers/Feeds/etc.),
   // which overlays the map's bottom-left corner where this used to pin.
   return (
