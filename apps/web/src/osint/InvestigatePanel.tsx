@@ -47,7 +47,7 @@ export function InvestigatePanel(): JSX.Element {
         // 401 here means a real Supabase deployment needs sign-in — no
         // special-cased copy, just the server's own detail.
         setError(
-          r.status === 503
+          r.status === 503 && detail.toLowerCase().includes('recon')
             ? 'Deep recon needs the OSINT_RECON_SIDECAR_URL sidecar running'
             : `${r.status}: ${detail.slice(0, 200)}`,
         );
