@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { X, PanelRightOpen } from 'lucide-react';
+import { X, PanelRightOpen, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Icon, type IconName } from '../normal/Icon.js';
 import { useFloatingPanels } from '../state/floatingPanels.js';
+import { useSettings } from '../state/settings.js';
 import { FloatingPanel } from './FloatingPanel.js';
 
 // Left icon rail (design §6.1 grammar #3/#4). A 44px column of icons; clicking one
@@ -33,6 +34,8 @@ export function LeftIconRail({
   ariaLabel?: string;
 }): JSX.Element {
   const [open, setOpen] = useState<string | null>(defaultOpen);
+  const expanded = useSettings((s) => s.leftRailExpanded);
+  const setSetting = useSettings((s) => s.set);
   const floating = useFloatingPanels((s) => s.panels);
   const detach = useFloatingPanels((s) => s.detach);
   const redock = useFloatingPanels((s) => s.redock);
@@ -53,11 +56,14 @@ export function LeftIconRail({
         title={isFloating ? `${it.label} (floating; click to dock)` : it.label}
         aria-pressed={on}
         onClick={() => (isFloating ? (redock(it.id), setOpen(it.id)) : setOpen(on ? null : it.id))}
-        className={`relative w-11 h-11 flex items-center justify-center shrink-0 transition-colors ${
+        className={`relative h-11 flex items-center shrink-0 transition-colors ${
+          expanded ? 'w-full justify-start gap-2.5 px-3' : 'w-11 justify-center'
+        } ${
           on ? 'text-accent bg-accent-dim' : isFloating ? 'text-accent/70 hover:text-accent' : 'text-txt-3 hover:text-txt-1 hover:bg-bg-2'
         }`}
       >
-        <Icon name={it.icon} className="w-[18px] h-[18px]" />
+        <Icon name={it.icon} className="w-[18px] h-[18px] shrink-0" />
+        {expanded && <span className="text-[12px] tracking-[0.2px] truncate">{it.label}</span>}
         {on && <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-accent rounded-r-sm" />}
         {isFloating && <span className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" />}
         {it.badge != null && it.badge > 0 && (
@@ -73,10 +79,31 @@ export function LeftIconRail({
     <div className="relative h-full" role="toolbar" aria-label={ariaLabel}>
       {/* 44px icon column (in flow). Scrolls internally when the item list is
           taller than the viewport (short screens) so no icon is clipped. */}
-      <div className="w-11 h-full min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center bg-[var(--panel-bg)] py-1">
+      <div
+        className={`${expanded ? 'w-44' : 'w-11'} h-full min-h-0 overflow-y-auto overflow-x-hidden flex flex-col ${
+          expanded ? 'items-stretch' : 'items-center'
+        } bg-[var(--panel-bg)] py-1`}
+      >
         {primary.map(btn)}
-        {more.length > 0 && <div className="my-1 h-px w-6 bg-line-2" />}
+        {more.length > 0 && <div className={`my-1 h-px ${expanded ? 'w-full' : 'w-6'} bg-line-2`} />}
         {more.map(btn)}
+        {/* Expand/collapse: show or hide the text labels. Persisted in settings. */}
+        <button
+          type="button"
+          onClick={() => setSetting('leftRailExpanded', !expanded)}
+          title={expanded ? 'Collapse toolbar' : 'Expand toolbar (show labels)'}
+          aria-label={expanded ? 'Collapse toolbar' : 'Expand toolbar'}
+          className={`relative mt-auto h-9 flex items-center shrink-0 text-txt-3 hover:text-txt-1 hover:bg-bg-2 transition-colors ${
+            expanded ? 'w-full justify-start gap-2.5 px-3' : 'w-11 justify-center'
+          }`}
+        >
+          {expanded ? (
+            <ChevronsLeft size={18} strokeWidth={1.75} aria-hidden />
+          ) : (
+            <ChevronsRight size={18} strokeWidth={1.75} aria-hidden />
+          )}
+          {expanded && <span className="text-[12px]">Collapse</span>}
+        </button>
       </div>
       {/* flyout floats over the map to the right of the rail (design §6.1) */}
       {active && (

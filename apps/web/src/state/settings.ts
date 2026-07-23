@@ -55,6 +55,10 @@ export interface Settings {
   // above it does NOT mirror any backend state, so it may be written directly
   // from its settings control. Default 'top' so the brief is seen on select.
   selectionAiPosition: 'top' | 'bottom';
+  // Left icon rail expanded (shows text labels next to each tool icon and widens
+  // the rail 44px→176px). OFF by default = icon-only. ConsoleShell reads this to
+  // size the rail column and --rail-left-w so map overlays dock past it.
+  leftRailExpanded: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -65,6 +69,7 @@ const DEFAULTS: Settings = {
   selectionAiEnabled: false,
   selectionAiModel: null,
   selectionAiPosition: 'top',
+  leftRailExpanded: false,
 };
 
 const LS_KEY = 'velocity.settings';
