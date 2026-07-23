@@ -124,6 +124,16 @@ export function AlertRulesSection(): JSX.Element {
       setError('Lat and lon must be numbers.');
       return;
     }
+    // Mirror the backend AlertRuleIn Field constraints so a bad AOI is caught
+    // before the round-trip (routes/alert_rules.py: lat ±90, lon ±180, radius 0<r≤5000).
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      setError('Lat must be -90..90 and lon -180..180.');
+      return;
+    }
+    if (Number.isFinite(radius_nm) && (radius_nm <= 0 || radius_nm > 5000)) {
+      setError('Radius (nm) must be greater than 0 and at most 5000.');
+      return;
+    }
     if (form.channel !== 'inapp' && !form.sink_url.trim()) {
       setError(`Channel ${form.channel} requires a sink URL.`);
       return;
