@@ -268,8 +268,11 @@ async def country_security(
     dataset, whose ``country`` field is only populated for US (MIRTA) rows.
 
     Shape: ``{iso3, name, counts: {conflict, ucdp, installations}, events:
-    [{label, date, actors, deaths?, lat, lon, source}], sources: {conflict,
-    ucdp, installations: {unavailable?, note?}}, notes: [str, …]}``.
+    [{label, date, actors, deaths?, lat, lon, source, url}], sources: {conflict,
+    ucdp, installations: {unavailable?, note?}}, notes: [str, …]}``. ``url`` is
+    the upstream article/record link when the source carried one (GDELT does;
+    UCDP GED does not today) and ``None`` otherwise — never fabricated, so a
+    caller can footnote a claim only when ``url`` is present.
     """
     from app import places
     from app.intel import conflict as conflict_mod
@@ -314,6 +317,7 @@ async def country_security(
                             "lat": geom[1],
                             "lon": geom[0],
                             "source": "gdelt",
+                            "url": p.get("url"),
                         }
                     )
         notes.append(
@@ -343,6 +347,11 @@ async def country_security(
                         "lat": geom[1],
                         "lon": geom[0],
                         "source": "ucdp",
+                        # UCDP GED carries no per-event article link today; kept
+                        # for shape parity with the GDELT event dict above (and
+                        # in case a future UCDP field supplies one) — never
+                        # fabricated, so this is None in practice.
+                        "url": p.get("url"),
                     }
                 )
         if u_unavail:
@@ -403,6 +412,23 @@ _BRIEF_SYS = (
 )
 
 
+def _round_wb_value(v: Any) -> Any:
+    """World Bank floats arrive with spurious precision (percentages like
+    ``23.4567891233``) that reads as false accuracy once quoted verbatim in a
+    brief. Round to 4 significant figures; ints and non-numeric values pass
+    through unchanged."""
+    if isinstance(v, bool) or not isinstance(v, int | float):
+        return v
+    if isinstance(v, int):
+        return v
+    if v == 0:
+        return 0.0
+    from math import floor, log10
+
+    digits = 4 - int(floor(log10(abs(v)))) - 1
+    return round(v, max(digits, 0))
+
+
 def _wb_digest(wb: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Latest value per World Bank indicator, for the model prompt."""
     out: list[dict[str, Any]] = []
@@ -416,7 +442,7 @@ def _wb_digest(wb: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "indicator": ind.get("label") or ind.get("id"),
                 "unit": ind.get("unit"),
                 "year": latest.get("year"),
-                "value": latest.get("value"),
+                "value": _round_wb_value(latest.get("value")),
             }
         )
     return out
