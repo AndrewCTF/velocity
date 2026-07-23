@@ -65,6 +65,10 @@ export function OpsPanel({
     counts: {},
     total: 0,
   });
+  // A non-2xx poll (e.g. a 401 on a deployment that hard-gates this route) must
+  // not read the same as "fetched, zero detections" — this carries the HTTP
+  // status so the panel can say so instead of showing a confident 0.
+  const [standingUnavailable, setStandingUnavailable] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
     const poll = async (): Promise<void> => {
@@ -73,12 +77,17 @@ export function OpsPanel({
         // stale/misrouted cached body (e.g. an index.html served during a backend
         // blip), which would freeze the panel on wrong data.
         const r = await apiFetch('/api/alerts/standing', { cache: 'no-store' });
-        if (!r.ok || cancelled) return;
+        if (cancelled) return;
+        if (!r.ok) {
+          setStandingUnavailable(r.status);
+          return;
+        }
         const data = (await r.json()) as {
           detections?: unknown[];
           counts?: Record<string, number>;
         };
         if (cancelled) return;
+        setStandingUnavailable(null);
         setStanding({ counts: data.counts ?? {}, total: (data.detections ?? []).length });
       } catch {
         /* keep last good counts on a transient failure */
@@ -167,8 +176,23 @@ export function OpsPanel({
       {/* Live region: announce detection changes to assistive tech (the counts
           update off a 5 s poll; the rollup is small so polite re-reads are fine). */}
       <section className="space-y-1.5" aria-live="polite">
-        <SectionLabel title="Standing detections" count={standing.total} />
-        {detections.length === 0 ? (
+        <div
+          title={
+            standingUnavailable != null
+              ? `Standing detections unavailable (HTTP ${standingUnavailable})`
+              : undefined
+          }
+        >
+          <SectionLabel
+            title="Standing detections"
+            count={standingUnavailable != null ? '—' : standing.total}
+          />
+        </div>
+        {standingUnavailable != null ? (
+          <div className="mono text-[10px] text-alert px-2 py-[5px]">
+            Standing detections unavailable (HTTP {standingUnavailable})
+          </div>
+        ) : detections.length === 0 ? (
           <div className="mono text-[10px] text-txt-3 px-2 py-[5px]">no detections firing</div>
         ) : (
           <div className="space-y-px">

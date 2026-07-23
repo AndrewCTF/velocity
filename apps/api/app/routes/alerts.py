@@ -22,7 +22,7 @@ from app.config import get_settings
 from app.correlate.bus import bus, jamming_recent
 from app.intel import watch
 from app.intel.geo import NM_TO_KM, haversine_km
-from app.keys import UserCtx, current_user
+from app.keys import UserCtx, current_user_or_local
 
 router = APIRouter(tags=["alerts"])
 
@@ -34,7 +34,7 @@ async def recent_alerts(limit: int = 50) -> dict[str, Any]:
 
 @router.post("/api/alerts/watch-session")
 async def register_watch_session(
-    ctx: UserCtx = Depends(current_user),
+    ctx: UserCtx = Depends(current_user_or_local),
 ) -> dict[str, Any]:
     """Make the caller's Supabase token visible to the geofence evaluator.
 
@@ -43,7 +43,11 @@ async def register_watch_session(
     ``links``). It instead sweeps an explicit registry of ACTIVE SESSIONS that an
     authed entry point supplies — this route is that entry point. The frontend
     alerts client POSTs here on mount and re-POSTs periodically so the stored
-    token stays fresh.
+    token stays fresh. ``current_user_or_local`` degrades to the shared
+    ``local`` identity on a keyless boot (no Supabase configured), the same
+    predicate ``routes/alert_rules.py`` uses — the evaluator already sweeps a
+    synthetic local session on its own (``evaluate_all``), so this just gives
+    a keyless caller the same registration path an authed one has.
 
     CAVEAT — tokens expire. The registry holds whatever token the caller last
     handed over; once it expires, the loop's reads for that session 401 and
@@ -59,7 +63,7 @@ async def register_watch_session(
 
 @router.delete("/api/alerts/watch-session")
 async def unregister_watch_session(
-    ctx: UserCtx = Depends(current_user),
+    ctx: UserCtx = Depends(current_user_or_local),
 ) -> dict[str, Any]:
     """Drop the caller's session so the evaluator stops reading their rules.
 
@@ -72,7 +76,7 @@ async def unregister_watch_session(
 
 @router.get("/api/alerts/standing")
 async def standing_detections(
-    ctx: UserCtx = Depends(current_user),
+    ctx: UserCtx = Depends(current_user_or_local),
 ) -> dict[str, Any]:
     """Current LEVEL view of the caller's standing detections.
 
@@ -83,7 +87,10 @@ async def standing_detections(
     recent-edge backfill, then goes quiet while contacts sit inside). This recomputes
     the qualifying-inside set from the evaluator's most recent shared candidate set
     against the caller's RLS-scoped rules, so the panel is stable across reloads,
-    reconnects, and backend restarts.
+    reconnects, and backend restarts. ``current_user_or_local`` keeps this reachable
+    on a keyless boot (mirrors ``routes/alert_rules.py`` CRUD, which already reads/
+    writes rules under the shared ``local`` identity) — the Ops panel's poll would
+    otherwise 401 forever with no way to distinguish "unreachable" from "zero".
     """
     s = get_settings()
     rules = await watch._list_enabled_rules(ctx, s)

@@ -9,7 +9,10 @@ and reads each session's rules with the caller's own token (RLS-scoped). These
 tests pin the contract WITHOUT a live Supabase or network — the upstream is
 mocked / the route's effect on the in-process registry is asserted directly:
 
-  - both verbs require a signed-in user (``current_user`` → 401 keyless),
+  - keyless (no Supabase configured, the default test posture) both verbs
+    degrade to the shared ``local`` identity via ``current_user_or_local``
+    instead of a dead 401 — same predicate ``routes/alert_rules.py`` uses,
+  - with Supabase configured both verbs still require a signed-in user,
   - POST registers the caller's id+token into the evaluator's session registry,
   - POST is idempotent on ``user_id`` and REFRESHES the stored token (the
     periodic re-POST is what keeps a long-lived tab's token from going stale),
@@ -19,6 +22,9 @@ mocked / the route's effect on the in-process registry is asserted directly:
     makes the loop's reads 401 → ``_list_enabled_rules`` returns ``[]`` so the
     session evaluates to ZERO firings (goes quiet, never crashes) — it stays
     registered until the next re-POST refreshes it or the DELETE removes it.
+
+Also covers ``GET /api/alerts/standing`` (the level-view read path next to this
+same write path), which shares the identical ``current_user_or_local`` gate.
 """
 
 from __future__ import annotations
@@ -28,9 +34,11 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
+from app import keys as keys_mod
 from app.config import Settings
 from app.intel import watch
-from app.keys import UserCtx, current_user
+from app.keys import UserCtx, current_user_or_local
+from app.routes import alerts as alerts_mod
 
 
 @pytest.fixture(autouse=True)
@@ -44,8 +52,8 @@ def _clean_registry() -> None:
 
 
 # A mutable holder so a test can change the identity/token the route's
-# ``current_user`` dependency resolves to between calls (mirrors a browser
-# re-POSTing with a rotated access token).
+# ``current_user_or_local`` dependency resolves to between calls (mirrors a
+# browser re-POSTing with a rotated access token).
 _CALLER = {"user_id": "u1", "token": "tok-1"}
 
 
@@ -53,12 +61,39 @@ def _fake_user() -> UserCtx:
     return UserCtx(_CALLER["user_id"], _CALLER["token"])
 
 
+def _configure_supabase(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Same helper as ``test_alert_rules.py::_configure_supabase`` — patch the
+    name each module actually calls (``get_settings`` is memoized) so exactly
+    this test sees Supabase as configured and ``current_user_or_local`` stops
+    degrading to the shared ``local`` identity.
+    """
+    fake = Settings(supabase_url="http://x", supabase_anon_key="anon")
+    monkeypatch.setattr(keys_mod, "get_settings", lambda: fake)
+    monkeypatch.setattr(alerts_mod, "get_settings", lambda: fake)
+
+
 # ── auth gate ───────────────────────────────────────────────────────────────────
 
 
-def test_watch_session_requires_auth(client: TestClient) -> None:
-    # No signed-in user (the test app carries no API key / Supabase token):
-    # current_user rejects before the handler runs, for BOTH verbs.
+def test_watch_session_keyless_local_identity(client: TestClient) -> None:
+    # No Supabase configured (default test settings) → current_user_or_local
+    # degrades to the shared "local" identity instead of a dead 401 — same
+    # contract test_alert_rules.py asserts for the rule-CRUD routes.
+    r = client.post("/api/alerts/watch-session")
+    assert r.status_code == 200
+    assert [c.user_id for c in watch.active_sessions()] == ["local"]
+
+    r = client.delete("/api/alerts/watch-session")
+    assert r.status_code == 200
+    assert watch.active_sessions() == []
+
+
+def test_watch_session_requires_auth_when_supabase_configured(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _configure_supabase(monkeypatch)
+    # No signed-in user and Supabase IS configured: current_user_or_local falls
+    # through to current_user's strict token check, for BOTH verbs.
     assert client.post("/api/alerts/watch-session").status_code == 401
     assert client.delete("/api/alerts/watch-session").status_code == 401
     # …and nothing leaked into the registry.
@@ -70,7 +105,7 @@ def test_watch_session_requires_auth(client: TestClient) -> None:
 
 def test_post_registers_caller_token(client: TestClient) -> None:
     _CALLER.update(user_id="u1", token="tok-1")
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     try:
         r = client.post("/api/alerts/watch-session")
         assert r.status_code == 200
@@ -81,7 +116,7 @@ def test_post_registers_caller_token(client: TestClient) -> None:
         assert [c.user_id for c in sessions] == ["u1"]
         assert sessions[0].token == "tok-1"
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_post_is_idempotent_and_refreshes_token(client: TestClient) -> None:
@@ -89,7 +124,7 @@ def test_post_is_idempotent_and_refreshes_token(client: TestClient) -> None:
     # token (so it never goes stale) WITHOUT duplicating the session. This is the
     # mechanism that keeps a long-lived tab's reads from 401ing as the token
     # rotates — register_session is idempotent on user_id.
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     try:
         _CALLER.update(user_id="u1", token="tok-1")
         client.post("/api/alerts/watch-session")
@@ -101,7 +136,7 @@ def test_post_is_idempotent_and_refreshes_token(client: TestClient) -> None:
         assert len(sessions) == 1
         assert sessions[0].token == "tok-2"  # refreshed, not stale
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 # ── DELETE drops the caller's session (idempotent) ───────────────────────────────
@@ -109,7 +144,7 @@ def test_post_is_idempotent_and_refreshes_token(client: TestClient) -> None:
 
 def test_delete_unregisters_caller_session(client: TestClient) -> None:
     _CALLER.update(user_id="u1", token="tok-1")
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     try:
         client.post("/api/alerts/watch-session")
         assert len(watch.active_sessions()) == 1
@@ -125,7 +160,7 @@ def test_delete_unregisters_caller_session(client: TestClient) -> None:
         assert r2.status_code == 200
         assert r2.json()["active_sessions"] == 0
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_only_callers_own_session_is_dropped(client: TestClient) -> None:
@@ -133,7 +168,7 @@ def test_only_callers_own_session_is_dropped(client: TestClient) -> None:
     # evict another user's still-live session from the shared registry.
     watch.register_session(UserCtx("other", "tok-other"))
     _CALLER.update(user_id="u1", token="tok-1")
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     try:
         client.post("/api/alerts/watch-session")
         assert {c.user_id for c in watch.active_sessions()} == {"u1", "other"}
@@ -141,7 +176,28 @@ def test_only_callers_own_session_is_dropped(client: TestClient) -> None:
         # only u1 left the registry; 'other' is untouched
         assert [c.user_id for c in watch.active_sessions()] == ["other"]
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
+
+
+# ── GET /api/alerts/standing — same keyless contract as the write path above ─────
+
+
+def test_standing_detections_keyless_local_identity(client: TestClient) -> None:
+    # No Supabase configured: the LEVEL-view read path must be reachable with
+    # no browser ever having signed in, exactly like the rule-CRUD routes —
+    # this was the gap (write path keyless, read path hard-401) the persona
+    # report caught.
+    r = client.get("/api/alerts/standing")
+    assert r.status_code == 200
+    body = r.json()
+    assert body == {"detections": [], "counts": {}, "as_of": body["as_of"]}
+
+
+def test_standing_detections_requires_auth_when_supabase_configured(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _configure_supabase(monkeypatch)
+    assert client.get("/api/alerts/standing").status_code == 401
 
 
 # ── honest caveat: a stale/expired token goes quiet, it does not crash ───────────
