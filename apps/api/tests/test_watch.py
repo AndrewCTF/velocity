@@ -81,6 +81,18 @@ def test_within_geofence_is_lon_first() -> None:
     assert within_geofence(r, 26.5, 56.3) is False
 
 
+def test_within_geofence_tolerates_missing_aoi() -> None:
+    # An identity-only rule (P6.1) persists lat/lon/radius_nm as None. Both
+    # evaluate_rules and standing_detections already gate this function behind
+    # has_identity, so it's never reached for those rows in practice — but a
+    # legacy/foreign-written row without that guarantee must read as "never
+    # inside" rather than crash the sweep on float(None).
+    no_aoi = _rule(lat=None, lon=None, radius_nm=None)
+    assert within_geofence(no_aoi, 56.3, 26.5) is False
+    half_aoi = _rule(lat=26.5, lon=None, radius_nm=50)
+    assert within_geofence(half_aoi, 56.3, 26.5) is False
+
+
 # ── candidate extraction ────────────────────────────────────────────────────────
 
 

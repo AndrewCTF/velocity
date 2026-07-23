@@ -100,3 +100,16 @@ def test_legacy_rule_ignores_identity_pinned_candidate_outside_kind() -> None:
     r = _rule(lat=26.5, lon=56.3, radius_nm=50, kinds=["quake"])
     cand = _Candidate("aircraft:m1", "military_air", 56.3, 26.5, 3, "mil")
     assert evaluate_rules([r], [cand]) == []
+
+
+def test_identity_rule_with_no_aoi_still_fires() -> None:
+    # P6.1: an identity-only rule (routes/alert_rules.py's model validator no
+    # longer forces a fake AOI) persists lat/lon/radius_nm as None. The
+    # entity-follows-anywhere behavior must be unchanged by having no AOI at
+    # all, not just a distant one — has_identity is still the whole gate.
+    r = _rule(lat=None, lon=None, radius_nm=None, icao24="abc123")
+    cand = _Candidate("aircraft:abc123", "military_air", 100.0, -30.0, 3,
+                       "military contact RCH1", {"icao24": "abc123"})
+    firings = evaluate_rules([r], [cand])
+    assert len(firings) == 1
+    assert firings[0][2] == "enter"

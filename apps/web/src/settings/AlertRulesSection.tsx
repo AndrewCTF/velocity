@@ -26,12 +26,25 @@ const KINDS = [
 const CHANNELS = ['inapp', 'discord', 'webhook'] as const;
 type Channel = (typeof CHANNELS)[number];
 
+// The list card used to always render `${rule.radius_nm} nm`, even for an
+// identity-pinned rule created with no AOI at all (radius_nm null) — a fake
+// geofence badge for a rule watch.py's has_identity gate never actually
+// enforces (sam-2). Say what the rule really is instead.
+function aoiLabel(rule: AlertRule): string {
+  const hasIdentity = Boolean(rule.icao24 || rule.mmsi || rule.callsign);
+  const hasAoi = rule.lat != null && rule.lon != null && rule.radius_nm != null;
+  if (hasIdentity && hasAoi) return `identity pin · ${rule.radius_nm} nm`;
+  if (hasIdentity) return 'identity pin · global';
+  if (hasAoi) return `${rule.radius_nm} nm`;
+  return '—';
+}
+
 interface AlertRule {
   id: string;
   label: string;
-  lat: number;
-  lon: number;
-  radius_nm: number;
+  lat: number | null;
+  lon: number | null;
+  radius_nm: number | null;
   kinds: string[];
   min_severity: number;
   channel: string;
@@ -113,26 +126,54 @@ export function AlertRulesSection(): JSX.Element {
   const submit = async (): Promise<void> => {
     setError(null);
     setCreatedId(null);
-    const lat = Number(form.lat);
-    const lon = Number(form.lon);
-    const radius_nm = Number(form.radius_nm);
     if (!form.label.trim()) {
       setError('Label is required.');
       return;
     }
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      setError('Lat and lon must be numbers.');
+    const hasIdentity = Boolean(
+      form.icao24.trim() || form.mmsi.trim() || form.callsign.trim(),
+    );
+    // Number('') === 0, which IS finite — coercing a blank lat/lon straight to
+    // Number() used to submit a real (0, 0) geofence for what the analyst meant
+    // as "no AOI, just follow this identity." Read blankness from the raw
+    // string first so an identity-only rule can omit the AOI instead of lying
+    // about it, and a half-filled AOI is a hard error rather than a silent 0.
+    const latRaw = form.lat.trim();
+    const lonRaw = form.lon.trim();
+    const latBlank = latRaw === '';
+    const lonBlank = lonRaw === '';
+    if (latBlank !== lonBlank) {
+      setError('Lat and lon must both be set or both left blank.');
       return;
     }
-    // Mirror the backend AlertRuleIn Field constraints so a bad AOI is caught
-    // before the round-trip (routes/alert_rules.py: lat ±90, lon ±180, radius 0<r≤5000).
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-      setError('Lat must be -90..90 and lon -180..180.');
+    const hasAoi = !latBlank && !lonBlank;
+    if (!hasAoi && !hasIdentity) {
+      setError(
+        'Provide either an identity field (icao24, mmsi, or callsign) or a complete lat/lon/radius AOI.',
+      );
       return;
     }
-    if (Number.isFinite(radius_nm) && (radius_nm <= 0 || radius_nm > 5000)) {
-      setError('Radius (nm) must be greater than 0 and at most 5000.');
-      return;
+    let aoi: { lat: number; lon: number; radius_nm: number } | null = null;
+    if (hasAoi) {
+      const lat = Number(latRaw);
+      const lon = Number(lonRaw);
+      const radiusRaw = form.radius_nm.trim();
+      const radius_nm = radiusRaw === '' ? 50 : Number(radiusRaw);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        setError('Lat and lon must be numbers.');
+        return;
+      }
+      // Mirror the backend AlertRuleIn Field constraints so a bad AOI is caught
+      // before the round-trip (routes/alert_rules.py: lat ±90, lon ±180, radius 0<r≤5000).
+      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        setError('Lat must be -90..90 and lon -180..180.');
+        return;
+      }
+      if (!Number.isFinite(radius_nm) || radius_nm <= 0 || radius_nm > 5000) {
+        setError('Radius (nm) must be greater than 0 and at most 5000.');
+        return;
+      }
+      aoi = { lat, lon, radius_nm };
     }
     if (form.channel !== 'inapp' && !form.sink_url.trim()) {
       setError(`Channel ${form.channel} requires a sink URL.`);
@@ -145,9 +186,7 @@ export function AlertRulesSection(): JSX.Element {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           label: form.label.trim(),
-          lat,
-          lon,
-          radius_nm: Number.isFinite(radius_nm) ? radius_nm : 50,
+          ...(aoi ?? {}),
           kinds: Array.from(form.kinds),
           min_severity: form.min_severity,
           channel: form.channel,
@@ -195,7 +234,7 @@ export function AlertRulesSection(): JSX.Element {
               <div className="flex flex-col min-w-0">
                 <span className="mono text-[11px] text-txt-1 truncate">{rule.label}</span>
                 <span className="mono text-[10px] text-txt-3 truncate">
-                  {rule.radius_nm} nm · {rule.kinds.join(', ') || 'all kinds'} · sev≥
+                  {aoiLabel(rule)} · {rule.kinds.join(', ') || 'all kinds'} · sev≥
                   {rule.min_severity} · {rule.channel}
                 </span>
               </div>

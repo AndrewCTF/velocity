@@ -21,7 +21,7 @@ module is CRUD-only. ``email`` is rejected at creation until a sender exists.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.config import Settings, get_settings
 from app.keys import UserCtx, _client, _headers, current_user_or_local
@@ -59,9 +59,16 @@ def _rest(s: Settings) -> str:
 
 class AlertRuleIn(BaseModel):
     label: str = Field(..., min_length=1, max_length=120)
-    lat: float = Field(..., ge=-90, le=90)
-    lon: float = Field(..., ge=-180, le=180)
-    radius_nm: float = Field(50, gt=0, le=5000)
+    # AOI is OPTIONAL: an identity-pinned rule (icao24/mmsi/callsign below)
+    # follows that entity globally and needs no starting coordinate — watch.py's
+    # ``has_identity or within_geofence(...)`` gate already gives it a free pass
+    # around the geofence, so requiring a fake lat/lon/radius here just to
+    # satisfy the model was pure theater (and the rule list rendered that fake
+    # radius as if it were a real geofence). ``_require_identity_or_aoi`` below
+    # enforces the real constraint: an identity pin, or a COMPLETE AOI.
+    lat: float | None = Field(None, ge=-90, le=90)
+    lon: float | None = Field(None, ge=-180, le=180)
+    radius_nm: float | None = Field(50, gt=0, le=5000)
     kinds: list[str] = Field(default_factory=list)
     min_severity: int = Field(1, ge=1, le=5)
     channel: str = "inapp"
@@ -85,6 +92,34 @@ class AlertRuleIn(BaseModel):
             return None
         v = v.strip().lower()
         return v or None
+
+    @model_validator(mode="after")
+    def _require_identity_or_aoi(self) -> AlertRuleIn:
+        """A rule needs a gate: either an identity pin, or a full AOI circle.
+
+        Runs after every field validator, so ``icao24``/``mmsi``/``callsign``
+        are already normalized (blank → None). ``lat``/``lon`` must both be
+        present or both absent — a lone coordinate can't be geofenced and is
+        never useful, identity pin or not. When no AOI is given at all,
+        ``radius_nm`` is forced back to ``None`` too: its ``Field(50, ...)``
+        default exists only to preserve the old "radius omitted → 50" shape
+        for AOI rules, and must never leak a fabricated 50 nm onto an
+        identity-only rule that has no circle to size.
+        """
+        has_identity = bool(self.icao24 or self.mmsi or self.callsign)
+        has_lat = self.lat is not None
+        has_lon = self.lon is not None
+        if has_lat != has_lon:
+            raise ValueError("lat and lon must both be set or both omitted")
+        has_aoi = has_lat and has_lon
+        if not has_aoi:
+            self.radius_nm = None
+        if not has_identity and not has_aoi:
+            raise ValueError(
+                "a rule needs either an identity pin (icao24, mmsi, or "
+                "callsign) or a complete AOI (lat, lon, radius_nm)"
+            )
+        return self
 
 
 class AlertRule(AlertRuleIn):

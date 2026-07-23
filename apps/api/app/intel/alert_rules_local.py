@@ -64,9 +64,9 @@ CREATE TABLE IF NOT EXISTS alert_rules (
   user_id      TEXT NOT NULL,
   id           TEXT NOT NULL,
   label        TEXT NOT NULL,
-  lat          REAL NOT NULL,
-  lon          REAL NOT NULL,
-  radius_nm    REAL NOT NULL DEFAULT 50,
+  lat          REAL,
+  lon          REAL,
+  radius_nm    REAL DEFAULT 50,
   kinds        TEXT NOT NULL DEFAULT '[]',
   min_severity INTEGER NOT NULL DEFAULT 1,
   channel      TEXT NOT NULL DEFAULT 'inapp',
@@ -108,6 +108,36 @@ def _migrate(con: sqlite3.Connection) -> None:
     for col in _IDENTITY_COLUMNS:
         if col not in have:
             con.execute(f"ALTER TABLE alert_rules ADD COLUMN {col} TEXT")
+    _relax_aoi_not_null(con)
+
+
+# An identity-only rule (P6.1: icao24/mmsi/callsign with no AOI) persists NULL
+# lat/lon/radius_nm — a DB file created before that has a NOT NULL constraint
+# on those columns that a plain ALTER TABLE ADD COLUMN can't lift (SQLite has
+# no ALTER COLUMN). Rebuild the table instead: rename it aside, let ``_SCHEMA``
+# recreate the (already-nullable) definition, copy every row across by name,
+# drop the old one. The identity-column migration above must run FIRST so the
+# renamed-aside copy already has icao24/mmsi/callsign for the column list to
+# select. Runs at most once per DB file: after it, ``lat``'s notnull flag is 0,
+# so the next boot's check is a single PRAGMA read.
+_ALERT_RULE_COLUMNS = (
+    "user_id, id, label, lat, lon, radius_nm, kinds, min_severity, channel,"
+    " sink_url, enabled, created_at, icao24, mmsi, callsign"
+)
+
+
+def _relax_aoi_not_null(con: sqlite3.Connection) -> None:
+    info = con.execute("PRAGMA table_info(alert_rules)").fetchall()
+    lat_notnull = next((row[3] for row in info if row[1] == "lat"), 0)
+    if not lat_notnull:
+        return
+    con.execute("ALTER TABLE alert_rules RENAME TO alert_rules_old")
+    con.executescript(_SCHEMA)
+    con.execute(
+        f"INSERT INTO alert_rules ({_ALERT_RULE_COLUMNS})"
+        f" SELECT {_ALERT_RULE_COLUMNS} FROM alert_rules_old"
+    )
+    con.execute("DROP TABLE alert_rules_old")
 
 
 def _connect(settings: Settings | None = None) -> sqlite3.Connection:
@@ -197,9 +227,15 @@ async def create_rule(
     row = {
         "id": rid,
         "label": body["label"],
-        "lat": float(body["lat"]),
-        "lon": float(body["lon"]),
-        "radius_nm": float(body.get("radius_nm", 50)),
+        # An identity-only rule (icao24/mmsi/callsign, no AOI — AlertRuleIn's
+        # model validator guarantees one or the other) carries None here; keep
+        # it None rather than crashing on float(None) or fabricating a 0/50
+        # geofence the evaluator was never told to enforce.
+        "lat": float(body["lat"]) if body.get("lat") is not None else None,
+        "lon": float(body["lon"]) if body.get("lon") is not None else None,
+        "radius_nm": (
+            float(body["radius_nm"]) if body.get("radius_nm") is not None else None
+        ),
         "kinds": kinds,
         "min_severity": int(body.get("min_severity", 1)),
         "channel": body.get("channel") or "inapp",

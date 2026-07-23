@@ -88,4 +88,84 @@ describe('AlertRulesSection', () => {
 
     expect(await screen.findByText(/unknown kinds/)).toBeTruthy();
   });
+
+  // sam-2: Number('') === 0, which IS finite, so a blank lat/lon used to
+  // coerce straight to a real (0, 0) geofence instead of "no AOI". An
+  // identity-only submission must omit lat/lon/radius_nm from the POST body
+  // entirely, not send zeros.
+  it('omits the AOI entirely when an identity field is set and lat/lon are left blank', async () => {
+    render(<AlertRulesSection />);
+    await waitFor(() => expect(mockedFetch).toHaveBeenCalledWith('/api/alerts/rules'));
+
+    fireEvent.change(screen.getByPlaceholderText(/Label/), {
+      target: { value: 'THUN EOS watch' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('mmsi (optional)'), {
+      target: { value: '244013009' },
+    });
+    // lat/lon/radius left at their defaults (lat/lon blank).
+
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse({ id: 'rule-2', label: 'THUN EOS watch' }, 201),
+    );
+    fireEvent.click(screen.getByText('Create alert rule'));
+
+    await screen.findByText(/Rule created/);
+
+    const createCall = mockedFetch.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+    );
+    const [, init] = createCall as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.mmsi).toBe('244013009');
+    expect('lat' in body).toBe(false);
+    expect('lon' in body).toBe(false);
+    expect('radius_nm' in body).toBe(false);
+  });
+
+  it('shows an inline error for a partially filled AOI instead of silently coercing it', async () => {
+    render(<AlertRulesSection />);
+    await waitFor(() => expect(mockedFetch).toHaveBeenCalledWith('/api/alerts/rules'));
+
+    fireEvent.change(screen.getByPlaceholderText(/Label/), {
+      target: { value: 'Half AOI' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('lat'), { target: { value: '26.5' } });
+    // lon left blank.
+    fireEvent.click(screen.getByText('Create alert rule'));
+
+    expect(await screen.findByText(/Lat and lon must both be set/)).toBeTruthy();
+    const createCall = mockedFetch.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(createCall).toBeUndefined();
+  });
+
+  // sam-2 (rule list): an identity-only rule (no AOI) used to render the
+  // Field(50, ...) default as if it were a real '50 nm' geofence — a fake
+  // number for a rule watch.py's has_identity gate never actually enforces.
+  it('renders an identity-only rule with the global badge, not a fake nm radius', async () => {
+    mockedFetch.mockReset();
+    mockedFetch.mockResolvedValue(
+      jsonResponse([
+        {
+          id: 'rule-3',
+          label: 'Track RCH1',
+          lat: null,
+          lon: null,
+          radius_nm: null,
+          kinds: [],
+          min_severity: 1,
+          channel: 'inapp',
+          enabled: true,
+          icao24: 'abc123',
+        },
+      ]),
+    );
+
+    render(<AlertRulesSection />);
+
+    expect(await screen.findByText(/identity pin · global/)).toBeTruthy();
+    expect(screen.queryByText(/^50 nm/)).toBeNull();
+  });
 });

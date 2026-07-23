@@ -146,10 +146,18 @@ def within_geofence(rule: dict[str, Any], lon: float, lat: float) -> bool:
 
     ``haversine_km`` is **lon-first** (geo.py) — passing lat-first would mirror the
     AOI across the diagonal, so the order here is load-bearing.
+
+    An identity-only rule (P6.1: icao24/mmsi/callsign, no AOI) persists
+    ``None`` for lat/lon/radius_nm. Both callers already gate this function
+    behind ``has_identity`` so it's never reached for those rows — but a
+    legacy or foreign-written row (e.g. a hand-edited Supabase table) isn't
+    guaranteed that invariant, so read a missing AOI as "never inside" rather
+    than crashing the sweep on ``float(None)``.
     """
-    return haversine_km(rule["lon"], rule["lat"], lon, lat) <= _radius_km(
-        rule.get("radius_nm", 50)
-    )
+    r_lat, r_lon, radius_nm = rule.get("lat"), rule.get("lon"), rule.get("radius_nm")
+    if r_lat is None or r_lon is None or radius_nm is None:
+        return False
+    return haversine_km(r_lon, r_lat, lon, lat) <= _radius_km(radius_nm)
 
 
 def _meets_severity(rule: dict[str, Any], severity_rank: int) -> bool:

@@ -100,6 +100,48 @@ def test_create_rejects_bad_sink_url(client: TestClient) -> None:
     assert r.status_code == 400
 
 
+def test_create_rejects_neither_identity_nor_aoi(client: TestClient) -> None:
+    # Nothing provided (no lat/lon, no icao24/mmsi/callsign) — the model
+    # validator has nothing to gate the rule on, so this is a 422, not a
+    # silent lat=0/lon=0 (sam-2 finding).
+    r = client.post("/api/alerts/rules", json={"label": "x"})
+    assert r.status_code == 422
+    assert "identity pin" in str(r.json()["detail"])
+
+
+def test_create_rejects_partial_aoi_without_identity(client: TestClient) -> None:
+    # lat given without lon (or vice versa) is never a usable AOI, identity
+    # pin or not — reject it rather than coerce the missing half to 0.
+    r = client.post("/api/alerts/rules", json={"label": "x", "lat": 26.5})
+    assert r.status_code == 422
+    assert "lat and lon" in str(r.json()["detail"])
+
+
+def test_create_identity_only_rule_persists_no_aoi(client: TestClient) -> None:
+    # mika-3 / sam-2: an icao24/mmsi/callsign-pinned rule needs no starting
+    # coordinate. The created row and the list read-back must carry real
+    # nulls, never a fabricated lat=0/lon=0/radius_nm=50.
+    r = client.post(
+        "/api/alerts/rules",
+        json={"label": "THUN EOS watch", "kinds": ["ais_gap"], "mmsi": "244013009"},
+    )
+    assert r.status_code == 201, r.text
+    created = r.json()
+    assert created["lat"] is None
+    assert created["lon"] is None
+    assert created["radius_nm"] is None
+    assert created["mmsi"] == "244013009"
+    rule_id = created["id"]
+
+    listed = client.get("/api/alerts/rules").json()
+    assert len(listed) == 1
+    assert listed[0]["lat"] is None
+    assert listed[0]["lon"] is None
+    assert listed[0]["radius_nm"] is None
+
+    assert client.delete(f"/api/alerts/rules/{rule_id}").status_code == 204
+
+
 def test_crud_keyless_local_store(client: TestClient) -> None:
     # Local SQLite CRUD path (no Supabase): create, list, delete round-trip.
     r = client.post(
