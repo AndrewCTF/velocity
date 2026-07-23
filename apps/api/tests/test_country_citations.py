@@ -106,6 +106,15 @@ def test_wb_digest_rounds_spurious_precision():
     assert out[0]["value"] == 23.46  # 4 significant figures, not 10 decimals
 
 
+def test_wb_round_keeps_sig_figs_for_gdp_scale_values():
+    # Regression: the earlier max(digits, 0) clamp defeated rounding for any
+    # value >= 10_000 (digits goes negative), i.e. exactly the GDP case it was
+    # meant to tidy. round() must accept negative ndigits to keep 4 sig figs.
+    assert cp._round_wb_value(2.1943729812e13) == 2.194e13
+    assert cp._round_wb_value(1234567) == 1234567  # ints pass through untouched
+    assert cp._round_wb_value(98765.4) == 98770.0
+
+
 def test_wb_digest_leaves_ints_alone():
     wb = {
         "indicators": [

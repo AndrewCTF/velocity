@@ -432,7 +432,10 @@ def _round_wb_value(v: Any) -> Any:
     from math import floor, log10
 
     digits = 4 - int(floor(log10(abs(v)))) - 1
-    return round(v, max(digits, 0))
+    # digits can be negative for large magnitudes (e.g. GDP ~2e13 -> -10), which
+    # round() uses to round to the left of the decimal — that is exactly how we
+    # keep 4 significant figures. Clamping to 0 would defeat the whole function.
+    return round(v, digits)
 
 
 def _wb_digest(wb: dict[str, Any] | None) -> list[dict[str, Any]]:
