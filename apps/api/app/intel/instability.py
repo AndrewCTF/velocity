@@ -16,13 +16,19 @@ renormalizes the remaining weights to sum to 1 (see ``_score_country``).
 
 | component          | weight | source(s)                                   |
 |--------------------|--------|----------------------------------------------|
-| armed_conflict     | 0.30   | GDELT ``conflict_events`` + UCDP ``ucdp_events`` counts |
+| armed_conflict     | 0.30   | GDELT + UCDP event counts (mixed matching — see below) |
 | news_pressure      | 0.15   | latest edition's country-tagged stories (verified 2x) |
 | unrest_advisories  | 0.10   | ``advisories_summary()`` max level 1-4 (linear) |
 | displacement       | 0.10   | ``displacement_summary()`` idps+refugees (log scale) |
 | infra_disruption   | 0.15   | ``load_ioda()`` outage counts (jamming skipped, see below) |
 | natural_hazard     | 0.10   | ``load_gdacs()`` alert-weighted events + ``load_quakes()`` M>=5.5 |
 | market_risk_off    | 0.10   | ``market_stress()`` composite score, same value for every country |
+
+``armed_conflict``'s two sources are matched differently: GDELT features carry
+a ``properties.iso3`` but it is unreliable (FIPS-geocoded, frequently wrong),
+so they count only on a word-boundary match of the country's name against
+either CAMEO actor (``app.intel.gdelt_match``); UCDP's curated ``country``
+field is trustworthy and counts straight on ``iso3``, unchanged.
 
 ## Normalization
 
@@ -31,6 +37,22 @@ no cross-country percentile needed at cold start — simpler than a trailing
 z-score, which is a deliberate simplification to revisit once
 ``instability_snapshots`` has enough history to compute one per component).
 Each component's ``k`` is documented at its computation site below.
+
+## Renormalization clamp
+
+A country missing components renormalizes the survivors' weights to sum to
+1 (``weight / weight_sum``) — but for a country with only the 4 baseline
+components present (armed_conflict + unrest_advisories + displacement +
+market_risk_off, the common case when neither natural_hazard nor
+news_pressure has signal that week), armed_conflict's base 0.30 renormalizes
+to 0.30/0.60 = 0.50, letting the single noisiest, least-attributable
+component swing half the score. Each renormalized weight is therefore
+clamped to ``_MAX_COMPONENT_WEIGHT`` (0.40); the clamped-off excess is
+DROPPED, never redistributed to the other components, so a thin candidate's
+weights can sum to < 1. The final score is a plain weighted sum of these
+already-clamped weights — it is NEVER re-divided by their (possibly
+under-1) sum — so a country with fewer live signals can only score LOWER
+than a fuller one, never get inflated back up by a second renormalization.
 
 ## Jamming attribution — deliberately skipped
 
@@ -64,10 +86,12 @@ from typing import Any
 from app.geo.adminshapes import country_name_to_iso3
 from app.intel import instability_local
 from app.intel.conflict import conflict_events
+from app.intel.gdelt_match import actor_matches_country
 from app.intel.ucdp import ucdp_events
 from app.markets import market_stress
 from app.news.history_local import latest as news_latest
 from app.routes.advisories import advisories_summary
+from app.routes.country_stats import countries_iso
 from app.routes.cyber import load_ioda
 from app.routes.displacement import displacement_summary
 from app.routes.eq import load_quakes
@@ -128,6 +152,11 @@ _CONFLICT_HOURS = 72
 # signal, and the whole world would get scored off market_risk_off alone
 # (the one truly global component) if nothing else were available.
 _MIN_NON_GLOBAL_COMPONENTS = 2
+
+# Cap on a single component's post-renormalization weight — see "##
+# Renormalization clamp" in the module docstring. The clamped-off excess is
+# dropped, never redistributed, so a thin candidate's weights can sum to <1.
+_MAX_COMPONENT_WEIGHT = 0.40
 
 
 def _decay(count: float, k: float) -> float:
@@ -242,19 +271,58 @@ def _alpha2_to_iso3(alpha2: str) -> str | None:
     return _ALPHA2_TO_ALPHA3.get(alpha2.upper())
 
 
+def _iso3_name_pairs() -> list[tuple[str, str]]:
+    """(iso3, name) for every ISO-3166 country — reuses the exact iso3->name
+    resolution the Country app already uses (``country_stats.countries_iso()``,
+    the same bundled ``countries_iso.json`` ``_alpha2_to_iso3`` above reads)
+    rather than vendoring a second country-name list."""
+    return [
+        (str(row["alpha-3"]).upper(), str(row["name"]))
+        for row in countries_iso()
+        if row.get("alpha-3") and row.get("name")
+    ]
+
+
 async def _armed_conflict_counts() -> dict[str, float] | None:
+    """armed_conflict raw count per iso3.
+
+    GDELT half: ``conflict_events`` features carry a ``properties.iso3`` but
+    it is frequently wrong (FIPS-geocoded, mistags e.g. UK-hosted tech and
+    entertainment articles as UK conflict events — see docs/decisions.md), so
+    a feature counts for a country only when its actor1/actor2 text
+    word-boundary-matches that country's name — the same
+    ``gdelt_match.actor_matches_country`` heuristic
+    ``country_profile.country_security()`` uses, generalized across every
+    ISO-3166 country instead of one at a time. Reporting intensity, not
+    verified ground truth.
+
+    UCDP half: unchanged straight ``properties.iso3`` tally — UCDP's
+    ``country`` field is curated upstream and trustworthy, unlike GDELT's
+    free-text actors.
+    """
     conflict_fc = await _safe(conflict_events(hours=_CONFLICT_HOURS))
     ucdp_fc = await _safe(ucdp_events())
     if conflict_fc is None and ucdp_fc is None:
         return None
     counts: dict[str, float] = defaultdict(float)
-    for fc in (conflict_fc, ucdp_fc):
-        if not fc:
-            continue
-        for feat in fc.get("features") or []:
+
+    if conflict_fc:
+        pairs = _iso3_name_pairs()
+        for feat in conflict_fc.get("features") or []:
+            props = feat.get("properties") or {}
+            actor1, actor2 = props.get("actor1"), props.get("actor2")
+            if not actor1 and not actor2:
+                continue
+            for iso3, name in pairs:
+                if actor_matches_country(actor1, name) or actor_matches_country(actor2, name):
+                    counts[iso3] += 1.0
+
+    if ucdp_fc:
+        for feat in ucdp_fc.get("features") or []:
             iso3 = (feat.get("properties") or {}).get("iso3")
             if iso3:
                 counts[str(iso3)] += 1.0
+
     return dict(counts)
 
 
@@ -450,13 +518,19 @@ async def score_all() -> list[dict[str, Any]]:
                 }
             )
 
+        # Renormalize each component's weight to what it would contribute
+        # over the components actually present for this country, then CLAMP
+        # to `_MAX_COMPONENT_WEIGHT` WITHOUT redistributing the clamped-off
+        # excess (see "## Renormalization clamp" in the module docstring): a
+        # thin candidate's clamped weights can sum to < 1. The score below is
+        # a plain weighted sum of these already-clamped weights — it is
+        # NEVER re-divided by their (possibly under-1) sum, so a country with
+        # fewer live signals can only score LOWER, never get inflated back up
+        # by a second renormalization.
         weight_sum = sum(c["weight"] for c in components)
-        score = sum(c["normalized"] * c["weight"] for c in components) / weight_sum
-        # Renormalize each component's reported weight to what it actually
-        # contributed, so the payload is internally consistent (weights sum
-        # to 1 across the components actually present).
         for c in components:
-            c["weight"] = round(c["weight"] / weight_sum, 4)
+            c["weight"] = round(min(c["weight"] / weight_sum, _MAX_COMPONENT_WEIGHT), 4)
+        score = sum(c["normalized"] * c["weight"] for c in components)
 
         rows.append(
             {

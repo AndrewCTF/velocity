@@ -189,6 +189,40 @@ def test_security_fuses_and_filters(client, monkeypatch):
     assert isinstance(body["notes"], list) and body["notes"]
 
 
+def test_security_does_not_attribute_demonym_to_country(client, monkeypatch):
+    # Regression: a St. Paul, Minnesota crime story naming an "Ethiopian"
+    # suspect must NOT be attributed to Ethiopia's security brief -- the old
+    # substring match (`name_n in actor`) false-positived on "ethiopia"
+    # inside "ethiopian"; the word-boundary matcher must not.
+    async def fake_conflict(hours=6):
+        return {"type": "FeatureCollection", "features": [
+            {"geometry": {"type": "Point", "coordinates": [-93.1, 44.9]},
+             "properties": {"actor1": "Minnesota", "actor2": "Ethiopian immigrant",
+                            "event": "small-arms fight", "day": "20260723",
+                            "url": "https://example.com/st-paul-shooting"}},
+            {"geometry": {"type": "Point", "coordinates": [39.0, 9.0]},
+             "properties": {"actor1": "Ethiopia Government", "actor2": "Rebels",
+                            "event": "armed clash", "day": "20260720"}},
+        ]}
+
+    async def fake_ucdp(version=None):
+        return {"type": "FeatureCollection", "features": []}
+
+    import app.intel.conflict as conflict_mod
+    import app.intel.ucdp as ucdp_mod
+
+    monkeypatch.setattr(conflict_mod, "conflict_events", fake_conflict)
+    monkeypatch.setattr(ucdp_mod, "ucdp_events", fake_ucdp)
+    cache.invalidate("country:security:ETH:24")
+
+    r = client.get("/api/country/ETH/security")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["counts"]["conflict"] == 1  # only the "Ethiopia Government" event
+    urls = {e["url"] for e in body["events"] if e["url"]}
+    assert "https://example.com/st-paul-shooting" not in urls
+
+
 def test_security_degrades_when_layers_unavailable(client, monkeypatch):
     async def dead_conflict(hours=6):
         return {"type": "FeatureCollection", "features": [], "unavailable": True,

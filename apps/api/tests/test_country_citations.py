@@ -141,6 +141,30 @@ def test_sourced_footnotes_empty_when_no_urls():
     assert cp._sourced_footnotes([{"label": "clash", "url": None}]) == ""
 
 
+def test_sourced_footnotes_flags_gdelt_provenance():
+    # A GDELT-sourced citation carries a working URL but is only actor-name
+    # matched (reporting intensity, not verified ground truth); the
+    # deterministic Sources list must say so, since it is appended after the
+    # model's markdown and never itself reviewed by the model.
+    events = [
+        {"label": "clash", "date": "2026-07-20", "url": "https://example.com/a",
+         "source": "gdelt"},
+    ]
+    out = cp._sourced_footnotes(events)
+    assert "reporting intensity" in out
+    assert "## Sources" in out
+
+
+def test_sourced_footnotes_no_caveat_when_ucdp_only():
+    events = [
+        {"label": "clash", "date": "2026-07-20", "url": "https://example.com/a",
+         "source": "ucdp"},
+    ]
+    out = cp._sourced_footnotes(events)
+    assert "reporting intensity" not in out
+    assert "## Sources" in out
+
+
 # ── FIX 3: /api/news/feed?iso3= server-side filter ──────────────────────────
 
 

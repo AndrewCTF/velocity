@@ -77,11 +77,13 @@ def _patch_all_sources(
 
 
 def test_hand_computed_score_for_one_country(monkeypatch: pytest.MonkeyPatch) -> None:
-    # UKR: 5 conflict events + 3 ucdp events = 8 armed_conflict raw.
+    # UKR: 5 conflict events (word-boundary actor-name match on "Ukraine")
+    # + 3 ucdp events (unchanged iso3 tally) = 8 armed_conflict raw.
     # 2 verified news stories (weight 2 each) = 4.0 news_pressure raw.
     # advisory level 4, 150000 displaced, 2 ioda outages, 1 orange gdacs event.
     conflict_feats = [
-        {"properties": {"iso3": "UKR"}} for _ in range(5)
+        {"properties": {"actor1": "Ukraine Government", "actor2": "Unidentified Forces"}}
+        for _ in range(5)
     ]
     ucdp_feats = [{"properties": {"iso3": "UKR"}} for _ in range(3)]
     news = [
@@ -172,10 +174,16 @@ def test_hand_computed_score_for_one_country(monkeypatch: pytest.MonkeyPatch) ->
 def test_missing_component_drops_and_renormalizes(monkeypatch: pytest.MonkeyPatch) -> None:
     # displacement_summary + advisories both empty for RUS but armed_conflict
     # and news_pressure are present -> RUS still scores (2 non-global present),
-    # weights renormalize over the components that ARE present.
+    # weights renormalize over the components that ARE present, then clamp:
+    # armed_conflict's 0.30/0.45=0.667 renormalized share is capped at 0.40
+    # (see test_armed_conflict_weight_is_clamped_not_50_percent below), so
+    # the two weights no longer sum back to 1.0.
     _patch_all_sources(
         monkeypatch,
-        conflict_features=[{"properties": {"iso3": "RUS"}} for _ in range(5)],
+        conflict_features=[
+            {"properties": {"actor1": "Russian Federation Armed Forces", "actor2": "Rebels"}}
+            for _ in range(5)
+        ],
         news_stories=[{"countries": ["RUS"], "verification": {"status": "reviewed"}}],
         advisories={},
         displacement={},
@@ -183,10 +191,46 @@ def test_missing_component_drops_and_renormalizes(monkeypatch: pytest.MonkeyPatc
     )
     rows = asyncio.run(instability.score_all())
     row = next(r for r in rows if r["iso3"] == "RUS")
-    keys_present = {c["key"] for c in row["components"]}
-    assert keys_present == {"armed_conflict", "news_pressure"}
+    by_key = {c["key"]: c for c in row["components"]}
+    assert set(by_key) == {"armed_conflict", "news_pressure"}
+    assert by_key["armed_conflict"]["weight"] == instability._MAX_COMPONENT_WEIGHT
+    assert by_key["news_pressure"]["weight"] == pytest.approx(0.15 / 0.45, abs=1e-4)
     total_weight = sum(c["weight"] for c in row["components"])
-    assert total_weight == pytest.approx(1.0)
+    assert total_weight < 1.0
+
+
+def test_armed_conflict_weight_is_clamped_not_50_percent(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The GBR/AUS bug from the persona findings: with only the 4 baseline
+    # components present (armed_conflict + unrest_advisories + displacement +
+    # market_risk_off), armed_conflict's base 0.30 used to renormalize up to
+    # 0.30/0.60 = 0.50 exactly -- the single noisiest, least-attributable
+    # component swinging half the score. The clamp caps it at 0.40 and does
+    # NOT redistribute the freed 0.10 to the other three.
+    _patch_all_sources(
+        monkeypatch,
+        conflict_features=[
+            {"properties": {"actor1": "Chad Government forces", "actor2": "Rebels"}}
+            for _ in range(5)
+        ],
+        advisories={"TCD": 3},
+        displacement={"TCD": 50_000},
+        stress={"score": 20.0, "degraded": False},
+    )
+    rows = asyncio.run(instability.score_all())
+    row = next(r for r in rows if r["iso3"] == "TCD")
+    by_key = {c["key"]: c for c in row["components"]}
+    assert set(by_key) == {
+        "armed_conflict", "unrest_advisories", "displacement", "market_risk_off",
+    }
+    assert by_key["armed_conflict"]["weight"] == instability._MAX_COMPONENT_WEIGHT
+    assert by_key["armed_conflict"]["weight"] < 0.5  # never the old 0.30/0.60
+    # The other three keep their unclamped renormalized share (0.10/0.60
+    # each) -- the clamped-off excess is dropped, not handed to them.
+    for key in ("unrest_advisories", "displacement", "market_risk_off"):
+        assert by_key[key]["weight"] == pytest.approx(0.10 / 0.60, abs=1e-4)
+    total_weight = sum(c["weight"] for c in row["components"])
+    assert total_weight == pytest.approx(0.40 + 3 * (0.10 / 0.60), abs=1e-4)
+    assert total_weight < 1.0
 
 
 # ── dead-source tolerance ────────────────────────────────────────────────────
@@ -198,7 +242,10 @@ def test_dead_source_does_not_crash_scorer(monkeypatch: pytest.MonkeyPatch) -> N
 
     _patch_all_sources(
         monkeypatch,
-        conflict_features=[{"properties": {"iso3": "SDN"}} for _ in range(3)],
+        conflict_features=[
+            {"properties": {"actor1": "Sudan Government", "actor2": "Rebels"}}
+            for _ in range(3)
+        ],
         news_stories=[{"countries": ["SDN"], "verification": {"status": "reviewed"}}],
     )
     monkeypatch.setattr(instability, "load_ioda", _boom)
@@ -226,7 +273,10 @@ def test_country_with_only_one_local_component_is_dropped(monkeypatch: pytest.Mo
 def test_ioda_unavailable_drops_infra_disruption_for_everyone(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_all_sources(
         monkeypatch,
-        conflict_features=[{"properties": {"iso3": "YEM"}} for _ in range(4)],
+        conflict_features=[
+            {"properties": {"actor1": "Yemen Government", "actor2": "Rebels"}}
+            for _ in range(4)
+        ],
         news_stories=[{"countries": ["YEM"], "verification": {"status": "reviewed"}}],
         ioda_items=[{"entity": {"type": "country", "code": "YE"}}],
         ioda_unavailable=True,
@@ -246,7 +296,10 @@ def test_score_and_store_persists_rows(monkeypatch: pytest.MonkeyPatch, tmp_path
     try:
         _patch_all_sources(
             monkeypatch,
-            conflict_features=[{"properties": {"iso3": "MMR"}} for _ in range(4)],
+            conflict_features=[
+                {"properties": {"actor1": "Myanmar Government", "actor2": "Rebels"}}
+                for _ in range(4)
+            ],
             news_stories=[{"countries": ["MMR"], "verification": {"status": "reviewed"}}],
         )
         n = asyncio.run(instability.score_and_store())
