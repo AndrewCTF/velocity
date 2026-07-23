@@ -188,7 +188,7 @@ export function App(): JSX.Element {
       { id: 'chokepoints', icon: 'route', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} />, group: 'more' },
       { id: 'acars', icon: 'signal', label: 'ACARS', content: <AcarsPanel />, group: 'more' },
       { id: 'extract', icon: 'file', label: 'Extract', content: <ExtractPanel />, group: 'more' },
-      { id: 'countries', icon: 'globe', label: 'Countries', content: <CountriesPanel />, group: 'more' },
+      { id: 'countries', icon: 'globe', label: 'Country Sources', content: <CountriesPanel />, group: 'more' },
       { id: 'allsources', icon: 'sliders', label: 'All sources', content: <LayerRail registry={registry} viewer={viewer} />, group: 'more' },
       { id: 'filters', icon: 'filter', label: 'Filters', content: <HistogramPanel viewer={viewer} />, group: 'more' },
       { id: 'field', icon: 'crosshair', label: 'Field', content: <FieldPanel viewer={viewer} />, group: 'more' },

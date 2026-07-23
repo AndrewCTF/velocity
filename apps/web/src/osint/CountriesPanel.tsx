@@ -190,12 +190,12 @@ export function CountriesPanel(): JSX.Element {
             ? 'Failed to load catalog.'
             : 'Loading catalog…'}
       </div>
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <input
           placeholder="Filter countries / resources…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          style={{ ...inputStyle, flex: 1 }}
+          style={{ ...inputStyle, flex: '1 1 140px' }}
         />
         {detail && (
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={inputStyle}>
@@ -210,14 +210,8 @@ export function CountriesPanel(): JSX.Element {
       </div>
       {listError && <div style={{ fontSize: 11, color: 'var(--alert)' }}>{listError}</div>}
       <div style={{ display: 'flex', flex: 1, minHeight: 0, gap: 8 }}>
-        <div
-          style={{
-            flex: selected ? '0 0 45%' : '1 1 auto',
-            overflow: 'auto',
-            borderRight: selected ? '1px solid rgba(255,255,255,0.1)' : 'none',
-            paddingRight: selected ? 6 : 0,
-          }}
-        >
+        {!selected && (
+          <div style={{ flex: '1 1 auto', overflow: 'auto' }}>
           {grouped.map(([region, countries]) => (
             <div key={region} style={{ marginBottom: 4 }}>
               <button type="button" onClick={() => toggleRegion(region)} style={sectionBtnStyle}>
@@ -245,9 +239,17 @@ export function CountriesPanel(): JSX.Element {
                 ))}
             </div>
           ))}
-        </div>
+          </div>
+        )}
         {selected && (
           <div style={{ flex: 1, overflow: 'auto' }}>
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              style={{ ...btnStyle, marginBottom: 6 }}
+            >
+              ← All countries
+            </button>
             {detailLoading && <div style={{ fontSize: 11, color: 'var(--txt-3)' }}>Loading…</div>}
             {detailError && <div style={{ fontSize: 11, color: 'var(--alert)' }}>{detailError}</div>}
             {detail && (
@@ -306,6 +308,7 @@ const inputStyle: CSSProperties = {
   border: '1px solid rgba(255,255,255,0.15)',
   borderRadius: 4,
   color: 'inherit',
+  colorScheme: 'dark',
   padding: '4px 6px',
 };
 
