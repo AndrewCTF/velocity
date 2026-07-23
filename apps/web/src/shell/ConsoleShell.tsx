@@ -8,6 +8,7 @@ import { StatusDot, MicroLabel } from './instruments.js';
 import { FloatingPanel } from './FloatingPanel.js';
 import { useConnection, useFeeds, useTime, useSim } from '../state/stores.js';
 import { useRailWidth, RIGHT_MIN, RIGHT_MAX } from '../state/railWidth.js';
+import { useSettings } from '../state/settings.js';
 import { useFloatingPanels } from '../state/floatingPanels.js';
 
 // Stable id for the inspector's detached-window rect in the floatingPanels store.
@@ -155,6 +156,10 @@ export function ConsoleShell({
   const isMobile = useIsMobile();
   const bleed = fullBleed && !isMobile;
   const sim = useSim((s) => s.active);
+  // Icon rail can expand to show text labels (settings.leftRailExpanded); when it
+  // does, the column and --rail-left-w grow so map overlays keep docking past it.
+  const leftRailExpanded = useSettings((s) => s.leftRailExpanded);
+  const iconRailW = leftRailExpanded ? 176 : ICON_RAIL_W;
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [leftW, setLeftW] = useState(() => clampN(readW(LS_LEFT, 296), LEFT_MIN, LEFT_MAX));
@@ -199,7 +204,7 @@ export function ConsoleShell({
           // under-/over-lapping when the operator drags it (design §4 grammar #1).
           // Full-bleed publishes 0 so AppSurface stretches to the right edge;
           // rightW itself is untouched and restores when the flag drops.
-          '--rail-left-w': `${iconRail ? ICON_RAIL_W : leftW}px`,
+          '--rail-left-w': `${iconRail ? iconRailW : leftW}px`,
           '--rail-right-w': bleed ? '0px' : `${rightW}px`,
         } as CSSProperties
       }
@@ -242,7 +247,7 @@ export function ConsoleShell({
             On desktop it floats between the rails (left 296 / right 336). */}
         <div
           className={`absolute top-1.5 z-[15] flex justify-center pointer-events-none ${isMobile ? 'inset-x-2' : ''}`}
-          style={isMobile ? undefined : { left: (iconRail ? ICON_RAIL_W : leftW) + 10, right: rightW + 10 }}
+          style={isMobile ? undefined : { left: (iconRail ? iconRailW : leftW) + 10, right: rightW + 10 }}
         >
           <MapHealthStrip />
         </div>
@@ -267,7 +272,7 @@ export function ConsoleShell({
               <aside
                 className="absolute left-0 top-0 bottom-0 border-r border-line-2 flex flex-col z-[var(--z-rail)]"
                 aria-label="Tools"
-                style={{ background: RAIL_BG, width: ICON_RAIL_W }}
+                style={{ background: RAIL_BG, width: iconRailW }}
               >
                 {left}
               </aside>
@@ -315,7 +320,7 @@ export function ConsoleShell({
                     <PanelRightOpen size={14} strokeWidth={1.75} aria-hidden />
                   </button>
                 </div>
-                <div className="flex-1 min-h-0 overflow-auto">{right}</div>
+                <div className="flex-1 min-h-0 overflow-auto bg-bg-1">{right}</div>
                 <RailResizer side="right" width={rightW} set={setRightW} />
               </aside>
             )}

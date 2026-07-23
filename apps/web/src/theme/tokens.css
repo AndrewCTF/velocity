@@ -3,6 +3,9 @@
    them); only the VALUES shift the look. Dark theme is deliberately a few
    steps LIGHTER and warmer than a typical near-black console. */
 :root {
+  /* Dark by default: makes native controls (select popups, number spinners,
+     scrollbars, date pickers) render dark instead of OS-light. */
+  color-scheme: dark;
   /* substrate — warm dark ink (slightly amber-shifted grey, not blue-black).
      Lifted well off pure black so panels read as material, not void. */
   --bg-0: #191817;
@@ -123,6 +126,7 @@
    flips; the Cesium globe canvas is not token-coloured, so the map itself stays
    dark (a light basemap would be a separate change). */
 :root[data-theme='light'] {
+  color-scheme: light;
   --bg-0: #eef1f5;
   --bg-1: #ffffff;
   --bg-2: #f3f5f8;
