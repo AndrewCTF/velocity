@@ -49,7 +49,6 @@ function usePoll<T>(url: string, intervalMs: number): FetchState<T> {
       cancelled = true;
       window.clearInterval(id);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, intervalMs]);
 
   return state;
