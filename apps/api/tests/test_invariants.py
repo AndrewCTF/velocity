@@ -313,3 +313,33 @@ def test_unmatched_api_path_returns_json_404_not_spa() -> None:
             "a non-api client route must still SPA-fallback to index.html"
         )
         assert "text/html" in client_route_resp.headers.get("content-type", "")
+
+
+def test_unmatched_ws_upgrade_is_denied_not_500() -> None:
+    # Decision: a genuine WebSocket-upgrade request to an unmatched /ws/* path
+    # falls through to the same SPA static-file mount as the plain-GET case
+    # above, but in websocket scope, not http scope. Starlette's StaticFiles
+    # asserts scope["type"] == "http" and raises an uncaught AssertionError
+    # for anything else, which surfaced as a bare HTTP 500 to a real client.
+    # _SPAStaticFiles must intercept websocket scope before StaticFiles ever
+    # sees it and deny the handshake cleanly. TestClient advertises the
+    # Websocket Denial Response extension, so a clean denial here raises
+    # WebSocketDenialResponse (a 404), never an AssertionError/500 and never
+    # a silent accept.
+    from fastapi.testclient import TestClient
+    from starlette.testclient import WebSocketDenialResponse
+
+    from app.main import create_app
+
+    # A fresh app instance, not the module-level singleton the sibling test
+    # above uses — its MCP streamable-HTTP session manager can only run()
+    # once per instance, and that test already spends the singleton's one
+    # lifespan cycle.
+    with TestClient(create_app()) as client:
+        with pytest.raises(WebSocketDenialResponse) as exc_info:
+            with client.websocket_connect("/ws/definitely-not-a-route"):
+                pass
+
+    assert exc_info.value.status_code == 404, (
+        f"unmatched /ws/* upgrade must be denied with 404, got {exc_info.value.status_code}"
+    )

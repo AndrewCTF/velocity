@@ -624,8 +624,29 @@ def create_app() -> FastAPI:
         # real 404, never the SPA shell — this mount is LAST, so any route typo or
         # unwired router would otherwise silently 200 with index.html (it once
         # masked the instability router never being include_router'd). A genuine
-        # WebSocket upgrade never reaches here (StaticFiles handles http scope
-        # only). Client routes have no such prefix, so they're unaffected.
+        # WebSocket upgrade to an unmatched /ws/* path reaches this mount too
+        # (every real /ws/* route is registered earlier and matches first, so
+        # only unmatched ones fall through here) — StaticFiles.__call__ asserts
+        # scope["type"] == "http" and raises an uncaught AssertionError for
+        # websocket scope, which uvicorn turns into a bare 500. __call__ below
+        # intercepts websocket scope and denies the handshake cleanly before it
+        # ever reaches StaticFiles. Client routes have no such prefix, so
+        # they're unaffected.
+        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            if scope["type"] == "websocket":
+                from starlette.responses import JSONResponse  # noqa: PLC0415
+                from starlette.websockets import WebSocket, WebSocketClose  # noqa: PLC0415
+
+                if "websocket.http.response" in scope.get("extensions", {}):
+                    websocket = WebSocket(scope, receive=receive, send=send)
+                    await websocket.send_denial_response(
+                        JSONResponse({"detail": "Not Found"}, status_code=404)
+                    )
+                else:
+                    await WebSocketClose()(scope, receive, send)
+                return
+            await super().__call__(scope, receive, send)
+
         async def get_response(self, path: str, scope):  # type: ignore[no-untyped-def]
             try:
                 return await super().get_response(path, scope)
