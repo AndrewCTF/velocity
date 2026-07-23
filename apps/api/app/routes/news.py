@@ -62,9 +62,21 @@ async def _ensure_articles() -> list[news_sources.Article]:
     return articles
 
 
+def _matches_iso3(article: news_sources.Article, iso3u: str) -> bool:
+    """True when ``article`` names the given country, via the same
+    deterministic title+summary name-matching :func:`app.news.verify.country_tags`
+    already uses for edition stories — reused here (not duplicated) so a
+    country and its news share one definition of "about this country"."""
+    from app.news.verify import country_tags  # noqa: PLC0415 — avoid import cycle at module load
+
+    tags = country_tags({"title": article.title, "neutral_summary": article.summary})
+    return iso3u in tags
+
+
 @router.get("/api/news/feed")
 async def news_feed(
     topic: str | None = Query(None, max_length=200),
+    iso3: str | None = Query(None, min_length=3, max_length=3),
 ) -> dict[str, Any]:
     """Latest scraped world headlines (cached, refreshed on staleness).
 
@@ -72,6 +84,11 @@ async def news_feed(
     :data:`app.news.sources.CONFLICT_FEEDS`). An optional ``?topic=`` (preset
     key like ``mideast`` or free text) fetches a scoped keyword search on demand,
     bypassing the single-slot cache so it never poisons the default feed.
+
+    ``?iso3=`` filters the returned headlines to those whose title/summary
+    names that country (best-effort text match, same rule the news edition
+    uses for its per-story ``countries`` tags — see the Country app's news
+    card). Never errors on an unknown/garbage code; it just yields zero rows.
     """
     s = get_settings()
     if not s.news_enabled:
@@ -80,6 +97,9 @@ async def news_feed(
         articles = await news_sources.fetch_for_topic(topic)
     else:
         articles = await _ensure_articles()
+    if iso3 and iso3.strip():
+        iso3u = iso3.strip().upper()
+        articles = [a for a in articles if _matches_iso3(a, iso3u)]
     return {"count": len(articles), "articles": _articles_payload(articles)}
 
 
