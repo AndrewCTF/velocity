@@ -620,11 +620,12 @@ def create_app() -> FastAPI:
     class _SPAStaticFiles(StaticFiles):
         # SPA fallback: client-side routes (/2d, /studio, …) have no matching file,
         # so a 404 falls back to index.html and React Router takes over. BUT an
-        # unmatched /api/* or /ws/* path must stay a real 404 (JSON), never the
-        # SPA shell — this mount is LAST, so any route typo or unwired router
-        # would otherwise silently 200 with index.html (it once masked the
-        # instability router never being include_router'd). Client routes have
-        # no such prefix, so they're unaffected.
+        # unmatched /api/* path (or a stray HTTP GET to a /ws/* path) must stay a
+        # real 404, never the SPA shell — this mount is LAST, so any route typo or
+        # unwired router would otherwise silently 200 with index.html (it once
+        # masked the instability router never being include_router'd). A genuine
+        # WebSocket upgrade never reaches here (StaticFiles handles http scope
+        # only). Client routes have no such prefix, so they're unaffected.
         async def get_response(self, path: str, scope):  # type: ignore[no-untyped-def]
             try:
                 return await super().get_response(path, scope)

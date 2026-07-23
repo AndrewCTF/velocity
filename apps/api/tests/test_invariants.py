@@ -295,6 +295,16 @@ def test_unmatched_api_path_returns_json_404_not_spa() -> None:
             "unmatched /api/* path must return JSON, not the SPA HTML shell"
         )
 
+        # A stray HTTP GET to a /ws/* path must also 404, not the SPA shell —
+        # exercises the startswith("/ws/") half of the fallback guard directly.
+        ws_resp = client.get("/ws/definitely-not-a-route")
+        assert ws_resp.status_code == 404, (
+            f"unmatched /ws/* path must 404, got {ws_resp.status_code}"
+        )
+        assert "text/html" not in ws_resp.headers.get("content-type", ""), (
+            "unmatched /ws/* path must not return the SPA HTML shell"
+        )
+
         root_resp = client.get("/")
         assert root_resp.status_code == 200
         assert "text/html" in root_resp.headers.get("content-type", "")
