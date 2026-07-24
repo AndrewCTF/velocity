@@ -320,6 +320,42 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any
     return data if isinstance(data, dict) else {"result": data}
 
 
+async def _post(path: str, body: dict[str, Any]) -> dict[str, Any]:
+    """POST an intel endpoint. Same non-raising, structured-error contract as
+    ``_get`` (None fields dropped so the route's own Pydantic defaults apply,
+    a non-2xx status becomes a structured error dict, never HTML/an exception)."""
+    await _ensure_backend()
+    url = _api_base() + path
+    clean = {k: v for k, v in body.items() if v is not None}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(url, json=clean, headers=_headers())
+    except Exception as exc:  # noqa: BLE001 — surface, don't crash the tool
+        return {"error": "backend_unreachable", "detail": str(exc), "url": url}
+    if r.status_code not in (200, 201):
+        return {"error": f"backend_{r.status_code}", "detail": r.text[:400], "url": url}
+    try:
+        data: Any = r.json()
+    except ValueError:
+        return {"error": "bad_json", "detail": r.text[:400], "url": url}
+    return data if isinstance(data, dict) else {"result": data}
+
+
+async def _delete(path: str) -> dict[str, Any]:
+    """DELETE an intel endpoint. Same non-raising, structured-error contract
+    as ``_get``/``_post``. A 204 (no body) is the success case."""
+    await _ensure_backend()
+    url = _api_base() + path
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.delete(url, headers=_headers())
+    except Exception as exc:  # noqa: BLE001 — surface, don't crash the tool
+        return {"error": "backend_unreachable", "detail": str(exc), "url": url}
+    if r.status_code not in (200, 204):
+        return {"error": f"backend_{r.status_code}", "detail": r.text[:400], "url": url}
+    return {"ok": True}
+
+
 # ── tools ─────────────────────────────────────────────────────────────────────
 
 
@@ -912,6 +948,102 @@ async def market_stress(detail: str = "short") -> dict[str, Any]:
     """Composite market-stress score from equity drawdown, gold/oil moves, USD
     flight-to-safety, and BTC drawdown."""
     return shape(await _get("/api/markets/stress"), detail)
+
+
+# ── 2026-07-24 REST-parity wave: eq geo-filter, history, watch rules ────────
+# These three capabilities (geo-filtered /api/eq, identity-scoped
+# /api/history/track, per-identity watch-rule CRUD) shipped REST-only in the
+# prior wave with no MCP wrapper — an MCP-restricted agent had no way to reach
+# them. Thin wrappers only; the routes already do the validation.
+
+
+@mcp.tool()
+async def quakes_near(
+    lat: float, lon: float, radius_km: float, range: str = "day", detail: str = "short"
+) -> dict[str, Any]:
+    """Earthquakes (USGS) within radius_km of a point (GET /api/eq).
+
+    lat, lon, and radius_km must ALL be given together — the route 422s on a
+    partial set rather than silently falling back to the unfiltered global
+    feed (agent-safe: pass all three or none). range is 'hour'|'day'
+    (default)|'week'|'month'. For a severity-scored global disaster view
+    instead, use disaster_alerts()."""
+    data = await _get(
+        "/api/eq", {"lat": lat, "lon": lon, "radius_km": radius_km, "range": range}
+    )
+    return shape(data, detail)
+
+
+@mcp.tool()
+async def track_history(
+    id: str,
+    from_ts: float | None = None,
+    to_ts: float | None = None,
+    detail: str = "short",
+) -> dict[str, Any]:
+    """Historical position track for ONE entity (GET /api/history/track).
+
+    id is 'aircraft:<icao24hex>' / 'vessel:<mmsi>', or a bare id whose shape is
+    unambiguous (6-char ICAO24 hex or 9-digit MMSI) — the route infers the
+    kind from it. from_ts/to_ts are unix seconds (default: the last hour). A
+    id the route can't resolve returns its 422 message as-is (e.g. ambiguous
+    shape — pass a 'kind:id' prefix)."""
+    data = await _get("/api/history/track", {"id": id, "from_ts": from_ts, "to_ts": to_ts})
+    return shape(data, detail)
+
+
+@mcp.tool()
+async def create_watch_rule(
+    label: str,
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_nm: float | None = None,
+    kinds: list[str] | None = None,
+    min_severity: int = 1,
+    channel: str = "inapp",
+    sink_url: str | None = None,
+    enabled: bool = True,
+    icao24: str | None = None,
+    mmsi: str | None = None,
+    callsign: str | None = None,
+) -> dict[str, Any]:
+    """Create a standing watch rule (POST /api/alerts/rules).
+
+    A rule needs a gate: either an identity pin (icao24/mmsi/callsign — follows
+    that one entity globally, no AOI required) or a complete AOI (lat, lon;
+    radius_nm defaults to 50 nm if omitted). kinds filters which signal kinds
+    fire it — jamming/dark_vessel/military_air/military_vessel/incident/quake/
+    fire/ais_gap/rendezvous/loiter (omit for all). channel is
+    'inapp'|'discord'|'webhook' ('discord'/'webhook' require sink_url). The
+    route validates and 400/422s on a bad gate, channel, sink_url, or kind —
+    this wrapper does not re-validate, it passes the error through."""
+    body = {
+        "label": label,
+        "lat": lat,
+        "lon": lon,
+        "radius_nm": radius_nm,
+        "kinds": kinds,
+        "min_severity": min_severity,
+        "channel": channel,
+        "sink_url": sink_url,
+        "enabled": enabled,
+        "icao24": icao24,
+        "mmsi": mmsi,
+        "callsign": callsign,
+    }
+    return await _post("/api/alerts/rules", body)
+
+
+@mcp.tool()
+async def list_watch_rules(detail: str = "short") -> dict[str, Any]:
+    """List your standing watch rules (GET /api/alerts/rules)."""
+    return shape(await _get("/api/alerts/rules"), detail)
+
+
+@mcp.tool()
+async def delete_watch_rule(rule_id: str) -> dict[str, Any]:
+    """Delete a standing watch rule by id (DELETE /api/alerts/rules/{rule_id})."""
+    return await _delete(f"/api/alerts/rules/{quote(rule_id, safe='')}")
 
 
 # ── deep analysis (DeepSeek reasoner, Ollama fallback) ────────────────────────

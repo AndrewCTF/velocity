@@ -98,10 +98,16 @@ def test_mcp_http_handshake_lists_all_tools(keyed: str) -> None:
         # 22 core + 12 keyless-feed tools (2026-07-14 data-layers wave)
         # + news_brief (2026-07-21 news wave)
         # + travel_advisories/displacement/nas_status/climate_anomalies/
-        #   markets_snapshot/market_stress (2026-07-21 context+markets wave).
-        assert len(names) == 41, sorted(names)
+        #   markets_snapshot/market_stress (2026-07-21 context+markets wave)
+        # + quakes_near/track_history/create_watch_rule/list_watch_rules/
+        #   delete_watch_rule (2026-07-24 REST-parity wave).
+        assert len(names) == 46, sorted(names)
         assert {"get_situation", "intel_brief", "query_aircraft", "deep_analyze"} <= names
         assert {"disaster_alerts", "maritime_chokepoints", "space_weather"} <= names
+        assert {
+            "quakes_near", "track_history",
+            "create_watch_rule", "list_watch_rules", "delete_watch_rule",
+        } <= names
 
 
 def test_mcp_endpoint_rejects_without_token(keyed: str) -> None:

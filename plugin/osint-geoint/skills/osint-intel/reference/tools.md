@@ -1,6 +1,6 @@
 # OSINT GEOINT — tool reference
 
-41 tools. All geography is optional and accepted two ways: a **centre**
+46 tools. All geography is optional and accepted two ways: a **centre**
 (`lat`, `lon`, `radius_nm`) or an explicit **bbox** (`min_lon`, `min_lat`,
 `max_lon`, `max_lat`). Omit both for a **global** view. Most tools take
 `detail='short'` (default digest) or `'long'` (full bundle) — see the SKILL.
@@ -51,6 +51,16 @@
 | `fact_check(claim)` | Adjudicate one claim vs current headlines → `{verdict, reasoning, sources, confidence}`. | `claim` |
 | `aoi_imagery(before, after, lat, lon)` | What VHR/Sentinel imagery exists for a place at two dates (no download). `best_source` says which to use. | dates, area, `window_days=30` |
 | `data_sources()` | Which feeds are always-on vs key-gated, + configured reasoning backend. Explain coverage gaps with this. | — |
+
+## Quakes, history & standing watches
+
+| Tool | Use it to… | Key args |
+| --- | --- | --- |
+| `quakes_near(lat, lon, radius_km)` | USGS earthquakes within `radius_km` of a point. All three of `lat`/`lon`/`radius_km` are required together (422 on a partial set). | `range='hour'|'day'|'week'|'month'`, `detail` |
+| `track_history(id)` | Historical position track for ONE aircraft/vessel over a time window. `id` is `'aircraft:<icao24>'`/`'vessel:<mmsi>'` or an unambiguous bare id. | `from_ts`, `to_ts`, `detail` |
+| `create_watch_rule(label, ...)` | Create a standing watch: an identity pin (`icao24`/`mmsi`/`callsign`, follows that entity globally) OR a complete AOI (`lat`, `lon`, `radius_nm`, default 50 nm). | `kinds`, `min_severity`, `channel='inapp'|'discord'|'webhook'`, `sink_url` |
+| `list_watch_rules()` | List your standing watch rules. | `detail` |
+| `delete_watch_rule(rule_id)` | Delete a standing watch rule by id. | `rule_id` |
 
 ## Reading a `short` digest
 

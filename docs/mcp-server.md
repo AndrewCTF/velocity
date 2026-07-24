@@ -12,7 +12,7 @@ See also [`adsb-aircraft-pipeline.md`](./adsb-aircraft-pipeline.md) for how the
 ## Architecture
 
 ```
-agent ──stdio / http (/mcp)──▶ app.mcp_server (41 tools)
+agent ──stdio / http (/mcp)──▶ app.mcp_server (46 tools)
                           │  httpx
                           ▼
                      /api/intel/*  (app.routes.intel)
@@ -36,7 +36,7 @@ agent ──stdio / http (/mcp)──▶ app.mcp_server (41 tools)
   `anomalies`, `area_intel`. Reads the already-warm in-process snapshot — it
   opens **no** new steady-state upstream fan-out.
 - **`app/routes/intel.py`** — the `/api/intel/*` HTTP surface the MCP drives.
-- **`app/mcp_server.py`** — FastMCP server exposing 41 tools over that HTTP
+- **`app/mcp_server.py`** — FastMCP server exposing 46 tools over that HTTP
   surface (+ the Ollama-backed `deep_analyze`). `build_mcp_mount()` mounts it
   into the FastAPI app at `/mcp` (streamable-HTTP) for the hosted deployment.
 
@@ -81,7 +81,7 @@ or an explicit bbox (`min_lon,min_lat,max_lon,max_lat`).
 
 ## MCP tools
 
-41 tools — a representative table is in the [README](../README.md#mcp-server--query-the-live-console-from-an-ai-agent);
+46 tools — a representative table is in the [README](../README.md#mcp-server--query-the-live-console-from-an-ai-agent);
 run `--list-tools` for the full set. A slice:
 `get_situation`, `focus_area`, `aircraft_density`, `gps_jamming`,
 `query_aircraft`, `lookup_aircraft`, `query_vessels`, `anomalies`,
@@ -89,6 +89,26 @@ run `--list-tools` for the full set. A slice:
 `whats_changed`, `incident_history`, `vessel_dossier`, `aircraft_dossier`,
 `list_focus_areas`, `data_sources`, `deep_analyze`, `news_analysis`,
 `fact_check`, `aoi_imagery`.
+
+### REST-parity tools (`/api/eq`, `/api/history`, `/api/alerts/rules`)
+
+Three routes outside `/api/intel/*` also get thin wrappers, so an
+MCP-restricted agent can reach them without dropping to raw HTTP:
+
+- **`quakes_near(lat, lon, radius_km, range='day', detail)`** → `GET /api/eq`.
+  `lat`, `lon`, `radius_km` must all be given together — the route 422s on a
+  partial set rather than silently returning the unfiltered global feed.
+- **`track_history(id, from_ts, to_ts, detail)`** → `GET /api/history/track`.
+  `id` is `'aircraft:<icao24hex>'` / `'vessel:<mmsi>'`, or a bare id whose
+  shape is unambiguous (6-char ICAO24 hex or 9-digit MMSI) — the route infers
+  the kind. An id it can't resolve returns the route's 422 message as-is.
+- **`create_watch_rule(label, ..., icao24, mmsi, callsign)`** /
+  **`list_watch_rules(detail)`** / **`delete_watch_rule(rule_id)`** →
+  `POST` / `GET` / `DELETE /api/alerts/rules`. A rule needs a gate: an
+  identity pin (`icao24`/`mmsi`/`callsign`, follows that entity globally, no
+  AOI needed) or a complete AOI (`lat`, `lon`, `radius_nm`, default 50 nm).
+  The route validates channel/kind/gate; the wrapper passes its error through
+  unchanged.
 
 ### Context budget: `detail='short'` vs `'long'`
 
