@@ -126,6 +126,37 @@ def test_investigate_domain_builds_objects_and_links(monkeypatch: pytest.MonkeyP
     assert summary["subdomains"] == 1
 
 
+def test_investigate_persists_connector_source_not_analyst(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The registry-persistence step in the /investigate route (not the graph
+    builder itself) must stamp each object's real connector as the assertion
+    source, and links with the endpoint that minted them — never fall through
+    to upsert()/Link's "analyst" default, which is reserved for a human
+    editing the ontology by hand (routes/ontology.py). A case-report footnote
+    that says "asserted by analyst" for automated OSINT collection is a lie."""
+    _mock_fetch(monkeypatch, {
+        "type=1": {"Answer": [{"type": 1, "data": "1.2.3.4"}]},
+    })
+    from app.intel.ontology import get_registry
+    from app.keys import UserCtx
+
+    ctx = UserCtx("local", "")
+    resp = asyncio.run(R.investigate(R.InvestigateRequest(target="example.com"), ctx=ctx))
+    assert resp.root == "domain:example.com"
+
+    reg = get_registry(ctx, R.get_settings())
+    source_assertions = asyncio.run(reg.get_assertions("domain:example.com", prop="source"))
+    assert source_assertions, "expected a 'source' assertion for the investigate root"
+    assert source_assertions[0].source == "rdap+dns"
+    assert source_assertions[0].source != "analyst"
+
+    links = asyncio.run(reg._links_touching(["domain:example.com"]))
+    resolves = next(lk for lk in links if lk.rel == "resolves_to")
+    assert resolves.source == "osint-investigate"
+    assert resolves.source != "analyst"
+
+
 # ── GET routes ───────────────────────────────────────────────────────────────────
 
 def test_get_dns_route(client, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]

@@ -854,9 +854,14 @@ async def investigate(
 
     reg = get_registry(ctx, get_settings())
     for obj in g.objs.values():
-        await reg.upsert(obj)
+        # Each object's own props already carry the real connector that
+        # collected it (rdap+dns, otx, urlscan, …) — stamp that as the
+        # assertion source instead of falling through to upsert's "analyst"
+        # default, which would mislabel automated collection as a human edit
+        # in case-report footnotes.
+        await reg.upsert(obj, source=obj.props.get("source") or "osint-investigate")
     for lk in g.links.values():
-        await reg.link(lk)
+        await reg.link(lk.model_copy(update={"source": "osint-investigate"}))
 
     await audit(
         ctx, "osint_investigate", kind, root,
@@ -923,9 +928,11 @@ async def recon(
 
     reg = get_registry(ctx, s)
     for obj in g.objs.values():
-        await reg.upsert(obj)
+        # Same provenance fix as /investigate: stamp the real connector
+        # ("recon:" + tool) instead of the analyst default.
+        await reg.upsert(obj, source=obj.props.get("source") or "osint-recon")
     for lk in g.links.values():
-        await reg.link(lk)
+        await reg.link(lk.model_copy(update={"source": "osint-recon"}))
     summary = {
         "subdomains": len(data.get("subdomains") or []),
         "ips": len(data.get("ips") or []),
