@@ -287,8 +287,57 @@ def test_brief_ok_with_mocked_llm(client, monkeypatch):
     assert body["ok"] is True
     assert body["markdown"].startswith("## Overview")
     assert body["model"] == "test-model" and body["backend"] == "deepseek"
-    assert captured["tier"] == "fast" and captured["max_tokens"] == 900
+    assert captured["tier"] == "fast" and captured["max_tokens"] == cp._BRIEF_MAX_TOKENS
     assert "senior all-source intelligence analyst" in captured["sys"]
+
+
+def test_brief_trims_truncated_body_before_sources(client, monkeypatch):
+    # Regression: a live run hit the model's length cap mid-sentence (once even
+    # mid-URL) inside ## Recent security events, right before the deterministic
+    # ## Sources footer got appended. The raw truncated fragment must never
+    # reach the response markdown.
+    async def fake_wb(iso3u, ids, years):
+        return []
+
+    async def fake_profile(iso3, name=None):
+        return {"leadership": [], "military_branches": []}
+
+    async def fake_security(iso3, name=None, hours=24):
+        return {
+            "counts": {"conflict": 1, "ucdp": 0, "installations": 0},
+            "events": [
+                {"label": "clash", "date": "2026-07-20", "url": "https://example.com/a",
+                 "source": "gdelt"},
+            ],
+            "notes": [],
+        }
+
+    truncated = (
+        "## Overview\nStable.\n\n## Recent security events\nA military force "
+        "event involving actors was reported ([source](https://example.com/"
+        "very-long-article-that-got-cut-off-mid-url-righ"
+    )
+
+    async def fake_chat(messages, **kwargs):
+        return LlmResult(text=truncated, model="test-model", backend="deepseek")
+
+    monkeypatch.setattr(country_stats, "load_worldbank", fake_wb)
+    monkeypatch.setattr(cp, "fetch_profile", fake_profile)
+    monkeypatch.setattr(cp, "country_security", fake_security)
+    import app.llm as llm_mod
+
+    monkeypatch.setattr(llm_mod, "chat", fake_chat)
+    cache.invalidate("country:brief:ETH")
+
+    r = client.get("/api/country/ETH/brief")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    md = body["markdown"]
+    assert "## Sources" in md
+    pre_sources = md.split("## Sources")[0]
+    assert "cut-off-mid-url-righ" not in pre_sources  # dangling fragment dropped
+    assert pre_sources.rstrip().endswith("Stable.")  # cut back to the last clean sentence
 
 
 def test_brief_degrades_when_no_llm(client, monkeypatch):

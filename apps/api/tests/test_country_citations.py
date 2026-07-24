@@ -165,6 +165,54 @@ def test_sourced_footnotes_no_caveat_when_ucdp_only():
     assert "## Sources" in out
 
 
+# ── _trim_incomplete_tail: truncated-generation backstop ───────────────────
+# Regression: two independent live /api/country/{iso3}/brief runs truncated
+# mid-sentence (once mid-URL) right before the deterministic ## Sources
+# footer, because the model's own generation hit its length cap. This trims
+# the dangling fragment back to the last safely-terminated sentence.
+
+
+def test_trim_incomplete_tail_cuts_mid_sentence():
+    text = (
+        "## Overview\nThe situation remains tense. A military force event "
+        "involving Minnesota and Ethiopian actors was reported on 202"
+    )
+    assert cp._trim_incomplete_tail(text) == "## Overview\nThe situation remains tense."
+
+
+def test_trim_incomplete_tail_cuts_mid_url():
+    text = (
+        "## Overview\nCalm.\n\n## Recent security events\nA clash was reported "
+        "([source](https://www.dailymail.com/news/article-15996701/Tsegaab-"
+        "Binessu-shooting-ap"
+    )
+    out = cp._trim_incomplete_tail(text)
+    assert out == "## Overview\nCalm."
+    assert "[" not in out and "(" not in out  # no dangling link syntax kept
+
+
+def test_trim_incomplete_tail_leaves_clean_ending_untouched():
+    text = "## Watch items\nWatch for further escalation in the border region."
+    assert cp._trim_incomplete_tail(text) == text
+
+
+def test_trim_incomplete_tail_leaves_clean_citation_untouched():
+    text = "A clash was reported ([source](https://example.com/ok))."
+    assert cp._trim_incomplete_tail(text) == text
+
+
+def test_trim_incomplete_tail_empty_body():
+    assert cp._trim_incomplete_tail("") == ""
+    assert cp._trim_incomplete_tail("   \n\t  ") == ""
+
+
+def test_trim_incomplete_tail_drops_all_when_no_safe_boundary():
+    # No sentence-ending punctuation anywhere in the text -- nothing safe to
+    # keep, so the whole dangling fragment is dropped rather than shown broken.
+    text = "A clash was reported ([source](https://example.com/still-loading"
+    assert cp._trim_incomplete_tail(text) == ""
+
+
 # ── FIX 3: /api/news/feed?iso3= server-side filter ──────────────────────────
 
 
