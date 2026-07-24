@@ -191,8 +191,58 @@ ${doss['assessment'] ? `<p><b>Assessment:</b> ${esc(String(doss['assessment']))}
   );
 }
 
-function PropertiesTab({ viewer, id }: { viewer: Cesium.Viewer | null; id: string }): JSX.Element {
-  const props = useEntityProps(viewer, id);
+// riley-1: positionless ontology nodes (domain/ip/org/company-screening/…) are
+// never plotted as a Cesium entity, so useEntityProps reads null for them
+// forever even though the backend persisted real props (GET
+// /api/ontology/object/{id}). Once the Cesium lookup comes up empty, fall back
+// to that route — the same apiFetch DossierTab already uses — so the one
+// screening surface the backend computes has somewhere to render.
+type OntologyFallback =
+  | { kind: 'idle' | 'loading' | 'not-found' }
+  | { kind: 'ok'; props: Record<string, unknown> }
+  | { kind: 'error'; message: string };
+
+function useOntologyFallbackProps(id: string, enabled: boolean): OntologyFallback {
+  const [state, setState] = useState<OntologyFallback>({ kind: 'idle' });
+  useEffect(() => {
+    if (!enabled) {
+      setState({ kind: 'idle' });
+      return;
+    }
+    let alive = true;
+    setState({ kind: 'loading' });
+    (async () => {
+      try {
+        const r = await apiFetch(`/api/ontology/object/${encodeURIComponent(id)}`, { cache: 'no-store' });
+        if (!alive) return;
+        if (r.status === 404) {
+          setState({ kind: 'not-found' });
+          return;
+        }
+        if (!r.ok) {
+          setState({ kind: 'error', message: `Properties unavailable (HTTP ${r.status}).` });
+          return;
+        }
+        const obj = (await r.json()) as { props?: Record<string, unknown> };
+        setState({ kind: 'ok', props: obj.props ?? {} });
+      } catch {
+        if (alive) setState({ kind: 'error', message: 'Properties unavailable. Network error.' });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id, enabled]);
+  return state;
+}
+
+// Exported for direct component testing (ObjectInspector.test.tsx) — the tab
+// switch UI has no test value of its own; the fallback logic does.
+export function PropertiesTab({ viewer, id }: { viewer: Cesium.Viewer | null; id: string }): JSX.Element {
+  const entityProps = useEntityProps(viewer, id);
+  const fallback = useOntologyFallbackProps(id, entityProps === null);
+  const props = entityProps ?? (fallback.kind === 'ok' ? fallback.props : null);
+
   const rows = useMemo(() => {
     if (!props) return [];
     return Object.entries(props)
@@ -202,6 +252,18 @@ function PropertiesTab({ viewer, id }: { viewer: Cesium.Viewer | null; id: strin
 
   const source = props?.['source'] ?? props?.['src'];
   const seenAt = typeof props?.['seen_at'] === 'number' ? (props['seen_at'] as number) : null;
+
+  // No Cesium entity AND the ontology fallback hasn't settled into a
+  // renderable state yet — surface its loading/error state instead of the
+  // provenance box below (which has nothing to say about either). A 404 (id in
+  // neither store) falls through to the same "No properties resolved." as
+  // before this fix.
+  if (entityProps === null && fallback.kind === 'loading') {
+    return <div className="p-3"><p className="mono text-[11px] text-txt-3">loading…</p></div>;
+  }
+  if (entityProps === null && fallback.kind === 'error') {
+    return <div className="p-3"><p className="mono text-[11px] text-alert">{fallback.message}</p></div>;
+  }
 
   return (
     <div className="p-3 text-txt-1">
