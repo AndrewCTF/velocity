@@ -523,8 +523,11 @@ and you'll want a discrete card with headroom.
 **Backend (server):** Python 3.12, outbound HTTPS, measured steady-state
 ~3.2 GB backend RSS with the full feed set warm. Runs on a small VPS or the
 same box, and it isn't the frontend's bottleneck. The optional headless-Chrome
-coverage sidecars (ADS-B/AIS scraping tiers) cost several GB more each on top
-of that when enabled.
+coverage sidecars are the real memory line item: the ADS-B scraping tier
+measured ~11 GB RSS across its ~50-process Chrome tree and the AIS tier
+~3-6 GB across its ~20-36 (both measured 2026-07-24 at full coverage), so
+budget roughly 15 GB on top of the backend when both are enabled — or skip
+them and keep the lighter direct feeds.
 
 ## Stack
 
