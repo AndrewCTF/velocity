@@ -147,7 +147,7 @@ describe('BriefCard', () => {
       jsonResponse({ ok: false, reason: 'no LLM backend configured' }),
     );
     render(<BriefCard iso3="ZZF" />);
-    // Nothing fetched on mount — the brief is click-only (10-60 s LLM call).
+    // Nothing fetched on mount — the brief is click-only (10-90 s LLM call).
     expect(mockedFetch).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Generate brief' }));
     await waitFor(() => {
@@ -155,6 +155,13 @@ describe('BriefCard', () => {
     });
     expect(mockedFetch).toHaveBeenCalledWith('/api/country/ZZF/brief', expect.anything());
     expect(screen.getByText(/Settings → Local AI/)).toBeTruthy();
+  });
+
+  it('promises the real 90s server budget while generating (priya-2: was a stale 60s ceiling)', async () => {
+    mockedFetch.mockImplementation(() => new Promise(() => {}));
+    render(<BriefCard iso3="ZZM" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Generate brief' }));
+    expect(await screen.findByText(/up to ~90 s/)).toBeTruthy();
   });
 
   it('renders the markdown brief on ok:true', async () => {

@@ -1,7 +1,8 @@
 // AI country brief card — /api/country/{iso3}/brief is an LLM call that can
-// take 10-60 s, so it fires ONLY on an explicit button click (never on
-// selection). While generating we show an elapsed-seconds progress line; the
-// result renders through the shared <Markdown> (token-styled, HTML-stripped).
+// take up to 90 s (server budget), so it fires ONLY on an explicit button
+// click (never on selection). While generating we show an elapsed-seconds
+// progress line; the result renders through the shared <Markdown>
+// (token-styled, HTML-stripped).
 // ok:false (no LLM backend / no model pinned) degrades to a plain explanation
 // with a pointer at Settings → Local AI — successful briefs are cached per
 // iso3 in a module map, failures are not (so fixing the model config retries).
@@ -74,7 +75,7 @@ export function BriefCard({ iso3 }: { iso3: string }): JSX.Element {
         </button>
         {state.busy && (
           <span className="mono text-[10px] text-txt-3">
-            fusing indicators + leadership + security… {elapsed} s (local model, up to ~60 s)
+            fusing indicators + leadership + security… {elapsed} s (local model, up to ~90 s)
           </span>
         )}
         {!state.busy && !state.data && !state.error && (
