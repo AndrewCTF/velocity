@@ -326,3 +326,74 @@ async def test_investigate_company_mints_org_officer_and_sanction(monkeypatch) -
     )
     assert summary["sanctions_matches"] == 1
     assert summary["officers"] == 1
+
+    # The screening result is not just returned in the response summary — it's
+    # persisted onto the org root's props, so re-opening the case later shows
+    # what was checked without re-running the fan-out.
+    props = g.objs[root].props
+    assert props["sanctions_matches"] == 1
+    assert props["opencorporates_matches"] == 1
+    assert props["officers"] == 1
+    assert props["aleph_matches"] == 0
+    assert props["wikidata_matches"] == 1
+
+
+async def test_investigate_company_persists_zero_counts_as_screened(monkeypatch) -> None:
+    """A clean screening (every connector finds 0) must still persist the counts
+    onto the org object — a 0 is "checked, clean", not "never checked", and the
+    props dict comprehension that drops falsy identity fields (cik/ticker/…)
+    must NOT also drop these. Falsy identity fields still get dropped."""
+    monkeypatch.setattr(
+        O.corp, "sec_edgar_company",
+        _noop_async({"name": "Nada Inc", "cik": "", "ticker": "", "sic": "", "filings": [], "count": 0}),
+    )
+    monkeypatch.setattr(
+        O.corp, "opensanctions_search",
+        _noop_async({"query": "Nada Inc", "matches": [], "count": 0}),
+    )
+    monkeypatch.setattr(
+        O.corp, "opencorporates_search",
+        _noop_async({"query": "Nada Inc", "companies": [], "count": 0}),
+    )
+    monkeypatch.setattr(
+        O.corp, "openownership_search",
+        _noop_async({"query": "Nada Inc", "owners": [], "count": 0}),
+    )
+    monkeypatch.setattr(O.corp, "aleph_search", _noop_async({"query": "Nada Inc", "entities": [], "count": 0}))
+    monkeypatch.setattr(
+        O.corp, "wikidata_search",
+        _noop_async({"query": "Nada Inc", "entities": [], "count": 0}),
+    )
+
+    g = O._Graph(ts=time.time())
+    summary = await O._investigate_company(g, "Nada Inc")
+
+    root = "ext:organization:nada-inc"
+    assert root in g.objs
+    props = g.objs[root].props
+    assert props["sanctions_matches"] == 0
+    assert props["opencorporates_matches"] == 0
+    assert props["officers"] == 0
+    assert props["aleph_matches"] == 0
+    assert props["wikidata_matches"] == 0
+    # Falsy identity fields (no CIK found) still get dropped, not fabricated.
+    assert "cik" not in props
+    assert summary["sanctions_matches"] == 0
+    assert summary["cik"] == ""
+
+    # Readable back via the ontology registry, same as the route's persistence
+    # step (get_registry(ctx, settings).upsert(obj) for every g.objs value).
+    from app.config import get_settings
+    from app.intel.ontology import get_registry
+    from app.keys import UserCtx
+
+    ctx = UserCtx("local", "")
+    reg = get_registry(ctx, get_settings())
+    await reg.upsert(g.objs[root])
+    fetched = await reg.get(root)
+    assert fetched is not None
+    assert fetched.props["sanctions_matches"] == 0
+    assert fetched.props["opencorporates_matches"] == 0
+    assert fetched.props["officers"] == 0
+    assert fetched.props["aleph_matches"] == 0
+    assert fetched.props["wikidata_matches"] == 0

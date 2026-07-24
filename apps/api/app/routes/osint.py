@@ -785,14 +785,24 @@ async def _investigate_company(g: _Graph, name: str) -> dict[str, Any]:
         g.link(pid, root, "officer_of")
         officers += 1
 
-    return {
-        "cik": sec_r.get("cik", ""),
+    screening = {
         "sanctions_matches": sanctioned,
         "opencorporates_matches": oc_r.get("count", 0),
         "officers": officers,
         "aleph_matches": al_r.get("count", 0),
         "wikidata_matches": wd_r.get("count", 0),
     }
+    # These are due-diligence counts, not identity fields: a 0 means "checked,
+    # clean" and is the whole point of a durable screening record, so it must
+    # survive re-opening the case. g.obj()'s dict comprehension drops falsy
+    # values (correct for cik/ticker/sic/etc — an identity field that wasn't
+    # found shouldn't render as a fabricated 0/""), so set these directly on
+    # the already-minted root, bypassing that filter. collected_at (stamped by
+    # g.obj() above) already records when this screening ran — no separate
+    # "screened_at" field needed.
+    g.objs[root].props.update(screening)
+
+    return {"cik": sec_r.get("cik", ""), **screening}
 
 
 @router.post("/investigate", response_model=InvestigateResponse)

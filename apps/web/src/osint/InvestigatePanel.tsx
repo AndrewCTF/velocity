@@ -136,6 +136,34 @@ export function InvestigatePanel(): JSX.Element {
                 threat pulses: {String(result.summary['threat_pulses'])}
               </div>
             )}
+          {typeof result.summary?.['cik'] === 'string' && result.summary['cik'] && (
+            <div>SEC CIK: {String(result.summary['cik'])}</div>
+          )}
+          {/* Company screening counts: a 0 is "checked, clean" — the whole point
+              of a due-diligence record — so render it as a real zero, not hide it. */}
+          {typeof result.summary?.['sanctions_matches'] === 'number' && (
+            <div
+              style={
+                (result.summary['sanctions_matches'] as number) > 0
+                  ? { color: 'var(--alert)' }
+                  : undefined
+              }
+            >
+              Sanctions matches: {String(result.summary['sanctions_matches'])}
+            </div>
+          )}
+          {typeof result.summary?.['opencorporates_matches'] === 'number' && (
+            <div>OpenCorporates matches: {String(result.summary['opencorporates_matches'])}</div>
+          )}
+          {typeof result.summary?.['aleph_matches'] === 'number' && (
+            <div>Aleph matches: {String(result.summary['aleph_matches'])}</div>
+          )}
+          {typeof result.summary?.['wikidata_matches'] === 'number' && (
+            <div>Wikidata matches: {String(result.summary['wikidata_matches'])}</div>
+          )}
+          {typeof result.summary?.['officers'] === 'number' && (
+            <div>Officers found: {String(result.summary['officers'])}</div>
+          )}
         </div>
       )}
     </div>

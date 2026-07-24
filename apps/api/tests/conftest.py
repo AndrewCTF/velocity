@@ -121,6 +121,19 @@ def _isolate_alert_rules_db(tmp_path: Path) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_audit_db(tmp_path: Path) -> Iterator[None]:
+    """Point the local audit-log fallback at a per-test temp file (mirrors
+    ontology/foundry/workflows/alert_rules) — without this, every test that
+    exercises an audited route on this keyless (no-Supabase) test boot would
+    write ``./data/audit_log.db`` into the repo."""
+    from app import audit as audit_mod
+
+    audit_mod.override_db_path(str(tmp_path / "audit_log.db"))
+    yield
+    audit_mod.override_db_path(None)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_evidence_dir(tmp_path: Path) -> Iterator[None]:
     """Point the evidence-locker blob dir at a per-test temp dir (mirrors the
     ontology/foundry isolation) — route handlers resolve ``evidence_dir`` via

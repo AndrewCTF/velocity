@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from app import audit as audit_mod
@@ -58,7 +60,44 @@ async def test_audit_nonblocking_on_error(monkeypatch: pytest.MonkeyPatch) -> No
     assert ok is False  # logged, never raised
 
 
-async def test_audit_noop_without_supabase(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_audit_local_fallback_without_supabase(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keyless (no Supabase configured) used to no-op; it must now durably
+    record the same row in the local SQLite fallback instead. DB path
+    isolation comes from the autouse ``_isolate_audit_db`` conftest fixture
+    (mirrors ontology/alert-rules local-store tests)."""
     monkeypatch.setattr(audit_mod, "_url", lambda: "")
-    ok = await audit_mod.audit(UserCtx("u1", "tok"), "a", "b")
-    assert ok is False
+    ok = await audit_mod.audit(
+        UserCtx("u1", "tok"), "osint_investigate", "org", "ext:organization:acme",
+        classification=2, detail={"sanctions_matches": 0},
+    )
+    assert ok is True
+
+    con = sqlite3.connect(audit_mod._local_db_path())
+    try:
+        row = con.execute(
+            "SELECT user_id, action, resource_type, target_id, classification,"
+            " params FROM audit_log"
+        ).fetchone()
+    finally:
+        con.close()
+    assert row is not None
+    assert row[0] == "u1"
+    assert row[1] == "osint_investigate"
+    assert row[2] == "org"
+    assert row[3] == "ext:organization:acme"
+    assert row[4] == 2
+    assert row[5] == '{"sanctions_matches": 0}'
+
+
+async def test_audit_local_fallback_never_touches_supabase_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When Supabase IS configured, behavior is unchanged: no local write."""
+    captured: list = []
+    monkeypatch.setattr(audit_mod, "_url", lambda: "https://x.supabase.co/rest/v1/action_log")
+    monkeypatch.setattr(audit_mod, "_client", lambda: _FakeClient(captured))
+    calls: list = []
+    monkeypatch.setattr(audit_mod, "_audit_local", lambda row: calls.append(row) or True)
+    ok = await audit_mod.audit(UserCtx("u1", "tok"), "extract", "document")
+    assert ok is True
+    assert calls == []  # local fallback never invoked on the configured path
