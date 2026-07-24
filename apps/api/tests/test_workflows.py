@@ -673,6 +673,14 @@ async def test_source_vessels_degrades_to_empty_on_feed_error(monkeypatch: pytes
 
 
 async def test_source_quakes_parses_geojson(monkeypatch: pytest.MonkeyPatch) -> None:
+    """source.quakes must go through the internal loader (``load_quakes``),
+    never the route handler (``quakes``) in-process — calling the route with
+    only ``range=`` left its ``lat``/``lon``/``radius_km`` ``Query(...)``
+    defaults unresolved (not None), so the route's own radius-filter branch
+    fired and raised TypeError, silently swallowed into 0 rows every run.
+    Stubbing ``quakes`` to blow up (while ``load_quakes`` returns real data)
+    catches a regression back to the route: the block's bare except would
+    swallow the AssertionError into [], failing the row-shape assert below."""
     from app.routes import eq as eq_routes
 
     fake_fc = {
@@ -685,14 +693,30 @@ async def test_source_quakes_parses_geojson(monkeypatch: pytest.MonkeyPatch) -> 
         ]
     }
 
-    async def fake_quakes(range="day"):  # noqa: A002 - mirrors the real signature
+    async def fake_load_quakes(range="day"):  # noqa: A002 - mirrors the real signature
         assert range == "week"
         return fake_fc
 
-    monkeypatch.setattr(eq_routes, "quakes", fake_quakes)
+    async def quakes_must_not_be_called_in_process(*a, **kw):
+        raise AssertionError("source.quakes called the route handler in-process")
+
+    monkeypatch.setattr(eq_routes, "load_quakes", fake_load_quakes)
+    monkeypatch.setattr(eq_routes, "quakes", quakes_must_not_be_called_in_process)
     ctx = BlockCtx(user_ctx=_CTX, workflow_id="wf", memory={})
     rows = await blocks_mod._run_source_quakes({"range": "week"}, [], ctx)
     assert rows == [{"id": "usgs1", "lon": 1.0, "lat": 2.0, "depth_km": 5.0, "mag": 4.2, "place": "Somewhere", "time": 1700000000000}]
+
+
+async def test_source_quakes_degrades_to_empty_on_feed_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.routes import eq as eq_routes
+
+    async def boom(range="day"):  # noqa: A002 - mirrors the real signature
+        raise RuntimeError("no network in tests")
+
+    monkeypatch.setattr(eq_routes, "load_quakes", boom)
+    ctx = BlockCtx(user_ctx=_CTX, workflow_id="wf", memory={})
+    rows = await blocks_mod._run_source_quakes({}, [], ctx)
+    assert rows == []
 
 
 async def test_source_alerts_reads_bus_ring() -> None:

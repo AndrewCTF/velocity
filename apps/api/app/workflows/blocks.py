@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import time
 import uuid
@@ -51,6 +52,8 @@ from app.intel.ontology_local import _connect as _ontology_connect
 from app.keys import UserCtx
 from app.workflows import control, python_exec
 from app.workflows.store import WorkflowError
+
+log = logging.getLogger(__name__)
 
 Row = dict[str, Any]
 
@@ -364,18 +367,24 @@ async def _run_source_alerts(
 async def _run_source_quakes(
     config: dict[str, Any], inputs: list[list[Row]], ctx: BlockCtx
 ) -> list[Row]:
-    """USGS earthquake feed. Calls the route function directly WITH an
-    explicit ``range`` kwarg (never relying on its ``Query(...)`` default —
-    the same trap ``global_snapshot()``'s docstring documents for adsb) so no
-    unresolved ``fastapi.Query`` sentinel leaks into the comparison."""
+    """USGS earthquake feed via the internal cached loader — never the route
+    handler in-process (same rule ``global_snapshot()``'s docstring documents
+    for adsb). ``eq.quakes()``'s ``lat``/``lon``/``radius_km`` params default
+    to ``fastapi.Query(None, ...)`` sentinel objects, not ``None`` — calling
+    the route in-process with only ``range=`` left those sentinels in place,
+    so the route's own "radius filter requested" check saw all three as
+    "supplied" and called ``filter_by_radius`` on them, raising TypeError.
+    ``load_quakes`` takes only ``range`` and does no radius filtering, so it
+    can't hit that trap."""
     from app.routes import eq as eq_routes  # noqa: PLC0415
 
     rng = config.get("range") or "day"
     if rng not in ("hour", "day", "week", "month"):
         rng = "day"
     try:
-        fc = await eq_routes.quakes(range=rng)
-    except Exception:  # noqa: BLE001 — upstream degrade → empty, never block the run
+        fc = await eq_routes.load_quakes(rng)
+    except Exception as exc:  # noqa: BLE001 — upstream degrade → empty, never block the run
+        log.warning("source.quakes: load_quakes(%r) failed, yielding 0 rows: %s", rng, exc)
         return []
     rows: list[Row] = []
     for f in (fc or {}).get("features") or []:
