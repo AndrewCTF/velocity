@@ -13,6 +13,7 @@ hand-seeded in-memory observation store. Covers the two stress-test fixes:
 from __future__ import annotations
 
 import time
+import types
 
 import pytest
 
@@ -61,6 +62,14 @@ def _add_vessel(eid: str, mmsi: str, t: float, lon: float, lat: float,
         attrs={"mmsi": mmsi, "name": name, "shipType": ship_type,
                "sog": 11.0, "cog": 90.0},
     ))
+
+
+def _seed_db_positions(db: str, rows: list[tuple[str, str, float, float, float]]) -> None:
+    """Write (kind, id, t, lon, lat) rows straight into a fresh tmp positions DB."""
+    H._buffer.clear()
+    H._last.clear()
+    H.override_db_path(db)
+    H._flush_sync([(kind, eid, t, lon, lat, 0.0, "{}") for (kind, eid, t, lon, lat) in rows])
 
 
 # ── BUG 9: DB-backed track depth ──────────────────────────────────────────────
@@ -177,3 +186,111 @@ async def test_vessel_dossier_not_found(tmp_path) -> None:
     H.override_db_path(str(tmp_path / "hist5.db"))
     res = await dossier.vessel_dossier("123450000")
     assert res["found"] is False
+
+
+# ── mika-2: honest DB-tier window (settings-derived, not a hardcoded 48h) ──────
+#
+# apps/api/app/intel/dossier.py used to hardcode _DB_LOOKBACK_S = 48h regardless
+# of history_retention_hours (the operator-tunable ceiling) or of what the
+# byte-cap-bound positions DB could actually still hold. These prove the window
+# now derives from settings, that the reported "effective" window reflects the
+# store's REAL depth for the entity being queried (not the nominal ask), and
+# that it never claims coverage further back than what was actually queried.
+
+async def test_vessel_dossier_window_requested_derives_from_settings(
+    tmp_path, monkeypatch
+) -> None:
+    """window_requested_s tracks history_retention_hours, not a hardcoded 48h —
+    the original bug this closes."""
+    _reset_store()
+    H.override_db_path(str(tmp_path / "hist6.db"))
+    now = time.time()
+    _add_vessel("vessel:477961500", "477961500", now - 5, 28.4, 59.7, "BAO MING", 70)
+    monkeypatch.setattr(
+        dossier, "get_settings", lambda: types.SimpleNamespace(history_retention_hours=2)
+    )
+
+    res = await dossier.vessel_dossier("477961500")
+
+    assert res["found"] is True
+    assert res["window_requested_s"] == 2 * 3600.0
+    assert "2h nominally requested" in res["window_note"]
+
+
+async def test_vessel_dossier_reports_shortened_effective_window(tmp_path) -> None:
+    """The DB holds fixes for this id only back to ~30 min, far short of the
+    (default) 168h nominal ask — the dossier must report the REAL depth, not
+    the requested ceiling, and window_note must state it honestly rather than
+    repeat the old static '~48h history' claim."""
+    _reset_store()
+    eid = "vessel:477961501"
+    now = time.time()
+    _seed_db_positions(str(tmp_path / "hist7.db"), [
+        ("vessel", eid, now - 1800, 28.40, 59.70),
+        ("vessel", eid, now - 900, 28.41, 59.71),
+    ])
+    _add_vessel(eid, "477961501", now - 5, 28.42, 59.72, "TEST SHIP", 70)
+
+    res = await dossier.vessel_dossier("477961501")
+
+    assert res["found"] is True
+    requested_s = res["window_requested_s"]
+    available_s = time.time() - res["window_available_from_ts"]
+    assert available_s < requested_s * 0.5, (
+        "effective depth must be reported far short of the nominal ask"
+    )
+    assert available_s < 3600, "effective depth pinned to this id's oldest DB row (~30 min)"
+    assert "byte-cap-bound" in res["window_note"]
+    assert f"{requested_s / 3600:.0f}h nominally requested" in res["window_note"]
+    assert "48h" not in res["window_note"], "the stale hardcoded claim must be gone"
+
+
+async def test_aircraft_dossier_reports_shortened_effective_window(tmp_path) -> None:
+    """Same honesty check on the aircraft path, which shares the DB-tier
+    plumbing with vessel_dossier."""
+    _reset_store()
+    eid = "aircraft:short01"
+    now = time.time()
+    _seed_db_positions(str(tmp_path / "hist8.db"), [
+        ("aircraft", eid, now - 600, 10.0, 50.0),
+        ("aircraft", eid, now - 300, 10.1, 50.1),
+    ])
+    store.add(Observation(
+        id=eid, source="adsb", t=now - 5, lon=10.2, lat=50.2, emits_kind="aircraft",
+        attrs={"icao24": "short01", "callsign": "TST1"},
+    ))
+
+    res = await dossier.aircraft_dossier("short01")
+
+    assert res["found"] is True
+    available_s = time.time() - res["window_available_from_ts"]
+    assert available_s < 3600
+    assert "byte-cap-bound" in res["window_note"]
+
+
+async def test_vessel_dossier_window_available_capped_at_requested(
+    tmp_path, monkeypatch
+) -> None:
+    """DB history for this id reaches further back than the nominal window
+    asks for; the reported effective-from timestamp must be capped at what was
+    actually queried (t_from) — never claim coverage beyond the request just
+    because older rows happen to still exist."""
+    _reset_store()
+    eid = "vessel:477961502"
+    monkeypatch.setattr(
+        dossier, "get_settings", lambda: types.SimpleNamespace(history_retention_hours=1)
+    )
+    now = time.time()
+    _seed_db_positions(str(tmp_path / "hist9.db"), [
+        ("vessel", eid, now - 10 * 3600, 28.0, 59.0),  # 10h back, older than the 1h ask
+        ("vessel", eid, now - 30, 28.1, 59.1),
+    ])
+    _add_vessel(eid, "477961502", now - 5, 28.2, 59.2, "OLD ROW SHIP", 70)
+
+    res = await dossier.vessel_dossier("477961502")
+
+    assert res["found"] is True
+    expected_t_from = time.time() - res["window_requested_s"]
+    assert abs(res["window_available_from_ts"] - expected_t_from) < 5, (
+        "must cap at t_from, not the older row that exists in the DB"
+    )

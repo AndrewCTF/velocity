@@ -5,9 +5,11 @@ aircraft (ICAO24) — into a single read: its recent track, AIS/ADS-B gaps, a
 derived speed profile (loiter vs transit vs dash), the area it has covered, and
 which live incidents it currently appears in. The track FUSES two tiers: the
 in-memory observation store (the freshest, richest fix — carries identity attrs,
-~1h retention) and the SQLite positions DB (`app.history`, up to ~48h of fixes)
-so pattern-of-life spans hours, not just the live window — stated honestly in the
-response rather than implied to be a full history.
+~1h retention) and the SQLite positions DB (`app.history`, nominally up to
+`history_retention_hours` of fixes, but byte-cap-bound in practice — see
+`_window_requested_s`/`_effective_window_from`) so pattern-of-life spans hours,
+not just the live window — stated honestly (the ACTUAL effective depth, not the
+nominal ceiling) in the response rather than implied to be a full history.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app import history
+from app.config import get_settings
 from app.correlate.store import store
 from app.correlate.types import Observation
 from app.intel import incidents
@@ -36,14 +39,78 @@ _MIN_SEG_DT_S = 30.0
 _MAX_PLAUSIBLE_KN = 1000.0
 _KM_S_TO_KN = 1943.84
 
-# How far back the dossier reaches into the SQLite positions DB (history.py).
-# Bounded by the DB's own retention (history_retention_hours); a generous
-# ceiling here just means "give me everything the DB still holds for this id".
-_DB_LOOKBACK_S = 48.0 * 3600.0
 # Two DB points closer together than this are treated as the same fix when
 # merging with the in-memory track (the live store and the DB both sample the
 # same upstream, so a 1s-apart pair is one observation, not two).
 _MERGE_DEDUP_DT_S = 1.0
+
+
+def _window_requested_s() -> float:
+    """How far back we ASK the SQLite positions DB for, derived from the
+    operator's configured retention target (``history_retention_hours``) —
+    not a hardcoded ceiling. This is only the request: the store is byte-cap-
+    bound (``history_max_bytes``), so what it can actually still answer for a
+    given query is frequently much shorter. ``_effective_window_from`` reports
+    that real number; never repeat this value alone as if it were a guarantee.
+    """
+    return float(get_settings().history_retention_hours) * 3600.0
+
+
+async def _effective_window_from(entity_id: str, t_from: float) -> float:
+    """The earliest timestamp the positions DB can honestly promise fixes from
+    for THIS entity — the effective floor of the byte-cap-bound store, not the
+    nominal retention window.
+
+    Reuses the same `history._connect()` plumbing `_db_track_sync` already
+    opens (see its docstring) for a second, equally cheap indexed lookup:
+    `MIN(t) WHERE id = ?` hits the covering `idx_id_t` index directly (no
+    table/id scan), unlike a global `MIN(t)` which is exactly as cheap but
+    conflates "this vessel wasn't transmitting yet" with "the DB dropped
+    everything before here" — the id-scoped version answers the question this
+    dossier is actually asking: how far back does OUR track go.
+
+    Returns `t_from` (i.e. "no evidence the window is any shorter than asked")
+    when history is disabled, the id has no DB rows, or the DB errors.
+    """
+    if not history.stats().get("enabled"):
+        return t_from
+    try:
+        return await asyncio.to_thread(_oldest_ts_sync, entity_id, t_from)
+    except Exception:  # noqa: BLE001 — a DB hiccup must not break the dossier
+        return t_from
+
+
+def _oldest_ts_sync(entity_id: str, t_from: float) -> float:
+    con = history._connect()
+    try:
+        row = con.execute(
+            "SELECT MIN(t) FROM positions WHERE id = ?", (entity_id,)
+        ).fetchone()
+    finally:
+        con.close()
+    oldest = row[0] if row else None
+    if oldest is None:
+        # No DB rows for this id at all: the DB tier adds zero depth beyond
+        # the live store, i.e. the effective floor is "now", not the request.
+        return time.time()
+    # The DB may hold fixes older than we asked for (t_from); we only ever
+    # queried down to t_from, so we can't honestly claim coverage further
+    # back than that even if the row exists.
+    return max(t_from, float(oldest))
+
+
+def _window_note(closing: str, requested_s: float, available_from_ts: float) -> str:
+    """The DB-tier honesty clause: what we asked the positions DB for vs. what
+    it can actually still answer for THIS query. Always states the real
+    number — the store is byte-cap-bound, not a fixed retention clock, so the
+    effective depth is frequently far short of the nominal ask."""
+    requested_h = requested_s / 3600.0
+    available_h = max(0.0, (time.time() - available_from_ts) / 3600.0)
+    return (
+        "Track fuses the live store (~1h, freshest) with the positions DB "
+        f"(byte-cap-bound; effective depth here is ~{available_h:.1f}h of the "
+        f"{requested_h:.0f}h nominally requested); {closing}"
+    )
 
 
 def _db_track_sync(entity_id: str, t_from: float) -> list[Observation]:
@@ -90,7 +157,7 @@ async def _db_track(entity_id: str, kind: str) -> list[Observation]:
         return []
     try:
         return await asyncio.to_thread(
-            _db_track_sync, entity_id, time.time() - _DB_LOOKBACK_S
+            _db_track_sync, entity_id, time.time() - _window_requested_s()
         )
     except Exception:  # noqa: BLE001 — a DB hiccup must not break the dossier
         return []
@@ -307,6 +374,11 @@ async def vessel_dossier(mmsi: str) -> dict[str, Any]:
     if in_incidents:
         assessment = f"appears in {len(in_incidents)} live incident(s); " + assessment
 
+    window_requested_s = _window_requested_s()
+    window_available_from_ts = await _effective_window_from(
+        eid, time.time() - window_requested_s
+    )
+
     return {
         "found": True,
         "mmsi": mmsi,
@@ -320,9 +392,11 @@ async def vessel_dossier(mmsi: str) -> dict[str, Any]:
         "track": stats,
         "in_incidents": in_incidents,
         "assessment": assessment,
-        "window_note": (
-            "Track fuses the live store (~1h, freshest) with the positions DB "
-            "(up to ~48h history); older history is not kept server-side."
+        "window_requested_s": window_requested_s,
+        "window_available_from_ts": int(window_available_from_ts),
+        "window_note": _window_note(
+            "older history is not kept server-side.",
+            window_requested_s, window_available_from_ts,
         ),
     }
 
@@ -382,6 +456,11 @@ async def aircraft_dossier(ident: str) -> dict[str, Any]:
     if in_incidents:
         assessment = f"appears in {len(in_incidents)} live incident(s); " + assessment
 
+    window_requested_s = _window_requested_s()
+    window_available_from_ts = await _effective_window_from(
+        eid, time.time() - window_requested_s
+    )
+
     return {
         "found": True,
         "icao24": icao,
@@ -394,8 +473,10 @@ async def aircraft_dossier(ident: str) -> dict[str, Any]:
         "track": stats,
         "in_incidents": in_incidents,
         "assessment": assessment,
-        "window_note": (
-            "Track fuses the live store (~1h, freshest) with the positions DB "
-            "(up to ~48h history); full client-side history is longer still."
+        "window_requested_s": window_requested_s,
+        "window_available_from_ts": int(window_available_from_ts),
+        "window_note": _window_note(
+            "full client-side history is longer still.",
+            window_requested_s, window_available_from_ts,
         ),
     }
