@@ -70,7 +70,8 @@ async def _effective_window_from(entity_id: str, t_from: float) -> float:
     dossier is actually asking: how far back does OUR track go.
 
     Returns `t_from` (i.e. "no evidence the window is any shorter than asked")
-    when history is disabled, the id has no DB rows, or the DB errors.
+    when history is disabled or the DB errors; an id with no DB rows at all
+    returns "now" (the DB tier adds zero depth — see `_oldest_ts_sync`).
     """
     if not history.stats().get("enabled"):
         return t_from
