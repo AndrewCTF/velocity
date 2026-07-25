@@ -5,10 +5,10 @@
        the live one. Inset to 78% to clear the rounded tile corners; stroke
        widths are pre-compensated for that scale. -->
   <g transform="translate(16 16) scale(0.78) translate(-16 -16)">
-    <g fill="none" stroke="#d946ef">
+    <g fill="none" stroke="#ecebe7">
       <path d="M7 11 16 25.5 25 11" stroke-width="3.5" stroke-linejoin="miter"/>
       <rect x="3.9" y="4.9" width="6.2" height="6.2" stroke-width="2.5"/>
     </g>
-    <rect x="21.9" y="4.9" width="6.2" height="6.2" fill="#d946ef"/>
+    <rect x="21.9" y="4.9" width="6.2" height="6.2" fill="#ecebe7"/>
   </g>
 </svg>

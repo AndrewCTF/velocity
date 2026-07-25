@@ -40,6 +40,27 @@ document.querySelectorAll('.reveal').forEach((el) => {
   } else io.observe(el);
 });
 
+// Mobile menu. The five section links are unreachable below 760px without it.
+const toggle = document.getElementById('nav-toggle');
+const navLinks = document.getElementById('nav-links');
+const setMenu = (open) => {
+  toggle.setAttribute('aria-expanded', String(open));
+  toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  if (open) navLinks.setAttribute('data-open', '');
+  else navLinks.removeAttribute('data-open');
+};
+toggle.addEventListener('click', () => setMenu(toggle.getAttribute('aria-expanded') !== 'true'));
+navLinks.addEventListener('click', (e) => { if (e.target.tagName === 'A') setMenu(false); });
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') { setMenu(false); toggle.focus(); }
+});
+// Leaving the breakpoint must not strand the panel open on desktop.
+matchMedia('(min-width: 761px)').addEventListener('change', (e) => { if (e.matches) setMenu(false); });
+document.addEventListener('click', (e) => {
+  if (toggle.getAttribute('aria-expanded') !== 'true') return;
+  if (!nav.contains(e.target)) setMenu(false);
+});
+
 // Copy quick-start commands
 document.querySelectorAll('.copy-btn').forEach((btn) => {
   btn.addEventListener('click', async () => {

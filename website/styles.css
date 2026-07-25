@@ -28,8 +28,9 @@
   --paper-raise: #f6f5f2;
   --ink: #14161a;
   --ink-2: #4d545c;
-  --accent: #d946ef;        /* the product's own selection colour */
-  --accent-deep: #b429cc;
+  --bone: #ecebe7;          /* primary CTA fill; the chrome carries no hue */
+  --bone-hi: #ffffff;
+  --on-bone: #0d1014;
   --r-ctrl: 4px;
   --r-card: 10px;
   --sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -133,15 +134,15 @@ h2 {
   transition: background .18s ease, border-color .18s ease, transform .18s ease, color .18s ease;
 }
 .btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--accent); color: #14020f; border-color: var(--accent); }
-.btn-primary:hover { background: #e781f5; border-color: #e781f5; }
+.btn-primary { background: var(--bone); color: var(--on-bone); border-color: var(--bone); }
+.btn-primary:hover { background: var(--bone-hi); border-color: var(--bone-hi); }
 /* Border carries the control boundary here, so it must clear 3:1 against the
    darkest surface it sits on (#5b6673 vs #05070a measures 3.46:1). */
 .btn-line { background: rgba(255, 255, 255, .05); color: var(--txt); border-color: #5b6673; }
 .btn-line:hover { background: rgba(255, 255, 255, .11); border-color: #7c8794; }
 .btn-sm { height: 38px; padding: 0 15px; font-size: 14px; }
 .btn-big { height: 52px; padding: 0 28px; font-size: 16px; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--bone); outline-offset: 3px; }
 
 /* ---------- nav ---------- */
 
@@ -175,6 +176,33 @@ h2 {
   transition: color .16s ease;
 }
 .nav-links a:hover { color: var(--txt); }
+
+/* Mobile menu trigger. Hidden on desktop; the three bars become a cross when
+   open. 44px square so it clears the minimum touch target. */
+.nav-toggle {
+  display: none;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  position: relative;
+}
+.nav-toggle span {
+  position: absolute;
+  left: 11px;
+  width: 22px;
+  height: 1.5px;
+  background: var(--txt);
+  transition: transform .26s cubic-bezier(.16,1,.3,1), opacity .18s ease;
+}
+.nav-toggle span:nth-child(1) { top: 16px; }
+.nav-toggle span:nth-child(2) { top: 21.5px; }
+.nav-toggle span:nth-child(3) { top: 27px; }
+.nav-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.nav-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
 
 /* ---------- 2. hero: full bleed, type bottom left ---------- */
 
@@ -488,7 +516,7 @@ h2 {
   color: #cfd8e2;
 }
 .term .c { color: #5f6b78; }
-.term .p { color: var(--accent); }
+.term .p { color: #7d8fa1; }
 .term .hl { color: #7fd6a8; }
 .copy-btn {
   position: absolute;
@@ -575,7 +603,7 @@ summary:hover { color: #fff; }
 .x svg { stroke: var(--txt-2); }
 details[open] .x { transform: rotate(45deg); border-color: #3a444f; }
 details p { padding: 0 60px 24px 0; font-size: 15.5px; line-height: 1.66; color: var(--txt-2); max-width: 78ch; }
-details a { color: #c489e8; text-underline-offset: 3px; }
+details a { color: var(--bone); text-underline-offset: 3px; }
 
 /* ---------- 14. close ---------- */
 
@@ -613,6 +641,7 @@ details a { color: #c489e8; text-underline-offset: 3px; }
 .reveal { opacity: 0; transform: translateY(20px); transition: opacity .68s cubic-bezier(.16, 1, .3, 1), transform .68s cubic-bezier(.16, 1, .3, 1); }
 .reveal.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
+  .nav-links, .nav-toggle span { transition: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
   .tile img, .cap, .btn { transition: none; }
 }
@@ -630,9 +659,37 @@ details a { color: #c489e8; text-underline-offset: 3px; }
 @media (max-width: 760px) {
   :root { --pad: 20px; }
   body { font-size: 16px; }
-  .nav-links { display: none; }
-  .nav .wrap { gap: 16px; }
+  .nav-toggle { display: block; }
+  .nav .wrap { gap: 12px; }
   .nav .btn { margin-left: auto; }
+  /* The five section links move into a panel under the bar. Closed state uses
+     visibility, not display, so the slide can animate and so the links stay out
+     of the tab order while hidden. */
+  .nav-links {
+    position: fixed;
+    top: 64px;
+    left: 0;
+    right: 0;
+    display: block;
+    margin: 0;
+    padding: 6px var(--pad) 18px;
+    background: rgba(9, 12, 16, .97);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line);
+    transform: translateY(-8px);
+    opacity: 0;
+    visibility: hidden;
+    transition: transform .28s cubic-bezier(.16,1,.3,1), opacity .2s ease, visibility .28s;
+  }
+  .nav-links[data-open] { transform: none; opacity: 1; visibility: visible; }
+  .nav-links a {
+    display: block;
+    padding: 15px 0;
+    font-size: 17px;
+    color: var(--txt);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .nav-links a:last-child { border-bottom: 0; }
   .hero { min-height: 92dvh; }
   .hero-inner { padding-bottom: 40px; }
   .hero h1 { max-width: 100%; }
