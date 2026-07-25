@@ -123,25 +123,34 @@ async function ensureBrowser() {
 async function openPage(url) {
   await ensureBrowser();
   const context = await browser.newContext({ userAgent: UA, viewport: { width: 1366, height: 900 } });
-  const page = await context.newPage();
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  // Wait for Cloudflare to clear + tar1090 globals to exist.
-  await page.waitForFunction('typeof OLMap !== "undefined" && typeof g !== "undefined"', { timeout: 60000 });
-  // Zoom to the whole world ONCE — this single move makes tar1090 fetch +
-  // decode + parse every aircraft into g.planesOrdered. Do NOT keep re-moving
-  // it (that resets the load); a slow keep-alive nudge refreshes it later.
-  await page.evaluate(zoomFn, { z: ZOOM, c: CENTER });
-  // Poll (same READ_FN the loop uses) until the store populates. tar1090
-  // typically fills within ~3 s of the zoom.
-  let loaded = 0;
-  for (let i = 0; i < 14; i++) {
-    await page.waitForTimeout(2500);
-    const ac = await page.evaluate(readFn);
-    if (Array.isArray(ac) && ac.length >= MIN_PLANES) { loaded = ac.length; break; }
+  try {
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // Wait for Cloudflare to clear + tar1090 globals to exist.
+    await page.waitForFunction('typeof OLMap !== "undefined" && typeof g !== "undefined"', { timeout: 60000 });
+    // Zoom to the whole world ONCE — this single move makes tar1090 fetch +
+    // decode + parse every aircraft into g.planesOrdered. Do NOT keep re-moving
+    // it (that resets the load); a slow keep-alive nudge refreshes it later.
+    await page.evaluate(zoomFn, { z: ZOOM, c: CENTER });
+    // Poll (same READ_FN the loop uses) until the store populates. tar1090
+    // typically fills within ~3 s of the zoom.
+    let loaded = 0;
+    for (let i = 0; i < 14; i++) {
+      await page.waitForTimeout(2500);
+      const ac = await page.evaluate(readFn);
+      if (Array.isArray(ac) && ac.length >= MIN_PLANES) { loaded = ac.length; break; }
+    }
+    if (loaded) log('opened', url, '-', loaded, 'aircraft');
+    else log('warn: planes not populated for', url, '(loop will keep trying)');
+    return page;
+  } catch (e) {
+    // Close THIS context on failure so its renderers don't orphan on the SHARED
+    // browser (multi-source: browser.close() would kill sibling tabs, so scope
+    // teardown to the context). A goto/waitForFunction timeout during a
+    // Cloudflare re-challenge otherwise leaked this context's renderer per reload.
+    try { await context.close(); } catch (_) {}
+    throw e;
   }
-  if (loaded) log('opened', url, '-', loaded, 'aircraft');
-  else log('warn: planes not populated for', url, '(loop will keep trying)');
-  return page;
 }
 
 // Tiny alternating pan to keep tar1090's fetch loop alive (headless tabs can be

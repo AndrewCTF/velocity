@@ -145,19 +145,28 @@ async function waitForApi(p) {
 async function openPage() {
   await ensureBrowser();
   const context = await browser.newContext({ userAgent: UA, viewport: { width: 1366, height: 900 } });
-  const p = await context.newPage();
   try {
-    await p.goto(SITE, { waitUntil: 'commit', timeout: 45000 });
+    const p = await context.newPage();
+    try {
+      await p.goto(SITE, { waitUntil: 'commit', timeout: 45000 });
+    } catch (e) {
+      log('goto warning -', e.message, '- probing API anyway');
+    }
+    if (!(await waitForApi(p))) {
+      throw new Error('myshiptracking vessel API not reachable yet');
+    }
+    // Settle past any early SPA reroute (same one-shot reroute footgun as the
+    // MarineTraffic feeder) before the first grid sweep fires.
+    await p.waitForTimeout(3000);
+    return p;
   } catch (e) {
-    log('goto warning -', e.message, '- probing API anyway');
+    // Close THIS context on any failed open so its chrome renderer processes
+    // don't orphan on the browser. While the site blocks us, initPage() reloads
+    // every cycle and each failed openPage (waitForApi false / goto throw) used
+    // to leave its context alive — ~1-2 leaked renderers per 30 s, hundreds/hr.
+    try { await context.close(); } catch (_) {}
+    throw e;
   }
-  if (!(await waitForApi(p))) {
-    throw new Error('myshiptracking vessel API not reachable yet');
-  }
-  // Settle past any early SPA reroute (same one-shot reroute footgun as the
-  // MarineTraffic feeder) before the first grid sweep fires.
-  await p.waitForTimeout(3000);
-  return p;
 }
 
 async function initPage() {
