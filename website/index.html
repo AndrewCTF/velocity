@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preload" as="image" href="assets/hero-orbit.jpg" fetchpriority="high">
 <link rel="stylesheet" href="styles.css">
+<script>document.documentElement.className='js'</script>
 </head>
 <body>
 
@@ -60,8 +61,11 @@
   <div class="hero-media">
     <video id="hero-video" poster="assets/hero-orbit.jpg" autoplay muted loop playsinline preload="metadata"
            aria-label="Velocity's globe seen from orbit over the Mediterranean, the Levant and the Gulf, drifting east while live aircraft traffic and conflict-event markers update">
-      <source src="assets/hero-orbit.webm" type="video/webm">
+      <!-- mp4 first here: this webm encode is 2.34 MB against the mp4's 1.74 MB,
+           so source order was serving every Chrome and Firefox visitor 34% more
+           bytes for the page's heaviest above-the-fold asset. -->
       <source src="assets/hero-orbit.mp4" type="video/mp4">
+      <source src="assets/hero-orbit.webm" type="video/webm">
     </video>
   </div>
   <div class="hero-inner wrap">
@@ -226,8 +230,11 @@
   </div>
 </div>
 
-<!-- 9. Evidence chain -->
-<section class="section section-alt" id="evidence">
+<!-- 9. What happens after you see something: custody, then the agent. One band,
+     inverted. These were two sections on the same --surface tone separated by a
+     1px hairline, which read as 1,030px of one flat empty block in the part of
+     the page that already had the least going on. -->
+<section class="light" id="evidence">
   <div class="wrap">
     <div class="sec-head reveal">
       <h2>From sighting to signed report</h2>
@@ -250,13 +257,9 @@
         <code>report.html · report.pptx</code>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- 10. Agent -->
-<section class="section" id="agent" style="background:var(--surface);border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)">
-  <div class="wrap">
-    <div class="split">
+    <!-- 10. Agent, same band. -->
+    <div class="split band-next" id="agent">
       <div class="reveal">
         <span class="eyebrow">Model context protocol</span>
         <h2>Give your agent real eyes</h2>

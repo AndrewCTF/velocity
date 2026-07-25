@@ -40,12 +40,16 @@ const countUp = (el) => {
 const io = new IntersectionObserver((entries) => {
   for (const e of entries) {
     if (!e.isIntersecting) continue;
+    // Idempotent instead of unobserved: a block jumped over by an End-key press
+    // or a scrollbar drag was never intersected, and unobserving on first hit
+    // meant it stayed invisible forever once passed. Now it catches up on
+    // re-entry, and re-firing on an already-revealed block is a no-op.
+    if (e.target.classList.contains('in')) continue;
     e.target.classList.add('in');
     // A wipe inside a revealed block runs with it, so the row and its artifact
     // are one event rather than two.
     e.target.querySelectorAll('.wipe, .wipe-r').forEach((w) => w.classList.add('in'));
     e.target.querySelectorAll('[data-count]').forEach(countUp);
-    io.unobserve(e.target);
   }
   // threshold 0 + a bottom inset: a section taller than the viewport can never
   // reach a ratio threshold, which left the last gallery cards at opacity 0.
