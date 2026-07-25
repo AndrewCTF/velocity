@@ -204,8 +204,12 @@
         <div class="datarule on-light" style="margin-top:34px"><span>Recording since 2026-07-24</span><span>7,609,574 fixes</span></div>
       </div>
       <figure class="shot reveal">
-        <img src="assets/replay-scrubber.jpg" alt="Velocity's replay scrubber rewinding the last hour of global traffic" loading="lazy" decoding="async">
-        <figcaption class="chip"><i></i>Replay · rewinding the last hour</figcaption>
+        <video class="shot-video" poster="assets/replay-live.jpg" autoplay muted loop playsinline preload="none"
+               aria-label="Velocity replaying the last hour of global traffic: aircraft moving through recorded positions above the scrubber, which reads 2.0 GB and 10,876,450 recorded fixes">
+          <source src="assets/replay-live.webm" type="video/webm">
+          <source src="assets/replay-live.mp4" type="video/mp4">
+        </video>
+        <figcaption class="chip"><i></i>Replay · the last hour, from your own disk</figcaption>
       </figure>
     </div>
   </div>
@@ -353,12 +357,46 @@
 <footer class="footer">
   <div class="wrap">
     <div class="footer-grid">
-      <div>
-        <a class="brand" href="#top" style="margin-bottom:16px">
+      <div class="foot-brand">
+        <a class="brand" href="#top">
           <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="#ecebe7"><path d="M7 11 16 25.5 25 11" stroke-width="2.8" stroke-linejoin="miter"/><rect x="3.9" y="4.9" width="6.2" height="6.2" stroke-width="2"/></g><rect x="21.9" y="4.9" width="6.2" height="6.2" fill="#ecebe7"/></svg>
           VELOCITY
         </a>
         <p class="sign">Built in the open. Owned by whoever runs it.</p>
+        <div class="datarule"><span>AGPL-3.0</span><span>v1.0.1</span></div>
+      </div>
+      <div>
+        <h4>Domains</h4>
+        <ul>
+          <li><a href="#capabilities">Air</a></li>
+          <li><a href="#capabilities">Maritime</a></li>
+          <li><a href="#capabilities">Space</a></li>
+          <li><a href="#capabilities">Hazards</a></li>
+          <li><a href="#capabilities">Signals</a></li>
+          <li><a href="#capabilities">Infrastructure</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Workspace</h4>
+        <ul>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Explorer</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Briefs</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Foundry</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Workflows</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Satellites</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Layers</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Upstream feeds</h4>
+        <ul>
+          <li><a href="https://opensky-network.org" rel="noopener">OpenSky Network</a></li>
+          <li><a href="https://airplanes.live" rel="noopener">airplanes.live</a></li>
+          <li><a href="https://www.shipxplorer.com" rel="noopener">ShipXplorer</a></li>
+          <li><a href="https://celestrak.org" rel="noopener">CelesTrak</a></li>
+          <li><a href="https://earthquake.usgs.gov" rel="noopener">USGS</a></li>
+          <li><a href="https://www.gdeltproject.org" rel="noopener">GDELT</a></li>
+        </ul>
       </div>
       <div>
         <h4>Project</h4>
@@ -367,23 +405,8 @@
           <li><a href="https://github.com/AndrewCTF/velocity/releases" rel="noopener">Releases</a></li>
           <li><a href="https://github.com/AndrewCTF/velocity#readme" rel="noopener">README</a></li>
           <li><a href="https://github.com/AndrewCTF/velocity/issues" rel="noopener">Issues</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Legal</h4>
-        <ul>
-          <li><a href="https://github.com/AndrewCTF/velocity/blob/master/LICENSE" rel="noopener">AGPL-3.0 license</a></li>
-          <li><a href="https://github.com/AndrewCTF/velocity/blob/master/NOTICE" rel="noopener">Data source notices</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity/blob/master/NOTICE" rel="noopener">Data notices</a></li>
           <li><a href="https://github.com/AndrewCTF/velocity/blob/master/DISCLAIMER.md" rel="noopener">Disclaimer</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Data sources</h4>
-        <ul>
-          <li><a href="https://opensky-network.org" rel="noopener">OpenSky Network</a></li>
-          <li><a href="https://airplanes.live" rel="noopener">airplanes.live</a></li>
-          <li><a href="https://celestrak.org" rel="noopener">CelesTrak</a></li>
-          <li><a href="https://earthquake.usgs.gov" rel="noopener">USGS</a></li>
         </ul>
       </div>
     </div>
