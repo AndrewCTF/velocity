@@ -169,6 +169,9 @@ h2 {
   text-decoration: none;
 }
 .nav-links { display: flex; gap: 26px; margin-left: auto; }
+/* Menu-panel footer: mobile only. Without this it renders inside the desktop
+   nav bar, because its positioning rules live in the breakpoint block. */
+.nav-foot { display: none; }
 .nav-links a {
   font-size: 14.5px;
   color: var(--txt-2);
