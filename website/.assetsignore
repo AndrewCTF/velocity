@@ -1,0 +1,14 @@
+# [assets] directory = "." in wrangler.toml, so everything in this folder is a
+# candidate for public upload. This file is the only thing keeping the working
+# files out of it. .env holds a live OPENROUTER_API_KEY.
+.env
+*.env
+.assetsignore
+wrangler.toml
+node_modules
+package*.json
+.wrangler
+# Internal working documents, not page content.
+CLIENT-NOTES.md
+build-plan.md
+scripts
