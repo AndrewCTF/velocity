@@ -3,7 +3,21 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Nav background after leaving the hero
 const nav = document.getElementById('nav');
-const onScroll = () => nav.classList.toggle('scrolled', scrollY > 40);
+// The announcement strip retracts on first scroll and the nav slides up into
+// its place, so it costs no vertical space below the fold.
+const topbar = document.getElementById('topbar');
+const topbarX = document.getElementById('topbar-x');
+let barDismissed = false;
+const onScroll = () => {
+  nav.classList.toggle('scrolled', scrollY > 40);
+  document.body.classList.toggle('bar-gone', barDismissed || scrollY > 24);
+};
+topbarX.addEventListener('click', () => {
+  barDismissed = true;
+  document.body.classList.add('bar-gone');
+  topbar.setAttribute('aria-hidden', 'true');
+  topbar.querySelectorAll('a,button').forEach((e) => e.setAttribute('tabindex', '-1'));
+});
 addEventListener('scroll', onScroll, { passive: true });
 onScroll();
 

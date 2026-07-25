@@ -144,20 +144,89 @@ h2 {
 .btn-big { height: 52px; padding: 0 28px; font-size: 16px; }
 :focus-visible { outline: 2px solid var(--bone); outline-offset: 3px; }
 
+/* ---------- announcement strip ---------- */
+/* Carries one real, dated, linked artifact. It scrolls away on first scroll and
+   the nav takes its place, so it costs nothing below the fold. */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 41;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 44px 0 20px;
+  background: #0b0e13;
+  border-bottom: 1px solid var(--line-soft);
+  transition: transform .32s cubic-bezier(.16, 1, .3, 1);
+}
+body.bar-gone .topbar { transform: translateY(-100%); }
+.topbar-msg {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-decoration: none;
+  color: var(--txt-2);
+  transition: color .16s ease;
+}
+.topbar-msg:hover { color: var(--txt); }
+.topbar-kicker {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--txt-3);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 3px 7px;
+}
+.topbar-text {
+  font-size: 13.5px;
+  letter-spacing: -0.008em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-msg svg { flex: none; opacity: .7; }
+.topbar-x {
+  position: absolute;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  color: var(--txt-3);
+  cursor: pointer;
+  transition: color .16s ease, background .16s ease;
+}
+.topbar-x:hover { color: var(--txt); background: var(--raise); }
+
 /* ---------- nav ---------- */
 
 .nav {
   position: fixed;
-  inset: 0 0 auto;
+  top: 40px;
+  left: 0;
+  right: 0;
   z-index: 40;
+  transition: top .32s cubic-bezier(.16, 1, .3, 1);
   height: 64px;
   display: flex;
   align-items: center;
   border-bottom: 1px solid transparent;
-  transition: background .28s ease, border-color .28s ease, backdrop-filter .28s ease;
 }
 .nav .wrap { display: flex; align-items: center; gap: 34px; }
 .nav.scrolled { background: rgba(5, 7, 10, .88); backdrop-filter: blur(14px); border-bottom-color: var(--line); }
+body.bar-gone .nav { top: 0; }
 .brand {
   display: flex;
   align-items: center;
@@ -649,7 +718,7 @@ details a { color: var(--bone); text-underline-offset: 3px; }
   .nav-links {
     position: fixed;
     inset: 0;
-    z-index: 38;
+    z-index: 42;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -689,6 +758,7 @@ details a { color: var(--bone); text-underline-offset: 3px; }
      resolved against the bar and sat off-screen. */
   .nav-foot {
     position: fixed;
+    z-index: 43;
     left: var(--pad);
     right: var(--pad);
     bottom: calc(var(--pad) + 4px);
@@ -705,7 +775,10 @@ details a { color: var(--bone); text-underline-offset: 3px; }
   }
   .nav-foot .btn { width: 100%; justify-content: center; margin: 0; height: 52px; font-size: 16px; }
   /* Toggle and brand ride above the overlay. */
-  .nav .brand, .nav-toggle { position: relative; z-index: 39; }
+  .nav .brand, .nav-toggle { position: relative; z-index: 43; }
+  .nav.menu-open ~ .topbar, body.menu-locked .topbar { display: none; }
+  .topbar-text { font-size: 12.5px; }
+  .topbar { padding-left: 16px; }
   .nav.menu-open { background: var(--void); border-bottom-color: transparent; }
   .nav.menu-open > .wrap > .btn { opacity: 0; pointer-events: none; }
   body.menu-locked { overflow: hidden; }
