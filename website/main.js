@@ -43,11 +43,25 @@ document.querySelectorAll('.reveal').forEach((el) => {
 // Mobile menu. The five section links are unreachable below 760px without it.
 const toggle = document.getElementById('nav-toggle');
 const navLinks = document.getElementById('nav-links');
+const navFoot = document.querySelector('.nav-foot');
 const setMenu = (open) => {
   toggle.setAttribute('aria-expanded', String(open));
   toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
-  if (open) navLinks.setAttribute('data-open', '');
-  else navLinks.removeAttribute('data-open');
+  navLinks.toggleAttribute('data-open', open);
+  nav.classList.toggle('menu-open', open);
+  // Full-screen overlay, so the page behind it must not scroll.
+  document.body.classList.toggle('menu-locked', open);
+  navFoot.setAttribute('aria-hidden', String(!open));
+  navFoot.querySelectorAll('a').forEach((a) => a.setAttribute('tabindex', open ? '0' : '-1'));
+  // The overlay covers the viewport but does not stop the page behind it being
+  // tabbable, so tab focus walked into the hero button and the FAQ. inert takes
+  // that content out of both the tab order and the accessibility tree.
+  for (const el of document.body.children) {
+    if (el !== nav) el.toggleAttribute('inert', open);
+  }
+  // Move focus into the overlay. A rAF is too early: the pointer interaction
+  // that opened the menu still focuses the toggle afterwards.
+  if (open) setTimeout(() => navLinks.querySelector('a')?.focus(), 60);
 };
 toggle.addEventListener('click', () => setMenu(toggle.getAttribute('aria-expanded') !== 'true'));
 navLinks.addEventListener('click', (e) => { if (e.target.tagName === 'A') setMenu(false); });
@@ -56,10 +70,6 @@ addEventListener('keydown', (e) => {
 });
 // Leaving the breakpoint must not strand the panel open on desktop.
 matchMedia('(min-width: 761px)').addEventListener('change', (e) => { if (e.matches) setMenu(false); });
-document.addEventListener('click', (e) => {
-  if (toggle.getAttribute('aria-expanded') !== 'true') return;
-  if (!nav.contains(e.target)) setMenu(false);
-});
 
 // Copy quick-start commands
 document.querySelectorAll('.copy-btn').forEach((btn) => {
