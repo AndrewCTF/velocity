@@ -324,11 +324,35 @@ export function StatusDot({ tone, className = '' }: { tone: string; className?: 
   return <span className={`inline-block h-[6px] w-[6px] rounded-full ${bg} ${className}`} />;
 }
 
-// ── brand mark (.brand) — diamond + wordmark ────────────────────────────────
+// ── brand mark (.brand) — the V track glyph + wordmark ──────────────────────
+// The V is a recorded track: the open square is an archived fix, the solid one
+// is the live fix. Same mark as the marketing site and the favicon. It takes
+// currentColor so it matches the wordmark rather than the accent — the accent
+// diamond is a panel-header device (FOUNDRY, WORKFLOWS, CITY 3D) and the
+// product mark stays distinct from it. Drawn at 18px because the open square's
+// counter closes up below roughly 16.
+export function BrandMark({ size = 18, className = '' }: { size?: number; className?: string }): JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <g fill="none" stroke="currentColor">
+        <path d="M7 11 16 25.5 25 11" strokeWidth="2.9" strokeLinejoin="miter" />
+        <rect x="3.9" y="4.9" width="6.2" height="6.2" strokeWidth="2.1" />
+      </g>
+      <rect x="21.9" y="4.9" width="6.2" height="6.2" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function Brand({ name = 'VELOCITY', version }: { name?: string; version?: string }): JSX.Element {
   return (
     <div className="flex items-center gap-2 mono font-semibold tracking-[1.5px] text-[12px] text-txt-0">
-      <span className="w-2 h-2 bg-accent rotate-45 shrink-0" />
+      <BrandMark />
       {name}
       {version && (
         <span className="hidden min-[1440px]:inline font-normal tracking-[0.5px] text-[11px] text-txt-3">
