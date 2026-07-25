@@ -101,10 +101,14 @@
   </div>
 </section>
 
-<!-- 5. Full-bleed console band -->
+<!-- 5. Full-bleed console band, recorded live rather than a still -->
 <div class="bleed bleed-console">
-  <img src="assets/plate-console-europe.jpg" alt="The full Velocity console: layer rail, live globe over Europe and the Middle East, alert ticker, replay scrubber and selection panel" loading="lazy" decoding="async">
-  <span class="chip"><i></i>Live console · 13,829 entities on one screen, refreshed every second</span>
+  <video class="bleed-video" poster="assets/console-live.jpg" autoplay muted loop playsinline preload="none"
+         aria-label="The Velocity console running: the layer rail, the live globe, and the feed and alert counters updating in real time">
+    <source src="assets/console-live.webm" type="video/webm">
+    <source src="assets/console-live.mp4" type="video/mp4">
+  </video>
+  <span class="chip"><i></i>Live console · 15,774 entities, every counter moving in real time</span>
 </div>
 
 <!-- 6. Capabilities -->

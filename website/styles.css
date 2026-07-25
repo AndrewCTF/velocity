@@ -32,7 +32,7 @@
   --bone-hi: #ffffff;
   --on-bone: #0d1014;
   --r-ctrl: 4px;
-  --r-card: 10px;
+  --r-card: 8px;
   --sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --w: 1240px;
@@ -182,7 +182,7 @@ body.bar-gone .topbar { transform: translateY(-100%); }
   text-transform: uppercase;
   color: #7f8a98;
   border: 1px solid rgba(255, 255, 255, .18);
-  border-radius: 3px;
+  border-radius: var(--r-ctrl);
   padding: 3px 7px;
 }
 .topbar-text {
@@ -359,7 +359,7 @@ body.bar-gone .nav { top: 0; }
 
 /* ---------- 3. live scale strip ---------- */
 
-.scale { background: var(--surface); border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.scale { background: var(--surface); }
 .scale .wrap { padding-top: 30px; padding-bottom: 32px; }
 .scale-grid {
   display: grid;
@@ -399,8 +399,24 @@ body.bar-gone .nav { top: 0; }
 /* ---------- 5. full-bleed console band ---------- */
 
 .bleed { position: relative; }
-.bleed img { width: 100%; height: clamp(420px, 52vw, 720px); object-fit: cover; }
-.bleed-console img { object-position: 50% 42%; }
+.bleed img, .bleed-video { width: 100%; height: clamp(420px, 52vw, 720px); object-fit: cover; display: block; }
+/* The console band plays a real-time recording of the product. preload is none
+   so it costs nothing until it scrolls near, and it falls back to its own
+   poster frame under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .bleed-video { display: none; }
+  .bleed-console { background: #05070a url('assets/console-live.jpg') center / cover no-repeat; }
+}
+/* The console recording is 2.5:1. Letting the generic band height force 2:1
+   cover-cropped the layer rail and the selection panel, slicing their labels.
+   Drive the height from the source aspect so the whole console is visible. */
+.bleed-console { line-height: 0; }
+.bleed-console .bleed-video {
+  aspect-ratio: 2.5;
+  height: auto;
+  min-height: 260px;
+  object-position: 52% 50%;
+}
 .bleed::after {
   content: '';
   position: absolute;
@@ -549,7 +565,7 @@ body.bar-gone .nav { top: 0; }
 
 /* ---------- 9. evidence chain ---------- */
 
-.chain { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 40px; border-top: 1px solid var(--line); }
+.chain { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 40px; }
 .chain-step { padding: 26px 30px 28px 0; position: relative; }
 .chain-step:not(:first-child) { padding-left: 30px; }
 .chain-step::before {
@@ -658,7 +674,7 @@ body.bar-gone .nav { top: 0; }
 
 /* ---------- 13. faq ---------- */
 
-.faq-list { margin-top: 34px; border-top: 1px solid var(--line-soft); }
+.faq-list { margin-top: 34px; }
 details { border-bottom: 1px solid var(--line-soft); }
 summary {
   display: flex;
@@ -692,14 +708,14 @@ details a { color: var(--bone); text-underline-offset: 3px; }
 
 /* ---------- 14. close ---------- */
 
-.close { background: var(--surface); border-top: 1px solid var(--line-soft); }
+.close { background: var(--surface); }
 .close .wrap { padding-top: 84px; padding-bottom: 84px; }
 .close-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 56px; align-items: center; }
 .close .term { background: #0a0d11; }
 
 /* ---------- 15. footer ---------- */
 
-.footer { background: var(--void); border-top: 1px solid var(--line-soft); }
+.footer { background: var(--void); }
 .footer .wrap { padding-top: 56px; padding-bottom: 40px; }
 .footer-grid { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 40px; }
 .sign { font-size: 15px; color: var(--txt-2); max-width: 26ch; }
