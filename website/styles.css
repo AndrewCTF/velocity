@@ -61,14 +61,14 @@ a { color: inherit; }
 
 /* ---------- shared type ---------- */
 
-h1, h2, h3 { font-weight: 560; letter-spacing: -0.024em; line-height: 1.02; }
+h1, h2, h3 { font-weight: 540; letter-spacing: -0.024em; line-height: 1.02; }
 
 h2 {
   font-size: clamp(32px, 3.6vw, 50px);
-  letter-spacing: -0.024em;
-  line-height: 1.04;
-  font-weight: 620;
-  font-variation-settings: 'wdth' 112;
+  letter-spacing: -0.032em;
+  line-height: 1.05;
+  font-weight: 400;
+  font-variation-settings: 'wdth' 100;
 }
 
 .lede {
@@ -235,33 +235,20 @@ h2 {
   /* Enough scrim to hold AA contrast on the headline, not enough to erase the
      tracks. Measured: headline sits over the 0.62-0.70 band. */
   background:
-    linear-gradient(to top, var(--void) 0%, rgba(5, 7, 10, .62) 20%, rgba(5, 7, 10, .10) 56%, rgba(5, 7, 10, .22) 100%),
-    linear-gradient(to right, rgba(5, 7, 10, .58) 0%, rgba(5, 7, 10, .14) 48%, transparent 80%);
+    radial-gradient(74% 62% at 6% 76%, rgba(5, 7, 10, .74) 0%, rgba(5, 7, 10, .44) 42%, transparent 72%),
+    linear-gradient(to top, var(--void) 0%, rgba(5, 7, 10, .58) 18%, rgba(5, 7, 10, .08) 54%, rgba(5, 7, 10, .20) 100%),
+    linear-gradient(to right, rgba(5, 7, 10, .46) 0%, rgba(5, 7, 10, .10) 46%, transparent 78%);
 }
 .hero-inner { padding-bottom: 56px; padding-top: 120px; position: relative; }
-/* A local scrim under the type column only, so the right side of the globe
-   stays bright. Measured: lifts the h1 worst case from 2.93:1 to over 3:1
-   without flattening the image the way a full-frame scrim did. */
-.hero-inner::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 22%;
-  top: 84px;
-  bottom: 22px;
-  z-index: -1;
-  background: radial-gradient(120% 100% at 12% 62%, rgba(5, 7, 10, .78) 0%, rgba(5, 7, 10, .52) 46%, transparent 78%);
-  pointer-events: none;
-}
 /* Micro-labels over photography need far more weight than they do on a flat
    surface; --txt-3 measured 1.91:1 here. */
 .hero .eyebrow { color: #ccd6e0; display: inline-block; }
 .hero h1 {
   text-shadow: 0 2px 34px rgba(5, 7, 10, .72), 0 1px 5px rgba(5, 7, 10, .5);
-  font-size: clamp(46px, 7.4vw, 104px);
-  letter-spacing: -0.026em;
-  font-weight: 620;
-  font-variation-settings: 'wdth' 112;
+  font-size: clamp(44px, 7vw, 98px);
+  letter-spacing: -0.038em;
+  font-weight: 400;
+  font-variation-settings: 'wdth' 100;
   line-height: 0.96;
   max-width: 15ch;
   margin: 18px 0 0;
@@ -287,12 +274,10 @@ h2 {
 .scale-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 1px;
-  margin-top: 24px;
-  background: var(--line-soft);
-  border: 1px solid var(--line-soft);
+  gap: 34px;
+  margin-top: 26px;
 }
-.stat { background: var(--surface); padding: 20px 18px 22px; }
+.stat { padding: 0; }
 .stat b {
   display: block;
   font-family: var(--mono);
@@ -309,16 +294,16 @@ h2 {
 .statement .wrap { padding-top: 104px; padding-bottom: 104px; }
 .statement p {
   font-size: clamp(27px, 3.3vw, 46px);
-  line-height: 1.16;
-  letter-spacing: -0.022em;
-  font-weight: 560;
-  font-variation-settings: 'wdth' 108;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+  font-variation-settings: 'wdth' 100;
   color: #5c6672;
   max-width: 20ch;
   margin: 0 auto;
   text-wrap: balance;
 }
-.statement strong { color: var(--txt); font-weight: 500; }
+.statement strong { color: var(--txt); font-weight: 560; }
 .statement.tight .wrap { padding-top: 84px; padding-bottom: 84px; }
 
 /* ---------- 5. full-bleed console band ---------- */
@@ -343,7 +328,6 @@ h2 {
   align-items: center;
   gap: 10px;
   padding: 9px 15px;
-  border: 1px solid rgba(255, 255, 255, .15);
   border-radius: var(--r-ctrl);
   background: rgba(9, 12, 16, .74);
   backdrop-filter: blur(9px);
@@ -369,23 +353,21 @@ h2 {
 }
 .cap {
   background: var(--surface);
-  border: 1px solid var(--line-soft);
   border-radius: var(--r-card);
-  padding: 24px 24px 26px;
-  transition: border-color .2s ease, background .2s ease, transform .2s ease;
+  padding: 26px 26px 28px;
+  transition: background .2s ease, transform .2s ease;
 }
-.cap:hover { border-color: var(--line); background: var(--raise); transform: translateY(-2px); }
+.cap:hover { background: var(--raise); transform: translateY(-2px); }
 .icon-tile {
   width: 40px;
   height: 40px;
   border-radius: 9px;
   background: var(--raise);
-  border: 1px solid var(--line);
   display: grid;
   place-items: center;
   margin-bottom: 18px;
 }
-.cap:hover .icon-tile { border-color: #33404d; }
+.cap:hover .icon-tile { background: #202730; }
 .icon-tile svg { width: 19px; height: 19px; stroke: #9fb0c1; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .cap h3 { font-size: 19px; letter-spacing: -0.018em; font-variation-settings: 'wdth' 104; }
 .cap .n {
@@ -402,7 +384,7 @@ h2 {
 .cap-shots { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-top: 14px; }
 .cap-shots .shot img { aspect-ratio: 21 / 9; }
 .cap-shots .shot:last-child img { aspect-ratio: 14 / 9; }
-.shot { position: relative; border-radius: var(--r-card); overflow: hidden; border: 1px solid var(--line-soft); }
+.shot { position: relative; border-radius: var(--r-card); overflow: hidden; }
 .shot img { width: 100%; height: 100%; object-fit: cover; aspect-ratio: 16 / 9; }
 .shot .chip { left: 14px; bottom: 14px; transform: none; }
 
@@ -459,21 +441,20 @@ h2 {
 }
 .overband p {
   font-size: clamp(26px, 3.2vw, 44px);
-  line-height: 1.16;
-  letter-spacing: -0.022em;
-  font-weight: 560;
-  font-variation-settings: 'wdth' 108;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+  font-variation-settings: 'wdth' 100;
   color: #7e8894;
   max-width: 19ch;
   text-wrap: balance;
 }
-.overband strong { color: #fff; font-weight: 500; }
+.overband strong { color: #fff; font-weight: 560; }
 
 /* ---------- 9. evidence chain ---------- */
 
 .chain { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 40px; border-top: 1px solid var(--line); }
-.chain-step { padding: 26px 30px 28px 0; border-right: 1px solid var(--line-soft); position: relative; }
-.chain-step:last-child { border-right: 0; }
+.chain-step { padding: 26px 30px 28px 0; position: relative; }
 .chain-step:not(:first-child) { padding-left: 30px; }
 .chain-step::before {
   content: '';
@@ -494,10 +475,9 @@ h2 {
   font-size: 11.5px;
   letter-spacing: 0.03em;
   color: #8ea0b2;
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
+  background: var(--raise);
   border-radius: var(--r-ctrl);
-  padding: 5px 9px;
+  padding: 6px 10px;
 }
 
 /* ---------- 10. agent split ---------- */
@@ -505,7 +485,6 @@ h2 {
 .split { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 56px; align-items: center; }
 .term {
   background: var(--surface);
-  border: 1px solid var(--line);
   border-radius: var(--r-card);
   padding: 24px 26px;
   overflow-x: auto;
@@ -527,18 +506,19 @@ h2 {
   right: 14px;
   height: 28px;
   padding: 0 11px;
+  background: var(--raise);
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--txt-2);
   background: var(--raise);
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--r-ctrl);
   cursor: pointer;
-  transition: color .16s ease, border-color .16s ease;
+  transition: color .16s ease, background .16s ease;
 }
-.copy-btn:hover { color: var(--txt); border-color: #3a444f; }
+.copy-btn:hover { color: var(--txt); background: #202730; }
 
 /* ---------- 11. workspace bento, edge to edge ---------- */
 
@@ -596,15 +576,14 @@ summary:hover { color: #fff; }
   flex: none;
   width: 30px;
   height: 30px;
-  border: 1px solid var(--line);
   border-radius: var(--r-ctrl);
-  background: var(--surface);
+  background: var(--raise);
   display: grid;
   place-items: center;
   transition: transform .22s ease, border-color .22s ease;
 }
 .x svg { stroke: var(--txt-2); }
-details[open] .x { transform: rotate(45deg); border-color: #3a444f; }
+details[open] .x { transform: rotate(45deg); background: #202730; }
 details p { padding: 0 60px 24px 0; font-size: 15.5px; line-height: 1.66; color: var(--txt-2); max-width: 78ch; }
 details a { color: var(--bone); text-underline-offset: 3px; }
 
@@ -687,9 +666,9 @@ details a { color: var(--bone); text-underline-offset: 3px; }
     display: block;
     padding: 20px 0;
     font-size: clamp(28px, 8.4vw, 40px);
-    font-weight: 620;
-    letter-spacing: -0.026em;
-    font-variation-settings: 'wdth' 112;
+    font-weight: 440;
+    letter-spacing: -0.032em;
+    font-variation-settings: 'wdth' 100;
     line-height: 1.05;
     color: var(--txt);
     border-bottom: 1px solid var(--line-soft);
