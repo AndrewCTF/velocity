@@ -23,7 +23,7 @@
   --line-soft: #1a2027;
   --txt: #eef1f4;
   --txt-2: #99a4b1;
-  --txt-3: #66717e;
+  --txt-3: #737e8c;   /* 4.89:1 on --void; #66717e measured 4.04 and carries body copy */
   --paper: #eceae5;         /* the single light band */
   --paper-raise: #f6f5f2;
   --ink: #14161a;
@@ -446,6 +446,36 @@ body.bar-gone .nav { top: 0; }
 }
 .chip i { width: 6px; height: 6px; border-radius: 50%; background: #3fb996; flex: none; }
 
+/* World plates: real-register photographs of the domains Velocity tracks, used
+   as the ground for existing sections rather than as standalone bands, so they
+   add atmosphere and tonal contrast without adding filler height. The scrim is
+   heavy because these carry body copy, not just a headline. */
+.onworld { position: relative; isolation: isolate; overflow: hidden; }
+.onworld-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: .62;
+}
+.onworld::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .76) 28%, rgba(5, 7, 10, .78) 72%, var(--void));
+}
+.close.onworld { background: transparent; }
+/* The port plate's upper half is bright overcast sky, which dropped body copy
+   in the evidence section to 3.59:1. Frame its dark water and quay instead and
+   carry a heavier scrim, since this section is the most text-dense of the three. */
+#evidence .onworld-bg { object-position: 50% 88%; opacity: .5; }
+#evidence.onworld::before {
+  background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .86) 26%, rgba(5, 7, 10, .88) 74%, var(--void));
+}
+
 /* ---------- 6. capabilities: 3x2 card grid ---------- */
 
 .section .wrap { padding-top: 86px; padding-bottom: 86px; }
@@ -455,49 +485,54 @@ body.bar-gone .nav { top: 0; }
 .sec-head-wide { max-width: none; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 0 64px; align-items: end; }
 .sec-head-wide .lede { margin-top: 0; max-width: 54ch; }
 
-.cap-grid {
+/* Domain index. Number-led hairline rows carrying a live thumbnail, which is
+   denser per pixel than a card grid and removes the last boxed surface. */
+.dom-index { margin-top: 4px; }
+.dom {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 56px 48px;
-  margin-top: 4px;
-}
-/* No card surface. Each domain is a hairline-ruled column led by its number,
-   which is the grammar Palantir uses for its capability list. Six filled boxes
-   in a grid was the single most dashboard-looking thing on the page. */
-.cap {
+  grid-template-columns: 132px minmax(0, 1fr) 320px;
+  gap: 0 40px;
+  align-items: start;
+  padding: 30px 0;
   border-top: 1px solid var(--line);
-  padding-top: 20px;
 }
-.cap-n {
-  display: block;
+.dom:last-child { border-bottom: 1px solid var(--line); }
+.dom-n {
   font-family: var(--mono);
-  font-size: clamp(30px, 3vw, 40px);
+  font-size: clamp(26px, 2.5vw, 34px);
   font-weight: 400;
   letter-spacing: -0.03em;
-  line-height: 1;
+  line-height: .95;
   font-variant-numeric: tabular-nums;
   color: var(--txt);
 }
-.cap-q {
+.dom-body h3 {
+  font-size: 21px;
+  font-weight: 440;
+  letter-spacing: -0.022em;
+  font-variation-settings: 'wdth' 104;
+}
+.dom-q {
   display: block;
-  margin-top: 9px;
+  margin-top: 6px;
   font-family: var(--mono);
   font-size: 11.5px;
   letter-spacing: 0.04em;
-  line-height: 1.45;
   color: #c8b06b;
 }
-.cap h3 {
-  margin-top: 20px;
-  font-size: 19px;
-  letter-spacing: -0.018em;
-  font-variation-settings: 'wdth' 104;
+.dom-body p { margin-top: 12px; font-size: 14.5px; line-height: 1.58; color: var(--txt-3); max-width: 56ch; }
+.dom-thumb { overflow: hidden; border-radius: var(--r-card); }
+.dom-thumb img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1), opacity .3s ease;
+  opacity: .8;
 }
-.cap p { margin-top: 9px; font-size: 14.5px; line-height: 1.56; color: var(--txt-3); }
+.dom:hover .dom-thumb img { transform: scale(1.04); opacity: 1; }
 
-/* Full-bleed band between a section head and its body. */
 .section-head-only .wrap { padding-bottom: 44px; }
-.section-tight .wrap { padding-top: 60px; }
+.section-tight .wrap { padding-top: 56px; }
 .bleed-band img { height: clamp(340px, 40vw, 560px); object-position: 50% 58%; }
 
 /* ---------- 7. archive: the one light band ---------- */
@@ -751,7 +786,8 @@ details a { color: var(--bone); text-underline-offset: 3px; }
 
 @media (max-width: 1080px) {
   :root { --pad: 28px; }
-  .cap-grid { grid-template-columns: repeat(2, 1fr); gap: 44px 40px; }
+  .dom { grid-template-columns: 104px minmax(0, 1fr); gap: 0 28px; }
+  .dom-thumb { grid-column: 1 / -1; margin-top: 16px; max-width: 420px; }
   .archive-grid, .split, .close-grid { grid-template-columns: 1fr; gap: 40px; }
   .scale-grid { grid-template-columns: repeat(3, 1fr); }
   .bento { grid-auto-rows: 190px; }
@@ -842,8 +878,9 @@ details a { color: var(--bone); text-underline-offset: 3px; }
   .statement .wrap { padding-top: 80px; padding-bottom: 80px; }
   .statement p, .overband p { max-width: 100%; }
   .scale-grid { grid-template-columns: repeat(2, 1fr); }
-  .cap-grid, .truths { grid-template-columns: 1fr; }
-  .cap-grid { gap: 34px; }
+  .truths { grid-template-columns: 1fr; }
+  .dom { grid-template-columns: 1fr; gap: 16px; padding: 26px 0; }
+  .dom-thumb { max-width: 100%; }
   .truths { gap: 0; }
   .chain { grid-template-columns: 1fr; border-top: 0; }
   .chain-step { border-right: 0; border-top: 1px solid var(--line); padding: 24px 0 26px !important; }

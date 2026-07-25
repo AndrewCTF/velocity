@@ -1,110 +1,108 @@
-# Velocity site, build plan v2 (defense-contractor parity)
+# Velocity site, build plan v3 (full redesign)
 
-Supersedes v1. v1 was rejected on sight against palantir.com, l3harris.com and
-peers. This plan fixes the structural cause, not the styling.
+Supersedes v2. v2 was iterated section by section against live client feedback
+until the hero held up; this plan rebuilds the whole page on what those rounds
+actually proved, rather than patching further.
 
-## Measured gap that triggered the rebuild
+## What the measurements settled
 
-Captured live 2026-07-25, 1440px viewport, full page, scrolled to force lazy load:
+Eight sites captured live at 1440px, 2026-07-25, scrolled to force lazy load.
 
-| Site | Body base | H1 | Page height | Images >300px | Image per px | video/canvas |
-|---|---|---|---|---|---|---|
-| Anduril | `#000000` | visual-led | 5,403 | 11 | 1 / 491 | 3 |
-| Shield AI | `#050506` | 100px | 5,937 | 20 | 1 / 297 | 14 |
-| Palantir | white, banded | 80px / -3.4px | 6,649 | 39 | 1 / 171 | 6 |
-| Northrop | white | 60.8px / 700 | 3,362 | 7 | 1 / 480 | 12 |
-| L3Harris | white | 48px | 5,485 | 6 | 1 / 914 | 3 |
-| **Velocity v1** | **`#efeeec` cream** | **68px** | **8,257** | **4** | **1 / 2,064** | **0** |
+| Site | Height | Bordered els | Images | 1 image per | Motion | Font sizes | Density | H1 |
+|---|---|---|---|---|---|---|---|---|
+| Anduril | 5,403 | **0.0%** | 11 | 491px | 3 | 8 | 166 | visual-led |
+| Saronic | 9,362 | 0.8% | 6 | 1,560px | 5 | 10 | 135 | 21px |
+| Epirus | 10,581 | 1.3% | 52 | 203px | 8 | 8 | 567 | 90px / **300** |
+| Palantir | 6,649 | 1.9% | 39 | **170px** | 6 | **16** | **1,695** | 80px / **400** |
+| Primer | 10,470 | 2.7% | 7 | 1,496px | 7 | 6 | 388 | 80px / 700 |
+| Applied Intuition | 5,229 | 5.0% | 7 | 747px | 0 | 6 | 348 | 36px |
+| Shield AI | 5,937 | 7.4% | 20 | 297px | **14** | 12 | 155 | 100px / **400** |
+| Velocity v2 | 8,962 | 11.7% | 11 | 815px | 2 | 11 | 475 | 98px / 400 |
 
-v1 is the tallest page in the set and the least visual, by 4x against the
-weakest reference. It reads as a long essay with four postage stamps.
+Four findings drive this rebuild:
 
-Three structural causes:
+1. **Display type is light, not heavy.** Palantir 400, Shield AI 400, Epirus
+   300. v1 and most of v2 ran 560 to 620 on the theory that heavy reads as
+   authority. It reads as loud. Fixed late in v2; this plan bakes it in.
+2. **Borders are near zero.** Anduril literally 0.0%, Palantir 1.9%. v2 still
+   sits at 11.7% and it is the worst in the set. Separation comes from surface,
+   space and image edges, never from an outline round a card.
+3. **Motion is plural.** Between 3 and 14 moving elements. v2 has 2.
+4. **Density is the sleeper.** Palantir fits 1,695 characters per unit area
+   against our 475, and one image every 170px against our 815. The page is not
+   airy, it is thin. Height is not the problem: Epirus and Primer both run
+   longer than us.
 
-1. **Cream base.** Every product asset is a dark console. On paper they can only
-   sit in bordered boxes with drop shadows, so nothing can ever go full bleed.
-   The references put the subject edge to edge; v1 structurally cannot.
-2. **One layout family repeated.** Headline, lede, screenshot right, five times
-   running. The references change band shape every section.
-3. **No subject imagery.** v1 leads with a staged laptop on a desk. Every
-   reference leads with the actual thing: the ship, the aircraft, the globe.
+## Direction, unchanged from v2 and now proven
 
-## Direction: "the console at altitude"
+"The console at altitude." True black `#05070a` sampled from the app's own
+space background, one light band at the archive argument, chrome carrying no
+hue at all and every colour coming from real imagery. Archivo on the width axis
+for display, Geist Mono for operational labels. The V-track mark. All of that
+survived client review; none of it is reopened here.
 
-**Category defaults named, both avoided.** (a) Cream editorial SaaS landing with
-floating screenshot cards, which is v1. (b) Near-black plus neon cyan glow plus
-glass cards, which is what an AI tool produces for "defense tech". This page is
-true black with the product's own rendered colour as its only accent.
+## What changes structurally
 
-- **Base** `#05070a`, sampled from the app's own space background. Surfaces
-  `#0e1116` and `#161b21`. One light band at the archive argument, the way
-  Palantir uses white as punctuation between cinematic bands.
-- **Accent** `#d946ef`, the product's own selection colour, already an enforced
-  invariant in `globe/adapters/styles.ts`. CTAs only. Earned, not decorative.
-  Data colours (amber aircraft, orange incidents, teal clusters) appear only
-  inside real imagery, never as page chrome.
-- **Type** Geist, self-hosted, already in `assets/fonts`. The reference
-  differentiator is scale and tracking, not family: display goes to
-  `clamp(52px, 7.4vw, 104px)` at weight 560 and `-0.035em`, against v1's flat
-  68px / -0.022em. Geist Mono carries 11px uppercase operational micro-labels,
-  which is what Anduril and Shield AI both do at 12px.
-- **Signature** the hairline data rule: a 1px rule carrying mono tick marks and
-  a value at its right end, lifted from the app's own scrubber chrome. Repeats
-  as the section divider and under the hero.
-- **Imagery** every plate is a real capture of the running product at 2560x1440,
-  from a live backend carrying 11,532 aircraft and 2,867 vessels. Nothing
-  generated, nothing staged. The v1 generated desk plates are retired.
+- **Cut both grey statement bands.** Two full-height sections of large grey type
+  restating a claim made better elsewhere, roughly 1,000px for 40 words. That
+  space buys density.
+- **Domains become an index, not cards.** Six hairline rows carrying number,
+  name, detail and a live thumbnail, in the grammar Palantir uses for its
+  capability list. Denser per pixel and it kills the last card grid.
+- **The archive gets the biggest treatment on the page**, because it is the only
+  claim no competitor can match. Light band, comparison table, and a recording
+  of the scrubber actually rewinding rather than a still of it.
+- **The footer becomes a real index.** Palantir's footer carries roughly sixty
+  links and that alone signals an ecosystem. Ours lists real things we have:
+  twelve apps, six domain groups, every upstream source, the licence set.
+- **Motion target 5 or more.** Hero loop, console loop, replay loop, count-ups,
+  scroll reveals.
 
 ## Section table
 
-Heights are targets at 1440px. Accent column = magenta permitted.
+Heights are targets at 1440. Accent column is bone, CTAs only.
 
-| # | Section | Layout family | Belief it earns | Artifacts | Imagery | Accent | Target h |
-|---|---|---|---|---|---|---|---|
-| 1 | Nav | fixed bar | orientation | 5 links, GitHub button | none | button | 64 |
-| 2 | Hero | full-bleed plate, type bottom left | an operational system | eyebrow, H1, sub, 2 CTA, data rule | `plate-gulf` | primary CTA | 900 |
-| 3 | Live scale | graphite strip, 6 count-ups | the numbers are measured | 6 stats, mono caption | none | no | 240 |
-| 4 | Statement | centred giant grey type | the competitor keeps your history | 2 sentences, payoff in white | none | no | 400 |
-| 5 | Console | full-bleed screenshot band | it is real and it is dense | caption chip | `plate-console-europe` | no | 720 |
-| 6 | Capabilities | 3x2 card grid, drawn icon tiles | breadth is real, per domain | 6 cards with real counts | 2 inset shots | no | 820 |
-| 7 | Archive | LIGHT band, table plus shot | the archive is the argument | compare table, note | `replay-scrubber` | no | 800 |
-| 8 | Second statement | full-bleed limb plate, type over | you own it outright | one sentence | `plate-baltic` | no | 520 |
-| 9 | Evidence | hairline chain strip | findings survive scrutiny | 3 steps, hashes | none | no | 480 |
-| 10 | Agent | asymmetric terminal split | agents get real eyes | terminal, 46 tools | none | no | 540 |
-| 11 | Workspace | edge-to-edge bento mosaic | twelve apps, not one map | 6 tiles, mixed sizes | 6 shots | no | 760 |
-| 12 | Honesty | 4 truths, hairline dividers | it states its own edges | 4 truths | none | no | 620 |
-| 13 | FAQ | accordion, immediately before exit | objections answered | 6 items | none | no | 700 |
-| 14 | Close | quick start plus single ask | one thing to do | 4 commands, copy, 1 CTA | none | primary CTA | 520 |
-| 15 | Footer | 4 columns plus base | trust, legal, sources | links, licence | none | no | 380 |
+| # | Section | Family | Belief | Artifacts | Motion | Target h |
+|---|---|---|---|---|---|---|
+| 1 | Release strip | fixed strip | it ships, recently | dated release, linked | retract | 40 |
+| 2 | Nav | transparent bar | orientation | 5 links, GitHub | fade | 64 |
+| 3 | Hero | full-bleed loop | an operational system | H1 98/400, 2 CTA, data rule | 360 loop | 900 |
+| 4 | Live scale | graphite strip | the numbers are measured | 6 count-ups | count-up | 210 |
+| 5 | Console | full-bleed live recording | real, dense, moving | caption chip | live loop | 600 |
+| 6 | Domain index | hairline rows | breadth is real per domain | 6 rows, number-led | reveal | 760 |
+| 7 | Archive | LIGHT band | the archive is the argument | table, note, replay loop | replay loop | 900 |
+| 8 | Workspace | edge-to-edge bento | twelve apps, not one map | 6 tiles, names at 26px | hover | 760 |
+| 9 | Agent | asymmetric terminal | agents get real eyes | terminal, 46 tools | reveal | 520 |
+| 10 | Evidence | hairline chain | findings survive scrutiny | 3 steps, hashes | reveal | 470 |
+| 11 | Limits | 4 truths | it states its own edges | 4 truths, unchanged copy | reveal | 600 |
+| 12 | FAQ | accordion before exit | objections answered | 6 items | expand | 700 |
+| 13 | Close | quick start, one ask | one thing to do | 4 commands, copy, 1 CTA | reveal | 520 |
+| 14 | Footer | 5-column index | there is a system here | apps, domains, sources, legal | none | 460 |
 
-Total target 8,460 including the fixed nav, so roughly 8,100 of scroll. That is
-above the reference median and the copy is worth keeping, so density carries
-parity: 13 real images over ~8,100px is one image per 623px, inside the Anduril
-band of 1/491 and well past L3Harris at 1/914.
+Target roughly 8,500 of scroll at meaningfully higher density than v2, since two
+statement bands leave and the index and footer both carry far more per pixel.
 
-## Lints, floors and ceilings
+## Lints
 
-Floors, fail the build if missed:
+Floors:
+- 5 or more moving elements.
+- 5 or more full-bleed bands.
+- 12 or more real images, every one a capture of the running product.
+- Display reaches 96px at 1440 and stays at weight 400.
+- Every number traceable to the README, the measured Show HN draft, or the live
+  backend at capture time.
 
-- 13 real images minimum, every one a capture of the running product.
-- 3 full-bleed bands minimum, zero side margin.
-- 12 distinct layout families across 15 sections.
-- 2 CTA bands minimum, both to the same destination.
-- Motion inventory 3 minimum: hero plate drift, stat count-ups, scroll reveals.
-- Display type reaches 96px at 1440.
-
-Ceilings, fail the build if exceeded:
-
-- Accent fills: 2 on the whole page, both CTAs. No accent bands, no accent cards.
-- Eyebrows: 5 across 15 sections, one per three.
-- One contact ask before the footer. Footer is links plus one base line.
+Ceilings:
+- Bordered elements under 6%. Table rules, FAQ separators and control
+  boundaries are the only permitted borders.
+- 2 accent fills, both CTAs. No accent bands, no accent cards.
+- Radius scale: 2 tokens plus the status dot.
+- Em dashes visible: 0. External hosts at runtime: 0.
 - Consecutive sections sharing a layout family: 0.
-- Em dashes visible on the page: 0. Middot as separator: 1 per line.
-- External hosts fetched at runtime: 0. Fonts stay self-hosted.
-- Pill radius: none. Radius scale is 4px controls, 10px cards, 0 on bands.
 
 ## Authenticity
 
-Every number traces to the README, the measured Show HN draft, or the live
-backend at capture time. No invented metrics, no testimonials, no logo wall, no
-customer claims. The project has no customers to name, so it names none.
+No customers, no testimonials, no logo wall, no invented metrics. The project
+has 36 stars, 3 forks and 2 contributors; those are not on the page because
+they are not yet an argument. The limits section stays exactly as written, per
+the operator, and it survived three adversarial judge rounds.

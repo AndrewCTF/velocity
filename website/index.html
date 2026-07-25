@@ -94,13 +94,6 @@
   </div>
 </section>
 
-<!-- 4. Statement -->
-<section class="statement">
-  <div class="wrap reveal">
-    <p>Flightradar24 keeps 7 days of free history. MarineTraffic keeps 24 hours. <strong>Velocity records to your own disk for as long as you give it room.</strong></p>
-  </div>
-</section>
-
 <!-- 5. Full-bleed console band, recorded live rather than a still -->
 <div class="bleed bleed-console">
   <video class="bleed-video" poster="assets/console-live.jpg" autoplay muted loop playsinline preload="none"
@@ -112,7 +105,8 @@
 </div>
 
 <!-- 6. Capabilities -->
-<section class="section section-head-only" id="capabilities">
+<section class="section section-head-only onworld" id="capabilities">
+  <img class="onworld-bg" src="assets/band-air-world.jpg" alt="" loading="lazy" decoding="async">
   <div class="wrap">
     <div class="sec-head reveal">
       <h2>Every feed on one globe</h2>
@@ -128,42 +122,60 @@
 
 <section class="section section-tight">
   <div class="wrap">
-    <div class="cap-grid">
-      <div class="cap reveal">
-        <b class="cap-n">13,000</b>
-        <span class="cap-q">aircraft on a typical day, from 9,000</span>
-        <h3>Air</h3>
-        <p>ADS-B from OpenSky and airplanes.live, including around 140 military aircraft. Busy days peak far higher; the 21,186 above was one measured snapshot.</p>
+    <div class="dom-index">
+      <div class="dom reveal">
+        <b class="dom-n">13,000</b>
+        <div class="dom-body">
+          <h3>Air</h3>
+          <span class="dom-q">aircraft on a typical day, from 9,000</span>
+          <p>ADS-B from OpenSky and airplanes.live, including around 140 military aircraft. Busy days peak far higher; the 21,186 above was one measured snapshot.</p>
+        </div>
+        <div class="dom-thumb"><img src="assets/band-air.jpg" alt="Live aircraft over the North Sea" loading="lazy" decoding="async"></div>
       </div>
-      <div class="cap reveal">
-        <b class="cap-n">33,000</b>
-        <span class="cap-q">vessels on a typical day</span>
-        <h3>Maritime</h3>
-        <p>Keyless AIS, MMSI-deduplicated across ShipXplorer, MyShipTracking and Nordic public feeds. 55,086 in the same measured peak.</p>
+      <div class="dom reveal">
+        <b class="dom-n">33,000</b>
+        <div class="dom-body">
+          <h3>Maritime</h3>
+          <span class="dom-q">vessels on a typical day</span>
+          <p>Keyless AIS, MMSI-deduplicated across ShipXplorer, MyShipTracking and Nordic public feeds. 55,086 in the same measured peak.</p>
+        </div>
+        <div class="dom-thumb"><img src="assets/plate-europe-dense.jpg" alt="Vessel and aircraft density over northern Europe" loading="lazy" decoding="async"></div>
       </div>
-      <div class="cap reveal">
-        <b class="cap-n">16,000</b>
-        <span class="cap-q">orbital objects, propagated in-browser</span>
-        <h3>Space</h3>
-        <p>CelesTrak two-line elements propagated with real SGP4 physics in your browser, not a decorative orbit animation.</p>
+      <div class="dom reveal">
+        <b class="dom-n">16,000</b>
+        <div class="dom-body">
+          <h3>Space</h3>
+          <span class="dom-q">orbital objects, propagated in-browser</span>
+          <p>CelesTrak two-line elements propagated with real SGP4 physics in your browser, not a decorative orbit animation.</p>
+        </div>
+        <div class="dom-thumb"><img src="assets/hero-satellites.jpg" alt="Thousands of orbital tracks around Earth" loading="lazy" decoding="async"></div>
       </div>
-      <div class="cap reveal">
-        <b class="cap-n">250</b>
-        <span class="cap-q">quake events a day</span>
-        <h3>Hazards</h3>
-        <p>Earthquakes, wildfires, storms, volcanic activity and power outages, on the same timeline as the traffic that has to route around them.</p>
+      <div class="dom reveal">
+        <b class="dom-n">250</b>
+        <div class="dom-body">
+          <h3>Hazards</h3>
+          <span class="dom-q">quake events a day</span>
+          <p>Earthquakes, wildfires, storms, volcanic activity and power outages, on the same timeline as the traffic that has to route around them.</p>
+        </div>
+        <div class="dom-thumb"><img src="assets/plate-orbit-wide.jpg" alt="Hazard and traffic layers over the Atlantic" loading="lazy" decoding="async"></div>
       </div>
-      <div class="cap reveal">
-        <b class="cap-n">200</b>
-        <span class="cap-q">jamming cells flagged at a time</span>
-        <h3>Signals</h3>
-        <p>GPS jamming inferred from ADS-B position-accuracy degradation, aggregated into cells you can click and query.</p>
+      <div class="dom reveal">
+        <b class="dom-n">200</b>
+        <div class="dom-body">
+          <h3>Signals</h3>
+          <span class="dom-q">jamming cells flagged at a time</span>
+          <p>GPS jamming inferred from ADS-B position-accuracy degradation, aggregated into cells you can click and query.</p>
+        </div>
+        <div class="dom-thumb"><img src="assets/hero-selected-track.jpg" alt="A selected aircraft and its recorded track" loading="lazy" decoding="async"></div>
       </div>
-      <div class="cap reveal">
-        <b class="cap-n">53</b>
-        <span class="cap-q">country toolkits</span>
-        <h3>Infrastructure</h3>
-        <p>7,183 military bases, 3,804 ports, submarine cables and per-country reference layers, searchable next to the live picture.</p>
+      <div class="dom reveal">
+        <b class="dom-n">53</b>
+        <div class="dom-body">
+          <h3>Infrastructure</h3>
+          <span class="dom-q">country toolkits</span>
+          <p>7,183 military bases, 3,804 ports, submarine cables and per-country reference layers, searchable next to the live picture.</p>
+        </div>
+        <div class="dom-thumb"><img src="assets/rail-layers.jpg" alt="The layer rail: air, sea, space, hazards and infrastructure" loading="lazy" decoding="async"></div>
       </div>
     </div>
   </div>
@@ -199,16 +211,9 @@
   </div>
 </section>
 
-<!-- 8. Second statement over a real limb plate -->
-<section class="overband">
-  <img src="assets/plate-orbit-wide.jpg" alt="Velocity's globe from orbit over Europe, north Africa and the Atlantic, live aircraft traffic across the whole visible hemisphere" loading="lazy" decoding="async">
-  <div class="wrap reveal">
-    <p>No account. No API key. <strong>No paywall between you and your own archive.</strong></p>
-  </div>
-</section>
-
 <!-- 9. Evidence chain -->
-<section class="section" id="evidence">
+<section class="section onworld" id="evidence">
+  <img class="onworld-bg" src="assets/band-sea-world.jpg" alt="" loading="lazy" decoding="async">
   <div class="wrap">
     <div class="sec-head reveal">
       <h2>From sighting to signed report</h2>
@@ -323,7 +328,8 @@
 </section>
 
 <!-- 14. Close: the single ask -->
-<section class="close" id="start">
+<section class="close onworld" id="start">
+  <img class="onworld-bg" src="assets/band-orbit-world.jpg" alt="" loading="lazy" decoding="async">
   <div class="wrap">
     <div class="close-grid">
       <div class="reveal">
