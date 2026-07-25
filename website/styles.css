@@ -506,15 +506,15 @@ body.bar-gone .nav { top: 0; }
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .76) 28%, rgba(5, 7, 10, .78) 72%, var(--void));
+  background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .80) 26%, rgba(5, 7, 10, .82) 74%, var(--void));
 }
 .close.onworld { background: transparent; }
 /* The port plate's upper half is bright overcast sky, which dropped body copy
    in the evidence section to 3.59:1. Frame its dark water and quay instead and
    carry a heavier scrim, since this section is the most text-dense of the three. */
-#evidence .onworld-bg { object-position: 50% 88%; opacity: .5; }
+#evidence .onworld-bg { object-position: 50% 86%; opacity: .55; }
 #evidence.onworld::before {
-  background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .86) 26%, rgba(5, 7, 10, .88) 74%, var(--void));
+  background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .87) 24%, rgba(5, 7, 10, .89) 76%, var(--void));
 }
 
 /* ---------- 6. capabilities: 3x2 card grid ---------- */
@@ -580,6 +580,9 @@ body.bar-gone .nav { top: 0; }
 .dom:hover .dom-thumb img { transform: scale(1.04); opacity: 1; }
 
 .section-head-only .wrap { padding-bottom: var(--s5); }
+.section-head-only .sec-head { max-width: none; display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); align-items: end; }
+.section-head-only .sec-head h2 { grid-column: span 6; }
+.section-head-only .sec-head .lede { grid-column: 7 / -1; margin-top: 0; max-width: 46ch; }
 .section-tight .wrap { padding-top: var(--s6); }
 .bleed-band img { height: clamp(340px, 40vw, 560px); object-position: 50% 58%; }
 
@@ -592,9 +595,9 @@ body.bar-gone .nav { top: 0; }
 .light .eyebrow { color: #85817a; }
 .archive-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); align-items: start; margin-top: var(--s5); }
 .archive-grid > *:first-child { grid-column: span 6; }
-.archive-grid > *:last-child { grid-column: 7 / -1; }
+.archive-grid > *:last-child { grid-column: 7 / -1; align-self: start; }
 
-.compare { width: 100%; border-collapse: collapse; font-size: 15px; }
+.compare { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: fixed; }
 .compare th {
   text-align: left;
   font-family: var(--mono);
@@ -606,8 +609,12 @@ body.bar-gone .nav { top: 0; }
   padding: 0 14px 14px 0;
   vertical-align: bottom;
 }
-.compare td { padding: 15px 14px 15px 12px; vertical-align: top; }
-.compare tbody tr:nth-child(odd) td { background: #e4e1da; }
+.compare td { padding: 16px 14px 16px 12px; vertical-align: top; border-bottom: 1px solid #dedbd4; }
+.compare tbody tr:last-child td { border-bottom: 0; }
+.compare th:first-child, .compare td:first-child { width: 25%; white-space: nowrap; }
+.compare th:nth-child(2), .compare td:nth-child(2) { width: 48%; }
+.compare th:last-child, .compare td:last-child { width: 27%; }
+
 .compare tr.you td { background: #d9d5cc; font-weight: 520; }
 .compare tr.you td:first-child { box-shadow: inset 3px 0 0 var(--ink); }
 .compare .muted { color: #6f6b64; }
@@ -620,6 +627,7 @@ body.bar-gone .nav { top: 0; }
    claim is demonstrated rather than asserted. preload none; poster fallback
    under reduced motion. */
 .shot-video { width: 100%; display: block; aspect-ratio: 1400 / 690; object-fit: cover; }
+.light .shot { border-radius: var(--r-card); box-shadow: 0 1px 0 rgba(20,22,26,.10), 0 18px 40px -18px rgba(20,22,26,.35); }
 @media (prefers-reduced-motion: reduce) {
   .shot-video { display: none; }
   .light .shot { background: #0e1116 url('assets/replay-live.jpg') center / cover no-repeat; min-height: 300px; }
@@ -662,14 +670,25 @@ body.bar-gone .nav { top: 0; }
 .chain-step { grid-column: span 4; }
 .chain-step { padding: var(--s3) 0 var(--s4); position: relative; }
 
+.chain { position: relative; padding-top: var(--s3); }
+.chain::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+}
 .chain-step::before {
   content: '';
   position: absolute;
-  top: -4px;
+  top: -1px;
   left: 0;
   width: 7px;
   height: 7px;
-  background: var(--txt-3);
+  background: var(--txt);
+  z-index: 1;
 }
 
 .chain-k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--txt); }
@@ -811,7 +830,8 @@ details a { color: var(--bone); text-underline-offset: 3px; }
 .close-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); align-items: center; }
 .close-grid > *:first-child { grid-column: span 5; }
 .close-grid > *:last-child { grid-column: 7 / -1; }
-.close .term { background: #0a0d11; }
+.close .term { background: rgba(8, 10, 14, .88); backdrop-filter: blur(6px); }
+.onworld .term { background: rgba(8, 10, 14, .88); backdrop-filter: blur(6px); }
 
 /* ---------- 15. footer ---------- */
 
