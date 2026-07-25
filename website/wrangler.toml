@@ -1,0 +1,11 @@
+# Cloudflare Workers static-assets config for the Velocity site.
+name = "velocity-site"
+compatibility_date = "2026-07-01"
+
+routes = [
+  { pattern = "projectvelocity.org", custom_domain = true },
+  { pattern = "www.projectvelocity.org", custom_domain = true },
+]
+
+[assets]
+directory = "."
