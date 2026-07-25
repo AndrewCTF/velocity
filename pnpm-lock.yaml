@@ -38,9 +38,6 @@ importers:
       '@osint/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@protomaps/basemaps':
-        specifier: ^5.7.2
-        version: 5.7.2
       '@sparkjsdev/spark':
         specifier: ^2.1.0
         version: 2.1.0(three@0.184.0)
@@ -62,9 +59,6 @@ importers:
       milsymbol:
         specifier: ^3.0.4
         version: 3.0.4
-      pmtiles:
-        specifier: ^4.4.1
-        version: 4.4.1
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -582,10 +576,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@protomaps/basemaps@5.7.2':
-    resolution: {integrity: sha512-K1Yk6bWdULulYg+R2QRVXx4NzJZan5YQhpejEG0c1/sXruJrfPIPZuakpf3jwAgVmjIRVQwAv+yRafDeN0aaUQ==}
-    hasBin: true
 
   '@remix-run/router@1.23.2':
     resolution: {integrity: sha512-Ic6m2U/rMjTkhERIa/0ZtXJP17QUi2CbWE7cqx4J58M8aA3QTfW+2UlQ4psvTX9IO1RfNVhK3pcpdjej7L+t2w==}
@@ -2184,9 +2174,6 @@ packages:
     resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
     engines: {node: '>= 6'}
 
-  pmtiles@4.4.1:
-    resolution: {integrity: sha512-5oTeQc/yX/ft1evbpIlnoCZugQuug/iYIAj/ZTqIqzdGek4uZEho99En890EE6NOSI3JTI3IG8R7r8+SltphxA==}
-
   pngjs@3.4.0:
     resolution: {integrity: sha512-NCrCHhWmnQklfH4MtJMRjZ2a8c80qXeMlQMv2uVp9ISJMTt562SbGd6n2oq0PaPgKm7Z6pL9E2UlLIhC+SHL3w==}
     engines: {node: '>=4.0.0'}
@@ -3216,8 +3203,6 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
-
-  '@protomaps/basemaps@5.7.2': {}
 
   '@remix-run/router@1.23.2': {}
 
@@ -4973,10 +4958,6 @@ snapshots:
   pify@2.3.0: {}
 
   pirates@4.0.7: {}
-
-  pmtiles@4.4.1:
-    dependencies:
-      fflate: 0.8.3
 
   pngjs@3.4.0: {}
 

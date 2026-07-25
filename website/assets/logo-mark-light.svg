@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Velocity">
+  <title>Velocity</title>
+  <g fill="none" stroke="#ecebe7">
+    <path d="M7 11 16 25.5 25 11" stroke-width="2.8" stroke-linejoin="miter"/>
+    <rect x="3.9" y="4.9" width="6.2" height="6.2" stroke-width="2"/>
+  </g>
+  <rect x="21.9" y="4.9" width="6.2" height="6.2" fill="#ecebe7"/>
+</svg>

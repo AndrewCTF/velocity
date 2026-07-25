@@ -6,6 +6,8 @@ import { intel } from '../../intel/registry.js';
 import { tracks } from '../../intel/tracks.js';
 import { useSelection } from '../../state/stores.js';
 import { withWsKey } from '../../transport/http.js';
+import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
+import { refreshBagInPlace } from './PollGeoJsonAdapter.js';
 
 // Read a Cesium property's current value. Used to diff billboard fields so
 // we only reassign when the value actually changed — repeatedly assigning
@@ -47,6 +49,9 @@ interface Props {
 
 const MAX_VESSELS = 8000;
 const PRUNE_AFTER_MS = 60 * 60 * 1000;
+// Floor for the per-frame drain slice so progress is made even in a frame
+// another adapter already spent (same constant the poll adapter uses).
+const DRAIN_MIN_SLICE_MS = 2;
 
 export class AisWsAdapter implements LayerAdapter {
   // Public so LayerCompositor can apply per-layer policy (EntityCluster
@@ -59,6 +64,12 @@ export class AisWsAdapter implements LayerAdapter {
   private lastSeen = new Map<string, number>();
   private pruneTimer: number | null = null;
   private destroyed = false;
+  // WS frames arrive as a firehose (a fresh connect replays tens of thousands
+  // of vessels in seconds). Upserting synchronously per message froze the main
+  // thread, so messages queue here latest-wins-per-id and a frame-budgeted rAF
+  // drain applies them — the same shape as the poll adapter's drain.
+  private pending = new Map<string, VesselMsg & { id: string; lat: number; lon: number }>();
+  private drainHandle: number | null = null;
 
   constructor(private readonly props: Props) {
     this.ds = new Cesium.CustomDataSource(props.ctx.descriptor.id);
@@ -74,6 +85,11 @@ export class AisWsAdapter implements LayerAdapter {
     this.destroyed = true;
     this.ws?.close();
     this.ws = null;
+    if (this.drainHandle != null) {
+      window.cancelAnimationFrame(this.drainHandle);
+      this.drainHandle = null;
+    }
+    this.pending.clear();
     if (this.pruneTimer != null) {
       window.clearInterval(this.pruneTimer);
       this.pruneTimer = null;
@@ -106,7 +122,8 @@ export class AisWsAdapter implements LayerAdapter {
           return;
         }
         if (msg.kind === 'vessel' && msg.id && msg.lat != null && msg.lon != null) {
-          this.upsert(msg as Required<Pick<VesselMsg, 'id' | 'lat' | 'lon'>> & VesselMsg);
+          this.pending.set(msg.id, msg as Required<Pick<VesselMsg, 'id' | 'lat' | 'lon'>> & VesselMsg);
+          this.scheduleDrain();
         }
       } catch {
         /* drop bad frame */
@@ -129,6 +146,29 @@ export class AisWsAdapter implements LayerAdapter {
     if (this.destroyed) return;
     window.setTimeout(() => this.connect(), this.reconnectDelay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
+  }
+
+  private scheduleDrain(): void {
+    if (this.drainHandle != null || this.destroyed) return;
+    this.drainHandle = window.requestAnimationFrame((ts) => this.drain(ts));
+  }
+
+  private drain(ts: number): void {
+    this.drainHandle = null;
+    if (this.destroyed) return;
+    const start = performance.now();
+    const budget = Math.max(DRAIN_MIN_SLICE_MS, frameBudgetRemaining(ts));
+    const deadline = start + budget;
+    let applied = 0;
+    for (const [id, m] of this.pending) {
+      if (performance.now() >= deadline) break;
+      this.pending.delete(id);
+      this.upsert(m);
+      applied++;
+    }
+    recordFrameSpend(ts, performance.now() - start);
+    if (applied > 0) this.props.ctx.viewer.scene.requestRender();
+    if (this.pending.size > 0) this.scheduleDrain();
   }
 
   private upsert(m: VesselMsg & { id: string; lat: number; lon: number }): void {
@@ -186,8 +226,12 @@ export class AisWsAdapter implements LayerAdapter {
           e.label.text = new Cesium.ConstantProperty(labelText);
         }
       }
-      // refresh properties so the entity panel reflects latest sog/cog
-      e.properties = new Cesium.PropertyBag(props);
+      // refresh properties so the entity panel reflects latest sog/cog. In
+      // place, not a fresh PropertyBag: allocating one per frame per vessel
+      // was measurable GC churn at firehose rates, and swapping the bag drops
+      // the definitionChanged subscriptions the panel relies on.
+      if (e.properties) refreshBagInPlace(e.properties, props);
+      else e.properties = new Cesium.PropertyBag(props);
     } else {
       if (entities.values.length >= MAX_VESSELS) this.dropOldest();
       e = entities.add({
@@ -240,7 +284,6 @@ export class AisWsAdapter implements LayerAdapter {
     // the selection is being tracked.
     const force = useSelection.getState().selectedEntityId === m.id;
     tracks.push(m.id, tp, { force });
-    this.props.ctx.viewer.scene.requestRender();
   }
 
   // Smooth position updates — CLAUDE.md: vessels must update in place via

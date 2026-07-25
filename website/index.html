@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Velocity · The self-hosted OSINT console you own</title>
+<meta name="description" content="Velocity is a self-hosted, keyless OSINT console: live aircraft, ships and satellites fused on one 3D globe, with replay history recorded to your own disk. Open source, AGPL-3.0.">
+<meta name="theme-color" content="#05070a">
+<meta property="og:title" content="Velocity · The self-hosted OSINT console you own">
+<meta property="og:description" content="Live aircraft, ships and satellites on one globe. Unlimited replay history on your own disk. No account, no API keys. Open source.">
+<meta property="og:image" content="assets/hero-orbit.jpg">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preload" as="image" href="assets/hero-orbit.jpg" fetchpriority="high">
+<link rel="stylesheet" href="styles.css">
+<script>document.documentElement.className='js'</script>
+</head>
+<body>
+
+<div class="topbar" id="topbar">
+  <a class="topbar-msg" href="https://github.com/AndrewCTF/velocity/releases/tag/v1.0.1" rel="noopener">
+    <span class="topbar-kicker">Release</span>
+    <span class="topbar-text">v1.0.1 · bound the archive's write-ahead log</span>
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+  </a>
+  <button class="topbar-x" id="topbar-x" type="button" aria-label="Dismiss announcement">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+</div>
+
+<nav class="nav" id="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Velocity home">
+      <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor"><path d="M7 11 16 25.5 25 11" stroke-width="2.8" stroke-linejoin="miter"/><rect x="3.9" y="4.9" width="6.2" height="6.2" stroke-width="2"/></g><rect x="21.9" y="4.9" width="6.2" height="6.2" fill="currentColor"/></svg>
+      VELOCITY
+    </a>
+    <div class="nav-links" id="nav-links">
+      <a href="#capabilities">Capabilities</a>
+      <a href="#archive">Archive</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#agent">Agent</a>
+      <a href="#start">Quick start</a>
+    </div>
+    <div class="nav-foot" aria-hidden="true">
+      <div class="datarule"><span>AGPL-3.0</span><span>Self-hosted</span><span>No API keys</span></div>
+      <a class="btn btn-primary" href="https://github.com/AndrewCTF/velocity" rel="noopener" tabindex="-1">Get started on GitHub</a>
+    </div>
+    <a class="btn btn-line btn-sm" href="https://github.com/AndrewCTF/velocity" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      GitHub
+    </a>
+    <button class="nav-toggle" id="nav-toggle" type="button"
+            aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- 2. Hero: full-bleed capture of the running product, type bottom left -->
+<header class="hero" id="top">
+  <div class="hero-media">
+    <video id="hero-video" poster="assets/hero-orbit.jpg" autoplay muted loop playsinline preload="metadata"
+           aria-label="Velocity's globe seen from orbit over the Mediterranean, the Levant and the Gulf, drifting east while live aircraft traffic and conflict-event markers update">
+      <!-- mp4 first here: this webm encode is 2.34 MB against the mp4's 1.74 MB,
+           so source order was serving every Chrome and Firefox visitor 34% more
+           bytes for the page's heaviest above-the-fold asset. -->
+      <source src="assets/hero-orbit.mp4" type="video/mp4">
+      <source src="assets/hero-orbit.webm" type="video/webm">
+    </video>
+  </div>
+  <div class="hero-inner wrap">
+    <h1>The situation console you own.</h1>
+    <p>Self-hosted and keyless. Live aircraft, ships and satellites fused on one globe, with history nobody can paywall.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary btn-big" href="https://github.com/AndrewCTF/velocity" rel="noopener">Get started on GitHub</a>
+      <a class="btn btn-line btn-big" href="#start">Quick start</a>
+    </div>
+    <div class="datarule">
+      <span>AGPL-3.0</span>
+      <span>Self-hosted</span>
+      <span>No API keys</span>
+    </div>
+  </div>
+</header>
+
+<!-- 3. Big image carrying the claim, the way the reference set does it below
+     the fold. Absorbs what was a thin strip of numbers on a flat band. -->
+<section class="overlay-band" aria-label="Measured live scale">
+  <img class="overlay-bg" src="assets/band-air.jpg" alt="Thousands of individual live aircraft over the United Kingdom, the North Sea, Germany and Scandinavia on Velocity's globe" loading="eager" decoding="async">
+  <div class="wrap">
+    <div class="overlay-panel reveal">
+      <h2>Flightradar24 keeps 7 days.<br>MarineTraffic keeps 24 hours.<br><strong>You keep everything.</strong></h2>
+      <div class="scale-grid">
+        <div class="stat reveal"><b data-count="21186">0</b><span>aircraft, peak snapshot</span></div>
+        <div class="stat reveal"><b data-count="55086">0</b><span>vessels, same snapshot</span></div>
+        <div class="stat reveal"><b data-count="16000" data-prefix="~">0</b><span>satellites in-browser</span></div>
+        <div class="stat reveal"><b data-count="7183">0</b><span>military bases</span></div>
+        <div class="stat reveal"><b data-count="46">0</b><span>MCP tools</span></div>
+        <div class="stat reveal"><b data-count="1972">0</b><span>tests passing</span></div>
+      </div>
+      <div class="datarule"><span>Measured on one development box</span><span>17 July 2026</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Full-bleed console band, recorded live rather than a still -->
+<div class="bleed bleed-console">
+  <video class="bleed-video wipe reveal" poster="assets/console-live.jpg" autoplay muted loop playsinline preload="none"
+         aria-label="The Velocity console running: the layer rail, the live globe, and the feed and alert counters updating in real time">
+    <source src="assets/console-live.webm" type="video/webm">
+    <source src="assets/console-live.mp4" type="video/mp4">
+  </video>
+  <span class="chip"><i></i>Live console · 15,774 entities, every counter moving in real time</span>
+</div>
+
+<!-- 6. Capabilities -->
+<section class="section section-head-only" id="capabilities">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>Every feed on one globe</h2>
+      <p class="lede">Aircraft, vessels, satellites, hazards and infrastructure land in one 3D view and are correlated on the server, so you stop eyeballing six browser tabs. Core feeds need no account and no API key.</p>
+    </div>
+  </div>
+</section>
+
+<div class="bleed bleed-band wipe reveal">
+  <img src="assets/band-air.jpg" alt="Thousands of individual live aircraft over the United Kingdom, the North Sea, Germany and Scandinavia on Velocity's globe" loading="lazy" decoding="async">
+  <span class="chip"><i></i>Live · the North Sea and Baltic, one second of the feed</span>
+</div>
+
+<section class="section section-tight">
+  <div class="wrap">
+    <div class="dom-index">
+      <div class="dom reveal">
+        <b class="dom-n">13,000</b>
+        <div class="dom-body">
+          <h3>Air</h3>
+          <span class="dom-q">aircraft on a typical day, from 9,000</span>
+          <p>ADS-B from OpenSky and airplanes.live, including around 140 military aircraft. Busy days peak far higher; the 21,186 above was one measured snapshot.</p>
+        </div>
+        <div class="dom-thumb"><img class="wipe-r" src="assets/band-air.jpg" alt="Live aircraft over the North Sea" loading="lazy" decoding="async"></div>
+      </div>
+      <div class="dom reveal">
+        <b class="dom-n">33,000</b>
+        <div class="dom-body">
+          <h3>Maritime</h3>
+          <span class="dom-q">vessels on a typical day</span>
+          <p>Keyless AIS, MMSI-deduplicated across ShipXplorer, MyShipTracking and Nordic public feeds. 55,086 in the same measured peak.</p>
+        </div>
+        <div class="dom-thumb"><img class="wipe-r" src="assets/plate-europe-dense.jpg" alt="Vessel and aircraft density over northern Europe" loading="lazy" decoding="async"></div>
+      </div>
+      <div class="dom reveal">
+        <b class="dom-n">16,000</b>
+        <div class="dom-body">
+          <h3>Space</h3>
+          <span class="dom-q">orbital objects, propagated in-browser</span>
+          <p>CelesTrak two-line elements propagated with real SGP4 physics in your browser, not a decorative orbit animation.</p>
+        </div>
+        <div class="dom-thumb"><img class="wipe-r" src="assets/hero-satellites.jpg" alt="Thousands of orbital tracks around Earth" loading="lazy" decoding="async"></div>
+      </div>
+      <div class="dom reveal">
+        <b class="dom-n">250</b>
+        <div class="dom-body">
+          <h3>Hazards</h3>
+          <span class="dom-q">quake events a day</span>
+          <p>Earthquakes, wildfires, storms, volcanic activity and power outages, on the same timeline as the traffic that has to route around them.</p>
+        </div>
+        <div class="dom-thumb"><img class="wipe-r" src="assets/plate-orbit-wide.jpg" alt="Hazard and traffic layers over the Atlantic" loading="lazy" decoding="async"></div>
+      </div>
+      <div class="dom reveal">
+        <b class="dom-n">200</b>
+        <div class="dom-body">
+          <h3>Signals</h3>
+          <span class="dom-q">jamming cells flagged at a time</span>
+          <p>GPS jamming inferred from ADS-B position-accuracy degradation, aggregated into cells you can click and query.</p>
+        </div>
+        <div class="dom-thumb"><img class="wipe-r" src="assets/hero-selected-track.jpg" alt="A selected aircraft and its recorded track" loading="lazy" decoding="async"></div>
+      </div>
+      <div class="dom reveal">
+        <b class="dom-n">53</b>
+        <div class="dom-body">
+          <h3>Infrastructure</h3>
+          <span class="dom-q">country toolkits</span>
+          <p>7,183 military bases, 3,804 ports, submarine cables and per-country reference layers, searchable next to the live picture.</p>
+        </div>
+        <div class="dom-thumb"><img class="wipe-r" src="assets/rail-layers.jpg" alt="The layer rail: air, sea, space, hazards and infrastructure" loading="lazy" decoding="async"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7. The archive argument, on the one light band -->
+<section class="light" id="archive">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">The archive</span>
+      <h2>History nobody can take back</h2>
+      <p class="lede">Turn on the archive profile and Velocity records position history to your disk, with a scrubber to rewind any layer to any past moment. No account to close, no tier to cut, no API to sunset.</p>
+    </div>
+    <div class="archive-grid">
+      <div class="reveal">
+        <table class="compare">
+          <thead><tr><th scope="col">Tracker</th><th scope="col">Replayable history, free tier</th><th scope="col">Archive owner</th></tr></thead>
+          <tbody>
+            <tr class="you"><td>Velocity</td><td>Bounded by your disk, scrubbable to any moment</td><td>You</td></tr>
+            <tr><td class="muted">Flightradar24</td><td class="muted">7 days</td><td class="muted">Them</td></tr>
+            <tr><td class="muted">MarineTraffic</td><td class="muted">24 hours, down from 72</td><td class="muted">Them</td></tr>
+            <tr><td class="muted">ADS-B Exchange</td><td class="muted">Free API tier discontinued</td><td class="muted">Them</td></tr>
+          </tbody>
+        </table>
+        <p class="compare-note">Free tiers as of July 2026, each checkable on the vendors' own pricing pages. Live coverage is similar community feeder data everywhere. The paywall is the history.</p>
+        <div class="datarule on-light" style="margin-top:34px"><span>Recording since 2026-07-24</span><span>7,609,574 fixes</span></div>
+      </div>
+      <figure class="shot reveal">
+        <video class="shot-video wipe reveal" poster="assets/replay-live.jpg" autoplay muted loop playsinline preload="none"
+               aria-label="Velocity replaying the last hour of global traffic: aircraft moving through recorded positions above the scrubber, which reads 2.0 GB and 10,876,450 recorded fixes">
+          <source src="assets/replay-live.webm" type="video/webm">
+          <source src="assets/replay-live.mp4" type="video/mp4">
+        </video>
+        <figcaption class="chip"><i></i>Replay · the last hour, from your own disk</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<div class="bleed bleed-line">
+  <img src="assets/band-sea-world.jpg" alt="A working container terminal at dusk, containers stacked along the quay" loading="lazy" decoding="async">
+  <div class="wrap">
+    <p class="bleed-claim reveal">No account. No API key. <strong>No paywall between you and your own archive.</strong></p>
+  </div>
+</div>
+
+<!-- 9. What happens after you see something: custody, then the agent. One band,
+     inverted. These were two sections on the same --surface tone separated by a
+     1px hairline, which read as 1,030px of one flat empty block in the part of
+     the page that already had the least going on. -->
+<section class="light" id="evidence">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>From sighting to signed report</h2>
+      <p class="lede">Once a finding matters, it has to survive scrutiny. The evidence locker keeps a chain of custody from first capture to final document.</p>
+    </div>
+    <div class="chain">
+      <div class="chain-step reveal">
+        <span class="chain-k">Capture</span>
+        <p>Freeze a URL, an upload or a live feed slice the moment you see it.</p>
+        <code>sha256(capture)</code>
+      </div>
+      <div class="chain-step reveal">
+        <span class="chain-k">Custody</span>
+        <p>Every capture is hashed into an append-only custody log. Nothing edits history; corrections append.</p>
+        <code>custody.log · append-only</code>
+      </div>
+      <div class="chain-step reveal">
+        <span class="chain-k">Report</span>
+        <p>A case rolls up into a self-contained HTML or PPTX report where every claim carries its provenance.</p>
+        <code>report.html · report.pptx</code>
+      </div>
+    </div>
+
+    <!-- 10. Agent, same band. -->
+    <div class="split band-next" id="agent">
+      <div class="reveal">
+        <span class="eyebrow">Model context protocol</span>
+        <h2>Give your agent real eyes</h2>
+        <p class="lede">Velocity runs as an MCP server with 46 tools, so an AI agent queries the live feeds instead of guessing from its training cutoff. Everything it returns is labelled as automated output, never sold as insight.</p>
+      </div>
+      <div class="term reveal" aria-label="Example MCP session with real tool names">
+<pre><span class="c"># real tool names, illustrative session</span>
+<span class="p">&gt;</span> query_aircraft(lat=25.1, lon=55.3, radius_nm=150)
+<span class="p">&gt;</span> gps_jamming(detail="short")
+<span class="p">&gt;</span> query_vessels(lat=59.4, lon=24.7, radius_nm=90)
+<span class="p">&gt;</span> track_history(id="aircraft:ae1462")
+<span class="c"># served from your local archive,</span>
+<span class="c"># labelled as automated output</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11. Workspace bento -->
+<section class="section has-bleed-grid" aria-label="Workspace apps">
+  <div class="wrap"><div class="sec-head sec-head-wide reveal">
+    <h2>Twelve apps, one workspace</h2>
+    <p class="lede">The globe is the front door. Behind it: entity search, graph analysis, case files, data pipelines and automation over the same live substrate. Six of the twelve below; the <a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">README tour</a> walks all of them.</p>
+  </div></div>
+  <div class="bento">
+    <figure class="tile reveal"><img src="assets/ui-explorer.jpg" alt="Explorer app: a searchable table of every live entity" loading="lazy" decoding="async"><figcaption><b>Explorer</b><span>Query every live entity like a database.</span></figcaption></figure>
+    <figure class="tile reveal"><img src="assets/workflows-dag.jpg" alt="Workflows app: an automation graph of connected blocks" loading="lazy" decoding="async"><figcaption><b>Workflows</b><span>Automation blocks over live feeds, with real control outputs.</span></figcaption></figure>
+    <figure class="tile reveal"><img src="assets/ui-briefs.jpg" alt="Briefs app: generated situation briefs with cited sources" loading="lazy" decoding="async"><figcaption><b>Briefs</b><span>Watch-officer summaries with cited sources.</span></figcaption></figure>
+    <figure class="tile reveal"><img src="assets/foundry-pipeline-new.jpg" alt="Foundry app: a dataset transform pipeline" loading="lazy" decoding="async"><figcaption><b>Foundry</b><span>Bring your own datasets, transform, bind to the map.</span></figcaption></figure>
+    <figure class="tile reveal"><img src="assets/hero-satellites.jpg" alt="Satellite mode: thousands of orbital tracks around Earth" loading="lazy" decoding="async"><figcaption><b>Satellites</b><span>Sixteen thousand objects on real orbital physics.</span></figcaption></figure>
+    <figure class="tile reveal"><img src="assets/rail-layers.jpg" alt="Layer rail: air, maritime, space, hazards and infrastructure toggles" loading="lazy" decoding="async"><figcaption><b>Layers</b><span>Air, sea, space, hazards, signals and 14 infrastructure layers.</span></figcaption></figure>
+  </div>
+</section>
+
+<!-- 12. Honesty -->
+<section class="section" style="background:var(--surface);border-top:1px solid var(--line-soft)">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">Stated limits</span>
+      <h2>What it will not pretend</h2>
+      <p class="lede">Trust in a tool like this comes from knowing where its edges are. These are stated in the README and enforced in tests.</p>
+    </div>
+    <div class="truths">
+      <div class="truth reveal"><h3>Motion is real</h3><p>Aircraft jump to real received fixes by default. Predicted motion exists, but it is opt-in, analytic and clearly a model, because only 13.5% of velocity fits survive contact with the next fix.</p></div>
+      <div class="truth reveal"><h3>Coverage is community feeders</h3><p>Dense over Europe and North America, thin over oceans and conflict zones. AIS is strongest in Northern Europe. The map shows what receivers hear, and that is stated.</p></div>
+      <div class="truth reveal"><h3>Built for one analyst</h3><p>Derived state like incident lists clears on restart. What you deliberately keep persists: the position archive, case files and the custody log.</p></div>
+      <div class="truth reveal"><h3>No hosted demo</h3><p>Community feeder terms do not allow public redistribution, so there is no demo instance to click. You run it, it is yours. That is the point.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 13. FAQ, immediately before the exit -->
+<section class="section" aria-label="Frequently asked questions">
+  <div class="wrap">
+    <h2 class="reveal">Before you ask</h2>
+    <div class="faq-list reveal">
+      <details>
+        <summary>Do I need any API keys?<span class="x"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+        <p>No. Aircraft, vessels, satellites, earthquakes and the basemap all work keyless out of the box. A few optional layers, like NASA FIRMS wildfires, unlock more with a free key and degrade gracefully without one.</p>
+      </details>
+      <details>
+        <summary>What hardware does it want?<span class="x"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+        <p>Any machine that runs Docker handles the backend. The 3D globe holds 60 fps with around 15,000 aircraft on the desktop RTX card it was measured on; the satellite layer is the hungriest. There is a 2D mode for modest machines.</p>
+      </details>
+      <details>
+        <summary>Is watching this data legal?<span class="x"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+        <p>The feeds are public, volunteer-run aggregators of unencrypted broadcasts that aircraft and ships transmit by design. Each upstream's terms and rate limits are listed in the <a href="https://github.com/AndrewCTF/velocity/blob/master/NOTICE" rel="noopener">NOTICE</a> file; your instance displays the data locally and never re-serves it publicly, which is also why there is no hosted demo. The <a href="https://github.com/AndrewCTF/velocity/blob/master/DISCLAIMER.md" rel="noopener">disclaimer</a> covers responsible use.</p>
+      </details>
+      <details>
+        <summary>Why AGPL-3.0?<span class="x"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+        <p>So improvements to a tool about transparency stay transparent. If you run a modified Velocity as a service, you share your changes. Private self-hosted use is unaffected. Some upstream feeds carry their own non-commercial terms, listed in the NOTICE file.</p>
+      </details>
+      <details>
+        <summary>How much disk does the archive eat?<span class="x"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+        <p>Full-breadth global recording measured around 3 GB an hour on a keyless box, so 48 hours of everything is roughly 150 GB. Out of the box a 2 GB byte cap binds first; raise it, or set ARCHIVE_MODE with a disk budget you choose. The scrubber always shows the actual depth you have, never a promise.</p>
+      </details>
+      <details>
+        <summary>How is this different from Flightradar24 with extra steps?<span class="x"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+        <p>Live coverage is similar community data. The differences are fusion (ships, satellites, jamming and hazards on the same globe as aircraft), correlation on the server, the evidence locker, the MCP interface, and above all the archive: your replay window is your disk, not a subscription tier.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- 14. Close: the single ask -->
+<section class="close" id="start">
+  <div class="wrap">
+    <div class="close-grid">
+      <div class="reveal">
+        <h2>Up in four commands</h2>
+        <p class="lede">Docker Compose brings up the API, the web app and a proxy on port 8080. First data appears within a minute of boot.</p>
+        <a class="btn btn-primary btn-big" style="margin-top:32px" href="https://github.com/AndrewCTF/velocity" rel="noopener">Get started on GitHub</a>
+      </div>
+      <div class="term reveal">
+        <button class="copy-btn" data-copy="git clone https://github.com/AndrewCTF/velocity.git&#10;cd velocity&#10;cp .env.example .env&#10;docker compose up">copy</button>
+<pre><span class="p">$</span> git clone https://github.com/AndrewCTF/velocity.git
+<span class="p">$</span> cd velocity
+<span class="p">$</span> cp .env.example .env
+<span class="p">$</span> docker compose up
+<span class="c"># api + web + nginx on :8080</span>
+<span class="hl">open http://localhost:8080</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top">
+          <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor"><path d="M7 11 16 25.5 25 11" stroke-width="2.8" stroke-linejoin="miter"/><rect x="3.9" y="4.9" width="6.2" height="6.2" stroke-width="2"/></g><rect x="21.9" y="4.9" width="6.2" height="6.2" fill="currentColor"/></svg>
+          VELOCITY
+        </a>
+        <p class="sign">Built in the open. Owned by whoever runs it.</p>
+        <div class="datarule"><span>AGPL-3.0</span><span>v1.0.1</span></div>
+      </div>
+      <div>
+        <h4>Domains</h4>
+        <ul>
+          <li><a href="#capabilities">Air</a></li>
+          <li><a href="#capabilities">Maritime</a></li>
+          <li><a href="#capabilities">Space</a></li>
+          <li><a href="#capabilities">Hazards</a></li>
+          <li><a href="#capabilities">Signals</a></li>
+          <li><a href="#capabilities">Infrastructure</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Workspace</h4>
+        <ul>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Explorer</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Briefs</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Foundry</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Workflows</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Satellites</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">Layers</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Upstream feeds</h4>
+        <ul>
+          <li><a href="https://opensky-network.org" rel="noopener">OpenSky Network</a></li>
+          <li><a href="https://airplanes.live" rel="noopener">airplanes.live</a></li>
+          <li><a href="https://www.shipxplorer.com" rel="noopener">ShipXplorer</a></li>
+          <li><a href="https://celestrak.org" rel="noopener">CelesTrak</a></li>
+          <li><a href="https://earthquake.usgs.gov" rel="noopener">USGS</a></li>
+          <li><a href="https://www.gdeltproject.org" rel="noopener">GDELT</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/AndrewCTF/velocity" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity/releases" rel="noopener">Releases</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity#readme" rel="noopener">README</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity/issues" rel="noopener">Issues</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity/blob/master/NOTICE" rel="noopener">Data notices</a></li>
+          <li><a href="https://github.com/AndrewCTF/velocity/blob/master/DISCLAIMER.md" rel="noopener">Disclaimer</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-base">
+      <span>Velocity · AGPL-3.0-or-later · v1.0.1</span>
+      <span>Thanks to the volunteer feeder communities that make public tracking possible.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="main.js" defer></script>
+</body>
+</html>

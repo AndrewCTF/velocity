@@ -178,7 +178,11 @@ function placesBboxQuery(viewer: Cesium.Viewer): () => string | null {
     const minLat = clamp(s - padLat, -90, 90).toFixed(3);
     const maxLon = clamp(e + padLon, -180, 180).toFixed(3);
     const maxLat = clamp(n + padLat, -90, 90).toFixed(3);
-    return `bbox=${minLon},${minLat},${maxLon},${maxLat}`;
+    // limit bounds a dense metro view: without it the routes default to 2000
+    // per layer, and ten facility layers of label-bearing entities at once is
+    // a GPU label-atlas OOM (Cesium labels are per-glyph textures). The
+    // backend caps by type priority, so the important subset survives.
+    return `bbox=${minLon},${minLat},${maxLon},${maxLat}&limit=1000`;
   };
 }
 

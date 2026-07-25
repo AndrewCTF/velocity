@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:poll": "CHOKIDAR_USEPOLLING=true CHOKIDAR_INTERVAL=1000 vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -19,7 +20,6 @@
     "@macrostrat/cesium-martini": "^1.6.0",
     "@mkkellogg/gaussian-splats-3d": "^0.4.7",
     "@osint/shared": "workspace:*",
-    "@protomaps/basemaps": "^5.7.2",
     "@sparkjsdev/spark": "^2.1.0",
     "@supabase/supabase-js": "2.108.2",
     "cesium": "^1.123.0",
@@ -27,7 +27,6 @@
     "lucide-react": "^1.24.0",
     "maplibre-gl": "^5.0.0",
     "milsymbol": "^3.0.4",
-    "pmtiles": "^4.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",

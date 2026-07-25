@@ -334,12 +334,23 @@ const MOBILE_LAYER_CAP = isMobileDevice() ? 2000 : Number.POSITIVE_INFINITY;
 // on desktop — the operator invariant requires the desktop world view to carry
 // ≥ 8000 aircraft; only the separately-sanctioned mobile cap touches them. A
 // desktop that still can't cope is what the low-end 2D suggestion is for.
+// Reference kinds (billboard + Cesium Label each) are capped on EVERY preset:
+// labels are per-glyph GPU textures, and ten facility layers over a dense
+// metro without a ceiling was a VRAM OOM (context loss / tab death), not a
+// slowdown. 1500/layer stays far above what a metro view usefully shows;
+// decimation past the cap is the sanctioned stableSubset.
+const REFERENCE_LAYER_CAP = 1500;
+const REFERENCE_KINDS: ReadonlySet<string> = new Set(['facility', 'airport', 'port', 'base']);
+
 function effectiveLayerCap(styleKind: string): number {
   const presetLayer =
     styleKind === 'aircraft' && !isMobileDevice()
       ? Number.POSITIVE_INFINITY
       : presetKnobs(useSettings.getState().mapQuality).layerCap;
-  return Math.min(MOBILE_LAYER_CAP, presetLayer);
+  const reference = REFERENCE_KINDS.has(styleKind)
+    ? REFERENCE_LAYER_CAP
+    : Number.POSITIVE_INFINITY;
+  return Math.min(MOBILE_LAYER_CAP, presetLayer, reference);
 }
 
 function stableSubset(feats: Feature[], cap: number): Feature[] {

@@ -36,14 +36,17 @@ export interface TrackPoint {
 }
 
 const MAX_POINTS_PER_ENTITY = 60; // ~last 60 fixes
-// Must exceed the live entity population or eviction thrashes: with the
-// Digitraffic global snapshot (~18.5k vessels) + ADS-B (~2k aircraft) a
-// 5 000 cap meant every vessel poll evicted every aircraft ring, so the
-// selection polyline never reached 2 points. 25 000 matches the per-layer
-// entity cap (MAX_PER_LAYER in PollGeoJsonAdapter); in steady state no
-// eviction happens at all, which also removes the O(n) evict scan per
-// insert.
-const MAX_TRACKED_ENTITIES = 25_000;
+// Must exceed the live entity population or eviction thrashes: a 5 000 cap
+// once meant every vessel poll evicted every aircraft ring, so the selection
+// polyline never reached 2 points. Today's worst realistic population is
+// ~27k (ADS-B desktop limit 20 000 + keyless AIS union in view + sats), so
+// 40 000 keeps steady state eviction-free. Memory stays modest: rings are
+// ≤ MAX_POINTS_PER_ENTITY points. If the population ever exceeds the cap,
+// evictBatch() amortizes the cost — never reintroduce a per-insert scan.
+const MAX_TRACKED_ENTITIES = 40_000;
+// Evict this fraction of the map in one batch when the cap is hit, so the
+// O(n log n) stale-scan runs once per ~4k inserts instead of per insert.
+const EVICT_FRACTION = 0.1;
 
 class TrackStore {
   private tracks = new Map<string, TrackPoint[]>();
@@ -51,7 +54,7 @@ class TrackStore {
   push(id: string, p: TrackPoint, opts?: { force?: boolean }): void {
     let arr = this.tracks.get(id);
     if (!arr) {
-      if (this.tracks.size >= MAX_TRACKED_ENTITIES) this.evictOne();
+      if (this.tracks.size >= MAX_TRACKED_ENTITIES) this.evictBatch();
       arr = [];
       this.tracks.set(id, arr);
     }
@@ -107,18 +110,23 @@ class TrackStore {
     return this.tracks.get(id)?.length ?? 0;
   }
 
-  private evictOne(): void {
-    // Evict the entity with the oldest most-recent fix.
-    let oldestId: string | null = null;
-    let oldestT = Infinity;
+  private evictBatch(): void {
+    // Evict the entities with the oldest most-recent fixes, EVICT_FRACTION of
+    // the map at once. The predecessor evicted one entity per insert with a
+    // full-map scan; past the cap with a churning world view that is O(n) per
+    // NEW id — measured as a main-thread freeze at ~45k live contacts. One
+    // sorted batch per ~4k inserts keeps the same evict-stalest semantics.
+    const byAge: Array<[string, number]> = [];
     for (const [id, arr] of this.tracks) {
       const last = arr[arr.length - 1];
-      if (last && last.t < oldestT) {
-        oldestT = last.t;
-        oldestId = id;
-      }
+      byAge.push([id, last ? last.t : 0]);
     }
-    if (oldestId) this.tracks.delete(oldestId);
+    byAge.sort((a, b) => a[1] - b[1]);
+    const n = Math.max(1, Math.floor(this.tracks.size * EVICT_FRACTION));
+    for (let i = 0; i < n; i++) {
+      const entry = byAge[i];
+      if (entry) this.tracks.delete(entry[0]);
+    }
   }
 }
 

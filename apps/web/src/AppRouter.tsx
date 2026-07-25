@@ -1,17 +1,10 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { App } from './App.js';
-import { App2D } from './App2D.js';
-import { StudioPage } from './studio/StudioPage.js';
 import { AuthProvider, useAuth } from './auth/AuthContext.js';
-import { AuthForm } from './auth/AuthForm.js';
-import { LoginPage } from './auth/LoginPage.js';
-import { SignupPage } from './auth/SignupPage.js';
 import { SettingsModal } from './settings/SettingsModal.js';
 import { useSettings } from './state/settings.js';
 import { useAppView, APP_META } from './state/appView.js';
-import { VelocityNewsPage } from './news/VelocityNewsPage.js';
-import { StoryView } from './news/StoryView.js';
 import { Onboarding, hasOnboarded } from './onboarding/Onboarding.js';
 import { isSupabaseConfigured } from './transport/supabase.js';
 import { AiSetupWizard } from './settings/localAi/AiSetupWizard.js';
@@ -24,6 +17,28 @@ import { LowEndBanner } from './globe/LowEndBanner.js';
 // the router's basename tracks it — keeps client routes correct behind /app.
 const BASENAME = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/';
 
+// Secondary routes are code-split so "/" (the console everyone lands on) does
+// not pay for their heavy deps: App2D pulls maplibre-gl, StudioPage pulls
+// three + the splat viewer. The console route (App) stays eager — it IS the
+// product; lazy-loading it would only add a loading seam to every visit.
+const App2D = lazy(() => import('./App2D.js').then((m) => ({ default: m.App2D })));
+const StudioPage = lazy(() => import('./studio/StudioPage.js').then((m) => ({ default: m.StudioPage })));
+const VelocityNewsPage = lazy(() =>
+  import('./news/VelocityNewsPage.js').then((m) => ({ default: m.VelocityNewsPage })),
+);
+const StoryView = lazy(() => import('./news/StoryView.js').then((m) => ({ default: m.StoryView })));
+const LoginPage = lazy(() => import('./auth/LoginPage.js').then((m) => ({ default: m.LoginPage })));
+const SignupPage = lazy(() => import('./auth/SignupPage.js').then((m) => ({ default: m.SignupPage })));
+const AuthForm = lazy(() => import('./auth/AuthForm.js').then((m) => ({ default: m.AuthForm })));
+
+function RouteLoading(): JSX.Element {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <span className="mono text-[11px] text-txt-2">loading…</span>
+    </div>
+  );
+}
+
 export function AppRouter(): JSX.Element {
   return (
     <BrowserRouter basename={BASENAME}>
@@ -33,17 +48,19 @@ export function AppRouter(): JSX.Element {
         <LowEndBanner />
         <OnboardingGate />
         <AiSetupGate />
-        <Routes>
-          <Route path="/" element={<DashboardRoute />} />
-          <Route path="/2d" element={<App2D />} />
-          <Route path="/studio" element={<StudioPage />} />
-          <Route path="/news" element={<VelocityNewsPage />} />
-          <Route path="/news/:id" element={<StoryView />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/forgot" element={<AuthForm mode="forgot" />} />
-          <Route path="/reset" element={<AuthForm mode="reset" />} />
-        </Routes>
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
+            <Route path="/" element={<DashboardRoute />} />
+            <Route path="/2d" element={<App2D />} />
+            <Route path="/studio" element={<StudioPage />} />
+            <Route path="/news" element={<VelocityNewsPage />} />
+            <Route path="/news/:id" element={<StoryView />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/forgot" element={<AuthForm mode="forgot" />} />
+            <Route path="/reset" element={<AuthForm mode="reset" />} />
+          </Routes>
+        </Suspense>
         <ToastHost />
       </AuthProvider>
     </BrowserRouter>

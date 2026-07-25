@@ -54,6 +54,16 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    // Static assets that never need HMR (~6.2k files: pre-rendered dark tiles
+    // + self-hosted fonts). Keeping them out of the watch set matters on this
+    // host: fs.inotify.max_user_watches is a shared per-user budget, and when
+    // the editor + a second dev server + agent sessions stack up, vite's share
+    // tips it over ENOSPC and the dev server dies. `dev:poll` in package.json
+    // is the committed fallback when the budget is exhausted by OTHER
+    // processes; the durable host fix is raising the sysctl.
+    watch: {
+      ignored: ['**/public/darktiles/**', '**/public/fonts/**', '**/dist/**'],
+    },
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },
       // ws: true with lifecycle wiring. The bare proxy never tore down the
@@ -85,6 +95,9 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    sourcemap: true,
+    // 'hidden' still emits the .map files for local symbolication but omits
+    // the sourceMappingURL comment, so browsers never download the ~20 MB of
+    // maps alongside the bundle.
+    sourcemap: 'hidden',
   },
 });

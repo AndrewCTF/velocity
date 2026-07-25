@@ -1,0 +1,1148 @@
+/* Velocity marketing site, v2. "The console at altitude" per build-plan.md.
+   Base is the app's own space black; the one light band punctuates. */
+
+@font-face {
+  font-family: 'Archivo';
+  src: url('assets/fonts/Archivo-var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('assets/fonts/GeistMono-var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  /* Light base. Measured against the reference set: palantir runs 9 of 10
+     luminance bands light with dark imagery as punctuation. This page ran 0 of
+     10. Dark is the easy choice and it reads as the category default; a light
+     page is harder because every flaw shows, which is why it reads premium. */
+  --void: #ffffff;          /* page base */
+  --surface: #f4f3f0;       /* alternating band */
+  --raise: #e9e7e2;         /* raised chip / tile */
+  --line: #d7d4cd;
+  --line-soft: #e5e2dc;
+  --txt: #14161a;
+  --txt-2: #474d55;
+  --txt-3: #5f666e;   /* 5.1:1 on white; carries body copy */
+  --paper: #101317;         /* the punctuation band inverts: now dark */
+  --paper-raise: #171b20;
+  --ink: #f4f3f0;
+  --ink-2: #b4b8be;
+  --bone: #14161a;          /* dark CTA on a light page */
+  --bone-hi: #000000;
+  --on-bone: #ffffff;
+  --plate: #05070a;         /* the colour dark photographic bands sit on */
+  --r-ctrl: 4px;
+  --r-card: 8px;
+  --sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --w: 1240px;
+  --pad: 40px;
+  /* Spacing scale. Every vertical rhythm value comes from here. */
+  --s2: 16px;
+  --s3: 24px;
+  --s4: 32px;
+  --s5: 48px;
+  --s6: 64px;
+  --s7: 88px;
+  --s8: 120px;
+  /* 12 columns across the 1160px content measure, 24px gutters. */
+  --gutter: 24px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  background: var(--void);
+  color: var(--txt);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.62;
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+img { display: block; max-width: 100%; }
+a { color: inherit; }
+
+.wrap { width: 100%; max-width: var(--w); margin: 0 auto; padding: 0 var(--pad); }
+/* One grid for every multi-column block, so columns land on the same edges
+   section after section instead of each split inventing its own ratio. */
+.g12 { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); }
+.c-half { grid-column: span 6; }
+.c-third { grid-column: span 4; }
+.c-5 { grid-column: span 5; }
+.c-7 { grid-column: 7 / -1; }
+
+/* ---------- shared type ---------- */
+
+h1, h2, h3 { font-weight: 540; letter-spacing: -0.024em; line-height: 1.02; }
+
+h2 {
+  font-size: clamp(32px, 3.6vw, 50px);
+  letter-spacing: -0.032em;
+  line-height: 1.05;
+  font-weight: 400;
+  font-variation-settings: 'wdth' 100;
+}
+
+.lede {
+  color: var(--txt-2);
+  font-size: 18px;
+  line-height: 1.66;
+  max-width: 62ch;
+  margin-top: 20px;
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--txt-3);
+  display: block;
+}
+
+/* Signature: the hairline data rule, lifted from the app's scrubber chrome. */
+.datarule {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.datarule::before {
+  content: '';
+  flex: 1;
+  height: 7px;
+  background-image: repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 34px);
+  align-self: flex-start;
+  margin-top: -12px;
+}
+.datarule span {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--txt-3);
+  white-space: nowrap;
+}
+.datarule.on-light { border-color: #333940; }
+.datarule.on-light::before { background-image: repeating-linear-gradient(90deg, #333940 0 1px, transparent 1px 34px); }
+.datarule.on-light span { color: #8b939c; }
+
+/* ---------- buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 46px;
+  padding: 0 22px;
+  border-radius: var(--r-ctrl);
+  font-size: 15px;
+  font-weight: 520;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: background .18s ease, border-color .18s ease, transform .18s ease, color .18s ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--bone); color: var(--on-bone); border-color: var(--bone); }
+.btn-primary:hover { background: var(--bone-hi); border-color: var(--bone-hi); }
+/* Border carries the control boundary here, so it must clear 3:1 against the
+   darkest surface it sits on (#5b6673 vs #05070a measures 3.46:1). */
+.btn-line { background: rgba(0, 0, 0, .03); color: var(--txt); border-color: #9ca2aa; }
+.btn-line:hover { background: rgba(0, 0, 0, .07); border-color: #6d737b; }
+/* Over the dark hero the controls invert. */
+.hero .btn-primary { background: #ffffff; color: #14161a; border-color: #ffffff; }
+.hero .btn-primary:hover { background: #eeece7; border-color: #eeece7; }
+.hero .btn-line { background: rgba(255,255,255,.08); color: #ffffff; border-color: rgba(255,255,255,.44); }
+.hero .btn-line:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.66); }
+.hero .datarule { border-color: rgba(255,255,255,.2); }
+.hero .datarule::before { background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.2) 0 1px, transparent 1px 34px); }
+.hero .datarule span { color: #a9b4bf; }
+
+.btn-sm { height: 38px; padding: 0 15px; font-size: 14px; }
+.btn-big { height: 52px; padding: 0 28px; font-size: 16px; }
+:focus-visible { outline: 2px solid var(--bone); outline-offset: 3px; }
+/* --bone is near-black, so on the dark surfaces the ring measured 1.1:1 and the
+   first nine tab stops had no visible focus at all. */
+.hero :focus-visible,
+.overlay-band :focus-visible,
+.bleed :focus-visible,
+.light :focus-visible,
+.term :focus-visible,
+.nav:not(.scrolled) :focus-visible { outline-color: var(--ink); }
+
+/* ---------- announcement strip ---------- */
+/* Carries one real, dated, linked artifact. It scrolls away on first scroll and
+   the nav takes its place, so it costs nothing below the fold. */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 41;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 44px 0 20px;
+  background: transparent;
+  transition: transform .32s cubic-bezier(.16, 1, .3, 1);
+}
+body.bar-gone .topbar { transform: translateY(-100%); }
+.topbar-msg {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-decoration: none;
+  color: #ccd4dc;
+  transition: color .16s ease;
+}
+.topbar-msg:hover { color: #ffffff; }
+.topbar-kicker {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #b9c2cc;
+  border: 1px solid rgba(255, 255, 255, .26);
+  border-radius: var(--r-ctrl);
+  padding: 3px 7px;
+}
+.topbar-text {
+  font-size: 13.5px;
+  letter-spacing: -0.008em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-msg svg { flex: none; opacity: .7; }
+.topbar-x {
+  position: absolute;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  color: #8e97a1;
+  cursor: pointer;
+  transition: color .16s ease, background .16s ease;
+}
+.topbar-x:hover { color: #ffffff; background: rgba(255,255,255,.1); }
+
+/* ---------- nav ---------- */
+
+.nav {
+  position: fixed;
+  top: 40px;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid transparent;
+  transition: top .32s cubic-bezier(.16, 1, .3, 1), background .28s ease,
+              border-color .28s ease, backdrop-filter .28s ease;
+}
+.nav .wrap { display: flex; align-items: center; gap: 34px; }
+.nav .brand { color: #ffffff; }
+.nav-links a { color: #ccd4dc; }
+.nav-links a:hover { color: #ffffff; }
+.nav.scrolled { background: rgba(255, 255, 255, .92); backdrop-filter: blur(14px); border-bottom-color: var(--line); }
+.nav.scrolled .brand { color: var(--txt); }
+.nav.scrolled .nav-links a { color: var(--txt-2); }
+.nav.scrolled .nav-links a:hover { color: var(--txt); }
+body.bar-gone .nav { top: 0; }
+.brand {
+  color: var(--txt);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-decoration: none;
+}
+.nav-links { display: flex; gap: 26px; margin-left: auto; }
+/* Menu-panel footer: mobile only. Without this it renders inside the desktop
+   nav bar, because its positioning rules live in the breakpoint block. */
+.nav-foot { display: none; }
+/* No colour here. This rule sits after the transparent-nav colours above and had
+   identical specificity, so var(--txt-2) beat #ccd4dc and the five section links
+   rendered at 2.4:1 over the dark hero. Colour is owned by .nav / .nav.scrolled. */
+.nav-links a {
+  font-size: 14.5px;
+  text-decoration: none;
+  transition: color .16s ease;
+}
+
+/* The nav is transparent over the plate, so its button has no surface to sit
+   on and reads as an overlay. Keep it a text control up top; it earns its fill
+   once the nav gains a background on scroll. */
+.nav > .wrap > .btn {
+  background: transparent;
+  border-color: transparent;
+  color: #ccd4dc;
+  padding: 0 8px;
+}
+.nav > .wrap > .btn:hover { background: transparent; border-color: transparent; color: var(--txt); }
+.nav.scrolled > .wrap > .btn {
+  background: rgba(0, 0, 0, .04);
+  border-color: #9ca2aa;
+  color: var(--txt);
+  padding: 0 15px;
+}
+.nav.scrolled > .wrap > .btn:hover { background: rgba(0, 0, 0, .08); border-color: #6d737b; }
+
+/* Mobile menu trigger. Hidden on desktop; the three bars become a cross when
+   open. 44px square so it clears the minimum touch target. */
+.nav-toggle {
+  display: none;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  position: relative;
+}
+.nav-toggle span {
+  position: absolute;
+  left: 11px;
+  width: 22px;
+  height: 1.5px;
+  /* Light while the nav is transparent over the dark hero; dark once the bar or
+     the menu panel puts a light surface behind it. */
+  background: var(--ink);
+  transition: transform .26s cubic-bezier(.16,1,.3,1), opacity .18s ease, background .18s ease;
+}
+.nav.scrolled .nav-toggle span, .nav.menu-open .nav-toggle span { background: var(--txt); }
+.nav-toggle span:nth-child(1) { top: 16px; }
+.nav-toggle span:nth-child(2) { top: 21.5px; }
+.nav-toggle span:nth-child(3) { top: 27px; }
+.nav-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.nav-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
+
+/* ---------- 2. hero: full bleed, type bottom left ---------- */
+
+.hero {
+  background: var(--plate);
+  color: #ffffff;
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  isolation: isolate;
+}
+.hero-media { position: absolute; inset: 0; z-index: -2; background: #05070a; }
+.hero-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 46%;
+}
+/* The video is decoration over a poster of the same frame, so reduced motion
+   simply freezes it; no content is lost. */
+@media (prefers-reduced-motion: reduce) { .hero-media video { display: none; }
+  .hero-media { background: #05070a url('assets/hero-orbit.jpg') center 46% / cover no-repeat; } }
+.hero-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* Enough scrim to hold AA contrast on the headline, not enough to erase the
+     tracks. Measured: headline sits over the 0.62-0.70 band. */
+  background:
+    radial-gradient(74% 62% at 6% 76%, rgba(5, 7, 10, .74) 0%, rgba(5, 7, 10, .44) 42%, transparent 72%),
+    linear-gradient(to top,
+      rgba(5, 7, 10, .92) 0%, rgba(5, 7, 10, .5) 18%, rgba(5, 7, 10, .04) 46%,
+      rgba(5, 7, 10, .14) 64%, rgba(5, 7, 10, .42) 82%, rgba(5, 7, 10, .7) 100%),
+    linear-gradient(to right, rgba(5, 7, 10, .46) 0%, rgba(5, 7, 10, .10) 46%, transparent 78%);
+}
+.hero-inner { padding-bottom: var(--s6); padding-top: var(--s8); position: relative; }
+/* Micro-labels over photography need far more weight than they do on a flat
+   surface; --txt-3 measured 1.91:1 here. */
+.hero .eyebrow { color: #ccd6e0; display: inline-block; }
+.hero h1 {
+  text-shadow: 0 2px 34px rgba(5, 7, 10, .72), 0 1px 5px rgba(5, 7, 10, .5);
+  font-size: clamp(44px, 7vw, 98px);
+  letter-spacing: -0.038em;
+  font-weight: 400;
+  font-variation-settings: 'wdth' 100;
+  line-height: 0.96;
+  max-width: 15ch;
+  margin: 18px 0 0;
+  text-wrap: balance;
+}
+.hero p {
+  color: #d3dae1;
+  text-shadow: 0 1px 16px rgba(5, 7, 10, .85);
+  margin-top: 22px;
+  max-width: 54ch;
+  font-size: 19px;
+  line-height: 1.55;
+  color: #c3ccd6;
+}
+.hero-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin: 32px 0 46px; }
+.hero .datarule { border-color: rgba(255, 255, 255, .17); }
+.hero .datarule::before { background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, .17) 0 1px, transparent 1px 34px); }
+.hero .datarule span { color: #9aa6b3; }
+
+/* ---------- 3. big image carrying the claim ---------- */
+/* The reference set puts a large photograph immediately below the fold with the
+   text sitting on it. This replaced a 204px strip of numbers on a flat band,
+   which was the weakest moment on the page. */
+.overlay-band { position: relative; overflow: hidden; isolation: isolate; display: flex; align-items: center; min-height: 760px; background: var(--plate); color: #f2f1ee; }
+.overlay-bg { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: 50% 56%; }
+.overlay-band::before {
+  content: '';
+  position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(to right, rgba(5,7,10,.94) 0%, rgba(5,7,10,.86) 38%, rgba(5,7,10,.34) 74%, rgba(5,7,10,.5) 100%);
+}
+.overlay-band .wrap { padding-top: var(--s7); padding-bottom: var(--s7); }
+.overlay-panel { max-width: 62ch; }
+.overlay-panel h2 {
+  font-size: clamp(30px, 3.5vw, 48px);
+  line-height: 1.14;
+  letter-spacing: -0.032em;
+  font-weight: 400;
+  color: #93a0ad;
+  text-wrap: balance;
+}
+.overlay-panel h2 strong { color: #fff; font-weight: 400; display: inline-block; margin-top: 2px; }
+.overlay-panel .scale-grid { margin-top: var(--s6); }
+.overlay-panel .datarule { margin-top: var(--s5); border-color: rgba(255,255,255,.2); }
+.overlay-panel .datarule::before { background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.2) 0 1px, transparent 1px 34px); }
+.overlay-panel .datarule span { color: #93a0ad; }
+
+/* ---------- 3b. stat row ---------- */
+
+.scale-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s5) var(--s4);
+}
+.stat { padding: 0; }
+.overlay-band .stat b { color: #fff; }
+.stat b {
+  display: block;
+  /* Archivo, not Geist Mono. Mono gives the comma a full monospace advance, so
+     the flagship numbers rendered as "21 , 186". Mono stays on provenance
+     labels; display numerals belong in the sans, tabular for column alignment. */
+  font-family: var(--sans);
+  font-size: clamp(24px, 2.3vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.stat span { display: block; margin-top: 6px; font-size: 12.5px; line-height: 1.4; color: #93a0ad; }
+
+/* ---------- 4. statement ---------- */
+
+.statement { text-align: center; }
+.statement .wrap { padding-top: 104px; padding-bottom: 104px; }
+.statement p {
+  font-size: clamp(27px, 3.3vw, 46px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+  font-variation-settings: 'wdth' 100;
+  color: #5c6672;
+  max-width: 20ch;
+  margin: 0 auto;
+  text-wrap: balance;
+}
+.statement strong { color: var(--txt); font-weight: 560; }
+.statement.tight .wrap { padding-top: 84px; padding-bottom: 84px; }
+
+/* ---------- 5. full-bleed console band ---------- */
+
+.bleed { position: relative; overflow: hidden; background: var(--plate); }
+.bleed img, .bleed-video { width: 100%; height: clamp(420px, 52vw, 720px); object-fit: cover; display: block; }
+/* The console band plays a real-time recording of the product. preload is none
+   so it costs nothing until it scrolls near, and it falls back to its own
+   poster frame under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .bleed-video { display: none; }
+  .bleed-console { background: #05070a url('assets/console-live.jpg') center / cover no-repeat; }
+}
+/* The console recording is 2.5:1. Letting the generic band height force 2:1
+   cover-cropped the layer rail and the selection panel, slicing their labels.
+   Drive the height from the source aspect so the whole console is visible. */
+.bleed-console { line-height: 0; }
+.bleed-console .bleed-video {
+  aspect-ratio: 1500 / 790;
+  height: auto;
+  min-height: 260px;
+  object-position: 52% 50%;
+}
+/* No blend veil on the bleed bands. The white top stop washed out the top 121px
+   of the console recording and the dark bottom stop sliced its scrubber: 288px
+   of 758px, and the two zones the app puts its live status bar and timeline in.
+   The chip carries its own scrim, so the gradient bought nothing. Bands butt. */
+.chip {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 15px;
+  border-radius: var(--r-ctrl);
+  background: rgba(9, 12, 16, .74);
+  backdrop-filter: blur(9px);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #c8d1db;
+  max-width: calc(100% - 32px);
+}
+.chip i { width: 6px; height: 6px; border-radius: 50%; background: #3fb996; flex: none; }
+
+/* World plates: real-register photographs of the domains Velocity tracks, used
+   as the ground for existing sections rather than as standalone bands, so they
+   add atmosphere and tonal contrast without adding filler height. The scrim is
+   heavy because these carry body copy, not just a headline. */
+.onworld { position: relative; isolation: isolate; overflow: hidden; }
+.onworld-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: .62;
+}
+.onworld::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .80) 26%, rgba(5, 7, 10, .82) 74%, var(--void));
+}
+.close.onworld { background: transparent; }
+/* The port plate's upper half is bright overcast sky, which dropped body copy
+   in the evidence section to 3.59:1. Frame its dark water and quay instead and
+   carry a heavier scrim, since this section is the most text-dense of the three. */
+#evidence .onworld-bg { object-position: 50% 86%; opacity: .55; }
+#evidence.onworld::before {
+  background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .87) 24%, rgba(5, 7, 10, .89) 76%, var(--void));
+}
+
+/* Alternating light band, the way a light page separates sections. */
+.section-alt { background: var(--surface); }
+
+/* A photograph with one line on it, no body copy: the only way an image and
+   text share a band without the scrim destroying the image. */
+.bleed-line { display: flex; align-items: center; min-height: 520px; }
+.bleed-line img { position: absolute; inset: 0; height: 100%; }
+.bleed-line::after { background: linear-gradient(to right, rgba(5,7,10,.9) 0%, rgba(5,7,10,.62) 46%, rgba(5,7,10,.3) 100%); }
+.bleed-line .wrap { position: relative; z-index: 2; }
+.bleed-claim {
+  font-size: clamp(26px, 3.2vw, 44px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+  color: #93a0ad;
+  max-width: 24ch;
+  text-wrap: balance;
+}
+.bleed-claim strong { color: #fff; font-weight: 400; }
+
+/* ---------- 6. capabilities: 3x2 card grid ---------- */
+
+.section .wrap { padding-top: var(--s7); padding-bottom: var(--s7); }
+.sec-head { max-width: 66ch; }
+/* Section heads that sit above a full-width artifact run the whole measure, so
+   the band below does not open under an empty right column. */
+.sec-head-wide { max-width: none; display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); align-items: end; }
+.sec-head-wide h2 { grid-column: span 6; }
+.sec-head-wide .lede { grid-column: 7 / -1; }
+.sec-head-wide .lede { margin-top: 0; max-width: 54ch; }
+
+/* Domain index. Number-led hairline rows carrying a live thumbnail, which is
+   denser per pixel than a card grid and removes the last boxed surface. */
+.dom-index { margin-top: 4px; }
+.dom {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 0 var(--gutter);
+  align-items: center;
+  padding: var(--s3) 20px;
+  margin: 0 -20px;
+  border-radius: var(--r-card);
+  transition: background .22s ease;
+}
+.dom:hover { background: var(--surface); }
+.dom-n {
+  font-family: var(--sans);
+  font-size: clamp(26px, 2.5vw, 34px);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: .95;
+  font-variant-numeric: tabular-nums;
+  color: var(--txt);
+}
+.dom-n { grid-column: span 2; }
+.dom-body { grid-column: span 6; }
+.dom-thumb { grid-column: 9 / -1; }
+.dom-body h3 {
+  font-size: 21px;
+  font-weight: 440;
+  letter-spacing: -0.022em;
+  font-variation-settings: 'wdth' 104;
+}
+.dom-q {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: #7a5e12;
+}
+.dom-body p { margin-top: 10px; font-size: 14.5px; line-height: 1.58; color: var(--txt-3); max-width: 56ch; }
+.dom-thumb { overflow: hidden; border-radius: var(--r-card); }
+.dom-thumb img {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1), opacity .3s ease;
+  opacity: .8;
+}
+.dom:hover .dom-thumb img { transform: scale(1.04); opacity: 1; }
+
+.section-head-only .wrap { padding-bottom: var(--s5); }
+.section-head-only .sec-head { max-width: none; display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); align-items: end; }
+.section-head-only .sec-head h2 { grid-column: span 6; }
+.section-head-only .sec-head .lede { grid-column: 7 / -1; margin-top: 0; max-width: 46ch; }
+.section-tight .wrap { padding-top: var(--s6); }
+.bleed-band img { height: clamp(340px, 40vw, 560px); object-position: 50% 58%; }
+
+/* ---------- 7. archive: the one light band ---------- */
+
+.light { background: var(--paper); color: var(--ink); }
+.light .eyebrow { color: #8b939c; }
+.light .wrap { padding-top: var(--s7); padding-bottom: var(--s7); }
+.light h2 { color: var(--ink); }
+.light .lede { color: var(--ink-2); }
+.light .eyebrow { color: #85817a; }
+.archive-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); align-items: start; margin-top: var(--s5); }
+.archive-grid > *:first-child { grid-column: span 6; }
+.archive-grid > *:last-child { grid-column: 7 / -1; align-self: start; }
+
+.compare { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: fixed; }
+.compare th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8b939c;
+  padding: 0 14px 14px 0;
+  vertical-align: bottom;
+}
+.compare td { padding: 16px 14px 16px 12px; vertical-align: top; border-bottom: 1px solid #262b31; }
+.compare tbody tr:last-child td { border-bottom: 0; }
+.compare th:first-child, .compare td:first-child { width: 25%; white-space: nowrap; }
+.compare th:nth-child(2), .compare td:nth-child(2) { width: 48%; }
+.compare th:last-child, .compare td:last-child { width: 27%; }
+
+.compare tr.you td { background: #1d2126; font-weight: 520; }
+.compare tr.you td:first-child { box-shadow: inset 3px 0 0 var(--ink); }
+.compare .muted { color: #969ba2; }
+.compare-note { margin-top: 18px; font-size: 13.5px; line-height: 1.55; color: #969ba2; max-width: 56ch; }
+/* Taller crop so the shot column ends level with the table column instead of
+   leaving a void; biased low because the scrubber lives at the bottom. */
+
+.light .shot img { aspect-ratio: 4 / 3; object-position: 50% 64%; }
+/* The archive artifact is a recording of the replay actually running, so the
+   claim is demonstrated rather than asserted. preload none; poster fallback
+   under reduced motion. */
+.shot-video { width: 100%; display: block; aspect-ratio: 1400 / 690; object-fit: cover; }
+/* position:relative or the absolutely-positioned figcaption chip escapes to the
+   initial containing block. The .reveal transform masked it: translateY(20px)
+   made the figure a containing block, so the chip only broke loose once .in set
+   transform:none, landing it on the hero 5,000px up. */
+.shot { position: relative; }
+.light .shot { border-radius: var(--r-card); box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+@media (prefers-reduced-motion: reduce) {
+  .shot-video { display: none; }
+  .light .shot { background: #0e1116 url('assets/replay-live.jpg') center / cover no-repeat; min-height: 300px; }
+}
+
+/* ---------- 8. second statement over a plate ---------- */
+
+.overband {
+  position: relative;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  min-height: 460px;
+  overflow: hidden;
+  isolation: isolate;
+}
+.overband img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: 50% 44%; }
+.overband::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .68) 30%, rgba(5, 7, 10, .72) 70%, var(--void));
+}
+.overband p {
+  font-size: clamp(26px, 3.2vw, 44px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+  font-variation-settings: 'wdth' 100;
+  color: #7e8894;
+  max-width: 19ch;
+  text-wrap: balance;
+}
+.overband strong { color: #fff; font-weight: 560; }
+
+/* ---------- 9. evidence chain ---------- */
+
+.chain { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); margin-top: var(--s5); }
+.chain-step { grid-column: span 4; }
+.chain-step { padding: var(--s3) 0 var(--s4); position: relative; }
+
+.chain { position: relative; padding-top: var(--s3); }
+.chain::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+}
+.chain-step::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  background: var(--txt);
+  z-index: 1;
+}
+
+.chain-k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--txt); }
+.chain-step p { margin-top: 12px; font-size: 14.5px; line-height: 1.56; color: var(--txt-3); max-width: 34ch; }
+.chain-step code {
+  display: inline-block;
+  margin-top: 16px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  color: var(--txt-2);
+  background: var(--raise);
+  border-radius: var(--r-ctrl);
+  padding: 6px 10px;
+}
+
+/* The custody chain and the agent split now share one inverted band, so both
+   need the dark-ground colours. --term is exactly --paper, so on this band the
+   terminal would have merged into the background; raise it one step. */
+.light .chain::after { background: rgba(255, 255, 255, .16); }
+.light .chain-k { color: var(--ink); }
+.light .chain-step p { color: var(--ink-2); }
+.light .chain-step code { color: var(--ink-2); background: var(--paper-raise); }
+.light .term { background: var(--paper-raise); }
+/* Second argument in the same band: separated by space and a rule, not by a
+   section boundary. */
+.band-next { margin-top: var(--s7); padding-top: var(--s6); border-top: 1px solid rgba(255, 255, 255, .12); }
+
+/* ---------- 10. agent split ---------- */
+
+.split { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); align-items: center; }
+.split > *:first-child { grid-column: span 5; }
+.split > *:last-child { grid-column: 7 / -1; }
+.term {
+  background: #101317;
+  border-radius: var(--r-card);
+  padding: 24px 26px;
+  overflow-x: auto;
+  position: relative;
+}
+.term pre {
+  color: #d5dae0;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.92;
+  letter-spacing: -0.01em;
+  color: #cfd8e2;
+}
+.term .c { color: #8b95a2; }
+.term .p { color: #7d8fa1; }
+.term .hl { color: #7fd6a8; }
+.copy-btn {
+  color: #aeb5bd;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  height: 28px;
+  padding: 0 11px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: #21262c;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  cursor: pointer;
+  transition: color .16s ease, background .16s ease;
+}
+.copy-btn:hover { color: #ffffff; background: #2b3138; }
+
+/* ---------- 11. workspace bento, edge to edge ---------- */
+
+.has-bleed-grid .wrap { padding-bottom: var(--s5); }
+.bento {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 208px;
+  gap: 2px;
+}
+.tile { position: relative; overflow: hidden; background: var(--surface); }
+.tile:nth-child(1) { grid-column: span 2; grid-row: span 2; }
+.tile:nth-child(2) { grid-column: span 2; }
+.tile:nth-child(3), .tile:nth-child(4) { grid-column: span 1; }
+.tile:nth-child(5) { grid-column: span 3; }
+.tile:nth-child(6) { grid-column: span 1; }
+.tile img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s cubic-bezier(.16, 1, .3, 1); }
+.tile:hover img { transform: scale(1.035); }
+.tile figcaption {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 44px 20px 18px;
+  /* The ramp has to still be opaque where the app NAME sits, not just where the
+     subtitle does. It faded out by the top of the padding box, which left six
+     near-black titles on dark screenshots at 1.0:1 while their lighter
+     subtitles read fine. */
+  background: linear-gradient(to top, rgba(5, 7, 10, .96) 38%, rgba(5, 7, 10, .78) 72%, transparent);
+}
+.tile b {
+  display: block;
+  font-size: clamp(20px, 1.9vw, 26px);
+  font-weight: 440;
+  letter-spacing: -0.026em;
+  font-variation-settings: 'wdth' 104;
+  line-height: 1.05;
+  /* Never inherit --txt here: this text always sits on a photograph. */
+  color: var(--ink);
+}
+.tile figcaption span { display: block; margin-top: 7px; font-size: 13px; line-height: 1.45; color: #9aa6b3; max-width: 34ch; }
+
+/* ---------- 12. honesty ---------- */
+
+.truths { display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--s2) var(--gutter); margin-top: var(--s5); }
+.truth { grid-column: span 6; }
+.truth:nth-child(even) { grid-column: 7 / -1; }
+.truth { padding: var(--s3) 0 var(--s4); }
+.truth h3 { font-size: 17.5px; letter-spacing: -0.016em; font-variation-settings: 'wdth' 104; }
+.truth p { margin-top: 10px; font-size: 14.5px; line-height: 1.58; color: var(--txt-3); }
+
+/* ---------- 13. faq ---------- */
+
+.faq-list { margin-top: 34px; }
+details { border-bottom: 1px solid var(--line-soft); }
+summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 17.5px;
+  font-weight: 520;
+  letter-spacing: -0.02em;
+  transition: color .16s ease;
+}
+summary::-webkit-details-marker { display: none; }
+/* Was #fff. The FAQ sits on the white page, so hovering a question erased it. */
+summary:hover { color: var(--bone-hi); }
+.x {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-ctrl);
+  background: var(--raise);
+  display: grid;
+  place-items: center;
+  transition: transform .22s ease, border-color .22s ease;
+}
+.x svg { stroke: var(--txt-2); }
+/* The chip inverts when open. It used to keep --txt-2 on #202730 (1.76:1), so
+   the one element carrying open/closed state had no visible state. */
+details[open] .x { transform: rotate(45deg); background: #202730; color: var(--ink); }
+details p { padding: 0 60px 24px 0; font-size: 15.5px; line-height: 1.66; color: var(--txt-2); max-width: 78ch; }
+details a { color: var(--bone); text-underline-offset: 3px; }
+
+/* ---------- 14. close ---------- */
+
+.close { background: var(--surface); }
+.close .wrap { padding-top: var(--s7); padding-bottom: var(--s7); }
+.close-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); align-items: center; }
+.close-grid > *:first-child { grid-column: span 5; }
+.close-grid > *:last-child { grid-column: 7 / -1; }
+.close .term { background: rgba(8, 10, 14, .88); backdrop-filter: blur(6px); }
+.onworld .term { background: rgba(8, 10, 14, .88); backdrop-filter: blur(6px); }
+
+/* ---------- 15. footer ---------- */
+
+.footer { background: var(--void); }
+.footer .wrap { padding-top: var(--s6); padding-bottom: var(--s5); }
+.footer-grid { display: grid; grid-template-columns: 1.5fr repeat(4, 1fr); gap: 40px 32px; }
+.foot-brand .datarule { margin-top: 20px; max-width: 200px; }
+.sign { font-size: 15px; color: var(--txt-2); max-width: 26ch; }
+.footer h4 { font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--txt-3); }
+.footer ul { list-style: none; margin-top: 14px; display: grid; gap: 9px; }
+.footer a { font-size: 14px; color: var(--txt-2); text-decoration: none; transition: color .16s ease; }
+.footer a:hover { color: var(--txt); }
+.footer-base {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 32px;
+  justify-content: space-between;
+  margin-top: 44px;
+  padding-top: 22px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  color: var(--txt-3);
+}
+
+/* ---------- motion ---------- */
+/* Vocabulary measured off the reference set: they run clip-path wipes (8
+   elements on both palantir and shield.ai), transform hovers in the hundreds,
+   and scroll-linked drift. Everything here animates transform, opacity or
+   clip-path only, so it stays on the compositor, and every rule is gated on
+   prefers-reduced-motion. */
+
+/* Visible by DEFAULT. The hidden state is gated on .js, which an inline head
+   script sets, so a visitor with JS blocked gets the whole page unanimated
+   rather than 43 invisible blocks and three background images. */
+.js .reveal { opacity: 0; transform: translateY(20px); transition: opacity .68s cubic-bezier(.16, 1, .3, 1), transform .68s cubic-bezier(.16, 1, .3, 1); }
+.js .reveal.in { opacity: 1; transform: none; }
+
+/* Stagger: sequence within a group reads as narrative rather than a single
+   block arriving. Index-driven so it needs no per-element markup. */
+.dom-index .reveal:nth-child(1)  { transition-delay: .00s }
+.dom-index .reveal:nth-child(2)  { transition-delay: .06s }
+.dom-index .reveal:nth-child(3)  { transition-delay: .12s }
+.dom-index .reveal:nth-child(4)  { transition-delay: .18s }
+.dom-index .reveal:nth-child(5)  { transition-delay: .24s }
+.dom-index .reveal:nth-child(6)  { transition-delay: .30s }
+.scale-grid .reveal:nth-child(2) { transition-delay: .05s }
+.scale-grid .reveal:nth-child(3) { transition-delay: .10s }
+.scale-grid .reveal:nth-child(4) { transition-delay: .15s }
+.scale-grid .reveal:nth-child(5) { transition-delay: .20s }
+.scale-grid .reveal:nth-child(6) { transition-delay: .25s }
+.truths .reveal:nth-child(2) { transition-delay: .07s }
+.truths .reveal:nth-child(3) { transition-delay: .14s }
+.truths .reveal:nth-child(4) { transition-delay: .21s }
+.chain .reveal:nth-child(2) { transition-delay: .09s }
+.chain .reveal:nth-child(3) { transition-delay: .18s }
+
+/* Clip-path wipe. Used on the artifacts that carry the argument, so the
+   reveal is an event rather than a fade. */
+.js .wipe { clip-path: inset(0 0 100% 0); transition: clip-path .95s cubic-bezier(.16, 1, .3, 1); }
+.js .wipe.in { clip-path: inset(0 0 0 0); }
+.js .wipe-r { clip-path: inset(0 100% 0 0); transition: clip-path .9s cubic-bezier(.16, 1, .3, 1); }
+.js .wipe-r.in { clip-path: inset(0 0 0 0); }
+
+/* Hover vocabulary. Anduril carries transform transitions on 114 elements;
+   ours were on a handful. */
+.footer a, .compare tbody tr, .chain-step, .stat { transition: transform .28s cubic-bezier(.16, 1, .3, 1), color .2s ease, background .2s ease; }
+.footer a:hover { transform: translateX(3px); }
+.chain-step:hover { transform: translateY(-2px); }
+.light .compare tbody tr:hover td { background: #23282e; }
+
+/* Scroll-linked drift on the full-bleed plates. No scroll listener: this is a
+   view timeline, so it never touches the main thread. Chromium only today and
+   it simply does not run elsewhere, which is the correct degradation. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    /* The bands clip, which makes them scroll containers that never scroll, so
+       a bare view() inside one resolves against the band and never advances.
+       Name the timeline on the band, whose own scrollport is the document, and
+       reference it from the child. */
+    .bleed-band, .onworld { view-timeline-name: --plate; view-timeline-axis: block; }
+    .hero { view-timeline-name: --hero; view-timeline-axis: block; }
+    /* The headline recedes as the hero leaves rather than cutting away, which
+       is the one place a scroll-linked effect earns its keep. */
+    .hero-inner {
+      animation: heroSettle linear both;
+      animation-timeline: --hero;
+      /* Started at exit 28%, which put the block at opacity .22 by scrollY 700 of
+         a 900px hero: the primary CTA dimmed out while it was still on screen
+         and still being read. Recede only once the hero is genuinely leaving. */
+      animation-range: exit 62% exit 100%;
+    }
+    @keyframes heroSettle {
+      from { opacity: 1; transform: none; }
+      to   { opacity: .22; transform: translate3d(0, -26px, 0); }
+    }
+    .bleed-band img, .onworld-bg {
+      animation: plateDrift linear both;
+      animation-timeline: --plate;
+      animation-range: entry 0% exit 100%;
+      will-change: transform;
+    }
+    @keyframes plateDrift {
+      from { transform: scale(1.07) translate3d(0, -1.6%, 0); }
+      to   { transform: scale(1.07) translate3d(0, 1.6%, 0); }
+    }
+  }
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 1080px) {
+  :root { --pad: 28px; }
+  .dom { grid-template-columns: 104px minmax(0, 1fr); gap: 0 28px; }
+  .dom-thumb { grid-column: 1 / -1; margin-top: 16px; max-width: 420px; }
+  .archive-grid, .split, .close-grid { grid-template-columns: 1fr; gap: 40px; }
+
+  .bento { grid-auto-rows: 190px; }
+}
+
+@media (max-width: 760px) {
+  :root { --pad: 20px; }
+  body { font-size: 16px; }
+  .nav-toggle { display: block; }
+  .nav .wrap { gap: 12px; }
+  .nav .btn { margin-left: auto; }
+  /* Full-screen takeover, which is what the reference set does on mobile. The
+     bar stays above it so the wordmark and the close control never move. */
+  .nav-links {
+    position: fixed;
+    inset: 0;
+    z-index: 42;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    margin: 0;
+    padding: 84px var(--pad) calc(var(--pad) + 96px);
+    background: var(--void);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .3s ease, visibility .3s;
+  }
+  .nav-links[data-open] { opacity: 1; visibility: visible; }
+  .nav-links a {
+    display: block;
+    padding: 20px 0;
+    font-size: clamp(28px, 8.4vw, 40px);
+    font-weight: 440;
+    letter-spacing: -0.032em;
+    font-variation-settings: 'wdth' 100;
+    line-height: 1.05;
+    color: var(--txt);
+    border-bottom: 1px solid var(--line-soft);
+    transform: translateY(14px);
+    opacity: 0;
+    transition: transform .5s cubic-bezier(.16,1,.3,1), opacity .4s ease;
+  }
+  .nav-links[data-open] a { transform: none; opacity: 1; }
+  .nav-links[data-open] a:nth-child(1) { transition-delay: .05s; }
+  .nav-links[data-open] a:nth-child(2) { transition-delay: .10s; }
+  .nav-links[data-open] a:nth-child(3) { transition-delay: .15s; }
+  .nav-links[data-open] a:nth-child(4) { transition-delay: .20s; }
+  .nav-links[data-open] a:nth-child(5) { transition-delay: .25s; }
+  .nav-links a:last-child { border-bottom: 0; }
+  /* The panel's own footer: primary action plus the same data rule the hero
+     carries, so the menu is not a bare list. */
+  /* Fixed to the viewport, not to the 64px bar. As an absolute child of .nav it
+     resolved against the bar and sat off-screen. */
+  .nav-foot {
+    position: fixed;
+    /* Was 43 then re-declared 39, and .nav-links is 42 with an opaque white
+       background, so the panel's only CTA was painted behind the panel:
+       elementFromPoint at its centre returned .nav-links. Keyboard could reach
+       it, a thumb could not. */
+    z-index: 44;
+    left: var(--pad);
+    right: var(--pad);
+    bottom: calc(var(--pad) + 4px);
+    display: grid;
+    gap: 18px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: opacity .3s ease .18s, transform .45s cubic-bezier(.16,1,.3,1) .18s, visibility .3s;
+  }
+  .nav.menu-open ~ * .nav-foot, .nav.menu-open .nav-foot {
+    opacity: 1; visibility: visible; transform: none;
+  }
+  .nav-foot .btn { width: 100%; justify-content: center; margin: 0; height: 52px; font-size: 16px; }
+  /* Toggle and brand ride above the overlay. */
+  .nav .brand, .nav-toggle { position: relative; z-index: 43; }
+  .nav.menu-open ~ .topbar, body.menu-locked .topbar { display: none; }
+  .topbar-text { font-size: 12.5px; }
+  .topbar { padding-left: 16px; }
+  .nav.menu-open { background: var(--void); border-bottom-color: transparent; }
+  /* The wordmark is #fff for the transparent nav over the hero; the open panel
+     is --void, so it went white-on-white. */
+  .nav.menu-open .brand { color: var(--txt); }
+  .nav.menu-open > .wrap > .btn { opacity: 0; pointer-events: none; }
+  body.menu-locked { overflow: hidden; }
+  .hero { min-height: 92dvh; }
+  .hero-inner { padding-bottom: 40px; }
+  .hero h1 { max-width: 100%; }
+  .hero p { font-size: 17px; }
+  .hero-ctas { gap: 10px; margin-bottom: 34px; }
+  .hero-ctas .btn { flex: 1 1 auto; justify-content: center; }
+  .section .wrap, .light .wrap, .close .wrap { padding-top: 68px; padding-bottom: 68px; }
+  .statement .wrap { padding-top: 80px; padding-bottom: 80px; }
+  .statement p, .overband p { max-width: 100%; }
+  .scale-grid { grid-template-columns: repeat(2, 1fr); }
+  .overlay-band { min-height: 0; }
+  .overlay-panel { max-width: none; }
+  .truths { grid-template-columns: 1fr; }
+  .dom { grid-template-columns: 1fr; gap: 16px; padding: 26px 0; }
+  .dom-thumb { max-width: 100%; }
+  .truths { gap: 0; }
+  .chain { grid-template-columns: 1fr; border-top: 0; }
+  .chain-step { border-right: 0; border-top: 1px solid rgba(255, 255, 255, .12); padding: 24px 0 26px !important; }
+  .chain-step::before { left: 0 !important; }
+  .bento { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 168px; }
+  .tile:nth-child(n) { grid-column: span 1; grid-row: span 1; }
+  .tile:nth-child(1) { grid-column: span 2; }
+  .tile:nth-child(5) { grid-column: span 2; }
+  .sec-head-wide { grid-template-columns: 1fr; gap: 18px; }
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: 30px 24px; }
+  .foot-brand { grid-column: span 2; }
+  details p { padding-right: 0; }
+  .datarule::before { display: none; }
+  .datarule { flex-wrap: wrap; gap: 8px 14px; }
+}

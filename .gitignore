@@ -64,6 +64,10 @@ apps/ml/fusion/output_3dgs/
 # render outputs, and large video renders. Never commit these artifacts.
 apps/ml/fusion/recon/
 *.mp4
+# The marketing site's hero loop is a deliberate exception: it is the page's
+# primary asset, not a reconstruction artifact. Declared here rather than
+# force-added so a re-encode still shows up in `git status`.
+!website/assets/*.mp4
 apps/ml/fusion/**/colmap/dense/
 apps/ml/fusion/**/gsplat_repo/
 apps/ml/fusion/**/output/

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Suspense, lazy, type ReactNode } from 'react';
 import * as Cesium from 'cesium';
 import { useAppView, APP_META } from '../state/appView.js';
 import { InvestigationCanvas } from '../graph/InvestigationCanvas.js';
@@ -9,10 +9,13 @@ import { ReportsApp } from '../reports/ReportsApp.js';
 import { ExplorerApp } from '../explorer/ExplorerApp.js';
 import { FoundryApp } from '../foundry/FoundryApp.js';
 import { WorkflowsApp } from '../workflows/WorkflowsApp.js';
-import { CityApp } from '../city/CityApp.js';
 import { CountryApp } from '../country/CountryApp.js';
 import { AiHubApp } from '../ai/AiHubApp.js';
 import { MarketsApp } from '../markets/MarketsApp.js';
+
+// CityApp is the one surface that drags three + the splat renderer with it —
+// code-split so the console bundle doesn't carry a 3D engine nobody opened.
+const CityApp = lazy(() => import('../city/CityApp.js').then((m) => ({ default: m.CityApp })));
 
 // AppSurface (design §6.1) — the non-Map apps render as a full surface over the
 // globe (which stays mounted behind for instant return + shared selection). Map +
@@ -74,7 +77,13 @@ export function AppSurface({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
         </span>
         <span className="mono text-[10px] text-txt-3 truncate">{APP_META[app].hint}</span>
       </div>
-      <div className="flex-1 min-h-0 overflow-auto">{node}</div>
+      <div className="flex-1 min-h-0 overflow-auto">
+        <Suspense
+          fallback={<div className="p-3 mono text-[11px] text-txt-2">loading…</div>}
+        >
+          {node}
+        </Suspense>
+      </div>
     </div>
   );
 }
