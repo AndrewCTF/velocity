@@ -41,6 +41,9 @@ const io = new IntersectionObserver((entries) => {
   for (const e of entries) {
     if (!e.isIntersecting) continue;
     e.target.classList.add('in');
+    // A wipe inside a revealed block runs with it, so the row and its artifact
+    // are one event rather than two.
+    e.target.querySelectorAll('.wipe, .wipe-r').forEach((w) => w.classList.add('in'));
     e.target.querySelectorAll('[data-count]').forEach(countUp);
     io.unobserve(e.target);
   }
@@ -50,6 +53,7 @@ const io = new IntersectionObserver((entries) => {
 document.querySelectorAll('.reveal').forEach((el) => {
   if (reduce) {
     el.classList.add('in');
+    el.querySelectorAll('.wipe, .wipe-r').forEach((w) => w.classList.add('in'));
     el.querySelectorAll('[data-count]').forEach(countUp);
   } else io.observe(el);
 });
