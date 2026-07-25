@@ -249,6 +249,24 @@ body.bar-gone .nav { top: 0; }
 }
 .nav-links a:hover { color: var(--txt); }
 
+/* The nav is transparent over the plate, so its button has no surface to sit
+   on and reads as an overlay. Keep it a text control up top; it earns its fill
+   once the nav gains a background on scroll. */
+.nav > .wrap > .btn {
+  background: transparent;
+  border-color: transparent;
+  color: var(--txt-2);
+  padding: 0 8px;
+}
+.nav > .wrap > .btn:hover { background: transparent; border-color: transparent; color: var(--txt); }
+.nav.scrolled > .wrap > .btn {
+  background: rgba(255, 255, 255, .05);
+  border-color: #5b6673;
+  color: var(--txt);
+  padding: 0 15px;
+}
+.nav.scrolled > .wrap > .btn:hover { background: rgba(255, 255, 255, .11); border-color: #7c8794; }
+
 /* Mobile menu trigger. Hidden on desktop; the three bars become a cross when
    open. 44px square so it clears the minimum touch target. */
 .nav-toggle {
