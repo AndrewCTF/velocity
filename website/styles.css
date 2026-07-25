@@ -159,8 +159,7 @@ h2 {
   justify-content: center;
   gap: 10px;
   padding: 0 44px 0 20px;
-  background: #0b0e13;
-  border-bottom: 1px solid var(--line-soft);
+  background: var(--void);
   transition: transform .32s cubic-bezier(.16, 1, .3, 1);
 }
 body.bar-gone .topbar { transform: translateY(-100%); }
@@ -305,7 +304,10 @@ body.bar-gone .nav { top: 0; }
      tracks. Measured: headline sits over the 0.62-0.70 band. */
   background:
     radial-gradient(74% 62% at 6% 76%, rgba(5, 7, 10, .74) 0%, rgba(5, 7, 10, .44) 42%, transparent 72%),
-    linear-gradient(to top, var(--void) 0%, rgba(5, 7, 10, .58) 18%, rgba(5, 7, 10, .08) 54%, rgba(5, 7, 10, .20) 100%),
+    linear-gradient(to top,
+      var(--void) 0%, rgba(5, 7, 10, .58) 16%, rgba(5, 7, 10, .04) 44%,
+      rgba(5, 7, 10, .10) 58%, rgba(5, 7, 10, .55) 82%, rgba(5, 7, 10, .88) 90%,
+      var(--void) 95%, var(--void) 100%),
     linear-gradient(to right, rgba(5, 7, 10, .46) 0%, rgba(5, 7, 10, .10) 46%, transparent 78%);
 }
 .hero-inner { padding-bottom: 56px; padding-top: 120px; position: relative; }
