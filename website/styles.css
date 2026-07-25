@@ -16,21 +16,26 @@
 }
 
 :root {
-  --void: #05070a;          /* sampled from the app's space background */
-  --surface: #0e1116;
-  --raise: #161b21;
-  --line: #232a33;
-  --line-soft: #1a2027;
-  --txt: #eef1f4;
-  --txt-2: #99a4b1;
-  --txt-3: #737e8c;   /* 4.89:1 on --void; #66717e measured 4.04 and carries body copy */
-  --paper: #eceae5;         /* the single light band */
-  --paper-raise: #f6f5f2;
-  --ink: #14161a;
-  --ink-2: #4d545c;
-  --bone: #ecebe7;          /* primary CTA fill; the chrome carries no hue */
-  --bone-hi: #ffffff;
-  --on-bone: #0d1014;
+  /* Light base. Measured against the reference set: palantir runs 9 of 10
+     luminance bands light with dark imagery as punctuation. This page ran 0 of
+     10. Dark is the easy choice and it reads as the category default; a light
+     page is harder because every flaw shows, which is why it reads premium. */
+  --void: #ffffff;          /* page base */
+  --surface: #f4f3f0;       /* alternating band */
+  --raise: #e9e7e2;         /* raised chip / tile */
+  --line: #d7d4cd;
+  --line-soft: #e5e2dc;
+  --txt: #14161a;
+  --txt-2: #474d55;
+  --txt-3: #5f666e;   /* 5.1:1 on white; carries body copy */
+  --paper: #101317;         /* the punctuation band inverts: now dark */
+  --paper-raise: #171b20;
+  --ink: #f4f3f0;
+  --ink-2: #b4b8be;
+  --bone: #14161a;          /* dark CTA on a light page */
+  --bone-hi: #000000;
+  --on-bone: #ffffff;
+  --plate: #05070a;         /* the colour dark photographic bands sit on */
   --r-ctrl: 4px;
   --r-card: 8px;
   --sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -130,9 +135,9 @@ h2 {
   color: var(--txt-3);
   white-space: nowrap;
 }
-.datarule.on-light { border-color: #cfccc5; }
-.datarule.on-light::before { background-image: repeating-linear-gradient(90deg, #cfccc5 0 1px, transparent 1px 34px); }
-.datarule.on-light span { color: #7c7871; }
+.datarule.on-light { border-color: #333940; }
+.datarule.on-light::before { background-image: repeating-linear-gradient(90deg, #333940 0 1px, transparent 1px 34px); }
+.datarule.on-light span { color: #8b939c; }
 
 /* ---------- buttons ---------- */
 
@@ -155,8 +160,17 @@ h2 {
 .btn-primary:hover { background: var(--bone-hi); border-color: var(--bone-hi); }
 /* Border carries the control boundary here, so it must clear 3:1 against the
    darkest surface it sits on (#5b6673 vs #05070a measures 3.46:1). */
-.btn-line { background: rgba(255, 255, 255, .05); color: var(--txt); border-color: #5b6673; }
-.btn-line:hover { background: rgba(255, 255, 255, .11); border-color: #7c8794; }
+.btn-line { background: rgba(0, 0, 0, .03); color: var(--txt); border-color: #9ca2aa; }
+.btn-line:hover { background: rgba(0, 0, 0, .07); border-color: #6d737b; }
+/* Over the dark hero the controls invert. */
+.hero .btn-primary { background: #ffffff; color: #14161a; border-color: #ffffff; }
+.hero .btn-primary:hover { background: #eeece7; border-color: #eeece7; }
+.hero .btn-line { background: rgba(255,255,255,.08); color: #ffffff; border-color: rgba(255,255,255,.44); }
+.hero .btn-line:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.66); }
+.hero .datarule { border-color: rgba(255,255,255,.2); }
+.hero .datarule::before { background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.2) 0 1px, transparent 1px 34px); }
+.hero .datarule span { color: #a9b4bf; }
+
 .btn-sm { height: 38px; padding: 0 15px; font-size: 14px; }
 .btn-big { height: 52px; padding: 0 28px; font-size: 16px; }
 :focus-visible { outline: 2px solid var(--bone); outline-offset: 3px; }
@@ -186,10 +200,10 @@ body.bar-gone .topbar { transform: translateY(-100%); }
   gap: 10px;
   min-width: 0;
   text-decoration: none;
-  color: var(--txt-2);
+  color: #ccd4dc;
   transition: color .16s ease;
 }
-.topbar-msg:hover { color: var(--txt); }
+.topbar-msg:hover { color: #ffffff; }
 .topbar-kicker {
   flex: none;
   font-family: var(--mono);
@@ -197,8 +211,8 @@ body.bar-gone .topbar { transform: translateY(-100%); }
   font-weight: 500;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #7f8a98;
-  border: 1px solid rgba(255, 255, 255, .18);
+  color: #b9c2cc;
+  border: 1px solid rgba(255, 255, 255, .26);
   border-radius: var(--r-ctrl);
   padding: 3px 7px;
 }
@@ -220,11 +234,11 @@ body.bar-gone .topbar { transform: translateY(-100%); }
   background: none;
   border: 0;
   border-radius: var(--r-ctrl);
-  color: var(--txt-3);
+  color: #8e97a1;
   cursor: pointer;
   transition: color .16s ease, background .16s ease;
 }
-.topbar-x:hover { color: var(--txt); background: var(--raise); }
+.topbar-x:hover { color: #ffffff; background: rgba(255,255,255,.1); }
 
 /* ---------- nav ---------- */
 
@@ -242,9 +256,16 @@ body.bar-gone .topbar { transform: translateY(-100%); }
               border-color .28s ease, backdrop-filter .28s ease;
 }
 .nav .wrap { display: flex; align-items: center; gap: 34px; }
-.nav.scrolled { background: rgba(5, 7, 10, .88); backdrop-filter: blur(14px); border-bottom-color: var(--line); }
+.nav .brand { color: #ffffff; }
+.nav-links a { color: #ccd4dc; }
+.nav-links a:hover { color: #ffffff; }
+.nav.scrolled { background: rgba(255, 255, 255, .92); backdrop-filter: blur(14px); border-bottom-color: var(--line); }
+.nav.scrolled .brand { color: var(--txt); }
+.nav.scrolled .nav-links a { color: var(--txt-2); }
+.nav.scrolled .nav-links a:hover { color: var(--txt); }
 body.bar-gone .nav { top: 0; }
 .brand {
+  color: var(--txt);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -272,17 +293,17 @@ body.bar-gone .nav { top: 0; }
 .nav > .wrap > .btn {
   background: transparent;
   border-color: transparent;
-  color: var(--txt-2);
+  color: #ccd4dc;
   padding: 0 8px;
 }
 .nav > .wrap > .btn:hover { background: transparent; border-color: transparent; color: var(--txt); }
 .nav.scrolled > .wrap > .btn {
-  background: rgba(255, 255, 255, .05);
-  border-color: #5b6673;
+  background: rgba(0, 0, 0, .04);
+  border-color: #9ca2aa;
   color: var(--txt);
   padding: 0 15px;
 }
-.nav.scrolled > .wrap > .btn:hover { background: rgba(255, 255, 255, .11); border-color: #7c8794; }
+.nav.scrolled > .wrap > .btn:hover { background: rgba(0, 0, 0, .08); border-color: #6d737b; }
 
 /* Mobile menu trigger. Hidden on desktop; the three bars become a cross when
    open. 44px square so it clears the minimum touch target. */
@@ -314,6 +335,8 @@ body.bar-gone .nav { top: 0; }
 /* ---------- 2. hero: full bleed, type bottom left ---------- */
 
 .hero {
+  background: var(--plate);
+  color: #ffffff;
   position: relative;
   min-height: 100dvh;
   display: flex;
@@ -341,9 +364,8 @@ body.bar-gone .nav { top: 0; }
   background:
     radial-gradient(74% 62% at 6% 76%, rgba(5, 7, 10, .74) 0%, rgba(5, 7, 10, .44) 42%, transparent 72%),
     linear-gradient(to top,
-      var(--void) 0%, rgba(5, 7, 10, .58) 16%, rgba(5, 7, 10, .04) 44%,
-      rgba(5, 7, 10, .14) 62%, rgba(5, 7, 10, .42) 80%, rgba(5, 7, 10, .68) 92%,
-      rgba(5, 7, 10, .78) 100%),
+      rgba(5, 7, 10, .92) 0%, rgba(5, 7, 10, .5) 18%, rgba(5, 7, 10, .04) 46%,
+      rgba(5, 7, 10, .14) 64%, rgba(5, 7, 10, .42) 82%, rgba(5, 7, 10, .7) 100%),
     linear-gradient(to right, rgba(5, 7, 10, .46) 0%, rgba(5, 7, 10, .10) 46%, transparent 78%);
 }
 .hero-inner { padding-bottom: var(--s6); padding-top: var(--s8); position: relative; }
@@ -362,6 +384,7 @@ body.bar-gone .nav { top: 0; }
   text-wrap: balance;
 }
 .hero p {
+  color: #d3dae1;
   text-shadow: 0 1px 16px rgba(5, 7, 10, .85);
   margin-top: 22px;
   max-width: 54ch;
@@ -378,14 +401,12 @@ body.bar-gone .nav { top: 0; }
 /* The reference set puts a large photograph immediately below the fold with the
    text sitting on it. This replaced a 204px strip of numbers on a flat band,
    which was the weakest moment on the page. */
-.overlay-band { position: relative; overflow: hidden; isolation: isolate; display: flex; align-items: center; min-height: 760px; }
+.overlay-band { position: relative; overflow: hidden; isolation: isolate; display: flex; align-items: center; min-height: 760px; background: var(--plate); color: #f2f1ee; }
 .overlay-bg { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: 50% 56%; }
 .overlay-band::before {
   content: '';
   position: absolute; inset: 0; z-index: -1;
-  background:
-    linear-gradient(to right, rgba(5,7,10,.94) 0%, rgba(5,7,10,.86) 38%, rgba(5,7,10,.34) 74%, rgba(5,7,10,.5) 100%),
-    linear-gradient(to bottom, var(--void) 0%, transparent 14%, transparent 84%, var(--void) 100%);
+  background: linear-gradient(to right, rgba(5,7,10,.94) 0%, rgba(5,7,10,.86) 38%, rgba(5,7,10,.34) 74%, rgba(5,7,10,.5) 100%);
 }
 .overlay-band .wrap { padding-top: var(--s7); padding-bottom: var(--s7); }
 .overlay-panel { max-width: 62ch; }
@@ -399,7 +420,9 @@ body.bar-gone .nav { top: 0; }
 }
 .overlay-panel h2 strong { color: #fff; font-weight: 400; display: inline-block; margin-top: 2px; }
 .overlay-panel .scale-grid { margin-top: var(--s6); }
-.overlay-panel .datarule { margin-top: var(--s5); }
+.overlay-panel .datarule { margin-top: var(--s5); border-color: rgba(255,255,255,.2); }
+.overlay-panel .datarule::before { background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.2) 0 1px, transparent 1px 34px); }
+.overlay-panel .datarule span { color: #93a0ad; }
 
 /* ---------- 3b. stat row ---------- */
 
@@ -409,6 +432,7 @@ body.bar-gone .nav { top: 0; }
   gap: var(--s5) var(--s4);
 }
 .stat { padding: 0; }
+.overlay-band .stat b { color: #fff; }
 .stat b {
   display: block;
   font-family: var(--mono);
@@ -439,7 +463,7 @@ body.bar-gone .nav { top: 0; }
 
 /* ---------- 5. full-bleed console band ---------- */
 
-.bleed { position: relative; overflow: hidden; }
+.bleed { position: relative; overflow: hidden; background: var(--plate); }
 .bleed img, .bleed-video { width: 100%; height: clamp(420px, 52vw, 720px); object-fit: cover; display: block; }
 /* The console band plays a real-time recording of the product. preload is none
    so it costs nothing until it scrolls near, and it falls back to its own
@@ -517,6 +541,26 @@ body.bar-gone .nav { top: 0; }
   background: linear-gradient(to bottom, var(--void), rgba(5, 7, 10, .87) 24%, rgba(5, 7, 10, .89) 76%, var(--void));
 }
 
+/* Alternating light band, the way a light page separates sections. */
+.section-alt { background: var(--surface); }
+
+/* A photograph with one line on it, no body copy: the only way an image and
+   text share a band without the scrim destroying the image. */
+.bleed-line { display: flex; align-items: center; min-height: 520px; }
+.bleed-line img { position: absolute; inset: 0; height: 100%; }
+.bleed-line::after { background: linear-gradient(to right, rgba(5,7,10,.9) 0%, rgba(5,7,10,.62) 46%, rgba(5,7,10,.3) 100%); }
+.bleed-line .wrap { position: relative; z-index: 2; }
+.bleed-claim {
+  font-size: clamp(26px, 3.2vw, 44px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+  color: #93a0ad;
+  max-width: 24ch;
+  text-wrap: balance;
+}
+.bleed-claim strong { color: #fff; font-weight: 400; }
+
 /* ---------- 6. capabilities: 3x2 card grid ---------- */
 
 .section .wrap { padding-top: var(--s7); padding-bottom: var(--s7); }
@@ -566,7 +610,7 @@ body.bar-gone .nav { top: 0; }
   font-family: var(--mono);
   font-size: 11.5px;
   letter-spacing: 0.04em;
-  color: #c8b06b;
+  color: #7a5e12;
 }
 .dom-body p { margin-top: 10px; font-size: 14.5px; line-height: 1.58; color: var(--txt-3); max-width: 56ch; }
 .dom-thumb { overflow: hidden; border-radius: var(--r-card); }
@@ -589,6 +633,7 @@ body.bar-gone .nav { top: 0; }
 /* ---------- 7. archive: the one light band ---------- */
 
 .light { background: var(--paper); color: var(--ink); }
+.light .eyebrow { color: #8b939c; }
 .light .wrap { padding-top: var(--s7); padding-bottom: var(--s7); }
 .light h2 { color: var(--ink); }
 .light .lede { color: var(--ink-2); }
@@ -605,29 +650,29 @@ body.bar-gone .nav { top: 0; }
   font-weight: 500;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #85817a;
+  color: #8b939c;
   padding: 0 14px 14px 0;
   vertical-align: bottom;
 }
-.compare td { padding: 16px 14px 16px 12px; vertical-align: top; border-bottom: 1px solid #dedbd4; }
+.compare td { padding: 16px 14px 16px 12px; vertical-align: top; border-bottom: 1px solid #262b31; }
 .compare tbody tr:last-child td { border-bottom: 0; }
 .compare th:first-child, .compare td:first-child { width: 25%; white-space: nowrap; }
 .compare th:nth-child(2), .compare td:nth-child(2) { width: 48%; }
 .compare th:last-child, .compare td:last-child { width: 27%; }
 
-.compare tr.you td { background: #d9d5cc; font-weight: 520; }
+.compare tr.you td { background: #1d2126; font-weight: 520; }
 .compare tr.you td:first-child { box-shadow: inset 3px 0 0 var(--ink); }
-.compare .muted { color: #6f6b64; }
-.compare-note { margin-top: 18px; font-size: 13.5px; line-height: 1.55; color: #7c7871; max-width: 56ch; }
+.compare .muted { color: #969ba2; }
+.compare-note { margin-top: 18px; font-size: 13.5px; line-height: 1.55; color: #969ba2; max-width: 56ch; }
 /* Taller crop so the shot column ends level with the table column instead of
    leaving a void; biased low because the scrubber lives at the bottom. */
-.light .shot { border-color: #d5d2cb; }
+
 .light .shot img { aspect-ratio: 4 / 3; object-position: 50% 64%; }
 /* The archive artifact is a recording of the replay actually running, so the
    claim is demonstrated rather than asserted. preload none; poster fallback
    under reduced motion. */
 .shot-video { width: 100%; display: block; aspect-ratio: 1400 / 690; object-fit: cover; }
-.light .shot { border-radius: var(--r-card); box-shadow: 0 1px 0 rgba(20,22,26,.10), 0 18px 40px -18px rgba(20,22,26,.35); }
+.light .shot { border-radius: var(--r-card); box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
 @media (prefers-reduced-motion: reduce) {
   .shot-video { display: none; }
   .light .shot { background: #0e1116 url('assets/replay-live.jpg') center / cover no-repeat; min-height: 300px; }
@@ -699,7 +744,7 @@ body.bar-gone .nav { top: 0; }
   font-family: var(--mono);
   font-size: 11.5px;
   letter-spacing: 0.03em;
-  color: #8ea0b2;
+  color: var(--txt-2);
   background: var(--raise);
   border-radius: var(--r-ctrl);
   padding: 6px 10px;
@@ -711,23 +756,25 @@ body.bar-gone .nav { top: 0; }
 .split > *:first-child { grid-column: span 5; }
 .split > *:last-child { grid-column: 7 / -1; }
 .term {
-  background: var(--surface);
+  background: #101317;
   border-radius: var(--r-card);
   padding: 24px 26px;
   overflow-x: auto;
   position: relative;
 }
 .term pre {
+  color: #d5dae0;
   font-family: var(--mono);
   font-size: 13.5px;
   line-height: 1.92;
   letter-spacing: -0.01em;
   color: #cfd8e2;
 }
-.term .c { color: #5f6b78; }
+.term .c { color: #8b95a2; }
 .term .p { color: #7d8fa1; }
 .term .hl { color: #7fd6a8; }
 .copy-btn {
+  color: #aeb5bd;
   position: absolute;
   top: 14px;
   right: 14px;
@@ -739,13 +786,13 @@ body.bar-gone .nav { top: 0; }
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--txt-2);
-  background: var(--raise);
+  background: #21262c;
   border: 0;
   border-radius: var(--r-ctrl);
   cursor: pointer;
   transition: color .16s ease, background .16s ease;
 }
-.copy-btn:hover { color: var(--txt); background: #202730; }
+.copy-btn:hover { color: #ffffff; background: #2b3138; }
 
 /* ---------- 11. workspace bento, edge to edge ---------- */
 
@@ -898,7 +945,7 @@ details a { color: var(--bone); text-underline-offset: 3px; }
 .footer a, .compare tbody tr, .chain-step, .stat { transition: transform .28s cubic-bezier(.16, 1, .3, 1), color .2s ease, background .2s ease; }
 .footer a:hover { transform: translateX(3px); }
 .chain-step:hover { transform: translateY(-2px); }
-.light .compare tbody tr:hover td { background: #dcd8d0; }
+.light .compare tbody tr:hover td { background: #23282e; }
 
 /* Scroll-linked drift on the full-bleed plates. No scroll listener: this is a
    view timeline, so it never touches the main thread. Chromium only today and
