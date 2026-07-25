@@ -108,53 +108,59 @@
 </div>
 
 <!-- 6. Capabilities -->
-<section class="section" id="capabilities">
+<section class="section section-head-only" id="capabilities">
   <div class="wrap">
     <div class="sec-head reveal">
       <h2>Every feed on one globe</h2>
       <p class="lede">Aircraft, vessels, satellites, hazards and infrastructure land in one 3D view and are correlated on the server, so you stop eyeballing six browser tabs. Core feeds need no account and no API key.</p>
     </div>
+  </div>
+</section>
+
+<div class="bleed bleed-band">
+  <img src="assets/band-air.jpg" alt="Thousands of individual live aircraft over the United Kingdom, the North Sea, Germany and Scandinavia on Velocity's globe" loading="lazy" decoding="async">
+  <span class="chip"><i></i>Live · the North Sea and Baltic, one second of the feed</span>
+</div>
+
+<section class="section section-tight">
+  <div class="wrap">
     <div class="cap-grid">
       <div class="cap reveal">
-        <div class="icon-tile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 13.6 10l6.9 2.2-6.9 1.3-1.6 7-1.6-7-6.9-1.3L10.4 10Z"/></svg></div>
-        <h3>Air</h3><span class="n">9,000 to 13,000 on a typical day</span>
+        <b class="cap-n">13,000</b>
+        <span class="cap-q">aircraft on a typical day, from 9,000</span>
+        <h3>Air</h3>
         <p>ADS-B from OpenSky and airplanes.live, including around 140 military aircraft. Busy days peak far higher; the 21,186 above was one measured snapshot.</p>
       </div>
       <div class="cap reveal">
-        <div class="icon-tile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 15.5h17l-2.4 4.2H5.9Z"/><path d="M6.8 15.5V8.2h10.4v7.3"/><path d="M12 8.2V4.4"/></svg></div>
-        <h3>Maritime</h3><span class="n">~33,000 on a typical day</span>
+        <b class="cap-n">33,000</b>
+        <span class="cap-q">vessels on a typical day</span>
+        <h3>Maritime</h3>
         <p>Keyless AIS, MMSI-deduplicated across ShipXplorer, MyShipTracking and Nordic public feeds. 55,086 in the same measured peak.</p>
       </div>
       <div class="cap reveal">
-        <div class="icon-tile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.1"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(-28 12 12)"/></svg></div>
-        <h3>Space</h3><span class="n">~16,000 objects</span>
+        <b class="cap-n">16,000</b>
+        <span class="cap-q">orbital objects, propagated in-browser</span>
+        <h3>Space</h3>
         <p>CelesTrak two-line elements propagated with real SGP4 physics in your browser, not a decorative orbit animation.</p>
       </div>
       <div class="cap reveal">
-        <div class="icon-tile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 21.4 19.6H2.6Z"/><path d="M12 10v4.2"/><path d="M12 17.1h.01"/></svg></div>
-        <h3>Hazards</h3><span class="n">~250 quake events a day</span>
+        <b class="cap-n">250</b>
+        <span class="cap-q">quake events a day</span>
+        <h3>Hazards</h3>
         <p>Earthquakes, wildfires, storms, volcanic activity and power outages, on the same timeline as the traffic that has to route around them.</p>
       </div>
       <div class="cap reveal">
-        <div class="icon-tile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2Z"/><path d="M6.9 17.1a7.2 7.2 0 0 1 0-10.2"/><path d="M17.1 6.9a7.2 7.2 0 0 1 0 10.2"/></svg></div>
-        <h3>Signals</h3><span class="n">~200 flagged cells at a time</span>
+        <b class="cap-n">200</b>
+        <span class="cap-q">jamming cells flagged at a time</span>
+        <h3>Signals</h3>
         <p>GPS jamming inferred from ADS-B position-accuracy degradation, aggregated into cells you can click and query.</p>
       </div>
       <div class="cap reveal">
-        <div class="icon-tile"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 20.2h16.4"/><path d="M6.2 20.2V9.4l5.8-5 5.8 5v10.8"/><path d="M10.2 20.2v-5.1h3.6v5.1"/></svg></div>
-        <h3>Infrastructure</h3><span class="n">53 country toolkits</span>
+        <b class="cap-n">53</b>
+        <span class="cap-q">country toolkits</span>
+        <h3>Infrastructure</h3>
         <p>7,183 military bases, 3,804 ports, submarine cables and per-country reference layers, searchable next to the live picture.</p>
       </div>
-    </div>
-    <div class="cap-shots">
-      <figure class="shot reveal">
-        <img src="assets/plate-europe-dense.jpg" alt="Velocity's globe over the North Sea and Baltic: hundreds of live aircraft over the United Kingdom, Germany and Scandinavia, with conflict-event markers and a submarine-cable overlay" loading="lazy" decoding="async">
-        <figcaption class="chip"><i></i>Live · North Sea and Baltic, one second of the feed</figcaption>
-      </figure>
-      <figure class="shot reveal">
-        <img src="assets/hero-selected-track.jpg" alt="An aircraft selected on Velocity's globe with its full recorded track drawn behind it in magenta" loading="lazy" decoding="async">
-        <figcaption class="chip"><i></i>Selection · an aircraft and its owned track</figcaption>
-      </figure>
     </div>
   </div>
 </section>
@@ -248,7 +254,7 @@
 
 <!-- 11. Workspace bento -->
 <section class="section has-bleed-grid" aria-label="Workspace apps">
-  <div class="wrap"><div class="sec-head reveal">
+  <div class="wrap"><div class="sec-head sec-head-wide reveal">
     <h2>Twelve apps, one workspace</h2>
     <p class="lede">The globe is the front door. Behind it: entity search, graph analysis, case files, data pipelines and automation over the same live substrate. Six of the twelve below; the <a href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener">README tour</a> walks all of them.</p>
   </div></div>
