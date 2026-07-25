@@ -174,6 +174,14 @@ h2 {
 .btn-sm { height: 38px; padding: 0 15px; font-size: 14px; }
 .btn-big { height: 52px; padding: 0 28px; font-size: 16px; }
 :focus-visible { outline: 2px solid var(--bone); outline-offset: 3px; }
+/* --bone is near-black, so on the dark surfaces the ring measured 1.1:1 and the
+   first nine tab stops had no visible focus at all. */
+.hero :focus-visible,
+.overlay-band :focus-visible,
+.bleed :focus-visible,
+.light :focus-visible,
+.term :focus-visible,
+.nav:not(.scrolled) :focus-visible { outline-color: var(--ink); }
 
 /* ---------- announcement strip ---------- */
 /* Carries one real, dated, linked artifact. It scrolls away on first scroll and
@@ -279,13 +287,14 @@ body.bar-gone .nav { top: 0; }
 /* Menu-panel footer: mobile only. Without this it renders inside the desktop
    nav bar, because its positioning rules live in the breakpoint block. */
 .nav-foot { display: none; }
+/* No colour here. This rule sits after the transparent-nav colours above and had
+   identical specificity, so var(--txt-2) beat #ccd4dc and the five section links
+   rendered at 2.4:1 over the dark hero. Colour is owned by .nav / .nav.scrolled. */
 .nav-links a {
   font-size: 14.5px;
-  color: var(--txt-2);
   text-decoration: none;
   transition: color .16s ease;
 }
-.nav-links a:hover { color: var(--txt); }
 
 /* The nav is transparent over the plate, so its button has no surface to sit
    on and reads as an overlay. Keep it a text control up top; it earns its fill
@@ -322,9 +331,12 @@ body.bar-gone .nav { top: 0; }
   left: 11px;
   width: 22px;
   height: 1.5px;
-  background: var(--txt);
-  transition: transform .26s cubic-bezier(.16,1,.3,1), opacity .18s ease;
+  /* Light while the nav is transparent over the dark hero; dark once the bar or
+     the menu panel puts a light surface behind it. */
+  background: var(--ink);
+  transition: transform .26s cubic-bezier(.16,1,.3,1), opacity .18s ease, background .18s ease;
 }
+.nav.scrolled .nav-toggle span, .nav.menu-open .nav-toggle span { background: var(--txt); }
 .nav-toggle span:nth-child(1) { top: 16px; }
 .nav-toggle span:nth-child(2) { top: 21.5px; }
 .nav-toggle span:nth-child(3) { top: 27px; }
@@ -435,7 +447,10 @@ body.bar-gone .nav { top: 0; }
 .overlay-band .stat b { color: #fff; }
 .stat b {
   display: block;
-  font-family: var(--mono);
+  /* Archivo, not Geist Mono. Mono gives the comma a full monospace advance, so
+     the flagship numbers rendered as "21 , 186". Mono stays on provenance
+     labels; display numerals belong in the sans, tabular for column alignment. */
+  font-family: var(--sans);
   font-size: clamp(24px, 2.3vw, 32px);
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -482,13 +497,10 @@ body.bar-gone .nav { top: 0; }
   min-height: 260px;
   object-position: 52% 50%;
 }
-.bleed::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(to bottom, var(--void), transparent 16%, transparent 78%, rgba(5, 7, 10, .92));
-}
+/* No blend veil on the bleed bands. The white top stop washed out the top 121px
+   of the console recording and the dark bottom stop sliced its scrubber: 288px
+   of 758px, and the two zones the app puts its live status bar and timeline in.
+   The chip carries its own scrim, so the gradient bought nothing. Bands butt. */
 .chip {
   position: absolute;
   left: 50%;
@@ -587,7 +599,7 @@ body.bar-gone .nav { top: 0; }
 }
 .dom:hover { background: var(--surface); }
 .dom-n {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: clamp(26px, 2.5vw, 34px);
   font-weight: 400;
   letter-spacing: -0.03em;
@@ -672,6 +684,11 @@ body.bar-gone .nav { top: 0; }
    claim is demonstrated rather than asserted. preload none; poster fallback
    under reduced motion. */
 .shot-video { width: 100%; display: block; aspect-ratio: 1400 / 690; object-fit: cover; }
+/* position:relative or the absolutely-positioned figcaption chip escapes to the
+   initial containing block. The .reveal transform masked it: translateY(20px)
+   made the figure a containing block, so the chip only broke loose once .in set
+   transform:none, landing it on the hero 5,000px up. */
+.shot { position: relative; }
 .light .shot { border-radius: var(--r-card); box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
 @media (prefers-reduced-motion: reduce) {
   .shot-video { display: none; }
@@ -750,6 +767,18 @@ body.bar-gone .nav { top: 0; }
   padding: 6px 10px;
 }
 
+/* The custody chain and the agent split now share one inverted band, so both
+   need the dark-ground colours. --term is exactly --paper, so on this band the
+   terminal would have merged into the background; raise it one step. */
+.light .chain::after { background: rgba(255, 255, 255, .16); }
+.light .chain-k { color: var(--ink); }
+.light .chain-step p { color: var(--ink-2); }
+.light .chain-step code { color: var(--ink-2); background: var(--paper-raise); }
+.light .term { background: var(--paper-raise); }
+/* Second argument in the same band: separated by space and a rule, not by a
+   section boundary. */
+.band-next { margin-top: var(--s7); padding-top: var(--s6); border-top: 1px solid rgba(255, 255, 255, .12); }
+
 /* ---------- 10. agent split ---------- */
 
 .split { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0 var(--gutter); align-items: center; }
@@ -780,12 +809,10 @@ body.bar-gone .nav { top: 0; }
   right: 14px;
   height: 28px;
   padding: 0 11px;
-  background: var(--raise);
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--txt-2);
   background: #21262c;
   border: 0;
   border-radius: var(--r-ctrl);
@@ -815,7 +842,11 @@ body.bar-gone .nav { top: 0; }
   position: absolute;
   inset: auto 0 0;
   padding: 44px 20px 18px;
-  background: linear-gradient(to top, rgba(5, 7, 10, .95), transparent);
+  /* The ramp has to still be opaque where the app NAME sits, not just where the
+     subtitle does. It faded out by the top of the padding box, which left six
+     near-black titles on dark screenshots at 1.0:1 while their lighter
+     subtitles read fine. */
+  background: linear-gradient(to top, rgba(5, 7, 10, .96) 38%, rgba(5, 7, 10, .78) 72%, transparent);
 }
 .tile b {
   display: block;
@@ -824,6 +855,8 @@ body.bar-gone .nav { top: 0; }
   letter-spacing: -0.026em;
   font-variation-settings: 'wdth' 104;
   line-height: 1.05;
+  /* Never inherit --txt here: this text always sits on a photograph. */
+  color: var(--ink);
 }
 .tile figcaption span { display: block; margin-top: 7px; font-size: 13px; line-height: 1.45; color: #9aa6b3; max-width: 34ch; }
 
@@ -854,7 +887,8 @@ summary {
   transition: color .16s ease;
 }
 summary::-webkit-details-marker { display: none; }
-summary:hover { color: #fff; }
+/* Was #fff. The FAQ sits on the white page, so hovering a question erased it. */
+summary:hover { color: var(--bone-hi); }
 .x {
   flex: none;
   width: 30px;
@@ -866,7 +900,9 @@ summary:hover { color: #fff; }
   transition: transform .22s ease, border-color .22s ease;
 }
 .x svg { stroke: var(--txt-2); }
-details[open] .x { transform: rotate(45deg); background: #202730; }
+/* The chip inverts when open. It used to keep --txt-2 on #202730 (1.76:1), so
+   the one element carrying open/closed state had no visible state. */
+details[open] .x { transform: rotate(45deg); background: #202730; color: var(--ink); }
 details p { padding: 0 60px 24px 0; font-size: 15.5px; line-height: 1.66; color: var(--txt-2); max-width: 78ch; }
 details a { color: var(--bone); text-underline-offset: 3px; }
 
@@ -911,8 +947,11 @@ details a { color: var(--bone); text-underline-offset: 3px; }
    clip-path only, so it stays on the compositor, and every rule is gated on
    prefers-reduced-motion. */
 
-.reveal { opacity: 0; transform: translateY(20px); transition: opacity .68s cubic-bezier(.16, 1, .3, 1), transform .68s cubic-bezier(.16, 1, .3, 1); }
-.reveal.in { opacity: 1; transform: none; }
+/* Visible by DEFAULT. The hidden state is gated on .js, which an inline head
+   script sets, so a visitor with JS blocked gets the whole page unanimated
+   rather than 43 invisible blocks and three background images. */
+.js .reveal { opacity: 0; transform: translateY(20px); transition: opacity .68s cubic-bezier(.16, 1, .3, 1), transform .68s cubic-bezier(.16, 1, .3, 1); }
+.js .reveal.in { opacity: 1; transform: none; }
 
 /* Stagger: sequence within a group reads as narrative rather than a single
    block arriving. Index-driven so it needs no per-element markup. */
@@ -935,10 +974,10 @@ details a { color: var(--bone); text-underline-offset: 3px; }
 
 /* Clip-path wipe. Used on the artifacts that carry the argument, so the
    reveal is an event rather than a fade. */
-.wipe { clip-path: inset(0 0 100% 0); transition: clip-path .95s cubic-bezier(.16, 1, .3, 1); }
-.wipe.in { clip-path: inset(0 0 0 0); }
-.wipe-r { clip-path: inset(0 100% 0 0); transition: clip-path .9s cubic-bezier(.16, 1, .3, 1); }
-.wipe-r.in { clip-path: inset(0 0 0 0); }
+.js .wipe { clip-path: inset(0 0 100% 0); transition: clip-path .95s cubic-bezier(.16, 1, .3, 1); }
+.js .wipe.in { clip-path: inset(0 0 0 0); }
+.js .wipe-r { clip-path: inset(0 100% 0 0); transition: clip-path .9s cubic-bezier(.16, 1, .3, 1); }
+.js .wipe-r.in { clip-path: inset(0 0 0 0); }
 
 /* Hover vocabulary. Anduril carries transform transitions on 114 elements;
    ours were on a handful. */
@@ -963,7 +1002,10 @@ details a { color: var(--bone); text-underline-offset: 3px; }
     .hero-inner {
       animation: heroSettle linear both;
       animation-timeline: --hero;
-      animation-range: exit 28% exit 94%;
+      /* Started at exit 28%, which put the block at opacity .22 by scrollY 700 of
+         a 900px hero: the primary CTA dimmed out while it was still on screen
+         and still being read. Recede only once the hero is genuinely leaving. */
+      animation-range: exit 62% exit 100%;
     }
     @keyframes heroSettle {
       from { opacity: 1; transform: none; }
@@ -1044,11 +1086,14 @@ details a { color: var(--bone); text-underline-offset: 3px; }
      resolved against the bar and sat off-screen. */
   .nav-foot {
     position: fixed;
-    z-index: 43;
+    /* Was 43 then re-declared 39, and .nav-links is 42 with an opaque white
+       background, so the panel's only CTA was painted behind the panel:
+       elementFromPoint at its centre returned .nav-links. Keyboard could reach
+       it, a thumb could not. */
+    z-index: 44;
     left: var(--pad);
     right: var(--pad);
     bottom: calc(var(--pad) + 4px);
-    z-index: 39;
     display: grid;
     gap: 18px;
     opacity: 0;
@@ -1066,6 +1111,9 @@ details a { color: var(--bone); text-underline-offset: 3px; }
   .topbar-text { font-size: 12.5px; }
   .topbar { padding-left: 16px; }
   .nav.menu-open { background: var(--void); border-bottom-color: transparent; }
+  /* The wordmark is #fff for the transparent nav over the hero; the open panel
+     is --void, so it went white-on-white. */
+  .nav.menu-open .brand { color: var(--txt); }
   .nav.menu-open > .wrap > .btn { opacity: 0; pointer-events: none; }
   body.menu-locked { overflow: hidden; }
   .hero { min-height: 92dvh; }
@@ -1085,7 +1133,7 @@ details a { color: var(--bone); text-underline-offset: 3px; }
   .dom-thumb { max-width: 100%; }
   .truths { gap: 0; }
   .chain { grid-template-columns: 1fr; border-top: 0; }
-  .chain-step { border-right: 0; border-top: 1px solid var(--line); padding: 24px 0 26px !important; }
+  .chain-step { border-right: 0; border-top: 1px solid rgba(255, 255, 255, .12); padding: 24px 0 26px !important; }
   .chain-step::before { left: 0 !important; }
   .bento { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 168px; }
   .tile:nth-child(n) { grid-column: span 1; grid-row: span 1; }
