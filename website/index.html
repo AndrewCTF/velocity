@@ -79,17 +79,22 @@
   </div>
 </header>
 
-<!-- 3. Live scale -->
-<section class="scale" aria-label="Measured live scale">
+<!-- 3. Big image carrying the claim, the way the reference set does it below
+     the fold. Absorbs what was a thin strip of numbers on a flat band. -->
+<section class="overlay-band" aria-label="Measured live scale">
+  <img class="overlay-bg" src="assets/band-air.jpg" alt="Thousands of individual live aircraft over the United Kingdom, the North Sea, Germany and Scandinavia on Velocity's globe" loading="eager" decoding="async">
   <div class="wrap">
-    <span class="eyebrow">Measured on one development box · July 17, 2026</span>
-    <div class="scale-grid">
-      <div class="stat reveal"><b data-count="21186">0</b><span>aircraft in that day's peak snapshot</span></div>
-      <div class="stat reveal"><b data-count="55086">0</b><span>vessels in the same peak snapshot</span></div>
-      <div class="stat reveal"><b data-count="16000" data-prefix="~">0</b><span>satellites propagated in-browser</span></div>
-      <div class="stat reveal"><b data-count="7183">0</b><span>military bases mapped</span></div>
-      <div class="stat reveal"><b data-count="46">0</b><span>MCP tools for AI agents</span></div>
-      <div class="stat reveal"><b data-count="1972">0</b><span>tests passing</span></div>
+    <div class="overlay-panel reveal">
+      <h2>Flightradar24 keeps 7 days.<br>MarineTraffic keeps 24 hours.<br><strong>You keep everything.</strong></h2>
+      <div class="scale-grid">
+        <div class="stat reveal"><b data-count="21186">0</b><span>aircraft, peak snapshot</span></div>
+        <div class="stat reveal"><b data-count="55086">0</b><span>vessels, same snapshot</span></div>
+        <div class="stat reveal"><b data-count="16000" data-prefix="~">0</b><span>satellites in-browser</span></div>
+        <div class="stat reveal"><b data-count="7183">0</b><span>military bases</span></div>
+        <div class="stat reveal"><b data-count="46">0</b><span>MCP tools</span></div>
+        <div class="stat reveal"><b data-count="1972">0</b><span>tests passing</span></div>
+      </div>
+      <div class="datarule"><span>Measured on one development box</span><span>17 July 2026</span></div>
     </div>
   </div>
 </section>
