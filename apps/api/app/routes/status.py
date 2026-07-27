@@ -36,11 +36,11 @@ async def status() -> dict[str, Any]:
 
     # Counts only — never `global_snapshot()`. This route is public, anonymous
     # and polled by status pages, and calling the snapshot helper for a number
-    # took _SNAPSHOT_LOCK, which the 1 Hz refresher holds across its merge.
-    # Measured 2026-07-27: p50 12.5 ms with a 757 ms TAIL before, p50 10.2 ms
-    # with a 12.5 ms tail after — the tail is the point, because that wait was
-    # on the event loop. See adsb_routes.snapshot_count() for why the lock-free
-    # read is exact rather than approximate.
+    # took _SNAPSHOT_LOCK (held by the 1 Hz refresher across its merge), copied
+    # the snapshot dict, and on a cold process could kick a fan-out from an
+    # anonymous request. Measured p50 12.5 ms -> 10.1 ms. The multi-second tail
+    # is loop-wide, not this route's, and is unchanged — see
+    # adsb_routes.snapshot_count().
     try:
         aircraft = adsb_routes.snapshot_count()
     except Exception:  # noqa: BLE001 — status must never 500

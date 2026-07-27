@@ -4,10 +4,15 @@ It used to call `global_snapshot()` for nothing but an aircraft count and
 `len(store.latest("vessel"))` for a vessel count. That took `_SNAPSHOT_LOCK`
 (held by the 1 Hz refresher across its merge), shallow-copied the snapshot, and
 materialised a list of every live vessel — 57 089 entries measured 2026-07-27.
-The route read p50 12.5 ms with a 757 ms tail against 0.8 ms for
-`/api/status/perf`. On a cold process it would also have kicked a synchronous
-fan-out from an anonymous request; the lifespan already warms the snapshot
-(`start_snapshot()`), so no request needs to.
+On a cold process it would also have kicked a synchronous fan-out from an
+anonymous request; the lifespan already warms the snapshot (`start_snapshot()`),
+so no request needs to.
+
+Measured p50 12.5 ms -> 10.1 ms over equal 30 s windows. The route's
+multi-second tail is NOT from this and did not change: sampled over the same
+window, `/api/health` (a literal dict, no state) shows MAX 2470 ms against
+status's 2272 ms, so the tail is the event loop being blocked by the snapshot
+cycle, paid equally by every request.
 
 These assert the counts are still EXACT — the cheap path must not become an
 approximate one — and that the expensive helpers are no longer on the route.
@@ -57,18 +62,48 @@ def test_count_applies_the_same_retention_filter() -> None:
     assert s.count("vessel") == len(s.latest("vessel")) == 10
 
 
-def test_snapshot_count_is_lock_free_and_exact(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Equal to what the locked `global_snapshot()` path returned, and readable
-    while the refresher holds the lock — which is the point."""
-    fc = {"type": "FeatureCollection", "features": [{"id": f"aircraft:{i}"} for i in range(123)]}
+async def test_snapshot_count_equals_the_original_locked_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cheap read must return EXACTLY what `global_snapshot()` would.
+
+    This is the direct comparison, both paths against the same state, because
+    two different HTTP endpoints cannot prove it: `/api/adsb/global` serves
+    `_HOT_BLOB`, which is built AFTER `_LATEST_SNAPSHOT` is rebound, so those two
+    are legitimately one build apart and a delta between them says nothing about
+    whether this read is exact.
+    """
+    monkeypatch.setattr(adsb_routes, "_SNAPSHOT_STARTED", True)
+    for n in (0, 1, 123, 20_000):
+        fc = {
+            "type": "FeatureCollection",
+            "features": [{"id": f"aircraft:{i}"} for i in range(n)],
+        }
+        monkeypatch.setattr(adsb_routes, "_LATEST_SNAPSHOT", fc)
+        via_lock = await adsb_routes.global_snapshot()
+        assert adsb_routes.snapshot_count() == len(via_lock.get("features") or []) == n
+
+
+def test_snapshot_count_takes_no_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Readable while the refresher HOLDS the lock — which is the whole point:
+    the old path made a public anonymous request wait on the event loop's lock
+    (757 ms tail, measured 2026-07-27)."""
+    fc = {"type": "FeatureCollection", "features": [{"id": f"aircraft:{i}"} for i in range(77)]}
     monkeypatch.setattr(adsb_routes, "_LATEST_SNAPSHOT", fc)
-    assert adsb_routes.snapshot_count() == 123
 
-    async def _boom() -> dict[str, object]:  # pragma: no cover — must not be called
-        raise AssertionError("status must not call global_snapshot()")
+    # Hold the snapshot lock for the duration of the read.
+    assert not adsb_routes._SNAPSHOT_LOCK.locked()
+    import asyncio
 
-    monkeypatch.setattr(adsb_routes, "global_snapshot", _boom)
-    assert adsb_routes.snapshot_count() == 123
+    async def _hold_and_read() -> int:
+        async with adsb_routes._SNAPSHOT_LOCK:
+            assert adsb_routes._SNAPSHOT_LOCK.locked()
+            # Would deadlock (or block) if this acquired the lock.
+            return await asyncio.wait_for(
+                asyncio.to_thread(adsb_routes.snapshot_count), timeout=2.0
+            )
+
+    assert asyncio.run(_hold_and_read()) == 77
 
 
 def test_status_route_does_not_touch_the_expensive_helpers(

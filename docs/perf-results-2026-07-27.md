@@ -529,3 +529,70 @@ the full Cesium app with ~41 000 entities — it is not the sidecar tier alone.)
    8 000 MB. But a 4x reading is not something to bury: it is **unexplained**,
    it was not tracked over time, and it wants a soak measurement before anyone
    calls memory bounded.
+
+
+---
+
+## Addendum — `/api/status` snapshot copy, and a tail that was a measurement artifact
+
+`/api/status` is public, unauthenticated and polled, and it called
+`global_snapshot()` for nothing but an aircraft count, plus
+`len(store.latest("vessel"))` for a vessel count. That took `_SNAPSHOT_LOCK`
+(held by the 1 Hz refresher across its merge), shallow-copied the snapshot dict,
+materialised a list of every live vessel, and on a cold process would have kicked
+a synchronous fan-out from an anonymous request.
+
+Fixed: `adsb_routes.snapshot_count()` reads the length from module state with no
+lock and no copy — exact, not approximate, because the refresher REBINDS
+`_LATEST_SNAPSHOT` wholesale and never mutates it in place. `store.count(kind)`
+applies the same retention filter without building the list.
+
+### The correction that matters more than the fix
+
+An earlier reading in this document claimed the route went from **a 757 ms tail
+to 12.5 ms**. That was wrong, and the way it was wrong is worth keeping.
+
+The two runs sampled **unequal wall-clock windows**: 60 sequential requests at
+12.5 ms each observe ~750 ms of real time, while 60 at 0.8 ms observe ~50 ms. The
+snapshot cycle blocks the loop for ~230 ms every few seconds, so the longer run
+had roughly fifteen times the chance of overlapping a block. The "tail" was the
+sampling window, not the route.
+
+Re-measured properly — each endpoint sampled for the **same 30 s** at identical
+100 ms pacing:
+
+```
+/api/status          n=195  p50=  10.1  p90=  13.9  p99=1440.2  MAX= 2271.8 ms
+/api/status/perf     n=228  p50=   1.5  p90=   2.0  p99= 324.9  MAX= 1820.9 ms
+/api/health          n=215  p50=   1.1  p90=   1.9  p99= 597.9  MAX= 2469.6 ms
+```
+
+**`/api/health` returns a literal `{"status": "ok"}` and touches no state, and it
+has the WORST maximum of the three.** So the multi-second tail is loop-wide — the
+snapshot cycle's own CPU (`fanout_cpu` ~49 ms, `merge` ~53 ms, `history` ~64 ms,
+`blob` ~49 ms, total ~231 ms per cycle at 19 741 features) — and every request
+pays it equally. Removing the lock from one route could not have changed it.
+
+### What the change actually buys, stated exactly
+
+| | before | after |
+|---|---|---|
+| `/api/status` p50 (equal 30 s windows) | 12.5 ms | **10.1 ms** |
+| `_SNAPSHOT_LOCK` acquisitions per request | 1 | **0** |
+| snapshot dict copies per request | 1 | **0** |
+| vessel list allocations per request | 1 × ~57 000 elements | **0** |
+| fan-out reachable from an anonymous request | yes (cold process) | **no** |
+| multi-second tail | loop-wide | **loop-wide, unchanged** |
+
+The p50 gain is modest. The lock removal is the substantive part: a public
+anonymous request can no longer queue behind the refresher's own lock, which is a
+different and worse failure mode than being slow.
+
+`store.count()` is an **allocation** win, not a speed one — benchmarked at 76 000
+entities it is 1.42 ms against the list comprehension's 1.04 ms, because a
+comprehension has the faster inner loop. What it avoids is handing the allocator
+a 57 000-element list per request and dropping it immediately.
+
+The loop-wide tail remains the same open item named throughout this document:
+`_aircraft_geojson` rebuilding ~19 700 nested dicts per cycle. Threading it does
+not help (GIL); the fix is to stop rebuilding unchanged features.

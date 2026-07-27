@@ -1915,10 +1915,18 @@ def snapshot_count() -> int:
     `/api/status` is PUBLIC, unauthenticated, and polled by status pages and
     measurement harnesses, and it was calling `global_snapshot()` for nothing but
     this number. That does three things it should not: it takes
-    `_SNAPSHOT_LOCK`, which the 1 Hz refresher holds across its merge — measured
-    2026-07-27, `/api/status` p50 12.5 ms with a **757 ms** tail against 0.8 ms
-    for `/api/status/perf`; it shallow-copies the snapshot dict; and on a cold
-    process it would kick a synchronous fan-out from an anonymous request.
+    `_SNAPSHOT_LOCK`, which the 1 Hz refresher holds across its merge; it
+    shallow-copies the snapshot dict; and on a cold process it would kick a
+    synchronous fan-out from an anonymous request.
+
+    Measured 2026-07-27, equal 30 s sampling windows: `/api/status` p50 12.5 ms
+    before, 10.1 ms after. Be precise about what that is and is not — the route's
+    multi-second TAIL is NOT from this and did not change. Sampled properly,
+    `/api/health`, which returns a literal dict and touches no state, shows the
+    same tail (MAX 2470 ms vs status's 2272 ms). It is the event loop being
+    blocked by the snapshot cycle's own CPU, and every request pays it equally.
+    An earlier "757 ms → 12.5 ms" reading here was an artifact of comparing runs
+    that observed unequal wall-clock windows.
 
     No lock is needed to read a count: `_LATEST_SNAPSHOT` is REBOUND wholesale by
     the refresher (`_LATEST_SNAPSHOT = fc`) and never mutated in place, so this
