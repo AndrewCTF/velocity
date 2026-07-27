@@ -588,10 +588,14 @@ The p50 gain is modest. The lock removal is the substantive part: a public
 anonymous request can no longer queue behind the refresher's own lock, which is a
 different and worse failure mode than being slow.
 
-`store.count()` is an **allocation** win, not a speed one — benchmarked at 76 000
-entities it is 1.42 ms against the list comprehension's 1.04 ms, because a
-comprehension has the faster inner loop. What it avoids is handing the allocator
-a 57 000-element list per request and dropping it immediately.
+`store.count()` is an **allocation** win and a small **speed loss**. Measured
+back-to-back on one store of 77 000 entities (57 000 vessels + 20 000 aircraft,
+the live shape): 1.902 ms against `len(latest())`'s 1.481 ms — 28 % slower,
+because a comprehension has a faster inner loop than a generator. What it avoids
+is handing the allocator a 57 000-element list per request and dropping it
+immediately. Profiled at that scale the whole `status()` handler is ~7 ms, of
+which this walk is the dominant term; the rest (`snapshot_count`,
+`parked_count`, and all four `stats()` helpers) is 0.001 ms or less.
 
 The loop-wide tail remains the same open item named throughout this document:
 `_aircraft_geojson` rebuilding ~19 700 nested dicts per cycle. Threading it does
