@@ -203,3 +203,95 @@ has that path (`PrimitiveEntityLayer`, shared `BillboardCollection` +
 to the other ~45 layers is the work that moves 6 fps to 25 fps, and it is **not
 done in this branch**. Recorded here so the next person starts from the
 measurement rather than from the same guess.
+
+---
+
+## Phase 4 — the right-side controls
+
+The operator's report was "the right side of the globe the selector its hard to
+control and is bugged". Reading found four defects; three are fixed here.
+
+**The rail resizer had no pointer capture, no `pointercancel` handler, and no
+`touch-action`.** It listened on `window`, so any gesture the browser cancelled —
+a touch interruption, a context menu, the pointer leaving the window — never
+fired `pointerup`. Both listeners stayed attached and
+`document.body.style.userSelect` stayed `'none'` **forever**: the rail tracked the
+cursor and the whole document became unselectable. `FloatingPanel.tsx` had fixed
+this exact bug in that file and left a comment saying so; this one never got the
+same treatment. `touch-action` appeared **nowhere** in the frontend.
+
+Proven live, dragging the separator and releasing the button outside the window:
+
+```
+RESIZER : hit=11px userSelect="" cameraRotate=true
+```
+
+Before the fix that release path left `userSelect` stuck at `none`. The hit area
+also went from 7 px to 11 px with the visible chrome unchanged, and a double-click
+snaps back to the default width.
+
+**The move tool could strand the camera locked.** It disabled `enableRotate` and
+`enableTranslate` on `LEFT_DOWN` and restored them only from Cesium's `LEFT_UP`,
+which fires on the canvas alone. Release anywhere else and the globe stayed
+undraggable until the tool was switched. Window-level `pointerup`, `pointercancel`
+and `blur` now all end the drag, and the previous values are restored rather than
+an unconditional `true`. The drag also writes the store once per animation frame
+instead of once per mousemove event.
+
+Not fixed in this branch, and named so it is not mistaken for done: the toolbar is
+rendered inside a `z-0` wrapper that caps its `--z-dock` (the file's own comment
+calls these "z-0-trapped overlays"), and three `ScreenSpaceEventHandler`s share
+the canvas so a tool click also mutates the selection.
+
+---
+
+## Phase 5 — annotate
+
+"Mediocre, not many options, and not fun to use." What was actually there: three
+kinds, four fixed colours, one label field, no undo, no groups, no export, and a
+`loadAnnotations` that was exported and **imported by nothing**, so even a manual
+Save was never read back. The map toolbar hardcoded
+`{ threat: 'unknown', label: '' }` and could only drop a point, so its own tooltip
+promised "labelled markers" and produced unlabelled yellow dots. And the renderer
+called `removeAll()` then re-added every entity on **every** store change — one
+keystroke in the label field, or one frame of a marker drag, tore down the layer.
+
+Now:
+
+| | before | after |
+|---|---|---|
+| Kinds | 3 (point, line, circle) | **11** (+ polygon, rect, arrow, corridor, sector, text, symbol, freehand) |
+| Colour | 4 fixed threat values | 4 threat presets **+ any CSS colour** (native `<input type="color">`) |
+| Style | none — width/opacity/font all hardcoded | width, stroke opacity, fill opacity, dash (solid/dashed/dotted), font size, point size, outline |
+| Undo/redo | none | 50-step history, `Ctrl+Z` / `Ctrl+Shift+Z` |
+| Per-item | delete only | show/hide, lock, rename, restyle, fly-to, delete |
+| List | unsorted, unfiltered | filter box, empty states |
+| Persistence | manual save that was never loaded | localStorage on every change **+** the ontology round-trip, now actually called and merged newest-wins |
+| Import/export | none | GeoJSON both ways, round-trip tested |
+| Clear all | no confirmation | two-step confirm |
+| Renderer | full teardown per change | upsert by id, guarded |
+
+Verified live in the browser — all eight geometry kinds placed through the shared
+draft, rendered, and undone:
+
+```
+ANNOTATE: {"placed":8,"rendered":10,"afterUndo":7,"afterRedo":8,"kinds":8}
+CONSOLE ERRORS: 0
+```
+
+(10 entities for 8 annotations: line and arrow carry their label on a separate
+mid-point entity, since a polyline has no anchor position of its own.)
+
+The three surfaces that create annotations — panel, map toolbar, context menu —
+now read ONE shared draft, so they cannot disagree again.
+
+### Guards added
+
+`globe/invariants.test.ts` now asserts `AnnotationLayer.ts` contains no
+`.removeAll(` and does contain `getById`. The rule existed for
+`PollGeoJsonAdapter` and had simply never been extended, which is exactly why the
+regression was invisible. Plus six store tests covering every kind, undo/redo,
+lock, colour precedence, the GeoJSON round-trip, and the shared draft.
+
+`bash scripts/verify.sh` — **ALL GREEN**, 1980 backend tests passed + 2 skipped
+(baseline was 1972), 440 web tests passed (was 433).

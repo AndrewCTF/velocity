@@ -34,6 +34,16 @@ describe('CLAUDE.md sacred behaviors (source-scan guards)', () => {
     expect(read('globe/adapters/PollGeoJsonAdapter.ts')).not.toContain('.removeAll(');
   });
 
+  it('AnnotationLayer never calls removeAll (upsert-by-id)', () => {
+    // Same invariant, different file. The annotation renderer did
+    // removeAll() + re-add on EVERY store change, so one keystroke in the label
+    // field (the panel fires update() per character) or one frame of a marker
+    // drag destroyed and recreated every annotation entity. The rule had simply
+    // never been extended past PollGeoJsonAdapter, which is why it went unseen.
+    expect(read('globe/AnnotationLayer.ts')).not.toContain('.removeAll(');
+    expect(read('globe/AnnotationLayer.ts')).toContain('getById');
+  });
+
   it('aircraft/vessel category styling keeps its SVG palette, no bare points', () => {
     // Decision: every contact renders as its category SVG icon, never a dot.
     const s = read('globe/adapters/styles.ts');

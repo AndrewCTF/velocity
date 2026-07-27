@@ -5,7 +5,7 @@ import { getDrawController, haversineKm, type LatLon, type DrawProgress } from '
 import { resetToTopDown } from './camera.js';
 import { useMapTools, type MapTool } from './mapTools.js';
 import { areaActions } from './mapActions.js';
-import { useAnnotations } from '../annotations/annotationStore.js';
+import { useAnnotations, useAnnoDraft, draftBase } from '../annotations/annotationStore.js';
 
 // Right-side globe toolbar (design §6.1) — quick map tools reachable without
 // leaving the current tab: pan (rest), measure, area-select, annotate, move
@@ -99,14 +99,57 @@ export function GlobeToolbar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
     } else if (tool === 'annotate') {
       setMeasure(null);
       setArea(null);
-      const { threat, label } = { threat: 'unknown' as const, label: '' };
-      const armPoint = (): void => {
-        draw.placePoint((p) => {
-          useAnnotations.getState().add({ kind: 'point', threat, label, coords: [[p.lon, p.lat]] });
-          if (useMapTools.getState().tool === 'annotate') armPoint();
-        });
+      // Read the SHARED draft, so whatever kind/colour/label the operator picked
+      // in the Annotate panel is what this tool places. It used to hardcode an
+      // unlabelled unknown-threat point, which is why the tool could only ever
+      // produce yellow dots while the panel offered more.
+      const arm = (): void => {
+        const kind = useAnnoDraft.getState().kind;
+        const again = (): void => {
+          if (useMapTools.getState().tool === 'annotate') arm();
+        };
+        if (kind === 'line' || kind === 'freehand' || kind === 'arrow') {
+          draw.drawPolyline((verts) => {
+            useAnnotations
+              .getState()
+              .add({ ...draftBase(), coords: verts.map((v) => [v.lon, v.lat]) });
+            again();
+          });
+        } else if (kind === 'polygon' || kind === 'corridor') {
+          draw.drawPolygon((ring) => {
+            useAnnotations
+              .getState()
+              .add({ ...draftBase(), coords: ring.map((v) => [v.lon, v.lat]) });
+            again();
+          });
+        } else if (kind === 'rect') {
+          draw.drawRect((a, b) => {
+            useAnnotations.getState().add({
+              ...draftBase(),
+              coords: [
+                [a.lon, a.lat],
+                [b.lon, a.lat],
+                [b.lon, b.lat],
+                [a.lon, b.lat],
+              ],
+            });
+            again();
+          });
+        } else if (kind === 'circle' || kind === 'sector') {
+          draw.drawCircle((c, r) => {
+            useAnnotations
+              .getState()
+              .add({ ...draftBase(), center: { lat: c.lat, lon: c.lon }, radiusKm: r });
+            again();
+          });
+        } else {
+          draw.placePoint((p) => {
+            useAnnotations.getState().add({ ...draftBase(), coords: [[p.lon, p.lat]] });
+            again();
+          });
+        }
       };
-      armPoint();
+      arm();
     } else {
       // 'pan' | 'move' — no DrawController op. Clear stale readouts on 'pan'.
       if (tool === 'pan') {
@@ -174,28 +217,58 @@ export function GlobeToolbar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
       }
       if (best) {
         dragId = best.id;
+        priorRotate = viewer.scene.screenSpaceCameraController.enableRotate;
+        priorTranslate = viewer.scene.screenSpaceCameraController.enableTranslate;
         viewer.scene.screenSpaceCameraController.enableRotate = false;
         viewer.scene.screenSpaceCameraController.enableTranslate = false;
       }
     }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
 
+    // One store write per animation frame, not per mousemove event. At 60-120
+    // events a second each write drives a React render and (before the
+    // AnnotationLayer upsert fix) a full annotation teardown, which is why
+    // dragging a marker felt like it was fighting the map.
+    let rafPending = 0;
+    let rafTarget: LatLon | null = null;
     handler.setInputAction((e: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
       if (!dragId) return;
       const p = pick(e.endPosition);
       if (!p) return;
-      useAnnotations.getState().update(dragId, { coords: [[p.lon, p.lat]] });
-      viewer.scene.requestRender();
+      rafTarget = p;
+      if (rafPending) return;
+      rafPending = window.requestAnimationFrame(() => {
+        rafPending = 0;
+        if (!dragId || !rafTarget) return;
+        useAnnotations.getState().update(dragId, { coords: [[rafTarget.lon, rafTarget.lat]] });
+        viewer.scene.requestRender();
+      });
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
+    // Restore what we found, not an unconditional `true` — something else may
+    // legitimately have the camera locked.
+    let priorRotate = true;
+    let priorTranslate = true;
     const endDrag = (): void => {
+      if (dragId === null) return;
       dragId = null;
-      viewer.scene.screenSpaceCameraController.enableRotate = true;
-      viewer.scene.screenSpaceCameraController.enableTranslate = true;
+      viewer.scene.screenSpaceCameraController.enableRotate = priorRotate;
+      viewer.scene.screenSpaceCameraController.enableTranslate = priorTranslate;
     };
+    // Cesium's LEFT_UP only fires on the canvas. Releasing the button anywhere
+    // else — over the right rail, over browser chrome, off-window — left
+    // enableRotate/enableTranslate false and the globe permanently undraggable
+    // until the tool was switched. Window-level pointerup/pointercancel/blur are
+    // the ones that always arrive.
     handler.setInputAction(endDrag, Cesium.ScreenSpaceEventType.LEFT_UP);
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+    window.addEventListener('blur', endDrag);
 
     return () => {
       endDrag();
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
+      window.removeEventListener('blur', endDrag);
       handler.destroy();
     };
   }, [tool, viewer]);
