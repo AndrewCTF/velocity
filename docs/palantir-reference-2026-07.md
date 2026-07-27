@@ -388,8 +388,9 @@ Supporting technical sources for the implementation phases:
 
 ---
 
+## 10. Scoring the predictions against the docs
 
-After writing §2.5 the predictions were checked against Palantir's analytics docs. Scoring
+After writing §5 the predictions were checked against Palantir's analytics docs. Scoring
 the guesses matters: it tells us how much weight to put on the ones still unverified.
 
 | Name | Predicted | Palantir's own words | Verdict |
@@ -405,7 +406,7 @@ Two useful lessons for us:
 1. **The split Palantir draws is dataset-vs-object, not chart-type.** Contour is tabular
    and top-down; Quiver is ontology objects and time series. Our `explorer/` is closer to
    Insight, our `foundry/` closer to Contour, and we have nothing at all in the Quiver
-   slot. `docs/…` follow-up (Series panel)'s Series panel is the cheapest entry into it.
+   slot. A Series panel on the map (§11.3) is the cheapest entry into it.
 2. **Dashboards are an output of an analysis, not a separate app.** Both Contour and
    Quiver produce embeddable, read-only, interactive dashboards from a saved analysis.
    Our dashboard panels are hand-built React; the leverage would be making a saved
@@ -421,6 +422,7 @@ https://www.palantir.com/docs/foundry/contour/overview
 
 ---
 
+## 11. The panel walkthrough, panel by panel
 
 The operator asked to *"describe each panels and predict the other panels feature based on
 name."* Sections 2-5 give the inventory and the predictions; this section walks each panel
@@ -767,6 +769,7 @@ scope; both belong in the follow-up entry the deferred-work list creates.
 
 ---
 
+## 12. More sources
 
 The operator asked for more sources across the board. Three categories, each with what it
 would take to wire.

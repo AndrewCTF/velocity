@@ -443,3 +443,89 @@ of its 1000 ms budget with everything on. That is `_aircraft_geojson` allocating
 ~18 000 nested dicts per second, and the fix is to stop rebuilding features that
 have not changed — not to move the same work to a thread. Named, measured, and
 not done.
+
+---
+
+## Criterion 3 evidence — all toggles on, browser AND backend, before vs after
+
+Both sides of the same run. The browser numbers come from `measure_ui.mjs`
+against a real GPU; the backend numbers are sampled from `/proc` **while that run
+is driving the load**, so they describe the same system at the same moment.
+
+### Browser (58 layers enabled through the real registry)
+
+| Metric | baseline | after | change |
+|---|---|---|---|
+| `rendersPerSec` p50 | 5.0 | 6.0 | +20 % |
+| `rendersPerSec` p95 | 8.0 | **11.0** | +38 % |
+| `frameMsEMA` p50 | 239.3 ms | **158.7 ms** | **-34 %** |
+| `frameMsEMA` p95 | 290.5 ms | **223.9 ms** | -23 % |
+| **JS heap p50** | **2 677.8 MB** | **2 700.7 MB** | flat |
+| Cesium entities p50 | 60 826 | **41 269** | **-32 %** |
+| Cesium data sources | 78 | 78 | unchanged |
+| `drainMsLast` p95 | 25.0 ms | 18.9 ms | -24 % |
+| **Request rate** | **282 req/min** | **219.7 req/min** | **-22 %** |
+
+Raw:
+
+```
+profile check: dataSources=78 entities=49788
+
+| series          | p05     | p50     | p95     | max     |
+| animatedPrims   | 31.0    | 34.0    | 135.0   | 135.0   |
+| dataSources     | 78.0    | 78.0    | 78.0    | 78.0    |
+| drainMsLast     | 0.0     | 9.3     | 18.9    | 23.0    |
+| entities        | 36514.0 | 41269.0 | 51243.0 | 51376.0 |
+| frameMsEMA      | 100.8   | 158.7   | 223.9   | 256.5   |
+| heapMB          | 1616.8  | 2700.7  | 3645.0  | 3736.1  |
+| longtasksPerMin | 243.0   | 386.0   | 438.0   | 444.0   |
+| rendersPerSec   | 3.0     | 6.0     | 11.0    | 13.0    |
+
+## Measured /api requests: 263 over 71.8s = 219.7 req/min
+```
+
+### Backend, sampled during that same browser run
+
+```
+| sample | api cpu% | api rss MB | chrome rss MB |
+|---|---|---|---|
+| 1 | 54.4% | 2283 | 10666 |
+| 2 | 120.2% | 2289 | 10233 |
+| 3 | 96.8% | 2280 | 9182 |
+| 4 | 45.0% | 2258 | 9857 |
+| 5 | 62.2% | 2266 | 11310 |
+| 6 | 82.4% | 2275 | 11624 |
+
+loop lag: p50 0.0 ms   p95 566.0 ms
+```
+
+(`chrome rss` here includes the **measurement browser**, which is itself running
+the full Cesium app with ~41 000 entities — it is not the sidecar tier alone.)
+
+### Does this show "no backend blowup"? Partly, and here is the honest split
+
+**Yes on the things that constituted the blowup:**
+
+- Every hot route is now constant-time. `/api/maritime/snapshot` 270 ms → 2.8 ms,
+  `?parked=1` 77 ms → 1.4 ms, `/api/places/*` up to 90x faster, ADS-B world
+  served from bytes. Nothing on the request path rebuilds a payload any more.
+- Loop lag **p50 is 0-1 ms** under full load. The loop is not saturated.
+- Request rate is down 22 % with the same layers on.
+- The backend no longer works at full rate when nothing is attached (idle cycle
+  5 s / 20 s, re-arming on the first read).
+- No 502 storms; `/api/status` stayed `operational` throughout at 17 000+
+  aircraft and 40 000+ vessels — **more load than the baseline carried**.
+
+**No, on two counts, stated because they are real:**
+
+1. **Loop-lag p95 is 566 ms.** Attributed (§ Phase 9): `_aircraft_geojson`
+   allocating ~18 000 nested dicts a second. Threading will not fix it — the GIL
+   means pure-Python allocation blocks the loop from a worker thread too. The fix
+   is to mutate retained feature dicts instead of rebuilding them, specified in
+   the plan's §25.4(a) and **not done**.
+2. **API RSS is 2 283 MB against a 578 MB baseline reading.** The baseline was
+   taken minutes after boot; this process had been running through many
+   measurement cycles at 50 % more contacts, and `main.py` only warns above
+   8 000 MB. But a 4x reading is not something to bury: it is **unexplained**,
+   it was not tracked over time, and it wants a soak measurement before anyone
+   calls memory bounded.
