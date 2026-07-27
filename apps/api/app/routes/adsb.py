@@ -1084,7 +1084,14 @@ def _sync_feed_client() -> httpx.Client:
     return _SYNC_FEED_CLIENT
 
 
-def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]]]:
+# Per-feed ETag, so a poll landing inside the source's own build window costs a
+# 304 instead of a multi-MB body AND its parse. Only the localhost sidecar sets
+# one today; upstream mirrors simply never send the header and fall through.
+_FEED_ETAGS: dict[str, str] = {}
+_UNCHANGED = object()  # sentinel: 304, caller keeps the slice it already has
+
+
+def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]] | Any]:
     """Blocking fetch+parse of ONE feed, run via asyncio.to_thread so a saturated
     event loop can't starve the socket read. The async path's read is a sequence
     of per-chunk awaits, so a busy loop dribbles the 3.6 MB loopback body out over
@@ -1092,14 +1099,29 @@ def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]]]:
     (benchmarked: 9.0 s on-loop -> 0.9 s threaded under identical contention).
     Returns (monotonic_ts, aircraft); ts is captured HERE in the thread so the
     slice's age is independent of when the loop resumes to store it. Mirrors
-    _fetch_one_feed's parsing (readsb 'aircraft' / ADSBx-v2 'ac')."""
+    _fetch_one_feed's parsing (readsb 'aircraft' / ADSBx-v2 'ac').
+
+    Returns `_UNCHANGED` in place of the list on a 304 — the caller keeps its
+    existing slice and skips both the transfer and the parse."""
     ac: list[dict[str, Any]] = []
     try:
-        r = _sync_feed_client().get(
-            url, timeout=_feed_timeout(url), headers={"User-Agent": _FEED_UA}
-        )
+        headers = {"User-Agent": _FEED_UA, "Accept-Encoding": "gzip"}
+        prev = _FEED_ETAGS.get(url)
+        if prev:
+            headers["If-None-Match"] = prev
+        r = _sync_feed_client().get(url, timeout=_feed_timeout(url), headers=headers)
+        if r.status_code == 304:
+            return time.monotonic(), _UNCHANGED
         if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
-            j = r.json()
+            etag = r.headers.get("etag")
+            if etag:
+                _FEED_ETAGS[url] = etag
+            else:
+                _FEED_ETAGS.pop(url, None)
+            # orjson over stdlib: measured 7.8x faster on a payload this shape,
+            # and the whole point of this thread is to give the loop its slot
+            # back sooner.
+            j = orjson.loads(r.content) if orjson is not None else r.json()
             ac = j.get("aircraft") or j.get("ac") or []
     except Exception:  # noqa: BLE001 — timeout / transport / non-JSON body
         ac = []
@@ -1143,6 +1165,14 @@ async def _pull_one_feed(url: str) -> None:
         ts, ac = await asyncio.to_thread(_fetch_one_feed_sync, url)
     finally:
         _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
+    if ac is _UNCHANGED:
+        # 304 — the source has not rebuilt since our last pull, so we saved the
+        # body and the parse. Leave the slice ENTIRELY alone: its `ts` is when
+        # the DATA was produced, and re-stamping it here would advertise an
+        # unchanged cache as freshly observed. That is precisely the immortal
+        # cached-tier bug (docs/decisions.md, 2026-07-15). An honest slice ages
+        # out under _FEED_SLICE_MAX_AGE_S if the source really has stopped.
+        return
     if ac:
         # Stamp receipt time so these mirror aircraft carry a `seen_at` like the
         # grid + firehose tiers do (_aircraft_geojson reads `_seen_at`). Without

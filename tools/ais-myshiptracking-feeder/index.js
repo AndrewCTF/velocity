@@ -46,6 +46,14 @@ const CONCURRENCY = parseInt(process.env.CONCURRENCY || '3', 10);
 const READ_MS = parseInt(process.env.READ_MS || '30000', 10);
 const MIN_VESSELS = parseInt(process.env.MIN_VESSELS || '500', 10);
 const MAX_VESSELS = parseInt(process.env.MAX_VESSELS || '60000', 10);
+// Viewport stays at the size the site was verified against. A Playwright route
+// handler and a smaller viewport were both tried on 2026-07-27 and the site's
+// own vessel endpoint became unreachable for 20 minutes straight against a
+// working baseline — this feeder drives that endpoint from inside the page, so
+// anything that perturbs the page's request path costs the whole tier. The
+// process flags below are safe and are where this feeder's savings come from.
+const VIEW_W = parseInt(process.env.VIEW_W || '1366', 10);
+const VIEW_H = parseInt(process.env.VIEW_H || '900', 10);
 const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
@@ -101,11 +109,49 @@ async function fetchCellInPage(cfg) {
 let browser = null;
 let page = null;
 let latest = { vessels: [], lastGood: 0, cellsOk: 0, cellsFail: 0, cellsTotal: 0 };
+// The vessel array is the whole cost of /vessels.json (~2 MB, ~22k entries) and
+// it only changes once per 30 s sweep, while the backend polls every 30 s and
+// retries. Serialise it ONCE per sweep and splice the small header per request.
+//
+// Deliberately NO ETag/304 here: `age_s` is the freshness the poller uses to
+// REFUSE a stale union (docs/decisions.md, 2026-07-15). A 304 would make the
+// caller reuse the age it was told last time, which is exactly how a frozen
+// cache advertises itself as live. The header must be recomputed every time.
+let vesselsJson = Buffer.from('[]');
+
+function rebuildVesselsJson() {
+  vesselsJson = Buffer.from(JSON.stringify(latest.vessels));
+}
 
 function log(...a) { console.log(new Date().toISOString(), ...a); }
 
 function launchOpts() {
-  const o = { headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] };
+  const o = {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      // Match the ADS-B feeder: headless tabs are treated as background and
+      // throttle their timers, which slows the SPA's own boot and the retry
+      // path. The rest is long-lived-scraper hygiene — a per-renderer heap cap
+      // turns a slow leak into a renderer restart instead of a host-memory
+      // climb (8.9 GB across the browser tier, measured 2026-07-27).
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-features=CalculateNativeWinOcclusion',
+      '--js-flags=--max-old-space-size=512',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-component-update',
+      '--disable-client-side-phishing-detection',
+      '--disable-sync',
+      '--metrics-recording-only',
+      '--mute-audio',
+      '--no-first-run',
+      '--no-default-browser-check',
+    ],
+  };
   if (process.env.CHROME_PATH) o.executablePath = process.env.CHROME_PATH;
   else o.channel = 'chrome';
   return o;
@@ -144,7 +190,10 @@ async function waitForApi(p) {
 
 async function openPage() {
   await ensureBrowser();
-  const context = await browser.newContext({ userAgent: UA, viewport: { width: 1366, height: 900 } });
+  const context = await browser.newContext({
+    userAgent: UA,
+    viewport: { width: VIEW_W, height: VIEW_H },
+  });
   try {
     const p = await context.newPage();
     try {
@@ -224,6 +273,7 @@ async function pump() {
 
   if (union.size >= MIN_VESSELS) {
     latest = { vessels: [...union.values()], lastGood: Date.now(), cellsOk, cellsFail, cellsTotal: cells.length };
+    rebuildVesselsJson();
     log('scraped', union.size, 'vessels', `(${cellsOk}/${cells.length} cells ok, ${cellsFail} failed)`);
   } else if (Date.now() - latest.lastGood > 180000) {
     log('stalled (' + union.size + ' vessels) — reloading page');
@@ -243,18 +293,28 @@ async function main() {
       // (see pump()), so `now` alone would advertise a frozen cache as fresh
       // forever and the poller would stamp hour-old fixes as live — the same
       // cached-tier trap as ADS-B seen_pos_s. Serve the honest age with the data.
-      res.end(JSON.stringify({
+      const head = JSON.stringify({
         now: Date.now() / 1000,
         last_good: latest.lastGood ? latest.lastGood / 1000 : null,
         age_s: latest.lastGood ? ((Date.now() - latest.lastGood) / 1000) | 0 : null,
-        vessels: latest.vessels,
-      }));
+      });
+      // {"now":…,"last_good":…,"age_s":…  +  ,"vessels":[…]}
+      const body = Buffer.concat([
+        Buffer.from(head.slice(0, -1)),
+        Buffer.from(',"vessels":'),
+        vesselsJson,
+        Buffer.from('}'),
+      ]);
+      res.setHeader('content-length', body.length);
+      res.end(body);
     } else if (req.url.startsWith('/health')) {
       res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify({
         total: latest.vessels.length,
         age_s: latest.lastGood ? ((Date.now() - latest.lastGood) / 1000) | 0 : null,
         cells_ok: latest.cellsOk, cells_fail: latest.cellsFail, cells_total: latest.cellsTotal,
+        rss_mb: (process.memoryUsage().rss / 1048576) | 0,
+        bytes_json: vesselsJson.length,
       }));
     } else { res.statusCode = 404; res.end('not found'); }
   }).listen(PORT, '127.0.0.1', () => log(`serving vessels.json on http://127.0.0.1:${PORT}`));

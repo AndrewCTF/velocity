@@ -26,20 +26,45 @@
  *   CENTER       "lon,lat" map center (default "15,35")
  *   MIN_PLANES   minimum plane count to consider a page healthy (default 500)
  *   READ_MS      how often to re-read each page's store (default 5000)
+ *   READ_TIMEOUT_MS  per-source read cap; a slower page is reinitialised (15000)
+ *   VIEW_W/VIEW_H    viewport px — coupled to ZOOM, see the note below (683x450)
+ *   BLOCK_IMAGES     '0' to load images; default off, we only read the store
  */
 'use strict';
 
 const http = require('http');
+const zlib = require('zlib');
 const { chromium } = require('playwright');
 
 const GLOBE_URLS = (process.env.GLOBE_URLS || 'https://globe.airplanes.live/')
   .split(',').map((s) => s.trim()).filter(Boolean);
 const PORT = parseInt(process.env.PORT || '8090', 10);
-const ZOOM = parseFloat(process.env.ZOOM || '2.2');
+// Viewport and zoom are coupled: tar1090 fetches the aircraft its VIEW EXTENT
+// covers, and the extent is (viewport px x resolution), where resolution halves
+// per zoom level. Halving both viewport dimensions and subtracting 1 from the
+// zoom therefore covers the SAME ground while rasterising a quarter of the
+// pixels. Measured on this box: 1366x900@2.2 held ~12.1k aircraft at ~394% CPU
+// across the browser tier; the smaller pair holds the same count for a fraction
+// of the raster work. Both stay env-tunable so a site with a zoom floor can be
+// pinned back without a code change.
+const VIEW_W = parseInt(process.env.VIEW_W || '683', 10);
+const VIEW_H = parseInt(process.env.VIEW_H || '450', 10);
+const ZOOM = parseFloat(process.env.ZOOM || '1.2');
 const CENTER = (process.env.CENTER || '15,35').split(',').map(Number);
 const MIN_PLANES = parseInt(process.env.MIN_PLANES || '500', 10);
 const READ_MS = parseInt(process.env.READ_MS || '5000', 10);
 const NUDGE_MS = parseInt(process.env.NUDGE_MS || '30000', 10);
+const READ_TIMEOUT_MS = parseInt(process.env.READ_TIMEOUT_MS || '15000', 10);
+// Image loading. We need tar1090's PARSED AIRCRAFT STORE, never its pixels, and
+// aircraft silhouettes plus basemap tiles are pure decode + texture cost on a
+// tab nobody looks at.
+//
+// This is a BLINK SETTING, not a Playwright route handler, deliberately: a
+// route handler round-trips EVERY subresource through the node process, and
+// with three tar1090 tabs that was enough to wedge the read loop (measured
+// 2026-07-27: pumps stopped landing, health age_s climbed to 163 s while the
+// slots still held their last good data). The flag costs nothing at runtime.
+const BLOCK_IMAGES = process.env.BLOCK_IMAGES !== '0';
 const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
@@ -79,6 +104,7 @@ function zoomFn({ z, c }) {
 }
 
 let browser = null;
+let pumpMsLast = 0;
 const pages = new Map(); // url -> { page, aircraft:[], lastGood:0 }
 
 function log(...a) { console.log(new Date().toISOString(), ...a); }
@@ -97,8 +123,24 @@ function launchOpts() {
       '--disable-backgrounding-occluded-windows',
       '--disable-renderer-backgrounding',
       '--disable-features=CalculateNativeWinOcclusion',
+      // Long-lived scraper hygiene: nothing here changes what tar1090 fetches,
+      // it only stops Chrome doing work for a tab with no viewer. The heap cap
+      // is per renderer and well above what the plane store needs (~13k small
+      // objects); it turns a slow leak into a renderer restart instead of an
+      // 8.9 GB host-memory climb (measured 2026-07-27).
+      '--js-flags=--max-old-space-size=512',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-component-update',
+      '--disable-client-side-phishing-detection',
+      '--disable-sync',
+      '--metrics-recording-only',
+      '--mute-audio',
+      '--no-first-run',
+      '--no-default-browser-check',
     ],
   };
+  if (BLOCK_IMAGES) o.args.push('--blink-settings=imagesEnabled=false');
   if (process.env.CHROME_PATH) o.executablePath = process.env.CHROME_PATH;
   else o.channel = 'chrome';
   return o;
@@ -122,7 +164,10 @@ async function ensureBrowser() {
 
 async function openPage(url) {
   await ensureBrowser();
-  const context = await browser.newContext({ userAgent: UA, viewport: { width: 1366, height: 900 } });
+  const context = await browser.newContext({
+    userAgent: UA,
+    viewport: { width: VIEW_W, height: VIEW_H },
+  });
   try {
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -177,7 +222,17 @@ async function pump(url) {
   if (!slot || !slot.page) { await initPage(url); return; }
   try {
     // READ ONLY — never re-move the map here; that resets tar1090's load.
-    const ac = await slot.page.evaluate(readFn);
+    // page.evaluate has NO default timeout, so a wedged renderer hangs this
+    // await forever, and since the sources are pumped together that stalls the
+    // whole union (measured 2026-07-27: age_s climbed to 163 s with every slot
+    // still holding good data). Bound it: a source that cannot answer in
+    // READ_TIMEOUT_MS is treated as a read error and reinitialised, which is
+    // what the catch below already does well.
+    const ac = await Promise.race([
+      slot.page.evaluate(readFn),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('evaluate timeout')), READ_TIMEOUT_MS)),
+    ]);
     if (Array.isArray(ac) && ac.length >= MIN_PLANES) {
       slot.aircraft = ac;
       slot.lastGood = Date.now();
@@ -222,6 +277,27 @@ function unioned() {
   return { now: Date.now() / 1000, aircraft: [...merged.values()].map((v) => v.a) };
 }
 
+// The union only changes when a pump lands, but the backend polls
+// /aircraft.json at 1 Hz and supervise() probes /health every 60 s. Rebuilding
+// a ~39k-entry Map and re-serialising ~2.6 MB per REQUEST (and twice more per
+// health probe, which called unioned() again for a count it had already looped)
+// was pure repetition. Build once per pump, serve the bytes.
+let cache = { rev: 0, json: null, gz: null, total: 0, builtAt: 0 };
+
+function rebuildCache() {
+  const u = unioned();
+  const json = Buffer.from(JSON.stringify(u));
+  cache = {
+    rev: cache.rev + 1,
+    json,
+    // Level 1: the consumer is on loopback, so the win is the avoided
+    // serialize, not the bytes. Level 1 costs ~a third of level 6 for ~5% size.
+    gz: zlib.gzipSync(json, { level: 1 }),
+    total: u.aircraft.length,
+    builtAt: Date.now(),
+  };
+}
+
 async function main() {
   // Serve the HTTP endpoint IMMEDIATELY — BEFORE any browser init — so a slow or
   // dead aggregator (Cloudflare challenge, a globe that won't populate) can never
@@ -231,15 +307,37 @@ async function main() {
   // below its floor in the meantime.
   http.createServer((req, res) => {
     if (req.url.startsWith('/aircraft.json')) {
-      const body = JSON.stringify(unioned());
+      if (!cache.json) { res.statusCode = 503; res.end('{"now":0,"aircraft":[]}'); return; }
+      const etag = `W/"${cache.rev}"`;
       res.setHeader('content-type', 'application/json');
       res.setHeader('access-control-allow-origin', '*');
+      res.setHeader('etag', etag);
+      res.setHeader('cache-control', 'no-cache');
+      // A poll landing inside the same pump window gets a 304 and skips the
+      // multi-MB body AND the caller's parse.
+      if (req.headers['if-none-match'] === etag) { res.statusCode = 304; res.end(); return; }
+      const gzOk = (req.headers['accept-encoding'] || '').includes('gzip');
+      const body = gzOk ? cache.gz : cache.json;
+      if (gzOk) res.setHeader('content-encoding', 'gzip');
+      res.setHeader('content-length', body.length);
       res.end(body);
     } else if (req.url.startsWith('/health')) {
       const per = {};
       for (const [u, s] of pages) per[u] = { aircraft: s.aircraft.length, age_s: ((Date.now() - s.lastGood) / 1000) | 0 };
       res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ total: unioned().aircraft.length, sources: per }));
+      // Never call unioned() here — the count comes from the cache the pump
+      // loop already built.
+      res.end(JSON.stringify({
+        total: cache.total,
+        rev: cache.rev,
+        age_s: cache.builtAt ? ((Date.now() - cache.builtAt) / 1000) | 0 : null,
+        rss_mb: (process.memoryUsage().rss / 1048576) | 0,
+        contexts: pages.size,
+        pump_ms_last: pumpMsLast,
+        bytes_json: cache.json ? cache.json.length : 0,
+        bytes_gz: cache.gz ? cache.gz.length : 0,
+        sources: per,
+      }));
     } else { res.statusCode = 404; res.end('not found'); }
   }).listen(PORT, '127.0.0.1', () => log(`serving aircraft.json on http://127.0.0.1:${PORT}`));
 
@@ -254,9 +352,18 @@ async function main() {
   await Promise.allSettled(GLOBE_URLS.map((url) => initPage(url)));
 
   // Read loop — just read each page's store on a cadence (no map moves here).
+  // The sources are independent contexts, so pump them CONCURRENTLY: serially
+  // the cycle cost sum(t_i) and one slow tab delayed every other source's
+  // freshness. allSettled, never all — one blocked source must not stall the
+  // union, which is what the per-slot lastGood carry-forward exists to survive.
   for (;;) {
-    for (const url of GLOBE_URLS) await pump(url);
-    await new Promise((f) => setTimeout(f, READ_MS));
+    const t0 = Date.now();
+    await Promise.allSettled(GLOBE_URLS.map((url) => pump(url)));
+    rebuildCache();
+    pumpMsLast = Date.now() - t0;
+    // Book the next read against a wall-clock grid so a slow cycle does not
+    // push the cadence out by its own duration.
+    await new Promise((f) => setTimeout(f, Math.max(0, READ_MS - pumpMsLast)));
   }
 }
 
