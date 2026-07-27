@@ -1417,11 +1417,20 @@ async def _do_global_fanout() -> dict[str, Any]:
     # floor (Chromium crash / cold start), so the map can't go empty.
     if get_settings().adsb_sidecar_only:
         sidecar: dict[Any, dict[str, Any]] = {}
+        _t0 = time.monotonic()
         feeds0 = await _await_within(
             asyncio.ensure_future(_readsb_feeds()), time.monotonic() + _FANOUT_BUDGET_S
         )
+        _t1 = time.monotonic()
         if feeds0:
             _merge_raw_into(sidecar, feeds0)
+        _t2 = time.monotonic()
+        # Split the fan-out's wall time into "waiting for the feed" and "turning
+        # it into features". Only the second is loop-blocking CPU, and telling
+        # them apart is the difference between optimising the right thing and
+        # guessing (the aggregate alone read 324 ms and explained nothing).
+        _CYCLE_MS["fanout_wait"] = round((_t1 - _t0) * 1000, 1)
+        _CYCLE_MS["fanout_cpu"] = round((_t2 - _t1) * 1000, 1)
         if len(sidecar) >= _SIDECAR_ONLY_FLOOR:
             return {"type": "FeatureCollection", "features": list(sidecar.values())}
         # sidecar thin/down → fall through to the full multi-tier union.
@@ -1594,6 +1603,52 @@ def _merge_with_previous(
     return {"type": "FeatureCollection", "features": list(by_id.values())}
 
 
+# Per-phase timings of the last snapshot cycle, in ms. The 2026-07-27 baseline
+# could attribute a 500 ms loop-lag p95 to nothing in particular; these say which
+# phase owns it. Cheap (six floats) and read by /api/status/perf.
+_CYCLE_MS: dict[str, float] = {}
+
+# Idle back-pressure.
+#
+# The snapshot cycle ran at 1 Hz forever, whether or not anything was reading
+# it. Measured 2026-07-27 at ~17k contacts, one cycle costs 200-410 ms of which
+# 56-84 ms is loop-blocking CPU (_aircraft_geojson rebuilding a nested dict per
+# aircraft). With no browser attached that is a permanent 20-40% tax on the box
+# for a payload nobody has asked for, and it is the floor under the event-loop
+# lag tail.
+#
+# This is Palantir's own rule for Gaia's collaborative state, applied to our
+# own fan-out: state is "only stored and synced across clients when a user is
+# actively being followed" (docs/palantir-reference-2026-07.md §7).
+#
+# The GUARDED 1.0 s cadence is unchanged whenever anything is watching: a WS
+# subscriber, or an HTTP read of the world blob within _IDLE_AFTER_S. The first
+# request after an idle period re-arms it immediately AND is still answered from
+# the sticky snapshot, so no reader ever waits for a cycle. _SNAPSHOT_STALE_S is
+# 30 s, comfortably above the idle cycle, so the staleness gate is unaffected.
+_IDLE_AFTER_S = 30.0
+_IDLE_CYCLE_S = 5.0
+_LAST_DEMAND_AT: float = 0.0
+
+
+def note_demand() -> None:
+    """Something read the snapshot. Re-arm the fast cadence."""
+    global _LAST_DEMAND_AT
+    _LAST_DEMAND_AT = time.monotonic()
+
+
+def _target_cycle_s() -> float:
+    if _WS_SUBSCRIBERS:
+        return _SNAPSHOT_TARGET_CYCLE_S
+    if _LAST_DEMAND_AT and (time.monotonic() - _LAST_DEMAND_AT) < _IDLE_AFTER_S:
+        return _SNAPSHOT_TARGET_CYCLE_S
+    return _IDLE_CYCLE_S
+
+
+def cycle_timings() -> dict[str, float]:
+    return dict(_CYCLE_MS)
+
+
 async def _refresh_snapshot_forever() -> None:
     """Background task: refresh the sticky snapshot on a 5s target cycle.
 
@@ -1611,10 +1666,18 @@ async def _refresh_snapshot_forever() -> None:
         t0 = time.monotonic()
         try:
             fc = await _do_global_fanout()
+            t_fanout = time.monotonic()
             async with _SNAPSHOT_LOCK:
                 # Carry forward recently-seen aircraft so host-coverage flips
                 # between fan-outs never blank half the map.
-                fc = _merge_with_previous(fc, _LATEST_SNAPSHOT)
+                #
+                # OFF the loop: this rebuilds an id index over both the new and
+                # the previous feature lists and re-materialises the result —
+                # 62 ms per cycle at 16k contacts, measured 2026-07-27, once a
+                # second, for work no request is awaiting. Pure function over
+                # plain dicts, and it already runs under _SNAPSHOT_LOCK, so a
+                # thread hop changes nothing about who may touch the snapshot.
+                fc = await asyncio.to_thread(_merge_with_previous, fc, _LATEST_SNAPSHOT)
                 new_count = len(fc.get("features") or [])
                 prev_count = len(_LATEST_SNAPSHOT.get("features") or [])
                 age = (
@@ -1631,16 +1694,25 @@ async def _refresh_snapshot_forever() -> None:
                 if accept:
                     _LATEST_SNAPSHOT = fc
                     _LATEST_SNAPSHOT_AT = time.monotonic()
+            t_merge = time.monotonic()
             # Mirror accepted aircraft fixes into the history store for 3D
             # replay. Outside the snapshot lock; ingest_aircraft only buffers
             # in memory (rate-limited, no I/O) so it can't stall the tick.
+            t_history = t_merge
             if accept:
                 try:
                     from app import history  # noqa: PLC0415
 
-                    history.ingest_aircraft(fc.get("features") or [])
+                    # OFF the loop. ingest_aircraft walks EVERY feature (16.9k
+                    # measured 2026-07-27) building per-contact ring buffers, once
+                    # a second, and it was doing that on the event loop. The
+                    # comment claiming it "can't stall the tick" was written when
+                    # the union was a third of the size; at 16.9k it is a
+                    # measurable slice of the 500 ms lag tail.
+                    await asyncio.to_thread(history.ingest_aircraft, fc.get("features") or [])
                 except Exception:  # noqa: BLE001
                     pass
+                t_history = time.monotonic()
                 # Rebuild the pre-gzipped world-view blob ONCE per cycle (off the
                 # event loop via a worker thread) and push it to WS subscribers.
                 # This is the decimate/serialize/gzip work that used to run on
@@ -1651,12 +1723,22 @@ async def _refresh_snapshot_forever() -> None:
                     await _broadcast_blob(_HOT_BLOB)
                 except Exception:  # noqa: BLE001
                     pass
+            now = time.monotonic()
+            _CYCLE_MS.update(
+                fanout=round((t_fanout - t0) * 1000, 1),
+                merge=round((t_merge - t_fanout) * 1000, 1),
+                history=round((t_history - t_merge) * 1000, 1),
+                blob=round((now - t_history) * 1000, 1),
+                total=round((now - t0) * 1000, 1),
+                features=float(len(fc.get("features") or [])),
+            )
         except Exception:
             # Never let the background loop die — a transient httpx /
             # cancellation / asyncio exception just rolls into the next tick.
             pass
         elapsed = time.monotonic() - t0
-        await asyncio.sleep(max(0.0, _SNAPSHOT_TARGET_CYCLE_S - elapsed))
+        _CYCLE_MS["target_s"] = _target_cycle_s()
+        await asyncio.sleep(max(0.0, _target_cycle_s() - elapsed))
 
 
 def _pos_stale(f: dict[str, Any]) -> bool:
@@ -1870,6 +1952,10 @@ async def adsb_global(
     # everywhere below. lamin/... (the live globe) wins; min_lat/... (API/curl) fills
     # in only when its lamin counterpart is absent. Keeps the world gate + viewport_filter
     # downstream untouched while making a supplied bbox in EITHER spelling take effect.
+    # Someone is reading the snapshot → hold the fast 1 s cadence (see
+    # _target_cycle_s). Idle, the cycle relaxes to _IDLE_CYCLE_S rather than
+    # rebuilding 17k features a second for nobody.
+    note_demand()
     if lamin is None:
         lamin = min_lat
     if lomin is None:
@@ -1925,6 +2011,7 @@ async def adsb_ws(ws: WebSocket) -> None:
     # Ensure the refresher is running even if no HTTP poll kicked it off (idempotent).
     await start_snapshot()
     _WS_SUBSCRIBERS.add(ws)
+    note_demand()
     try:
         if _HOT_BLOB is not None:
             await ws.send_bytes(_HOT_BLOB)

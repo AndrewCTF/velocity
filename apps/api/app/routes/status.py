@@ -243,6 +243,7 @@ async def status_perf() -> dict[str, Any]:
             "age_s": round(adsb_routes.snapshot_age_s(), 2),
             "ws_subscribers": len(adsb_routes._WS_SUBSCRIBERS),
             "feed_slices": len(adsb_routes._FEED_SLICES),
+            "cycle_ms": adsb_routes.cycle_timings(),
         }
     except Exception:  # noqa: BLE001 — diagnostics must never 500
         out["adsb"] = {"error": "unavailable"}

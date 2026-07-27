@@ -132,4 +132,34 @@ def test_bbox_request_bypasses_the_blob(client: TestClient, seeded_store: None) 
 def test_blob_state_reports_honestly() -> None:
     st = maritime_routes.vessel_blob_state()
     assert set(st) >= {"built_at", "age_s", "bytes", "bytes_parked", "cycle_s"}
-    assert st["cycle_s"] == maritime_routes._VESSEL_CYCLE_S
+    assert st["cycle_s"] in (
+        maritime_routes._VESSEL_CYCLE_S,
+        maritime_routes._VESSEL_IDLE_CYCLE_S,
+    )
+
+
+def test_the_builder_relaxes_when_nothing_reads_it() -> None:
+    """Two blobs, each walking ~40k observations, were rebuilt every 5 s whether
+    or not anything had ever asked. A read re-arms the fast cycle."""
+    maritime_routes._VESSEL_LAST_DEMAND_AT = 0.0
+    assert maritime_routes._vessel_cycle_s() == maritime_routes._VESSEL_IDLE_CYCLE_S
+    maritime_routes.note_vessel_demand()
+    assert maritime_routes._vessel_cycle_s() == maritime_routes._VESSEL_CYCLE_S
+    # The idle cycle must stay well inside what the vessel layer polls at (30 s),
+    # or a first read after idle would serve something visibly stale.
+    assert maritime_routes._VESSEL_IDLE_CYCLE_S < 30.0
+    maritime_routes._VESSEL_LAST_DEMAND_AT = 0.0
+
+
+def test_parked_cache_is_count_capped() -> None:
+    """Retention was time-only, so the dict was unbounded in COUNT: 28117
+    entries measured 2026-07-27, growing with every anchorage ever seen."""
+    assert maritime_routes._PARKED_MAX > 0
+    maritime_routes._PARKED.clear()
+    for i in range(maritime_routes._PARKED_MAX + 500):
+        maritime_routes._PARKED[f"vessel:{i}"] = {
+            "properties": {"t": 1_700_000_000.0 + i}
+        }
+    maritime_routes._update_parked()
+    assert len(maritime_routes._PARKED) <= maritime_routes._PARKED_MAX
+    maritime_routes._PARKED.clear()

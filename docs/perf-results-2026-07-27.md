@@ -363,3 +363,83 @@ count and a control ruled out the image flag.
 but no model was active during this session, so there is no
 time-to-first-token number to report. `measure_llm.py` exists to produce one the
 moment a model is selected.
+
+---
+
+## Phase 9 — the event-loop lag tail, attributed and reduced
+
+The first pass could not say *why* the loop stalled, only that it did. Adding
+per-phase cycle timing to `/api/status/perf` made it answerable.
+
+### What the cycle actually costs (17.6k contacts)
+
+```
+adsb cycle_ms: {'fanout_wait': 20.1, 'fanout_cpu': 51.4, 'merge': 48.6,
+                'history': 34.8, 'blob': 31.2, 'total': 254.3,
+                'features': 18012.0, 'target_s': 5.0}
+```
+
+`fanout_wait` is I/O and does not block the loop. `fanout_cpu` is
+`_aircraft_geojson` rebuilding a nested dict per aircraft — **that is the
+loop-blocking core, and threading it would not help, because it is pure-Python
+work and the GIL means a worker thread blocks the loop just the same.** Stated
+plainly so the next person does not spend a day moving it to a thread.
+
+### What was moved and capped
+
+| Change | Was |
+|---|---|
+| `history.ingest_aircraft` → worker thread | walked 17k features on the loop, once a second |
+| `_merge_with_previous` → worker thread | 62 ms/cycle on the loop |
+| `_update_parked` → worker thread | swept the whole ~40k vessel store on the loop, per poll |
+| `_PARKED` count cap (20 000) | retention was time-only; held **28 117** entries and growing |
+
+### Idle back-pressure — the structural fix
+
+Both the aircraft cycle (1 Hz) and the vessel blob builder (5 s, twice) ran
+regardless of whether anything was reading them. That is a permanent tax for a
+payload nobody asked for, and it is the floor under the lag tail.
+
+Both now relax when idle and re-arm on the first read, which is Palantir's own
+rule for Gaia's shared state — "only stored and synced across clients when a user
+is actively being followed" (`docs/palantir-reference-2026-07.md` §7). The
+guarded 1.0 s cadence is **unchanged whenever anything is watching**, and a
+reader is still answered from the sticky snapshot, so nobody waits for a cycle.
+
+Proven live, quiet (no client attached):
+
+```
+adsb target_s 5.0   cycle total 271.6   feats 17628
+vessel cycle_s 20.0   parked 20000
+lag p50 0.0   p95 316.0
+idle api CPU%: 23.2  23.4  90.2  57.2  28.4  20.8      (median ~26 %)
+```
+
+Proven live, with all 58 layers on in a real browser:
+
+```
+adsb target_s 1.0   total 839.5   | vessel cycle 5.0
+lag p50 1.0   p95 547.0
+```
+
+The cadence re-arms correctly under load. Idle CPU is ~26 % while carrying
+**17 628 aircraft** against the baseline's 11 770 — 50 % more data.
+
+### Final all-toggles browser state
+
+| Metric | baseline | final | change |
+|---|---|---|---|
+| `rendersPerSec` p50 | 5.0 | 6.0 | +20 % |
+| `frameMsEMA` p50 | 239.3 ms | **170.1 ms** | **-29 %** |
+| Cesium entities p50 | 60 826 | **36 699** | **-40 %** |
+| Request rate | 282/min | **214/min** | **-24 %** |
+| `drainMsLast` p95 | (n/a) | 14.0 ms | inside the 12 ms budget's tolerance |
+| Loop-lag p50 under load | UNMEASURABLE | **1.0 ms** | now measurable |
+
+### Honest remaining tail
+
+Loop-lag **p95 is 316 ms idle / 547 ms under load**, and one cycle costs 839 ms
+of its 1000 ms budget with everything on. That is `_aircraft_geojson` allocating
+~18 000 nested dicts per second, and the fix is to stop rebuilding features that
+have not changed — not to move the same work to a thread. Named, measured, and
+not done.
