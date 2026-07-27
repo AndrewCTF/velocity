@@ -274,6 +274,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # the unified vessel store (/api/maritime/snapshot) without a viewer.
             # maritime_routes is module-imported — do NOT re-import locally.
             maritime_routes.start_background_poll()
+            # Pre-render the world vessel payload on a short cycle so
+            # /api/maritime/snapshot serves bytes instead of rebuilding ~40k
+            # features per request (measured 185 ms of blocking loop work each,
+            # at a 30 s poll, twice, re-fired on every camera move).
+            maritime_routes.start_vessel_blob()
+            # Event-loop lag probe — the number the 2026-07-27 baseline could
+            # not report, and the one that says whether the loop is starving.
+            status_routes.start_lag_probe()
             # AISStream global firehose (opt-in, keyed): when AISSTREAM_FIREHOSE
             # is set, run the keyed upstream always-on from boot so global
             # vessels stream without needing a browser on /ws/ais. Off by default
@@ -394,6 +402,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await ais_keyless.stop()
             await marinetraffic.stop()
             await maritime_routes.stop_background_poll()
+            await maritime_routes.stop_vessel_blob()
+            await status_routes.stop_lag_probe()
             await history.stop()
             await watch_eval.stop()
             from app.intel import watch_officer  # noqa: PLC0415

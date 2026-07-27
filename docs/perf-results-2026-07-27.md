@@ -81,3 +81,58 @@ unreachable. **Control case:** the pre-change file, restored from git and run on
 port 8099, failed identically (`init failed - myshiptracking vessel API not
 reachable yet`, repeatedly, for 150 s). So the AIS outage is upstream, not ours —
 but the route handler is out of both feeders on the ADS-B evidence alone.
+
+---
+
+## Phase 2 — the backend under all toggles
+
+Changes: the vessel world payload is pre-rendered on a 5 s cycle and served as
+bytes with ETag/304, exactly as the ADS-B world blob already was; `/api/places/*`
+gained a 10-degree grid index keyed by (dataset, category); `/api/status/perf`
+exists, so event-loop lag is measurable at all.
+
+### Route cost, measured live
+
+| endpoint | before | after (warm) | change |
+|---|---|---|---|
+| `/api/maritime/snapshot` | 270 ms / 1 624 682 B | **2.8 ms / 515 806 B** | **-99 % time, -68 % bytes** |
+| `/api/maritime/snapshot?parked=1` | 77 ms / 805 504 B | **1.4 ms / 281 594 B** | -98 % / -65 % |
+| `/api/places/infrastructure?category=datacenter` | (full 125 612-row scan) | **1.9 ms** | — |
+| `/api/places/infrastructure?category=power` | (full scan) | **9.4 ms** | — |
+| `/api/places/bases` | (full 7 183-row scan) | **1.9 ms** | — |
+| `/api/adsb/global?limit=20000` | already blob-served | 1.4 ms / 1 110 324 B | unchanged |
+
+The first `/api/places/infrastructure` call after boot costs ~700 ms because it
+builds the index for that category over 125 612 rows. That is once per category
+per process, against ~117 requests a minute in steady state.
+
+In-process benchmark of the same queries (20 iterations, warm, US-west bbox):
+
+| query | full scan | grid | speedup |
+|---|---|---|---|
+| infrastructure, category=datacenter | 8.17 ms | **0.09 ms** | **90x** |
+| infrastructure, category=power | 2.98 ms | **0.76 ms** | 3.9x |
+| airports | 0.18 ms | **0.05 ms** | 3.7x |
+| bases | 0.19 ms | **0.13 ms** | 1.5x |
+
+`power` gains least because both paths stop at the 1000-row limit early; the
+category-filtered layers, which are the ones firing nine times per camera move,
+gain most.
+
+### Event-loop lag is now measurable
+
+`/api/status/perf` reports it from a probe that asks for 0.5 s and records the
+overshoot:
+
+```
+loop_lag_ms_p50: 0.0   loop_lag_ms_p95: 199.0   loop_lag_ms_max: 1201.0   (120 samples / 60 s)
+```
+
+The baseline could not report this at all. p50 is clean; the p95/max tail is the
+1 s snapshot cycle's own merge chain plus GC, which is Phase 3 territory and is
+now visible rather than inferred.
+
+The endpoint also reports blob sizes and ages, the feed-cache depth, parked-cache
+size, and the AIS supervision state (stale-for, restarts-in-window,
+budget-exhausted) so the sidecar behaviour from Phase 1 is inspectable without
+reading a log.

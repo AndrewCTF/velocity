@@ -12,3 +12,8 @@ package*.json
 CLIENT-NOTES.md
 build-plan.md
 scripts
+
+# Masters: 296 MB and 51 MB, both over Cloudflare's 25 MiB per-file asset limit.
+# The page and the press kit ship assets/launch.mp4 (9 MB) instead.
+launch-4k.mp4
+launch-1080.mp4

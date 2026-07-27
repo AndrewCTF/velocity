@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Velocity · Press kit</title>
+<meta name="description" content="Press kit for Velocity, the self-hosted OSINT console: approved descriptions, measured numbers, video and stills, and the honest limits. Free to use with credit.">
+<meta name="theme-color" content="#05070a">
+<meta property="og:title" content="Velocity · Press kit">
+<meta property="og:description" content="Descriptions, measured numbers, video, stills and honest limits for anyone writing about Velocity.">
+<meta property="og:image" content="assets/hero-orbit.jpg">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+<!-- No main.js here: it binds to the home page's topbar and reveal observer,
+     and .js .reveal starts at opacity 0. A press page that needs JS to become
+     visible is a press page a reviewer closes. -->
+<style>
+  .press-main { padding: 120px 0 40px; }
+  .press-block { margin: 0 0 56px; }
+  .press-block h3 { font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--txt-3); margin: 0 0 14px; }
+  .press-quote { border-left: 2px solid var(--line); padding: 2px 0 2px 18px; margin: 0; color: var(--txt-2); max-width: 62ch; }
+  .press-table { width: 100%; max-width: 900px; border-collapse: collapse; font-size: .95rem; }
+  .press-table th, .press-table td { text-align: left; padding: 10px 16px 10px 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  .press-table th { font-weight: 600; white-space: nowrap; color: var(--txt-3); }
+  .press-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; align-items: start; }
+  .press-grid figure { margin: 0; }
+  .press-grid img, .press-grid video { width: 100%; height: auto; display: block; border-radius: 6px; }
+  .press-grid figcaption { font-size: .85rem; color: var(--txt-3); padding: 8px 2px 0; }
+  /* The light mark is near-white: it needs a dark swatch to be visible at all. */
+  .press-grid .on-dark img { background: var(--paper); padding: 26px; }
+  .press-block ul { max-width: 74ch; color: var(--txt-2); padding-left: 20px; }
+  .press-block ul li { margin: 0 0 8px; }
+</style>
+</head>
+<!-- .bar-gone / .scrolled are set by main.js on the home page, off the topbar and
+     scroll position. This page has neither, so it carries the settled state. -->
+<body class="bar-gone">
+
+<nav class="nav scrolled" aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Velocity home">
+      <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor"><path d="M7 11 16 25.5 25 11" stroke-width="2.8" stroke-linejoin="miter"/><rect x="3.9" y="4.9" width="6.2" height="6.2" stroke-width="2"/></g><rect x="21.9" y="4.9" width="6.2" height="6.2" fill="currentColor"/></svg>
+      VELOCITY
+    </a>
+    <a class="btn btn-line btn-sm" href="https://github.com/AndrewCTF/velocity" rel="noopener">GitHub</a>
+  </div>
+</nav>
+
+<main class="wrap press-main">
+
+  <div class="sec-head">
+    <span class="eyebrow">Press kit</span>
+    <h1>Everything you need to write about Velocity.</h1>
+    <p class="lede">Copy any of it verbatim. The video and stills are free to use with credit to the project. If a number below matters to your piece, ask and it gets re-measured rather than guessed.</p>
+    <div class="datarule"><span>AGPL-3.0</span><span>v1.0.1</span><span>No API keys</span></div>
+  </div>
+
+  <section class="press-block">
+    <h3>In one sentence</h3>
+    <blockquote class="press-quote">
+      Velocity is a self-hosted OSINT console: live aircraft, ships, satellites and hazards on one 3D globe, with position history you own and can replay.
+    </blockquote>
+  </section>
+
+  <section class="press-block">
+    <h3>In a paragraph</h3>
+    <blockquote class="press-quote">
+      Velocity fuses live aircraft, ships, satellites, earthquakes and conflict events onto one 3D globe, self-hosted, with no API keys for core feeds. The part hosted trackers cannot match: it archives position history to your own disk and lets you scrub back to any past moment. Open source under AGPL-3.0.
+    </blockquote>
+  </section>
+
+  <section class="press-block">
+    <h3>The long version</h3>
+    <blockquote class="press-quote">
+      Flightradar24 gives you 7 days of history on the free tier, MarineTraffic cut its free window to 24 hours, ADS-B Exchange discontinued its free API. Velocity is the self-hosted answer: a FastAPI backend and a Cesium globe that fuse aircraft (OpenSky plus the airplanes.live grid), keyless AIS, CelesTrak satellites propagated with real SGP4 in the browser, earthquakes, wildfires, GPS jamming inferred from ADS-B integrity degradation, and conflict events. It records every position to a local SQLite archive with a size cap you choose, and a scrubber rewinds to any moment you kept. Evidence exports carry SHA-256 custody logs. One compose file, AGPL-3.0.
+    </blockquote>
+  </section>
+
+  <section class="press-block">
+    <h3>Facts</h3>
+    <table class="press-table">
+      <tr><th>Project</th><td>Velocity</td></tr>
+      <tr><th>What it is</th><td>Self-hosted OSINT / situational-awareness console</td></tr>
+      <tr><th>Licence</th><td>AGPL-3.0-or-later</td></tr>
+      <tr><th>Release</th><td>v1.0.1</td></tr>
+      <tr><th>Stack</th><td>FastAPI + Python 3.12 backend, React + CesiumJS frontend, SQLite archive</td></tr>
+      <tr><th>Install</th><td><code>git clone https://github.com/AndrewCTF/velocity &amp;&amp; docker compose up</code></td></tr>
+      <tr><th>Live scale</th><td>21,186 aircraft and 55,086 vessels in one measured peak snapshot; a typical day is around 13,000 and 33,000</td></tr>
+      <tr><th>Satellites</th><td>~16,000 orbital objects propagated client-side with real SGP4, not decorative orbits</td></tr>
+      <tr><th>Also counted</th><td>7,183 military bases, 46 MCP tools, 1,972 backend tests passing</td></tr>
+      <tr><th>Archive</th><td>8.7M positions in a 1.8 GB SQLite file at a 2 GB cap, on one development box</td></tr>
+      <tr><th>Keys required</th><td>None for aircraft, vessels, satellites, earthquakes or the base map</td></tr>
+      <tr><th>Repository</th><td><a href="https://github.com/AndrewCTF/velocity" rel="noopener">github.com/AndrewCTF/velocity</a></td></tr>
+    </table>
+  </section>
+
+  <section class="press-block">
+    <h3 id="tour">Video</h3>
+    <p class="lede">Product footage, no compositing: every frame is the running console against live feeds. Right-click to save, or link them directly.</p>
+    <figure style="max-width: 1000px; margin: 0 0 30px;">
+      <video src="assets/launch.mp4" poster="assets/launch.jpg" controls playsinline preload="none" style="width:100%; height:auto; display:block; border-radius:6px;" aria-label="Launch film: the live world, the feeds that make it, the satellite constellation, the console, a selected aircraft with its recorded track, the six domains, and the archive rewound"></video>
+      <figcaption style="font-size:.85rem; color:var(--txt-3); padding:8px 2px 0;">The launch film · 52 s · scored · <a href="assets/launch.mp4" download>download</a> · 2160p and 1080p masters on request<br>Music: “Rising Dawn” by Ethereal88, <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>. Keep this credit if you use the film with its audio.</figcaption>
+    </figure>
+    <figure style="max-width: 900px; margin: 0 0 22px;">
+      <video src="assets/tour.mp4" poster="assets/tour.jpg" controls muted loop playsinline preload="none" style="width:100%; height:auto; display:block; border-radius:6px;" aria-label="Full walkthrough: the live world, a fly-in to Northern Europe, an aircraft selected with its recorded track, then the archive rewound and replayed"></video>
+      <figcaption style="font-size:.85rem; color:var(--txt-3); padding:8px 2px 0;">The tour · 1 min 51 s · world view, fly-in, an aircraft and its owned track, then the archive rewound · <a href="assets/tour.mp4" download>mp4</a></figcaption>
+    </figure>
+    <div class="press-grid">
+      <figure>
+        <video src="assets/hero-orbit.mp4" poster="assets/hero-orbit.jpg" autoplay muted loop playsinline preload="none" aria-label="The globe seen from orbit over the Mediterranean and the Gulf, live aircraft updating"></video>
+        <figcaption>Orbit view · 16 s · <a href="assets/hero-orbit.mp4" download>mp4</a> · <a href="assets/hero-orbit.webm" download>webm</a></figcaption>
+      </figure>
+      <figure>
+        <video src="assets/console-live.mp4" poster="assets/console-live.jpg" autoplay muted loop playsinline preload="none" aria-label="The console running live over the North Sea and Baltic"></video>
+        <figcaption>Live console · 16 s · <a href="assets/console-live.mp4" download>mp4</a> · <a href="assets/console-live.webm" download>webm</a></figcaption>
+      </figure>
+      <figure>
+        <video src="assets/replay-live.mp4" poster="assets/replay-live.jpg" autoplay muted loop playsinline preload="none" aria-label="The replay scrubber rewinding the last hour of recorded traffic"></video>
+        <figcaption>Replay · the last hour off local disk · 18 s · <a href="assets/replay-live.mp4" download>mp4</a> · <a href="assets/replay-live.webm" download>webm</a></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="press-block">
+    <h3>Stills</h3>
+    <div class="press-grid">
+      <figure><img src="assets/hero-orbit.jpg" alt="Velocity's globe from orbit, live traffic over the Mediterranean and the Gulf" decoding="async"><figcaption><a href="assets/hero-orbit.jpg" download>Orbit view</a></figcaption></figure>
+      <figure><img src="assets/band-air.jpg" alt="Thousands of individual live aircraft over the UK, North Sea, Germany and Scandinavia" decoding="async"><figcaption><a href="assets/band-air.jpg" download>Air density, Northern Europe</a></figcaption></figure>
+      <figure><img src="assets/hero-selected-track.jpg" alt="A selected aircraft with its recorded track drawn behind it and its dossier panel open" decoding="async"><figcaption><a href="assets/hero-selected-track.jpg" download>Selection and owned track</a></figcaption></figure>
+      <figure><img src="assets/hero-satellites.jpg" alt="Thousands of orbital tracks around Earth" decoding="async"><figcaption><a href="assets/hero-satellites.jpg" download>Satellite mode</a></figcaption></figure>
+      <figure><img src="assets/ui-explorer.jpg" alt="Explorer app: a searchable table of every live entity" decoding="async"><figcaption><a href="assets/ui-explorer.jpg" download>Explorer</a></figcaption></figure>
+      <figure><img src="assets/plate-europe-dense.jpg" alt="Dense European coverage on the globe at close zoom" decoding="async"><figcaption><a href="assets/plate-europe-dense.jpg" download>Europe, close zoom</a></figcaption></figure>
+    </div>
+  </section>
+
+  <section class="press-block">
+    <h3>Logo</h3>
+    <div class="press-grid">
+      <figure><img src="assets/logo.svg" alt="Velocity wordmark, dark background"><figcaption><a href="assets/logo.svg" download>Wordmark, dark</a></figcaption></figure>
+      <figure class="on-dark"><img src="assets/logo-mark-light.svg" alt="Velocity mark, light background"><figcaption><a href="assets/logo-mark-light.svg" download>Mark, light</a></figcaption></figure>
+    </div>
+  </section>
+
+  <section class="press-block">
+    <h3>What to be careful about</h3>
+    <p class="lede">These belong in any honest write-up, and leaving them out is how a tool like this gets oversold.</p>
+    <ul>
+      <li>Coverage comes from volunteer community feeders, so it is dense over Europe and North America and thin over open ocean and conflict zones, which is exactly where people most want it. AIS is strongest in Northern Europe.</li>
+      <li>It is a single-analyst tool, not a team server. Live derived state clears on restart; what you deliberately keep (the archive, case files, the evidence locker) persists to disk.</li>
+      <li>The 3D globe wants a real GPU. Satellite mode is a VRAM hog.</li>
+      <li>There are AI summarisation features. They are optional, labelled as automated output, can run entirely against local inference, and can be confidently wrong. Please do not describe the project as AI-powered.</li>
+      <li>It pulls from third-party sources that have not authorised it. Their terms bind whoever runs it, from their own IP. Not for safety-of-life or navigation use.</li>
+      <li>There is no public demo instance, deliberately: redistributing the feeds is not what the volunteer feeder communities signed up for.</li>
+    </ul>
+  </section>
+
+  <section class="press-block">
+    <h3>Contact</h3>
+    <p class="lede">Questions, review copies of anything, or a walkthrough: open an issue on <a href="https://github.com/AndrewCTF/velocity/issues" rel="noopener">GitHub</a> and it gets answered the same day.</p>
+    <a class="btn btn-primary" href="https://github.com/AndrewCTF/velocity" rel="noopener">Get started on GitHub</a>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-base">
+      <span>Velocity · AGPL-3.0-or-later · v1.0.1</span>
+      <span>Thanks to the volunteer feeder communities that make public tracking possible.</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

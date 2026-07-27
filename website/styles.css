@@ -480,12 +480,100 @@ body.bar-gone .nav { top: 0; }
 
 .bleed { position: relative; overflow: hidden; background: var(--plate); }
 .bleed img, .bleed-video { width: 100%; height: clamp(420px, 52vw, 720px); object-fit: cover; display: block; }
-/* The console band plays a real-time recording of the product. preload is none
-   so it costs nothing until it scrolls near, and it falls back to its own
-   poster frame under reduced motion. */
+/* The film band waits for a click, so reduced-motion keeps the player: nothing
+   moves until the visitor asks it to. Only the autoplaying bleeds fall back. */
 @media (prefers-reduced-motion: reduce) {
-  .bleed-video { display: none; }
-  .bleed-console { background: #05070a url('assets/console-live.jpg') center / cover no-repeat; }
+  .bleed-video:not(#film-video) { display: none; }
+}
+
+/* ---------- launch film player ----------
+   No native chrome: a single centred affordance, then a hairline bar that only
+   exists while the pointer is in the frame. Controls are light-on-dark
+   regardless of the page theme, because this band is always dark. */
+.film { --film-ease: cubic-bezier(.16, 1, .3, 1); }
+.film #film-video { cursor: pointer; }
+.film-poster {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  z-index: 2; pointer-events: none;
+  transition: opacity .34s var(--film-ease);
+}
+.film.is-playing .film-poster { opacity: 0; }
+.film-play {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 3; width: 88px; height: 88px; padding: 0 0 0 5px;
+  display: grid; place-items: center; cursor: pointer;
+  color: #fff; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .45);
+  background: rgba(10, 16, 24, .34);
+  -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+  transition: transform .32s var(--film-ease), opacity .3s var(--film-ease),
+              border-color .2s ease, background-color .2s ease;
+}
+.film-play:hover { border-color: #fff; background: rgba(10, 16, 24, .5); transform: translate(-50%, -50%) scale(1.045); }
+.film.is-playing .film-play { opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(.92); }
+.film-label {
+  position: absolute; left: 30px; bottom: 34px; z-index: 3; max-width: 46ch;
+  transition: opacity .3s var(--film-ease), transform .34s var(--film-ease);
+}
+.film-kicker {
+  display: block; font-family: var(--mono); font-size: 12px; letter-spacing: .28em;
+  text-transform: uppercase; color: #63cdff;
+}
+.film-label h3 {
+  margin: 12px 0 0; font-size: clamp(30px, 3.1vw, 46px); font-weight: 500;
+  letter-spacing: -.022em; line-height: 1.06; color: #fff;
+  text-shadow: 0 2px 26px rgba(0, 0, 0, .6);
+}
+.film-label p {
+  margin: 12px 0 0; font-size: 16.5px; line-height: 1.5; color: rgba(240, 246, 250, .82);
+  text-shadow: 0 1px 18px rgba(0, 0, 0, .65);
+}
+.film.is-playing .film-label { opacity: 0; transform: translateY(6px); pointer-events: none; }
+/* The label owns the lower left, so the scrim has to reach further up than a
+   bare control bar would need. */
+.film .film-bar { padding-top: 84px; }
+@media (max-width: 700px) {
+  .film-label { left: 18px; bottom: 26px; max-width: none; right: 18px; }
+  .film-label p { font-size: 15px; }
+}
+
+.film-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
+  padding: 60px 30px 22px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(2, 6, 12, .62) 62%, rgba(2, 6, 12, .82) 100%);
+  opacity: 0; transform: translateY(8px); pointer-events: none;
+  transition: opacity .26s var(--film-ease), transform .26s var(--film-ease);
+}
+.film.is-live .film-bar { opacity: 1; transform: none; pointer-events: auto; }
+.film-track { position: relative; height: 14px; display: flex; align-items: center; cursor: pointer; }
+.film-track::before {
+  content: ''; position: absolute; left: 0; right: 0; height: 2px;
+  background: rgba(255, 255, 255, .24); transition: height .18s ease;
+}
+.film-track:hover::before, .film-track:focus-visible::before { height: 4px; }
+.film-fill {
+  position: absolute; left: 0; height: 2px; width: 0; background: #fff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, .5); transition: height .18s ease;
+}
+.film-track:hover .film-fill, .film-track:focus-visible .film-fill { height: 4px; }
+.film-track:focus-visible { outline: none; }
+.film-row { display: flex; align-items: center; gap: 16px; margin-top: 14px; }
+.film-spacer { flex: 1; }
+.film-btn {
+  width: 32px; height: 32px; display: grid; place-items: center; cursor: pointer;
+  color: rgba(255, 255, 255, .82); background: transparent; border: 0; border-radius: 4px;
+  transition: color .18s ease, background-color .18s ease;
+}
+.film-btn:hover { color: #fff; background: rgba(255, 255, 255, .10); }
+.film-time {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .10em;
+  font-variant-numeric: tabular-nums; color: rgba(255, 255, 255, .72);
+}
+.film :focus-visible { outline: 2px solid rgba(255, 255, 255, .85); outline-offset: 3px; }
+@media (max-width: 700px) {
+  .film-play { width: 66px; height: 66px; }
+  .film-bar { padding: 44px 18px 16px; }
 }
 /* The console recording is 2.5:1. Letting the generic band height force 2:1
    cover-cropped the layer rail and the selection panel, slicing their labels.

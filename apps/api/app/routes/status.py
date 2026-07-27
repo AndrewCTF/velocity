@@ -8,7 +8,10 @@ total coverage.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import time
+from collections import deque
 from typing import Any
 
 from fastapi import APIRouter
@@ -165,3 +168,106 @@ async def status() -> dict[str, Any]:
             "See /api/intel/sources (authenticated) for per-feed detail."
         ),
     }
+
+
+# ── /api/status/perf ─────────────────────────────────────────────────────────
+#
+# The 2026-07-27 baseline could not report event-loop lag because nothing
+# measured it, so the single most diagnostic number for "the backend blows up
+# when I enable all toggles" was missing from the evidence. This endpoint is
+# that number plus the counters that explain it, and it is what the perf
+# harnesses poll.
+#
+# It must stay CHEAP — it is sampled once a second during a measurement run, so
+# it may not walk the snapshot or the vessel store the way /api/status does.
+
+_LAG_SAMPLES: deque[float] = deque(maxlen=120)
+_LAG_TASK: asyncio.Task[None] | None = None
+_LAG_TICK_S = 0.5
+
+
+async def _lag_probe_forever() -> None:
+    """Sleep a known interval and record the overshoot.
+
+    A task that asks for 0.5 s and gets 0.9 s spent 400 ms waiting behind
+    something that would not yield. That overshoot IS the lag every request on
+    this loop is also paying.
+    """
+    loop = asyncio.get_running_loop()
+    while True:
+        t0 = loop.time()
+        await asyncio.sleep(_LAG_TICK_S)
+        _LAG_SAMPLES.append(max(0.0, (loop.time() - t0 - _LAG_TICK_S) * 1000.0))
+
+
+def start_lag_probe() -> None:
+    global _LAG_TASK
+    if _LAG_TASK is None or _LAG_TASK.done():
+        _LAG_TASK = asyncio.create_task(_lag_probe_forever())
+
+
+async def stop_lag_probe() -> None:
+    global _LAG_TASK
+    t = _LAG_TASK
+    _LAG_TASK = None
+    if t and not t.done():
+        t.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await t
+
+
+def _pct(values: list[float], p: float) -> float | None:
+    if not values:
+        return None
+    s = sorted(values)
+    return round(s[min(len(s) - 1, max(0, round((p / 100.0) * (len(s) - 1))))], 2)
+
+
+@router.get("/api/status/perf")
+async def status_perf() -> dict[str, Any]:
+    """Event-loop lag, payload freshness and container sizes. Keyless, cheap."""
+    lag = list(_LAG_SAMPLES)
+    out: dict[str, Any] = {
+        "generated_at": int(time.time()),
+        "loop_lag_ms_p50": _pct(lag, 50),
+        "loop_lag_ms_p95": _pct(lag, 95),
+        "loop_lag_ms_max": round(max(lag), 2) if lag else None,
+        "loop_lag_samples": len(lag),
+        "loop_lag_window_s": round(len(lag) * _LAG_TICK_S, 1),
+    }
+    # ADS-B world blob — size and age come from module state, no snapshot walk.
+    try:
+        out["adsb"] = {
+            "blob_bytes": len(adsb_routes._HOT_BLOB) if adsb_routes._HOT_BLOB else 0,
+            "etag": adsb_routes._HOT_ETAG[:12] or None,
+            "age_s": round(adsb_routes.snapshot_age_s(), 2),
+            "ws_subscribers": len(adsb_routes._WS_SUBSCRIBERS),
+            "feed_slices": len(adsb_routes._FEED_SLICES),
+        }
+    except Exception:  # noqa: BLE001 — diagnostics must never 500
+        out["adsb"] = {"error": "unavailable"}
+    try:
+        from app.routes import maritime as maritime_routes  # noqa: PLC0415
+
+        out["vessels"] = maritime_routes.vessel_blob_state()
+        out["vessels"]["parked_cached"] = maritime_routes.parked_count()
+    except Exception:  # noqa: BLE001
+        out["vessels"] = {"error": "unavailable"}
+    try:
+        from app.upstream import cache as upstream_cache  # noqa: PLC0415
+
+        out["feed_cache"] = {
+            "entries": len(upstream_cache._data),
+            "max_entries": upstream_cache._MAX_CACHE_ENTRIES
+            if hasattr(upstream_cache, "_MAX_CACHE_ENTRIES")
+            else None,
+        }
+    except Exception:  # noqa: BLE001
+        out["feed_cache"] = {"error": "unavailable"}
+    try:
+        from app import ais_sidecar  # noqa: PLC0415
+
+        out["ais_supervision"] = ais_sidecar.supervision_state()
+    except Exception:  # noqa: BLE001
+        out["ais_supervision"] = {"error": "unavailable"}
+    return out
