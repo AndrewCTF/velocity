@@ -1270,6 +1270,33 @@ def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]])
     """Convert raw aggregator aircraft dicts → features and union into by_id,
     keeping the FRESHEST OBSERVATION per id.
 
+    ALWAYS CALL THIS VIA ``asyncio.to_thread``. It is the most expensive
+    on-loop work in the snapshot cycle — 44 ms at 20 000 aircraft, of which 43 %
+    is allocating four containers per contact (feature, geometry, coordinates,
+    properties) and the rest is ~15 `.get()`s, the filter chain and two
+    float conversions.
+
+    Threading pure-Python work buys no parallelism, but it does buy PREEMPTION,
+    and a latency tail is made of preemption. Measured 2026-07-27 with a 5 ms
+    probe against this exact call at 20 000 aircraft:
+
+        inline:  probe lag p95 62.59 ms, MAX 68.27 ms
+        thread:  probe lag p95 15.15 ms, MAX 24.09 ms
+
+    The loop is serviced every `sys.getswitchinterval()` (5 ms) instead of
+    waiting out the whole call. The median lag rises (0.10 → 5.17 ms) because
+    the loop now shares the GIL while the work runs; that is the correct trade
+    for a tail.
+
+    NOT solved by retaining and mutating the feature dicts across cycles, which
+    is the obvious next idea: `global_snapshot()` hands consumers a shallow copy
+    that SHARES these dicts, and `intel/analytics.py` passes that list across
+    `await`s and re-consumes it (`features=features`, :501→:510, :613-614), as
+    does `intel/incidents.py` (:95→:121). Mutating in place would let one
+    analysis compute half its answer from cycle N and half from N+1.
+
+    Thread-safe: `by_id` is the caller's local dict and `raw` is read-only here.
+
     Was: overwrite unconditionally, relying on the caller to merge the freshest
     tier last. That ordering assumption is what made aircraft fly BACKWARDS.
     Tier 3 (firehose) serves a CACHED list — `_FIREHOSE_RAW` only changes when a
@@ -1423,7 +1450,7 @@ async def _do_global_fanout() -> dict[str, Any]:
         )
         _t1 = time.monotonic()
         if feeds0:
-            _merge_raw_into(sidecar, feeds0)
+            await asyncio.to_thread(_merge_raw_into, sidecar, feeds0)
         _t2 = time.monotonic()
         # Split the fan-out's wall time into "waiting for the feed" and "turning
         # it into features". Only the second is loop-blocking CPU, and telling
@@ -1457,12 +1484,12 @@ async def _do_global_fanout() -> dict[str, Any]:
     #    AFTER OpenSky.
     feeds = await _await_within(feeds_task, deadline)
     if feeds:
-        _merge_raw_into(by_id, feeds)
+        await asyncio.to_thread(_merge_raw_into, by_id, feeds)
 
     # 3. Opportunistic firehose (deploy hosts with a reachable global verb).
     firehose = await _await_within(fh_task, deadline)
     if firehose:
-        _merge_raw_into(by_id, firehose)
+        await asyncio.to_thread(_merge_raw_into, by_id, firehose)
 
     # 4. Per-cell grid — ONLY as a FALLBACK when the fast tiers came up thin. The
     #    keyless feeds now supply ~11k at ~0.1s; on a datacenter IP every
@@ -1480,7 +1507,7 @@ async def _do_global_fanout() -> dict[str, Any]:
             except TimeoutError:
                 grid = []
             if grid:
-                _merge_raw_into(by_id, grid)
+                await asyncio.to_thread(_merge_raw_into, by_id, grid)
 
     return {"type": "FeatureCollection", "features": list(by_id.values())}
 

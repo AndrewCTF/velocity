@@ -600,3 +600,78 @@ which this walk is the dominant term; the rest (`snapshot_count`,
 The loop-wide tail remains the same open item named throughout this document:
 `_aircraft_geojson` rebuilding ~19 700 nested dicts per cycle. Threading it does
 not help (GIL); the fix is to stop rebuilding unchanged features.
+
+
+---
+
+## Addendum 2 — the `_aircraft_geojson` rebuild
+
+The largest on-loop cost in the snapshot cycle. Profiled at 20 000 aircraft:
+
+```
+_aircraft_geojson(20000)            44.03 ms
+  filters + string work only         5.46 ms   (12 %)
+  the ~15 property .get()s           7.85 ms   (18 %)
+  4 containers x 20k (alloc)        18.77 ms   (43 %)
+```
+
+### The obvious fix is a correctness regression — do not take it
+
+Retaining the feature dicts and mutating them across cycles kills the 43 %.
+It also breaks the intel layer. `global_snapshot()` returns a **shallow** copy
+whose `features` list shares those dicts, and the consumers hold them across
+`await`s and re-consume them:
+
+- `intel/analytics.py:501` takes a snapshot, then `:510` passes the same list to
+  `jamming(bbox, features=features)`; `:613-614` does the same for `density()`
+  and `jamming()`.
+- `intel/incidents.py:95` takes a snapshot, then `:121` runs a second analysis
+  while that list is still live.
+
+Mutating in place would let one analysis compute half its answer from cycle N
+and half from N+1. Recorded in `docs/decisions.md` so the idea is not retried.
+
+### The correction: threading a pure-Python hot spot DOES cut the tail
+
+This document previously asserted the opposite — that the GIL makes
+`asyncio.to_thread` useless for pure-Python CPU. **That was wrong**, and wrong in
+the direction that would have prevented the fix. CPython switches threads every
+`sys.getswitchinterval()` (5 ms), so the loop is serviced *during* the work
+rather than after it. Measured with a 5 ms probe against `_merge_raw_into` at
+20 000 aircraft:
+
+| | probe lag p50 | p95 | MAX |
+|---|---|---|---|
+| inline | 0.10 ms | 62.59 ms | 68.27 ms |
+| **in a thread** | 5.17 ms | **15.15 ms** | **24.09 ms** |
+
+No parallelism — total CPU is unchanged — and the **median gets worse**, because
+the loop now shares the GIL while the work runs. For a tail that is the right
+trade. All four `_merge_raw_into` call sites are now threaded.
+
+### Effect, measured three ways
+
+**1. In-process loop-lag probe** (the cleanest continuous signal, n=120 per
+60 s window):
+
+```
+before:  p95 368       max 1591
+after :  p95 271 / 218 / 189 / 347   max 1305 / 1225 / 1358 / 999   (4 windows)
+```
+
+p95 ~368 → ~230 median-of-windows, at a union that GREW from 19 741 to ~20 500.
+
+**2. End-to-end HTTP, equal 30 s windows, identical pacing:**
+
+| endpoint | p99 before | p99 after |
+|---|---|---|
+| `/api/status` | 1440.2 ms | **594.4 ms** |
+| `/api/status/perf` | 324.9 ms | 304.6 ms |
+| `/api/health` | 597.9 ms | 628.0 ms |
+
+**3. What did NOT improve, stated plainly.** The `MAX` column at n≈200 moved in
+both directions (`/api/status` 2272 → 2782, `/api/health` 2470 → 1620). A single
+worst sample out of ~200 is not a statistic, and those multi-second outliers are
+not the snapshot cycle — they are the background pollers (AIS at 30 s and 45 s,
+news, GC) blocking the loop for far longer than one cycle costs. Cutting the
+cycle's block cannot remove them, and this change does not claim to.

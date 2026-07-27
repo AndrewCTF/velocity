@@ -1431,27 +1431,41 @@ ever requested on a box with a 32 GB RTX 5090. All are now passed from settings
 (GPU layers default -1 = all, context bounded to 8192 rather than the catalog's
 262 144). → `tests/test_llamacpp_flags.py`
 
-**`asyncio.to_thread` does NOT unblock the loop for pure-Python CPU (2026-07-27).**
-This one is load-bearing for every future "move it off the loop" instinct, so it
-is stated separately. `_aircraft_geojson` builds ~4 dicts per aircraft — ~18 000
-allocations a second at the current union — and it is the largest on-loop cost
-(`fanout_cpu` 56-84 ms/cycle, measured via `/api/status/perf`'s `cycle_ms`). A
-worker thread does not help: the GIL means only one thread runs Python bytecode,
-so the loop is descheduled for exactly as long either way. The same caveat
-applies to `json.loads`/`orjson.loads`/`orjson.dumps` — C code, but GIL-held for
-the duration.
+**`asyncio.to_thread` DOES cut the latency tail for pure-Python CPU — it buys
+preemption, not parallelism (2026-07-27, CORRECTED same day).**
 
-What a thread DOES buy: work that genuinely releases the GIL (`isal.igzip`
-compression is the real example here), and getting non-critical work out from
-between two phases that share a cycle budget. The moves made this day
-(`history.ingest_aircraft`, `_merge_with_previous`, `_update_parked`) are the
-second kind and were worth making for that reason alone — but none of them is a
-lag fix, and the code comments say so.
+An earlier version of this entry said the opposite: that threading pure-Python
+work cannot help because the GIL means the loop is descheduled either way. That
+reasoning is wrong, and it was wrong in the direction that would have stopped
+the fix. CPython switches threads every `sys.getswitchinterval()` (5 ms by
+default), so a worker thread lets the loop be serviced *during* the work instead
+of after it. Measured with a 5 ms probe against `_merge_raw_into` at 20 000
+aircraft:
 
-So the ordering for CPU on the loop is: **do less work** first (the only thing
-that reliably helps), move it off the critical path second, reach for threads
-only when the work releases the GIL. The remaining tail is fixed by mutating
-retained feature dicts instead of rebuilding them, not by relocating the rebuild.
+| | probe lag p50 | p95 | MAX |
+|---|---|---|---|
+| inline | 0.10 ms | 62.59 ms | 68.27 ms |
+| **in a thread** | 5.17 ms | **15.15 ms** | **24.09 ms** |
+
+Total CPU is unchanged — there is no parallelism — and the MEDIAN gets worse,
+because the loop now shares the GIL while the work runs. For a tail that is the
+correct trade. All four `_merge_raw_into` call sites are threaded accordingly.
+
+`_aircraft_geojson` costs 44 ms at 20 000 aircraft, profiled as: 43 % allocating
+four containers per contact (feature, geometry, coordinates, properties), 18 %
+the ~15 `.get()`s, 12 % the filter chain, the rest float conversions.
+
+**Do NOT "fix" it by retaining and mutating the feature dicts across cycles.**
+That is the obvious next idea and it is a correctness regression:
+`global_snapshot()` hands consumers a shallow copy that SHARES those dicts, and
+`intel/analytics.py` passes the list across `await`s and re-consumes it
+(`features=features`, :501→:510, :613-614), as does `intel/incidents.py`
+(:95→:121). Mutating in place would let one analysis compute half its answer
+from cycle N and half from N+1.
+
+Ordering for CPU on the loop, corrected: **do less work** first; thread it
+second (real, for the tail); and only expect *parallelism* from work that
+releases the GIL (`isal.igzip` is the example here).
 
 Still open, named rather than implied: the feature-rebuild above; the
 batched-primitive render path (the real fps fix); the toolbar's `z-0` stacking
