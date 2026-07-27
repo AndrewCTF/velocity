@@ -1431,8 +1431,31 @@ ever requested on a box with a 32 GB RTX 5090. All are now passed from settings
 (GPU layers default -1 = all, context bounded to 8192 rather than the catalog's
 262 144). → `tests/test_llamacpp_flags.py`
 
-Still open, named rather than implied: the batched-primitive render path (the
-real fps fix); the toolbar's `z-0` stacking trap; three `ScreenSpaceEventHandler`s
+**`asyncio.to_thread` does NOT unblock the loop for pure-Python CPU (2026-07-27).**
+This one is load-bearing for every future "move it off the loop" instinct, so it
+is stated separately. `_aircraft_geojson` builds ~4 dicts per aircraft — ~18 000
+allocations a second at the current union — and it is the largest on-loop cost
+(`fanout_cpu` 56-84 ms/cycle, measured via `/api/status/perf`'s `cycle_ms`). A
+worker thread does not help: the GIL means only one thread runs Python bytecode,
+so the loop is descheduled for exactly as long either way. The same caveat
+applies to `json.loads`/`orjson.loads`/`orjson.dumps` — C code, but GIL-held for
+the duration.
+
+What a thread DOES buy: work that genuinely releases the GIL (`isal.igzip`
+compression is the real example here), and getting non-critical work out from
+between two phases that share a cycle budget. The moves made this day
+(`history.ingest_aircraft`, `_merge_with_previous`, `_update_parked`) are the
+second kind and were worth making for that reason alone — but none of them is a
+lag fix, and the code comments say so.
+
+So the ordering for CPU on the loop is: **do less work** first (the only thing
+that reliably helps), move it off the critical path second, reach for threads
+only when the work releases the GIL. The remaining tail is fixed by mutating
+retained feature dicts instead of rebuilding them, not by relocating the rebuild.
+
+Still open, named rather than implied: the feature-rebuild above; the
+batched-primitive render path (the real fps fix); the toolbar's `z-0` stacking
+trap; three `ScreenSpaceEventHandler`s
 sharing the canvas so a tool click also mutates selection; streaming LLM
 responses and the selection-brief cache key that hashes live props; annotation
 vertex-edit handles.

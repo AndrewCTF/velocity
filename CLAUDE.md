@@ -197,3 +197,11 @@ Never default every subagent to the biggest model.
 `bash scripts/verify.sh` green. For UI claims: boot the app, drag to Europe —
 hundreds of category icons (not dots); click an aircraft — EntityPanel +
 magenta track within 4 s; click empty — both clear; 30 s with no blink-off.
+
+For PERFORMANCE claims the harnesses already exist — use them, don't invent a
+number: `tools/perf/measure_ui.mjs` (real Chrome on the GPU, `--profile
+all-toggles`, reads `window.__perf`), `measure_api.py` (/proc sampling +
+per-route cost table), `measure_sidecars.sh --soak`, `measure_llm.py`. Backend
+lag/cycle attribution is live at `/api/status/perf`. A before/after is only a
+comparison if BOTH runs had the same tiers live — see `docs/decisions.md`
+(2026-07-27) for the retraction that rule came from.

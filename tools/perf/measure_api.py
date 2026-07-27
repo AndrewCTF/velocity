@@ -4,8 +4,11 @@
 Two jobs, both read-only:
 
   1. Sample CPU / RSS / threads / fds for the uvicorn process and every
-     descendant (node sidecars, chrome renderers) once a second, alongside
-     /api/status and /api/status/perf.
+     descendant (node sidecars, chrome renderers) once a second, alongside the
+     CHEAP /api/status/perf. It deliberately does NOT poll /api/status unless
+     asked (--status): that route copies the whole snapshot, and polling it made
+     an earlier version of this harness report 248 ms of loop lag on a backend
+     that was actually sitting at 0.0.
   2. With --routes, GET every layer endpoint the frontend registers and emit a
      ranked cost table (TTFB, total, bytes, content-encoding, etag).
 
@@ -215,13 +218,16 @@ def fmt(x: float, nd: int = 1) -> str:
 # ── main ─────────────────────────────────────────────────────────────────────
 
 
-def sample_loop(root: int, base: str, seconds: int, interval: float) -> None:
+def sample_loop(
+    root: int, base: str, seconds: int, interval: float, with_status: bool = False
+) -> None:
     print(f"\n## Process sampling — root pid {root}, {seconds}s @ {interval}s\n")
     prev: dict[int, float] = {}
     series: dict[str, list[float]] = {}
     lag: list[float] = []
     aircraft: list[float] = []
     vessels: list[float] = []
+    parked: list[float] = []
     n_ticks = 0
     t_end = time.monotonic() + seconds
     last = time.monotonic()
@@ -258,15 +264,31 @@ def sample_loop(root: int, base: str, seconds: int, interval: float) -> None:
             float(sum(1 for p in pids if "chrome" in (proc_stat(p) or {}).get("comm", "")))
         )
 
+        # /api/status/perf is deliberately cheap (module state only) so polling
+        # it once a second does not perturb what it reports.
         perf = get_json(f"{base}/api/status/perf", timeout=2.0)
         if perf and isinstance(perf.get("loop_lag_ms_p95"), (int, float)):
             lag.append(float(perf["loop_lag_ms_p95"]))
-        st = get_json(f"{base}/api/status", timeout=3.0)
-        if st:
-            if isinstance(st.get("aircraft_count"), (int, float)):
-                aircraft.append(float(st["aircraft_count"]))
-            if isinstance(st.get("vessel_count"), (int, float)):
-                vessels.append(float(st["vessel_count"]))
+        if perf:
+            a = ((perf.get("adsb") or {}).get("cycle_ms") or {}).get("features")
+            if isinstance(a, (int, float)):
+                aircraft.append(float(a))
+            v = (perf.get("vessels") or {}).get("parked_cached")
+            if isinstance(v, (int, float)):
+                parked.append(float(v))
+        # /api/status is NOT free: it copies the whole snapshot
+        # (`global_snapshot()`) and walks the vessel store, so polling it once a
+        # second is a load generator, not an observation. Measured 2026-07-27:
+        # sampling it every 2 s made this harness report a loop-lag p50 of 248 ms
+        # on a backend that read 0.0 ms when left alone. Opt in with --status
+        # only when you want that route's cost included on purpose.
+        if with_status:
+            st = get_json(f"{base}/api/status", timeout=3.0)
+            if st:
+                if isinstance(st.get("aircraft_count"), (int, float)):
+                    aircraft.append(float(st["aircraft_count"]))
+                if isinstance(st.get("vessel_count"), (int, float)):
+                    vessels.append(float(st["vessel_count"]))
 
         n_ticks += 1
         time.sleep(interval)
@@ -290,6 +312,9 @@ def sample_loop(root: int, base: str, seconds: int, interval: float) -> None:
     if vessels:
         print(f"| vessel_count | {fmt(pct(vessels,50),0)} | {fmt(pct(vessels,95),0)} "
               f"| {fmt(max(vessels),0)} |")
+    if parked:
+        print(f"| parked_cached | {fmt(pct(parked,50),0)} | {fmt(pct(parked,95),0)} "
+              f"| {fmt(max(parked),0)} |")
 
 
 def route_sweep(base: str, reps: int) -> None:
@@ -335,6 +360,13 @@ def main() -> int:
     ap.add_argument("--routes", action="store_true", help="also run the route sweep")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--pid", type=int, default=0, help="override the api pid")
+    ap.add_argument(
+        "--status",
+        action="store_true",
+        help="also poll /api/status each tick. OFF by default: that route copies "
+        "the whole snapshot, so polling it makes this harness a load generator "
+        "rather than an observer (see sample_loop).",
+    )
     args = ap.parse_args()
 
     print(f"# measure_api — {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -355,7 +387,7 @@ def main() -> int:
               "Skipping process sampling.")
     else:
         print(f"api pid {root}: {proc_cmdline(root)[:120]}")
-        sample_loop(root, args.base, args.seconds, args.interval)
+        sample_loop(root, args.base, args.seconds, args.interval, args.status)
 
     if args.routes:
         route_sweep(args.base, args.reps)
