@@ -1909,6 +1909,25 @@ async def global_snapshot() -> dict[str, Any]:
         return dict(_LATEST_SNAPSHOT)
 
 
+def snapshot_count() -> int:
+    """Aircraft in the live snapshot, without the lock and without a copy.
+
+    `/api/status` is PUBLIC, unauthenticated, and polled by status pages and
+    measurement harnesses, and it was calling `global_snapshot()` for nothing but
+    this number. That does three things it should not: it takes
+    `_SNAPSHOT_LOCK`, which the 1 Hz refresher holds across its merge — measured
+    2026-07-27, `/api/status` p50 12.5 ms with a **757 ms** tail against 0.8 ms
+    for `/api/status/perf`; it shallow-copies the snapshot dict; and on a cold
+    process it would kick a synchronous fan-out from an anonymous request.
+
+    No lock is needed to read a count: `_LATEST_SNAPSHOT` is REBOUND wholesale by
+    the refresher (`_LATEST_SNAPSHOT = fc`) and never mutated in place, so this
+    reads either the old list or the new one, never a torn one, and both are
+    honest. The value is identical to what the locked path returned.
+    """
+    return len(_LATEST_SNAPSHOT.get("features") or [])
+
+
 def snapshot_age_s() -> float | None:
     """Seconds since the global snapshot last refreshed (None if never). For the
     public /api/status page — lets callers see feed freshness, not just a count."""

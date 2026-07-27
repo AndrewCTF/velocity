@@ -96,6 +96,27 @@ class ObservationStore:
             return [o for o in self._latest.values() if o.t >= cutoff]
         return [o for o in self._latest.values() if o.t >= cutoff and o.emits_kind == kind]
 
+    def count(self, kind: str | None = None) -> int:
+        """How many entities `latest()` would return, without building the list.
+
+        `/api/status` wanted only `len(store.latest("vessel"))` and paid for a
+        fully materialised list of every live vessel to get it — 57 089 entries
+        measured 2026-07-27, once per request, on a public unauthenticated route.
+
+        Honest about what this buys: it is an ALLOCATION win, not a speed one.
+        Benchmarked at 76 000 entities the generator is 1.42 ms against the list
+        comprehension's 1.04 ms — a comprehension has the faster inner loop. What
+        it avoids is handing the allocator a 57 000-element list per request and
+        immediately dropping it, which is exactly the churn `run-api.sh` mandates
+        jemalloc for. Use `latest()` whenever you actually want the objects.
+        """
+        cutoff = time.time() - self._retention
+        if kind is None:
+            return sum(1 for o in self._latest.values() if o.t >= cutoff)
+        return sum(
+            1 for o in self._latest.values() if o.t >= cutoff and o.emits_kind == kind
+        )
+
     def latest_for(self, entity_id: str) -> Observation | None:
         o = self._latest.get(entity_id)
         if o is None:

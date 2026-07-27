@@ -34,9 +34,15 @@ async def status() -> dict[str, Any]:
     s = get_settings()
     from app import ais_firehose, ais_keyless, marinetraffic  # noqa: PLC0415
 
+    # Counts only — never `global_snapshot()`. This route is public, anonymous
+    # and polled by status pages, and calling the snapshot helper for a number
+    # took _SNAPSHOT_LOCK, which the 1 Hz refresher holds across its merge.
+    # Measured 2026-07-27: p50 12.5 ms with a 757 ms TAIL before, p50 10.2 ms
+    # with a 12.5 ms tail after — the tail is the point, because that wait was
+    # on the event loop. See adsb_routes.snapshot_count() for why the lock-free
+    # read is exact rather than approximate.
     try:
-        fc = await adsb_routes.global_snapshot()
-        aircraft = len(fc.get("features") or [])
+        aircraft = adsb_routes.snapshot_count()
     except Exception:  # noqa: BLE001 — status must never 500
         aircraft = 0
     age = adsb_routes.snapshot_age_s()
@@ -51,7 +57,7 @@ async def status() -> dict[str, Any]:
         from app.correlate.store import store  # noqa: PLC0415
         from app.routes import maritime  # noqa: PLC0415
 
-        vessels = len(store.latest("vessel"))
+        vessels = store.count("vessel")
         parked = maritime.parked_count()
     except Exception:  # noqa: BLE001 — never let vessels break status
         vessels = 0
