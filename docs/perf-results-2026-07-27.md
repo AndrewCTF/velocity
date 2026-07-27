@@ -318,3 +318,48 @@ lock, colour precedence, the GeoJSON round-trip, and the shared draft.
 
 `bash scripts/verify.sh` — **ALL GREEN**, 1980 backend tests passed + 2 skipped
 (baseline was 1972), 440 web tests passed (was 433).
+
+---
+
+## Final measurement — everything on, everything live
+
+Same harness, same camera script, same box. Note the load is **higher** than the
+baseline run, which makes the comparison conservative rather than flattering.
+
+| Metric | baseline | final | change |
+|---|---|---|---|
+| `rendersPerSec` p50 | 5.0 | **7.0** | +40 % |
+| `rendersPerSec` p95 | 8.0 | **19.0** | +138 % |
+| `frameMsEMA` p50 | 239.3 ms | **147.4 ms** | **-38 %** |
+| Cesium entities p50 | 60 826 | **38 479** | **-37 %** |
+| Cesium entities p05 | 54 970 | **26 942** | -51 % |
+| JS heap p50 | 2 678 MB | 2 484 MB | -7 % |
+| `drainMsLast` p50 | 7.1 ms | 5.5 ms | -23 % |
+| Measured request rate | 282 req/min | **221 req/min** | **-22 %** |
+| chrome RSS | 8 881 MB | **4 050 MB** | **-54 %** |
+| chrome renderers | 53 | **22** | **-58 %** |
+| `:8090/aircraft.json` p50 | 8.2 ms | **0.6 ms** | **-93 %** |
+| `/api/maritime/snapshot` p50 | 270 ms | **2.8 ms** | **-99 %** |
+| `/api/maritime/snapshot` bytes | 1 624 682 | **515 806** | -68 % |
+| — while carrying — | | | |
+| aircraft | 11 770 | **16 957** | **+44 %** |
+| vessels | 26 001 | **40 994** | **+58 %** |
+| `scripts/verify.sh` | green | **green** | 1985 + 2 skipped (was 1972) |
+
+### What is still true and unfixed
+
+**7 fps with every toggle on is still not good.** 78 Cesium data sources and
+~38 000 individually-managed entities keep the Entity API walk at ~97 % of the
+main thread. The fix is known, is what Palantir describe for exactly this
+problem, and this repo already has the machinery for it
+(`PrimitiveEntityLayer` — it is why 16 957 aircraft are affordable). Extending
+it to the other ~45 layers is the next piece of work and is not in this branch.
+
+**Chrome CPU in the sidecar tier is not improved** (see the corrected Phase 1
+table). Memory, renderer count and per-request latency are; CPU tracks feature
+count and a control ruled out the image flag.
+
+**The model is configured, not proven fast.** The flags are passed and guarded,
+but no model was active during this session, so there is no
+time-to-first-token number to report. `measure_llm.py` exists to produce one the
+moment a model is selected.
