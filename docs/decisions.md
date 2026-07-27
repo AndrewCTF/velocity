@@ -741,6 +741,8 @@ Findings from the same-day state-of-project audit
 
 ## Backend test baseline history
 
+- 1972 + 2 skipped — 2026-07-24, worldmonitor-gaps-2026-07, persona waves 2+3
+
 The current baseline lives in `CLAUDE.md` (Environment facts) and stays a
 three-line fact there. One line per wave, newest first — when the CLAUDE.md
 number changes, the displaced line lands here.
@@ -1305,3 +1307,132 @@ fell back to 2D" sends you hunting a fallback that does not exist. **A wide
 hero needs nadir pitch:** at 16,000 km Earth's angular radius is only ~16°, so
 a `-55°` pitch aims the camera into empty space and renders a black frame that
 looks exactly like a broken globe.
+
+### Performance wave: sidecars, vessel blob, layer caps, controls, annotate (2026-07-27)
+
+Operator report: performance very poor, the backend blows up with every toggle on,
+the model is not optimized to be fast, the annotate feature is mediocre, the
+right-side globe selector is hard to control and bugged, and "the biggest issues
+is sidecars not optimized".
+
+Everything below was measured before and after in a real browser on the GPU, plus
+`/proc` sampling of the process tree. Raw output:
+`docs/perf-baseline-2026-07-27.md` and `docs/perf-results-2026-07-27.md`.
+Competitive reference compiled the same day: `docs/palantir-reference-2026-07.md`.
+
+**The baseline.** All toggles on: 5 fps (p05 3) at 239 ms frame time, 60 826
+Cesium entities across 78 data sources, 2.7 GB heap, 282 requests/min — against
+58 fps with the default layers. The browser sidecar tier burned 394 % CPU at the
+median (peak 1523) and held 8.9 GB to serve two JSON files, while the API it
+feeds cost 31 % of one core. No route in the sweep returned an ETag. The local
+model answered 409 in 2 ms because it was disabled.
+
+**Sidecar cost is repetition, not work.** `/aircraft.json` rebuilt a 39k-entry
+union and re-serialised 2.6 MB per request at a 1 Hz poll, and `/health` did it a
+second time for a count the pump loop already had. Union now builds once per pump
+and is served as gzipped bytes with an ETag; the backend sends `If-None-Match` and
+skips the parse on 304 — **without re-stamping the feed slice's timestamp**,
+because that would advertise an unchanged cache as freshly observed (the
+2026-07-15 immortal-cached-tier bug). Sources pump concurrently with
+`allSettled`, each read bounded by a timeout (`page.evaluate` has none, and a
+wedged renderer otherwise hangs the loop — observed: `age_s` climbed to 163 s
+with every slot still holding good data). Images off at the renderer, viewport
+quartered with the zoom dropped by one so the fetched extent is identical.
+Result, measured settled with BOTH tiers live: `/aircraft.json` **0.6 ms**
+(from 8.2 ms), chrome RSS **4.0 GB** (from 8.9 GB), renderer count **22**
+(from 53) — while the union carries **16 859** aircraft, up from 12 131.
+**Chrome CPU is NOT improved** (829 % vs 394 %) and tracks feature count; a
+control with images re-enabled settled at ~745 %, so the image flag is not the
+cause. An intermediate reading of 128 % was an artifact of sampling while the AIS
+tier was dead — recorded because "measured one tier while the other was down and
+called it after" is the mistake worth remembering. Gzipping the union per pump
+was measured (node 44 % → 109 %) and BACKED OUT: it is lazy and memoised per rev,
+and the backend does not request it on loopback.
+
+**AIS supervision: staleness is not death.** `supervise()` restarted a feeder
+whenever its union aged past the poller's cap, so a *blocked* scraper was killed
+and respawned every 60 s for as long as the site chose to refuse us — the exact
+condition under which commit `2ff71f9` measured 496 leaked renderers in 1h40m.
+Liveness (`_serving`) now drives restarts alone, as it already did for the ADS-B
+twin; staleness arms a clock and escalates only after `_STALE_HARD_S`, and every
+restart draws from a token budget so a feeder a restart cannot fix is left down
+and reported degraded. MyShipTracking blocked us mid-session, which made the new
+path observable: one restart for the one real cause, none for the eight minutes
+that followed. **The boot-time adoption test (`_already_healthy`) is unchanged**,
+so a wedged feeder is still never inherited. Guards:
+`test_ais_sidecar_reuse.py::test_supervise_escalates_staleness_on_a_clock` and
+`::test_supervise_restart_budget_stops_a_pointless_loop`. The old assertion that
+staleness restarts on sight was deliberately replaced.
+
+**The vessel snapshot had no cache at all.** ~185 ms of blocking loop work per
+request at ~40k vessels (45 build + 46 pydantic + 56 json + 38 gzip), at a 30 s
+poll, twice, re-fired on camera move — during which the 1 s aircraft cycle cannot
+run. Now pre-rendered on a 5 s cycle in a thread and served with ETag/304, the
+same shape `_HOT_BLOB` already had. Warm: 2.8 ms / 516 KB. The builder only
+*reads* `store.latest("vessel")` — never merges, dedups or re-stamps.
+→ `tests/test_maritime_hot_blob.py`
+
+**`/api/places/*` scanned everything per request**, including the category
+filter, so the nine generated `infra.*` layers cost nine full passes over 125 612
+rows per camera settle (measured: 144 requests to that one path in 74 s). A
+10-degree bucket index keyed by (dataset, category) makes the category-filtered
+queries 90x faster. Rows are still filtered exactly inside visited cells.
+
+**Event-loop lag was unmeasurable.** `/api/status/perf` now reports it from a
+probe that asks for 0.5 s and records the overshoot, alongside blob sizes/ages,
+cache depth and the AIS supervision state.
+
+**Layers had no entity cap.** `MAX_PER_LAYER` was `Number.MAX_SAFE_INTEGER`. The
+largest layer with everything on was **not** aircraft (14 458) but NASA FIRMS
+(14 818), uncapped. Cesium walks every entity of every data source every frame,
+so an off-by-default long-tail layer costs what the primary feed costs.
+`LayerDescriptor.maxEntities` applies through the existing hash-keyed stable
+subset; **the desktop aircraft exemption is untouched** (≥8000 world-view
+invariant). `maritime.parked`, the one layer requesting the world with no bbox and
+no cap, got both.
+
+**One settle gate for the map.** Sixteen private 200 ms debounces fired together.
+There is now one timer, releasing in priority order in batches of four spaced
+250 ms, and a layer skips its move-refresh when the URL it would request is the
+one already fetched. Polling stops while the tab is hidden. 282 → 221 req/min.
+NOTE: the first version capped concurrency with a microtask, which capped nothing
+(refresh is fire-and-forget) and measured *worse* at 321/min.
+
+**Frontend result, stated honestly: 5 → 6 fps overall, 6 → 10 at world view**,
+entities −36 %, frame time −38 %. That is an improvement, not a fix. At 78 data
+sources and ~39 000 entities the Entity API walk is 97 % of the main thread. The
+remedy is batching the remaining ~45 layers into shared primitive collections the
+way aircraft and vessels already are (`PrimitiveEntityLayer`) — Palantir's own
+"10,000 lines with the same styling become one GPU operation". **Not done.**
+
+**The rail resizer soft-locked the app.** No pointer capture, no `pointercancel`,
+no `touch-action` anywhere in the frontend. A cancelled gesture left both window
+listeners attached and `body.userSelect: none` permanently. `FloatingPanel.tsx`
+had fixed this in its own file and left a comment saying so. Same fix here, plus
+an 11 px hit area and double-click-to-reset. The move tool had the same shape:
+camera rotate/translate restored only from Cesium's canvas-only `LEFT_UP`.
+Verified live by releasing outside the window.
+
+**Annotate.** Was: 3 kinds, 4 fixed colours, one label, no undo, no export, and a
+`loadAnnotations` imported by nothing so the ontology round-trip had never worked.
+The toolbar hardcoded `{threat:'unknown', label:''}` and could only drop a point,
+so its own tooltip promised labelled markers and produced unlabelled yellow dots.
+The renderer did `removeAll()` + re-add on every store change — one keystroke tore
+down the layer. Now 11 kinds, arbitrary colour via the native input, full style
+controls, 50-step undo, per-item show/hide/lock/rename/fly-to, GeoJSON
+import/export, localStorage + a working ontology merge, and an upsert renderer.
+Three creation surfaces read ONE shared draft so they cannot disagree again.
+→ `globe/invariants.test.ts` now guards `AnnotationLayer.ts` against `.removeAll(`.
+
+**llama-server ran with no performance flags.** The entire argv was
+models-dir/models-max/host/port/api-key/flash-attn: no `-ngl`, `--ctx-size`,
+`--threads`, `--batch-size`, `--cache-reuse` or `--jinja`, so no GPU offload was
+ever requested on a box with a 32 GB RTX 5090. All are now passed from settings
+(GPU layers default -1 = all, context bounded to 8192 rather than the catalog's
+262 144). → `tests/test_llamacpp_flags.py`
+
+Still open, named rather than implied: the batched-primitive render path (the
+real fps fix); the toolbar's `z-0` stacking trap; three `ScreenSpaceEventHandler`s
+sharing the canvas so a tool click also mutates selection; streaming LLM
+responses and the selection-brief cache key that hashes live props; annotation
+vertex-edit handles.

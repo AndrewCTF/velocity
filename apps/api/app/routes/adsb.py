@@ -1105,7 +1105,14 @@ def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]] | Any]:
     existing slice and skips both the transfer and the parse."""
     ac: list[dict[str, Any]] = []
     try:
-        headers = {"User-Agent": _FEED_UA, "Accept-Encoding": "gzip"}
+        # Ask remote mirrors for gzip; do NOT ask the localhost sidecar. Measured
+        # 2026-07-27: compressing its ~2.8 MB union once a second took node from
+        # 44% to 109% CPU, to save a loopback transfer that costs ~1 ms. The
+        # ETag below is the part that actually pays.
+        local = "127.0.0.1" in url or "localhost" in url
+        headers = {"User-Agent": _FEED_UA}
+        if not local:
+            headers["Accept-Encoding"] = "gzip"
         prev = _FEED_ETAGS.get(url)
         if prev:
             headers["If-None-Match"] = prev

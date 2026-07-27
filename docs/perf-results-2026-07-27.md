@@ -17,31 +17,54 @@ with a restart budget.
 
 ### Process cost (measure_api.py, 90 s @ 2 s, all defaults)
 
-| Metric | before | after | change |
-|---|---|---|---|
-| `cpu%` chrome p50 | 393.6 % | **128.3 %** | **-67 %** |
-| `cpu%` chrome p95 | 1203.6 % | **734.4 %** | -39 % |
-| `cpu%` chrome max | 1522.6 % | **877.3 %** | -42 % |
-| `rss_mb` chrome p50 | 8 881 MB | **6 386 MB** | **-28 %** |
-| chrome processes p50 | 53 | **45** | -15 % |
-| `cpu%` node p50 | 44.0 % | **0.0 %** | **-100 %** |
-| `rss_mb` node | 1 055 MB | **393 MB** | **-63 %** |
-| `cpu%` api p50 | 31.0 % | 28.8 % | -7 % |
-| **aircraft_count p50** | 11 770 | **11 754** | **unchanged — the floor holds** |
+**CORRECTED after a second measurement — read this table, not the first one I
+wrote.** The intermediate "after" sample showed chrome at 128 % CPU and node at
+0 %. Both were artifacts: MyShipTracking was refusing our browser at that moment,
+so the AIS feeder's context was idle, and the 2 s sampling interval aliased
+node's 1 Hz burst. A settled re-measurement with **both** tiers live, five
+minutes after boot, is below. Recording the wrong numbers and the correction
+rather than quietly replacing them, because the mistake — measuring a system with
+one tier dead and calling it "after" — is the more useful thing to remember.
 
-The "after" chrome figures are pessimistic: MyShipTracking began refusing our
-browser during this session (proven upstream, not a regression — see below), so its
-feeder is in a page-reload loop for the whole sample.
+| Metric | before | after (settled, both tiers live) | verdict |
+|---|---|---|---|
+| `cpu%` chrome p50 | 393.6 % | 828.8 % | **not improved** |
+| `rss_mb` chrome p50 | 8 881 MB | **4 050 MB** | **-54 %** |
+| chrome processes p50 | 53 | **22** | **-58 %** |
+| `cpu%` node p50 | 44.0 % | 72.5 % | ~neutral per unit of data |
+| `rss_mb` node | 1 055 MB | 1 140 MB | flat |
+| `cpu%` api p50 | 31.0 % | 50.1 % | higher, on 37 % more data |
+| **aircraft in the union** | 12 131 | **16 859** | **+39 %** |
+| **vessels in the store** | 22 239 | **38 599** | **+74 %** |
+
+Both tiers are carrying substantially more data than at baseline, which is the
+honest confound: chrome CPU tracks the number of features the tar1090 pages are
+managing. Per unit of data it is 11.5 %/k before against 15.0 %/k after — so
+**CPU is not improved, and may be slightly worse.**
+
+A control ruled out the most likely suspect: running the feeder with
+`BLOCK_IMAGES=0` (images on) settled at ~745 % chrome CPU against ~828 % with
+them off, at a comparable aircraft count. The image flag is not the cause.
+
+What IS proven improved: **memory (-54 %) and renderer count (-58 %) while
+carrying 39 % more aircraft**, and the per-request cost below.
 
 ### Per-request sidecar cost (measure_sidecars.sh)
 
 | endpoint | before | after |
 |---|---|---|
-| `:8090/aircraft.json` p50 | 8.2 ms / 2 604 272 B | **0.4 ms / 721 215 B (gzip)** |
-| `:8090/health` p50 | 1.3 ms / 198 B | **0.3 ms / 308 B** |
+| `:8090/aircraft.json` p50 | 8.2 ms | **0.6 ms** |
+| `:8090/health` p50 | 1.3 ms | **0.5 ms** |
 
-`/aircraft.json` is 95 % faster and 72 % smaller on the wire, and `/health` no longer
-rebuilds a 39k-entry map to report a number the pump loop already knew.
+**93 % faster per request**, and `/health` no longer rebuilds a 39k-entry map to
+report a number the pump loop already knew. This is the unambiguous win.
+
+Gzip was also measured and then **backed out of the hot path**. Compressing the
+~2.8 MB union once a second took node from 44 % to 109 % CPU to save a loopback
+transfer that costs about a millisecond. It is now built lazily and memoised per
+revision — a remote consumer that asks for it still gets it and pays once — and
+the backend no longer sends `Accept-Encoding: gzip` to a `127.0.0.1` feed at all.
+Node came back to 72 %. The ETag is the part that actually pays.
 
 ### Coverage held
 

@@ -155,9 +155,9 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1972 passed + 2 skipped** (skip = opt-in live probes; measured
-  2026-07-24, branch worldmonitor-gaps-2026-07, persona waves 2+3 — see
-  `docs/user-feedback-personas-wave2-2026-07.md`). Never commit below the baseline you inherited. When you raise it,
+  Baseline: **1985 passed + 2 skipped** (skip = opt-in live probes; measured
+  2026-07-27, branch perf-annotate-sidecars-2026-07-27, performance wave — see
+  `docs/perf-results-2026-07-27.md`). Never commit below the baseline you inherited. When you raise it,
   update the number/date/wave here and move the displaced line to
   `docs/decisions.md#backend-test-baseline-history` — this bullet stays a
   three-line fact, not a changelog.

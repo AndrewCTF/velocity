@@ -253,6 +253,27 @@ class Settings(BaseSettings):
     # the hardware/models routes look for it.
     llamacpp_host: str = "http://127.0.0.1:8094"  # LLAMACPP_HOST
     llamacpp_models_max: int = 2  # LLAMACPP_MODELS_MAX (main + hot selection)
+    # llama-server performance flags. NONE of these were passed before
+    # 2026-07-27: the whole command line was models-dir/models-max/host/port/
+    # api-key/flash-attn, so the server ran at its compiled-in defaults with no
+    # GPU offload requested at all, on a box with a 32 GB RTX 5090.
+    # localllm/binary.py already named `-ngl` as a flag "this platform needs".
+    #
+    # -1 offloads every layer the VRAM will take; 0 forces CPU.
+    llamacpp_gpu_layers: int = -1  # LLAMACPP_GPU_LAYERS
+    # The catalog advertises 262144-token contexts. We never need one, and a
+    # large context reserves a proportionally large KV cache, which slows the
+    # load and the prefill for no benefit on a 768-token selection brief.
+    llamacpp_ctx: int = 8192  # LLAMACPP_CTX
+    llamacpp_batch: int = 2048  # LLAMACPP_BATCH
+    llamacpp_ubatch: int = 512  # LLAMACPP_UBATCH
+    # 0 → half the cores. Uncapped threads on a many-core box thrash.
+    llamacpp_threads: int = 0  # LLAMACPP_THREADS
+    # Two slots so a selection brief and a watch-officer call do not serialize.
+    llamacpp_parallel: int = 2  # LLAMACPP_PARALLEL
+    # Prefix-cache reuse. Every call goes through llm.with_prose_style(), which
+    # prepends the SAME block, so the reusable prefix is large and free.
+    llamacpp_cache_reuse: int = 256  # LLAMACPP_CACHE_REUSE
     # vLLM stays OFF by default — no CPU/GPU hybrid offload (whole model must
     # fit VRAM), and it rejects Unsloth's UD-* GGUF dynamic quants (GH
     # #39469), so it is opt-in only for small models fully in VRAM.

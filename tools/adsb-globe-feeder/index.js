@@ -287,15 +287,17 @@ let cache = { rev: 0, json: null, gz: null, total: 0, builtAt: 0 };
 function rebuildCache() {
   const u = unioned();
   const json = Buffer.from(JSON.stringify(u));
-  cache = {
-    rev: cache.rev + 1,
-    json,
-    // Level 1: the consumer is on loopback, so the win is the avoided
-    // serialize, not the bytes. Level 1 costs ~a third of level 6 for ~5% size.
-    gz: zlib.gzipSync(json, { level: 1 }),
-    total: u.aircraft.length,
-    builtAt: Date.now(),
-  };
+  // NO gzip here, on measurement. Compressing ~2.8 MB every second cost more
+  // than it saved: node CPU went from 44% to 109% while the only consumer is
+  // the backend on LOOPBACK, where 2.8 MB reads in ~1 ms. `gz` is built lazily
+  // and memoised per rev, so a remote consumer that asks for gzip still gets it
+  // and pays for it once — but the steady-state local path never pays at all.
+  cache = { rev: cache.rev + 1, json, gz: null, total: u.aircraft.length, builtAt: Date.now() };
+}
+
+function cachedGzip() {
+  if (!cache.gz && cache.json) cache.gz = zlib.gzipSync(cache.json, { level: 1 });
+  return cache.gz;
 }
 
 async function main() {
@@ -317,7 +319,7 @@ async function main() {
       // multi-MB body AND the caller's parse.
       if (req.headers['if-none-match'] === etag) { res.statusCode = 304; res.end(); return; }
       const gzOk = (req.headers['accept-encoding'] || '').includes('gzip');
-      const body = gzOk ? cache.gz : cache.json;
+      const body = gzOk ? cachedGzip() : cache.json;
       if (gzOk) res.setHeader('content-encoding', 'gzip');
       res.setHeader('content-length', body.length);
       res.end(body);
@@ -335,7 +337,7 @@ async function main() {
         contexts: pages.size,
         pump_ms_last: pumpMsLast,
         bytes_json: cache.json ? cache.json.length : 0,
-        bytes_gz: cache.gz ? cache.gz.length : 0,
+        bytes_gz: cache.gz ? cache.gz.length : null,
         sources: per,
       }));
     } else { res.statusCode = 404; res.end('not found'); }

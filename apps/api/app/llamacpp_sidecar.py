@@ -253,6 +253,7 @@ async def start() -> None:
         await _kill_foreign_instance(foreign_pid)
 
     _api_key = secrets.token_urlsafe(32)
+    threads = settings.llamacpp_threads or max(1, (os.cpu_count() or 4) // 2)
     argv = [
         str(bin_path),
         "--models-dir", str(root),
@@ -261,6 +262,18 @@ async def start() -> None:
         "--port", str(_port()),
         "--api-key", _api_key,
         "--flash-attn", "auto",
+        # Performance flags. Every one of these was ABSENT before 2026-07-27, so
+        # the server ran at compiled-in defaults and never requested GPU
+        # offload. See config.py for what each one buys.
+        "-ngl", str(settings.llamacpp_gpu_layers),
+        "--ctx-size", str(settings.llamacpp_ctx),
+        "--batch-size", str(settings.llamacpp_batch),
+        "--ubatch-size", str(settings.llamacpp_ubatch),
+        "--threads", str(threads),
+        "--parallel", str(settings.llamacpp_parallel),
+        "--cache-reuse", str(settings.llamacpp_cache_reuse),
+        # Correct chat templates for Qwen/Gemma GGUFs.
+        "--jinja",
     ]
 
     env = dict(os.environ)
