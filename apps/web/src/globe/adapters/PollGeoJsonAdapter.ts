@@ -36,6 +36,7 @@ import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
 import { ingestFix, projectAt, type DrFix, type DrState } from './deadReckon.js';
 import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { perfSetDrain } from '../perf.js';
+import { onMoveSettle, cancelMoveSettle } from '../pollGate.js';
 import { isCameraMoving, cameraMovingForMs } from '../cameraMotion.js';
 import { VesselClusterPrimitive } from './VesselClusterPrimitive.js';
 import { tracks } from '../../intel/tracks.js';
@@ -302,10 +303,17 @@ interface FeatureCollection {
   note?: string;
 }
 
-// Per-layer entity cap removed — clustering at world/continent scale means
-// unlimited entities stay responsive. Clustering aggregates far-away entities
-// into count bubbles; individual icons appear only when zoomed in.
-const MAX_PER_LAYER = Number.MAX_SAFE_INTEGER;
+// Clustering keeps the VESSEL layer responsive at world scale, so that layer
+// carries its own cap and does not need this one. Everything else did: with the
+// cap at Number.MAX_SAFE_INTEGER, a single long-tail layer could out-weigh the
+// feed the operator is actually watching. Measured 2026-07-27, all toggles on:
+// 59942 entities across 78 data sources at 5 fps, of which NASA FIRMS alone was
+// 14818 — more than the 14458 aircraft. Cesium's DataSourceDisplay walks every
+// entity of every data source every frame, so those two cost the same.
+//
+// This is the DEFAULT for a layer that declares no `maxEntities`; per-layer
+// values live in the registry next to the endpoint they describe.
+const DEFAULT_LAYER_CAP = 6000;
 
 // djb2 string hash → unsigned 32-bit, base36 for compact ids. Used only to
 // synthesise a stable id when the upstream feature carries no id but does
@@ -342,15 +350,20 @@ const MOBILE_LAYER_CAP = isMobileDevice() ? 2000 : Number.POSITIVE_INFINITY;
 const REFERENCE_LAYER_CAP = 1500;
 const REFERENCE_KINDS: ReadonlySet<string> = new Set(['facility', 'airport', 'port', 'base']);
 
-function effectiveLayerCap(styleKind: string): number {
-  const presetLayer =
-    styleKind === 'aircraft' && !isMobileDevice()
-      ? Number.POSITIVE_INFINITY
-      : presetKnobs(useSettings.getState().mapQuality).layerCap;
+function effectiveLayerCap(styleKind: string, declared?: number): number {
+  const isAircraft = styleKind === 'aircraft' && !isMobileDevice();
+  const presetLayer = isAircraft
+    ? Number.POSITIVE_INFINITY
+    : presetKnobs(useSettings.getState().mapQuality).layerCap;
   const reference = REFERENCE_KINDS.has(styleKind)
     ? REFERENCE_LAYER_CAP
     : Number.POSITIVE_INFINITY;
-  return Math.min(MOBILE_LAYER_CAP, presetLayer, reference);
+  // Aircraft keep the desktop exemption (>= 8000 world-view invariant); every
+  // other kind gets its declared cap, else the default.
+  const generic = isAircraft
+    ? Number.POSITIVE_INFINITY
+    : (declared ?? DEFAULT_LAYER_CAP);
+  return Math.min(MOBILE_LAYER_CAP, presetLayer, reference, generic);
 }
 
 function stableSubset(feats: Feature[], cap: number): Feature[] {
@@ -637,22 +650,32 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       });
     }
     if (this.props.refreshOnMove) {
-      // Debounce so a multi-step zoom/pan coalesces into one re-poll of the
-      // new viewport (not one per intermediate camera event).
-      let t: number | null = null;
-      const onMove = (): void => {
-        if (t != null) window.clearTimeout(t);
-        t = window.setTimeout(() => {
-          // §5.6.3: skip the moveEnd re-poll when the WS push owns this view and a
-          // frame landed <1 s ago — it's already fresher than an HTTP poll. Zoomed-in
-          // (bbox) views still poll: WS is suppressed there and the bbox just changed.
-          if (this.wsActive && this.isWorldView() && Date.now() - this.lastWsMs < 1000) return;
-          this.refresh();
-        }, 200);
+      // ONE settle timer for the whole map, with a concurrency cap, instead of a
+      // private 200 ms debounce per adapter. Sixteen layers register for
+      // moveEnd; privately debounced they all fired at the same instant, and the
+      // nine infra.* layers share a single endpoint, so one settle cost nine
+      // identical requests to the same route (measured 144 in 74 s). See
+      // globe/pollGate.ts.
+      const release = (): void => {
+        // Skip the moveEnd re-poll when the WS push owns this view and a frame
+        // landed <1 s ago — it is already fresher than an HTTP poll. Zoomed-in
+        // (bbox) views still poll: WS is suppressed there and the bbox changed.
+        if (this.wsActive && this.isWorldView() && Date.now() - this.lastWsMs < 1000) return;
+        // A move-refresh exists to fetch a DIFFERENT viewport. If the URL this
+        // layer would request is the one it already fetched, the camera moved
+        // but this layer's request did not change, and the scheduled poll on
+        // the TTL grid is already keeping that same URL fresh. Orbiting or
+        // nudging the camera used to re-fire all sixteen move-refreshing layers
+        // regardless, which is most of the 3.3x gap between the request rate
+        // the TTLs predict and the 282/min actually measured.
+        const url = this.buildUrl();
+        if (url === this.lastFetchedUrl) return;
+        this.refresh();
       };
+      const onMove = (): void => onMoveSettle(this.props.ctx.descriptor.id, release);
       viewer.camera.moveEnd.addEventListener(onMove);
       this.detachMove = () => {
-        if (t != null) window.clearTimeout(t);
+        cancelMoveSettle(release);
         if (!viewer.isDestroyed()) viewer.camera.moveEnd.removeEventListener(onMove);
       };
     }
@@ -771,6 +794,16 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   private scheduleNext(delayMs: number): void {
     if (this.detached || this.props.ctx.viewer.isDestroyed()) return;
     this.timer = window.setTimeout(() => {
+      // A backgrounded tab has nothing to paint, but every layer kept polling:
+      // with all toggles on that is ~282 requests a minute of pure waste, and
+      // the frames the drain produces are thrown away. Re-anchor the grid and
+      // wait — `visibilitychange` already forces one immediate catch-up refresh
+      // when the tab comes back, so nothing is lost by not polling meanwhile.
+      if (typeof document !== 'undefined' && document.hidden) {
+        this.nextAt = Date.now();
+        this.scheduleNext(this.props.intervalSec * 1000);
+        return;
+      }
       if (this.nextAt === 0) this.nextAt = Date.now();
       void this.poll().finally(() => {
         const ttl = this.props.intervalSec * 1000;
@@ -781,6 +814,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       });
     }, delayMs);
   }
+
+  /** URL of the most recent poll — lets a move-refresh skip an unchanged viewport. */
+  private lastFetchedUrl = '';
 
   private buildUrl(): string {
     const bbox = this.props.bboxQuery?.();
@@ -815,7 +851,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // ETag): an unchanged blob returns 304 and we skip the parse + entity walk
       // entirely. The bbox path has no ETag, so it always renders.
       if (worldView && this.lastEtag) headers['If-None-Match'] = this.lastEtag;
-      const r = await apiFetch(this.buildUrl(), { signal: this.aborter.signal, headers });
+      const url = this.buildUrl();
+      this.lastFetchedUrl = url;
+      const r = await apiFetch(url, { signal: this.aborter.signal, headers });
       if (r.status === 304) {
         this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
         return;
@@ -949,15 +987,17 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // Bound the world-view vessel set (they cluster at this zoom anyway). djb2-
     // keyed stableSubset → the same ships persist across polls, so the upsert-by-id
     // never churns. Lifts when zoomed in past the freeze altitude.
-    let cap = effectiveLayerCap(this.props.styleKind);
+    let cap = effectiveLayerCap(
+      this.props.styleKind,
+      this.props.ctx.descriptor.maxEntities,
+    );
     if (
       this.props.styleKind === 'vessel' &&
       this.props.ctx.viewer.camera.positionCartographic.height > VESSEL_GLIDE_FREEZE_ALTITUDE_M
     ) {
       cap = Math.min(cap, presetKnobs(useSettings.getState().mapQuality).vesselCap);
     }
-    const capped = incoming.length > cap ? stableSubset(incoming, cap) : incoming;
-    this.pendingFeats = capped.slice(0, MAX_PER_LAYER);
+    this.pendingFeats = incoming.length > cap ? stableSubset(incoming, cap) : incoming;
     this.pendingIds = new Set<string>();
     this.pendingIdx = 0;
     if (this.drainHandle == null) {

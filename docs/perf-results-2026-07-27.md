@@ -136,3 +136,70 @@ The endpoint also reports blob sizes and ages, the feed-cache depth, parked-cach
 size, and the AIS supervision state (stale-for, restarts-in-window,
 budget-exhausted) so the sidecar behaviour from Phase 1 is inspectable without
 reading a log.
+
+---
+
+## Phase 3 — frontend render and toggle cost
+
+Changes: one shared move-settle gate for the whole map (batched release, priority
+ordered) instead of sixteen private debounces; a move-refresh is skipped when the
+URL it would request is the one already fetched; polling pauses while the tab is
+hidden; `maritime.parked` gained the viewport query and cap it never had; and
+`LayerDescriptor` gained `maxEntities`, restoring a real per-layer cap.
+
+### All toggles on, measured in a real browser on the GPU
+
+| Metric | baseline | after Phase 3 | change |
+|---|---|---|---|
+| `rendersPerSec` p50 | 5.0 | **6.0** | +20 % |
+| `rendersPerSec` p50, world view | 6.0 | **10.0** | **+67 %** |
+| `frameMsEMA` p50 | 239.3 ms | **148.7 ms** | **-38 %** |
+| Cesium entities p50 | 60 826 | **39 127** | **-36 %** |
+| Cesium entities p05 | 54 970 | 34 555 | -37 % |
+| **Measured request rate** | 282 req/min | **221 req/min** | **-22 %** |
+| `drainMsLast` p50 | 7.1 ms | 5.0 ms | -30 % |
+| JS heap p50 | 2 678 MB | 2 476 MB | -8 % |
+
+### Where the entities actually were
+
+Guessing would have targeted the wrong layer. The per-data-source breakdown, all
+toggles on:
+
+| data source | entities |
+|---|---|
+| **`hazards.nasa.firms`** | **14 818** |
+| `aviation.adsb.global` | 14 458 |
+| `maritime.keyless` | 6 000 |
+| `maritime.parked` | 6 000 (was uncapped; the store held 26 203) |
+| `maritime.aisstream` | 5 819 |
+| `infra.cables.landings` | 1 918 |
+| `infra.cams.public` | 1 820 |
+| …72 more | ~9 000 |
+| **total** | **59 942 across 78 data sources** |
+
+The largest layer was **not** the aircraft feed everyone watches — it was NASA
+FIRMS, uncapped, at 14 818 fire detections. Cesium's `DataSourceDisplay` walks
+every entity of every data source every frame, so an off-by-default long-tail
+layer costs exactly what the primary feed costs.
+
+### What did NOT work, and why it is recorded
+
+The first version of the shared gate capped concurrency with a microtask, which
+capped nothing: `refresh()` is fire-and-forget, so every queued layer still fired
+inside the same frame. Measured request rate went **up**, 282 to 321/min. The
+batched-release rewrite plus the unchanged-URL skip is what produced the 221.
+
+### Honest limit — this is not finished
+
+**5 fps to 6 fps is not a fix.** The remaining cost is structural: 78 Cesium data
+sources and ~39 000 individually-managed entities, walked per frame by the Entity
+API. `ScriptDuration` is 97 % of `TaskDuration`, so it is JS, not the GPU.
+
+The known remedy is the one Palantir describe for exactly this
+(docs/palantir-reference-2026-07.md §7): batch by style into single draw calls —
+"10,000 lines with the same styling become one GPU operation". This repo already
+has that path (`PrimitiveEntityLayer`, shared `BillboardCollection` +
+`LabelCollection`) and it is why the 14 458 aircraft are affordable. Extending it
+to the other ~45 layers is the work that moves 6 fps to 25 fps, and it is **not
+done in this branch**. Recorded here so the next person starts from the
+measurement rather than from the same guess.

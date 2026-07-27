@@ -421,6 +421,14 @@ export class LayerCompositor {
         // 20000 covers the ~4.5k union whole. Mobile: always a small bbox + cap.
         bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 6000, mobile ? 2000 : 20000, mobile);
         refreshOnMove = true;
+      } else if (d.id === 'maritime.parked') {
+        // The ONE layer that asked for the world with no bbox and no client cap.
+        // The parked cache is long-retained (12 h) and unbounded in count — it
+        // held 26203 entries during the 2026-07-27 measurement — so with this
+        // layer on it was the largest single contributor to the 60826-entity
+        // world view. Same treatment as the live vessel layer.
+        bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 6000, mobile ? 2000 : 8000, mobile);
+        refreshOnMove = true;
       } else if (
         d.id === 'places.airports' ||
         d.id === 'places.ports' ||
