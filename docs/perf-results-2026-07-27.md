@@ -675,3 +675,88 @@ worst sample out of ~200 is not a statistic, and those multi-second outliers are
 not the snapshot cycle — they are the background pollers (AIS at 30 s and 45 s,
 news, GC) blocking the loop for far longer than one cycle costs. Cutting the
 cycle's block cannot remove them, and this change does not claim to.
+
+
+---
+
+## Addendum 3 — the `_aircraft_geojson` rebuild, actually fixed
+
+Addendum 2 threaded the call, which moved the pain off the loop but left the work
+intact. This removes the work.
+
+### What changed
+
+`_merge_raw_into` no longer calls `_aircraft_geojson` at all. It walks the raw
+records itself and:
+
+1. runs the filter chain first, so a rejected record costs only that;
+2. decides **freshest-wins from the raw record** (`_raw_obs_at`, the same
+   `_seen_at - seen_pos` arithmetic `_feat_obs_at` does) — so a record that loses
+   the union costs nothing at all, where before every record was built into a
+   feature and then discarded;
+3. **updates a retained feature object** per id instead of allocating a new one.
+
+`_aircraft_geojson` is untouched and still serves its seven per-request callers.
+
+### Measured, 20 000 aircraft
+
+| | ms/cycle |
+|---|---|
+| OLD, rebuild every cycle | 43.59 |
+| NEW, cold (first cycle) | 32.94 |
+| **NEW, steady state (reuse)** | **31.42** |
+| **saving** | **12.17 ms — 28 % faster** |
+
+Two design choices were settled by measurement rather than intuition:
+
+- **`properties` is REPLACED, not updated key-by-key.** In-place updating
+  measured **23.52 ms against 20.48 ms** — 15 % *slower*, because a dict literal
+  with constant keys uses a fast build path while 20 separate stores each pay a
+  hash lookup. Replacing is also the safer option: it cannot leave a stale
+  optional key (`seen_pos_s`/`seen_at` are conditional) behind.
+- **Leaf values are replaced, never edited in place** — a new `coordinates`
+  list rather than three index assignments — so a concurrent reader sees the old
+  container or the new one, never a half-written one.
+
+### Isolation, which is what makes reuse legal
+
+`global_snapshot()` now returns an **independent copy** (`isolate_fc`), because
+consumers retain it across `await`s: `intel/analytics.py:501→:510` and
+`:613-614`, `intel/incidents.py:95→:121`. Under the old shallow copy those would
+have computed half an answer from cycle N and half from N+1.
+
+Copying on read rather than rebuilding on write is the right side to pay on: the
+cycle runs at 1 Hz, those consumers run per request and most are cached for 60 s.
+The hot bbox path of `/api/adsb/global` uses the new `snapshot_view()` (shared,
+read-now) and **filters before isolating**, so it copies a few hundred survivors
+rather than all ~20 000. Every mutation runs under `_SNAPSHOT_LOCK`, which
+`global_snapshot()` also takes, so no consumer can copy a half-updated set.
+
+### Live, on a booted backend (4 windows, 60 s apart)
+
+```
+lag p50=0.0 p95=186 max=1126 | fanout_cpu=59.7 merge=32.3 total=251.5 feats=19445
+lag p50=0.0 p95=232 max=1542 | fanout_cpu=61.7 merge=30.9 total=430.1 feats=19818
+lag p50=1.0 p95=161 max=1359 | fanout_cpu=69.9 merge=37.0 total=224.6 feats=20065
+lag p50=0.0 p95=282 max=1184 | fanout_cpu=58.6 merge=31.7 total=264.3 feats=20492
+```
+
+| | before (this session's first attribution) | after |
+|---|---|---|
+| loop-lag p95 | 368 ms | **161-282 ms** (median of windows ~209) |
+| `merge` (carry-forward) | 52.3 ms | **30.9-37.0 ms** |
+| features carried | 19 741 | 19 445-20 492 |
+
+`fanout_cpu` reads 58-70 ms rather than the 31 ms the micro-benchmark predicts:
+it is **wall** time of a threaded call that shares the GIL with the event loop,
+not CPU time, so it includes the loop's own slices. The benchmark measures the
+work; the live figure measures the elapsed window it runs in. Both moved the
+right way, and the `merge` phase — pure CPU, same measurement basis before and
+after — fell by ~40 %.
+
+### What is still not fixed
+
+The multi-second `max` remains (1126-1542 ms). It is not this cycle: the
+background pollers (AIS at 30 s and 45 s, ShipXplorer, news) block the loop for
+far longer than a cycle costs, and `/api/health` — which touches no state —
+shows the same magnitude. That is the next thing to attribute.

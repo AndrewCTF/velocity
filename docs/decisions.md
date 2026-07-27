@@ -1455,13 +1455,31 @@ correct trade. All four `_merge_raw_into` call sites are threaded accordingly.
 four containers per contact (feature, geometry, coordinates, properties), 18 %
 the ~15 `.get()`s, 12 % the filter chain, the rest float conversions.
 
-**Do NOT "fix" it by retaining and mutating the feature dicts across cycles.**
-That is the obvious next idea and it is a correctness regression:
-`global_snapshot()` hands consumers a shallow copy that SHARES those dicts, and
-`intel/analytics.py` passes the list across `await`s and re-consumes it
-(`features=features`, :501→:510, :613-614), as does `intel/incidents.py`
-(:95→:121). Mutating in place would let one analysis compute half its answer
-from cycle N and half from N+1.
+**Retaining and mutating the feature dicts IS the fix — but only once
+`global_snapshot()` isolates (done 2026-07-27).** On its own it is a correctness
+regression, because `global_snapshot()` used to hand out a shallow copy that
+SHARED those dicts while `intel/analytics.py` passes the list across `await`s and
+re-consumes it (`features=features`, :501→:510, :613-614), as does
+`intel/incidents.py` (:95→:121) — one analysis would compute half its answer from
+cycle N and half from N+1.
+
+So both halves shipped together:
+
+* `_merge_raw_into` walks the raw records itself, decides freshest-wins from the
+  RAW record (`_raw_obs_at`) so a losing record is never built, and updates a
+  retained feature object per id. **43.59 → 31.42 ms per 20 000 aircraft (28 %).**
+  `properties` is REPLACED rather than updated key-by-key: measured 20.48 ms vs
+  23.52 ms — the dict-literal path is faster than 20 stores — and replacing also
+  cannot leave a stale optional key behind. Leaf values are replaced, never
+  edited in place, so a concurrent reader never sees a half-written container.
+* `global_snapshot()` returns an independent copy (`isolate_fc`) under
+  `_SNAPSHOT_LOCK`, which every mutation also takes. `snapshot_view()` is the
+  opt-in shared read-now accessor; the hot bbox path filters against it and
+  isolates only the survivors, so it copies hundreds rather than ~20 000.
+* `_aircraft_geojson` is UNTOUCHED and remains the definition for its seven
+  per-request callers. `tests/test_adsb_feature_reuse.py` runs the old
+  implementation against the new one over a multi-cycle, multi-tier, mixed-
+  freshness sequence and requires identical output, so they cannot drift.
 
 Ordering for CPU on the loop, corrected: **do less work** first; thread it
 second (real, for the tail); and only expect *parallelism* from work that
