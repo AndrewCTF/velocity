@@ -50,6 +50,7 @@ osint-mcp = "app.mcp_server:main"
 dev = [
   "pytest>=8.3.3",
   "pytest-asyncio>=0.24.0",
+  "pytest-xdist>=3.8.0",
   "httpx>=0.27.2",
   "ruff>=0.6.8",
 ]
@@ -96,4 +97,19 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.File"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Parallel by default: the suite is a verification gate that runs at every commit
+# boundary, and 2 minutes of it taxes every change. Measured 2026-07-28 on 32
+# cores: 118.9 s serial -> 30.1 s with -n auto, identical 2006 passed + 2 skipped.
+#
+# --dist loadfile, NOT the default `load`, and that is load-bearing. Three pieces
+# of module state are mutated directly rather than through monkeypatch, so they
+# are not auto-reverted and the tests around them depend on running in file
+# order: ais_sidecar._stale_since/_restarts (test_ais_sidecar_reuse.py),
+# adsb_sidecar._proc/_reuse_pid (test_adsb_sidecar_supervise.py), and the
+# module-level _TEST_TILE_DIR in conftest.py that the tile tests build up across
+# calls. loadfile keeps every test from one file on one worker, so today's
+# ordering guarantee is preserved exactly. Fix those globals before loosening it.
+#
+# Pass -n0 to run serially (single-test debugging, or reading live log output).
+addopts = "-n auto --dist loadfile"
 

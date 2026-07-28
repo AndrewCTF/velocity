@@ -155,12 +155,13 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1985 passed + 2 skipped** (skip = opt-in live probes; measured
-  2026-07-27, branch perf-annotate-sidecars-2026-07-27, performance wave — see
-  `docs/perf-results-2026-07-27.md`). Never commit below the baseline you inherited. When you raise it,
-  update the number/date/wave here and move the displaced line to
-  `docs/decisions.md#backend-test-baseline-history` — this bullet stays a
-  three-line fact, not a changelog.
+  Baseline: **2006 passed + 2 skipped in ~30 s** (skip = opt-in live probes;
+  measured 2026-07-28, branch perf-annotate-sidecars-2026-07-27, edge wave — see
+  `docs/edge-wave-7-verify.md`). Runs parallel by default (`addopts = -n auto
+  --dist loadfile`); `-n0` for serial. Never commit below the baseline you
+  inherited. When you raise it, update the number/date/wave here and move the
+  displaced line to `docs/decisions.md#backend-test-baseline-history` — this
+  bullet stays a three-line fact, not a changelog.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
   = typecheck + lint + web unit + api tests in one command.
 - Boot: `bash scripts/run-api.sh` from repo ROOT (:8000, jemalloc preload —

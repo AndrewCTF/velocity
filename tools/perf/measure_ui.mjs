@@ -10,6 +10,7 @@
 // Headless cannot measure GPU fps (docs/decisions.md, Playwright section), so
 // --headless prints every fps figure as UNVERIFIED rather than a number.
 
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,6 +32,10 @@ const URL_ = opt('url', 'http://127.0.0.1:5173');
 const PROFILE = opt('profile', 'baseline');
 const SECONDS = parseInt(opt('seconds', '60'), 10);
 const HEADLESS = flag('headless');
+// --out writes the same numbers as JSON so a success criterion can be graded by
+// a command instead of by reading a transcript. The Markdown on stdout is
+// unchanged; this is additive.
+const OUT = opt('out', '');
 
 const pct = (v, p) => {
   if (!v.length) return NaN;
@@ -38,6 +43,29 @@ const pct = (v, p) => {
   return s[Math.min(s.length - 1, Math.max(0, Math.round((p / 100) * (s.length - 1))))];
 };
 const f = (x, nd = 1) => (Number.isFinite(x) ? x.toFixed(nd) : '—');
+
+// Samples land at ~1 Hz, so a 5-sample window is ~5 s. A median that looks fine
+// while one 5 s stretch locks the UI is exactly the experience being reported,
+// so report the WORST window, not the average of them.
+const WINDOW = 5;
+function worstWindow(frameMs, fps) {
+  if (frameMs.length < WINDOW) return null;
+  let worst = null;
+  for (let i = 0; i + WINDOW <= frameMs.length; i++) {
+    const fr = frameMs.slice(i, i + WINDOW);
+    const meanFrame = fr.reduce((a, b) => a + b, 0) / WINDOW;
+    if (!worst || meanFrame > worst.frameMsMean) {
+      const fp = fps.slice(i, i + WINDOW).filter(Number.isFinite);
+      worst = {
+        startSample: i,
+        frameMsMean: meanFrame,
+        frameMsMax: Math.max(...fr),
+        fpsMin: fp.length ? Math.min(...fp) : NaN,
+      };
+    }
+  }
+  return worst;
+}
 
 // The camera script — fixed so runs are comparable.
 const LEGS = [
@@ -300,6 +328,36 @@ async function main() {
       ? `OK (p05 rendersPerSec ${f(p05)})`
       : `POOR (p05 rendersPerSec ${f(p05)} < 20)`;
   console.log(`\n**Verdict: ${verdict}**`);
+
+  if (OUT) {
+    const stats = (v) => ({ p05: pct(v, 5), p50: pct(v, 50), p95: pct(v, 95), max: Math.max(...v) });
+    const report = {
+      profile: PROFILE,
+      url: URL_,
+      seconds: SECONDS,
+      headless: HEADLESS,
+      at: new Date().toISOString(),
+      dataSources: pre.dataSources,
+      entitiesAtStart: pre.entities,
+      series: Object.fromEntries(Object.entries(series).map(([k, v]) => [k, stats(v)])),
+      byLeg: Object.fromEntries(
+        Object.entries(legSamples).map(([k, v]) => [k, stats(v.filter(Number.isFinite))]),
+      ),
+      cdp: Object.fromEntries(
+        ['TaskDuration', 'ScriptDuration', 'LayoutDuration', 'RecalcStyleDuration', 'JSHeapUsedSize']
+          .filter((k) => m0[k] !== undefined)
+          .map((k) => [k, (m1[k] ?? 0) - (m0[k] ?? 0)]),
+      ),
+      requests: { total: requests.total, secs: requests.secs, perMin: (requests.total / requests.secs) * 60, by: requests.by },
+      worstWindow: worstWindow(series.frameMsEMA || [], series.rendersPerSec || []),
+      consoleErrors: consoleErrors.length,
+      verdict,
+      pass: HEADLESS ? null : Number.isFinite(p05) && p05 >= 20,
+    };
+    fs.mkdirSync(path.dirname(path.resolve(OUT)), { recursive: true });
+    fs.writeFileSync(OUT, `${JSON.stringify(report, null, 2)}\n`);
+    console.log(`\nwrote ${OUT}`);
+  }
 
   await browser.close();
   process.exit(!HEADLESS && Number.isFinite(p05) && p05 < 20 && PROFILE === 'all-toggles' ? 1 : 0);
