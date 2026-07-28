@@ -73,7 +73,11 @@ _COVERAGE_TTL_S: float = 120.0
 # _buffer: ordered list of rows pending flush
 # _last: per-id last-buffered (t, lon, lat)  used for rate-limiting
 _buffer: list[tuple[str, str, float, float, float, float, str]] = []
-_last: collections.OrderedDict[str, tuple[float, float, float]] = collections.OrderedDict()
+# per-id last-buffered (t, lon, lat, track) — track is part of the key because a
+# contact that turns without translating IS a new observation.
+_last: collections.OrderedDict[str, tuple[float, float, float, float]] = (
+    collections.OrderedDict()
+)
 _rows_written: int = 0
 _flush_task: asyncio.Task[None] | None = None
 # (window_hours, bucket_hours), computed_at, payload — see coverage() for why
@@ -86,6 +90,9 @@ _db_path_override: str | None = None  # set by tests via override_db_path()
 # the resolver fires once per distinct vessel (on first sight) — not every poll.
 _resolved_seen: set[str] = set()
 _RESOLVE_SEEN_MAX: int = 200_000
+# SQLite's compile-time SQLITE_MAX_ATTACHED default is 10, and `main` uses one
+# of the slots. Keep a margin.
+_MAX_ATTACHED: int = 8
 
 
 # ── DB path injection (for tests) ─────────────────────────────────────────────
@@ -102,6 +109,101 @@ def _resolved_db_path() -> str:
     if _db_path_override is not None:
         return _db_path_override
     return get_settings().history_db_path
+
+
+# ── storage roots and daily shards ────────────────────────────────────────────
+#
+# One file on one disk was the whole storage story, and it produced three
+# separate problems: an operator with a big spindle and a small SSD could not
+# say where the archive lives; retention had to DELETE rows and VACUUM, which is
+# what produced the 49.6 GB WAL runaway (docs/decisions.md, 2026-07-16); and the
+# byte cap could only overshoot between hourly passes.
+#
+# Rolling daily shards fix all three at once. Each UTC day is its own plain
+# SQLite file under one of OSINT_HISTORY_ROOTS; a new day opens in whichever
+# root has the most free space; retention becomes os.remove(). Reads ATTACH the
+# shards that overlap the window and expose a UNION ALL view named `positions`,
+# so every existing query works unchanged.
+#
+# Sharding is OPT-IN: with no roots configured the single legacy file behaves
+# exactly as before, so an existing install migrates when the operator asks and
+# not before. When roots ARE set, a pre-existing legacy file is still read as
+# one more shard, so no history is stranded.
+
+
+def _roots() -> list[Path]:
+    """Configured storage roots, in order. Empty when unset (legacy mode)."""
+    raw = (get_settings().history_roots or "").strip()
+    if not raw:
+        return []
+    return [Path(p.strip()).expanduser() for p in raw.split(",") if p.strip()]
+
+
+def sharded() -> bool:
+    """True when the operator has chosen one or more storage roots.
+
+    ``override_db_path`` deliberately does NOT disable this — it overrides where
+    the *legacy* file is, which is what lets a test exercise sharding without
+    the real ``./data/history.db`` joining the union as a shard.
+    """
+    return bool(_roots())
+
+
+def _shard_day(t: float) -> str:
+    return time.strftime("%Y-%m-%d", time.gmtime(t))
+
+
+def _shard_dir(root: Path) -> Path:
+    return root / "history"
+
+
+def _free_bytes(path: Path) -> int:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        st = os.statvfs(path)
+        return st.f_bavail * st.f_frsize
+    except OSError:
+        return 0
+
+
+def _shard_path_for(t: float) -> Path:
+    """Where the shard covering *t* lives.
+
+    If a shard for that day already exists in any root, that one wins — a root
+    list reordered between boots must never split one day across two files.
+    Otherwise it opens in the root with the most free space, which is what makes
+    "no single-disk assumption" true rather than merely configurable.
+    """
+    day = _shard_day(t)
+    roots = _roots()
+    for root in roots:
+        candidate = _shard_dir(root) / f"{day}.db"
+        if candidate.exists():
+            return candidate
+    best = max(roots, key=_free_bytes)
+    _shard_dir(best).mkdir(parents=True, exist_ok=True)
+    return _shard_dir(best) / f"{day}.db"
+
+
+def _all_shards() -> list[tuple[str, Path]]:
+    """Every shard we can read, oldest first, as (day, path).
+
+    A legacy single-file archive is included under the sentinel day "legacy" and
+    sorts first, so switching an existing install to roots keeps its history
+    queryable instead of silently hiding it.
+    """
+    out: list[tuple[str, Path]] = []
+    legacy = Path(_resolved_db_path())
+    if legacy.exists():
+        out.append(("legacy", legacy))
+    for root in _roots():
+        d = _shard_dir(root)
+        if not d.is_dir():
+            continue
+        for f in d.glob("*.db"):
+            out.append((f.stem, f))
+    out.sort(key=lambda p: ("" if p[0] == "legacy" else p[0]))
+    return out
 
 
 def _clamped_retention_hours() -> int:
@@ -133,8 +235,11 @@ def _clamped_retention_hours() -> int:
     return hours
 
 
-def _connect() -> sqlite3.Connection:
-    path = _resolved_db_path()
+def _connect(path: str | None = None) -> sqlite3.Connection:
+    """Open the WRITE connection: the legacy file, or today's shard when roots
+    are configured. Pass *path* to open one specific shard."""
+    if path is None:
+        path = str(_shard_path_for(time.time())) if sharded() else _resolved_db_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(path, check_same_thread=False)
     # auto_vacuum only takes on a FRESH db (or after a full VACUUM), and must be
@@ -171,6 +276,54 @@ def _connect() -> sqlite3.Connection:
     return con
 
 
+def _read_connect() -> sqlite3.Connection:
+    """Open a READ connection spanning every shard.
+
+    In legacy mode this is just ``_connect()``. When sharded, it opens the
+    newest shard as ``main``, ATTACHes the rest, and replaces ``positions`` with
+    a UNION ALL view over all of them — so every query in this module keeps
+    working against the name ``positions`` and none of them had to learn about
+    shards.
+
+    SQLite's default attach limit is 10, so the newest ``_MAX_ATTACHED`` shards
+    are used and older ones are skipped. That is a real bound: it is logged, not
+    silent, because a coverage answer that quietly omits half the archive is
+    worse than a slow one.
+    """
+    if not sharded():
+        return _connect()
+    shards = _all_shards()
+    if not shards:
+        return _connect()
+    newest = shards[-1]
+    older = shards[:-1]
+    if len(older) > _MAX_ATTACHED:
+        dropped = len(older) - _MAX_ATTACHED
+        log.warning(
+            "history: %d shard(s) older than %s are outside this read "
+            "(attach limit %d) — raise HISTORY_ROOTS consolidation or query a "
+            "narrower window",
+            dropped, older[dropped][0], _MAX_ATTACHED,
+        )
+        older = older[-_MAX_ATTACHED:]
+    con = _connect(str(newest[1]))
+    names = ["main"]
+    for i, (_day, path) in enumerate(older):
+        alias = f"s{i}"
+        try:
+            con.execute("ATTACH DATABASE ? AS " + alias, (str(path),))
+            # A shard written by an older build, or a half-created file, must not
+            # take the whole read down with it.
+            con.execute(f"SELECT 1 FROM {alias}.positions LIMIT 1")
+            names.append(alias)
+        except sqlite3.Error:
+            log.warning("history: skipping unreadable shard %s", path)
+    if len(names) > 1:
+        union = " UNION ALL ".join(f"SELECT * FROM {n}.positions" for n in names)
+        con.execute(f"CREATE TEMP VIEW positions AS {union}")
+    return con
+
+
 def _buffer_point(
     kind: str,
     entity_id: str,
@@ -180,23 +333,49 @@ def _buffer_point(
     track: float,
     extra: dict[str, Any],
 ) -> None:
-    """Append a point to the in-memory buffer if it passes the rate limit."""
+    """Buffer a fix unless it is the same observation we already stored.
+
+    CHANGE-based, not time-based (2026-07-28). The old rule dropped anything that
+    arrived within ``_RATE_LIMIT_SECS`` (5.0) and had moved less than
+    ``_RATE_LIMIT_DEG`` (0.01, about 1.1 km). At the 1 Hz snapshot tick that
+    discarded roughly four fixes in five for any slow or moored contact — a
+    moored vessel got one row every five seconds no matter how many times it was
+    observed, and its dwell was recorded at a fifth of the fidelity it was seen
+    at. That is the "the data is not complete, you cut a lot of it just to save
+    usage" report, and it was a default, not a law.
+
+    The rule now: record a fix when it DIFFERS from the last one stored for that
+    id, skip it when it is identical. A contact that has not moved between polls
+    is not a new observation and costs nothing; a contact that has moved by any
+    amount is recorded at the rate it was seen. Cost therefore tracks how much
+    the world actually moves rather than a clock.
+
+    ``history_min_interval_s`` / ``history_min_move_deg`` restore the old
+    behaviour for an operator who wants to trade completeness for disk — both
+    default to 0, so the trade is opt-in rather than the default.
+    """
     global _buffer, _last
 
     prev = _last.get(entity_id)
     if prev is not None:
-        prev_t, prev_lon, prev_lat = prev
-        dt = t - prev_t
-        dlat = abs(lat - prev_lat)
-        dlon = abs(lon - prev_lon)
-        if dt < _RATE_LIMIT_SECS and dlat < _RATE_LIMIT_DEG and dlon < _RATE_LIMIT_DEG:
-            return  # rate-limited: too recent + didn't move enough
+        prev_t, prev_lon, prev_lat, prev_track = prev
+        # Identical observation → nothing new happened. This is the only
+        # unconditional skip, and it drops no information at all.
+        if lon == prev_lon and lat == prev_lat and track == prev_track:
+            return
+        settings = get_settings()
+        min_dt = settings.history_min_interval_s
+        min_deg = settings.history_min_move_deg
+        if min_dt > 0.0 or min_deg > 0.0:
+            if (t - prev_t) < min_dt and abs(lat - prev_lat) < min_deg \
+                    and abs(lon - prev_lon) < min_deg:
+                return  # operator opted into sampling
 
     # FIFO-evict oldest id if we've hit the cap
     if len(_last) >= _MAX_BUFFERED_IDS and entity_id not in _last:
         _last.popitem(last=False)
 
-    _last[entity_id] = (t, lon, lat)
+    _last[entity_id] = (t, lon, lat, track)
     _buffer.append((kind, entity_id, t, lon, lat, track, _encode_extra(extra)))
 
 
@@ -308,6 +487,13 @@ def _size_cap_bytes(settings: Any) -> int:
     falling back to history_max_bytes (with a warning) if the budget wasn't set,
     so an operator opt-in is never a silent no-op.
     """
+    # An explicit archive budget wins over everything, in either profile. Sizing
+    # the archive to *free RAM* (the default branch below, 5 % of MemAvailable
+    # clamped to <=2 GB) is what silently shrank history on a memory-tight box:
+    # the operator asked for days of replay and got 64 MiB because something else
+    # was using the machine. Disk is what an archive costs; RAM is not.
+    if settings.history_budget_gb > 0:
+        return int(settings.history_budget_gb * 1024**3)
     if settings.archive_mode:
         if settings.history_disk_budget_gb > 0:
             return int(settings.history_disk_budget_gb * 1024**3)
@@ -344,7 +530,13 @@ async def _maintenance_pass() -> None:
             max(2, settings.history_decimate_stride),
         )
     deleted += await loop.run_in_executor(None, prune, hours)
-    deleted += await loop.run_in_executor(None, enforce_size_cap, size_cap)
+    if sharded():
+        # Exact, and free: a whole day's file is unlinked rather than its rows
+        # deleted, so there is nothing left to VACUUM and no overshoot between
+        # passes (the old estimator ran a 2 GB cap up to a measured 4-5 GB).
+        deleted += await loop.run_in_executor(None, enforce_budget, size_cap)
+    else:
+        deleted += await loop.run_in_executor(None, enforce_size_cap, size_cap)
     if deleted:
         # Archive mode skips the full-file VACUUM here on purpose: at archive
         # scale (tens-to-hundreds of GB) a full VACUUM can stall the writer for
@@ -390,7 +582,7 @@ def _query_sync(
 ) -> dict[str, Any]:
     """Execute a SQLite range query. Called via run_in_executor."""
     try:
-        con = _connect()
+        con = _read_connect()
         params: list[Any] = [t_from, t_to]
         where = "t >= ? AND t <= ?"
         if kind:
@@ -459,7 +651,7 @@ def _query_by_id_sync(
 ) -> dict[str, Any]:
     """Execute a single-id range scan via idx_id_t. Called via run_in_executor."""
     try:
-        con = _connect()
+        con = _read_connect()
         rows = con.execute(
             "SELECT t, lon, lat, track, extra FROM positions "
             "WHERE id = ? AND t BETWEEN ? AND ? ORDER BY t LIMIT ?",
@@ -502,7 +694,7 @@ def _timeseries_sync(bucket_sec: int, t_from: float, t_to: float) -> dict[str, A
     """Distinct contact counts per time bucket, split by kind. Real observed data
     from the position store — the source of the Metrics 'over time' trend."""
     try:
-        con = _connect()
+        con = _read_connect()
         rows = con.execute(
             "SELECT CAST(t / ? AS INTEGER) * ? AS bkt, kind, COUNT(DISTINCT id) AS n "
             "FROM positions WHERE t >= ? AND t <= ? GROUP BY bkt, kind ORDER BY bkt",
@@ -557,7 +749,7 @@ def _coverage_sync(window_hours: int, bucket_hours: int) -> dict[str, Any]:
     except OSError:
         total_bytes = 0
     try:
-        con = _connect()
+        con = _read_connect()
         recording_since = con.execute("SELECT MIN(t) FROM positions").fetchone()[0]
         row_count = con.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
         bucket_sec = bucket_hours * 3600
@@ -623,10 +815,42 @@ async def coverage(window_hours: int, bucket_hours: int) -> dict[str, Any]:
 
 # ── prune ─────────────────────────────────────────────────────────────────────
 
+def _drop_shard(path: Path) -> None:
+    """Remove a shard and its WAL/SHM siblings. This is what makes sharded
+    retention free: no DELETE, no VACUUM, no WAL amplification, and the space is
+    returned to the filesystem immediately instead of at the next vacuum."""
+    for suffix in ("", "-wal", "-shm"):
+        try:
+            Path(str(path) + suffix).unlink(missing_ok=True)
+        except OSError:
+            log.warning("history: could not remove %s%s", path, suffix)
+
+
 def prune(retention_hours: int) -> int:
-    """Delete rows older than *retention_hours* ago. Returns the deleted count."""
+    """Delete rows older than *retention_hours* ago. Returns the deleted count.
+
+    Sharded: whole days that end before the cutoff are unlinked, and only the
+    day the cutoff falls inside is row-deleted. Legacy: unchanged row delete.
+    """
     cutoff = time.time() - retention_hours * 3600
     try:
+        if sharded():
+            deleted = 0
+            cutoff_day = _shard_day(cutoff)
+            for day, path in _all_shards():
+                if day == "legacy":
+                    continue
+                if day < cutoff_day:
+                    _drop_shard(path)
+                    deleted += 1  # counted in shards, see the log line below
+                elif day == cutoff_day:
+                    con = _connect(str(path))
+                    con.execute("DELETE FROM positions WHERE t < ?", (cutoff,))
+                    con.commit()
+                    con.close()
+            if deleted:
+                log.info("history: dropped %d shard(s) older than %s", deleted, cutoff_day)
+            return deleted
         con = _connect()
         cur = con.execute("DELETE FROM positions WHERE t < ?", (cutoff,))
         deleted = cur.rowcount
@@ -636,6 +860,52 @@ def prune(retention_hours: int) -> int:
     except Exception:  # noqa: BLE001
         log.exception("history: prune error")
         return 0
+
+
+def archive_bytes() -> int:
+    """Total bytes on disk across every shard (plus the legacy file)."""
+    total = 0
+    for _day, path in _all_shards():
+        for suffix in ("", "-wal"):
+            try:
+                total += Path(str(path) + suffix).stat().st_size
+            except OSError:
+                pass
+    return total
+
+
+def enforce_budget(max_bytes: int) -> int:
+    """Sharded byte cap: drop whole oldest shards until the archive fits.
+
+    Exact rather than an overshoot — the old path estimated a row fraction from
+    the byte overage and corrected on the next hourly pass, which is how a 2 GB
+    cap became a measured 4-5 GB between passes. Today's shard is never dropped:
+    the recorder is writing into it, and an operator whose budget is smaller than
+    one day of data should be told, not silently left with an empty archive.
+    """
+    if max_bytes <= 0:
+        return 0
+    dropped = 0
+    today = _shard_day(time.time())
+    # Never unlink today's shard (the recorder is writing to it) and never
+    # unlink the legacy file. The legacy file is a path the OPERATOR configured
+    # directly and may hold their entire pre-sharding archive; a budget sweep
+    # that deletes it would destroy history we only ever promised to read.
+    # It is reported in archive_bytes() so the budget still accounts for it.
+    shards = [s for s in _all_shards() if s[0] != today and s[0] != "legacy"]
+    while archive_bytes() > max_bytes and shards:
+        day, path = shards.pop(0)
+        _drop_shard(path)
+        dropped += 1
+        log.info("history: dropped shard %s to stay under the %d-byte budget", day, max_bytes)
+    if archive_bytes() > max_bytes and not shards:
+        log.warning(
+            "history: archive is %d bytes, over the %d-byte budget, and only "
+            "today's shard is left — raise HISTORY_BUDGET_GB or add a root to "
+            "HISTORY_ROOTS. Nothing has been thinned.",
+            archive_bytes(), max_bytes,
+        )
+    return dropped
 
 
 def decimate(after_hours: int, stride: int) -> int:
@@ -777,7 +1047,16 @@ def start() -> None:
     except Exception:  # noqa: BLE001
         log.exception("history: failed to open DB at start")
     _flush_task = asyncio.ensure_future(_flush_loop())
-    log.info("history: started (db=%s)", _resolved_db_path())
+    # Report where writes ACTUALLY land. Logging the legacy path while sharded
+    # sends an operator to the wrong file when they go looking for their archive.
+    if sharded():
+        log.info(
+            "history: started (sharded, roots=%s, active=%s)",
+            ",".join(str(r) for r in _roots()),
+            _shard_path_for(time.time()),
+        )
+    else:
+        log.info("history: started (db=%s)", _resolved_db_path())
 
 
 async def stop() -> None:
@@ -813,4 +1092,14 @@ def stats() -> dict[str, Any]:
         "retention_hours": _clamped_retention_hours(),
         "retention_max_hours": int(settings.history_retention_max_hours),
         "max_bytes": int(settings.history_max_bytes),
+        # Storage layout, so an operator can see WHERE their archive is and how
+        # much of the budget it is using without reading the source.
+        "sharded": sharded(),
+        "roots": [str(r) for r in _roots()],
+        "shards": [{"day": d, "path": str(p)} for d, p in _all_shards()],
+        "archive_bytes": archive_bytes(),
+        "budget_bytes": _size_cap_bytes(settings),
+        # Completeness: 0/0 means every distinct observation is recorded.
+        "min_interval_s": settings.history_min_interval_s,
+        "min_move_deg": settings.history_min_move_deg,
     }

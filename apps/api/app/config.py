@@ -480,6 +480,33 @@ class Settings(BaseSettings):
     # delete (refills as live data flows). Disable to run fully stateless.
     history_enabled: bool = True
     history_db_path: str = "./data/history.db"
+    # Where the archive lives. Comma-separated directories; empty keeps the
+    # single legacy file at history_db_path, so an existing install is unchanged
+    # until the operator asks for something else.
+    #
+    #   HISTORY_ROOTS=/mnt/fast,/mnt/bulk
+    #
+    # Each UTC day becomes its own SQLite shard at <root>/history/<YYYY-MM-DD>.db,
+    # opened in whichever root has the most free space at the time — so the
+    # archive is not confined to one disk, and retention can delete a whole file
+    # instead of DELETE + VACUUM (the pattern behind the 49.6 GB WAL runaway,
+    # docs/decisions.md 2026-07-16). A pre-existing history_db_path is still read
+    # as one more shard, so switching strands nothing.
+    history_roots: str = ""  # HISTORY_ROOTS
+    # Total archive budget across ALL roots, in GB. 0 = fall back to the
+    # RAM-scaled history_max_bytes path. Set this and the archive is bounded by
+    # the disk you gave it rather than by how much RAM happens to be free.
+    history_budget_gb: float = 0.0  # HISTORY_BUDGET_GB
+    # Completeness. The recorder used to drop any fix that arrived within
+    # history_min_interval_s AND had moved less than history_min_move_deg — at a
+    # 1 Hz tick with the old 5.0 s / 0.01 deg defaults that discarded four fixes
+    # in five for anything slow or moored, which is the "the data is not complete,
+    # you cut a lot of it to save usage" report. Both now default to 0: a fix is
+    # recorded whenever it DIFFERS from the last one stored for that id, and
+    # skipped only when it is identical. Raise them to trade completeness for
+    # disk deliberately, rather than by default.
+    history_min_interval_s: float = 0.0  # HISTORY_MIN_INTERVAL_S
+    history_min_move_deg: float = 0.0  # HISTORY_MIN_MOVE_DEG
     # Default look-back window for replay. 7 days lets the operator scrub
     # multi-day, not just the live ~24 h window. This is a TIME bound only —
     # the byte cap below is what actually limits storage; the hour window just
