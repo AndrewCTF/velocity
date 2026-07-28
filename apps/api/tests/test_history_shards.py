@@ -19,11 +19,18 @@ from app.config import get_settings
 
 @pytest.fixture(autouse=True)
 def _clean():
-    history.override_db_path(None)
+    """Clear buffers, and RESTORE conftest's isolated path rather than clearing
+    it. `override_db_path(None)` does not mean "no path" — it means "the real
+    ./data/history.db", so a fixture that calls it undoes conftest's
+    _isolate_history_db and points destructive helpers at the live archive. That
+    is the exact hole test_the_history_archive_is_isolated_from_the_real_data_dir
+    exists to catch, and it caught this fixture first.
+    """
+    isolated = history._db_path_override
     history._buffer.clear()
     history._last.clear()
     yield
-    history.override_db_path(None)
+    history.override_db_path(isolated)
     history._buffer.clear()
     history._last.clear()
     get_settings.cache_clear()
@@ -218,3 +225,23 @@ def test_stats_reports_where_the_archive_lives(
     assert st["roots"] == [str(root)]
     assert len(st["shards"]) == 1
     assert st["min_interval_s"] == 0.0 and st["min_move_deg"] == 0.0
+
+
+# ── the suite must never touch the operator's live archive ───────────────────
+
+
+def test_the_history_archive_is_isolated_from_the_real_data_dir() -> None:
+    """conftest's _isolate_history_db must be in force for EVERY test.
+
+    history.py exposes prune/decimate/enforce_size_cap/_vacuum, and test_history.py
+    drives all four. Before the autouse fixture existed, a test that reached one
+    of them without re-overriding the path operated on ./data/history.db --
+    the operator's real archive, resolved against the repo root the suite runs
+    from. This asserts the isolation rather than trusting each test to remember.
+    """
+    resolved = Path(history._resolved_db_path()).resolve()
+    default = Path(get_settings().history_db_path).resolve()
+    assert resolved != default, (
+        f"history is pointed at the real archive ({resolved}) during a test"
+    )
+    assert "pytest" in str(resolved) or "tmp" in str(resolved), resolved

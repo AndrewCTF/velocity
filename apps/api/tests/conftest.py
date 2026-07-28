@@ -99,6 +99,40 @@ def _isolate_foundry_db(tmp_path: Path) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_history_db(tmp_path: Path) -> Iterator[None]:
+    """Point the history archive at a per-test temp file.
+
+    This was the ONE store with no isolation fixture, and it is the one that can
+    destroy real data. ``history.py`` exposes ``prune``, ``decimate``,
+    ``enforce_size_cap`` and ``_vacuum``, and ``test_history.py`` drives all of
+    them; its own per-test ``_reset_module`` sets an override and its ``finally``
+    clears it back to ``None`` — which restores the REAL path,
+    ``./data/history.db``, resolved against the repo root the suite runs from.
+    Any later test in that worker that reaches a destructive helper without
+    re-overriding hits the operator's live archive.
+
+    Observed 2026-07-28: ``data/history.db`` went from 2.7 GB to 22 MB over a
+    session in which the suite ran six times and the backend's own hourly
+    maintenance pass never came due (``next_prune`` is start + 3600 s and no boot
+    lasted an hour). Autouse isolation makes the whole class impossible rather
+    than relying on every test remembering.
+
+    ``HISTORY_ROOTS`` is cleared for the same reason: a developer with roots
+    configured in their environment must not have the suite write into them.
+    """
+    from app import history
+
+    prev_roots = os.environ.pop("HISTORY_ROOTS", None)
+    get_settings.cache_clear()
+    history.override_db_path(str(tmp_path / "history.db"))
+    yield
+    history.override_db_path(None)
+    if prev_roots is not None:
+        os.environ["HISTORY_ROOTS"] = prev_roots
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_workflows_db(tmp_path: Path) -> Iterator[None]:
     """Point the Workflows store at a per-test temp file (mirrors foundry)."""
     from app.workflows import store as workflows_store
