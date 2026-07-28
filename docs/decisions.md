@@ -1492,3 +1492,54 @@ trap; three `ScreenSpaceEventHandler`s
 sharing the canvas so a tool click also mutates selection; streaming LLM
 responses and the selection-brief cache key that hashes live props; annotation
 vertex-edit handles.
+
+### The 23 GB of VRAM was the model stack, not the browsers (2026-07-28)
+
+Operator report: the app is unoptimised, the sidecars eat RAM and CPU, and "it
+uses about twenty five GB of vRAM". Full write-ups:
+`docs/edge-wave-1-vram.md`, `docs/edge-wave-1b-sidecar-cpu.md`,
+`docs/edge-wave-7-verify.md`.
+
+**The attribution was wrong everywhere, including in this repo's own baseline.**
+`docs/perf-baseline-2026-07-27.md` recorded "23.3 GB of the 5090's VRAM" in the
+section about the browser sidecars, and every document downstream repeated it.
+`nvidia-smi -q -d PIDS`, which nobody had run, says: 25 Chromium scraper
+processes holding 4.8 GB of RAM and burning 433 % on one renderer hold **0 MiB**
+of VRAM. The card was 96 % local models — `ollama` at 21 440 MiB plus two
+`llama-server` children at 2 969 + 3 197 MiB. The planned `--disable-gpu` change
+to the four feeders would have shipped a good story with no effect.
+
+**`llamacpp_sidecar.is_enabled()` is now guarded behaviour — do not simplify it
+back.** It asks four questions, and the fourth was added here: engine wants
+llama.cpp, a binary resolves, a model is installed, **and something actually
+wants local inference** (`llm.prefer_local()` / `llm.selection_enabled()` / a
+model with a role / a model pinned hot). Without the fourth, merely having once
+downloaded a model made every boot spawn the router with `--models-max 2 -ngl -1`
+— "keep two models resident, all layers on the GPU" — which llama.cpp fills by
+itself. Measured with `/api/ai/local` reporting `enabled: false`,
+`selection_enabled: false` and `{"active":{"main":null,"selection":null},"hot":[]}`:
+6.2 GB committed to a feature every switch said was off. **"Configured off" has
+to mean "not resident".** The router starts on demand from `POST /api/ai/local`,
+`/api/ai/models/active` and `/api/ai/models/hot` instead.
+→ `tests/test_llamacpp_sidecar.py`; the old pair asserting binary + model was
+sufficient is deliberately replaced. Live: 6 166 MiB → **0**, `:8094` unbound.
+
+**Detaching the tar1090 map cuts 85 % of the sidecar CPU and silently freezes
+the feed — do not retry it as written.** Controlled A/B, same source, both warm
+at 14 209: control 227.1 % CPU with `total` climbing to 15 338; with
+`OLMap.setTarget(null)` 31.9 % CPU and `total` **frozen at exactly 14 209 across
+28 pump cycles**, while `/health` reported `rev: 28`, `age_s: 1`. tar1090's fetch
+loop is coupled to the map. Note the shape: this is the 2026-07-15 immortal-cache
+bug again — our `age_s` is the age of OUR pump, not of the store we read, so it
+cannot detect a frozen upstream store. The spike flag was reverted out rather
+than left off-by-default. The remaining option is the AIS feeder's pattern
+(`ais-myshiptracking-feeder/index.js:173-180`): same-origin `page.evaluate(fetch)`
+against the site's own endpoint, captured via CDP rather than guessed, where
+freshness comes from our own request. Any replacement reader must be tested for
+**movement against a control**, never for a plausible count.
+
+**The suite runs parallel** (`addopts = -n auto --dist loadfile`): 118.9 s →
+30.1 s, identical results. `loadfile` not `load`, because three pieces of module
+state are mutated without `monkeypatch` and depend on file order —
+`ais_sidecar._stale_since`/`._restarts`, `adsb_sidecar._proc`/`._reuse_pid`, and
+conftest's shared `_TEST_TILE_DIR`. Fix those before loosening it.
