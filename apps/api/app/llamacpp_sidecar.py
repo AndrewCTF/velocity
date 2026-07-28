@@ -88,11 +88,27 @@ def _port() -> int:
 
 def is_enabled() -> bool:
     """True when the resolved engine wants llama.cpp, a usable ``llama-server``
-    binary resolves (operator override, PATH, or a prior managed install), AND
-    at least one model is installed. All three are required — a bare binary
-    with nothing to serve, or an installed model with no binary, is not
-    "enabled". Cheap and side-effect-free beyond ``models_root()``'s
-    idempotent ``mkdir``."""
+    binary resolves (operator override, PATH, or a prior managed install), at
+    least one model is installed, AND the operator has actually asked for local
+    inference. A bare binary with nothing to serve, or an installed model with
+    no binary, is not "enabled". Cheap and side-effect-free beyond
+    ``models_root()``'s idempotent ``mkdir``.
+
+    The last clause was ADDED 2026-07-28 and is the load-bearing one. Without
+    it, merely having ever downloaded a model made this return True at boot, so
+    ``start()`` spawned the router with ``--models-max 2 -ngl -1`` and llama.cpp
+    auto-filled both slots on the GPU. Measured on this box with
+    ``/api/ai/local`` reporting ``enabled: false``, ``selection_enabled: false``,
+    ``active {main: null, selection: null}`` and ``hot: []``:
+
+        llama-server  Llama-3.2-3B-Instruct-Q4_K_M   2 969 MiB VRAM
+        llama-server  gemma-3-4b-it-Q4_K_M           3 197 MiB VRAM
+
+    6.2 GB of a 32 GB card, permanently, for a feature every switch said was
+    off. "Configured off" has to mean "not resident". The router now starts on
+    demand instead: enabling local inference, activating a model, or pinning one
+    hot each call ``start()``.
+    """
     engine = engine_state.get_engine()
     if engine not in ("auto", "llamacpp"):
         return False
@@ -100,7 +116,25 @@ def is_enabled() -> bool:
     root = manager.models_root(settings)
     if binary.find_binary(settings, root) is None:
         return False
-    return bool(manager.list_installed())
+    if not manager.list_installed():
+        return False
+    return _wanted()
+
+
+def _wanted() -> bool:
+    """Has anyone asked for local inference? Either the operator switch is on,
+    or a specific model has been given a role (active) or pinned (hot).
+
+    ``app.llm`` is imported lazily: it is a large module and this is called from
+    ``start()`` during lifespan, where an import cycle would be a boot failure
+    rather than a test failure.
+    """
+    from app import llm
+
+    if llm.prefer_local() or llm.selection_enabled():
+        return True
+    active = manager.get_active()
+    return bool(active.get("main") or active.get("selection") or manager.get_hot())
 
 
 async def _already_healthy() -> bool:

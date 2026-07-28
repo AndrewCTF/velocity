@@ -19,6 +19,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app import llamacpp_sidecar
 from app.config import get_settings
 from app.keys import UserCtx, current_user_or_local
 from app.localllm import binary, catalog, hardware, manager, state
@@ -130,6 +131,9 @@ async def post_active(
     body: ActiveIn, _ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
     active = await asyncio.to_thread(manager.set_active, body.role, body.key)
+    # The router no longer starts at boot (llamacpp_sidecar.is_enabled), so
+    # giving a model a role is one of the moments that brings it up.
+    await llamacpp_sidecar.start()
     return {"ok": True, "active": active}
 
 
@@ -141,6 +145,9 @@ class HotIn(BaseModel):
 @router.post("/api/ai/models/hot")
 async def post_hot(body: HotIn, _ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, Any]:
     hot = await asyncio.to_thread(manager.set_hot, body.key, body.hot)
+    # Same as set_active: pinning a model hot is a request for it to be resident,
+    # which means the router has to exist. start() is idempotent.
+    await llamacpp_sidecar.start()
     return {"ok": True, "hot": hot}
 
 

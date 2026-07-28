@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from app import llamacpp_sidecar as sc
+from app import llm
 from app.localllm import manager, state
 
 
@@ -18,12 +19,23 @@ def _isolate(tmp_path: Path):
     manager.override_models_dir(str(tmp_path / "models"))
     manager._JOBS.clear()
     state.set_engine(None)
+    llm.set_prefer_local(None)
+    llm.set_selection_enabled(None)
     _reset_sidecar_state()
     yield
     manager.override_models_dir(None)
     manager._JOBS.clear()
     state.set_engine(None)
+    llm.set_prefer_local(None)
+    llm.set_selection_enabled(None)
     _reset_sidecar_state()
+
+
+def _want() -> None:
+    """Ask for local inference. Since 2026-07-28 a bare install is not enough to
+    start the router — it holds models on the GPU, so something has to want it.
+    """
+    llm.set_prefer_local(True)
 
 
 def _reset_sidecar_state() -> None:
@@ -89,6 +101,7 @@ def test_is_enabled_false_without_installed_model(monkeypatch: pytest.MonkeyPatc
 def test_is_enabled_true_engine_auto_with_binary_and_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sc.binary, "find_binary", lambda *a, **k: Path("/usr/bin/llama-server"))
     _install()
+    _want()
     assert sc.is_enabled() is True
 
 
@@ -96,6 +109,51 @@ def test_is_enabled_true_engine_explicitly_llamacpp(monkeypatch: pytest.MonkeyPa
     state.set_engine("llamacpp")
     monkeypatch.setattr(sc.binary, "find_binary", lambda *a, **k: Path("/usr/bin/llama-server"))
     _install()
+    _want()
+    assert sc.is_enabled() is True
+
+
+# ── the router must not be resident for a feature that is switched off ───────
+#
+# These two tests replace an earlier pair that asserted binary + installed model
+# was sufficient. That WAS the contract and it was wrong: measured 2026-07-28
+# with every switch reporting off, the router held Llama-3.2-3B (2 969 MiB) and
+# gemma-3-4b (3 197 MiB) on the GPU — 6.2 GB for a disabled feature. The
+# replacement is deliberate, not a regression.
+
+
+def test_is_enabled_false_when_nothing_wants_local_inference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A binary and an installed model are necessary, not sufficient. Merely
+    having downloaded a model once must not commit VRAM at every boot."""
+    monkeypatch.setattr(sc.binary, "find_binary", lambda *a, **k: Path("/usr/bin/llama-server"))
+    _install()
+    assert llm.prefer_local() is False
+    assert sc.is_enabled() is False
+
+
+def test_is_enabled_true_when_a_model_is_given_a_role(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Activating a model IS asking for local inference, even with the top-level
+    preference untouched — otherwise the UI's model picker would silently do
+    nothing."""
+    monkeypatch.setattr(sc.binary, "find_binary", lambda *a, **k: Path("/usr/bin/llama-server"))
+    key = _install()
+    manager.set_active("main", key)
+    assert sc.is_enabled() is True
+
+
+def test_is_enabled_true_when_a_model_is_pinned_hot(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sc.binary, "find_binary", lambda *a, **k: Path("/usr/bin/llama-server"))
+    key = _install()
+    manager.set_hot(key, True)
+    assert sc.is_enabled() is True
+
+
+def test_is_enabled_true_when_selection_inference_is_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sc.binary, "find_binary", lambda *a, **k: Path("/usr/bin/llama-server"))
+    _install()
+    llm.set_selection_enabled(True)
     assert sc.is_enabled() is True
 
 
@@ -120,6 +178,7 @@ async def test_start_no_op_when_not_enabled(monkeypatch: pytest.MonkeyPatch) -> 
 async def test_start_builds_router_mode_argv(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sc.binary, "find_binary", lambda *a, **k: Path("/usr/bin/llama-server"))
     _install()
+    _want()
 
     health_calls = {"n": 0}
 
@@ -175,6 +234,7 @@ async def test_start_reuses_own_already_running_instance(monkeypatch: pytest.Mon
     untouched."""
     monkeypatch.setattr(sc.binary, "find_binary", lambda *a, **k: Path("/usr/bin/llama-server"))
     _install()
+    _want()
 
     sc._proc = _FakeProc()  # our own tracked process, still alive
     sc._api_key = "our-existing-boot-key"
@@ -216,6 +276,7 @@ async def test_start_kills_foreign_instance_and_respawns_with_own_key(
     ``_llamacpp_chat`` can actually authenticate against it."""
     monkeypatch.setattr(sc.binary, "find_binary", lambda *a, **k: Path("/usr/bin/llama-server"))
     _install()
+    _want()
     assert sc._proc is None  # nothing tracked — any healthy instance is foreign
 
     health_calls = {"n": 0}
