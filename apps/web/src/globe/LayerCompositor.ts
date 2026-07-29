@@ -6,7 +6,6 @@ import { useAoi } from '../state/aoi.js';
 import { isMobileDevice } from '../shell/device.js';
 import type { LayerAdapter, AdapterCtx, StatusReporter } from './adapters/types.js';
 import { PollGeoJsonAdapter, type StyleKind } from './adapters/PollGeoJsonAdapter.js';
-import { setActiveLayerCount } from './layerBudget.js';
 import { AisWsAdapter } from './adapters/AisWsAdapter.js';
 import { CablesAdapter } from './adapters/CablesAdapter.js';
 import { SatelliteAdapter } from './adapters/SatelliteAdapter.js';
@@ -255,9 +254,6 @@ export class LayerCompositor {
     const adapter = this.makeAdapter(d, ctx);
     if (!adapter) return;
     this.adapters.set(d.id, adapter);
-    // Publish the live count so each adapter can size itself against the shared
-    // entity budget (globe/layerBudget.ts).
-    setActiveLayerCount(this.adapters.size);
     void adapter.attach(this.viewer);
     reportStatus({ status: 'amber', note: 'connecting' });
     this.setOpacity(d.id, d.opacity);
@@ -288,7 +284,6 @@ export class LayerCompositor {
     this.desiredOpacity.delete(id);
     a.detach();
     this.adapters.delete(id);
-    setActiveLayerCount(this.adapters.size);
     useFeeds.getState().setFeed({ id, label: id, status: 'unknown' });
   }
 

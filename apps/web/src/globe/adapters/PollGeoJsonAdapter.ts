@@ -37,7 +37,6 @@ import { ingestFix, projectAt, type DrFix, type DrState } from './deadReckon.js'
 import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { perfSetDrain } from '../perf.js';
 import { onMoveSettle, cancelMoveSettle } from '../pollGate.js';
-import { activeLayerCount } from '../layerBudget.js';
 import { isCameraMoving, cameraMovingForMs } from '../cameraMotion.js';
 import { VesselClusterPrimitive } from './VesselClusterPrimitive.js';
 import { tracks } from '../../intel/tracks.js';
@@ -351,28 +350,6 @@ const MOBILE_LAYER_CAP = isMobileDevice() ? 2000 : Number.POSITIVE_INFINITY;
 const REFERENCE_LAYER_CAP = 1500;
 const REFERENCE_KINDS: ReadonlySet<string> = new Set(['facility', 'airport', 'port', 'base']);
 
-// Total non-aircraft entities the globe will hold across ALL enabled layers.
-//
-// Per-layer caps do not bound the globe: DEFAULT_LAYER_CAP is 6 000 and with ~58
-// layers enabled the measured total was 45 000-52 000 entities, at ~123 ms a
-// frame. Profiling put ~21 % of the main thread in BillboardCollection vertex
-// writes, ~11 % in the entity visualizers and ~6 % in label screen-space
-// declutter — all of which scale with the entity COUNT, not with how the layer
-// is drawn. Two rounds of batching moved that number very little, which is the
-// evidence that the count is the binding constraint.
-//
-// This is Palantir's own answer, quoted in docs/palantir-reference-2026-07.md §2:
-// "the application will use the contents of the layer to infer the optimal choice
-// between tile-based and object-based loading … best suited for large object sets
-// and prioritizing performance." We load everything, always, for every enabled
-// layer. A shared budget makes each layer's share shrink as more are turned on,
-// which is what makes the cost of the 58th layer bounded.
-//
-// Aircraft are EXEMPT (>= 8 000 world-view invariant, CLAUDE.md) and are not
-// counted against the budget.
-const GLOBAL_ENTITY_BUDGET = 24_000;
-const MIN_LAYER_SHARE = 400;
-
 function effectiveLayerCap(styleKind: string, declared?: number): number {
   const isAircraft = styleKind === 'aircraft' && !isMobileDevice();
   const presetLayer = isAircraft
@@ -386,13 +363,12 @@ function effectiveLayerCap(styleKind: string, declared?: number): number {
   const generic = isAircraft
     ? Number.POSITIVE_INFINITY
     : (declared ?? DEFAULT_LAYER_CAP);
-  // Fair share of the global budget. With a handful of layers on this is larger
-  // than any per-layer cap and changes nothing; it only binds once the operator
-  // turns on enough layers to matter, which is exactly the reported case.
-  const share = isAircraft
-    ? Number.POSITIVE_INFINITY
-    : Math.max(MIN_LAYER_SHARE, Math.floor(GLOBAL_ENTITY_BUDGET / activeLayerCount()));
-  return Math.min(MOBILE_LAYER_CAP, presetLayer, reference, generic, share);
+  // A shared global entity budget was tried here on 2026-07-29 and REMOVED.
+  // It did what it said -- entity count fell 24 %, 44 912 to 34 013 -- and frame
+  // time did not move at all (123.5 to 125.2 ms), because the cost was per
+  // collection and per visualizer, not per entity. Keeping it would have traded
+  // real data for no measured gain, which is the opposite of what was asked for.
+  return Math.min(MOBILE_LAYER_CAP, presetLayer, reference, generic);
 }
 
 function stableSubset(feats: Feature[], cap: number): Feature[] {
