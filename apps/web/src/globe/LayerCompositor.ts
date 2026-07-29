@@ -55,16 +55,7 @@ function viewportQuery(
       // the FULL local traffic (up to `limit`) for the viewport — so China/Russia
       // etc. show everything when you actually look at them.
       if (widthDeg > 170 || n - s > 140) return alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`;
-      // Pad ~15% so contacts just outside the frame are loaded before they
-      // scroll in; clamp to the backend's accepted ranges.
-      const padLat = (n - s) * 0.15;
-      const padLon = widthDeg * 0.15;
-      const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
-      const S = clamp(s - padLat, -90, 90).toFixed(3);
-      const N = clamp(n + padLat, -90, 90).toFixed(3);
-      const W = clamp(w - padLon, -180, 180).toFixed(3);
-      const E = clamp(e + padLon, -180, 180).toFixed(3);
-      return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
+      return paddedQuantizedBbox(s, n, w, widthDeg, limit);
     }
     // computeViewRectangle() returns undefined when the globe doesn't cleanly
     // fill the frame — a TILTED / oblique view with the horizon or sky visible,
@@ -77,6 +68,81 @@ function viewportQuery(
     // do we keep the world fallback.
     return cameraCenterBbox(viewer, limit) ?? (alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`);
   };
+}
+
+// ── Viewport request shaping ────────────────────────────────────────────────
+//
+// "It takes some time to load in data after I zoom out or move." Two causes,
+// and fixing either alone does not fix the symptom.
+//
+//  1. NOT ENOUGH RING. A 15% pad means a pan of a sixth of a screen reaches
+//     ground we never asked for, so there is nothing to draw until a round trip
+//     completes. PREFETCH_PAD widens that margin: the data for where you are
+//     about to look is already in the entity store.
+//
+//  2. AN UNSTABLE URL. The bbox was recomputed to three decimal places from the
+//     exact camera rectangle, so every pixel of movement produced a different
+//     URL. PollGeoJsonAdapter's move-refresh short-circuits when the URL it
+//     would request equals the one it already fetched — with an exact bbox that
+//     is essentially never, so every nudge of the camera was a fresh request and
+//     a fresh wait. Snapping the padded edges outward to a grid makes small
+//     moves reproduce the SAME URL, which turns them into an instant no-op
+//     against data already on screen.
+//
+// The two are deliberately coupled: quantising alone would just move the seam,
+// and padding alone would still refetch the same ground under a new URL. The
+// grid step is a fraction of the current span, so it scales with zoom rather
+// than being a fixed degree size that is coarse in orbit and useless up close.
+//
+// Cost of the ring is bounded by the same `limit` the request already carries,
+// so a wider box cannot return a bigger payload than before, only a better
+// chosen one. Palantir reaches the same conclusion from the other direction in
+// docs/palantir-reference-2026-07.md §2 ("change what you load, per layer"), and
+// so does the HN rendering thread in docs/research-last30days-2026-07-29.md §5.7.
+const PREFETCH_PAD = 0.35;
+// Grid step as a fraction of the viewport span. At 1/8 you can pan about an
+// eighth of a screen before the request changes, which covers ordinary nudging
+// and orbiting while still refetching for a deliberate move.
+const BBOX_QUANT = 0.125;
+
+/** Snap outward to a multiple of `step`, so the box only ever grows. Snapping to
+ *  the nearest multiple instead would let an edge move INWARD and briefly hide
+ *  contacts that were already loaded. */
+export function snapTo(v: number, step: number, dir: 'up' | 'down'): number {
+  if (!Number.isFinite(step) || step <= 0) return v;
+  return dir === 'up' ? Math.ceil(v / step) * step : Math.floor(v / step) * step;
+}
+
+/**
+ * The viewport query string for a camera rectangle: padded by the prefetch ring
+ * and snapped outward to a zoom-relative grid.
+ *
+ * Exported for tests — it is the whole of the pan-latency fix and it must not
+ * need a WebGL context to pin.
+ *
+ * @param s        south edge, degrees
+ * @param n        north edge, degrees
+ * @param w        west edge, degrees
+ * @param widthDeg longitude span, already unwrapped across the antimeridian
+ */
+export function paddedQuantizedBbox(
+  s: number,
+  n: number,
+  w: number,
+  widthDeg: number,
+  limit: number,
+): string {
+  const heightDeg = n - s;
+  const padLat = heightDeg * PREFETCH_PAD;
+  const padLon = widthDeg * PREFETCH_PAD;
+  const stepLat = Math.max(heightDeg * BBOX_QUANT, 1e-3);
+  const stepLon = Math.max(widthDeg * BBOX_QUANT, 1e-3);
+  const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+  const S = clamp(snapTo(s - padLat, stepLat, 'down'), -90, 90).toFixed(3);
+  const N = clamp(snapTo(n + padLat, stepLat, 'up'), -90, 90).toFixed(3);
+  const W = clamp(snapTo(w - padLon, stepLon, 'down'), -180, 180).toFixed(3);
+  const E = clamp(snapTo(w + widthDeg + padLon, stepLon, 'up'), -180, 180).toFixed(3);
+  return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
 }
 
 // Local bbox centred on the globe point under the screen centre, sized from the
@@ -100,10 +166,14 @@ function cameraCenterBbox(viewer: Cesium.Viewer, limit: number): string | null {
   const spanDeg = Math.min(40, Math.max(0.5, height / 60_000));
   const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
   const padLon = spanDeg / Math.max(0.25, Math.cos((lat * Math.PI) / 180));
-  const S = clamp(lat - spanDeg, -90, 90).toFixed(3);
-  const N = clamp(lat + spanDeg, -90, 90).toFixed(3);
-  const W = clamp(lon - padLon, -180, 180).toFixed(3);
-  const E = clamp(lon + padLon, -180, 180).toFixed(3);
+  // Same quantisation as the rectangle path: an oblique view is the common case
+  // when zoomed in, so it is exactly where a per-pixel URL hurts most.
+  const stepLat = Math.max(spanDeg * BBOX_QUANT, 1e-3);
+  const stepLon = Math.max(padLon * BBOX_QUANT, 1e-3);
+  const S = clamp(snapTo(lat - spanDeg, stepLat, 'down'), -90, 90).toFixed(3);
+  const N = clamp(snapTo(lat + spanDeg, stepLat, 'up'), -90, 90).toFixed(3);
+  const W = clamp(snapTo(lon - padLon, stepLon, 'down'), -180, 180).toFixed(3);
+  const E = clamp(snapTo(lon + padLon, stepLon, 'up'), -180, 180).toFixed(3);
   return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
 }
 
