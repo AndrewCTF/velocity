@@ -30,6 +30,7 @@ import numpy as np
 
 from app.correlate.store import store
 from app.imagery import cdse
+from app.intel import vessel_class
 
 _R = 6378137.0
 
@@ -375,6 +376,16 @@ async def detect_dark_vessels(
                     "headingDeg": round(t.get("heading_deg", 0.0), 1),
                     "rcs": t.get("rcs"),
                     "plausibleVessel": plausible,
+                    # Ranked hull-class characterisation with its evidence. NOT an
+                    # identification — see vessel_class.characterise's docstring for
+                    # why 10-20 m/px cannot produce one, and what it can.
+                    "classification": vessel_class.characterise(
+                        length_m,
+                        width_m,
+                        rcs=t.get("rcs"),
+                        ais_matched=matched,
+                        gsd_m=px_size_m,
+                    ),
                     "milHint": mil_hint,
                     "milBasis": (
                         "large unlit SAR contact — size-only heuristic, NOT a classified warship"
