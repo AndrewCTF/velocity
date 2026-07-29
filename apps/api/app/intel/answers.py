@@ -77,7 +77,14 @@ class Answer:
     verdict: str
     threshold: str
     as_of: float
-    data_lag_s: float
+    # Age of the newest evidence, in seconds. `None` means NO EVIDENCE WAS
+    # OBSERVED - it never means "fresh". The distinction matters on the wire:
+    # float("inf") does not survive JSON and arrives as null, so a consumer
+    # reading null as zero would turn "we have nothing" into "perfectly
+    # current", which is the exact inversion this whole design exists to
+    # prevent. `stale` is always true when this is None, so a consumer that
+    # checks staleness rather than arithmetic cannot get it wrong.
+    data_lag_s: float | None
     confidence: str
     detail: str
     inputs: list[str] = field(default_factory=list)
@@ -89,9 +96,10 @@ class Answer:
         """True when the evidence is too old for the verdict to be trusted.
 
         Surfaced rather than silently downgrading the verdict: the caller sees
-        both what we concluded and that the conclusion is ageing.
+        both what we concluded and that the conclusion is ageing. No evidence at
+        all counts as stale, never as fresh.
         """
-        return self.data_lag_s > MAX_ANSWER_LAG_S
+        return self.data_lag_s is None or self.data_lag_s > MAX_ANSWER_LAG_S
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -109,7 +117,7 @@ def _unknown(qid: str, question: str, threshold: str, why: str) -> Answer:
         as_of=time.time(),
         # Nothing was observed, so there is no evidence to be lagging. Reporting
         # 0 would read as "perfectly fresh", which is the opposite of the truth.
-        data_lag_s=float("inf"),
+        data_lag_s=None,
         confidence="low",
         detail=why,
         inputs=[],

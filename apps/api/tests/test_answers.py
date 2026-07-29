@@ -21,7 +21,7 @@ people who check things has to be able to say it does not know yet.
 
 from __future__ import annotations
 
-import math
+import json
 
 import pytest
 
@@ -36,7 +36,14 @@ def test_every_registered_answer_publishes_a_rule_and_a_lag() -> None:
     for a in items:
         assert a["threshold"].strip(), f"{a['id']} has no published rule"
         assert len(a["threshold"]) > 40, f"{a['id']} rule is too short to be a real rule"
-        assert isinstance(a["data_lag_s"], float), f"{a['id']} has no numeric evidence age"
+        # None is the "no evidence observed" sentinel and is only legitimate on
+        # an unknown verdict; anything we actually concluded must say how old
+        # the evidence was.
+        if a["verdict"] == A.UNKNOWN:
+            assert a["data_lag_s"] is None or isinstance(a["data_lag_s"], float)
+            assert a["stale"] is True, f"{a['id']} claims freshness with no verdict"
+        else:
+            assert isinstance(a["data_lag_s"], float), f"{a['id']} has no numeric evidence age"
         assert a["verdict"] in {A.OPEN, A.REDUCED, A.CLOSED, A.UNKNOWN}
         assert a["question"].endswith("?"), f"{a['id']} is not phrased as a question"
         # Copy rule: operator-visible text carries no em dashes (CLAUDE.md).
@@ -56,8 +63,10 @@ def test_unknown_carries_its_reason_and_does_not_claim_freshness() -> None:
     assert a.verdict == A.UNKNOWN
     assert "history" in a.detail
     # Nothing was observed, so there is no fresh evidence. Reporting a lag of 0
-    # would read as "perfectly current", the opposite of the truth.
-    assert math.isinf(a.data_lag_s)
+    # would read as "perfectly current", the opposite of the truth. None is the
+    # sentinel because float("inf") does not survive JSON: it reaches the client
+    # as null, and a consumer reading null as zero would invert the meaning.
+    assert a.data_lag_s is None
     assert a.stale is True
 
 
@@ -118,3 +127,15 @@ def test_the_published_rule_states_the_actual_numbers() -> None:
     assert str(int(A.CLOSED_RATIO * 100)) in A.CHOKEPOINT_THRESHOLD
     assert str(int(A.REDUCED_RATIO * 100)) in A.CHOKEPOINT_THRESHOLD
     assert str(A.MIN_BASELINE_DAYS) in A.CHOKEPOINT_THRESHOLD
+
+
+def test_no_evidence_survives_json_without_becoming_zero() -> None:
+    """The wire contract. float("inf") serialises to null (or to invalid JSON),
+    and a client treating null as 0 would read "we have nothing" as "perfectly
+    current". `stale` carries the meaning so arithmetic on the lag is never the
+    only thing standing between the operator and that inversion."""
+    a = A._unknown("x", "Is x open?", "the rule", "Nothing recorded.")
+    round_tripped = json.loads(json.dumps(a.to_dict()))
+    assert round_tripped["data_lag_s"] is None
+    assert round_tripped["stale"] is True
+    assert round_tripped["verdict"] == A.UNKNOWN
