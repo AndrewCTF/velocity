@@ -340,7 +340,12 @@ export class LayerCompositor {
       // CustomDataSource the world view paints as one smeared green blob over
       // every major shipping lane. Mirror the polling-adapter vessel branch
       // so AISStream and Digitraffic get the same low-zoom decluttering.
-      configureVesselClustering(adapter.ds);
+      // AISStream vessels now render as batched primitives off graphics-less
+      // entities, so Cesium's EntityCluster has nothing left to cluster — and it
+      // was recomputing screen-space positions and bounding boxes for ~6 000
+      // entities every frame (~6 % of the main thread, profiled 2026-07-29). The
+      // world-view count bubbles come from VesselClusterPrimitive in the polled
+      // vessel layers, exactly as they do for digitraffic/keyless.
       return adapter;
     }
     // satellites — any CelesTrak group layer (stations/starlink/gps/visual/…).
@@ -503,82 +508,6 @@ function applyEntityOpacity(e: Cesium.Entity, opacity: number): void {
   }
 }
 
-// Cluster styling for vessel layers. Matches the accent-ring aesthetic used
-// elsewhere — a translucent teal disc with a thin outline and the count in
-// the center. We rebuild the billboard image on every clustering event
-// because Cesium hands us the live event payload with the merged entities.
-function configureVesselClustering(ds: Cesium.CustomDataSource): void {
-  ds.clustering.enabled = true;
-  // Aggressive enough to declutter at globe scale, lax enough that close-up
-  // (port view) shows individual ship icons instead of one big cluster blob.
-  // pixelRange = 24 only merges entities ~24px apart; minimumClusterSize = 16
-  // is the audit-tightened floor (was 8) — at 8, tight ports painted a wall
-  // of overlapping bubbles instead of letting individual vessels through.
-  ds.clustering.pixelRange = 24;
-  ds.clustering.minimumClusterSize = 16;
-  ds.clustering.clusterBillboards = true;
-  ds.clustering.clusterLabels = true;
-  // Vessel entities never use Cesium points (they render as billboard icons),
-  // so clusterPoints would only enable the aggregator to also fold in stray
-  // point primitives we don't have. Off keeps the cluster pipeline focused
-  // on the billboards + labels we actually emit.
-  ds.clustering.clusterPoints = false;
-  ds.clustering.clusterEvent.addEventListener((_clustered, cluster) => {
-    cluster.label.show = true;
-    cluster.label.text = String(cluster.label.text);
-    cluster.label.font = '11px "IBM Plex Mono", monospace';
-    cluster.label.fillColor = Cesium.Color.fromCssColorString('#0b0e14');
-    cluster.label.showBackground = false;
-    cluster.label.pixelOffset = new Cesium.Cartesian2(0, 0);
-    cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
-    cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
-    cluster.billboard.show = true;
-    cluster.billboard.image = vesselClusterRing();
-    cluster.billboard.verticalOrigin = Cesium.VerticalOrigin.CENTER;
-    cluster.billboard.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
-    // Smooth handoff to individual ship icons. Individual vessel billboards
-    // fade in from 150 km → 600 km (see vesselBillboard.translucencyByDistance).
-    // We invert that here: the cluster bubble is fully opaque at world / continent
-    // scale, then fades out from 650 km → 350 km as the camera dives in. The
-    // 350–600 km overlap band gives a soft cross-fade with the individual ship
-    // billboards without a long stretch of double-rendered clusters + icons
-    // (the old 250k→800k band had a 450 km overlap that visibly painted both
-    // primitives at the same time at continent-to-region zoom).
-    cluster.billboard.translucencyByDistance = new Cesium.NearFarScalar(
-      350_000,
-      0.0,
-      650_000,
-      1.0,
-    );
-    cluster.label.translucencyByDistance = new Cesium.NearFarScalar(
-      350_000,
-      0.0,
-      650_000,
-      1.0,
-    );
-    cluster.point.show = false;
-  });
-}
-
-let cachedClusterRing: string | null = null;
-function vesselClusterRing(): string {
-  if (cachedClusterRing) return cachedClusterRing;
-  const canvas = document.createElement('canvas');
-  canvas.width = 28;
-  canvas.height = 28;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.beginPath();
-    ctx.arc(14, 14, 12, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(52, 211, 153, 0.55)';
-    ctx.fill();
-    ctx.lineWidth = 1.25;
-    ctx.strokeStyle = '#0b0e14';
-    ctx.stroke();
-  }
-  cachedClusterRing = canvas.toDataURL('image/png');
-  return cachedClusterRing;
-}
 
 function styleFromEmits(emits: readonly string[] | undefined): StyleKind {
   if (!emits || emits.length === 0) return 'generic';

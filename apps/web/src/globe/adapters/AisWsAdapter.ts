@@ -8,19 +8,8 @@ import { useSelection } from '../../state/stores.js';
 import { withWsKey } from '../../transport/http.js';
 import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { refreshBagInPlace } from './PollGeoJsonAdapter.js';
+import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
 
-// Read a Cesium property's current value. Used to diff billboard fields so
-// we only reassign when the value actually changed — repeatedly assigning
-// the same data: URI causes Cesium to re-decode the image and the icon
-// blinks off for a frame.
-function currentValue<T>(prop: Cesium.Property | undefined): T | undefined {
-  if (!prop) return undefined;
-  try {
-    return prop.getValue(Cesium.JulianDate.now()) as T | undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 interface VesselMsg {
   kind: 'vessel' | 'info';
@@ -71,18 +60,49 @@ export class AisWsAdapter implements LayerAdapter {
   private pending = new Map<string, VesselMsg & { id: string; lat: number; lon: number }>();
   private drainHandle: number | null = null;
 
+  /** Batched renderer. AISStream's ~6 000 vessels were the last big layer on the
+   * Cesium Entity API: BillboardVisualizer + LabelVisualizer walked them every
+   * frame, and the Cesium EntityCluster on this data source recomputed
+   * screen-space positions and bounding boxes for all of them (profiled at ~6 %
+   * of the main thread in getScreenSpaceBoundingBox /
+   * worldWithEyeOffsetToWindowCoordinates / getScreenSpacePositions). The
+   * entities are now graphics-less, exactly like the polled vessel layers. */
+  private prim: PrimitiveEntityLayer | null = null;
+
   constructor(private readonly props: Props) {
     this.ds = new Cesium.CustomDataSource(props.ctx.descriptor.id);
   }
 
   async attach(viewer: Cesium.Viewer): Promise<void> {
     await viewer.dataSources.add(this.ds);
+    this.prim = new PrimitiveEntityLayer(viewer.scene, {
+      styleFn: (props) => {
+        const st = vesselStyle(props);
+        return { imageUri: st.imageUri, scale: st.scale, rotationRad: st.rotationRad };
+      },
+      labelFn: vesselLabelText,
+      billboardBase: () => ({
+        alignedAxis: Cesium.Cartesian3.UNIT_Z,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        heightReference: Cesium.HeightReference.NONE,
+        // Unchanged from the entity billboard this replaces.
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 600_000),
+        translucencyByDistance: new Cesium.NearFarScalar(150_000, 1.0, 600_000, 0.0),
+        scaleByDistance: new Cesium.NearFarScalar(5_000, 1.7, 400_000, 0.6),
+      }),
+      labelBase: (text) => labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
+      getClock: () => viewer.clock.currentTime,
+      shouldAnimate: () => false,
+    });
     this.connect();
     this.pruneTimer = window.setInterval(() => this.prune(), 60_000);
   }
 
   detach(): void {
     this.destroyed = true;
+    this.prim?.destroy();
+    this.prim = null;
     this.ws?.close();
     this.ws = null;
     if (this.drainHandle != null) {
@@ -199,37 +219,10 @@ export class AisWsAdapter implements LayerAdapter {
     const labelText = vesselLabelText(props);
     if (e) {
       this.updatePosition(e, pos);
-      if (e.billboard) {
-        // Diff before reassigning — a fresh ConstantProperty re-decodes the
-        // data: URI on every WS frame and produces visible blink-off-then-on
-        // flicker. Only assign when the value actually changed.
-        const curImg = currentValue<string>(e.billboard.image);
-        if (curImg !== s.imageUri) {
-          e.billboard.image = new Cesium.ConstantProperty(s.imageUri);
-        }
-        const curRot = currentValue<number>(e.billboard.rotation);
-        if (curRot == null || Math.abs(curRot - s.rotationRad) >= 0.01) {
-          e.billboard.rotation = new Cesium.ConstantProperty(s.rotationRad);
-        }
-        // Ship type often arrives only after the first ShipStaticData frame —
-        // the category (and with it the icon scale) upgrades mid-session.
-        const curScale = currentValue<number>(e.billboard.scale);
-        if (curScale == null || Math.abs(curScale - s.scale) >= 0.02) {
-          e.billboard.scale = new Cesium.ConstantProperty(s.scale);
-        }
-      }
-      // Keep label in sync when a previously-anonymous vessel later
-      // broadcasts its name (or vice versa).
-      if (labelText && e.label) {
-        const current = currentValue<string>(e.label.text);
-        if (current !== labelText) {
-          e.label.text = new Cesium.ConstantProperty(labelText);
-        }
-      }
-      // refresh properties so the entity panel reflects latest sog/cog. In
-      // place, not a fresh PropertyBag: allocating one per frame per vessel
-      // was measurable GC churn at firehose rates, and swapping the bag drops
-      // the definitionChanged subscriptions the panel relies on.
+      // Pixels live in the batched primitive layer; the entity stays
+      // graphics-less. e.name is kept fresh below for the watchbox evaluator,
+      // the dark-vessel tracker and the entity panel.
+      this.prim?.sync(e, props);
       if (e.properties) refreshBagInPlace(e.properties, props);
       else e.properties = new Cesium.PropertyBag(props);
     } else {
@@ -237,26 +230,10 @@ export class AisWsAdapter implements LayerAdapter {
       e = entities.add({
         id: m.id,
         position: pos,
-        billboard: {
-          image: s.imageUri,
-          scale: s.scale,
-          rotation: s.rotationRad,
-          alignedAxis: Cesium.Cartesian3.UNIT_Z,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          // Match the polling adapter's vessel treatment exactly (see
-          // vesselBillboard in PollGeoJsonAdapter): icons paint below
-          // ~600 km and cross-fade to the cluster bubbles above that.
-          // The old 3,000 km cutoff here made AISStream vessels pop in/out
-          // at a different zoom band than Digitraffic ones.
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 600_000),
-          translucencyByDistance: new Cesium.NearFarScalar(150_000, 1.0, 600_000, 0.0),
-          // Scale with distance, matching the polling adapter's vessels.
-          scaleByDistance: new Cesium.NearFarScalar(5_000, 1.7, 400_000, 0.6),
-        },
-        ...(labelText && { label: labelFor(labelText) }),
+        ...(labelText && { name: labelText }),
         properties: props,
       });
+      this.prim?.sync(e, props);
     }
     if (labelText) e.name = labelText;
     this.lastSeen.set(m.id, now);
@@ -341,6 +318,7 @@ export class AisWsAdapter implements LayerAdapter {
     for (const [id, t] of this.lastSeen) {
       if (t < cutoff) {
         entities.removeById(id);
+        this.prim?.remove(id);
         this.lastSeen.delete(id);
       }
     }
@@ -359,6 +337,7 @@ export class AisWsAdapter implements LayerAdapter {
       if (!entry) continue;
       const [id] = entry;
       this.ds.entities.removeById(id);
+      this.prim?.remove(id);
       this.lastSeen.delete(id);
     }
   }
