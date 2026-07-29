@@ -289,12 +289,49 @@ def _patch_empty():
     return patch.object(adsb_routes, "global_snapshot", new=empty)
 
 
+def _patch_stores_empty():
+    """Empty the OTHER two global stores `threat_level` reads from.
+
+    `_patch_empty` only replaces the aircraft snapshot, but the anomalies score
+    in intel/analytics.py also sums dark vessels and high-severity fusion alerts,
+    both of which come from the module-level correlate store. So the assertion
+    below was really asserting "nothing anywhere in this process has ever seeded
+    a vessel or an alert", which is not something a test can know.
+
+    It passed for as long as it did by luck of worker assignment. The suite runs
+    `-n auto --dist loadfile`, so which FILES share a worker process depends on
+    the core count: at 16 workers this file sat alone, at 4 it shared a process
+    with files that seed those stores and the score crossed the 'elevated'
+    threshold. Reproduced locally with `-n4`, and it is what the CI runner saw.
+    """
+    from contextlib import ExitStack
+
+    from app.correlate.store import store
+    from app.intel import analytics as an
+
+    real_latest = store.latest
+
+    def no_vessels(kind: str | None = None):
+        # Narrowest possible patch: blank only the kind the score reads.
+        return [] if kind == "vessel" else real_latest(kind)
+
+    stack = ExitStack()
+    stack.enter_context(patch.object(store, "latest", new=no_vessels))
+    # Alerts reach the score through the BUS, not the store, so both have to be
+    # quiet for "empty" to mean empty.
+    stack.enter_context(patch.object(an.bus, "recent", new=lambda _n=200: []))
+    stack.enter_context(patch.object(an, "jamming_recent", new=lambda _n=100: []))
+    return stack
+
+
 def test_empty_snapshot_no_crash(client: TestClient) -> None:
-    with _patch_empty():
+    with _patch_empty(), _patch_stores_empty():
         assert client.get("/api/intel/situation").json()["aircraft"]["total"] == 0
         assert client.get("/api/intel/jamming").json()["summary"]["cells_flagged"] == 0
         d = client.get("/api/intel/density", params={"lat": 0, "lon": 0, "radius_nm": 100}).json()
         assert d["aircraft"]["total"] == 0 and d["aircraft"]["peak_cell"] is None
+        # Now that "empty" means every input the score reads, this is a real
+        # assertion about the scoring rule rather than about process history.
         assert client.get("/api/intel/anomalies").json()["threat_level"] == "low"
 
 

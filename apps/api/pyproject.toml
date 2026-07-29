@@ -120,6 +120,27 @@ testpaths = ["tests"]
 # calls. loadfile keeps every test from one file on one worker, so today's
 # ordering guarantee is preserved exactly. Fix those globals before loosening it.
 #
-# Pass -n0 to run serially (single-test debugging, or reading live log output).
-addopts = "-n auto --dist loadfile"
+# Pass `-n auto --dist loadfile` to run in parallel ON A MACHINE WHERE YOU HAVE
+# VERIFIED IT. It is NOT the default, and that is a deliberate reversal of the
+# 2026-07-28 decision described above.
+#
+# Why it was reverted: `-n auto` takes the worker count from the core count, so
+# `--dist loadfile` groups DIFFERENT files into the same worker process on
+# different machines. loadfile preserves ordering WITHIN a file; it says nothing
+# about which files share a process. The three module-state leaks named above are
+# only hidden by per-process isolation, so the suite answers differently per
+# machine. Measured 2026-07-29 on this branch:
+#
+#   -n0  serial, 32 cores    2108 passed              110 s
+#   -n16 parallel, 32 cores  2108 passed               30 s
+#   -n4  parallel (CI shape) 2105-2107 passed, 39 s, and a DIFFERENT 1-3
+#        failures each run - test_intel_route, test_news_edition_route,
+#        test_llm_obs - depending on which files landed together.
+#
+# CI runs on 4 cores, which is why the api job failed on a branch whose local
+# suite was green, with no commit to blame. A gate that answers differently per
+# machine is not a gate, and 80 seconds is the correct price for one that is.
+# The speedup returns the moment those globals are fixed; the note above already
+# says to fix them first, and that is still the right order of work.
+addopts = ""
 
