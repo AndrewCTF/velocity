@@ -1,0 +1,141 @@
+{
+  "profile": "all-toggles",
+  "url": "http://127.0.0.1:5173",
+  "seconds": 75,
+  "headless": false,
+  "at": "2026-07-29T12:48:30.065Z",
+  "dataSources": 78,
+  "entitiesAtStart": 34437,
+  "series": {
+    "rendersPerSec": {
+      "p05": 7,
+      "p50": 10,
+      "p95": 16,
+      "max": 16
+    },
+    "frameMsEMA": {
+      "p05": 63.61102108828102,
+      "p50": 99.28782059470663,
+      "p95": 134.55787931434577,
+      "max": 206.26219604214327
+    },
+    "drainMsLast": {
+      "p05": 0,
+      "p50": 8.3,
+      "p95": 20.7,
+      "max": 20.7
+    },
+    "longtasksPerMin": {
+      "p05": 273,
+      "p50": 538,
+      "p95": 614,
+      "max": 623
+    },
+    "liveLabels": {
+      "p05": 0,
+      "p50": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "animatedPrims": {
+      "p05": 26,
+      "p50": 31,
+      "p95": 139,
+      "max": 139
+    },
+    "entities": {
+      "p05": 19775,
+      "p50": 23507,
+      "p95": 37003,
+      "max": 37183
+    },
+    "dataSources": {
+      "p05": 78,
+      "p50": 78,
+      "p95": 78,
+      "max": 78
+    },
+    "heapMB": {
+      "p05": 861.6476802825928,
+      "p50": 1729.214331626892,
+      "p95": 3488.626567840576,
+      "max": 3781.1393756866455
+    }
+  },
+  "byLeg": {
+    "world": {
+      "p05": 7,
+      "p50": 9,
+      "p95": 11,
+      "max": 11
+    },
+    "europe-800km": {
+      "p05": 6,
+      "p50": 8,
+      "p95": 9,
+      "max": 9
+    },
+    "orbit": {
+      "p05": 7,
+      "p50": 12,
+      "p95": 13,
+      "max": 14
+    },
+    "london-60km": {
+      "p05": 10,
+      "p50": 16,
+      "p95": 16,
+      "max": 16
+    },
+    "world-return": {
+      "p05": 8,
+      "p50": 11,
+      "p95": 14,
+      "max": 14
+    }
+  },
+  "cdp": {
+    "TaskDuration": 74.671375,
+    "ScriptDuration": 72.350386,
+    "LayoutDuration": 0.06314299999999999,
+    "RecalcStyleDuration": 0.087984,
+    "JSHeapUsedSize": 191142488
+  },
+  "requests": {
+    "total": 330,
+    "secs": 74.959,
+    "perMin": 264.14439893808617,
+    "by": {
+      "/api/history/coverage": 15,
+      "/api/timeline/density": 15,
+      "/api/aviation/states": 6,
+      "/api/intel/brief": 4,
+      "/api/timeline/events": 3,
+      "/api/adsb/live/emergencies": 5,
+      "/api/adsb/live/mil": 3,
+      "/api/maritime/snapshot": 41,
+      "/api/adsb/fi/global": 3,
+      "/api/maritime/digitraffic": 21,
+      "/api/adsb/global": 50,
+      "/api/places/airports": 15,
+      "/api/places/ports": 15,
+      "/api/places/bases": 15,
+      "/api/places/infrastructure": 111,
+      "/api/places/military": 4,
+      "/api/eq": 1,
+      "/api/seismic/emsc": 1,
+      "/api/maritime/chokepoints": 1,
+      "/api/jamming/nacp": 1
+    }
+  },
+  "worstWindow": {
+    "startSample": 10,
+    "frameMsMean": 152.57115133067367,
+    "frameMsMax": 206.26219604214327,
+    "fpsMin": 6
+  },
+  "storm": null,
+  "consoleErrors": 13,
+  "verdict": "POOR (p05 rendersPerSec 7.0 < 20)",
+  "pass": false
+}

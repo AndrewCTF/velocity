@@ -113,3 +113,43 @@ describe('layer enable is gated', () => {
     expect(src).toContain('cancelMoveSettle(this.firstFetch)');
   });
 });
+
+// ── the trimmed visualizer set ────────────────────────────────────────────────
+//
+// Cesium runs one visualizer per graphics type per data source, every frame,
+// empty or not. At 78 data sources that was 624 update() calls a frame — a fixed
+// cost that does not scale with entity count, which is why cutting entities by
+// 24% moved frame time by nothing. GlobeCanvas overrides
+// DataSourceDisplay.defaultVisualizersCallback down to the five we actually use.
+//
+// The risk it creates: an entity graphic whose visualizer is no longer installed
+// silently does not render. This guard fails the moment anything sets one.
+describe('trimmed Cesium visualizers', () => {
+  const files = walk(SRC).filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f));
+
+  it('installs exactly the visualizers the app uses', () => {
+    const gc = read('globe/GlobeCanvas.tsx');
+    expect(gc).toContain('defaultVisualizersCallback');
+    for (const v of [
+      'BillboardVisualizer', 'GeometryVisualizer', 'LabelVisualizer',
+      'PointVisualizer', 'PolylineVisualizer',
+    ]) {
+      expect(gc).toContain(v);
+    }
+  });
+
+  it('no entity sets model / path / tileset graphics', () => {
+    // These three visualizers were dropped. Setting the graphics they draw
+    // would produce an invisible entity, which is worse than a slow one.
+    const offenders: string[] = [];
+    for (const f of files) {
+      const src = readFileSync(f, 'utf8');
+      for (const m of [/\bentity\.model\s*=/, /\be\.model\s*=/, /\bopts\.model\s*=/,
+                       /\bentity\.path\s*=/, /\be\.path\s*=/, /\bopts\.path\s*=/,
+                       /\bopts\.tileset\s*=/]) {
+        if (m.test(src)) offenders.push(`${f.slice(SRC.length + 1)} :: ${m}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});

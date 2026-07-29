@@ -101,6 +101,12 @@ export interface PrimitiveLayerOpts {
   // while the camera is tilted toward the horizon, so you see the plane/ship
   // from the side. Omit for layers that must stay flat (satellites).
   sideStyleFn?: (props: Record<string, unknown>) => PrimitiveStyle;
+  /** Give this layer its OWN BillboardCollection/LabelCollection instead of the
+   * shared pair. Only for layers with per-layer collection behaviour — aircraft
+   * (tilt + emergency pulse) and vessels (cluster hand-off). Everything else
+   * shares, because Cesium updates every collection every frame and 110 of them
+   * was measurably the binding cost. */
+  ownCollections?: boolean;
 }
 
 interface Prim {
@@ -124,10 +130,64 @@ interface Prim {
   sideScale: number;
 }
 
+
+// ── shared collections ────────────────────────────────────────────────────────
+//
+// One BillboardCollection + one LabelCollection PER LAYER looked like the right
+// shape until it was measured: with every layer on, the scene held **55 billboard
+// collections and 55 label collections**, and Cesium updates each one every
+// frame — bounding-volume recompute, actualPosition recompute, vertex-buffer
+// bookkeeping — whether or not anything in it changed.
+//
+// That cost is per COLLECTION, not per entity, and the evidence is direct:
+// cutting the entity count by 24 % (44 912 -> 34 013, via the shared entity
+// budget) moved frame time by nothing at all (123.5 -> 125.2 ms). Two rounds of
+// batching had already moved it very little for the same reason.
+//
+// So layers that need no per-layer collection behaviour share ONE pair. Aircraft
+// and vessels keep their own, because they own tilt/pulse/cluster state that is
+// genuinely per-layer. Every Billboard and Label still carries its own style,
+// DDC and id — sharing the CONTAINER changes nothing about what is drawn, which
+// is why `remove`, `setLayerOpacity` and `destroy` needed no changes: all three
+// already operated on this layer's own `prims`, never on the collection.
+interface SharedPool {
+  bb: Cesium.BillboardCollection;
+  lbl: Cesium.LabelCollection;
+  refs: number;
+}
+const sharedPools = new WeakMap<Cesium.Scene, SharedPool>();
+
+function acquireShared(scene: Cesium.Scene): SharedPool {
+  let pool = sharedPools.get(scene);
+  if (!pool) {
+    const bb = new Cesium.BillboardCollection({ scene });
+    const lbl = new Cesium.LabelCollection({ scene });
+    scene.primitives.add(bb);
+    scene.primitives.add(lbl);
+    pool = { bb, lbl, refs: 0 };
+    sharedPools.set(scene, pool);
+  }
+  pool.refs += 1;
+  return pool;
+}
+
+function releaseShared(scene: Cesium.Scene): void {
+  const pool = sharedPools.get(scene);
+  if (!pool) return;
+  pool.refs -= 1;
+  if (pool.refs > 0) return;
+  sharedPools.delete(scene);
+  try { scene.primitives.remove(pool.bb); } catch { /* viewer gone */ }
+  try { scene.primitives.remove(pool.lbl); } catch { /* viewer gone */ }
+}
+
 export class PrimitiveEntityLayer {
   private static seq = 0;
   private readonly bbColl: Cesium.BillboardCollection;
   private readonly lblColl: Cesium.LabelCollection;
+  /** True when bbColl/lblColl belong to the shared pool and must not be removed
+   * from the scene by this layer's destroy(). */
+  private readonly usesShared: boolean;
   private readonly prims = new Map<string, Prim>();
   private readonly emergencyIds = new Set<string>();
   // §5.1 render-governor need: unique per instance so multiple aircraft tiers
@@ -149,10 +209,20 @@ export class PrimitiveEntityLayer {
     private readonly scene: Cesium.Scene,
     private readonly opts: PrimitiveLayerOpts,
   ) {
-    this.bbColl = new Cesium.BillboardCollection({ scene });
-    this.lblColl = new Cesium.LabelCollection({ scene });
-    scene.primitives.add(this.bbColl);
-    scene.primitives.add(this.lblColl);
+    // Layers with no per-layer collection behaviour share one pair (see
+    // SharedPool above). Aircraft and vessels opt out via `ownCollections`
+    // because they own tilt / pulse / cluster state that is genuinely per-layer.
+    this.usesShared = !opts.ownCollections;
+    if (this.usesShared) {
+      const pool = acquireShared(scene);
+      this.bbColl = pool.bb;
+      this.lblColl = pool.lbl;
+    } else {
+      this.bbColl = new Cesium.BillboardCollection({ scene });
+      this.lblColl = new Cesium.LabelCollection({ scene });
+      scene.primitives.add(this.bbColl);
+      scene.primitives.add(this.lblColl);
+    }
     if (opts.sideStyleFn) {
       // Re-evaluate stand-up mode whenever the camera moves (ctrl-drag tilt).
       // §5.2.2: 0.15 (was 0.05) — 0.05 fired camera.changed every ~5% viewport
@@ -401,8 +471,18 @@ export class PrimitiveEntityLayer {
     this.removeCameraChanged = null;
     this.removeFilterSub?.();
     this.removeFilterSub = null;
-    try { this.scene.primitives.remove(this.bbColl); } catch { /* viewer gone */ }
-    try { this.scene.primitives.remove(this.lblColl); } catch { /* viewer gone */ }
+    if (this.usesShared) {
+      // Only OUR billboards/labels leave the shared collection; the container
+      // itself outlives this layer and is torn down when the last ref goes.
+      for (const p of this.prims.values()) {
+        try { this.bbColl.remove(p.bb); } catch { /* collection gone */ }
+        if (p.lbl) { try { this.lblColl.remove(p.lbl); } catch { /* gone */ } }
+      }
+      releaseShared(this.scene);
+    } else {
+      try { this.scene.primitives.remove(this.bbColl); } catch { /* viewer gone */ }
+      try { this.scene.primitives.remove(this.lblColl); } catch { /* viewer gone */ }
+    }
     this.prims.clear();
     this.emergencyIds.clear();
     this.lastPulseNeed = false;
