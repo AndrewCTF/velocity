@@ -348,6 +348,17 @@ class Settings(BaseSettings):
     # ── News debias / fact-check engine ──
     # Keyless RSS world feeds; analysis runs through app.llm. All optional.
     news_enabled: bool = True
+    # Master switch for the headless-Chromium ADS-B tier. The sidecar is the
+    # largest single cost on the box (25 Chromium processes, 4.4 GB RSS), and on
+    # an edge install it is not affordable — OpenSky is the documented breadth
+    # source, so coverage degrades rather than disappears. The `lite` profile
+    # seeds this to 0.
+    adsb_sidecar_enabled: bool = True  # ADSB_SIDECAR_ENABLED
+    # Whether background loops may run model inference on their own. A brief
+    # loop pulled a 21 GB model into VRAM on a box whose /api/ai/local reported
+    # the feature disabled. This never blocks a user ASKING for inference; it
+    # stops the machine deciding to unprompted. The `lite` profile seeds it 0.
+    ai_background_enabled: bool = True  # AI_BACKGROUND_ENABLED
     news_refresh_sec: int = 600  # backend RSS poll cadence
     news_max_items: int = 400  # cap retained headlines
 

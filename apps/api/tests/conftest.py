@@ -16,6 +16,11 @@ from fastapi.testclient import TestClient
 # (OpenSky, airplanes.live) on their first tick. Unit tests must never
 # touch the network.
 os.environ.setdefault("OSINT_DISABLE_BACKGROUND", "1")
+# Deployment profiles seed environment defaults at import (app/profile.py),
+# and the shipping default is `lite`, which switches features OFF. The suite
+# asserts the FULL feature set, so pin it here; profile behaviour itself is
+# covered by tests/test_profile.py, which drives resolve()/apply() directly.
+os.environ.setdefault("OSINT_PROFILE", "full")
 
 # The suite runs auth-disabled (no API_KEY / Supabase). Issue #8 makes the
 # cost/compute endpoints (LLM, recon, OSINT, imagery-detect) FAIL CLOSED on an
