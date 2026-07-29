@@ -199,8 +199,24 @@ const VESSEL_FREEZE_HYSTERESIS_M = 250_000; // 250 km
 export function refreshBagInPlace(bag: Cesium.PropertyBag, props: Record<string, unknown>): void {
   const raw = bag as unknown as Record<string, unknown>;
   for (const key in props) {
-    if (bag.hasProperty(key)) raw[key] = props[key];
-    else bag.addProperty(key, props[key]);
+    if (bag.hasProperty(key)) {
+      // Assign ONLY on a real change. PropertyBag's generated setter raises
+      // definitionChanged unconditionally, and that event is not cheap: it walks
+      // to Entity.definitionChanged, then EntityCollection._onEntityDefinitionChanged,
+      // which marks the entity changed so every visualizer reprocesses it next
+      // frame. At ~30 000 entities x ~15 properties that was ~450 000 event
+      // raises per poll for values that were mostly identical — profiled at
+      // ~6 % of the main thread in Event.raiseEvent alone, plus the allocation
+      // churn behind a 7.7 % GC share.
+      //
+      // Strict equality, deliberately: the properties that actually move are
+      // primitives (lat/lon/alt/speed/track/seen). An object-valued prop that is
+      // rebuilt per poll still writes, which is correct — we cannot know it is
+      // unchanged without a deep compare that would cost more than the write.
+      if (raw[key] !== props[key]) raw[key] = props[key];
+    } else {
+      bag.addProperty(key, props[key]);
+    }
   }
 }
 

@@ -24,7 +24,7 @@ import { installCaptures } from './CaptureLayer.js';
 import { installDetections } from './DetectLayer.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { prewarmIcons } from './icons.js';
-import { perfOnRender } from './perf.js';
+import { perfOnPreRender, perfOnRender } from './perf.js';
 import { presetKnobs } from './qualityPresets.js';
 import { setCameraMoving } from './cameraMotion.js';
 import { hasRenderNeed } from './renderNeeds.js';
@@ -665,6 +665,11 @@ export function GlobeCanvas({
       void time;
     };
     scene.postRender.addEventListener(onPostRender);
+    // Pair with preRender so window.__perf.renderMs* is the COST of a frame,
+    // not the interval between frames. Under requestRenderMode those are very
+    // different questions and only the first one answers "is the globe slow".
+    const onPreRender = (): void => perfOnPreRender(performance.now());
+    scene.preRender.addEventListener(onPreRender);
 
     // P0d render-on-demand governor (design §5.1). DEFAULT OFF (settings) — while
     // off, maximumRenderTimeChange stays 0 exactly as the CLAUDE.md guardrail

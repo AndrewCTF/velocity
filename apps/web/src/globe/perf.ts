@@ -21,11 +21,22 @@ export interface PerfState {
   longtasksPerMin: number;
   /** Cesium Label objects currently materialized (P1 lazy-label metric). */
   liveLabels: number;
+  /** Cost of the last painted frame, preRender to postRender, in ms. THIS is
+   *  "is the globe slow"; rendersPerSec and frameMsEMA are frequency, and under
+   *  requestRenderMode an idle globe scores badly on both while being fast. */
+  renderMsLast: number;
+  /** EMA of renderMsLast. */
+  renderMsEMA: number;
+  /** Worst single frame cost seen, in ms. */
+  renderMsMax: number;
   /** Prims mirrored per-frame (P1 animated-mirror LOD visibleSet size). */
   animatedPrims: number;
 }
 
 const state: PerfState = {
+  renderMsLast: 0,
+  renderMsEMA: 0,
+  renderMsMax: 0,
   rendersPerSec: 0,
   frameMsEMA: 0,
   drainMsLast: 0,
@@ -42,6 +53,7 @@ if (typeof window !== 'undefined') {
 
 // --- render rate + frame EMA ------------------------------------------------
 let renderCount = 0;
+let frameStartedAt = 0;
 let lastRenderAt = 0;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -55,8 +67,30 @@ function ensureFlusher(): void {
   }, 1000);
 }
 
+/** Call from viewer.scene.preRender — starts the cost clock for this frame. */
+export function perfOnPreRender(now: number): void {
+  frameStartedAt = now;
+}
+
 /** Call from viewer.scene.postRender — one call per real frame painted. */
 export function perfOnRender(now: number): void {
+  // Cost of THIS frame, not the gap since the last one.
+  //
+  // rendersPerSec and frameMsEMA both measure frame FREQUENCY, and under
+  // requestRenderMode: true a frame is only painted when something asks for one.
+  // A globe that is idle between camera moves therefore scores low on both while
+  // being perfectly fast — which is how an all-toggles run could report
+  // "p05 5 fps" with a median frame costing well under 16 ms. renderMs is the
+  // honest signal: preRender to postRender is the work Cesium actually did.
+  if (frameStartedAt > 0) {
+    const cost = now - frameStartedAt;
+    if (cost >= 0 && cost < 1000) {
+      state.renderMsLast = Math.round(cost * 100) / 100;
+      state.renderMsEMA =
+        state.renderMsEMA === 0 ? cost : state.renderMsEMA * 0.9 + cost * 0.1;
+      if (cost > state.renderMsMax) state.renderMsMax = cost;
+    }
+  }
   renderCount += 1;
   if (lastRenderAt > 0) {
     const dt = now - lastRenderAt;

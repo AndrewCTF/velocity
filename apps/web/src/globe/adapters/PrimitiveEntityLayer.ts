@@ -57,6 +57,10 @@ const STANDUP_MAX_HEIGHT_M = 2_500_000; // ~2500 km
 // the ddc far bound → the visible set is pixel-identical to today. Selected +
 // emergency contacts are always materialized regardless of zoom.
 const LABEL_MATERIALIZE_ALT_M = 400_000;
+// Max Cesium Label add/remove operations per frame, across one layer. Sized so a
+// full crossing settles within a couple of polls while no single frame pays for
+// the whole layer.
+const LABEL_OPS_PER_FRAME = 250;
 // §5.4 animated-mirror LOD: rebuild the frustum-visible set at 2 Hz; between
 // rebuilds, mirror only visible prims each frame. Off-screen prims refresh at 2 Hz
 // (a vessel at ≤15 m/s moves ≤7.5 m in 500 ms — invisible when it scrolls in).
@@ -64,6 +68,10 @@ const VISIBLE_RECOMPUTE_MS = 500;
 // Hard cap on prims mirrored per frame — a backstop for a pathological
 // everything-on-screen case; capped by stable Map insertion order (no churn).
 const MAX_ANIMATED = 4000;
+// Chunking this full pass across frames was tried on 2026-07-29 and REVERTED:
+// spreading it kept the mirror busy every frame instead of leaving idle ones, and
+// measured renderMs p95 39.9 then 53.2 ms against 17.3 un-chunked. The periodic
+// full pass is cheaper than a permanently busy one.
 const _cullSphere = new Cesium.BoundingSphere();
 const _upScratch = new Cesium.Cartesian3();
 
@@ -298,6 +306,34 @@ export class PrimitiveEntityLayer {
   // §5.5: should this contact's label be materialized right now? Inside the ddc
   // draw window (< 400 km) always; selected + emergency contacts always (cheap
   // insurance — the label spec is preserved for every contact via labelFn).
+  // Label churn is amortised across frames.
+  //
+  // wantLabel flips for EVERY contact the moment the camera crosses
+  // LABEL_MATERIALIZE_ALT_M, and sync() runs over the whole layer in one drain —
+  // so a single altitude crossing added or removed thousands of Cesium Labels at
+  // once and forced a full LabelCollection vertex rebuild. That is the frame-time
+  // tail: measured frameMsEMA p95 of 61-85 ms against a p50 of 26-34 ms, i.e. the
+  // rendersPerSec p05 the harness grades on.
+  //
+  // A budget per frame spreads the transition over a few polls instead. Skipping
+  // a label this pass is safe: the next sync for that id re-evaluates and
+  // converges, and an icon without its label for one poll is invisible to the
+  // operator at these zoom levels.
+  private labelOps = 0;
+  private labelOpsAt = 0;
+
+  /** Self-resetting: preUpdate is only hooked for animating layers, so the
+   * window is measured against the clock rather than a frame callback. One
+   * frame at 60 Hz is ~16 ms. */
+  private labelBudgetLeft(): boolean {
+    const now = performance.now();
+    if (now - this.labelOpsAt >= 16) {
+      this.labelOpsAt = now;
+      this.labelOps = 0;
+    }
+    return this.labelOps < LABEL_OPS_PER_FRAME;
+  }
+
   private wantLabel(id: string, emergency: boolean): boolean {
     if (emergency) return true;
     if (useSelection.getState().selectedEntityId === id) return true;
@@ -335,8 +371,10 @@ export class PrimitiveEntityLayer {
         id: { id },
       });
       let lbl: Cesium.Label | null = null;
-      if (labelText && this.wantLabel(id, !!s.emergency))
+      if (labelText && this.wantLabel(id, !!s.emergency) && this.labelBudgetLeft()) {
         lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
+        this.labelOps++;
+      }
       p = {
         bb, lbl, entity, props, emergency: !!s.emergency, dimFactor, labelText, tint,
         topImage: s.imageUri, topRot: rot, topScale: s.scale,
@@ -369,14 +407,19 @@ export class PrimitiveEntityLayer {
       // selected/emergency). Beyond it, destroy the label so world view holds ~0
       // labels. Recreated lazily on zoom-in — same visible set as today.
       if (labelText && this.wantLabel(id, !!s.emergency)) {
-        if (!p.lbl) p.lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
-        else {
+        if (!p.lbl) {
+          if (this.labelBudgetLeft()) {
+            p.lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
+            this.labelOps++;
+          }
+        } else {
           p.lbl.position = pos;
           if (p.labelText !== labelText) p.lbl.text = labelText;
         }
-      } else if (p.lbl) {
+      } else if (p.lbl && this.labelBudgetLeft()) {
         this.lblColl.remove(p.lbl);
         p.lbl = null;
+        this.labelOps++;
       }
       p.labelText = labelText;
       p.emergency = !!s.emergency;

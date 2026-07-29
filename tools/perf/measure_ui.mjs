@@ -174,6 +174,8 @@ const sampleFn = () => {
     rendersPerSec: p.rendersPerSec ?? NaN,
     frameMsEMA: p.frameMsEMA ?? NaN,
     drainMsLast: p.drainMsLast ?? NaN,
+    renderMsEMA: p.renderMsEMA ?? NaN,
+    renderMsLast: p.renderMsLast ?? NaN,
     longtasksPerMin: p.longtasksPerMin ?? NaN,
     liveLabels: p.liveLabels ?? NaN,
     animatedPrims: p.animatedPrims ?? NaN,
@@ -371,12 +373,20 @@ async function main() {
     console.log('```');
   }
 
+  // Grade on frame COST, not frame frequency.
+  //
+  // requestRenderMode paints only when something asks for it, so an idle globe
+  // reports few renders per second while being perfectly fast — the old
+  // p05-rendersPerSec gate failed a run for being quiet. renderMsEMA is
+  // preRender-to-postRender, i.e. the work Cesium actually did, and 16.7 ms is
+  // one frame at 60 Hz.
+  const renderP95 = pct(series.renderMsEMA || [], 95);
   const p05 = pct(series.rendersPerSec || [], 5);
   const verdict = HEADLESS
     ? 'UNVERIFIED (headless — GPU fps cannot be measured)'
-    : p05 >= 20
-      ? `OK (p05 rendersPerSec ${f(p05)})`
-      : `POOR (p05 rendersPerSec ${f(p05)} < 20)`;
+    : Number.isFinite(renderP95) && renderP95 <= 16.7
+      ? `OK (renderMs p95 ${f(renderP95)} <= 16.7, p05 rendersPerSec ${f(p05)})`
+      : `POOR (renderMs p95 ${f(renderP95)} > 16.7 — frames cost more than one 60 Hz frame)`;
   console.log(`\n**Verdict: ${verdict}**`);
 
   if (Object.keys(stormSeries).length) {
@@ -426,7 +436,8 @@ async function main() {
         : null,
       consoleErrors: consoleErrors.length,
       verdict,
-      pass: HEADLESS ? null : Number.isFinite(p05) && p05 >= 20,
+      renderMsP95: renderP95,
+      pass: HEADLESS ? null : Number.isFinite(renderP95) && renderP95 <= 16.7,
     };
     fs.mkdirSync(path.dirname(path.resolve(OUT)), { recursive: true });
     fs.writeFileSync(OUT, `${JSON.stringify(report, null, 2)}\n`);
@@ -434,7 +445,9 @@ async function main() {
   }
 
   await browser.close();
-  process.exit(!HEADLESS && Number.isFinite(p05) && p05 < 20 && PROFILE === 'all-toggles' ? 1 : 0);
+  process.exit(
+    !HEADLESS && Number.isFinite(renderP95) && renderP95 > 16.7 && PROFILE === 'all-toggles' ? 1 : 0,
+  );
 }
 
 main().catch((e) => {
