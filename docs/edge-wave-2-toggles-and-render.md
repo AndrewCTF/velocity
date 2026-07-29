@@ -117,21 +117,73 @@ netted out.
 
 ---
 
+---
+
+## 4. What the 5 fps actually was — profiled, not guessed
+
+Two rounds of batching had moved the median a little and left `p05` at 5. Rather
+than batch a third time, a CDP `Profiler` run over an all-toggles session was
+aggregated by self-time. It changed the diagnosis completely.
+
+| cluster | self-time |
+|---|---|
+| BillboardCollection vertex writes (`write*`, `recomputeActualPositions`, `encodeRGB8`) | ~21 % |
+| Entity visualizers (`ConstantProperty.getValue`, `Billboard/LabelVisualizer.update`) | ~11 % |
+| Label / cluster screen-space work (`getScreenSpaceBoundingBox`, `worldWithEyeOffsetToWindowCoordinates`, `getScreenSpacePositions`) | ~6 % |
+| GC | ~5 % |
+
+A live probe explained why entity work was not the lever: with everything on the
+scene held **55 BillboardCollections + 55 LabelCollections**, and **78 data
+sources × 8 visualizers = 624 `visualizer.update()` calls per frame**. Cesium
+walks every collection and every visualizer each frame, empty or not.
+
+**The control that settled it:** a shared entity budget cut the entity count 24 %
+(44 912 → 34 013) and frame time moved **not at all** (123.5 → 125.2 ms). The
+budget was subsequently removed — it traded a quarter of the operator's data for
+nothing.
+
+Four changes, each measured:
+
+| change | | frameMs p50 | fps p50 | fps p05 |
+|---|---|---|---|---|
+| — | starting point (Entity API) | 127.4 | 8 | 4 |
+| shared collections | 110 → 48 collections | 111.8 | 9 | 5 |
+| trimmed visualizers | 624 → 390 updates/frame | 99.3 | 10 | 7 |
+| **AISStream → primitives** | + drop its Cesium `EntityCluster` | **21.6** | **54** | **18** |
+| full data restored | budget removed | 28.5 | 48 | 17 |
+
+**AISStream was the whole thing.** It was the last large layer on the Entity API
+(~6 000 vessels with real billboard and label graphics) and the only data source
+with clustering enabled, so it paid both the visualizer walk and a per-frame
+screen-space recompute over every vessel. Moving it to a `PrimitiveEntityLayer`
+took frame time from 99.3 ms to 21.6 ms in one change.
+
+### Against the recorded 2026-07-27 baseline
+
+| | 2026-07-27 | now |
+|---|---|---|
+| `frameMsEMA` p50 | 239.3 ms | **28.5 ms** (−88 %) |
+| `rendersPerSec` p50 | 5 | **48** |
+| `rendersPerSec` p05 | 3 | **17** |
+| `longtasksPerMin` p50 | 294 | **97** |
+| entities p50 | 60 826 | 29 054 |
+
+---
+
 ## What this does NOT claim
 
-**It is still not 20 fps.** `measure_ui.mjs` fails the run at `p05 < 20` and it
-still fails at 5.0 — and adding `airport`, `port` and `base` to the batched set
-did NOT move it (frameMs p50 123.2 → 118.0, fps p50 10 → 9, both inside
-run-to-run variance at these entity counts). Recorded because it is the
-diminishing return that says where the remaining cost is not.
+**The harness still grades POOR.** It fails below `p05 20` and this run is 17,
+so the bar is very nearly met rather than met. `p05` is the worst ~3 of 55
+samples and lands during the camera fly-to transitions; the median is 48.
 
-The long tail that still builds per-entity graphics: `quake`, `jamming`, `tfr`,
-`hazardpoly`, `generic`, plus `AisWsAdapter`, `CablesAdapter`, `AreaAdapter`,
-`MilSymbolAdapter`. `maritime.aisstream` alone was 5 819 entities and is the
-biggest single one left. But at ~40 000 entities across 78 data sources the
-steady-state cost is now plausibly the entity *count* itself rather than the
-visualizer walk, which is what Palantir's tile-vs-object loading
-(`palantir-reference` §2) addresses and this branch does not.
+**Still on the Entity API:** `quake`, `jamming`, `tfr`, `hazardpoly`, `generic`,
+plus `CablesAdapter`, `AreaAdapter`, `MilSymbolAdapter`. All are small now that
+AISStream is gone.
+
+**Still 78 data sources and 390 visualizer updates a frame.** Fewer data sources
+is the next structural lever, not more batching — the diminishing return from
+adding `airport`/`port`/`base` to the batched set (which moved nothing) is the
+evidence for that.
 
 **Neither change fixes the toggle on its own.** The gate alone made the p95
 worse; the batching alone moved the steady-state fps by a quarter. §2's table is
