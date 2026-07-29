@@ -648,6 +648,7 @@ def _query_by_id_sync(
     t_from: float,
     t_to: float,
     limit: int,
+    include_series: bool = False,
 ) -> dict[str, Any]:
     """Execute a single-id range scan via idx_id_t. Called via run_in_executor."""
     try:
@@ -665,7 +666,30 @@ def _query_by_id_sync(
 
     kind = entity_id.split(":", 1)[0] if ":" in entity_id else ""
     points = [[lon, lat, t, track] for t, lon, lat, track, _extra in rows]
-    return {"tracks": [{"id": entity_id, "kind": kind, "points": points}]}
+    out: dict[str, Any] = {"tracks": [{"id": entity_id, "kind": kind, "points": points}]}
+    if include_series:
+        # The archive has been carrying altitude and speed in `extra` since
+        # ingest, and this query threw them away. Surfacing them is what turns a
+        # sparkline from "whatever this browser tab happened to observe since it
+        # was opened" into "what the archive actually holds" - the difference
+        # between a position and a behaviour, and the whole reason owning the
+        # history is worth anything.
+        #
+        # Emitted as a parallel array rather than widening `points`, because
+        # several callers index that shape positionally.
+        series: list[dict[str, Any]] = []
+        for t, _lon, _lat, _track, extra in rows:
+            e = _decode_extra(extra)
+            series.append(
+                {
+                    "t": float(t),
+                    "alt_m": e.get("baro_alt_m"),
+                    "sog": e.get("sog"),
+                    "callsign": e.get("callsign"),
+                }
+            )
+        out["series"] = series
+    return out
 
 
 async def query_track_by_id(
@@ -673,6 +697,7 @@ async def query_track_by_id(
     t_from: float,
     t_to: float,
     limit: int = 5000,
+    include_series: bool = False,
 ) -> dict[str, Any]:
     """Return the single track for *entity_id* (e.g. ``aircraft:af351f``) in the
     given time window — the identity-scoped counterpart to ``query_tracks``'s
@@ -684,7 +709,7 @@ async def query_track_by_id(
     """
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
-        None, _query_by_id_sync, entity_id, t_from, t_to, limit
+        None, _query_by_id_sync, entity_id, t_from, t_to, limit, include_series
     )
 
 

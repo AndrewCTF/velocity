@@ -138,3 +138,55 @@ def test_default_later_window_is_now(store) -> None:  # type: ignore[no-untyped-
         history.window_diff("vessel", _BBOX, now - 10_000, now - 9_000, now - 60, now + 60)
     )
     assert [r["id"] for r in d["arrived"]] == ["recent"]
+
+
+# ── archived behaviour series ────────────────────────────────────────────────
+#
+# The archive has carried altitude in `extra` since ingest, and the by-id query
+# dropped it, so the entity panel's sparkline could only ever plot what the
+# current browser tab happened to observe. Surfacing it is what turns a position
+# into a behaviour, and it is only possible because the history is owned.
+
+
+def _write_extra(rows: list[tuple[str, str, float, float, float, str]]) -> None:
+    """rows = (kind, id, t, lon, lat, extra_json)"""
+    con = history._connect()
+    con.executemany(
+        "INSERT INTO positions (kind, id, t, lon, lat, track, extra)"
+        " VALUES (?,?,?,?,?,0,?)",
+        rows,
+    )
+    con.commit()
+    con.close()
+
+
+def test_series_returns_archived_altitude(store) -> None:  # type: ignore[no-untyped-def]
+    _write_extra(
+        [
+            ("aircraft", "aircraft:abc123", 100.0, 1.0, 2.0, '{"baro_alt_m": 9000}'),
+            ("aircraft", "aircraft:abc123", 200.0, 1.1, 2.1, '{"baro_alt_m": 10000}'),
+        ]
+    )
+    out = asyncio.run(
+        history.query_track_by_id("aircraft:abc123", 0, 1_000, include_series=True)
+    )
+    assert [s["alt_m"] for s in out["series"]] == [9000, 10000]
+    assert [s["t"] for s in out["series"]] == [100.0, 200.0]
+
+
+def test_series_is_opt_in_so_existing_callers_are_unchanged(store) -> None:  # type: ignore[no-untyped-def]
+    _write_extra([("aircraft", "aircraft:abc123", 100.0, 1.0, 2.0, '{"baro_alt_m": 9000}')])
+    out = asyncio.run(history.query_track_by_id("aircraft:abc123", 0, 1_000))
+    assert "series" not in out
+    # The positional points shape several callers index into is untouched.
+    assert out["tracks"][0]["points"] == [[1.0, 2.0, 100.0, 0.0]]
+
+
+def test_series_tolerates_a_fix_with_no_altitude(store) -> None:  # type: ignore[no-untyped-def]
+    """A missing value must arrive as null, not as zero: a plotted 0 m would
+    read as an aircraft on the ground."""
+    _write_extra([("aircraft", "aircraft:abc123", 100.0, 1.0, 2.0, "{}")])
+    out = asyncio.run(
+        history.query_track_by_id("aircraft:abc123", 0, 1_000, include_series=True)
+    )
+    assert out["series"][0]["alt_m"] is None

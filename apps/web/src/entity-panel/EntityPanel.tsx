@@ -3,6 +3,7 @@ import * as Cesium from 'cesium';
 import { useSelection, useAlerts } from '../state/stores.js';
 import { aircraftStyle, vesselStyle } from '../globe/adapters/styles.js';
 import { CONFIDENCE_RULE } from '../globe/adapters/freshness.js';
+import { ArchiveSeriesCard } from './ArchiveSeriesCard.js';
 import { tracks } from '../intel/tracks.js';
 import {
   fetchEnrichment,
@@ -477,6 +478,8 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
       <ImageryCard id={id} kind={snap?.kind ?? ''} />
 
       <TrackCard kind={snap?.kind ?? ''} points={track} />
+
+      <ArchiveSeriesCard id={id} kind={snap?.kind ?? ''} />
 
       <ConnectionsCard
         entityId={id}

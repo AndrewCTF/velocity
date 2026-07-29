@@ -90,6 +90,13 @@ async def get_track_by_id(
     from_ts: float | None = Query(None, description="Unix timestamp (seconds)"),
     to_ts: float | None = Query(None, description="Unix timestamp (seconds)"),
     limit: int = Query(5000, ge=1, le=20000),
+    series: bool = Query(
+        False,
+        description=(
+            "Also return the archived altitude/speed series alongside the "
+            "positions, for plotting behaviour rather than only path"
+        ),
+    ),
 ) -> dict:
     """Identity-scoped history: the positions for ONE tail/MMSI over a time
     window, e.g. "where was this aircraft last Tuesday" — a direct idx_id_t
@@ -121,6 +128,7 @@ async def get_track_by_id(
         t_from=t_from,
         t_to=t_to,
         limit=limit,
+        include_series=series,
     )
 
 
