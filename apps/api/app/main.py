@@ -69,6 +69,7 @@ from app.routes import airspace as airspace_routes
 from app.routes import ais as ais_routes
 from app.routes import alert_rules as alert_rules_routes
 from app.routes import alerts as alerts_routes
+from app.routes import answers as answers_routes
 from app.routes import audit as audit_routes
 from app.routes import aviation as aviation_routes
 from app.routes import cables as cables_routes
@@ -532,6 +533,8 @@ def create_app() -> FastAPI:
     app.include_router(hazards_routes.router)
     app.include_router(env_routes.router)
     app.include_router(oceans_routes.router)
+    # Named questions with published thresholds (app/intel/answers.py).
+    app.include_router(answers_routes.router)
     app.include_router(spacewx_routes.router)
     app.include_router(infra_routes.router)
     app.include_router(airhazards_routes.router)

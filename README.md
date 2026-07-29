@@ -1,17 +1,37 @@
 # Velocity
 
-A self-hosted, keyless situation console: live aircraft, ships, satellites,
-GPS jamming, dark vessels, TFR airspace, military bases, naval warnings,
-earthquakes, outages and conflict events, fused on one 3D globe and correlated
-on the server instead of leaving you to eyeball six tabs.
+**A live map you can rewind, that tells you where every contact came from.**
 
-The part that's genuinely hard to find elsewhere: it keeps history *you* own.
-Flightradar24 gates replay at 7 days free, MarineTraffic cut its free window
-to 24 hours, ADS-B Exchange killed its free API tier outright — a self-hosted
-tool just doesn't have that problem. Turn on the archive profile and Velocity
-keeps recording position history to your own disk for as long as you give it
-room, with a scrubber to rewind to any past moment. No account, no API key,
-nobody who can paywall, filter or cut off your archive.
+There is no shortage of dashboards that draw aircraft and ships on a globe.
+Nearly all of them are stateless viewers of somebody else's API: they show you
+this instant, they cannot show you last Tuesday, and they render whatever the
+upstream asserts without saying who saw it or how long ago. Velocity is
+self-hosted and keyless like those, and then does the two things they don't.
+
+**It keeps history you own.** Flightradar24 gates replay at 7 days free,
+MarineTraffic cut its free window to 24 hours, ADS-B Exchange killed its free
+API tier outright — a self-hosted tool just doesn't have that problem. Turn on
+the archive profile and Velocity records position history to your own disk for
+as long as you give it room, with a scrubber to rewind to any past moment. No
+account, no API key, nobody who can paywall, filter or cut off your archive.
+
+**It scores what it shows you.** Anyone can upload whatever they like to a
+crowd-sourced ADS-B aggregator; a contact appearing on a map is not evidence it
+was ever broadcast. So every contact carries which independent sources reported
+it, how many agreed, and how old the fix actually is — with the confidence rule
+written out rather than implied. Cached sources report the age of the *data*,
+not the age of the response, so nothing sits on the map looking live because it
+was fresh when we fetched it this morning. `/api/status/provenance` gives you
+the same picture per source, including how many contacts each one is alone in
+seeing.
+
+On top of that: live aircraft, ships, satellites, GPS jamming, dark vessels,
+TFR airspace, military bases, naval warnings, earthquakes, outages and conflict
+events, correlated on the server instead of leaving you to eyeball six tabs.
+
+Honest scope, since this is a tool for people who check things: coverage is
+whatever the public feeds give you, it is not uniform, and the console tells
+you where it is thin rather than drawing a confident empty ocean.
 
 And once you've found something worth keeping, it stays evidence: a
 chain-of-custody **evidence locker** hashes every capture (a URL snapshot, an

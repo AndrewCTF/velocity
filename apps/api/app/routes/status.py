@@ -338,3 +338,119 @@ async def status_provenance() -> dict[str, Any]:
     except Exception:  # noqa: BLE001 — diagnostics must never 500
         out["aircraft"] = {"error": "unavailable"}
     return out
+
+
+# Capabilities that need configuration, and the EXACT setting names the code
+# reads. Generated against Settings at request time rather than written out in
+# prose, because the failure this exists to prevent is documentation drifting
+# away from the code.
+#
+# That drift is not hypothetical. The largest cluster of complaints on the
+# highest-scoring launch in this category was a map that rendered blank because
+# a key was missing and nothing said so, and a commenter had to work out that
+# the README named OPENSKY_USERNAME / OPENSKY_PASSWORD while the code read
+# OPENSKY_CLIENT_ID / OPENSKY_CLIENT_SECRET. The reply was "the perils of vibe
+# coding". See docs/research-last30days-2026-07-29.md §5.1 and §5.2.
+#
+# (capability, [setting names], what you lose without it)
+_OPTIONAL_CAPABILITIES: list[tuple[str, list[str], str]] = [
+    (
+        "OpenSky authenticated breadth",
+        ["opensky_client_id", "opensky_client_secret"],
+        "Anonymous access still works on a small daily credit budget; with "
+        "credentials the budget is larger, so the global aircraft floor is "
+        "easier to hold.",
+    ),
+    (
+        "AISStream global firehose",
+        ["aisstream_key"],
+        "Keyless regional AIS still runs; the global firehose adds open-ocean "
+        "vessels the regional feeds cannot see.",
+    ),
+    (
+        "NASA FIRMS fires",
+        ["firms_map_key"],
+        "The fire layer degrades gracefully without a key.",
+    ),
+    (
+        "Sentinel / CDSE imagery",
+        ["cdse_client_id", "cdse_client_secret"],
+        "On-demand satellite imagery and SAR dark-vessel sweeps are unavailable.",
+    ),
+    (
+        "Cesium Ion terrain and imagery",
+        ["cesium_ion_token"],
+        "The globe falls back to the keyless Carto basemap.",
+    ),
+]
+
+
+@router.get("/api/status/doctor")
+async def status_doctor() -> dict[str, Any]:
+    """What is configured, what is missing, and the exact line that fixes it.
+
+    A blank layer is indistinguishable from a broken product unless something
+    says which one it is. This endpoint is that something: for every optional
+    capability it reports whether the settings the CODE reads are populated, what
+    you lose without them, and the literal `KEY=value` line to add.
+
+    Setting names come from the Settings model itself, so this cannot describe an
+    environment variable the application does not actually read. It reports only
+    whether a value is present - never the value - so it is safe to paste into an
+    issue.
+    """
+    settings = get_settings()
+    fields = set(type(settings).model_fields)
+    problems: list[dict[str, Any]] = []
+    configured: list[str] = []
+
+    for cap, names, consequence in _OPTIONAL_CAPABILITIES:
+        missing: list[str] = []
+        unknown: list[str] = []
+        for n in names:
+            if n not in fields:
+                # A capability naming a setting that no longer exists is itself a
+                # defect: this list has drifted from the code.
+                unknown.append(n)
+                continue
+            if not getattr(settings, n, None):
+                missing.append(n)
+        if unknown:
+            problems.append(
+                {
+                    "capability": cap,
+                    "state": "misconfigured-check",
+                    "detail": (
+                        "This check names settings the application does not read: "
+                        + ", ".join(unknown)
+                        + ". The check is wrong, not your configuration."
+                    ),
+                    "fix": None,
+                }
+            )
+        elif missing:
+            problems.append(
+                {
+                    "capability": cap,
+                    "state": "not-configured",
+                    "detail": consequence,
+                    "fix": " ".join(f"{n.upper()}=..." for n in missing),
+                }
+            )
+        else:
+            configured.append(cap)
+
+    return {
+        "as_of": time.time(),
+        # Keyless by design: nothing here is required to run the console, so an
+        # empty `problems` list and a long one are both healthy states. Saying so
+        # explicitly stops a list of "not configured" reading as a list of faults.
+        "required_missing": 0,
+        "optional_not_configured": len(problems),
+        "configured": sorted(configured),
+        "problems": problems,
+        "note": (
+            "Every capability listed here is optional. The console runs keyless; "
+            "these only widen coverage."
+        ),
+    }

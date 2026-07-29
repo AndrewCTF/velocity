@@ -1103,3 +1103,161 @@ def stats() -> dict[str, Any]:
         "min_interval_s": settings.history_min_interval_s,
         "min_move_deg": settings.history_min_move_deg,
     }
+
+
+def _distinct_ids_per_bucket_sync(
+    kind: str,
+    bbox: tuple[float, float, float, float],
+    t_from: float,
+    t_to: float,
+    bucket_sec: float,
+) -> list[tuple[float, int]]:
+    """Distinct entity ids seen inside `bbox`, bucketed by time.
+
+    The counting primitive behind a chokepoint answer: "how many separate
+    vessels crossed this box today, and how does that compare with a normal
+    day". Counting DISTINCT ids rather than rows is the whole point - a ship
+    that sits in the strait for six hours contributes many position rows and one
+    transit, and rows would make a traffic jam look like heavy traffic.
+
+    Buckets are half-open [start, start + bucket_sec) anchored at `t_from`, so
+    the caller controls the day boundary rather than inheriting UTC midnight.
+    """
+    try:
+        con = _read_connect()
+        rows = con.execute(
+            """
+            SELECT CAST((t - ?) / ? AS INTEGER) AS bucket, COUNT(DISTINCT id)
+            FROM positions
+            WHERE kind = ? AND t >= ? AND t < ?
+              AND lon >= ? AND lon <= ? AND lat >= ? AND lat <= ?
+            GROUP BY bucket ORDER BY bucket
+            """,
+            (
+                t_from,
+                bucket_sec,
+                kind,
+                t_from,
+                t_to,
+                bbox[0],
+                bbox[2],
+                bbox[1],
+                bbox[3],
+            ),
+        ).fetchall()
+        con.close()
+    except sqlite3.Error:
+        return []
+    return [(t_from + int(b) * bucket_sec, int(n)) for b, n in rows]
+
+
+async def distinct_ids_per_bucket(
+    kind: str,
+    bbox: tuple[float, float, float, float],
+    t_from: float,
+    t_to: float,
+    bucket_sec: float,
+) -> list[tuple[float, int]]:
+    """Async wrapper for `_distinct_ids_per_bucket_sync`."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, _distinct_ids_per_bucket_sync, kind, bbox, t_from, t_to, bucket_sec
+    )
+
+
+def _ids_in_window_sync(
+    kind: str | None,
+    bbox: tuple[float, float, float, float],
+    t_from: float,
+    t_to: float,
+) -> dict[str, tuple[float, float, float]]:
+    """Entity ids present in `bbox` during [t_from, t_to], with their last fix.
+
+    Returns ``{id: (t, lon, lat)}`` for the newest position each id had inside
+    the box and window, which is what a diff needs to say where something was
+    when it was last seen there.
+    """
+    try:
+        con = _read_connect()
+        params: list[Any] = [t_from, t_to, bbox[0], bbox[2], bbox[1], bbox[3]]
+        where = "t >= ? AND t <= ? AND lon >= ? AND lon <= ? AND lat >= ? AND lat <= ?"
+        if kind:
+            where += " AND kind = ?"
+            params.append(kind)
+        rows = con.execute(
+            f"SELECT id, t, lon, lat FROM positions WHERE {where} ORDER BY id, t",
+            params,
+        ).fetchall()
+        con.close()
+    except sqlite3.Error:
+        return {}
+    out: dict[str, tuple[float, float, float]] = {}
+    for rid, t, lon, lat in rows:
+        out[str(rid)] = (float(t), float(lon), float(lat))  # ORDER BY t → last wins
+    return out
+
+
+async def window_diff(
+    kind: str | None,
+    bbox: tuple[float, float, float, float],
+    a_from: float,
+    a_to: float,
+    b_from: float,
+    b_to: float,
+    limit: int = 500,
+) -> dict[str, Any]:
+    """What changed in this box between two time windows.
+
+    The question a stateless dashboard cannot answer at all, and the reason
+    owning history is the defensible thing here rather than another live layer.
+    Everything else in this category renders the current instant and has no way
+    to tell you that the four vessels anchored off a terminal this morning are a
+    different four to the ones there last week.
+
+    Compares the SET OF IDS present in each window:
+
+      arrived   in B, not in A
+      departed  in A, not in B
+      stayed    in both
+
+    Windows rather than instants because a position is a sample, not a
+    continuous truth: asking "who was at 14:00:00" against a store that records
+    a fix every few seconds would answer "nobody" most of the time.
+    """
+    loop = asyncio.get_running_loop()
+    a = await loop.run_in_executor(None, _ids_in_window_sync, kind, bbox, a_from, a_to)
+    b = await loop.run_in_executor(None, _ids_in_window_sync, kind, bbox, b_from, b_to)
+
+    a_ids, b_ids = set(a), set(b)
+
+    def _rows(ids: set[str], src: dict[str, tuple[float, float, float]]) -> list[dict[str, Any]]:
+        # Newest first: the most recently seen contact is the one an operator
+        # wants at the top of a change list.
+        ordered = sorted(ids, key=lambda i: src[i][0], reverse=True)[:limit]
+        return [
+            {"id": i, "t": src[i][0], "lon": src[i][1], "lat": src[i][2]} for i in ordered
+        ]
+
+    arrived = b_ids - a_ids
+    departed = a_ids - b_ids
+    stayed = a_ids & b_ids
+    return {
+        "bbox": list(bbox),
+        "kind": kind,
+        "window_a": [a_from, a_to],
+        "window_b": [b_from, b_to],
+        "counts": {
+            "a": len(a_ids),
+            "b": len(b_ids),
+            "arrived": len(arrived),
+            "departed": len(departed),
+            "stayed": len(stayed),
+        },
+        "arrived": _rows(arrived, b),
+        "departed": _rows(departed, a),
+        "stayed": _rows(stayed, b),
+        # An empty store and "nothing changed" look identical in the counts, so
+        # say which it was. Silent emptiness is the failure mode this whole wave
+        # is pushing back on.
+        "recorded": bool(a_ids or b_ids),
+    }

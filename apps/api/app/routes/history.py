@@ -146,3 +146,39 @@ async def get_coverage(
     bucket_hours: int = Query(1, ge=1, le=24, description="Bucket width, hours"),
 ) -> dict:
     return await history.coverage(window_hours, bucket_hours)
+
+
+@router.get("/api/history/diff")
+async def get_diff(
+    lamin: float = Query(..., ge=-90, le=90),
+    lomin: float = Query(..., ge=-180, le=180),
+    lamax: float = Query(..., ge=-90, le=90),
+    lomax: float = Query(..., ge=-180, le=180),
+    at_a: float = Query(..., description="Centre of the earlier window, epoch seconds"),
+    at_b: float | None = Query(None, description="Centre of the later window; default now"),
+    window_sec: int = Query(600, ge=60, le=86_400, description="Half-width of each window"),
+    kind: str | None = Query(None, description="aircraft | vessel; omit for both"),
+    limit: int = Query(500, ge=1, le=5000),
+) -> dict:
+    """What changed inside this box between two moments.
+
+    Arrived, departed, and still-present, by entity id. This is the question
+    that needs owned history: a console that only holds the current instant can
+    show you four vessels off a terminal but cannot tell you they are a
+    different four to last week's.
+
+    `window_sec` widens each moment into a window, because a stored position is
+    a sample rather than a continuous truth - asking about a single instant
+    against a store that records a fix every few seconds mostly answers
+    "nobody".
+    """
+    b = time.time() if at_b is None else at_b
+    return await history.window_diff(
+        kind,
+        (lomin, lamin, lomax, lamax),
+        at_a - window_sec,
+        at_a + window_sec,
+        b - window_sec,
+        b + window_sec,
+        limit,
+    )
