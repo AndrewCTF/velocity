@@ -258,9 +258,86 @@ async def chokepoint_answer(qid: str, now: float | None = None) -> Answer:
     )
 
 
+# ── coverage ─────────────────────────────────────────────────────────────────
+
+COVERAGE_THRESHOLD = (
+    "Aircraft in the live snapshot against the configured breadth floor. At or "
+    "above the floor reads as open (trustworthy), between half the floor and "
+    "the floor as reduced, below half as closed. A picture this thin is not a "
+    "quiet sky, it is a source problem, so treat absence of contacts in it as "
+    "unknown rather than as evidence."
+)
+
+
+async def coverage_answer(now: float | None = None) -> Answer:
+    """Is the aircraft picture complete enough to reason from?
+
+    The question nobody thinks to ask until it matters. A thin snapshot looks
+    exactly like a quiet sky, and an operator who does not know which one they
+    are looking at will read an empty region as an absence of traffic rather
+    than an absence of coverage.
+
+    This is not hypothetical here: on 2026-07-29 the breadth tier was rate
+    limited for an entire session and the console showed a quarter of the usual
+    aircraft with nothing saying so. See docs/exec-report-2026-07-29.md §3.
+    """
+    t_now = time.time() if now is None else now
+    question = "Is aircraft coverage complete enough to trust?"
+    try:
+        from app.config import get_settings  # noqa: PLC0415
+        from app.routes import adsb as adsb_routes  # noqa: PLC0415
+
+        count = adsb_routes.snapshot_count()
+        floor = int(getattr(get_settings(), "adsb_min_aircraft", 8000) or 8000)
+    except Exception:  # noqa: BLE001 — an answer degrades, never 500
+        return _unknown(
+            "aircraft-coverage", question, COVERAGE_THRESHOLD, "Snapshot unavailable."
+        )
+
+    if count <= 0:
+        return _unknown(
+            "aircraft-coverage",
+            question,
+            COVERAGE_THRESHOLD,
+            "No aircraft in the snapshot at all, so there is nothing to judge coverage from.",
+        )
+
+    ratio = count / max(1, floor)
+    if ratio >= 1.0:
+        verdict = OPEN
+    elif ratio >= 0.5:
+        verdict = REDUCED
+    else:
+        verdict = CLOSED
+
+    return Answer(
+        id="aircraft-coverage",
+        question=question,
+        verdict=verdict,
+        threshold=COVERAGE_THRESHOLD,
+        as_of=t_now,
+        # The snapshot is refreshed on a one-second cycle, so its evidence is
+        # current by construction. This is the one answer whose lag really is
+        # near zero, and saying so is only honest because it is measured
+        # against a live counter rather than an archive.
+        data_lag_s=0.0,
+        confidence="high",
+        detail=(
+            f"{count} aircraft in the live snapshot against a floor of {floor} "
+            f"({ratio * 100:.0f}%)."
+        ),
+        observed=float(count),
+        baseline=float(floor),
+    )
+
+
 async def all_answers(now: float | None = None) -> list[dict[str, Any]]:
-    """Every registered answer. Order is stable so the dashboard does not jump."""
-    out: list[dict[str, Any]] = []
+    """Every registered answer. Order is stable so the dashboard does not jump.
+
+    Coverage comes FIRST, deliberately. It is the answer that tells you how much
+    to trust the others, and burying it under ten chokepoints would invert that.
+    """
+    out: list[dict[str, Any]] = [(await coverage_answer(now)).to_dict()]
     for qid in chokepoint_ids():
         out.append((await chokepoint_answer(qid, now)).to_dict())
     return out

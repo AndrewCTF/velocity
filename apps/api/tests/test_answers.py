@@ -139,3 +139,39 @@ def test_no_evidence_survives_json_without_becoming_zero() -> None:
     assert round_tripped["data_lag_s"] is None
     assert round_tripped["stale"] is True
     assert round_tripped["verdict"] == A.UNKNOWN
+
+
+# ── coverage answer ──────────────────────────────────────────────────────────
+#
+# The question nobody thinks to ask until it matters: is the picture complete
+# enough to reason from? A thin snapshot looks exactly like a quiet sky. On
+# 2026-07-29 the breadth tier was rate limited for a whole session and the
+# console showed a quarter of the usual aircraft with nothing saying so.
+
+
+def test_coverage_answer_is_first_so_it_frames_the_others() -> None:
+    """It tells you how much to trust everything below it; burying it under ten
+    chokepoints would invert that."""
+    import asyncio
+
+    items = asyncio.run(A.all_answers())
+    assert items[0]["id"] == "aircraft-coverage"
+
+
+def test_coverage_threshold_warns_against_reading_thin_as_quiet() -> None:
+    assert "not a quiet sky" in A.COVERAGE_THRESHOLD
+    assert "unknown rather than as evidence" in A.COVERAGE_THRESHOLD
+
+
+def test_coverage_answer_reports_a_real_lag_and_a_verdict() -> None:
+    import asyncio
+
+    a = asyncio.run(A.coverage_answer())
+    assert a.id == "aircraft-coverage"
+    assert a.verdict in {A.OPEN, A.REDUCED, A.CLOSED, A.UNKNOWN}
+    if a.verdict != A.UNKNOWN:
+        # Measured against a live counter, so near-zero lag is honest here in a
+        # way it would not be for an archive-backed answer.
+        assert a.data_lag_s == 0.0
+        assert a.stale is False
+        assert a.observed is not None and a.baseline is not None

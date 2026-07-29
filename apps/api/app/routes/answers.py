@@ -33,6 +33,8 @@ async def get_answer(answer_id: str) -> dict[str, Any]:
     real answer and an operator needs to see it. Collapsing that into an error
     would hide the most honest thing this endpoint says.
     """
+    if answer_id == "aircraft-coverage":
+        return (await answers_intel.coverage_answer()).to_dict()
     ans = await answers_intel.chokepoint_answer(answer_id)
     if ans.verdict == answers_intel.UNKNOWN and "No chokepoint with that name" in ans.detail:
         raise HTTPException(status_code=404, detail=ans.detail)
