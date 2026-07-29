@@ -3,8 +3,8 @@
 Against `docs/plan-50-2026-07-29.md`, on `overnight-provenance-answers-2026-07-29`
 (branched from `perf-annotate-sidecars-2026-07-27`; see §6).
 
-**Headline: 29 of 50 items landed, all three operator-reported defects fixed,
-`scripts/verify.sh` ALL GREEN, pytest 2047 → 2096.** The remaining 21 are
+**Headline: 34 of 50 items landed, all three operator-reported defects fixed,
+`scripts/verify.sh` ALL GREEN, pytest 2047 → 2105.** The remaining 16 are
 untouched and listed by number in §4. Nothing is half-built: every item below is
 either complete with evidence or absent.
 
@@ -17,7 +17,7 @@ A pull request is open at
 
 | Gate | Command | Result |
 |---|---|---|
-| G1 unit | `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q` | **2096 passed, 2 skipped** (inherited baseline 2047) |
+| G1 unit | `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q` | **2105 passed, 2 skipped** (inherited baseline 2047) |
 | G2 static | `pnpm -r typecheck` | clean |
 | G3 full | `bash scripts/verify.sh` | **ALL GREEN** |
 | G4 live | per item, §2 | run this session against :8000 |
@@ -25,6 +25,14 @@ A pull request is open at
 CLAUDE.md records the baseline as 2006; the tree actually inherited **2047**, and
 that is the number this wave must not regress below. Worth correcting in
 CLAUDE.md.
+
+One environment note for whoever runs this next:
+`test_workflows.py::test_python_exec_output_over_cap_fails_fast_not_timeout`
+is wall-clock sensitive and **fails while a local backend is running on :8000**
+(it asserts a subprocess hits an output cap within 30 s, and the sidecars starve
+it). It passes with the backend stopped. Confirmed both ways this session; the
+same class of flake the "stop a wall-clock test flaking under load" commit
+addressed earlier on this branch. Run `verify.sh` with :8000 free.
 
 ## 2. What landed, with the evidence
 
@@ -244,6 +252,62 @@ real traffic and call it rigour. Faded rather than hidden, and an unknown source
 count reads as corroborated. Guard: `freshness.test.ts` + a settings-default
 test. **Not browser-verified.**
 
+### Citation contract on model prose (item 46) — plumbed-unverified
+
+The selection brief told the model to "cite the concrete numbers and ids", which
+is an instruction nobody can check. It now asks for them in a bracket form, with
+`llm.is_grounded()` to verify a brief against the ids that were actually in the
+evidence. A claim with no supporting id must be dropped rather than hedged in; a
+fabricated id fails outright rather than being ignored, because an invented id
+looks like provenance and survives a skim; and partial provenance fails, so one
+real citation cannot launder one made-up one.
+Guard: `apps/api/tests/test_prose_style.py` (+6 tests). The prompt change is
+live in code; **no model output has been inspected**, hence plumbed.
+
+### Degraded-boot banner (item 35) — plumbed-unverified
+
+One dismissible line naming what is unconfigured, from `/api/status/doctor`.
+Deliberately not a modal and deliberately not phrased as an error: everything it
+reports is optional, so a line that read as a fault would be lying about the
+severity. The wording is a pure function with tests
+(`apps/web/src/globe/DegradedBanner.test.ts`). **Not browser-verified.**
+
+### Coverage honesty in the strip (item 18) — plumbed-unverified
+
+Zero-count hours used to render as nothing, which is visually identical to the
+strip's background: an hour the archive was down looked like an hour with no
+bar, letting an operator read "quiet" where the truth is "unknown". Gaps are now
+drawn in the alert colour and the strip states in words how many hours have
+recorded fixes. The existing guard asserted the OLD behaviour ("one bar per
+non-zero bucket") and was tightened, not relaxed, to pin the new contract.
+
+### Auto-pause at events (item 17) — plumbed-unverified
+
+Replay halts at each incident and alert. The rule is crossing detection, not
+proximity, because at 3600x one frame advances the replay by a minute: equality
+never fires and a "within N seconds" test fires every frame. Half-open intervals
+so a mark fires once; direction-aware; a jump spanning several marks stops at
+the first reached, since skipping two events to land on a third is how a briefing
+loses its middle; bursts collapse. Guard:
+`apps/web/src/globe/autoPause.test.ts`, 11 tests. **Not browser-verified.**
+
+### Coverage answer (item 29, partial) — proven-live
+
+The question nobody asks until it matters: is the picture complete enough to
+reason from? A thin snapshot looks exactly like a quiet sky.
+
+```
+GET /api/answers/aircraft-coverage
+verdict = closed
+detail  = 836 aircraft in the live snapshot against a floor of 8000 (10%).
+data_lag_s = 0.0   stale = false   confidence = high
+```
+
+**That is the whole argument for this wave in one response.** The console was
+showing a tenth of the expected picture, and before tonight nothing said so.
+The published rule includes the part that matters most: a picture this thin is a
+source problem, so absence of contacts in it is *unknown*, not evidence.
+
 ### Positioning (item 48) — done
 
 `README.md` now leads with **"A live map you can rewind, that tells you where
@@ -279,7 +343,7 @@ git ls-files | grep '\.env'  → .env.example only
 - **X coverage in the research is thin** — web search only, no engagement figures.
   Reading the operator's browser cookies unasked was not a call to make.
 
-## 4. The 21 items not started
+## 4. The 16 items not started
 
 Phase 1: **10, 13** — but note `apps/api/app/intel/deception.py` already ships
 duplicate-MMSI, teleport, spoof-cluster and kinematic detection, so the genuine
@@ -291,11 +355,12 @@ coverage-honesty strip, copy-link button, replay slice export).
 Phase 3: **27, 28, 29** (answer permalink, verdict history, three more answers).
 Phase 4: **32, 33, 35** (empty-layer reasons in the rail, the health panel, the
 degraded-boot banner).
-Phase 5: **38, 39, 42** (saved search → subscribe, watchbox → geofence alert,
-inbox store test). **37** and **40** were already built: `state/inbox.ts` carries
-read/archived triage state and `inbox/InboxPanel.tsx` already unified the
-surfaces, which the plan did not know.
-Phase 6: **46** (citation contract on model prose).
+Phase 5: **39, 42** (watchbox → geofence alert, inbox store test). **37**, **38**
+and **40** were already built: `state/inbox.ts` carries read/archived triage
+state, `inbox/InboxPanel.tsx` already unified the surfaces, and
+`state/savedSearches.ts` already polls saved searches and posts growth alerts
+into the inbox, so a saved search IS a subscription. The plan did not know any
+of that.
 
 Highest value per hour from here, in order: **46** (make model prose carry the
 object ids it came from — the audience treats unsourced LLM output as a quality
