@@ -209,6 +209,15 @@ class Settings(BaseSettings):
     # launch a local Ollama model for deeper, in-the-loop analysis without
     # spending the calling agent's context. All optional; degrade gracefully.
     ollama_host: str = "http://localhost:11434"  # OLLAMA_HOST
+    # How long ollama keeps a model in VRAM after answering. Ollama's own
+    # default is 5 minutes and it holds the entire model resident for that
+    # window — measured 2026-07-29, one fallback call left qwen3-coder:30b at
+    # 21 438 MiB of a 32 GB card. On a keyless install every llm call reaches
+    # the ollama rung (the cloud rungs fail without keys), so a single
+    # background brief pinned most of the GPU. 60 s keeps an interactive
+    # exchange warm and releases the card almost immediately otherwise.
+    # Any ollama duration: "0" unloads at once, "-1" never unloads, "10m", ...
+    ollama_keep_alive: str = "60s"  # OLLAMA_KEEP_ALIVE
     ollama_model: str = ""  # OLLAMA_MODEL ("" → auto-detect smallest installed)
     # Per-tier local model ids used when running inference locally (Part 4). The
     # auto-picker (llm._pick_ollama) biases to TINY models — right for a last-resort

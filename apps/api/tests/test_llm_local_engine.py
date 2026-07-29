@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 from app import llm
+from app.config import get_settings
 from app.localllm import manager, state
 
 
@@ -622,3 +623,49 @@ def test_api_key_never_in_ai_local_or_ai_models_response(client) -> None:  # noq
     finally:
         llamacpp_sidecar._api_key = None
         vllm_sidecar._api_key = None
+
+
+@pytest.mark.asyncio
+async def test_ollama_request_carries_keep_alive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ollama holds the whole model in VRAM for keep_alive after answering, and
+    its own default is 5 minutes. On a keyless install every call reaches this
+    rung, so without an explicit value one background brief pinned 21 438 MiB of
+    a 32 GB card (measured 2026-07-29).
+    """
+    from app import llm as L
+
+    captured: dict = {}
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict:
+            return {"message": {"content": "ok"}}
+
+    class _Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, json=None, **kw):  # noqa: A002
+            captured["body"] = json
+            return _Resp()
+
+    monkeypatch.setattr(L, "_client", lambda *a, **k: _Client())
+    monkeypatch.setattr(L, "_ollama_tags", _fake_tags)
+
+    await L._ollama_chat(
+        [{"role": "user", "content": "hi"}],
+        prefer_model="",
+        temperature=0.2,
+        timeout_s=5.0,
+    )
+    assert "keep_alive" in captured["body"], "no keep_alive → ollama's 5-minute default"
+    assert captured["body"]["keep_alive"] == get_settings().ollama_keep_alive
+
+
+async def _fake_tags(host: str, timeout_s: float) -> list[str]:
+    return ["qwen3:latest"]

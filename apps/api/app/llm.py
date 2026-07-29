@@ -641,6 +641,19 @@ async def _ollama_chat(
                     "stream": False,
                     "options": {"temperature": temperature},
                     "messages": messages,
+                    # Ollama's default keep_alive is 5 minutes, and it holds the
+                    # whole model in VRAM for that window. Measured 2026-07-29:
+                    # one fallback call left qwen3-coder:30b resident at
+                    # 21 438 MiB of a 32 GB card. On a keyless box EVERY llm call
+                    # reaches this rung (the cloud rungs fail without keys), so a
+                    # single background brief pins most of the GPU.
+                    #
+                    # 60 s keeps an interactive exchange warm — a follow-up
+                    # question inside a minute pays no reload — while an hourly
+                    # background brief releases the card almost immediately.
+                    # OLLAMA_KEEP_ALIVE takes any ollama duration ("0" unloads at
+                    # once, "-1" keeps forever, "10m", ...).
+                    "keep_alive": s.ollama_keep_alive,
                 },
             )
         if r.status_code != 200:
