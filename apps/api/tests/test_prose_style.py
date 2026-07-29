@@ -124,3 +124,59 @@ def test_news_verify_prompts_end_with_injection_guard() -> None:
                 assert line.index("with_prose_style") < line.index("_INJECTION_GUARD"), (
                     f"{mod.__name__}: style rider must precede the injection guard: {line.strip()}"
                 )
+
+
+# ── citation contract ────────────────────────────────────────────────────────
+#
+# Palantir treats this as a hard contract rather than a nicety: "Every response
+# from AIP retains links back to the underlying data records"
+# (docs/palantir-reference-2026-07.md §11.23). And this audience specifically
+# reads unsourced model output as a quality signal about the whole project, per
+# the 312-point launch thread in docs/research-last30days-2026-07-29.md §5.5.
+
+
+def test_citation_contract_demands_ids_and_forbids_inventing_them() -> None:
+    c = llm.CITATION_CONTRACT
+    assert "square brackets" in c
+    assert "Never invent an id" in c
+    # An unsupported claim must be dropped, not softened into existence.
+    assert "leave it out rather than hedging it in" in c
+
+
+def test_citations_are_extracted_in_order() -> None:
+    text = "The tanker slowed [vessel:123456789] then the escort turned [aircraft:a1b2c3]."
+    assert llm.citations_in(text) == ["vessel:123456789", "aircraft:a1b2c3"]
+
+
+def test_uncited_prose_is_not_grounded() -> None:
+    assert llm.is_grounded("Traffic through the strait looks normal today.") is False
+    assert llm.is_grounded("") is False
+
+
+def test_a_fabricated_id_fails_outright_rather_than_being_ignored() -> None:
+    """A made-up id is worse than no id: it looks like provenance and survives a
+    skim, so it must fail the check rather than being quietly dropped."""
+    assert llm.is_grounded("x [vessel:1] y", ["vessel:1"]) is True
+    assert llm.is_grounded("x [vessel:9] y", ["vessel:1"]) is False
+    # One real and one invented still fails: partial provenance is not provenance.
+    assert llm.is_grounded("a [vessel:1] b [vessel:9]", ["vessel:1"]) is False
+
+
+def test_with_citations_states_grounding_before_the_style_rider() -> None:
+    """Ordering is guarded: grounding first, style last among the riders, and the
+    injection guard stays the final instruction (docs/decisions.md)."""
+    composed = llm.with_prose_style(llm.with_citations("BASE CONTRACT"))
+    assert composed.index("BASE CONTRACT") < composed.index(llm.CITATION_CONTRACT[:40])
+    assert composed.index(llm.CITATION_CONTRACT[:40]) < composed.index(llm.PROSE_STYLE[:40])
+
+
+def test_the_selection_brief_carries_the_citation_contract() -> None:
+    """The dashboard's most-read model prose must be checkable, not merely told
+    to 'cite ids' in a sentence nobody can verify."""
+    from pathlib import Path
+
+    src = Path(llm.__file__).resolve().parent / "routes" / "ai_selection.py"
+    body = src.read_text(encoding="utf-8")
+    assert "with_citations" in body
+    # And it must still be wrapped by the style rider, not instead of it.
+    assert "with_prose_style" in body
