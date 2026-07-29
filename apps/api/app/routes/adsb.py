@@ -1401,7 +1401,12 @@ def _apply_raw_to_feature(
     return f
 
 
-def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]]) -> None:
+def _merge_raw_into(
+    by_id: dict[Any, dict[str, Any]],
+    raw: list[dict[str, Any]],
+    seen_by: dict[Any, set[str]] | None = None,
+    tier: str = "",
+) -> None:
     """Convert raw aggregator aircraft dicts → features and union into by_id,
     keeping the FRESHEST OBSERVATION per id.
 
@@ -1481,6 +1486,15 @@ def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]])
                 continue
 
         fid = f"aircraft:{icao24}"
+        # Record that THIS tier saw this aircraft, whether or not its fix wins
+        # the freshness comparison below. Corroboration is about how many
+        # independent observers reported the contact at all; a tier that lost by
+        # a second still saw it, and a contact only one tier has ever seen is
+        # exactly the shape of the fake-ADS-B problem (see docs/research-
+        # last30days-2026-07-29.md §4). Recorded AFTER the filter chain so a
+        # rejected record never counts as an observation.
+        if seen_by is not None and tier:
+            seen_by.setdefault(fid, set()).add(tier)
         cur = by_id.get(fid)
         if cur is not None:
             # Decide freshest-wins from the RAW record, before building anything.
@@ -1633,6 +1647,10 @@ async def _do_global_fanout() -> dict[str, Any]:
         # sidecar thin/down → fall through to the full multi-tier union.
 
     by_id: dict[Any, dict[str, Any]] = {}
+    # id -> the set of tiers that reported it THIS fanout. Rebuilt every cycle
+    # (never carried forward) so corroboration describes the current picture, not
+    # an accumulated history that only ever grows.
+    seen_by: dict[Any, set[str]] = {}
 
     osky_task = asyncio.ensure_future(_opensky_cached())
     feeds_task = asyncio.ensure_future(_readsb_feeds())
@@ -1647,6 +1665,7 @@ async def _do_global_fanout() -> dict[str, Any]:
             fid = f.get("id")
             if fid is not None:
                 by_id[fid] = f
+                seen_by.setdefault(fid, set()).add("opensky")
 
     # 2. Keyless full-feed readsb instances (theairtraffic, hpradar, the user's
     #    ultrafeeder) — full global aircraft.json at ~1s. Adds the aircraft
@@ -1655,13 +1674,13 @@ async def _do_global_fanout() -> dict[str, Any]:
     feeds = await _await_within(feeds_task, deadline)
     if feeds:
         async with _SNAPSHOT_LOCK:
-            await asyncio.to_thread(_merge_raw_into, by_id, feeds)
+            await asyncio.to_thread(_merge_raw_into, by_id, feeds, seen_by, "feeds")
 
     # 3. Opportunistic firehose (deploy hosts with a reachable global verb).
     firehose = await _await_within(fh_task, deadline)
     if firehose:
         async with _SNAPSHOT_LOCK:
-            await asyncio.to_thread(_merge_raw_into, by_id, firehose)
+            await asyncio.to_thread(_merge_raw_into, by_id, firehose, seen_by, "firehose")
 
     # 4. Per-cell grid — ONLY as a FALLBACK when the fast tiers came up thin. The
     #    keyless feeds now supply ~11k at ~0.1s; on a datacenter IP every
@@ -1680,9 +1699,69 @@ async def _do_global_fanout() -> dict[str, Any]:
                 grid = []
             if grid:
                 async with _SNAPSHOT_LOCK:
-                    await asyncio.to_thread(_merge_raw_into, by_id, grid)
+                    await asyncio.to_thread(_merge_raw_into, by_id, grid, seen_by, "grid")
 
+    _stamp_sources(by_id, seen_by)
     return {"type": "FeatureCollection", "features": list(by_id.values())}
+
+
+def _stamp_sources(
+    by_id: dict[Any, dict[str, Any]], seen_by: dict[Any, set[str]]
+) -> None:
+    """Publish, per contact, WHICH tiers observed it and how many.
+
+    The union keeps one winning fix per aircraft, so by itself it throws away the
+    most useful thing it knows: whether three independent observers agree that a
+    contact exists, or whether exactly one does. That distinction is the
+    community's own test for fabricated ADS-B - "it was not found if you looked
+    on other platforms" - and it is what lets an operator tell a real oceanic
+    contact from a single-source artefact.
+
+    `sources` is sorted so the value is stable across cycles and does not churn
+    the payload (and therefore the ETag) for no reason.
+    """
+    for fid, feat in by_id.items():
+        tiers = seen_by.get(fid)
+        if not tiers:
+            continue
+        props = feat.setdefault("properties", {})
+        props["sources"] = sorted(tiers)
+        props["source_count"] = len(tiers)
+        props["confidence"] = _confidence(len(tiers), props.get("seen_pos_s"))
+
+
+# The confidence rule, in the words shown to the operator. Kept next to the
+# function that implements it so the two cannot drift, and exported so the panel
+# renders THIS string rather than a hand-written paraphrase.
+#
+# Stating the rule is not decoration. The first question asked of the highest
+# scoring thing in this category ("Is Hormuz open yet?", 484 points) was "what's
+# the threshold function?" - a technical audience treats an unexplained verdict
+# as no verdict at all. See docs/research-last30days-2026-07-29.md §3.
+CONFIDENCE_RULE = (
+    "high: two or more independent sources and a fix under 2 minutes old. "
+    "medium: one source with a fresh fix, or several sources with an ageing one. "
+    "low: a single source and a fix older than 2 minutes."
+)
+
+
+def _confidence(source_count: int, seen_pos_s: Any) -> str:
+    """How much this contact should be trusted, from corroboration and freshness.
+
+    Deliberately coarse. Three buckets an operator can act on beat a score that
+    looks precise and is not; we can distinguish "several observers agree, just
+    now" from "one observer, a while ago", and inventing resolution between
+    those is the kind of false certainty this whole change exists to remove.
+
+    An unknown age is treated as ageing rather than fresh: not knowing when a fix
+    was taken is a reason for less confidence, never more.
+    """
+    fresh = isinstance(seen_pos_s, (int, float)) and float(seen_pos_s) <= _FRESH_POS_S
+    if source_count >= 2 and fresh:
+        return "high"
+    if source_count >= 2 or fresh:
+        return "medium"
+    return "low"
 
 
 # Along-track regression guard. An AIRBORNE aircraft cannot move backwards along

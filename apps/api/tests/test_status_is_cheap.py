@@ -138,10 +138,22 @@ def test_status_route_does_not_touch_the_expensive_helpers(
 
 def test_status_perf_stays_free_of_the_snapshot_walk(client: TestClient) -> None:
     """`/api/status/perf` is sampled once a second by the harnesses; it reports
-    module state and must never grow a snapshot or store walk."""
+    module state and must never grow a snapshot or store walk.
+
+    Scoped to the status_perf FUNCTION. This previously sliced from status_perf
+    to end-of-file, which held only because status_perf happened to be last: the
+    next cold diagnostic route appended to the module failed a guard about a
+    route it is not. The protection for status_perf is unchanged and now says
+    what it means, so it cannot be satisfied by moving code above the slice
+    either.
+    """
     src = status_routes.__file__
     assert src
     body = open(src, encoding="utf-8").read()
-    perf = body[body.index("async def status_perf") :]
+    start = body.index("async def status_perf")
+    # End at the next route decorator, or EOF when status_perf really is last.
+    nxt = body.find("@router.get(", start)
+    perf = body[start:] if nxt == -1 else body[start:nxt]
+    assert "async def status_perf" in perf and len(perf) > 200, "slice lost the function body"
     assert "global_snapshot" not in perf
-    assert 'store.latest' not in perf
+    assert "store.latest" not in perf

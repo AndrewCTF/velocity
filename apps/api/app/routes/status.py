@@ -278,3 +278,63 @@ async def status_perf() -> dict[str, Any]:
     except Exception:  # noqa: BLE001
         out["ais_supervision"] = {"error": "unavailable"}
     return out
+
+
+@router.get("/api/status/provenance")
+async def status_provenance() -> dict[str, Any]:
+    """Who is actually seeing the sky right now, and how much they agree.
+
+    Every competitor in this category renders whatever its upstream asserts and
+    says nothing about where it came from (docs/research-last30days-2026-07-29.md
+    §1.1). The single highest-engagement story in the category is fabricated
+    ADS-B rendered as real on a live map, and the community's own detection
+    method is cross-source corroboration. This endpoint is that method, exposed:
+
+      - per tier: how many contacts it saw, and how many ONLY it saw,
+      - overall: the share of contacts with two or more independent observers.
+
+    Exclusive counts are the interesting column. A tier contributing thousands of
+    contacts nobody else can see is either genuinely unique coverage (oceanic
+    breadth) or an unverifiable claim, and knowing which of your tiers is in that
+    position is the difference between honest breadth and inherited noise.
+
+    Diagnostics: never 500, and never triggers a fan-out of its own - it reads
+    the snapshot the refresher already built.
+    """
+    out: dict[str, Any] = {"as_of": time.time()}
+    try:
+        snap = await adsb_routes.global_snapshot()
+        feats = snap.get("features") or []
+        per_tier: dict[str, dict[str, int]] = {}
+        corroborated = 0
+        counted = 0
+        unknown = 0
+        for f in feats:
+            props = f.get("properties") or {}
+            srcs = props.get("sources")
+            if not isinstance(srcs, list) or not srcs:
+                unknown += 1
+                continue
+            counted += 1
+            if len(srcs) >= 2:
+                corroborated += 1
+            for s in srcs:
+                row = per_tier.setdefault(str(s), {"contacts": 0, "exclusive": 0})
+                row["contacts"] += 1
+                if len(srcs) == 1:
+                    row["exclusive"] += 1
+        out["aircraft"] = {
+            "total": len(feats),
+            # Contacts whose observer set we know. A contact carried forward from
+            # an earlier cycle has no set for THIS cycle, and calling that
+            # "single source" would be a guess.
+            "attributed": counted,
+            "unattributed": unknown,
+            "corroborated": corroborated,
+            "corroborated_pct": round(100.0 * corroborated / counted, 1) if counted else None,
+            "tiers": per_tier,
+            "confidence_rule": adsb_routes.CONFIDENCE_RULE,
+        }
+    except Exception:  # noqa: BLE001 — diagnostics must never 500
+        out["aircraft"] = {"error": "unavailable"}
+    return out

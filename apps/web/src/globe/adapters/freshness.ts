@@ -18,6 +18,21 @@
 /** Age past which a fix stops reading as live. Mirrors `_FRESH_POS_S` in routes/adsb.py. */
 export const FRESH_POS_S = 120;
 
+/**
+ * The confidence rule, in the words shown to the operator. Mirrors
+ * `CONFIDENCE_RULE` in routes/adsb.py, and pinned to it by
+ * apps/api/tests/test_provenance.py on the backend side.
+ *
+ * Shown on hover wherever a confidence verdict is rendered. A verdict whose rule
+ * is hidden is treated as no verdict by this audience: the first question asked
+ * of the highest-scoring project in this category was "what's the threshold
+ * function?" (docs/research-last30days-2026-07-29.md §3).
+ */
+export const CONFIDENCE_RULE =
+  'high: two or more independent sources and a fix under 2 minutes old. ' +
+  'medium: one source with a fresh fix, or several sources with an ageing one. ' +
+  'low: a single source and a fix older than 2 minutes.';
+
 /** Opacity applied to a stale contact's icon. Dim enough to recede, bright
  *  enough to stay legible against the dark globe. */
 export const STALE_ALPHA = 0.45;
