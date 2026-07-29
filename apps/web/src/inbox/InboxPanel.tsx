@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { clampCursor, moveCursor } from './queueCursor.js';
 import type * as Cesium from 'cesium';
 import { useAlerts, useSelection } from '../state/stores.js';
 import { useInbox } from '../state/inbox.js';
@@ -47,6 +48,10 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
   const reduced = useReducedMotion();
   const [sev, setSev] = useState<AlertSeverity | null>(null);
   const [channel, setChannel] = useState<string | null>(null);
+  // Keyboard cursor. A triage surface you can only drive with a mouse is a list
+  // you read, not a queue you work; the point of this panel is the second one.
+  const [cursor, setCursor] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const active = useMemo(() => alerts.filter((a) => !archived.has(a.id)), [alerts, archived]);
   const unread = useMemo(() => active.filter((a) => !read.has(a.id)).length, [active, read]);
@@ -60,7 +65,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
     [active, sev, channel],
   );
 
-  const open = (a: Alert): void => {
+  const open = useCallback((a: Alert): void => {
     markRead(a.id);
     const first = a.contributingObservations?.[0];
     if (first) useSelection.getState().select(first);
@@ -68,7 +73,75 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
       const [lon, lat] = a.geom.coordinates as [number, number];
       flyToPosition(viewer, lon, lat, 250_000, reduced ? 0 : 1.0);
     }
-  };
+  }, [markRead, viewer, reduced]);
+
+  // j/k move, enter opens and slews, e archives, g/G jump to the ends. The
+  // bindings every mail and code-review client already trained the operator on,
+  // so there is nothing to learn. Ignored while typing so the filter inputs keep
+  // working.
+  const visible = useMemo(() => filtered.slice(0, 80), [filtered]);
+  useEffect(() => {
+    // Keep the cursor inside the list as alerts arrive, expire, or get filtered.
+    setCursor((c) => clampCursor(c, visible.length));
+  }, [visible.length]);
+
+  useEffect(() => {
+    const typing = (t: EventTarget | null): boolean => {
+      const el = t as HTMLElement | null;
+      if (!el || typeof el.tagName !== 'string') return false;
+      if (el.isContentEditable) return true;
+      return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented || typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (visible.length === 0) return;
+      const at = visible[Math.min(cursor, visible.length - 1)];
+      switch (e.key) {
+        case 'j':
+          e.preventDefault();
+          setCursor((c) => moveCursor(c, 1, visible.length));
+          break;
+        case 'k':
+          e.preventDefault();
+          setCursor((c) => moveCursor(c, -1, visible.length));
+          break;
+        case 'g':
+          e.preventDefault();
+          setCursor(0);
+          break;
+        case 'G':
+          e.preventDefault();
+          setCursor(visible.length - 1);
+          break;
+        case 'Enter':
+          if (at) {
+            e.preventDefault();
+            open(at);
+          }
+          break;
+        case 'e':
+          if (at) {
+            e.preventDefault();
+            archive(at.id);
+            // Do NOT advance: archiving removes this row, so the next one slides
+            // under the same index. Advancing as well would skip it, which is
+            // how a triage queue silently loses items.
+          }
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visible, cursor, archive, open]);
+
+  // Keep the cursor row on screen when it moves off the top or bottom.
+  useEffect(() => {
+    const el = listRef.current?.children[cursor] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [cursor]);
+
 
   const slewToBrief = (b: WatchOfficerBrief): void => {
     const { lon, lat } = b.centroid;
@@ -231,11 +304,20 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
             : 'Nothing matches this filter.'}
         </p>
       ) : (
-        <ul className="divide-y divide-line border-y border-line">
-          {filtered.slice(0, 80).map((a) => {
+        <>
+        <p className="mono text-[10px] text-txt-4 mb-1">
+          j/k move · enter slews · e archives
+        </p>
+        <ul ref={listRef} className="divide-y divide-line border-y border-line">
+          {visible.map((a, i) => {
             const isUnread = !read.has(a.id);
+            const atCursor = i === cursor;
             return (
-              <li key={a.id} className="relative">
+              <li
+                key={a.id}
+                className={`relative ${atCursor ? 'bg-bg-2 outline outline-1 -outline-offset-1 outline-accent/40' : ''}`}
+                aria-current={atCursor ? 'true' : undefined}
+              >
                 <span className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: SEV_BAR[a.severity] }} />
                 <div className={`pl-3 pr-1 py-2 ${isUnread ? '' : 'opacity-60'}`}>
                   <div className="flex items-center justify-between gap-2">
@@ -271,6 +353,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
             );
           })}
         </ul>
+        </>
       )}
     </div>
   );
