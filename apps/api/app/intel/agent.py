@@ -442,12 +442,19 @@ _WALL_BUDGET_S = 240.0
 _OBS_CHARS = 1800
 
 
-def _tool_catalog(*, with_actions: bool) -> str:
+def _tool_catalog(*, with_actions: bool, with_clarification: bool = True) -> str:
     """The tool menu shown to the model. Read-only tools always; the write-back
     actions + control tools are appended only when an authenticated user is
-    present (``with_actions``) so a keyless run is never told it can mutate."""
+    present (``with_actions``) so a keyless run is never told it can mutate.
+    ``request_clarification`` is a dead end for a headless caller (no operator
+    to answer it), so it's dropped from the catalog when ``with_clarification``
+    is False — same additive-gate idiom as ``with_actions``."""
     lines = [f"- {name}: {desc}" for name, (desc, _) in TOOLS.items()]
-    lines += [f"- {name}: {desc}" for name, desc in CONTROL_TOOLS.items()]
+    lines += [
+        f"- {name}: {desc}"
+        for name, desc in CONTROL_TOOLS.items()
+        if with_clarification or name != "request_clarification"
+    ]
     if with_actions:
         lines += [f"- {name}: {desc}" for name, desc in _ACTION_DESCRIPTIONS.items()]
         lines.append(
@@ -649,6 +656,11 @@ async def run_agent(
     ctx: UserCtx | None = None,
     clearance: int = 0,
     compartments: tuple[str, ...] = (),
+    *,
+    max_steps: int = _MAX_STEPS,
+    wall_budget_s: float = _WALL_BUDGET_S,
+    seed_brief: dict[str, Any] | None = None,
+    interactive: bool = True,
 ) -> AsyncIterator[dict[str, Any]]:
     """Yield the live agent trace as events: thinking | tool_call | tool_result |
     action | app_var | clarification | final | error | done. The route serialises
@@ -659,6 +671,14 @@ async def run_agent(
     ``intel/actions.dispatch`` (mutate + ``action_log`` row); without one the tools
     are hidden from the catalog and a stray call gets a "sign-in required"
     observation. The read-only tools + the control tools work either way.
+
+    Headless callers (e.g. the watch-officer background loop) pass keyword-only:
+    ``max_steps``/``wall_budget_s`` to fit inside their own cycle budget (the
+    module defaults are sized for an interactive caller); ``seed_brief`` to hand
+    over a fused brief ALREADY computed this cycle so the seed skips a second
+    ``incidents.brief()`` call; ``interactive=False`` to drop
+    ``request_clarification`` from the catalog (a dead end with no operator to
+    answer it).
     """
     t0 = time.monotonic()
     can_act = ctx is not None
@@ -683,7 +703,9 @@ async def run_agent(
         "thought": "Seed with the fused cross-domain picture before reasoning.",
     }
     seed_t = time.monotonic()
-    brief = await incidents.brief(bbox)
+    # A headless caller (watch-officer) may already have this cycle's fused brief —
+    # use it instead of re-fusing (that's the "double-fuse" this loop must avoid).
+    brief = seed_brief if seed_brief is not None else await incidents.brief(bbox)
     _index(brief)
     seed_summary = (
         f"{brief.get('incident_count', 0)} incidents · "
@@ -733,7 +755,12 @@ async def run_agent(
            "text": _narrate_brief(brief, changes, news_compact, _scope_label(bbox))}
 
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": _SYS.format(catalog=_tool_catalog(with_actions=can_act))},
+        {
+            "role": "system",
+            "content": _SYS.format(
+                catalog=_tool_catalog(with_actions=can_act, with_clarification=interactive)
+            ),
+        },
         {
             "role": "user",
             "content": json.dumps(
@@ -766,8 +793,8 @@ async def run_agent(
 
     # ── gather loop: a FAST model drives quick tool calls (Claude-Code-style) ──
     evidence: list[str] = []
-    for step in range(1, _MAX_STEPS + 1):
-        if time.monotonic() - t0 > _WALL_BUDGET_S:
+    for step in range(1, max_steps + 1):
+        if time.monotonic() - t0 > wall_budget_s:
             yield {
                 "type": "note",
                 "text": "time budget reached — synthesising from evidence so far",

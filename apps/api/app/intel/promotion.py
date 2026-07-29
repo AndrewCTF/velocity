@@ -44,6 +44,18 @@ def _entity_id_from_evidence(ev: dict[str, Any]) -> str | None:
     return None
 
 
+def stable_id(prefix: str, key: str) -> str:
+    """Deterministic ``<prefix>:<sha1(key)[:16]>`` — the same input key always
+    mints the same id, so repeated calls UPDATE one object instead of minting
+    a duplicate. Shared by ``_stable_incident_id`` below (keyed by
+    ``incident_key()``, auto-promoted convergences) and
+    ``actions.py``'s ``_handle_promote_incident`` (keyed by the target object
+    id being manually promoted) so both promotion paths mint idempotently.
+    """
+    digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
+    return f"{prefix}:{digest}"
+
+
 def _stable_incident_id(incident: dict[str, Any]) -> str:
     """Deterministic incident:<id> so re-running UPDATES the same object.
 
@@ -53,9 +65,7 @@ def _stable_incident_id(incident: dict[str, Any]) -> str:
     "same real-world convergence" and is what watch_officer._BRIEFS is
     already keyed by.
     """
-    key = incident_key(incident)
-    digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
-    return f"incident:{digest}"
+    return stable_id("incident", incident_key(incident))
 
 
 async def promote_incident(

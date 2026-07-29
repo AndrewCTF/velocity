@@ -1,7 +1,8 @@
 """Governed write-back actions — pure-logic + dispatch units (hermetic).
 
 Covers: audit-row shape, registry dispatch (unknown action → 404, bad params →
-400), the route auth gate + 503 contract, and a full happy-path dispatch of
+400), the route auth gate + keyless-boot 200 contract, and a full happy-path
+dispatch of
 flag_entity / nominate_target / add_watch over a mocked PostgREST so the ontology
 mutation + side effect + audit append are all exercised without a network.
 """
@@ -103,16 +104,19 @@ def test_catalog_route_ok_when_authed(client: TestClient) -> None:
         client.app.dependency_overrides.pop(current_user, None)
 
 
-def test_action_503_when_supabase_unconfigured(client: TestClient) -> None:
-    # flag_entity touches the ontology store first; with no supabase_url the
-    # registry raises 503 — the store-not-configured contract.
+def test_action_200_when_supabase_unconfigured(client: TestClient) -> None:
+    # flag_entity touches the ontology store first (local-first since
+    # 2026-07-07, always available); the audit append also falls back to a
+    # local SQLite sink on a keyless boot (test_actions_local.py), so a
+    # missing supabase_url no longer 503s the whole action.
     client.app.dependency_overrides[current_user] = _fake_user
     try:
         r = client.post(
             "/api/actions/flag_entity",
             json={"target_id": "aircraft:abc", "note": "loitering"},
         )
-        assert r.status_code == 503
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
     finally:
         client.app.dependency_overrides.pop(current_user, None)
 

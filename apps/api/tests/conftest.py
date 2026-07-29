@@ -173,6 +173,18 @@ def _isolate_audit_db(tmp_path: Path) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_action_log_db(tmp_path: Path) -> Iterator[None]:
+    """Point the local action_log sink at a per-test temp file (mirrors
+    alert_rules) — without this every keyless governed-write test would write
+    ``./data/action_log.db`` into the repo's real data dir."""
+    from app.intel import action_log_local
+
+    action_log_local.override_db_path(str(tmp_path / "action_log.db"))
+    yield
+    action_log_local.override_db_path(None)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_evidence_dir(tmp_path: Path) -> Iterator[None]:
     """Point the evidence-locker blob dir at a per-test temp dir (mirrors the
     ontology/foundry isolation) — route handlers resolve ``evidence_dir`` via
