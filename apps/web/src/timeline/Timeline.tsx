@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { useTime, useSelection } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
@@ -7,6 +7,7 @@ import { installHistoryPlayback, type PlaybackController, type PlaybackInfo } fr
 import { usePolReplay } from '../state/polReplayStore.js';
 import { MicroLabel } from '../shell/instruments.js';
 import { CoverageStrip, type Coverage } from './CoverageStrip.js';
+import { dedupeMarks, markCrossed, type PauseMark } from '../globe/autoPause.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -403,6 +404,50 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
       ? Math.max(0, Math.min(100, ((clockMs - density.from) / (density.to - density.from)) * 100))
       : 100;
 
+  // ── Auto-pause at events ────────────────────────────────────────────────
+  // While replaying, halt the clock AT each incident or alert instead of
+  // sliding past it. Palantir models this as an array of pause timestamps
+  // (docs/palantir-reference-2026-07.md §11.2), and it is what turns a scrub
+  // into a briefing: the operator stops being the one who has to spot the
+  // moment.
+  //
+  // Only during replay. On the live clock the marks are all in the past, so
+  // there is nothing to stop for, and stopping the live view would be a bug.
+  const [pausedAt, setPausedAt] = useState<PauseMark | null>(null);
+  const marks = useMemo<PauseMark[]>(
+    () =>
+      dedupeMarks(
+        lanes.flatMap((l) =>
+          l.events.map((e) => ({ t: e.t / 1000, label: e.label })),
+        ),
+      ),
+    [lanes],
+  );
+
+  useEffect(() => {
+    if (!viewer || viewer.isDestroyed() || !replay.active || marks.length === 0) return;
+    let prev = julianToMs(viewer.clock.currentTime) / 1000;
+    const onTick = (clock: Cesium.Clock): void => {
+      const now = julianToMs(clock.currentTime) / 1000;
+      const hit = markCrossed(prev, now, marks);
+      prev = now;
+      if (!hit || !clock.shouldAnimate) return;
+      clock.shouldAnimate = false;
+      setPausedAt(hit);
+      setStamp(isoStamp(hit.t * 1000));
+    };
+    viewer.clock.onTick.addEventListener(onTick);
+    return () => {
+      if (!viewer.isDestroyed()) viewer.clock.onTick.removeEventListener(onTick);
+    };
+  }, [viewer, replay.active, marks]);
+
+  // Clear the "paused at" note as soon as the clock moves again, so it always
+  // describes the CURRENT stop rather than the last one.
+  useEffect(() => {
+    if (playing) setPausedAt(null);
+  }, [playing]);
+
   // ── Keyboard transport ──────────────────────────────────────────────────
   // A scrubber you can only reach with a mouse is a scrubber you fight. These
   // are the bindings every video tool already trained the operator on, so there
@@ -688,6 +733,22 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
         </span>
       </div>
 
+      {/* Why the clock stopped. Without this an auto-pause is indistinguishable
+          from the replay stalling, and a feature that looks like a bug gets
+          switched off. */}
+      {pausedAt && (
+        <div className="mono text-[10px] text-accent flex items-center gap-2">
+          <span>paused at {pausedAt.label}</span>
+          <button
+            type="button"
+            onClick={togglePlay}
+            className="text-txt-3 hover:text-txt-1 uppercase tracking-[0.4px]"
+          >
+            continue
+          </button>
+        </div>
+      )}
+
       {/* ── Row 2 · scrub ──────────────────────────────────────────────── */}
       <div className="scrub relative h-[6px] bg-bg-3 rounded-sm overflow-visible">
         <span
@@ -853,6 +914,13 @@ function isoStamp(ms: number): string {
 
 function jdToMs(jd: Cesium.JulianDate): number {
   return (jd.dayNumber - 2440587) * 86400_000 + jd.secondsOfDay * 1000 - 0.5 * 86400_000;
+}
+
+// Inverse of msToJulian. Cesium is imported as a TYPE here (the module is only
+// ever handed to us by the viewer), so the conversion is done by hand rather
+// than via Cesium.JulianDate.toDate.
+function julianToMs(j: Cesium.JulianDate): number {
+  return ((j.dayNumber - 2440587) * 86400 + j.secondsOfDay - 0.5 * 86400) * 1000;
 }
 
 function msToJulian(ms: number): Cesium.JulianDate {
