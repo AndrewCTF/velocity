@@ -42,7 +42,7 @@ describe('CoverageStrip', () => {
     mockedFetch.mockReset();
   });
 
-  it('fetches /api/history/coverage with a window/bucket query and renders one bar per non-zero bucket', async () => {
+  it('fetches /api/history/coverage with a window/bucket query and renders every bucket, gaps included', async () => {
     mockedFetch.mockResolvedValue(jsonResponse(COVERAGE));
     render(<CoverageStrip windowHours={168} />);
 
@@ -53,10 +53,20 @@ describe('CoverageStrip', () => {
     expect(url).toMatch(/^\/api\/history\/coverage\?window_hours=168&bucket_hours=\d+$/);
 
     const strip = await screen.findByRole('img', { name: /history coverage/i });
-    // Two non-zero buckets → two <rect> bars; the zero-count bucket renders nothing.
+    // Every bucket is drawn, INCLUDING the zero-count one. Previously a gap
+    // rendered nothing at all, which is visually identical to the strip's own
+    // background, so an hour we were down looked the same as an hour with no
+    // bar. That lets an operator read "quiet" where the truth is "not
+    // recorded", which is the same class of lie as a stale contact looking
+    // live. Three buckets in the fixture, so three rects.
     await waitFor(() => {
-      expect(strip.querySelectorAll('rect').length).toBe(2);
+      expect(strip.querySelectorAll('rect').length).toBe(3);
     });
+    // The gap is drawn in the alert colour, distinguishably from a real bar.
+    const rects = [...strip.querySelectorAll('rect')];
+    expect(rects.filter((r) => r.getAttribute('fill') === 'var(--alert)')).toHaveLength(1);
+    // And the strip says in words that the gap is unknown, not quiet.
+    expect(strip.getAttribute('aria-label')).toMatch(/unknown rather than quiet/i);
   });
 
   it('lifts the coverage totals up via onCoverage', async () => {
@@ -119,7 +129,8 @@ describe('CoverageStrip', () => {
         await vi.advanceTimersByTimeAsync(0);
       });
       const strip = screen.getByRole('img', { name: /history coverage/i });
-      expect(strip.querySelectorAll('rect').length).toBe(2);
+      // Three buckets in the fixture, gaps drawn too (see the render test above).
+      expect(strip.querySelectorAll('rect').length).toBe(3);
     } finally {
       vi.useRealTimers();
     }
