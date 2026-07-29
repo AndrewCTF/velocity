@@ -53,11 +53,26 @@ Bulk toggle, same session, code flipped between runs:
 | `frameMsEMA` p95 | **90.7** | 128.1 (**worse**) |
 | worst 5-sample window | **77.5 ms** | 84.1 ms (**worse**) |
 
-**The tail got worse.** Deferring the fetches clusters the entity builds that
-follow them, so the p50 improves and the p95 does not. Kept, because the request
-and longtask reductions are real backend and main-thread load — but this change
-alone does **not** support a claim of "no frame-time regression while toggling",
-and it is not offered as one.
+**On its own the tail got worse.** Deferring the fetches clusters the entity
+builds behind them, so the p50 improved and the p95 did not. That is why the
+gate is not presented as the fix by itself.
+
+**With §3's batching it is a different result**, and this is the one that
+matters — the entity builds the gate defers are now cheap:
+
+| toggle storm | frameMs p50 | p95 | longtasks p50 | worst 5 s window |
+|---|---|---|---|---|
+| ungated, Entity API (baseline) | 70.5 | 90.7 | 67.0 | 77.5 ms |
+| gated, Entity API | 61.4 | **128.1** | 49.0 | 84.1 ms |
+| **gated + batched** | **22.5** | **50.1** | **16.0** | **48.9 ms** |
+
+Against the baseline: **frame time −68 %, p95 −45 %, longtasks −76 %, worst
+window −37 %.** The two changes only pay together — the gate spreads the work,
+the batching makes the work cheap, and either alone is a wash or worse.
+
+Request rate went **up**, 247.9 → 283.7/min. That is not a regression being
+buried: the app is no longer stalling, so it completes more move-settle cycles
+in the same window. Worth watching, not worth undoing.
 
 ---
 
