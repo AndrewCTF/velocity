@@ -27,7 +27,17 @@ dependencies = [
   "python-pptx>=0.6.23",
   "numpy>=1.26",
   "pyyaml>=6.0",
-  "mcp>=1.2.0",
+  # Upper bound is load-bearing, not tidiness. CI installs with
+  # `pip install -e ".[dev]"`, which ignores uv.lock and resolves the newest
+  # match, so an unbounded ">=1.2.0" silently adopted mcp 2.0.0 the day it was
+  # published (2026-07-29). 2.x moved `mcp.server.fastmcp`, which app/mcp_server.py
+  # imports at module scope, and app/main.py imports THAT at module scope, so the
+  # whole test suite died at conftest with ModuleNotFoundError. It was not a code
+  # change that broke it and no commit could be blamed; master had the same
+  # unbounded pin and would have failed on its next run.
+  # Revisit deliberately: moving to 2.x means porting the FastMCP import and the
+  # 50 tool registrations, not relaxing this line.
+  "mcp>=1.2.0,<2",
   "pyais>=2.6.0",
   "feedparser>=6.0.11",
   "cryptography>=42.0",
