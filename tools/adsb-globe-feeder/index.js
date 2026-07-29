@@ -29,6 +29,12 @@
  *   READ_TIMEOUT_MS  per-source read cap; a slower page is reinitialised (15000)
  *   VIEW_W/VIEW_H    viewport px — coupled to ZOOM, see the note below (683x450)
  *   BLOCK_IMAGES     '0' to load images; default off, we only read the store
+ *   HIDE_LAYERS      '0' to keep drawing the map; default ON. Measured 2026-07-29:
+ *                    drawing costs 180%% CPU against 29%% with layers hidden, and
+ *                    the store keeps filling either way (11008->11338 vs
+ *                    11029->11333 over 4 min). Do NOT use OLMap.setTarget(null)
+ *                    instead — it removes the map size the fetch box is derived
+ *                    from and freezes the store silently.
  */
 'use strict';
 
@@ -65,6 +71,10 @@ const READ_TIMEOUT_MS = parseInt(process.env.READ_TIMEOUT_MS || '15000', 10);
 // 2026-07-27: pumps stopped landing, health age_s climbed to 163 s while the
 // slots still held their last good data). The flag costs nothing at runtime.
 const BLOCK_IMAGES = process.env.BLOCK_IMAGES !== '0';
+// Hide the map's layers after warm-up (see hideLayersFn). ON by default: the
+// pixels are never read, and the drawing is ~85% of this process's CPU.
+// HIDE_LAYERS=0 restores drawing for anyone debugging the page by hand.
+const HIDE_LAYERS = process.env.HIDE_LAYERS !== '0';
 const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
@@ -101,6 +111,27 @@ function readFn() {
 function zoomFn({ z, c }) {
   try { OLMap.getView().setZoom(z); OLMap.getView().setCenter(ol.proj.fromLonLat(c)); return true; }
   catch (e) { return false; }
+}
+
+// Hide every OpenLayers layer, keeping the map ATTACHED.
+//
+// We read g.planesOrdered — tar1090's parsed store — and never a pixel, so
+// drawing ~14k aircraft markers plus basemap tiles is pure waste. Measured:
+// the drawing is ~85% of this feeder's CPU.
+//
+// The map must stay attached. tar1090 computes its fetch box from the map's
+// view extent (observed: /re-api/?binCraft&zstd&box=<s>,<n>,<w>,<e>), so
+// OLMap.setTarget(null) removes the size the extent is derived from and the
+// store freezes — silently, with /health still reporting a healthy age_s.
+// Hiding layers leaves the view, the size and the extent intact; an invisible
+// layer is skipped at render time but changes nothing about what is fetched.
+function hideLayersFn() {
+  try {
+    if (typeof OLMap === 'undefined' || !OLMap.getLayers) return 'no-map';
+    let n = 0;
+    OLMap.getLayers().forEach((l) => { try { l.setVisible(false); n++; } catch (e) {} });
+    return `hidden:${n}`;
+  } catch (e) { return `error:${e && e.message}`; }
 }
 
 let browser = null;
@@ -187,6 +218,8 @@ async function openPage(url) {
     }
     if (loaded) log('opened', url, '-', loaded, 'aircraft');
     else log('warn: planes not populated for', url, '(loop will keep trying)');
+    // Only after the store has filled, so the first fetch still had a drawn map.
+    if (HIDE_LAYERS) log('render-off', url, '-', await page.evaluate(hideLayersFn));
     return page;
   } catch (e) {
     // Close THIS context on failure so its renderers don't orphan on the SHARED
