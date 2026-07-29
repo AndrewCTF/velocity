@@ -683,13 +683,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         shouldAnimate: () => useSettings.getState().aircraftDeadReckon,
         pulse: true,
         filter: true,
-        // Own collection, deliberately. Merging the BIG, constantly-updating
-        // layers into the shared pair measured WORSE (renderMs p95 44-46 ms
-        // against 31-36 split): a BillboardCollection rebuilds its ENTIRE vertex
-        // buffer when any member is dirty, so consolidating the layers that
-        // change every tick amplifies the rebuild instead of amortising it.
-        // Sharing pays for the many small, static layers; it does not pay here.
-        ownCollections: true,
+        // Aircraft layers all tick together, so they share a pool with each
+        // other and with nothing else. Merging them into the STATIC pool
+        // measured worse (renderMs p95 44-46 ms against 31-36): a
+        // BillboardCollection rebuilds its whole vertex buffer when any member
+        // is dirty, so a per-tick layer must not share with static ones.
+        poolKey: 'aircraft',
       });
     } else if (this.props.styleKind === 'vessel') {
       this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
@@ -724,7 +723,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           viewer.camera.positionCartographic.height <= VESSEL_GLIDE_FREEZE_ALTITUDE_M,
         pulse: false,
         filter: true,
-        ownCollections: true, // see the aircraft branch — big, per-tick layers own theirs
+        poolKey: 'vessel', // ticks with the other vessel layers, not with static markers
       });
       this.vesselCluster = new VesselClusterPrimitive(viewer, () => {
         const t = viewer.clock.currentTime;

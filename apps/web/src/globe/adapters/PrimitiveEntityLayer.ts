@@ -127,6 +127,10 @@ export interface PrimitiveLayerOpts {
    * collection (a different blend mode, say). Using it costs a per-frame
    * collection update. */
   ownCollections?: boolean;
+  /** Which shared pool this layer joins. Layers that go dirty together should
+   * share one; layers on different update cadences must not. Defaults to
+   * 'static' — the long tail of reference markers that never tick. */
+  poolKey?: string;
 }
 
 interface Prim {
@@ -175,28 +179,46 @@ interface SharedPool {
   lbl: Cesium.LabelCollection;
   refs: number;
 }
-const sharedPools = new WeakMap<Cesium.Scene, SharedPool>();
+// Pools are keyed by KIND, not global, because a BillboardCollection rebuilds its
+// entire vertex buffer when any member is dirty.
+//
+// One global pool measured WORSE than per-layer (renderMs p95 44-46 ms against
+// 31-36): merging aircraft and vessels — which change every tick — meant every
+// tick rebuilt a buffer holding every static airport and facility too. One pool
+// per layer is also wrong: frame cost tracks collection count (26 841 entities in
+// 11 collections rendered in 2.09 ms; 53 934 in 49 took 11.26 ms).
+//
+// So: layers that go dirty TOGETHER share a pool, layers on different update
+// cadences do not. Aircraft tick together, vessels tick together, and the long
+// tail of static reference markers never ticks at all.
+const sharedPools = new WeakMap<Cesium.Scene, Map<string, SharedPool>>();
 
-function acquireShared(scene: Cesium.Scene): SharedPool {
-  let pool = sharedPools.get(scene);
+function acquireShared(scene: Cesium.Scene, key: string): SharedPool {
+  let byKey = sharedPools.get(scene);
+  if (!byKey) {
+    byKey = new Map();
+    sharedPools.set(scene, byKey);
+  }
+  let pool = byKey.get(key);
   if (!pool) {
     const bb = new Cesium.BillboardCollection({ scene });
     const lbl = new Cesium.LabelCollection({ scene });
     scene.primitives.add(bb);
     scene.primitives.add(lbl);
     pool = { bb, lbl, refs: 0 };
-    sharedPools.set(scene, pool);
+    byKey.set(key, pool);
   }
   pool.refs += 1;
   return pool;
 }
 
-function releaseShared(scene: Cesium.Scene): void {
-  const pool = sharedPools.get(scene);
-  if (!pool) return;
+function releaseShared(scene: Cesium.Scene, key: string): void {
+  const byKey = sharedPools.get(scene);
+  const pool = byKey?.get(key);
+  if (!byKey || !pool) return;
   pool.refs -= 1;
   if (pool.refs > 0) return;
-  sharedPools.delete(scene);
+  byKey.delete(key);
   try { scene.primitives.remove(pool.bb); } catch { /* viewer gone */ }
   try { scene.primitives.remove(pool.lbl); } catch { /* viewer gone */ }
 }
@@ -208,6 +230,7 @@ export class PrimitiveEntityLayer {
   /** True when bbColl/lblColl belong to the shared pool and must not be removed
    * from the scene by this layer's destroy(). */
   private readonly usesShared: boolean;
+  private readonly poolKey: string;
   private readonly prims = new Map<string, Prim>();
   private readonly emergencyIds = new Set<string>();
   // §5.1 render-governor need: unique per instance so multiple aircraft tiers
@@ -233,8 +256,9 @@ export class PrimitiveEntityLayer {
     // SharedPool above). Aircraft and vessels opt out via `ownCollections`
     // because they own tilt / pulse / cluster state that is genuinely per-layer.
     this.usesShared = !opts.ownCollections;
+    this.poolKey = opts.poolKey ?? 'static';
     if (this.usesShared) {
-      const pool = acquireShared(scene);
+      const pool = acquireShared(scene, this.poolKey);
       this.bbColl = pool.bb;
       this.lblColl = pool.lbl;
     } else {
@@ -533,7 +557,7 @@ export class PrimitiveEntityLayer {
         try { this.bbColl.remove(p.bb); } catch { /* collection gone */ }
         if (p.lbl) { try { this.lblColl.remove(p.lbl); } catch { /* gone */ } }
       }
-      releaseShared(this.scene);
+      releaseShared(this.scene, this.poolKey);
     } else {
       try { this.scene.primitives.remove(this.bbColl); } catch { /* viewer gone */ }
       try { this.scene.primitives.remove(this.lblColl); } catch { /* viewer gone */ }

@@ -80,6 +80,7 @@ export class AisWsAdapter implements LayerAdapter {
         const st = vesselStyle(props);
         return { imageUri: st.imageUri, scale: st.scale, rotationRad: st.rotationRad };
       },
+      poolKey: 'vessel', // ticks with the other vessel layers, never with static markers
       labelFn: vesselLabelText,
       billboardBase: () => ({
         alignedAxis: Cesium.Cartesian3.UNIT_Z,
