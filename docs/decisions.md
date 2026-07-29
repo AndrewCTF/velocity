@@ -1543,3 +1543,80 @@ freshness comes from our own request. Any replacement reader must be tested for
 state are mutated without `monkeypatch` and depend on file order —
 `ais_sidecar._stale_since`/`._restarts`, `adsb_sidecar._proc`/`._reuse_pid`, and
 conftest's shared `_TEST_TILE_DIR`. Fix those before loosening it.
+
+### Edge wave: profiles, complete history, batched render, hull characterisation (2026-07-29)
+
+Operator report: unoptimised, sidecars eat RAM/CPU, ~25 GB of VRAM, toggling
+backend options spikes CPU, recording is partial, single-disc backup with no
+choice of location, analytics weak next to Palantir's imagery inference.
+Full write-ups: `docs/edge-resource-budget-2026-07-29.md`,
+`docs/edge-wave-1-vram.md`, `docs/edge-wave-1b-sidecar-cpu.md`,
+`docs/edge-wave-2-toggles-and-render.md`, `docs/edge-wave-7-verify.md`.
+
+**`lite` is the default profile (`app/profile.py`).** A default boot ran two
+Chromium tiers and pulled a 21 GB model into VRAM from a background loop. Profiles
+seed env defaults with `setdefault`, so an explicit setting or `.env` always wins
+and `full` seeds nothing. Measured under `systemd-run -p CPUQuota=400%
+-p MemoryMax=8G`: **0 Chromium processes, API RSS 528 MB, CPU p50 10 %, 11 770
+aircraft (OpenSky alone, above the 8 000 floor), operational.** Two new switches
+back it: `ADSB_SIDECAR_ENABLED` (the tier had no off switch) and
+`AI_BACKGROUND_ENABLED`. → `tests/test_profile.py`
+
+**Hiding the tar1090 map layers cuts 84 % of feeder CPU; detaching the map does
+not — do not retry `setTarget(null)`.** A/B, same source, 4 min: drawing 179.8 %
+with `total` 11 008→11 338; layers hidden 29.2 % tracking to within 0.04 %.
+`setTarget(null)` cut the same CPU and **froze the store at exactly 14 209 across
+28 cycles while `/health` said `rev: 28, age_s: 1`** — a CDP capture shows
+tar1090 fetching `/re-api/?binCraft&zstd&box=…` from the map's view extent, and
+detaching removes the size that extent derives from. Whole tier: chrome CPU p50
+828.8 % → 113.2 % (5.8× per unit of data; the load differed, so the raw ratio
+overstates it).
+
+**History records every distinct observation, on operator-chosen roots.**
+`_buffer_point` dropped anything within 5 s that had moved under ~1.1 km — four
+fixes in five for a moored contact at the 1 Hz tick. Now change-based: written
+when it differs, skipped only when identical; `HISTORY_MIN_INTERVAL_S` /
+`HISTORY_MIN_MOVE_DEG` restore sampling, default 0. `HISTORY_ROOTS` shards each
+UTC day into `<root>/history/<day>.db` in whichever root has most free space
+(an existing day wins over free space, so a reordered list cannot split a day);
+reads ATTACH + UNION so every query is unchanged; retention is `os.remove`, which
+**removes** the DELETE+VACUUM path behind the 49.6 GB WAL runaway rather than
+mitigating it again. `HISTORY_BUDGET_GB` sizes the archive by disk — the old cap
+was 5 % of *free RAM*, which is how a memory-tight box silently got 64 MiB of
+replay. → `tests/test_history_shards.py`
+
+**The test suite was destroying the live archive.** `conftest` isolated six
+stores and not history — the one exposing `prune`/`decimate`/`enforce_size_cap`/
+`_vacuum`. `test_history.py` clears its override in `finally`, and
+`override_db_path(None)` means the REAL `./data/history.db`. Observed:
+2.7 GB → 22 MB across a session that ran the suite six times (the backend's own
+maintenance is not a candidate — `next_prune` is start + 3600 s and no boot
+lasted an hour). Autouse `_isolate_history_db` added; its guard immediately
+caught a second instance of the same hole in a new test file.
+
+**Toggling: the gate and the batching only pay together.** Gating a newly-enabled
+layer's first fetch through the shared `pollGate` alone made the frame-time tail
+WORSE (p95 90.7 → 128.1) because it clusters the entity builds behind it.
+Batching eight style kinds into `PrimitiveEntityLayer` made those builds cheap.
+Combined, a bulk toggle went frameMs p50 70.5 → 22.5, p95 90.7 → 50.1,
+longtasks 67 → 16. Adding `airport`/`port`/`base` to the batched set moved
+nothing further, so at ~40 000 entities the residual is plausibly the entity
+*count*, not the visualizer walk — the next lever is Palantir's tile-vs-object
+loading, not more batching. Still `p05 = 5 fps` with everything on.
+
+**`llamacpp_sidecar.is_enabled()` is guarded behaviour**: it must also require
+that something WANTS local inference, or a box that once downloaded a model
+commits 6.2 GB of VRAM at every boot while `/api/ai/local` reports disabled.
+Ollama requests now carry `keep_alive` (default 60 s against ollama's 5 min);
+that bounds one call, not a loop that keeps re-arming it, which is what
+`AI_BACKGROUND_ENABLED=0` is for.
+
+**Hull characterisation, not identification** (`intel/vessel_class.py`). At
+10-20 m/px you cannot read a hull number; length, beam, L/B, RCS and AIS
+behaviour do discriminate hull class. Returns a ranked set with per-candidate
+evidence; confidence is the SEPARATION of the top two, not the top score.
+Detections under 3 px long report unresolved — live on Hormuz nearly every small
+contact was exactly 40×20 m (2×1 px) and the L/B of 2.0 is a pixel-grid artefact.
+A single-pixel beam caps confidence at medium rather than marking it unresolved,
+because a destroyer's 20 m beam IS one pixel at 20 m/px.
+→ `tests/test_vessel_class.py`
