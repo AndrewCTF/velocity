@@ -1599,10 +1599,34 @@ layer's first fetch through the shared `pollGate` alone made the frame-time tail
 WORSE (p95 90.7 → 128.1) because it clusters the entity builds behind it.
 Batching eight style kinds into `PrimitiveEntityLayer` made those builds cheap.
 Combined, a bulk toggle went frameMs p50 70.5 → 22.5, p95 90.7 → 50.1,
-longtasks 67 → 16. Adding `airport`/`port`/`base` to the batched set moved
-nothing further, so at ~40 000 entities the residual is plausibly the entity
-*count*, not the visualizer walk — the next lever is Palantir's tile-vs-object
-loading, not more batching. Still `p05 = 5 fps` with everything on.
+longtasks 67 → 16.
+
+**The 5 fps was Cesium's `EntityCluster` on the AISStream layer — profile, do not
+guess.** Two rounds of batching moved the median a little and left `p05` at 5, so
+a CDP `Profiler` run was aggregated by self-time: ~21 % BillboardCollection
+vertex writes, ~11 % entity visualizers, ~6 % screen-space label/cluster work. A
+live probe found **55+55 collections and 78 data sources × 8 visualizers = 624
+`visualizer.update()` calls per frame** — cost per CONTAINER, not per entity. The
+control that settled it: a shared entity budget cut entities 24 % (44 912 →
+34 013) and frame time moved **not at all** (123.5 → 125.2 ms), so the budget was
+removed rather than kept (it traded a quarter of the operator's data for nothing;
+the falsified hypothesis is recorded in `effectiveLayerCap`). Then, measured one
+at a time: shared collections 110 → 48 (125.2 → 111.8 ms); trimmed the visualizer
+set 8 → 5, dropping Model/Tileset/Path which no entity in this app ever sets
+(111.8 → 99.3 ms, and `p05` moved for the first time, 5 → 7); and **AISStream
+onto `PrimitiveEntityLayer`, which alone took 99.3 → 21.6 ms** — it was the last
+large Entity-API layer (~6 000 vessels) and the only clustered data source, so it
+paid both the visualizer walk and a per-frame screen-space recompute over every
+vessel. `configureVesselClustering` is deleted; `VesselClusterPrimitive` already
+provides the world-view bubbles.
+
+Against the 2026-07-27 baseline: **frameMs p50 239.3 → 28.5 ms (−88 %),
+rendersPerSec p50 5 → 48, p05 3 → 17**, longtasks 294 → 97. The harness still
+grades POOR because it fails under `p05 20`. Next lever is fewer data sources
+(78, 390 visualizer updates/frame), not more batching — adding
+`airport`/`port`/`base` to the batched set moved nothing, which is the evidence.
+→ `globe/invariants.test.ts` guards that nothing sets `entity.model`/`.path`/
+`.tileset`, since those visualizers are gone.
 
 **`llamacpp_sidecar.is_enabled()` is guarded behaviour**: it must also require
 that something WANTS local inference, or a box that once downloaded a model
