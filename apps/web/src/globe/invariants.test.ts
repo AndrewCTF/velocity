@@ -90,3 +90,26 @@ describe('CLAUDE.md sacred behaviors (source-scan guards)', () => {
     }
   });
 });
+
+// ── enabling a layer must go through the shared gate ──────────────────────────
+//
+// Enabling used to call scheduleNext(0): an immediate ungated fetch plus a
+// synchronous entity build of up to MAX_PER_LAYER features. Fine for one layer,
+// awful for the two surfaces that toggle in bulk — LayerCatalog's toggleFolder
+// and LayerRail's mission presets each enable a whole set at once, so N ungated
+// fetches and N builds landed in the same frame. That is the "toggling backend
+// options from the panel spikes CPU and lags" report.
+describe('layer enable is gated', () => {
+  const src = read('globe/adapters/PollGeoJsonAdapter.ts');
+
+  it('routes the first fetch through onMoveSettle, not straight to scheduleNext(0)', () => {
+    expect(src).toContain('onMoveSettle(this.props.ctx.descriptor.id, this.firstFetch)');
+    // The bare immediate call must not come back in attach().
+    const attach = src.slice(src.indexOf('async attach('), src.indexOf('private firstFetch'));
+    expect(attach).not.toMatch(/^\s*this\.scheduleNext\(0\);\s*$/m);
+  });
+
+  it('cancels the queued first fetch when the layer is switched off again', () => {
+    expect(src).toContain('cancelMoveSettle(this.firstFetch)');
+  });
+});

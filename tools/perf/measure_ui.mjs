@@ -88,6 +88,43 @@ async function waitFor(page, fn, ms, label) {
   }
 }
 
+// Enable layers in GROUPS, the way a person uses the panel: open a folder, wait,
+// open the next. `all-toggles` flips everything at once and then settles for
+// 20 s, which measures the steady state and hides the transient entirely — and
+// the transient is the complaint ("toggling backend options from the UI panel
+// causes CPU lag to spike").
+async function enableInWaves(page, sample, series, groupSize = 0, gapMs = 12000) {
+  // groupSize 0 = enable EVERYTHING in one call. That is the shape the operator
+  // actually hits: LayerCatalog's toggleFolder and LayerRail's mission presets
+  // enable a whole set in one click, and a paced 8-at-a-time sweep spreads the
+  // load enough to hide the very spike being measured (verified 2026-07-29 —
+  // paced waves showed no difference gated vs ungated).
+  const ids = await page.evaluate(() => {
+    const reg = window.__registry;
+    if (!reg || typeof reg.list !== 'function') return [];
+    return reg.list().filter((d) => !reg.isEnabled(d.id)).map((d) => d.id);
+  }).catch(() => []);
+  if (!ids.length) return 0;
+  let n = 0;
+  const step = groupSize > 0 ? groupSize : ids.length;
+  for (let i = 0; i < ids.length; i += step) {
+    const group = ids.slice(i, i + step);
+    await page.evaluate((g) => {
+      const reg = window.__registry;
+      for (const id of g) reg.enable(id);
+    }, group).catch(() => {});
+    n += group.length;
+    // Sample DURING the burst, once a second, so the spike is in the series.
+    const until = Date.now() + gapMs;
+    while (Date.now() < until) {
+      const s = await page.evaluate(sample).catch(() => null);
+      if (s) series(s);
+      await page.waitForTimeout(1000);
+    }
+  }
+  return n;
+}
+
 async function enableAllLayers(page) {
   // Drive the REAL registry (window.__registry, published in DEV by App.tsx) so
   // the measurement goes through the same enable path the LayerRail uses.
@@ -200,16 +237,29 @@ async function main() {
   }
   await waitFor(page, () => (window.__perf?.drainMsLast ?? 0) > 0, 90_000, 'first drain');
 
+  const stormSeries = {};
+  const stormPush = (s) => {
+    for (const [k, v] of Object.entries(s)) {
+      if (!Number.isFinite(v)) continue;
+      (stormSeries[k] ||= []).push(v);
+    }
+  };
+
   if (PROFILE === 'all-toggles') {
     const n = await enableAllLayers(page);
     console.error(`  toggled ${n} layers on; settling 20s`);
     await page.waitForTimeout(20_000);
+  } else if (PROFILE === 'toggle-storm') {
+    // Measure the ACT of toggling, not the state after it.
+    const n = await enableInWaves(page, sampleFn, stormPush);
+    console.error(`  toggled ${n} layers in waves; settling 10s`);
+    await page.waitForTimeout(10_000);
   }
 
   // Sanity-check the harness before trusting any number it prints.
   const pre = await page.evaluate(sampleFn);
   console.log(`\nprofile check: dataSources=${pre.dataSources} entities=${pre.entities}`);
-  if (PROFILE === 'all-toggles' && pre.dataSources < 40) {
+  if ((PROFILE === 'all-toggles' || PROFILE === 'toggle-storm') && pre.dataSources < 40) {
     console.log('\n**PROFILE DID NOT APPLY** — fewer than 40 data sources with '
       + 'all-toggles. Every number below would describe an empty globe. Aborting.');
     await browser.close();
@@ -329,6 +379,22 @@ async function main() {
       : `POOR (p05 rendersPerSec ${f(p05)} < 20)`;
   console.log(`\n**Verdict: ${verdict}**`);
 
+  if (Object.keys(stormSeries).length) {
+    const w = worstWindow(stormSeries.frameMsEMA || [], stormSeries.rendersPerSec || []);
+    console.log('\n## Toggle storm — samples taken DURING the enable waves\n');
+    console.log('| series | p50 | p95 | max |');
+    console.log('|---|---|---|---|');
+    for (const k of ['frameMsEMA', 'rendersPerSec', 'longtasksPerMin', 'entities', 'heapMB']) {
+      const v = stormSeries[k];
+      if (!v || !v.length) continue;
+      console.log(`| ${k} | ${f(pct(v, 50))} | ${f(pct(v, 95))} | ${f(Math.max(...v))} |`);
+    }
+    if (w) {
+      console.log(`\nworst 5-sample window during toggling: frameMs mean ${f(w.frameMsMean)} `
+        + `max ${f(w.frameMsMax)}, fps min ${f(w.fpsMin)}`);
+    }
+  }
+
   if (OUT) {
     const stats = (v) => ({ p05: pct(v, 5), p50: pct(v, 50), p95: pct(v, 95), max: Math.max(...v) });
     const report = {
@@ -350,6 +416,14 @@ async function main() {
       ),
       requests: { total: requests.total, secs: requests.secs, perMin: (requests.total / requests.secs) * 60, by: requests.by },
       worstWindow: worstWindow(series.frameMsEMA || [], series.rendersPerSec || []),
+      storm: Object.keys(stormSeries).length
+        ? {
+            series: Object.fromEntries(
+              Object.entries(stormSeries).map(([k, v]) => [k, stats(v)]),
+            ),
+            worstWindow: worstWindow(stormSeries.frameMsEMA || [], stormSeries.rendersPerSec || []),
+          }
+        : null,
       consoleErrors: consoleErrors.length,
       verdict,
       pass: HEADLESS ? null : Number.isFinite(p05) && p05 >= 20,

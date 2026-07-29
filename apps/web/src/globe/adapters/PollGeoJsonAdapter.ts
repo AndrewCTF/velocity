@@ -568,6 +568,44 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // Aircraft render as batched primitives (see PrimitiveEntityLayer). The
     // entities still hold position/name/props for watchbox/histogram/selection;
     // only the pixels move to the collection. Dead-reckon + clock read live.
+    // Billboard-shaped layers: one icon, optional name label, no rotation and no
+    // per-poll restyle. Every one of these already returns {imageUri, scale},
+    // which is exactly PrimitiveEntityLayer's styleFn shape — so they can share
+    // the batched path aircraft and vessels already use instead of each getting
+    // per-entity Cesium graphics that DataSourceDisplay walks every frame.
+    //
+    // Measured 2026-07-27: the largest layer with everything on was NOT the
+    // aircraft feed but hazards.nasa.firms at 14 818 entities, and ~45 layers
+    // were still on the Entity API. This is the batching the perf wave named and
+    // did not do.
+    //
+    // maxAlt mirrors the distanceDisplayCondition each kind used as an entity,
+    // so nothing starts painting at a zoom it did not before.
+    const nameOf = (props: Record<string, unknown>): string | null => {
+      const n = props['name'];
+      return typeof n === 'string' && n.length > 0 ? n : null;
+    };
+    const BATCHED: Partial<
+      Record<
+        StyleKind,
+        {
+          style: (p: Record<string, unknown>) => { imageUri: string; scale: number };
+          label: (p: Record<string, unknown>) => string | null;
+          maxAlt: number;
+          vertical?: Cesium.VerticalOrigin;
+        }
+      >
+    > = {
+      // maxAlt mirrors each kind's previous distanceDisplayCondition exactly, so
+      // nothing starts painting at a zoom it did not before. 0 = no gate; the
+      // global layers (warning/hazard) had none.
+      fire: { style: fireStyle, label: () => null, maxAlt: 8_000_000, vertical: Cesium.VerticalOrigin.BOTTOM },
+      camera: { style: () => cameraStyle(), label: nameOf, maxAlt: 4_000_000 },
+      facility: { style: facilityStyle, label: facilityLabelText, maxAlt: 1_500_000 },
+      warning: { style: warningStyle, label: warningLabelText, maxAlt: 0 },
+      hazard: { style: hazardStyle, label: nameOf, maxAlt: 0 },
+    };
+
     if (this.props.styleKind === 'aircraft') {
       this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
         styleFn: (props) => {
@@ -648,6 +686,23 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         }
         return out;
       });
+    } else if (BATCHED[this.props.styleKind]) {
+      const cfg = BATCHED[this.props.styleKind]!;
+      this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
+        styleFn: (props) => cfg.style(props),
+        labelFn: cfg.label,
+        billboardBase: () => ({
+          verticalOrigin: cfg.vertical ?? Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          heightReference: Cesium.HeightReference.NONE,
+          ...(cfg.maxAlt > 0
+            ? { distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, cfg.maxAlt) }
+            : {}),
+        }),
+        labelBase: (text) => labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
+        getClock: () => viewer.clock.currentTime,
+        shouldAnimate: () => false,
+      });
     }
     if (this.props.refreshOnMove) {
       // ONE settle timer for the whole map, with a concurrency cap, instead of a
@@ -713,8 +768,31 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // poll loop still starts — it gives instant first paint before the socket
     // opens and is the fallback while the socket is down / when zoomed in.
     if (this.props.ws) this.connectWs();
-    this.scheduleNext(0);
+    // First fetch goes through the SHARED gate, not straight out.
+    //
+    // Enabling a layer used to call scheduleNext(0) — an immediate, ungated
+    // request plus a synchronous entity build of up to MAX_PER_LAYER features.
+    // That is fine for one layer and awful for the two surfaces that toggle in
+    // bulk: LayerCatalog's toggleFolder and LayerRail's mission presets each
+    // enable a whole set at once, so N ungated fetches and N entity builds
+    // landed in the same frame. The move-settle gate already existed and
+    // already solved exactly this shape for camera moves — it was simply never
+    // applied to enables.
+    //
+    // Reusing onMoveSettle means a folder toggle collapses into ONE release,
+    // then batches of MAX_CONCURRENT spaced BATCH_GAP_MS apart, in the same
+    // priority order a camera move uses. cancelMoveSettle in detach() drops the
+    // job if the layer is switched off again before its turn — a user flicking
+    // a toggle must not spend a request on a layer they no longer want.
+    onMoveSettle(this.props.ctx.descriptor.id, this.firstFetch);
   }
+
+  /** Gate job for the initial fetch. A stable reference so cancelMoveSettle can
+   * find it, and a no-op once detached. */
+  private firstFetch = (): void => {
+    if (this.detached || this.props.ctx.viewer.isDestroyed()) return;
+    this.scheduleNext(0);
+  };
 
   // Forced re-poll — used when the AOI changes so the bbox query updates
   // without waiting for the next scheduled tick.
@@ -736,6 +814,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
 
   detach(): void {
     this.detached = true;
+    // Drop the queued first fetch if the layer is switched off before its turn
+    // in the gate — flicking a toggle must not spend a request on a layer the
+    // user no longer wants.
+    cancelMoveSettle(this.firstFetch);
     this.detachMove?.();
     this.detachMove = null;
     this.detachZoom?.();
@@ -1389,9 +1471,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         const added = entities.add(opts);
         // Aircraft/vessel pixels live in the primitive collection — paint the
         // icon+label for the freshly-created (graphics-less) entity.
-        if (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') {
-          this.primRenderer?.sync(added, props);
-        }
+        // Any layer with a primitive renderer paints there, not on the entity.
+        if (this.primRenderer) this.primRenderer.sync(added, props);
       }
     }
     // Charge this drain's main-thread time against the frame's shared budget so a
@@ -1518,16 +1599,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText) opts.name = labelText;
         break;
       }
-      case 'fire': {
-        const s = fireStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 8_000_000),
-        };
+      case 'fire':
+        // Graphics-less: the icon is painted by the batched primitive layer
+        // (BATCHED above). FIRMS was the single largest layer on the globe at
+        // 14 818 entities, and every one of them was a Cesium billboard that
+        // DataSourceDisplay walked per frame.
         break;
-      }
       case 'quake': {
         const mag = (props['mag'] as number | null) ?? null;
         const { color, pixelSize } = quakeStyle(mag);
@@ -1557,20 +1634,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         break;
       }
       case 'camera': {
-        const s = cameraStyle();
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          // Cams are dense city furniture — only paint below ~4,000 km.
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4_000_000),
-        };
+        // Graphics-less — pixels come from the batched layer. e.name stays so
+        // selection, the watchbox evaluator and the facet counts still read it.
         const name = props['name'];
-        if (typeof name === 'string' && name.length > 0) {
-          opts.label = labelFor(name);
-          opts.name = name;
-        }
+        if (typeof name === 'string' && name.length > 0) opts.name = name;
         break;
       }
       case 'airport': {
@@ -1635,37 +1702,18 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // SVG dispatched on props.category (power/nuclear/water/datacenter/
         // telecom/ground_station/telescope/launch/military_*), same zoom-gated
         // static-reference-marker treatment as airport/port/base.
-        const s = facilityStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
-        };
+        // Graphics-less — the batched layer paints it. e.name stays for
+        // selection / watchbox / facets.
         const labelText = facilityLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'warning': {
         // NGA naval broadcast warning — triangle glyph, distinct red mine
         // glyph when props.mine is true. Global layer (no zoom-gate DDC —
         // 386 active warnings worldwide is cheap to keep resident).
-        const s = warningStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        };
         const labelText = warningLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'hazard': {
@@ -1673,13 +1721,6 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // radiation/relief/chokepoint/buoy/airquality/aurora. Category tile SVG
         // dispatched on props.kind. Global layers (no zoom-gate DDC): counts are
         // in the hundreds, cheap to keep resident.
-        const s = hazardStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        };
         const name = props['name'];
         if (typeof name === 'string' && name.length > 0) opts.name = name;
         break;
@@ -1729,6 +1770,18 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   }
 
   private refreshStyle(e: Cesium.Entity, props: Record<string, unknown>): void {
+    // Batched kinds (BATCHED in attach) paint through the primitive layer, so a
+    // re-poll has to upsert THERE — an entity restyle would be a no-op and the
+    // icon would silently keep its first-seen image (e.g. a facility that
+    // changes category, a hazard whose kind is upgraded).
+    if (
+      this.primRenderer &&
+      this.props.styleKind !== 'aircraft' &&
+      this.props.styleKind !== 'vessel'
+    ) {
+      this.primRenderer.sync(e, props);
+      return;
+    }
     switch (this.props.styleKind) {
       case 'aircraft': {
         // Pixels live in the batched primitive collection — upsert icon image /

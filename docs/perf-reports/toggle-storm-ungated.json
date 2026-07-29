@@ -1,0 +1,192 @@
+{
+  "profile": "toggle-storm",
+  "url": "http://127.0.0.1:5173",
+  "seconds": 45,
+  "headless": false,
+  "at": "2026-07-29T12:00:42.623Z",
+  "dataSources": 78,
+  "entitiesAtStart": 49993,
+  "series": {
+    "rendersPerSec": {
+      "p05": 3,
+      "p50": 7,
+      "p95": 10,
+      "max": 12
+    },
+    "frameMsEMA": {
+      "p05": 106.33376885637634,
+      "p50": 141.04855844476887,
+      "p95": 203.16461906963767,
+      "max": 213.47851989258754
+    },
+    "drainMsLast": {
+      "p05": 0,
+      "p50": 10.6,
+      "p95": 22.2,
+      "max": 24.2
+    },
+    "longtasksPerMin": {
+      "p05": 305,
+      "p50": 443,
+      "p95": 514,
+      "max": 515
+    },
+    "liveLabels": {
+      "p05": 0,
+      "p50": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "animatedPrims": {
+      "p05": 24,
+      "p50": 26,
+      "p95": 141,
+      "max": 141
+    },
+    "entities": {
+      "p05": 32462,
+      "p50": 41522,
+      "p95": 51062,
+      "max": 51510
+    },
+    "dataSources": {
+      "p05": 78,
+      "p50": 78,
+      "p95": 78,
+      "max": 78
+    },
+    "heapMB": {
+      "p05": 1591.1580791473389,
+      "p50": 2779.0623922348022,
+      "p95": 3760.5785970687866,
+      "max": 3983.42636013031
+    }
+  },
+  "byLeg": {
+    "world": {
+      "p05": 3,
+      "p50": 9,
+      "p95": 12,
+      "max": 12
+    },
+    "europe-800km": {
+      "p05": 3,
+      "p50": 7,
+      "p95": 8,
+      "max": 8
+    },
+    "orbit": {
+      "p05": 4,
+      "p50": 6,
+      "p95": 8,
+      "max": 10
+    }
+  },
+  "cdp": {
+    "TaskDuration": 45.106372,
+    "ScriptDuration": 43.844836,
+    "LayoutDuration": 0.037762,
+    "RecalcStyleDuration": 0.06603,
+    "JSHeapUsedSize": 396385552
+  },
+  "requests": {
+    "total": 187,
+    "secs": 45.259,
+    "perMin": 247.9064937360525,
+    "by": {
+      "/api/aviation/states": 4,
+      "/api/intel/brief": 3,
+      "/api/history/coverage": 9,
+      "/api/timeline/density": 9,
+      "/api/timeline/events": 2,
+      "/api/adsb/live/emergencies": 3,
+      "/api/maritime/snapshot": 29,
+      "/api/adsb/live/mil": 2,
+      "/api/adsb/fi/global": 2,
+      "/api/maritime/digitraffic": 15,
+      "/api/adsb/global": 32,
+      "/api/places/airports": 11,
+      "/api/places/ports": 11,
+      "/api/places/bases": 11,
+      "/api/places/infrastructure": 39,
+      "/api/places/military": 1,
+      "/api/eq": 1,
+      "/api/seismic/emsc": 1,
+      "/api/jamming/nacp": 1,
+      "/api/maritime/chokepoints": 1
+    }
+  },
+  "worstWindow": {
+    "startSample": 25,
+    "frameMsMean": 197.65961180837613,
+    "frameMsMax": 213.47851989258754,
+    "fpsMin": 3
+  },
+  "storm": {
+    "series": {
+      "rendersPerSec": {
+        "p05": 11,
+        "p50": 16,
+        "p95": 21,
+        "max": 40
+      },
+      "frameMsEMA": {
+        "p05": 36.96515719398425,
+        "p50": 70.51125306590664,
+        "p95": 90.67526116615193,
+        "max": 96.83107283133478
+      },
+      "drainMsLast": {
+        "p05": 2.1,
+        "p50": 12.1,
+        "p95": 17.3,
+        "max": 39.6
+      },
+      "longtasksPerMin": {
+        "p05": 21,
+        "p50": 67,
+        "p95": 116,
+        "max": 126
+      },
+      "liveLabels": {
+        "p05": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "animatedPrims": {
+        "p05": 0,
+        "p50": 134,
+        "p95": 134,
+        "max": 134
+      },
+      "entities": {
+        "p05": 29402,
+        "p50": 43328,
+        "p95": 48692,
+        "max": 48862
+      },
+      "dataSources": {
+        "p05": 78,
+        "p50": 78,
+        "p95": 78,
+        "max": 78
+      },
+      "heapMB": {
+        "p05": 1054.0987005233765,
+        "p50": 1452.0006036758423,
+        "p95": 2537.120837211609,
+        "max": 2852.544713973999
+      }
+    },
+    "worstWindow": {
+      "startSample": 7,
+      "frameMsMean": 77.50155375840504,
+      "frameMsMax": 96.83107283133478,
+      "fpsMin": 10
+    }
+  },
+  "consoleErrors": 4,
+  "verdict": "POOR (p05 rendersPerSec 3.0 < 20)",
+  "pass": false
+}
