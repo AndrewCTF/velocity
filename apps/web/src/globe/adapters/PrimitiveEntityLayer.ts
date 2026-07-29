@@ -113,10 +113,19 @@ export interface PrimitiveLayerOpts {
   // from the side. Omit for layers that must stay flat (satellites).
   sideStyleFn?: (props: Record<string, unknown>) => PrimitiveStyle;
   /** Give this layer its OWN BillboardCollection/LabelCollection instead of the
-   * shared pair. Only for layers with per-layer collection behaviour — aircraft
-   * (tilt + emergency pulse) and vessels (cluster hand-off). Everything else
-   * shares, because Cesium updates every collection every frame and 110 of them
-   * was measurably the binding cost. */
+   * shared pair.
+   *
+   * Nothing uses this any more and nothing should: measured 2026-07-29, frame
+   * cost tracks the COLLECTION count, not the entity count. 26 841 entities in
+   * 11 collections rendered in 2.09 ms; 53 934 entities in 49 collections took
+   * 11.26 ms. Aircraft and vessels opted out on the assumption that tilt, the
+   * emergency pulse and the cluster hand-off were per-collection behaviour —
+   * they are not. Every one of them operates on this layer's own `prims`; a grep
+   * for `this.bbColl.` / `this.lblColl.` outside add/remove returns nothing.
+   *
+   * Kept as an escape hatch for a future layer that genuinely needs its own
+   * collection (a different blend mode, say). Using it costs a per-frame
+   * collection update. */
   ownCollections?: boolean;
 }
 
