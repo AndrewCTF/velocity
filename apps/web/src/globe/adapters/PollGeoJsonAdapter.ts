@@ -27,6 +27,7 @@ import {
   vesselLabelText,
   warningLabelText,
 } from './labelStyle.js';
+import { withStaleness } from './freshness.js';
 import {
   resolveAircraftFamily,
   aircraftSilhouette,
@@ -669,7 +670,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           const hex = aircraftStyle(props).color.toCssHexString().slice(0, 7);
           return { imageUri: aircraftSilhouette(fam ?? 'narrowbody', hex), scale: 0.62 };
         },
-        labelFn: aircraftLabelText,
+        // Identifier plus, when the fix is old, its real age ("DAL123 · 6h ago").
+        // aircraftLabelText stays a pure callsign→registration→ICAO24 resolver
+        // (a guarded invariant); the age is composed on top here.
+        labelFn: (p) => withStaleness(aircraftLabelText(p), p),
         billboardBase: () => ({
           alignedAxis: Cesium.Cartesian3.UNIT_Z,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,

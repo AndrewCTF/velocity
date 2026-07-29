@@ -4,6 +4,7 @@ import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
 import { setRenderNeed } from '../renderNeeds.js';
 import { useSelection } from '../../state/stores.js';
 import { perfSetAnimated } from '../perf.js';
+import { isStale, STALE_ALPHA } from './freshness.js';
 
 // Generic batched-primitive renderer for high-count map layers. Renders icons +
 // labels as ONE Cesium.BillboardCollection + ONE Cesium.LabelCollection
@@ -316,7 +317,8 @@ export class PrimitiveEntityLayer {
     const active = clauses.length > 0;
     let changed = false;
     for (const p of this.prims.values()) {
-      const dim = active && !entityPassesFilter(p.props, clauses) ? FILTER_DIM_ALPHA : 1;
+      const stale = isStale(p.props) ? STALE_ALPHA : 1;
+      const dim = (active && !entityPassesFilter(p.props, clauses) ? FILTER_DIM_ALPHA : 1) * stale;
       if (dim === p.dimFactor) continue;
       p.dimFactor = dim;
       changed = true;
@@ -333,10 +335,21 @@ export class PrimitiveEntityLayer {
     }
   }
 
+  // Two independent reasons an icon dims, multiplied so they compose:
+  //   1. the map-side facet filter excluded it (FILTER_DIM_ALPHA), and
+  //   2. its position is stale (STALE_ALPHA) — the fix is real but old.
+  // Staleness applies whether or not this layer has filtering, because it is a
+  // statement about the DATA, not about the operator's current selection. A
+  // stale contact stays drawn: it is still where the aircraft was, and deleting
+  // it would shrink the picture silently, which is the failure this whole change
+  // exists to end (see freshness.ts).
   private dimFactorFor(props: Record<string, unknown>): number {
-    if (!this.opts.filter) return 1;
+    const stale = isStale(props) ? STALE_ALPHA : 1;
+    if (!this.opts.filter) return stale;
     const clauses = useFilters.getState().clauses;
-    return clauses.length > 0 && !entityPassesFilter(props, clauses) ? FILTER_DIM_ALPHA : 1;
+    const filtered =
+      clauses.length > 0 && !entityPassesFilter(props, clauses) ? FILTER_DIM_ALPHA : 1;
+    return stale * filtered;
   }
 
   // §5.5: should this contact's label be materialized right now? Inside the ddc

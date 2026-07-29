@@ -629,10 +629,18 @@ _WORLD_LIMIT = 20000
 # stays ~13k (>=8000 guardrail held). Applied at the serve boundary (viewport_filter)
 # so BOTH the world blob and the zoomed bbox path are covered; internal readers
 # (jamming via global_snapshot) are untouched and still see every cell.
-# ponytail: known ceiling — the OpenSky cache freezes seen_pos_s, so a contact whose
-# fix was fresh at pull can read "fresh" all day; that's the existing count-holding
-# tradeoff, not fixed here — the cap only removes the visibly-stale stragglers.
+# The frozen-age ceiling this used to carry is gone: cached tiers now stamp an
+# absolute `pos_epoch` and `_age_cached_positions` re-derives the duration at the
+# serve boundary, so a contact reports the age of the DATA rather than the age of
+# the pull. See `_age_cached_positions` for why they are marked rather than dropped.
 _STALE_POS_CAP_S = 900.0
+# Serve cap for CACHED tiers. OpenSky pulls once per UTC day, so a fix is legitimately
+# up to ~24 h old; past a day plus slack the aircraft is unaccounted for, not merely
+# un-refreshed, and it leaves the union.
+_CACHED_POS_CAP_S = 26 * 3600.0
+# Age past which a fix stops counting as live. Drives the `stale` flag the globe
+# renders dimmed with a real "last seen" readout instead of a live-looking icon.
+_FRESH_POS_S = 120.0
 _HOT_BLOB: bytes | None = None  # gzip-compressed JSON of the decimated world FC
 _HOT_ETAG: str = ""  # md5 of the blob — drives ETag/304 (poll inside a cycle → 304)
 # WebSocket push subscribers. The refresher fans _HOT_BLOB out to these on each new
@@ -780,6 +788,16 @@ async def _try_opensky_global() -> dict[str, Any] | None:
     # frontend's monotonic fix guard accepted the STALE OpenSky position and the
     # icon teleported backwards. With an honest seen_pos_s the stale fix loses
     # the freshness comparison and the icon holds its live track instead.
+    # `pos_epoch` is the ABSOLUTE wall-clock instant of the fix, and it is what
+    # makes a cached tier honest. seen_pos_s is a DURATION computed at pull time,
+    # so once this FC is cached it freezes: an aircraft whose fix was 5 s old at
+    # 0000 UTC still claimed "5 s old" at 2300 UTC, and rode the union all day as
+    # a live-looking contact that never moved (the operator's "so many dead
+    # planes"). Storing the instant instead lets the serve boundary recompute the
+    # duration against the current clock — CLAUDE.md's standing rule that a tier
+    # which can serve a CACHE must publish the age of the DATA, never the age of
+    # the response. Same fix already applied to the :8093 AIS sidecar via
+    # last_good/age_s; OpenSky is the tier that never got it.
     now = time.time()
     for f in fc["features"]:
         props = f.setdefault("properties", {})
@@ -787,6 +805,7 @@ async def _try_opensky_global() -> dict[str, Any] | None:
         props["seen_at"] = now
         tp = props.get("time_position")
         if isinstance(tp, (int, float)) and tp > 0:
+            props["pos_epoch"] = float(tp)
             props["seen_pos_s"] = max(0.0, now - float(tp))
     return fc
 
@@ -1847,6 +1866,11 @@ async def _refresh_snapshot_forever() -> None:
         t0 = time.monotonic()
         try:
             fc = await _do_global_fanout()
+            # Re-derive position age for cached tiers against the current clock,
+            # BEFORE the carry-forward merge and every downstream serve path, so
+            # the merge's own staleness checks and the frontend both read the age
+            # of the data rather than the age of the pull.
+            _age_cached_positions(fc)
             t_fanout = time.monotonic()
             async with _SNAPSHOT_LOCK:
                 # Carry forward recently-seen aircraft so host-coverage flips
@@ -1922,14 +1946,64 @@ async def _refresh_snapshot_forever() -> None:
         await asyncio.sleep(max(0.0, _target_cycle_s() - elapsed))
 
 
+def _age_cached_positions(fc: dict[str, Any], now: float | None = None) -> int:
+    """Recompute position age for every feature carrying an absolute `pos_epoch`.
+
+    A cached tier (OpenSky: one pull per UTC day, served from memory on every
+    tick) stamps seen_pos_s ONCE, at pull time, so the duration freezes while the
+    clock keeps moving. Rewriting it here from the absolute fix instant is what
+    turns "5 s old, all day" into the truth.
+
+    Both fields move together so the freshest-observation-wins union is
+    unchanged: it keys on `seen_at - seen_pos_s`, which still evaluates to
+    pos_epoch, the real observation time. seen_at becomes the serve instant,
+    which is what the carry-forward breadth merge means by "this tier answered".
+
+    Marks rather than drops. `stale` is advisory - the renderer dims these and
+    labels them with a real age instead of showing a live-looking icon parked on
+    a fix from this morning. Dropping them instead would cut the union from ~13k
+    to the per-cell grid's ~1.5-3k and break the >=8000 breadth guardrail, which
+    is the trade the old frozen-age behaviour was silently buying.
+
+    Returns the number of features re-aged (0 when no cached tier is present).
+    """
+    t = time.time() if now is None else now
+    n = 0
+    for f in fc.get("features") or []:
+        props = f.get("properties")
+        if not isinstance(props, dict):
+            continue
+        pe = props.get("pos_epoch")
+        if not isinstance(pe, (int, float)) or pe <= 0:
+            continue
+        age = max(0.0, t - float(pe))
+        props["seen_pos_s"] = age
+        props["seen_at"] = t
+        props["stale"] = age > _FRESH_POS_S
+        n += 1
+    return n
+
+
 def _pos_stale(f: dict[str, Any]) -> bool:
-    """True when a feature's last real position fix is older than the serve cap.
+    """True when a feature's last real position fix is older than its serve cap.
 
     Reads seen_pos_s (position age in seconds, stamped by each tier). Absent or
     non-numeric → False (keep): an unknown age isn't evidence of staleness.
+
+    Two caps, because the tiers mean different things by "old". A LIVE tier that
+    reports a 20-minute-old fix has lost the aircraft, so 900 s drops it. A
+    CACHED tier (`pos_epoch` present) is expected to age between its daily pulls;
+    dropping it at 900 s would blank the breadth layer 15 minutes into every UTC
+    day. It keeps its slot, marked `stale`, until the fix is older than a full
+    pull interval plus slack — past that the aircraft is genuinely unaccounted
+    for rather than merely un-refreshed.
     """
-    sp = (f.get("properties") or {}).get("seen_pos_s")
-    return isinstance(sp, (int, float)) and float(sp) > _STALE_POS_CAP_S
+    props = f.get("properties") or {}
+    sp = props.get("seen_pos_s")
+    if not isinstance(sp, (int, float)):
+        return False
+    cap = _CACHED_POS_CAP_S if props.get("pos_epoch") else _STALE_POS_CAP_S
+    return float(sp) > cap
 
 
 def viewport_filter(
