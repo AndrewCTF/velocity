@@ -25,6 +25,7 @@ import { startSavedSearchPoller } from './state/savedSearches.js';
 import { LayerRail } from './layer-rail/LayerRail.js';
 import { LayerCatalog } from './layer-rail/LayerCatalog.js';
 import { OpsPanel } from './layer-rail/OpsPanel.js';
+import { AnswersCard } from './answers/AnswersCard.js';
 import { ImageryControl } from './imagery/ImageryControl.js';
 import { ChokepointsList } from './layer-rail/ChokepointsList.js';
 import { FeedsPanel } from './layer-rail/FeedsPanel.js';
@@ -184,6 +185,10 @@ export function App(): JSX.Element {
       { id: 'watch', icon: 'crosshair', label: 'Watchboxes', content: <WatchboxPanel /> },
       { id: 'annotate', icon: 'pin', label: 'Annotate', content: <AnnotationPanel /> },
       { id: 'inbox', icon: 'bell', label: 'Inbox', content: <InboxPanel viewer={viewer} />, badge: inboxUnread },
+      // Answers is a PRIMARY surface, not a 'more' one: it is the only place the
+      // console states a conclusion rather than showing data, which is the whole
+      // point of docs/research-last30days-2026-07-29.md §3.
+      { id: 'answers', icon: 'gauge', label: 'Answers', content: <AnswersCard /> },
       { id: 'imagery', icon: 'image', label: 'Imagery', content: <ImageryControl />, group: 'more' },
       { id: 'chokepoints', icon: 'route', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} />, group: 'more' },
       { id: 'acars', icon: 'signal', label: 'ACARS', content: <AcarsPanel />, group: 'more' },
