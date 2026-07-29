@@ -36,6 +36,13 @@ const HEADLESS = flag('headless');
 // a command instead of by reading a transcript. The Markdown on stdout is
 // unchanged; this is additive.
 const OUT = opt('out', '');
+// Viewport in CSS pixels. 4K is a different regime from 1080p: the JS cost is
+// unchanged but the pixel work quadruples, so a run that is CPU-bound at 1080p
+// can become GPU-bound at 2160p. --dpr forces the device pixel ratio so the
+// back-buffer size is explicit rather than inherited from the host display.
+const VW = parseInt(opt('width', '1920'), 10);
+const VH = parseInt(opt('height', '1080'), 10);
+const DPR = parseFloat(opt('dpr', '1'));
 
 const pct = (v, p) => {
   if (!v.length) return NaN;
@@ -189,7 +196,7 @@ const sampleFn = () => {
 
 async function main() {
   console.log(`# measure_ui — ${new Date().toISOString()}`);
-  console.log(`url=${URL_} profile=${PROFILE} seconds=${SECONDS} headless=${HEADLESS}`);
+  console.log(`url=${URL_} profile=${PROFILE} seconds=${SECONDS} headless=${HEADLESS} viewport=${VW}x${VH}@${DPR}x`);
 
   // The repo's playwright has no downloaded browser bundle (it drives the
   // system Chrome the sidecars use). Point at that binary explicitly.
@@ -208,7 +215,7 @@ async function main() {
     args: ['--enable-gpu', '--ignore-gpu-blocklist', '--no-sandbox'],
   });
   console.error(`  chrome: ${chromePath || '(playwright bundled)'}`);
-  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const ctx = await browser.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: DPR });
   const page = await ctx.newPage();
   // Count /api traffic from the network layer, not the resource-timing buffer:
   // that buffer caps at 250 entries and silently drops the rest, which is
@@ -260,7 +267,18 @@ async function main() {
 
   // Sanity-check the harness before trusting any number it prints.
   const pre = await page.evaluate(sampleFn);
+  const buf = await page.evaluate(() => {
+    const v = window.__viewer;
+    const c = v.scene.canvas;
+    return { drawW: c.width, drawH: c.height, cssW: c.clientWidth, cssH: c.clientHeight,
+             resolutionScale: v.resolutionScale, dpr: window.devicePixelRatio };
+  }).catch(() => null);
   console.log(`\nprofile check: dataSources=${pre.dataSources} entities=${pre.entities}`);
+  if (buf) {
+    console.log(`back-buffer: ${buf.drawW}x${buf.drawH} px (css ${buf.cssW}x${buf.cssH}, `
+      + `resolutionScale ${buf.resolutionScale}, dpr ${buf.dpr}) = `
+      + `${(buf.drawW * buf.drawH / 1e6).toFixed(1)} Mpx`);
+  }
   if ((PROFILE === 'all-toggles' || PROFILE === 'toggle-storm') && pre.dataSources < 40) {
     console.log('\n**PROFILE DID NOT APPLY** — fewer than 40 data sources with '
       + 'all-toggles. Every number below would describe an empty globe. Aborting.');

@@ -17,10 +17,21 @@
 // ponytail: a counter + a stamp. Not a frame scheduler. Upgrade to a real
 // priority queue only if a third heavy drain ever needs ordering guarantees.
 
-const FRAME_BUDGET_MS = 12; // leave ~4 ms of the 16.7 ms frame for Cesium's own render
+// Sizing this from the MEASURED render cost (16.7 - renderMsEMA) was tried on
+// 2026-07-29 and reverted. It is a positive feedback loop: a slower render
+// shrinks the drain budget, so drains span more frames, so the main thread stays
+// busy longer, so the render gets slower still. Measured renderMs p95 90.9 and
+// 49.4 ms against 35.8 with the flat budget.
+//
+// The stated "~4 ms for Cesium's own render" is still wrong — the render actually
+// costs 9.8 ms at 1080p and 12.7 ms at 4K — but a flat budget is stable and an
+// adaptive one is not. Fixing the overrun properly means making the render
+// cheaper, not rationing the drain against it.
+const FRAME_BUDGET_MS = 12;
 
 let lastStamp = -1;
 let spent = 0;
+
 
 // Remaining cooperative budget for the frame identified by `stamp`. The first
 // caller in a new frame resets the ledger and sees the full budget.
