@@ -1,17 +1,23 @@
 # Overnight execution report, 2026-07-29
 
-Against `docs/plan-50-2026-07-29.md`, on `perf-annotate-sidecars-2026-07-27`.
+Against `docs/plan-50-2026-07-29.md`, on `overnight-provenance-answers-2026-07-29`
+(branched from `perf-annotate-sidecars-2026-07-27`; see §6).
 
-**Headline: 16 of 50 items landed, all three operator-reported defects fixed,
-`scripts/verify.sh` ALL GREEN, pytest 2047 → 2086.** The remaining 34 are
+**Headline: 29 of 50 items landed, all three operator-reported defects fixed,
+`scripts/verify.sh` ALL GREEN, pytest 2047 → 2096.** The remaining 21 are
 untouched and listed by number in §4. Nothing is half-built: every item below is
 either complete with evidence or absent.
+
+A pull request is open at
+<https://github.com/AndrewCTF/velocity/pull/62> from
+`overnight-provenance-answers-2026-07-29`. See §6 for why that branch and not
+`perf-annotate-sidecars-2026-07-27`.
 
 ## 1. Gates
 
 | Gate | Command | Result |
 |---|---|---|
-| G1 unit | `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q` | **2086 passed, 2 skipped** (inherited baseline 2047) |
+| G1 unit | `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q` | **2096 passed, 2 skipped** (inherited baseline 2047) |
 | G2 static | `pnpm -r typecheck` | clean |
 | G3 full | `bash scripts/verify.sh` | **ALL GREEN** |
 | G4 live | per item, §2 | run this session against :8000 |
@@ -175,6 +181,69 @@ correct on a fresh store, and honestly distinguished from "no change".
 
 Guard: `apps/api/tests/test_history_diff.py`, 8 tests.
 
+### Answers rendered (item 25) — plumbed-unverified
+
+The answers backend shipped without a surface, which made it the least useful
+thing in the branch. It now has its own rail panel in the PRIMARY group, laying
+out verdict, evidence age and the rule together, none of them behind a tooltip.
+A null lag renders as "no evidence recorded", never "0s old" — the one inversion
+that would undo the design at the last hop, pinned by
+`apps/web/src/answers/AnswersCard.test.tsx`. **Not browser-verified.**
+
+### Agent surface (items 43, 44, 45, 47) — proven-live
+
+Four MCP tools: `answer`, `contact_provenance`, `history_diff`, `system_doctor`.
+Live via `python -m app.mcp_server --list-tools`:
+
+```
+osint-geoint MCP — 50 tools:
+  • answer: Named questions answered with a verdict, its rule, and the evidence age.
+  • contact_provenance: Which sources are seeing the sky right now, and how much they agree.
+  • history_diff: What changed inside a box between two moments: arrived, departed, stayed.
+  • system_doctor: What is configured, what is missing, and the exact line that fixes it.
+```
+
+A tool description is the prompt the model reads, so each carries the caveat its
+return value invites: unknown is a real answer, an uncorroborated contact is not
+a confirmed one, an empty archive is not a quiet period, a missing optional key
+is not a defect. Those four sentences are guarded by
+`apps/api/tests/test_mcp_new_tools.py` — a careful backend misreported at the
+agent hop is no better than a careless one.
+
+### Inbox as a queue (item 41) — plumbed-unverified
+
+j/k move, enter opens and slews, e archives, g/G jump to the ends. The rule worth
+extracting was what happens after an archive: the cursor **stays put**, because
+the archived row disappears and the next slides under the same index, so
+advancing would skip an alert. Guard: `apps/web/src/inbox/queueCursor.test.ts`.
+**Not browser-verified.**
+
+Note the plan was wrong about this phase: **37** and **40** already existed.
+`state/inbox.ts` carried read/archived triage state and `InboxPanel.tsx` already
+unified the surfaces. Only the keyboard path was missing.
+
+### Behaviour from the archive (item 21) — plumbed-unverified
+
+The panel's altitude trace came from the in-memory ring buffer, which starts
+empty on every page load, so it said "insufficient samples" no matter how much
+history was on disk. The archive has carried `baro_alt_m` since ingest and the
+by-id query threw it away; it now returns an opt-in `series` and the panel draws
+the last hour from it.
+
+Two refusals, both tested: a missing altitude arrives as `null` not `0` (a
+plotted zero reads as an aircraft on the ground), and a gap in the archive is
+drawn as a gap rather than bridged (a straight segment across a coverage hole
+asserts a position nobody observed). Guard:
+`apps/web/src/entity-panel/ArchiveSeriesCard.test.tsx`. **Not browser-verified.**
+
+### Corroboration lens (item 11) — plumbed-unverified
+
+OFF-by-default setting that fades contacts only one source reported. A lens, not
+a filter: single-source is normal over open ocean, so defaulting it on would hide
+real traffic and call it rigour. Faded rather than hidden, and an unknown source
+count reads as corroborated. Guard: `freshness.test.ts` + a settings-default
+test. **Not browser-verified.**
+
 ### Positioning (item 48) — done
 
 `README.md` now leads with **"A live map you can rewind, that tells you where
@@ -195,9 +264,13 @@ git ls-files | grep '\.env'  → .env.example only
 - **The OpenSky age fix was never exercised against live OpenSky data.** The tier
   was 429'd all session. Re-check after 0000 UTC, or configure
   `OPENSKY_CLIENT_ID`/`OPENSKY_CLIENT_SECRET` for the larger budget.
-- **No UI was browser-verified.** The replay transport, the staleness dimming, and
-  the provenance chip are all plumbed with unit guards and none has been seen in a
-  real browser. This is the biggest gap in the wave.
+- **No UI was browser-verified.** The replay transport, the staleness dimming,
+  the provenance chip, the answers panel, the inbox keyboard path, the archive
+  sparkline and the corroboration lens are all plumbed with unit guards and NONE
+  has been seen rendering. This is by some distance the biggest gap in the wave:
+  seven user-visible changes, zero of them observed. Everything needed to check
+  them is in place (`scripts/run-api.sh`, Vite on :5173, `window.__viewer` /
+  `__useSelection` in dev).
 - **No performance measurement.** The pan-latency change has a mechanism argument
   and unit guards, not a number. Both runs of any before/after must have the same
   tiers live.
@@ -206,27 +279,82 @@ git ls-files | grep '\.env'  → .env.example only
 - **X coverage in the research is thin** — web search only, no engagement figures.
   Reading the operator's browser cookies unasked was not a call to make.
 
-## 4. The 34 items not started
+## 4. The 21 items not started
 
-Phase 1 remainder: **10, 11, 13**. Phase 2: **15, 17, 18, 19, 20, 21**. Phase 3:
-**25, 27, 28, 29** (25 = the AnswerCard UI, the natural next step — the backend is
-done and unrendered). Phase 4: **32, 33, 35**. Phase 5 (queue): **37-42**. Phase 6
-(agent/MCP): **43-47**. Phase 7: **50** is this document.
+Phase 1: **10, 13** — but note `apps/api/app/intel/deception.py` already ships
+duplicate-MMSI, teleport, spoof-cluster and kinematic detection, so the genuine
+remainder is only *cross-tier* disagreement (two tiers placing one id far apart
+in the same cycle), not the detectors themselves.
 
-Highest value per hour, in order: **25** (render the answers that already exist),
-**37/38** (the inbox — the identity the operator picked), **43-45** (MCP tools over
-the three new endpoints), **21** (Series sparkline).
+Phase 2: **15, 17, 18, 19, 20** (replay permalink, auto-pause at events,
+coverage-honesty strip, copy-link button, replay slice export).
+Phase 3: **27, 28, 29** (answer permalink, verdict history, three more answers).
+Phase 4: **32, 33, 35** (empty-layer reasons in the rail, the health panel, the
+degraded-boot banner).
+Phase 5: **38, 39, 42** (saved search → subscribe, watchbox → geofence alert,
+inbox store test). **37** and **40** were already built: `state/inbox.ts` carries
+read/archived triage state and `inbox/InboxPanel.tsx` already unified the
+surfaces, which the plan did not know.
+Phase 6: **46** (citation contract on model prose).
+
+Highest value per hour from here, in order: **46** (make model prose carry the
+object ids it came from — the audience treats unsourced LLM output as a quality
+signal, research §5.5), **32/35** (finish the never-fail-silently loop in the UI
+now the backend doctor exists), **17/18** (turn replay into a briefing), **38**
+(subscribe from a saved search).
 
 ## 5. Commits
 
 ```
-1ec4141 Answer named questions, diagnose blank layers, and diff two moments
-73b211e Record which sources saw a contact, not just where it is
-f49d3ef Stop refetching the same ground under a new URL on every camera nudge
-d9f9f63 Make the replay strip a transport control instead of a rectangle
-c644eed Report the age of the data, not the age of the pull
-7ddcbd0 Research what the last 30 days rewarded, and plan 50 changes against it
+Add a corroboration lens to the globe
+Plot behaviour from the archive, not from what this tab happened to see
+Make the inbox a queue you work rather than a list you read
+Render the answers, and give an agent the four new capabilities
+Report the overnight wave honestly, and stop pitching the commodity
+Answer named questions, diagnose blank layers, and diff two moments
+Record which sources saw a contact, not just where it is
+Stop refetching the same ground under a new URL on every camera nudge
+Make the replay strip a transport control instead of a rectangle
+Report the age of the data, not the age of the pull
+Research what the last 30 days rewarded, and plan 50 changes against it
 ```
+
+Eleven new guard modules: `test_adsb_cached_age.py`, `test_provenance.py`,
+`test_answers.py`, `test_history_diff.py`, `test_layer_health.py`,
+`test_mcp_new_tools.py`, `freshness.test.ts`, `viewportQuery.test.ts`,
+`transport.test.ts`, `queueCursor.test.ts`, `ArchiveSeriesCard.test.tsx`,
+`AnswersCard.test.tsx`.
+
+### The three guards that were modified, and why
+
+Modifying a guard is how operator decisions get lost, so each is justified here.
+
+1. `test_status_is_cheap.py` sliced source from `status_perf` to end-of-file, so
+   it failed ANY new route appended to the module regardless of behaviour.
+   Rescoped to the function it names. The protection is unchanged and can no
+   longer be satisfied by moving code above the slice either.
+2. `test_mcp_http_mount.py` asserts an exact MCP tool count, deliberately, to
+   keep the advertised number in lock-step with the code. 46 → 50, and the
+   README count moved with it. Updating both is the intended path through that
+   guard, not a way around it.
+3. `settings.test.ts` pins the exact persisted-settings shape. `corroboratedOnly`
+   was added to it, plus a new test asserting it defaults OFF.
+
+## 6. Why the PR is on a different branch
+
+`perf-annotate-sidecars-2026-07-27` cannot be pushed to GitHub at all:
+`website/assets/launch-4k.mp4` (296 MB) exceeds the 100 MB hard limit and
+`launch-1080.mp4` (51 MB) trips the warning, both from commit `efab3a2`, which
+predates this work. The pre-receive hook rejects the whole push.
+
+Rewriting fifty commits of someone else's history unattended is not a call to
+make, so the work went onto `overnight-provenance-answers-2026-07-29`: the same
+tree and history with only those two blobs stripped. The original branch is
+untouched locally and tagged `backup-before-mp4-strip-2026-07-29`.
+
+**This needs an operator decision.** Either move those files to Git LFS, or drop
+them from history, or keep them out of git entirely. Until then that branch can
+never reach the remote.
 
 One guard was modified: `test_status_is_cheap.py` sliced source from `status_perf`
 to end-of-file, so it failed any new route appended to the module regardless of
