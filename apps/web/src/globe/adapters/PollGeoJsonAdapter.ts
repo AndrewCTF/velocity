@@ -604,6 +604,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       facility: { style: facilityStyle, label: facilityLabelText, maxAlt: 1_500_000 },
       warning: { style: warningStyle, label: warningLabelText, maxAlt: 0 },
       hazard: { style: hazardStyle, label: nameOf, maxAlt: 0 },
+      // Static reference markers. Zoom-gating already happens upstream in the
+      // compositor's placesBboxQuery (world view returns an empty payload); the
+      // maxAlt here is the same belt-and-braces DDC they carried as entities.
+      airport: { style: airportStyle, label: airportLabelText, maxAlt: 1_500_000 },
+      port: { style: () => portStyle(), label: portLabelText, maxAlt: 1_500_000 },
+      base: { style: baseStyle, label: baseLabelText, maxAlt: 1_500_000 },
     };
 
     if (this.props.styleKind === 'aircraft') {
@@ -1646,55 +1652,25 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // compositor's placesBboxQuery (world/continental view → empty payload);
         // the DDC here is belt-and-suspenders so a stray marker never paints
         // from continental altitude even if a bbox request slips through.
-        const s = airportStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
-        };
+        // Graphics-less — painted by the batched primitive layer.
         const labelText = airportLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'port': {
         // FR24/marine-style port tile. Static reference marker (same zoom-gate +
         // belt DDC as airport). No rotation, no per-poll restyle.
-        const s = portStyle();
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
-        };
+        // Graphics-less — painted by the batched primitive layer.
         const labelText = portLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'base': {
         // Military base — category SVG by branch (air/naval/army), same
         // zoom-gated static-reference-marker treatment as airport/port.
-        const s = baseStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
-        };
+        // Graphics-less — painted by the batched primitive layer.
         const labelText = baseLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'facility': {

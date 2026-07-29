@@ -87,8 +87,8 @@ layer built per-entity Cesium billboards and labels, which `DataSourceDisplay`
 walks every frame. The largest layer with everything on was not the aircraft
 feed but `hazards.nasa.firms` at 14 818 entities.
 
-Five style kinds moved onto the batched path — `fire`, `camera`, `facility`,
-`warning`, `hazard`. Each already returned `{ imageUri, scale }`, which is
+Eight style kinds moved onto the batched path — `fire`, `camera`, `facility`,
+`warning`, `hazard`, `airport`, `port`, `base`. Each already returned `{ imageUri, scale }`, which is
 exactly `PrimitiveEntityLayer`'s `styleFn` shape, so this is routing existing
 style functions into an existing class rather than a new renderer. Their
 entities are now graphics-less (as aircraft and vessels already were) but keep
@@ -120,11 +120,18 @@ netted out.
 ## What this does NOT claim
 
 **It is still not 20 fps.** `measure_ui.mjs` fails the run at `p05 < 20` and it
-still fails at 5.0. Ten of the seventy-eight data sources now batch; the rest of
-the long tail (`quake`, `jamming`, `airport`, `port`, `base`, `tfr`,
+still fails at 5.0 — and adding `airport`, `port` and `base` to the batched set
+did NOT move it (frameMs p50 123.2 → 118.0, fps p50 10 → 9, both inside
+run-to-run variance at these entity counts). Recorded because it is the
+diminishing return that says where the remaining cost is not.
+
+The long tail that still builds per-entity graphics: `quake`, `jamming`, `tfr`,
 `hazardpoly`, `generic`, plus `AisWsAdapter`, `CablesAdapter`, `AreaAdapter`,
-`MilSymbolAdapter`) still build per-entity graphics. `maritime.aisstream` alone
-was 5 819 entities on the Entity API and is untouched here.
+`MilSymbolAdapter`. `maritime.aisstream` alone was 5 819 entities and is the
+biggest single one left. But at ~40 000 entities across 78 data sources the
+steady-state cost is now plausibly the entity *count* itself rather than the
+visualizer walk, which is what Palantir's tile-vs-object loading
+(`palantir-reference` §2) addresses and this branch does not.
 
 **Neither change fixes the toggle on its own.** The gate alone made the p95
 worse; the batching alone moved the steady-state fps by a quarter. §2's table is
