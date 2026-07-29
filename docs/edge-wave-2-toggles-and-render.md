@@ -3,9 +3,10 @@
 Operator report: *"when I turn on the backend options from the UI panel, it just
 causes CPU lag to spike and it lags too much."*
 
-Two changes were tried. **One of them did not pay and is reported as such**,
-because a change with a good story and no measured effect is exactly what this
-wave is supposed to catch.
+Two changes. Measured separately **neither looked like a fix** — one made the
+frame-time tail worse — and that is reported here rather than netted out,
+because a change with a good story and no measured effect is what this wave
+exists to catch. Measured together they cut toggle frame time by 68 %.
 
 All runs: real Chrome on the GPU (`DISPLAY=:0`, `env -u LD_PRELOAD`), 78 data
 sources, both feeder tiers live, `tools/perf/measure_ui.mjs`. JSON reports via
@@ -125,8 +126,9 @@ the long tail (`quake`, `jamming`, `airport`, `port`, `base`, `tfr`,
 `MilSymbolAdapter`) still build per-entity graphics. `maritime.aisstream` alone
 was 5 819 entities on the Entity API and is untouched here.
 
-**The gate did not fix the toggle tail.** See §2. The p95 during a bulk toggle
-got worse, not better.
+**Neither change fixes the toggle on its own.** The gate alone made the p95
+worse; the batching alone moved the steady-state fps by a quarter. §2's table is
+the combined result and is the one to quote.
 
 The next piece of work is the rest of the batching, and the honest expectation
 is that it moves fps the same way this did — incrementally — rather than
