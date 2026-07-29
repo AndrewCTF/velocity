@@ -33,6 +33,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
@@ -61,6 +62,71 @@ PROSE_STYLE = (
     "over the vague one, and state uncertainty plainly rather than dressing "
     "it up."
 )
+
+
+# Appended to analyst prompts whose prose is rendered as findings rather than as
+# summary. Every claim must name the object ids it rests on, and a claim with no
+# supporting id must be omitted rather than hedged into existence.
+#
+# Two independent reasons, both from docs/research-last30days-2026-07-29.md:
+#
+#  1. Palantir treats this as a hard contract, not a nicety: "Every response from
+#     AIP retains links back to the underlying data records" (palantir-reference
+#     §11.23). Uncited model prose cannot be checked, and uncheckable output is
+#     not intelligence, it is atmosphere.
+#  2. This audience specifically reads unsourced LLM output as a QUALITY signal
+#     about the whole project. On the 312-point launch, a commenter said of a
+#     sloppy generated artefact: "dont give these OSINT quality signals away ...
+#     that's one of the indicators that allow you on first scan to id
+#     (potentially) low quality content" (§5.5).
+#
+# Grounding, not style, so it is applied BEFORE with_prose_style() and well
+# before the injection guard, which stays the final instruction.
+CITATION_CONTRACT = (
+    "GROUNDING: every factual claim you make must rest on the evidence provided "
+    "above, and you must name the object ids it came from in square brackets at "
+    "the end of the sentence, like [aircraft:a1b2c3]. If a claim has no "
+    "supporting id, leave it out rather than hedging it in. If the evidence "
+    "does not support an answer at all, say so plainly and stop. Never invent "
+    "an id."
+)
+
+
+def with_citations(system: str) -> str:
+    """Require the model to attach the object ids each claim rests on.
+
+    Applied BEFORE `with_prose_style` so the style rider stays last among the
+    riders (the guarded ordering in docs/decisions.md), and well before the
+    injection guard, which must remain the final instruction.
+    """
+    return f"{system.rstrip()}\n\n{CITATION_CONTRACT}"
+
+
+# Object ids look like "aircraft:a1b2c3" / "vessel:123456789" — a kind, a colon,
+# and an identifier. Anchored to the bracket form the contract asks for.
+_CITATION_RE = re.compile(r"\[([a-z_]+:[A-Za-z0-9_.\-]+)\]")
+
+
+def citations_in(text: str) -> list[str]:
+    """The object ids a model actually cited, in order of appearance."""
+    return _CITATION_RE.findall(text or "")
+
+
+def is_grounded(text: str, allowed_ids: Iterable[str] | None = None) -> bool:
+    """True when the prose cites at least one id, and every id it cites is real.
+
+    A fabricated id is worse than no id: it looks like provenance and survives a
+    skim. So an unknown id fails the check outright rather than being ignored,
+    and the caller can then decline to render rather than shipping prose that
+    points at nothing.
+    """
+    found = citations_in(text)
+    if not found:
+        return False
+    if allowed_ids is None:
+        return True
+    allowed = set(allowed_ids)
+    return all(f in allowed for f in found)
 
 
 def with_prose_style(system: str) -> str:
@@ -641,6 +707,19 @@ async def _ollama_chat(
                     "stream": False,
                     "options": {"temperature": temperature},
                     "messages": messages,
+                    # Ollama's default keep_alive is 5 minutes, and it holds the
+                    # whole model in VRAM for that window. Measured 2026-07-29:
+                    # one fallback call left qwen3-coder:30b resident at
+                    # 21 438 MiB of a 32 GB card. On a keyless box EVERY llm call
+                    # reaches this rung (the cloud rungs fail without keys), so a
+                    # single background brief pins most of the GPU.
+                    #
+                    # 60 s keeps an interactive exchange warm — a follow-up
+                    # question inside a minute pays no reload — while an hourly
+                    # background brief releases the card almost immediately.
+                    # OLLAMA_KEEP_ALIVE takes any ollama duration ("0" unloads at
+                    # once, "-1" keeps forever, "10m", ...).
+                    "keep_alive": s.ollama_keep_alive,
                 },
             )
         if r.status_code != 200:

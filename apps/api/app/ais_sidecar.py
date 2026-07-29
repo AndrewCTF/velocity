@@ -41,6 +41,7 @@ import os
 import re
 import signal
 import subprocess
+import time
 from pathlib import Path
 
 import httpx
@@ -297,8 +298,84 @@ async def start() -> None:
             await sc.start()
 
 
+# How long a feeder may serve a union older than its cap before we escalate.
+# Staleness and death are different failures and need different remedies: a dead
+# port needs a process, a blocked scraper needs patience and at most a page
+# reload. Treating the second as the first is what produced the 2026-07-27
+# measurement of 61 chrome processes holding 8.9 GB — every 60 s the supervisor
+# killed and respawned a browser whose only problem was that the site was
+# refusing it, and commit 2ff71f9 shows where that ends (496 leaked renderers,
+# tens of GB, in 1h40m). The leak is fixed; the storm that fed it is fixed here.
+_STALE_HARD_S = 1800.0  # 30 min continuously stale → one full respawn
+_RESTART_WINDOW_S = 1800.0  # …and no more than
+_RESTART_BUDGET = 3  # …this many respawns inside that window.
+
+# name -> monotonic ts when this feeder first read stale (0 = currently fresh)
+_stale_since: dict[str, float] = {}
+# name -> monotonic timestamps of recent respawns, trimmed to _RESTART_WINDOW_S
+_restarts: dict[str, list[float]] = {}
+
+
+def supervision_state() -> dict[str, dict[str, float | int | bool]]:
+    """Snapshot for /api/status — what supervision believes about each feeder."""
+    now = time.monotonic()
+    out: dict[str, dict[str, float | int | bool]] = {}
+    for sc in _SIDECARS:
+        recent = [t for t in _restarts.get(sc.name, []) if now - t < _RESTART_WINDOW_S]
+        since = _stale_since.get(sc.name, 0.0)
+        out[sc.name] = {
+            "enabled": bool(sc.is_enabled()),
+            "stale_for_s": round(now - since, 1) if since else 0.0,
+            "restarts_in_window": len(recent),
+            "budget_exhausted": len(recent) >= _RESTART_BUDGET,
+        }
+    return out
+
+
+async def _serving(sc: _Sidecar) -> bool:
+    """LIVENESS only: is the HTTP server answering at all?
+
+    Deliberately NOT ``_already_healthy`` — that one additionally refuses a
+    stale union, which is the right test for ADOPTING a feeder at boot and the
+    wrong one for deciding whether to kill a running process. The ADS-B twin has
+    carried this split since 2026-07-15 (docs/decisions.md, "liveness != has-data");
+    this side never got it.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as c:
+            r = await c.get(sc.health)
+            return r.status_code == 200
+    except Exception:  # noqa: BLE001 — nothing on the port
+        return False
+
+
+async def _union_age_s(sc: _Sidecar) -> float | None:
+    """Age of the DATA the feeder is serving, or None if it cannot be read."""
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as c:
+            r = await c.get(sc.health)
+            if r.status_code != 200:
+                return None
+            age = (r.json() or {}).get("age_s")
+            return float(age) if isinstance(age, (int, float)) else None
+    except Exception:  # noqa: BLE001 — unreachable / unparseable
+        return None
+
+
+def _may_restart(name: str) -> bool:
+    """Token bucket. A feeder a restart cannot fix must not be restarted forever."""
+    now = time.monotonic()
+    recent = [t for t in _restarts.get(name, []) if now - t < _RESTART_WINDOW_S]
+    _restarts[name] = recent
+    return len(recent) < _RESTART_BUDGET
+
+
+def _note_restart(name: str) -> None:
+    _restarts.setdefault(name, []).append(time.monotonic())
+
+
 async def supervise(interval_s: float = 60.0) -> None:
-    """Re-``start()`` any enabled feeder that has stopped serving. Runs forever.
+    """Keep each enabled feeder alive, and escalate staleness separately.
 
     ``start()`` only ever ran once, at lifespan boot, so a feeder that died after
     boot stayed dead until the next backend restart — the poller just backed off
@@ -307,10 +384,15 @@ async def supervise(interval_s: float = 60.0) -> None:
     when a restart's start() ADOPTED the outgoing backend's sidecar (still
     listening, health 200) moments before that backend's stop() killed it.
 
-    _already_healthy is the whole test, so this also recovers a feeder that is up
-    but wedged on a stale union — start() evicts the port holder and respawns.
-    A warming feeder (age_s null) reads healthy and is left alone, so this never
-    fights the first world sweep.
+    Two distinct triggers, because they are two distinct failures:
+
+    * **Not serving** (``_serving`` false) → restart immediately. A dead port is
+      only fixable by a process.
+    * **Serving, but the union is older than the poller's cap** → the tier is
+      already correctly silent (the poller refuses it), so nothing is being
+      served wrongly. Wait. Only after ``_STALE_HARD_S`` continuously stale do we
+      respawn, and only within a restart budget. A warming feeder (``age_s``
+      null) is never counted as stale, so this still never fights a first sweep.
     """
     while True:
         await asyncio.sleep(interval_s)
@@ -318,9 +400,51 @@ async def supervise(interval_s: float = 60.0) -> None:
             if not sc.is_enabled():
                 continue
             try:
-                if await sc._already_healthy():
+                if not await _serving(sc):
+                    log.warning("ais sidecar %s not serving on %s — restarting", sc.name, sc.base)
+                    _stale_since.pop(sc.name, None)
+                    if _may_restart(sc.name):
+                        _note_restart(sc.name)
+                        await sc.start()
+                    else:
+                        log.warning(
+                            "ais sidecar %s restart budget exhausted (%d in %.0fs) — "
+                            "leaving it down; tier stays degraded until an operator looks",
+                            sc.name, _RESTART_BUDGET, _RESTART_WINDOW_S,
+                        )
                     continue
-                log.warning("ais sidecar %s not serving on %s — restarting", sc.name, sc.base)
+
+                cap = sc.max_age_s() if sc.max_age_s else None
+                age = await _union_age_s(sc) if cap is not None else None
+                if cap is None or age is None or age <= cap:
+                    # Fresh, warming, or no cap declared — nothing to escalate.
+                    _stale_since.pop(sc.name, None)
+                    continue
+
+                since = _stale_since.get(sc.name)
+                if since is None:
+                    _stale_since[sc.name] = time.monotonic()
+                    log.info(
+                        "ais sidecar %s union is %ds old (cap %gs) — the poller is "
+                        "already refusing it; watching before acting",
+                        sc.name, int(age), cap,
+                    )
+                    continue
+                stale_for = time.monotonic() - since
+                if stale_for < _STALE_HARD_S:
+                    continue
+                if not _may_restart(sc.name):
+                    log.warning(
+                        "ais sidecar %s stale %.0fs but restart budget exhausted — "
+                        "leaving it alone", sc.name, stale_for,
+                    )
+                    continue
+                log.warning(
+                    "ais sidecar %s stale for %.0fs (union %ds old) — respawning",
+                    sc.name, stale_for, int(age),
+                )
+                _stale_since.pop(sc.name, None)
+                _note_restart(sc.name)
                 await sc.start()
             except asyncio.CancelledError:
                 raise

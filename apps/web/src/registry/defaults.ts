@@ -53,6 +53,11 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     license: 'NASA (CC0 / cite)',
     opacity: 1,
     visibleByDefault: false,
+    // The largest layer in the whole registry when it is on: 14818 entities
+    // measured 2026-07-27, more than the aircraft feed. Fire detections read as
+    // a density field, so a stable 5000-point subset shows the same picture for
+    // a third of the per-frame cost.
+    maxEntities: 5000,
     emits: ['fire'],
   },
   {

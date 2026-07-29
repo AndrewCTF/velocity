@@ -24,7 +24,7 @@ import { installCaptures } from './CaptureLayer.js';
 import { installDetections } from './DetectLayer.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { prewarmIcons } from './icons.js';
-import { perfOnRender } from './perf.js';
+import { perfOnPreRender, perfOnRender } from './perf.js';
 import { presetKnobs } from './qualityPresets.js';
 import { setCameraMoving } from './cameraMotion.js';
 import { hasRenderNeed } from './renderNeeds.js';
@@ -467,6 +467,56 @@ export function GlobeCanvas({
       baseLayer: buildDarkBasemap(),
     };
 
+    // Cesium runs EIGHT visualizers per data source, every frame, whether or not
+    // that data source contains anything they can draw. With every layer on the
+    // scene holds 78 data sources, so that is 624 visualizer.update() calls per
+    // frame — a fixed cost that does not scale with the entity count, which is
+    // why cutting entities by 24 % moved frame time by nothing.
+    //
+    // Probed live, across every data source we create, the only entity graphics
+    // in use are: billboard, label, point, polyline, polygon, ellipse, rectangle.
+    // ModelVisualizer, Cesium3DTilesetVisualizer and PathVisualizer draw
+    // entity.model / entity.tileset / entity.path, none of which this app ever
+    // sets — the OSM-buildings and Google 3D tilesets are scene.primitives, not
+    // entities, so they are unaffected. Dropping those three takes it to 390.
+    //
+    // Guarded by globe/invariants.test.ts: if a future feature starts setting
+    // entity.model / .path / .tileset it must add the visualizer back here, or
+    // it will silently not render.
+    const CesiumAny = Cesium as unknown as {
+      DataSourceDisplay: {
+        defaultVisualizersCallback: (
+          scene: Cesium.Scene, cluster: Cesium.EntityCluster, ds: Cesium.DataSource,
+        ) => unknown[];
+      };
+      BillboardVisualizer: new (...a: unknown[]) => unknown;
+      GeometryVisualizer: new (...a: unknown[]) => unknown;
+      LabelVisualizer: new (...a: unknown[]) => unknown;
+      PointVisualizer: new (...a: unknown[]) => unknown;
+      PolylineVisualizer: new (...a: unknown[]) => unknown;
+    };
+    CesiumAny.DataSourceDisplay.defaultVisualizersCallback = (
+      scene: Cesium.Scene,
+      entityCluster: Cesium.EntityCluster,
+      dataSource: Cesium.DataSource,
+    ): unknown[] => {
+      const entities = dataSource.entities;
+      // _primitives / _groundPrimitives are Cesium internals that the stock
+      // defaultVisualizersCallback also reads; they are how the geometry and
+      // polyline visualizers reach the per-data-source primitive collections.
+      const ds = dataSource as unknown as {
+        _primitives: Cesium.PrimitiveCollection;
+        _groundPrimitives: Cesium.PrimitiveCollection;
+      };
+      return [
+        new CesiumAny.BillboardVisualizer(entityCluster, entities),
+        new CesiumAny.GeometryVisualizer(scene, entities, ds._primitives, ds._groundPrimitives),
+        new CesiumAny.LabelVisualizer(entityCluster, entities),
+        new CesiumAny.PointVisualizer(entityCluster, entities),
+        new CesiumAny.PolylineVisualizer(scene, entities, ds._primitives, ds._groundPrimitives),
+      ];
+    };
+
     const viewer = new Cesium.Viewer(containerRef.current, viewerOpts);
     // DEV-only handle for debugging/introspection (mirrors __useSelection).
     if (import.meta.env?.DEV) (window as unknown as { __viewer: Cesium.Viewer }).__viewer = viewer;
@@ -615,6 +665,11 @@ export function GlobeCanvas({
       void time;
     };
     scene.postRender.addEventListener(onPostRender);
+    // Pair with preRender so window.__perf.renderMs* is the COST of a frame,
+    // not the interval between frames. Under requestRenderMode those are very
+    // different questions and only the first one answers "is the globe slow".
+    const onPreRender = (): void => perfOnPreRender(performance.now());
+    scene.preRender.addEventListener(onPreRender);
 
     // P0d render-on-demand governor (design §5.1). DEFAULT OFF (settings) — while
     // off, maximumRenderTimeChange stays 0 exactly as the CLAUDE.md guardrail

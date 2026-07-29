@@ -116,28 +116,32 @@ def _aircraft_context(enrich: Any, dossier: Any) -> dict[str, Any]:
     (asyncio.gather return_exceptions) or a degraded/empty dict — handled."""
     ctx: dict[str, Any] = {}
     if isinstance(enrich, dict):
-        ctx.update({
-            "registration": enrich.get("registration"),
-            "aircraft_type": enrich.get("type") or enrich.get("icao_type"),
-            "operator": enrich.get("operator"),
-            "manufacturer": enrich.get("manufacturer"),
-            "reg_country": enrich.get("country_origin"),
-            "airline": enrich.get("route_airline"),
-        })
+        ctx.update(
+            {
+                "registration": enrich.get("registration"),
+                "aircraft_type": enrich.get("type") or enrich.get("icao_type"),
+                "operator": enrich.get("operator"),
+                "manufacturer": enrich.get("manufacturer"),
+                "reg_country": enrich.get("country_origin"),
+                "airline": enrich.get("route_airline"),
+            }
+        )
         origin = _airport_label(enrich.get("origin"))
         dest = _airport_label(enrich.get("destination"))
         if origin or dest:
             ctx["flight_route"] = f"{origin or '?'} → {dest or '?'}"
     if isinstance(dossier, dict) and dossier.get("found"):
         track = dossier.get("track") or {}
-        ctx.update({
-            "track_profile": track.get("profile"),
-            "track_speed_kn": track.get("speed_kn"),
-            "track_gaps": track.get("gap_count") or None,
-            "gnss_degraded": dossier.get("gnss_degraded") or None,
-            "military": True if dossier.get("source") == "adsb_mil" else None,
-            "pattern_assessment": dossier.get("assessment"),
-        })
+        ctx.update(
+            {
+                "track_profile": track.get("profile"),
+                "track_speed_kn": track.get("speed_kn"),
+                "track_gaps": track.get("gap_count") or None,
+                "gnss_degraded": dossier.get("gnss_degraded") or None,
+                "military": True if dossier.get("source") == "adsb_mil" else None,
+                "pattern_assessment": dossier.get("assessment"),
+            }
+        )
         sq = str(dossier.get("squawk") or "")
         if sq in ("7500", "7600", "7700"):
             ctx["emergency_squawk"] = sq
@@ -155,26 +159,30 @@ def _vessel_context(enrich: Any, dossier: Any) -> dict[str, Any]:
     enrichment and the pattern-of-life dossier for a vessel."""
     ctx: dict[str, Any] = {}
     if isinstance(enrich, dict):
-        ctx.update({
-            "vessel_name": enrich.get("name"),
-            "flag": enrich.get("flag") or enrich.get("flag_country"),
-            "imo": enrich.get("imo"),
-            "vessel_type": enrich.get("vessel_type") or enrich.get("gear_type"),
-            "length_m": enrich.get("length_m"),
-            "nearest_place": enrich.get("nearest_port"),
-        })
+        ctx.update(
+            {
+                "vessel_name": enrich.get("name"),
+                "flag": enrich.get("flag") or enrich.get("flag_country"),
+                "imo": enrich.get("imo"),
+                "vessel_type": enrich.get("vessel_type") or enrich.get("gear_type"),
+                "length_m": enrich.get("length_m"),
+                "nearest_place": enrich.get("nearest_port"),
+            }
+        )
         dist = enrich.get("nearest_port_distance_km")
         if isinstance(dist, (int, float)):
             ctx["nearest_place_km"] = dist
     if isinstance(dossier, dict) and dossier.get("found"):
         track = dossier.get("track") or {}
-        ctx.update({
-            "category": dossier.get("category"),
-            "track_profile": track.get("profile"),
-            "track_speed_kn": track.get("speed_kn"),
-            "ais_gaps": track.get("gap_count") or None,
-            "pattern_assessment": dossier.get("assessment"),
-        })
+        ctx.update(
+            {
+                "category": dossier.get("category"),
+                "track_profile": track.get("profile"),
+                "track_speed_kn": track.get("speed_kn"),
+                "ais_gaps": track.get("gap_count") or None,
+                "pattern_assessment": dossier.get("assessment"),
+            }
+        )
         ident = dossier.get("identity") or {}
         aka = ident.get("mmsi_history") or []
         if len(aka) > 1:
@@ -190,11 +198,25 @@ def _vessel_context(enrich: Any, dossier: Any) -> dict[str, Any]:
 
 # Keys carrying photo/wiki/link/list blobs that add prompt weight without
 # grounding an assessment — dropped from the static-kind enrichment.
-_HEAVY_KEYS = frozenset({
-    "kind", "url", "thumb_url", "photo_url", "image", "photos", "extract",
-    "summary", "wikipedia_url", "wikidata_url", "liveatc_url",
-    "candidate_mounts", "candidate_mounts_best_effort", "runways", "frequencies",
-})
+_HEAVY_KEYS = frozenset(
+    {
+        "kind",
+        "url",
+        "thumb_url",
+        "photo_url",
+        "image",
+        "photos",
+        "extract",
+        "summary",
+        "wikipedia_url",
+        "wikidata_url",
+        "liveatc_url",
+        "candidate_mounts",
+        "candidate_mounts_best_effort",
+        "runways",
+        "frequencies",
+    }
+)
 
 
 def _static_context(enrich: Any) -> dict[str, Any]:
@@ -204,16 +226,12 @@ def _static_context(enrich: Any) -> dict[str, Any]:
     if not isinstance(enrich, dict):
         return {}
     picked = {
-        k: v
-        for k, v in enrich.items()
-        if k not in _HEAVY_KEYS and not isinstance(v, (list, dict))
+        k: v for k, v in enrich.items() if k not in _HEAVY_KEYS and not isinstance(v, (list, dict))
     }
     return _compact(picked)
 
 
-async def _gather_context(
-    kind: str, eid: str, props: dict[str, Any]
-) -> tuple[dict[str, Any], str]:
+async def _gather_context(kind: str, eid: str, props: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """Fuse the platform's existing enrichment substrate for the selected entity
     so the brief is grounded in registry identity, flight route, flag state,
     reverse-geocoded location, pattern-of-life and live incident membership —
@@ -301,15 +319,11 @@ async def _gather_context(
     return {}, "skipped"
 
 
-async def _safe_context(
-    kind: str, eid: str, props: dict[str, Any]
-) -> tuple[dict[str, Any], str]:
+async def _safe_context(kind: str, eid: str, props: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """`_gather_context` under a hard timeout; on timeout or any error the
     brief runs on the raw props alone and the status reports "skipped"."""
     try:
-        return await asyncio.wait_for(
-            _gather_context(kind, eid, props), timeout=_CONTEXT_TIMEOUT_S
-        )
+        return await asyncio.wait_for(_gather_context(kind, eid, props), timeout=_CONTEXT_TIMEOUT_S)
     except Exception:  # noqa: BLE001 — timeout or any enrichment failure → no context
         return {}, "skipped"
 
@@ -341,22 +355,29 @@ async def post_selection_brief(
         computed = True
         props_json = json.dumps(_clamp_props(body.props), default=str, separators=(",", ":"))
         context, enrichment_status = await _safe_context(body.kind, body.id, body.props)
+        # with_citations INSIDE with_prose_style: grounding is stated first, the
+        # style rider stays last among the riders (the guarded ordering in
+        # docs/decisions.md), and the injection guard remains the final word.
+        # Turns "cite the concrete numbers and ids" from an instruction nobody
+        # can check into a bracket form we can verify against the real ids below.
         system = llm.with_prose_style(
-            "You are a senior OSINT watch analyst briefing a watch floor. "
-            f"Write 3-6 sentences of markdown about this {body.kind} (bold the "
-            "key identifiers), in this order: (1) what it is, taking identity "
-            "from the registry/ENRICHMENT block; (2) what it is doing now: "
-            "position, track, speed, altitude/heading from the live fields; "
-            "(3) anomalies or notable pattern-of-life drawn from the ENRICHMENT "
-            "block (emergency squawks, AIS/ADS-B gaps, GNSS degradation, "
-            "incident membership, route deviation) when present; (4) close with "
-            "a bold one-line assessment tagged with a threat read, "
-            "**Threat: routine | watch | elevated | high**. "
-            "Ground every claim in the data provided and cite the concrete "
-            "numbers and ids. If nothing stands out, say 'no anomalies evident' "
-            "and tag Threat: routine. Never invent an anomaly, and never "
-            "speculate about intent beyond the evidence. If the ENRICHMENT "
-            "conflicts with the live data, say so explicitly."
+            llm.with_citations(
+                "You are a senior OSINT watch analyst briefing a watch floor. "
+                f"Write 3-6 sentences of markdown about this {body.kind} (bold the "
+                "key identifiers), in this order: (1) what it is, taking identity "
+                "from the registry/ENRICHMENT block; (2) what it is doing now: "
+                "position, track, speed, altitude/heading from the live fields; "
+                "(3) anomalies or notable pattern-of-life drawn from the ENRICHMENT "
+                "block (emergency squawks, AIS/ADS-B gaps, GNSS degradation, "
+                "incident membership, route deviation) when present; (4) close with "
+                "a bold one-line assessment tagged with a threat read, "
+                "**Threat: routine | watch | elevated | high**. "
+                "Ground every claim in the data provided and cite the concrete "
+                "numbers and ids. If nothing stands out, say 'no anomalies evident' "
+                "and tag Threat: routine. Never invent an anomaly, and never "
+                "speculate about intent beyond the evidence. If the ENRICHMENT "
+                "conflicts with the live data, say so explicitly."
+            )
         )
         user = f"{body.kind} {body.id}:\n{props_json}"
         if context:

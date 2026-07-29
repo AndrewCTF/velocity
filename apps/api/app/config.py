@@ -209,6 +209,15 @@ class Settings(BaseSettings):
     # launch a local Ollama model for deeper, in-the-loop analysis without
     # spending the calling agent's context. All optional; degrade gracefully.
     ollama_host: str = "http://localhost:11434"  # OLLAMA_HOST
+    # How long ollama keeps a model in VRAM after answering. Ollama's own
+    # default is 5 minutes and it holds the entire model resident for that
+    # window — measured 2026-07-29, one fallback call left qwen3-coder:30b at
+    # 21 438 MiB of a 32 GB card. On a keyless install every llm call reaches
+    # the ollama rung (the cloud rungs fail without keys), so a single
+    # background brief pinned most of the GPU. 60 s keeps an interactive
+    # exchange warm and releases the card almost immediately otherwise.
+    # Any ollama duration: "0" unloads at once, "-1" never unloads, "10m", ...
+    ollama_keep_alive: str = "60s"  # OLLAMA_KEEP_ALIVE
     ollama_model: str = ""  # OLLAMA_MODEL ("" → auto-detect smallest installed)
     # Per-tier local model ids used when running inference locally (Part 4). The
     # auto-picker (llm._pick_ollama) biases to TINY models — right for a last-resort
@@ -253,6 +262,27 @@ class Settings(BaseSettings):
     # the hardware/models routes look for it.
     llamacpp_host: str = "http://127.0.0.1:8094"  # LLAMACPP_HOST
     llamacpp_models_max: int = 2  # LLAMACPP_MODELS_MAX (main + hot selection)
+    # llama-server performance flags. NONE of these were passed before
+    # 2026-07-27: the whole command line was models-dir/models-max/host/port/
+    # api-key/flash-attn, so the server ran at its compiled-in defaults with no
+    # GPU offload requested at all, on a box with a 32 GB RTX 5090.
+    # localllm/binary.py already named `-ngl` as a flag "this platform needs".
+    #
+    # -1 offloads every layer the VRAM will take; 0 forces CPU.
+    llamacpp_gpu_layers: int = -1  # LLAMACPP_GPU_LAYERS
+    # The catalog advertises 262144-token contexts. We never need one, and a
+    # large context reserves a proportionally large KV cache, which slows the
+    # load and the prefill for no benefit on a 768-token selection brief.
+    llamacpp_ctx: int = 8192  # LLAMACPP_CTX
+    llamacpp_batch: int = 2048  # LLAMACPP_BATCH
+    llamacpp_ubatch: int = 512  # LLAMACPP_UBATCH
+    # 0 → half the cores. Uncapped threads on a many-core box thrash.
+    llamacpp_threads: int = 0  # LLAMACPP_THREADS
+    # Two slots so a selection brief and a watch-officer call do not serialize.
+    llamacpp_parallel: int = 2  # LLAMACPP_PARALLEL
+    # Prefix-cache reuse. Every call goes through llm.with_prose_style(), which
+    # prepends the SAME block, so the reusable prefix is large and free.
+    llamacpp_cache_reuse: int = 256  # LLAMACPP_CACHE_REUSE
     # vLLM stays OFF by default — no CPU/GPU hybrid offload (whole model must
     # fit VRAM), and it rejects Unsloth's UD-* GGUF dynamic quants (GH
     # #39469), so it is opt-in only for small models fully in VRAM.
@@ -318,6 +348,17 @@ class Settings(BaseSettings):
     # ── News debias / fact-check engine ──
     # Keyless RSS world feeds; analysis runs through app.llm. All optional.
     news_enabled: bool = True
+    # Master switch for the headless-Chromium ADS-B tier. The sidecar is the
+    # largest single cost on the box (25 Chromium processes, 4.4 GB RSS), and on
+    # an edge install it is not affordable — OpenSky is the documented breadth
+    # source, so coverage degrades rather than disappears. The `lite` profile
+    # seeds this to 0.
+    adsb_sidecar_enabled: bool = True  # ADSB_SIDECAR_ENABLED
+    # Whether background loops may run model inference on their own. A brief
+    # loop pulled a 21 GB model into VRAM on a box whose /api/ai/local reported
+    # the feature disabled. This never blocks a user ASKING for inference; it
+    # stops the machine deciding to unprompted. The `lite` profile seeds it 0.
+    ai_background_enabled: bool = True  # AI_BACKGROUND_ENABLED
     news_refresh_sec: int = 600  # backend RSS poll cadence
     news_max_items: int = 400  # cap retained headlines
 
@@ -459,6 +500,33 @@ class Settings(BaseSettings):
     # delete (refills as live data flows). Disable to run fully stateless.
     history_enabled: bool = True
     history_db_path: str = "./data/history.db"
+    # Where the archive lives. Comma-separated directories; empty keeps the
+    # single legacy file at history_db_path, so an existing install is unchanged
+    # until the operator asks for something else.
+    #
+    #   HISTORY_ROOTS=/mnt/fast,/mnt/bulk
+    #
+    # Each UTC day becomes its own SQLite shard at <root>/history/<YYYY-MM-DD>.db,
+    # opened in whichever root has the most free space at the time — so the
+    # archive is not confined to one disk, and retention can delete a whole file
+    # instead of DELETE + VACUUM (the pattern behind the 49.6 GB WAL runaway,
+    # docs/decisions.md 2026-07-16). A pre-existing history_db_path is still read
+    # as one more shard, so switching strands nothing.
+    history_roots: str = ""  # HISTORY_ROOTS
+    # Total archive budget across ALL roots, in GB. 0 = fall back to the
+    # RAM-scaled history_max_bytes path. Set this and the archive is bounded by
+    # the disk you gave it rather than by how much RAM happens to be free.
+    history_budget_gb: float = 0.0  # HISTORY_BUDGET_GB
+    # Completeness. The recorder used to drop any fix that arrived within
+    # history_min_interval_s AND had moved less than history_min_move_deg — at a
+    # 1 Hz tick with the old 5.0 s / 0.01 deg defaults that discarded four fixes
+    # in five for anything slow or moored, which is the "the data is not complete,
+    # you cut a lot of it to save usage" report. Both now default to 0: a fix is
+    # recorded whenever it DIFFERS from the last one stored for that id, and
+    # skipped only when it is identical. Raise them to trade completeness for
+    # disk deliberately, rather than by default.
+    history_min_interval_s: float = 0.0  # HISTORY_MIN_INTERVAL_S
+    history_min_move_deg: float = 0.0  # HISTORY_MIN_MOVE_DEG
     # Default look-back window for replay. 7 days lets the operator scrub
     # multi-day, not just the live ~24 h window. This is a TIME bound only —
     # the byte cap below is what actually limits storage; the hour window just

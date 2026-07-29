@@ -8,7 +8,10 @@ total coverage.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import time
+from collections import deque
 from typing import Any
 
 from fastapi import APIRouter
@@ -31,9 +34,15 @@ async def status() -> dict[str, Any]:
     s = get_settings()
     from app import ais_firehose, ais_keyless, marinetraffic  # noqa: PLC0415
 
+    # Counts only — never `global_snapshot()`. This route is public, anonymous
+    # and polled by status pages, and calling the snapshot helper for a number
+    # took _SNAPSHOT_LOCK (held by the 1 Hz refresher across its merge), copied
+    # the snapshot dict, and on a cold process could kick a fan-out from an
+    # anonymous request. Measured p50 12.5 ms -> 10.1 ms. The multi-second tail
+    # is loop-wide, not this route's, and is unchanged — see
+    # adsb_routes.snapshot_count().
     try:
-        fc = await adsb_routes.global_snapshot()
-        aircraft = len(fc.get("features") or [])
+        aircraft = adsb_routes.snapshot_count()
     except Exception:  # noqa: BLE001 — status must never 500
         aircraft = 0
     age = adsb_routes.snapshot_age_s()
@@ -48,7 +57,7 @@ async def status() -> dict[str, Any]:
         from app.correlate.store import store  # noqa: PLC0415
         from app.routes import maritime  # noqa: PLC0415
 
-        vessels = len(store.latest("vessel"))
+        vessels = store.count("vessel")
         parked = maritime.parked_count()
     except Exception:  # noqa: BLE001 — never let vessels break status
         vessels = 0
@@ -163,5 +172,285 @@ async def status() -> dict[str, Any]:
             "Live counts from the running snapshot. Coverage is uneven by design — "
             "absence of a signal in a thin-coverage region is not evidence of absence. "
             "See /api/intel/sources (authenticated) for per-feed detail."
+        ),
+    }
+
+
+# ── /api/status/perf ─────────────────────────────────────────────────────────
+#
+# The 2026-07-27 baseline could not report event-loop lag because nothing
+# measured it, so the single most diagnostic number for "the backend blows up
+# when I enable all toggles" was missing from the evidence. This endpoint is
+# that number plus the counters that explain it, and it is what the perf
+# harnesses poll.
+#
+# It must stay CHEAP — it is sampled once a second during a measurement run, so
+# it may not walk the snapshot or the vessel store the way /api/status does.
+
+_LAG_SAMPLES: deque[float] = deque(maxlen=120)
+_LAG_TASK: asyncio.Task[None] | None = None
+_LAG_TICK_S = 0.5
+
+
+async def _lag_probe_forever() -> None:
+    """Sleep a known interval and record the overshoot.
+
+    A task that asks for 0.5 s and gets 0.9 s spent 400 ms waiting behind
+    something that would not yield. That overshoot IS the lag every request on
+    this loop is also paying.
+    """
+    loop = asyncio.get_running_loop()
+    while True:
+        t0 = loop.time()
+        await asyncio.sleep(_LAG_TICK_S)
+        _LAG_SAMPLES.append(max(0.0, (loop.time() - t0 - _LAG_TICK_S) * 1000.0))
+
+
+def start_lag_probe() -> None:
+    global _LAG_TASK
+    if _LAG_TASK is None or _LAG_TASK.done():
+        _LAG_TASK = asyncio.create_task(_lag_probe_forever())
+
+
+async def stop_lag_probe() -> None:
+    global _LAG_TASK
+    t = _LAG_TASK
+    _LAG_TASK = None
+    if t and not t.done():
+        t.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await t
+
+
+def _pct(values: list[float], p: float) -> float | None:
+    if not values:
+        return None
+    s = sorted(values)
+    return round(s[min(len(s) - 1, max(0, round((p / 100.0) * (len(s) - 1))))], 2)
+
+
+@router.get("/api/status/perf")
+async def status_perf() -> dict[str, Any]:
+    """Event-loop lag, payload freshness and container sizes. Keyless, cheap."""
+    lag = list(_LAG_SAMPLES)
+    out: dict[str, Any] = {
+        "generated_at": int(time.time()),
+        "loop_lag_ms_p50": _pct(lag, 50),
+        "loop_lag_ms_p95": _pct(lag, 95),
+        "loop_lag_ms_max": round(max(lag), 2) if lag else None,
+        "loop_lag_samples": len(lag),
+        "loop_lag_window_s": round(len(lag) * _LAG_TICK_S, 1),
+    }
+    # ADS-B world blob — size and age come from module state, no snapshot walk.
+    try:
+        out["adsb"] = {
+            "blob_bytes": len(adsb_routes._HOT_BLOB) if adsb_routes._HOT_BLOB else 0,
+            "etag": adsb_routes._HOT_ETAG[:12] or None,
+            "age_s": round(adsb_routes.snapshot_age_s(), 2),
+            "ws_subscribers": len(adsb_routes._WS_SUBSCRIBERS),
+            "feed_slices": len(adsb_routes._FEED_SLICES),
+            "cycle_ms": adsb_routes.cycle_timings(),
+        }
+    except Exception:  # noqa: BLE001 — diagnostics must never 500
+        out["adsb"] = {"error": "unavailable"}
+    try:
+        from app.routes import maritime as maritime_routes  # noqa: PLC0415
+
+        out["vessels"] = maritime_routes.vessel_blob_state()
+        out["vessels"]["parked_cached"] = maritime_routes.parked_count()
+    except Exception:  # noqa: BLE001
+        out["vessels"] = {"error": "unavailable"}
+    try:
+        from app.upstream import cache as upstream_cache  # noqa: PLC0415
+
+        out["feed_cache"] = {
+            "entries": len(upstream_cache._data),
+            "max_entries": upstream_cache._MAX_CACHE_ENTRIES
+            if hasattr(upstream_cache, "_MAX_CACHE_ENTRIES")
+            else None,
+        }
+    except Exception:  # noqa: BLE001
+        out["feed_cache"] = {"error": "unavailable"}
+    try:
+        from app import ais_sidecar  # noqa: PLC0415
+
+        out["ais_supervision"] = ais_sidecar.supervision_state()
+    except Exception:  # noqa: BLE001
+        out["ais_supervision"] = {"error": "unavailable"}
+    return out
+
+
+@router.get("/api/status/provenance")
+async def status_provenance() -> dict[str, Any]:
+    """Who is actually seeing the sky right now, and how much they agree.
+
+    Every competitor in this category renders whatever its upstream asserts and
+    says nothing about where it came from (docs/research-last30days-2026-07-29.md
+    §1.1). The single highest-engagement story in the category is fabricated
+    ADS-B rendered as real on a live map, and the community's own detection
+    method is cross-source corroboration. This endpoint is that method, exposed:
+
+      - per tier: how many contacts it saw, and how many ONLY it saw,
+      - overall: the share of contacts with two or more independent observers.
+
+    Exclusive counts are the interesting column. A tier contributing thousands of
+    contacts nobody else can see is either genuinely unique coverage (oceanic
+    breadth) or an unverifiable claim, and knowing which of your tiers is in that
+    position is the difference between honest breadth and inherited noise.
+
+    Diagnostics: never 500, and never triggers a fan-out of its own - it reads
+    the snapshot the refresher already built.
+    """
+    out: dict[str, Any] = {"as_of": time.time()}
+    try:
+        snap = await adsb_routes.global_snapshot()
+        feats = snap.get("features") or []
+        per_tier: dict[str, dict[str, int]] = {}
+        corroborated = 0
+        counted = 0
+        unknown = 0
+        for f in feats:
+            props = f.get("properties") or {}
+            srcs = props.get("sources")
+            if not isinstance(srcs, list) or not srcs:
+                unknown += 1
+                continue
+            counted += 1
+            if len(srcs) >= 2:
+                corroborated += 1
+            for s in srcs:
+                row = per_tier.setdefault(str(s), {"contacts": 0, "exclusive": 0})
+                row["contacts"] += 1
+                if len(srcs) == 1:
+                    row["exclusive"] += 1
+        out["aircraft"] = {
+            "total": len(feats),
+            # Contacts whose observer set we know. A contact carried forward from
+            # an earlier cycle has no set for THIS cycle, and calling that
+            # "single source" would be a guess.
+            "attributed": counted,
+            "unattributed": unknown,
+            "corroborated": corroborated,
+            "corroborated_pct": round(100.0 * corroborated / counted, 1) if counted else None,
+            "tiers": per_tier,
+            "confidence_rule": adsb_routes.CONFIDENCE_RULE,
+        }
+    except Exception:  # noqa: BLE001 — diagnostics must never 500
+        out["aircraft"] = {"error": "unavailable"}
+    return out
+
+
+# Capabilities that need configuration, and the EXACT setting names the code
+# reads. Generated against Settings at request time rather than written out in
+# prose, because the failure this exists to prevent is documentation drifting
+# away from the code.
+#
+# That drift is not hypothetical. The largest cluster of complaints on the
+# highest-scoring launch in this category was a map that rendered blank because
+# a key was missing and nothing said so, and a commenter had to work out that
+# the README named OPENSKY_USERNAME / OPENSKY_PASSWORD while the code read
+# OPENSKY_CLIENT_ID / OPENSKY_CLIENT_SECRET. The reply was "the perils of vibe
+# coding". See docs/research-last30days-2026-07-29.md §5.1 and §5.2.
+#
+# (capability, [setting names], what you lose without it)
+_OPTIONAL_CAPABILITIES: list[tuple[str, list[str], str]] = [
+    (
+        "OpenSky authenticated breadth",
+        ["opensky_client_id", "opensky_client_secret"],
+        "Anonymous access still works on a small daily credit budget; with "
+        "credentials the budget is larger, so the global aircraft floor is "
+        "easier to hold.",
+    ),
+    (
+        "AISStream global firehose",
+        ["aisstream_key"],
+        "Keyless regional AIS still runs; the global firehose adds open-ocean "
+        "vessels the regional feeds cannot see.",
+    ),
+    (
+        "NASA FIRMS fires",
+        ["firms_map_key"],
+        "The fire layer degrades gracefully without a key.",
+    ),
+    (
+        "Sentinel / CDSE imagery",
+        ["cdse_client_id", "cdse_client_secret"],
+        "On-demand satellite imagery and SAR dark-vessel sweeps are unavailable.",
+    ),
+    (
+        "Cesium Ion terrain and imagery",
+        ["cesium_ion_token"],
+        "The globe falls back to the keyless Carto basemap.",
+    ),
+]
+
+
+@router.get("/api/status/doctor")
+async def status_doctor() -> dict[str, Any]:
+    """What is configured, what is missing, and the exact line that fixes it.
+
+    A blank layer is indistinguishable from a broken product unless something
+    says which one it is. This endpoint is that something: for every optional
+    capability it reports whether the settings the CODE reads are populated, what
+    you lose without them, and the literal `KEY=value` line to add.
+
+    Setting names come from the Settings model itself, so this cannot describe an
+    environment variable the application does not actually read. It reports only
+    whether a value is present - never the value - so it is safe to paste into an
+    issue.
+    """
+    settings = get_settings()
+    fields = set(type(settings).model_fields)
+    problems: list[dict[str, Any]] = []
+    configured: list[str] = []
+
+    for cap, names, consequence in _OPTIONAL_CAPABILITIES:
+        missing: list[str] = []
+        unknown: list[str] = []
+        for n in names:
+            if n not in fields:
+                # A capability naming a setting that no longer exists is itself a
+                # defect: this list has drifted from the code.
+                unknown.append(n)
+                continue
+            if not getattr(settings, n, None):
+                missing.append(n)
+        if unknown:
+            problems.append(
+                {
+                    "capability": cap,
+                    "state": "misconfigured-check",
+                    "detail": (
+                        "This check names settings the application does not read: "
+                        + ", ".join(unknown)
+                        + ". The check is wrong, not your configuration."
+                    ),
+                    "fix": None,
+                }
+            )
+        elif missing:
+            problems.append(
+                {
+                    "capability": cap,
+                    "state": "not-configured",
+                    "detail": consequence,
+                    "fix": " ".join(f"{n.upper()}=..." for n in missing),
+                }
+            )
+        else:
+            configured.append(cap)
+
+    return {
+        "as_of": time.time(),
+        # Keyless by design: nothing here is required to run the console, so an
+        # empty `problems` list and a long one are both healthy states. Saying so
+        # explicitly stops a list of "not configured" reading as a list of faults.
+        "required_missing": 0,
+        "optional_not_configured": len(problems),
+        "configured": sorted(configured),
+        "problems": problems,
+        "note": (
+            "Every capability listed here is optional. The console runs keyless; "
+            "these only widen coverage."
         ),
     }

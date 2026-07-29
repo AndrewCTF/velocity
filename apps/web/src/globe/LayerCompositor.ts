@@ -55,16 +55,7 @@ function viewportQuery(
       // the FULL local traffic (up to `limit`) for the viewport — so China/Russia
       // etc. show everything when you actually look at them.
       if (widthDeg > 170 || n - s > 140) return alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`;
-      // Pad ~15% so contacts just outside the frame are loaded before they
-      // scroll in; clamp to the backend's accepted ranges.
-      const padLat = (n - s) * 0.15;
-      const padLon = widthDeg * 0.15;
-      const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
-      const S = clamp(s - padLat, -90, 90).toFixed(3);
-      const N = clamp(n + padLat, -90, 90).toFixed(3);
-      const W = clamp(w - padLon, -180, 180).toFixed(3);
-      const E = clamp(e + padLon, -180, 180).toFixed(3);
-      return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
+      return paddedQuantizedBbox(s, n, w, widthDeg, limit);
     }
     // computeViewRectangle() returns undefined when the globe doesn't cleanly
     // fill the frame — a TILTED / oblique view with the horizon or sky visible,
@@ -77,6 +68,81 @@ function viewportQuery(
     // do we keep the world fallback.
     return cameraCenterBbox(viewer, limit) ?? (alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`);
   };
+}
+
+// ── Viewport request shaping ────────────────────────────────────────────────
+//
+// "It takes some time to load in data after I zoom out or move." Two causes,
+// and fixing either alone does not fix the symptom.
+//
+//  1. NOT ENOUGH RING. A 15% pad means a pan of a sixth of a screen reaches
+//     ground we never asked for, so there is nothing to draw until a round trip
+//     completes. PREFETCH_PAD widens that margin: the data for where you are
+//     about to look is already in the entity store.
+//
+//  2. AN UNSTABLE URL. The bbox was recomputed to three decimal places from the
+//     exact camera rectangle, so every pixel of movement produced a different
+//     URL. PollGeoJsonAdapter's move-refresh short-circuits when the URL it
+//     would request equals the one it already fetched — with an exact bbox that
+//     is essentially never, so every nudge of the camera was a fresh request and
+//     a fresh wait. Snapping the padded edges outward to a grid makes small
+//     moves reproduce the SAME URL, which turns them into an instant no-op
+//     against data already on screen.
+//
+// The two are deliberately coupled: quantising alone would just move the seam,
+// and padding alone would still refetch the same ground under a new URL. The
+// grid step is a fraction of the current span, so it scales with zoom rather
+// than being a fixed degree size that is coarse in orbit and useless up close.
+//
+// Cost of the ring is bounded by the same `limit` the request already carries,
+// so a wider box cannot return a bigger payload than before, only a better
+// chosen one. Palantir reaches the same conclusion from the other direction in
+// docs/palantir-reference-2026-07.md §2 ("change what you load, per layer"), and
+// so does the HN rendering thread in docs/research-last30days-2026-07-29.md §5.7.
+const PREFETCH_PAD = 0.35;
+// Grid step as a fraction of the viewport span. At 1/8 you can pan about an
+// eighth of a screen before the request changes, which covers ordinary nudging
+// and orbiting while still refetching for a deliberate move.
+const BBOX_QUANT = 0.125;
+
+/** Snap outward to a multiple of `step`, so the box only ever grows. Snapping to
+ *  the nearest multiple instead would let an edge move INWARD and briefly hide
+ *  contacts that were already loaded. */
+export function snapTo(v: number, step: number, dir: 'up' | 'down'): number {
+  if (!Number.isFinite(step) || step <= 0) return v;
+  return dir === 'up' ? Math.ceil(v / step) * step : Math.floor(v / step) * step;
+}
+
+/**
+ * The viewport query string for a camera rectangle: padded by the prefetch ring
+ * and snapped outward to a zoom-relative grid.
+ *
+ * Exported for tests — it is the whole of the pan-latency fix and it must not
+ * need a WebGL context to pin.
+ *
+ * @param s        south edge, degrees
+ * @param n        north edge, degrees
+ * @param w        west edge, degrees
+ * @param widthDeg longitude span, already unwrapped across the antimeridian
+ */
+export function paddedQuantizedBbox(
+  s: number,
+  n: number,
+  w: number,
+  widthDeg: number,
+  limit: number,
+): string {
+  const heightDeg = n - s;
+  const padLat = heightDeg * PREFETCH_PAD;
+  const padLon = widthDeg * PREFETCH_PAD;
+  const stepLat = Math.max(heightDeg * BBOX_QUANT, 1e-3);
+  const stepLon = Math.max(widthDeg * BBOX_QUANT, 1e-3);
+  const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+  const S = clamp(snapTo(s - padLat, stepLat, 'down'), -90, 90).toFixed(3);
+  const N = clamp(snapTo(n + padLat, stepLat, 'up'), -90, 90).toFixed(3);
+  const W = clamp(snapTo(w - padLon, stepLon, 'down'), -180, 180).toFixed(3);
+  const E = clamp(snapTo(w + widthDeg + padLon, stepLon, 'up'), -180, 180).toFixed(3);
+  return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
 }
 
 // Local bbox centred on the globe point under the screen centre, sized from the
@@ -100,10 +166,14 @@ function cameraCenterBbox(viewer: Cesium.Viewer, limit: number): string | null {
   const spanDeg = Math.min(40, Math.max(0.5, height / 60_000));
   const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
   const padLon = spanDeg / Math.max(0.25, Math.cos((lat * Math.PI) / 180));
-  const S = clamp(lat - spanDeg, -90, 90).toFixed(3);
-  const N = clamp(lat + spanDeg, -90, 90).toFixed(3);
-  const W = clamp(lon - padLon, -180, 180).toFixed(3);
-  const E = clamp(lon + padLon, -180, 180).toFixed(3);
+  // Same quantisation as the rectangle path: an oblique view is the common case
+  // when zoomed in, so it is exactly where a per-pixel URL hurts most.
+  const stepLat = Math.max(spanDeg * BBOX_QUANT, 1e-3);
+  const stepLon = Math.max(padLon * BBOX_QUANT, 1e-3);
+  const S = clamp(snapTo(lat - spanDeg, stepLat, 'down'), -90, 90).toFixed(3);
+  const N = clamp(snapTo(lat + spanDeg, stepLat, 'up'), -90, 90).toFixed(3);
+  const W = clamp(snapTo(lon - padLon, stepLon, 'down'), -180, 180).toFixed(3);
+  const E = clamp(snapTo(lon + padLon, stepLon, 'up'), -180, 180).toFixed(3);
   return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
 }
 
@@ -335,7 +405,12 @@ export class LayerCompositor {
       // CustomDataSource the world view paints as one smeared green blob over
       // every major shipping lane. Mirror the polling-adapter vessel branch
       // so AISStream and Digitraffic get the same low-zoom decluttering.
-      configureVesselClustering(adapter.ds);
+      // AISStream vessels now render as batched primitives off graphics-less
+      // entities, so Cesium's EntityCluster has nothing left to cluster — and it
+      // was recomputing screen-space positions and bounding boxes for ~6 000
+      // entities every frame (~6 % of the main thread, profiled 2026-07-29). The
+      // world-view count bubbles come from VesselClusterPrimitive in the polled
+      // vessel layers, exactly as they do for digitraffic/keyless.
       return adapter;
     }
     // satellites — any CelesTrak group layer (stations/starlink/gps/visual/…).
@@ -421,6 +496,14 @@ export class LayerCompositor {
         // 20000 covers the ~4.5k union whole. Mobile: always a small bbox + cap.
         bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 6000, mobile ? 2000 : 20000, mobile);
         refreshOnMove = true;
+      } else if (d.id === 'maritime.parked') {
+        // The ONE layer that asked for the world with no bbox and no client cap.
+        // The parked cache is long-retained (12 h) and unbounded in count — it
+        // held 26203 entries during the 2026-07-27 measurement — so with this
+        // layer on it was the largest single contributor to the 60826-entity
+        // world view. Same treatment as the live vessel layer.
+        bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 6000, mobile ? 2000 : 8000, mobile);
+        refreshOnMove = true;
       } else if (
         d.id === 'places.airports' ||
         d.id === 'places.ports' ||
@@ -490,82 +573,6 @@ function applyEntityOpacity(e: Cesium.Entity, opacity: number): void {
   }
 }
 
-// Cluster styling for vessel layers. Matches the accent-ring aesthetic used
-// elsewhere — a translucent teal disc with a thin outline and the count in
-// the center. We rebuild the billboard image on every clustering event
-// because Cesium hands us the live event payload with the merged entities.
-function configureVesselClustering(ds: Cesium.CustomDataSource): void {
-  ds.clustering.enabled = true;
-  // Aggressive enough to declutter at globe scale, lax enough that close-up
-  // (port view) shows individual ship icons instead of one big cluster blob.
-  // pixelRange = 24 only merges entities ~24px apart; minimumClusterSize = 16
-  // is the audit-tightened floor (was 8) — at 8, tight ports painted a wall
-  // of overlapping bubbles instead of letting individual vessels through.
-  ds.clustering.pixelRange = 24;
-  ds.clustering.minimumClusterSize = 16;
-  ds.clustering.clusterBillboards = true;
-  ds.clustering.clusterLabels = true;
-  // Vessel entities never use Cesium points (they render as billboard icons),
-  // so clusterPoints would only enable the aggregator to also fold in stray
-  // point primitives we don't have. Off keeps the cluster pipeline focused
-  // on the billboards + labels we actually emit.
-  ds.clustering.clusterPoints = false;
-  ds.clustering.clusterEvent.addEventListener((_clustered, cluster) => {
-    cluster.label.show = true;
-    cluster.label.text = String(cluster.label.text);
-    cluster.label.font = '11px "IBM Plex Mono", monospace';
-    cluster.label.fillColor = Cesium.Color.fromCssColorString('#0b0e14');
-    cluster.label.showBackground = false;
-    cluster.label.pixelOffset = new Cesium.Cartesian2(0, 0);
-    cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
-    cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
-    cluster.billboard.show = true;
-    cluster.billboard.image = vesselClusterRing();
-    cluster.billboard.verticalOrigin = Cesium.VerticalOrigin.CENTER;
-    cluster.billboard.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
-    // Smooth handoff to individual ship icons. Individual vessel billboards
-    // fade in from 150 km → 600 km (see vesselBillboard.translucencyByDistance).
-    // We invert that here: the cluster bubble is fully opaque at world / continent
-    // scale, then fades out from 650 km → 350 km as the camera dives in. The
-    // 350–600 km overlap band gives a soft cross-fade with the individual ship
-    // billboards without a long stretch of double-rendered clusters + icons
-    // (the old 250k→800k band had a 450 km overlap that visibly painted both
-    // primitives at the same time at continent-to-region zoom).
-    cluster.billboard.translucencyByDistance = new Cesium.NearFarScalar(
-      350_000,
-      0.0,
-      650_000,
-      1.0,
-    );
-    cluster.label.translucencyByDistance = new Cesium.NearFarScalar(
-      350_000,
-      0.0,
-      650_000,
-      1.0,
-    );
-    cluster.point.show = false;
-  });
-}
-
-let cachedClusterRing: string | null = null;
-function vesselClusterRing(): string {
-  if (cachedClusterRing) return cachedClusterRing;
-  const canvas = document.createElement('canvas');
-  canvas.width = 28;
-  canvas.height = 28;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.beginPath();
-    ctx.arc(14, 14, 12, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(52, 211, 153, 0.55)';
-    ctx.fill();
-    ctx.lineWidth = 1.25;
-    ctx.strokeStyle = '#0b0e14';
-    ctx.stroke();
-  }
-  cachedClusterRing = canvas.toDataURL('image/png');
-  return cachedClusterRing;
-}
 
 function styleFromEmits(emits: readonly string[] | undefined): StyleKind {
   if (!emits || emits.length === 0) return 'generic';

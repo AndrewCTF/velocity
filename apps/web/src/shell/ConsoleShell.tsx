@@ -7,7 +7,7 @@ import { useIsMobile } from './useIsMobile.js';
 import { StatusDot, MicroLabel } from './instruments.js';
 import { FloatingPanel } from './FloatingPanel.js';
 import { useConnection, useFeeds, useTime, useSim } from '../state/stores.js';
-import { useRailWidth, RIGHT_MIN, RIGHT_MAX } from '../state/railWidth.js';
+import { useRailWidth, RIGHT_MIN, RIGHT_MAX, RIGHT_DEFAULT } from '../state/railWidth.js';
 import { useSettings } from '../state/settings.js';
 import { useFloatingPanels } from '../state/floatingPanels.js';
 
@@ -88,21 +88,54 @@ function RailResizer({
 }): JSX.Element {
   const lo = side === 'left' ? LEFT_MIN : RIGHT_MIN;
   const hi = side === 'left' ? LEFT_MAX : RIGHT_MAX;
+  // Pointer CAPTURE, plus a pointercancel handler, plus touch-action: none.
+  //
+  // Without capture the drag listened on window, so any gesture the browser
+  // decided to cancel — a touch interruption, a context menu, the pointer
+  // leaving the window — never fired pointerup. Both listeners stayed attached
+  // and `document.body.style.userSelect` stayed 'none' forever, leaving the rail
+  // stuck to the cursor and the whole document unselectable. That is the "hard
+  // to control and bugged" report.
+  //
+  // FloatingPanel.tsx fixed this exact bug in that file and left a comment
+  // saying so; this one never got the same treatment. Same shape, same fix.
   const onDown = (e: ReactPointerEvent): void => {
     e.preventDefault();
+    const el = e.currentTarget as HTMLElement;
+    const pid = e.pointerId;
+    try {
+      el.setPointerCapture(pid);
+    } catch {
+      /* element already detached — fall through to the window-less listeners */
+    }
+    // Measure from the container's own edge rather than assuming the app is
+    // flush against the viewport.
+    const host = el.parentElement?.getBoundingClientRect();
     const move = (ev: PointerEvent): void => {
-      const raw = side === 'left' ? ev.clientX : window.innerWidth - ev.clientX;
+      const edge =
+        side === 'left' ? (host?.left ?? 0) : (host?.right ?? window.innerWidth);
+      const raw = side === 'left' ? ev.clientX - edge : edge - ev.clientX;
       set(clampN(raw, lo, hi));
     };
-    const up = (): void => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
+    const done = (): void => {
+      el.removeEventListener('pointermove', move as EventListener);
+      el.removeEventListener('pointerup', done);
+      el.removeEventListener('pointercancel', done);
+      try {
+        el.releasePointerCapture(pid);
+      } catch {
+        /* already released */
+      }
       document.body.style.userSelect = '';
     };
     document.body.style.userSelect = 'none';
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    el.addEventListener('pointermove', move as EventListener);
+    el.addEventListener('pointerup', done);
+    el.addEventListener('pointercancel', done);
   };
+  // Double-click snaps back to the default width — a cheap escape hatch when a
+  // drag has left the rail somewhere unhelpful.
+  const onDoubleClick = (): void => set(side === 'left' ? LEFT_MIN : RIGHT_DEFAULT);
   const onKey = (e: ReactKeyboardEvent): void => {
     // On the RIGHT rail the panel grows toward the screen's left edge, so
     // ArrowLeft = wider; the left rail is the mirror. Home/End jump to bounds.
@@ -120,7 +153,11 @@ function RailResizer({
   return (
     <div
       onPointerDown={onDown}
+      onDoubleClick={onDoubleClick}
       onKeyDown={onKey}
+      // No `touch-action` existed anywhere in the frontend, so a touch drag on
+      // this strip was competing with the browser's own scroll/zoom gesture.
+      style={{ touchAction: 'none' }}
       role="separator"
       aria-orientation="vertical"
       aria-label={`Resize ${side} panel`}
@@ -128,8 +165,10 @@ function RailResizer({
       aria-valuemin={lo}
       aria-valuemax={hi}
       tabIndex={0}
-      title="Drag, or focus and use arrow keys, to resize"
-      className={`group absolute top-0 bottom-0 ${side === 'left' ? 'right-0' : 'left-0'} w-[7px] cursor-col-resize z-30 flex items-center justify-center hover:bg-accent-line/40 focus-visible:bg-accent-line/50 focus:outline-none`}
+      title="Drag to resize · double-click to reset · arrow keys when focused"
+      // 11px target with a 2px negative margin: the same 7px of visible chrome,
+      // a hit area a pointer can actually land on.
+      className={`group absolute top-0 bottom-0 ${side === 'left' ? 'right-0 -mr-[2px]' : 'left-0 -ml-[2px]'} w-[11px] cursor-col-resize z-30 flex items-center justify-center hover:bg-accent-line/40 focus-visible:bg-accent-line/50 focus:outline-none`}
     >
       {/* grip dots — subtle until hover/focus, then clearly a handle */}
       <span

@@ -51,15 +51,16 @@ def test_supplied_bbox_scopes_response_either_spelling(
 ) -> None:
     snap = _snapshot_spread()
 
-    async def fake_global_snapshot() -> dict:
-        return snap
-
     # A hot blob is present (the whole 90-feature snapshot). If the bbox were
     # dropped, the world gate would serve THIS verbatim — the test would see 90.
     blob, etag = adsb._build_hot_blob(snap)
     monkeypatch.setattr(adsb, "_HOT_BLOB", blob)
     monkeypatch.setattr(adsb, "_HOT_ETAG", etag)
-    monkeypatch.setattr(adsb, "global_snapshot", fake_global_snapshot)
+    # Seed the real snapshot state rather than patching an accessor: the bbox
+    # branch reads `snapshot_view()` (shared, no copy) and only isolates the
+    # survivors, so patching `global_snapshot` would no longer be on this path.
+    monkeypatch.setattr(adsb, "_LATEST_SNAPSHOT", snap)
+    monkeypatch.setattr(adsb, "_SNAPSHOT_STARTED", True)
 
     r = client.get("/api/adsb/global", params=box, headers={"Accept-Encoding": "gzip"})
     assert r.status_code == 200

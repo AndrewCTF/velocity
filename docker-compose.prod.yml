@@ -2,6 +2,10 @@
 
 services:
   api:
+    # Published by .github/workflows/publish.yml on a version tag, so
+    # `docker compose -f docker-compose.prod.yml pull` skips the source build.
+    # `up` still builds locally when the image is absent.
+    image: ghcr.io/andrewctf/velocity-api:latest
     build:
       context: .
       dockerfile: infra/docker/api.Dockerfile
@@ -34,6 +38,7 @@ services:
   web-build:
     # One-shot builder: compiles the static web bundle into the shared web_dist
     # volume, then exits. nginx serves the produced files.
+    image: ghcr.io/andrewctf/velocity-web:latest
     build:
       context: .
       dockerfile: infra/docker/web.Dockerfile

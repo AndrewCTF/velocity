@@ -164,13 +164,33 @@ export function KV({ children, className = '' }: { children: ReactNode; classNam
     </div>
   );
 }
-export function KVRow({ k, v, warn = false }: { k: string; v: ReactNode; warn?: boolean }): JSX.Element {
+export function KVRow({
+  k,
+  v,
+  warn = false,
+  title,
+}: {
+  k: string;
+  v: ReactNode;
+  warn?: boolean;
+  // Optional hover explanation. Used where a value is a VERDICT rather than a
+  // measurement (confidence, freshness), because a verdict whose rule is hidden
+  // is treated as no verdict at all.
+  title?: string;
+}): JSX.Element {
   // Field key = sentence-case label voice (readable, not shouted); the VALUE
   // keeps the mono/tabular machine voice so figures still align and scan.
   return (
     <>
-      <span className="text-[11px] text-txt-2">{k}</span>
-      <span className={`mono text-right min-w-0 break-words ${warn ? 'text-alert-fg' : 'text-txt-0'}`}>{v}</span>
+      <span className="text-[11px] text-txt-2" {...(title && { title })}>
+        {k}
+      </span>
+      <span
+        className={`mono text-right min-w-0 break-words ${warn ? 'text-alert-fg' : 'text-txt-0'}`}
+        {...(title && { title })}
+      >
+        {v}
+      </span>
     </>
   );
 }

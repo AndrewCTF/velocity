@@ -63,4 +63,12 @@ async def ai_local_set(body: LocalToggle) -> dict:
         from app.localllm import manager  # noqa: PLC0415
 
         manager.set_active("selection", body.selection_model or None)
+    # The llama.cpp router is no longer spawned at boot — it holds models on the
+    # GPU, and holding them for a feature that is switched off cost 6.2 GB of
+    # VRAM here (see llamacpp_sidecar.is_enabled). Turning local inference on is
+    # exactly the moment to bring it up. Idempotent, and a no-op when the switch
+    # went the other way.
+    from app import llamacpp_sidecar  # noqa: PLC0415
+
+    await llamacpp_sidecar.start()
     return await llm.local_status()

@@ -34,6 +34,16 @@ describe('CLAUDE.md sacred behaviors (source-scan guards)', () => {
     expect(read('globe/adapters/PollGeoJsonAdapter.ts')).not.toContain('.removeAll(');
   });
 
+  it('AnnotationLayer never calls removeAll (upsert-by-id)', () => {
+    // Same invariant, different file. The annotation renderer did
+    // removeAll() + re-add on EVERY store change, so one keystroke in the label
+    // field (the panel fires update() per character) or one frame of a marker
+    // drag destroyed and recreated every annotation entity. The rule had simply
+    // never been extended past PollGeoJsonAdapter, which is why it went unseen.
+    expect(read('globe/AnnotationLayer.ts')).not.toContain('.removeAll(');
+    expect(read('globe/AnnotationLayer.ts')).toContain('getById');
+  });
+
   it('aircraft/vessel category styling keeps its SVG palette, no bare points', () => {
     // Decision: every contact renders as its category SVG icon, never a dot.
     const s = read('globe/adapters/styles.ts');
@@ -78,5 +88,68 @@ describe('CLAUDE.md sacred behaviors (source-scan guards)', () => {
         i = s.indexOf('new WebSocket(', i + 1);
       }
     }
+  });
+});
+
+// ── enabling a layer must go through the shared gate ──────────────────────────
+//
+// Enabling used to call scheduleNext(0): an immediate ungated fetch plus a
+// synchronous entity build of up to MAX_PER_LAYER features. Fine for one layer,
+// awful for the two surfaces that toggle in bulk — LayerCatalog's toggleFolder
+// and LayerRail's mission presets each enable a whole set at once, so N ungated
+// fetches and N builds landed in the same frame. That is the "toggling backend
+// options from the panel spikes CPU and lags" report.
+describe('layer enable is gated', () => {
+  const src = read('globe/adapters/PollGeoJsonAdapter.ts');
+
+  it('routes the first fetch through onMoveSettle, not straight to scheduleNext(0)', () => {
+    expect(src).toContain('onMoveSettle(this.props.ctx.descriptor.id, this.firstFetch)');
+    // The bare immediate call must not come back in attach().
+    const attach = src.slice(src.indexOf('async attach('), src.indexOf('private firstFetch'));
+    expect(attach).not.toMatch(/^\s*this\.scheduleNext\(0\);\s*$/m);
+  });
+
+  it('cancels the queued first fetch when the layer is switched off again', () => {
+    expect(src).toContain('cancelMoveSettle(this.firstFetch)');
+  });
+});
+
+// ── the trimmed visualizer set ────────────────────────────────────────────────
+//
+// Cesium runs one visualizer per graphics type per data source, every frame,
+// empty or not. At 78 data sources that was 624 update() calls a frame — a fixed
+// cost that does not scale with entity count, which is why cutting entities by
+// 24% moved frame time by nothing. GlobeCanvas overrides
+// DataSourceDisplay.defaultVisualizersCallback down to the five we actually use.
+//
+// The risk it creates: an entity graphic whose visualizer is no longer installed
+// silently does not render. This guard fails the moment anything sets one.
+describe('trimmed Cesium visualizers', () => {
+  const files = walk(SRC).filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f));
+
+  it('installs exactly the visualizers the app uses', () => {
+    const gc = read('globe/GlobeCanvas.tsx');
+    expect(gc).toContain('defaultVisualizersCallback');
+    for (const v of [
+      'BillboardVisualizer', 'GeometryVisualizer', 'LabelVisualizer',
+      'PointVisualizer', 'PolylineVisualizer',
+    ]) {
+      expect(gc).toContain(v);
+    }
+  });
+
+  it('no entity sets model / path / tileset graphics', () => {
+    // These three visualizers were dropped. Setting the graphics they draw
+    // would produce an invisible entity, which is worse than a slow one.
+    const offenders: string[] = [];
+    for (const f of files) {
+      const src = readFileSync(f, 'utf8');
+      for (const m of [/\bentity\.model\s*=/, /\be\.model\s*=/, /\bopts\.model\s*=/,
+                       /\bentity\.path\s*=/, /\be\.path\s*=/, /\bopts\.path\s*=/,
+                       /\bopts\.tileset\s*=/]) {
+        if (m.test(src)) offenders.push(`${f.slice(SRC.length + 1)} :: ${m}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

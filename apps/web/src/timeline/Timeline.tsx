@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as Cesium from 'cesium';
 import { useTime, useSelection } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
@@ -7,6 +7,7 @@ import { installHistoryPlayback, type PlaybackController, type PlaybackInfo } fr
 import { usePolReplay } from '../state/polReplayStore.js';
 import { MicroLabel } from '../shell/instruments.js';
 import { CoverageStrip, type Coverage } from './CoverageStrip.js';
+import { dedupeMarks, markCrossed, type PauseMark } from '../globe/autoPause.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -21,6 +22,10 @@ const REPLAY_WINDOWS = [
   { label: '7d', sec: 604_800 },
 ] as const;
 const POLL_MS = 5_000;
+// Below this, a pointer gesture is a click (seek) rather than a range selection.
+// Small enough that a deliberate short drag still selects, large enough that a
+// shaky click does not accidentally load a two-second replay window.
+const DRAG_RANGE_MIN_PX = 5;
 const DAY_SEC = 86_400;
 const HOUR_SEC = 3_600;
 // Fallback retention until /api/history/stats answers — matches the config
@@ -32,6 +37,20 @@ const DEFAULT_RETENTION_HOURS = 168;
 function isoDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
+/**
+ * Next speed along the SPEEDS ladder, clamped at both ends.
+ *
+ * Exported so the keyboard bindings are testable without mounting Cesium: the
+ * transport is the operator-reported defect, so its stepping needs a guard that
+ * does not depend on a WebGL context.
+ */
+export function stepSpeed(current: number, dir: 1 | -1): number {
+  const i = SPEEDS.indexOf(current as (typeof SPEEDS)[number]);
+  const from = i < 0 ? 0 : i;
+  const next = Math.max(0, Math.min(SPEEDS.length - 1, from + dir));
+  return SPEEDS[next] ?? SPEEDS[0];
+}
+
 // Midnight UTC (epoch seconds) at the start of a "YYYY-MM-DD" day string.
 function dayStartSec(day: string): number {
   return Date.parse(`${day}T00:00:00Z`) / 1000;
@@ -69,6 +88,9 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
   const [lanes, setLanes] = useState<Lane[]>([]);
   const stripRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ start: number; end: number } | null>(null);
+  // Time under the pointer, for the hover readout. Null when the pointer is off
+  // the strip: an empty readout is honest, a stale one is not.
+  const [hoverMs, setHoverMs] = useState<number | null>(null);
 
   // Historical playback (replay recorded tracks for the current view).
   const playbackRef = useRef<PlaybackController | null>(null);
@@ -145,6 +167,33 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
       setReplay({ active: ctrl.isActive(), loading: false, info });
     })();
   }, [polSeq]);
+
+  /**
+   * Load an explicit [fromMs, toMs] span as the replay window.
+   *
+   * The controller only exposes `load(windowSec)` = [now − windowSec, now], the
+   * same constraint the day-scrub path works around: size the window back to
+   * `fromMs`, load, then jump the clock to `fromMs` and stop it at `toMs` so the
+   * operator scrubs the span they selected rather than everything since.
+   */
+  const loadReplayRange = async (fromMs: number, toMs: number): Promise<void> => {
+    const ctrl = playbackRef.current;
+    if (!ctrl || !viewer) return;
+    const nowMsLocal = Date.now();
+    const from = Math.min(fromMs, toMs);
+    const to = Math.min(Math.max(fromMs, toMs), nowMsLocal);
+    if (to - from < 1000) return; // sub-second span: nothing to replay
+    setReplay((r) => ({ ...r, loading: true }));
+    const windowSec = Math.max(60, Math.ceil((nowMsLocal - from) / 1000));
+    const info = await ctrl.load(windowSec);
+    jumpClockTo(viewer, from);
+    setStamp(isoStamp(from));
+    viewer.clock.stopTime = msToJulian(to);
+    // An explicit span overrides the preset window and the day picker; leaving
+    // either selected would make the controls disagree with what is playing.
+    setReplayDay('');
+    setReplay({ active: ctrl.isActive(), loading: false, info });
+  };
 
   const toggleReplay = async (): Promise<void> => {
     const ctrl = playbackRef.current;
@@ -259,30 +308,83 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
     if (ev.ref_id) useSelection.getState().select(ev.ref_id);
   };
 
-  const onStripMouseDown = (e: React.MouseEvent) => {
+  // ── Scrub + range select ────────────────────────────────────────────────
+  //
+  // The strip used to accept a mouse-down, draw a selection rectangle, and then
+  // throw the selection away on release: only a click under 5 px did anything.
+  // That is the operator's "I cannot drag select move and control easily".
+  //
+  // Three changes make it a real transport control:
+  //  1. the playhead FOLLOWS the pointer during a drag (scrubbing, not
+  //     rubber-banding at a dead rectangle),
+  //  2. a release that covers a real span LOADS that span as the replay window
+  //     instead of discarding it, and
+  //  3. the drag is captured on the element, so it survives the pointer leaving
+  //     the strip. Previously onMouseLeave cancelled mid-gesture, which is why a
+  //     slightly-too-fast drag did nothing at all.
+
+  /** Clamp a client x to the strip and convert it to a time in the density window. */
+  const timeAtX = (clientX: number): number | null => {
+    if (!stripRef.current || !density || density.to <= density.from) return null;
+    const rect = stripRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    return density.from + (x / rect.width) * (density.to - density.from);
+  };
+
+  const onStripPointerDown = (e: React.PointerEvent) => {
     if (!stripRef.current) return;
     const rect = stripRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    setDrag({ start: x, end: x });
-  };
-  const onStripMouseMove = (e: React.MouseEvent) => {
-    if (!drag || !stripRef.current) return;
-    const rect = stripRef.current.getBoundingClientRect();
-    setDrag({ start: drag.start, end: e.clientX - rect.left });
-  };
-  const onStripMouseUp = () => {
-    if (!drag || !stripRef.current || !viewer || !density) {
-      setDrag(null);
-      return;
+    // Capture so the gesture survives leaving the strip; without this a fast
+    // drag fires pointerleave and the selection is lost mid-motion.
+    try {
+      stripRef.current.setPointerCapture(e.pointerId);
+    } catch {
+      /* jsdom and older browsers: the gesture still works, it just cancels at the edge */
     }
-    const rect = stripRef.current.getBoundingClientRect();
-    if (Math.abs(drag.end - drag.start) < 5) {
-      const frac = drag.start / rect.width;
-      const t = density.from + frac * (density.to - density.from);
+    setDrag({ start: x, end: x });
+    const t = timeAtX(e.clientX);
+    if (t != null && viewer) {
       jumpClockTo(viewer, t);
       setStamp(isoStamp(t));
     }
+  };
+
+  const onStripPointerMove = (e: React.PointerEvent) => {
+    const t = timeAtX(e.clientX);
+    if (t != null) setHoverMs(t);
+    if (!drag || !stripRef.current) return;
+    const rect = stripRef.current.getBoundingClientRect();
+    setDrag({ start: drag.start, end: e.clientX - rect.left });
+    // Scrub live: the playhead tracks the pointer so the operator sees the globe
+    // move under their hand rather than waiting for release.
+    if (t != null && viewer) {
+      jumpClockTo(viewer, t);
+      setStamp(isoStamp(t));
+    }
+  };
+
+  const onStripPointerUp = (e: React.PointerEvent) => {
+    if (!stripRef.current) {
+      setDrag(null);
+      return;
+    }
+    try {
+      stripRef.current.releasePointerCapture(e.pointerId);
+    } catch {
+      /* never let a capture-release failure strand the drag state */
+    }
+    const d = drag;
     setDrag(null);
+    if (!d || !viewer || !density) return;
+    if (Math.abs(d.end - d.start) < DRAG_RANGE_MIN_PX) return; // a click; already sought on down
+    // A real span: replay exactly what was selected.
+    const rect = stripRef.current.getBoundingClientRect();
+    const span = density.to - density.from;
+    const a = density.from + (Math.min(d.start, d.end) / rect.width) * span;
+    const b = density.from + (Math.max(d.start, d.end) / rect.width) * span;
+    void loadReplayRange(a, b);
   };
 
   const detections = density?.detections ?? [];
@@ -301,6 +403,128 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
     density && Number.isFinite(clockMs) && density.to > density.from
       ? Math.max(0, Math.min(100, ((clockMs - density.from) / (density.to - density.from)) * 100))
       : 100;
+
+  // ── Auto-pause at events ────────────────────────────────────────────────
+  // While replaying, halt the clock AT each incident or alert instead of
+  // sliding past it. Palantir models this as an array of pause timestamps
+  // (docs/palantir-reference-2026-07.md §11.2), and it is what turns a scrub
+  // into a briefing: the operator stops being the one who has to spot the
+  // moment.
+  //
+  // Only during replay. On the live clock the marks are all in the past, so
+  // there is nothing to stop for, and stopping the live view would be a bug.
+  const [pausedAt, setPausedAt] = useState<PauseMark | null>(null);
+  const marks = useMemo<PauseMark[]>(
+    () =>
+      dedupeMarks(
+        lanes.flatMap((l) =>
+          l.events.map((e) => ({ t: e.t / 1000, label: e.label })),
+        ),
+      ),
+    [lanes],
+  );
+
+  useEffect(() => {
+    if (!viewer || viewer.isDestroyed() || !replay.active || marks.length === 0) return;
+    let prev = julianToMs(viewer.clock.currentTime) / 1000;
+    const onTick = (clock: Cesium.Clock): void => {
+      const now = julianToMs(clock.currentTime) / 1000;
+      const hit = markCrossed(prev, now, marks);
+      prev = now;
+      if (!hit || !clock.shouldAnimate) return;
+      clock.shouldAnimate = false;
+      setPausedAt(hit);
+      setStamp(isoStamp(hit.t * 1000));
+    };
+    viewer.clock.onTick.addEventListener(onTick);
+    return () => {
+      if (!viewer.isDestroyed()) viewer.clock.onTick.removeEventListener(onTick);
+    };
+  }, [viewer, replay.active, marks]);
+
+  // Clear the "paused at" note as soon as the clock moves again, so it always
+  // describes the CURRENT stop rather than the last one.
+  useEffect(() => {
+    if (playing) setPausedAt(null);
+  }, [playing]);
+
+  // ── Keyboard transport ──────────────────────────────────────────────────
+  // A scrubber you can only reach with a mouse is a scrubber you fight. These
+  // are the bindings every video tool already trained the operator on, so there
+  // is nothing to learn: space toggles, arrows step, shift+arrows jump, comma
+  // and period change speed, L returns to live.
+  //
+  // Ignored while typing (input/textarea/select/contenteditable) — otherwise
+  // space stops working in the search box, which is a worse bug than the one
+  // this fixes.
+  useEffect(() => {
+    const typing = (t: EventTarget | null): boolean => {
+      const el = t as HTMLElement | null;
+      if (!el || typeof el.tagName !== 'string') return false;
+      if (el.isContentEditable) return true;
+      return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+    };
+    const step = (dir: 1 | -1, big: boolean): void => {
+      if (!viewer || !density) return;
+      const span = density.to - density.from;
+      // A small step is one density bin (what the strip actually resolves); a
+      // big step is a twentieth of the window.
+      const delta = big ? span / 20 : span / Math.max(1, density.bins);
+      const next = Math.max(density.from, Math.min(density.to, clockMs + dir * delta));
+      jumpClockTo(viewer, next);
+      setStamp(isoStamp(next));
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented || typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          step(-1, e.shiftKey);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          step(1, e.shiftKey);
+          break;
+        case ',':
+          e.preventDefault();
+          setMultiplier(stepSpeed(multiplier, -1));
+          break;
+        case '.':
+          e.preventDefault();
+          setMultiplier(stepSpeed(multiplier, 1));
+          break;
+        case 'l':
+        case 'L': {
+          // Back to live: clear any replay and put the playhead at now.
+          e.preventDefault();
+          const ctrl = playbackRef.current;
+          if (ctrl?.isActive()) {
+            ctrl.clear();
+            setReplay({ active: false, loading: false, info: null });
+          }
+          if (viewer) {
+            jumpClockTo(viewer, Date.now());
+            setStamp(isoStamp(Date.now()));
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [viewer, density, clockMs, multiplier, togglePlay, setMultiplier]);
+
+  // Where the hover readout sits, as a percentage of the strip.
+  const hoverPct =
+    density && hoverMs != null && density.to > density.from
+      ? Math.max(0, Math.min(100, ((hoverMs - density.from) / (density.to - density.from)) * 100))
+      : 0;
 
   // Seek to either edge of the loaded density window, reusing the same
   // clock-jump math the strip-click already uses (real behaviour, no fakery).
@@ -509,6 +733,22 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
         </span>
       </div>
 
+      {/* Why the clock stopped. Without this an auto-pause is indistinguishable
+          from the replay stalling, and a feature that looks like a bug gets
+          switched off. */}
+      {pausedAt && (
+        <div className="mono text-[10px] text-accent flex items-center gap-2">
+          <span>paused at {pausedAt.label}</span>
+          <button
+            type="button"
+            onClick={togglePlay}
+            className="text-txt-3 hover:text-txt-1 uppercase tracking-[0.4px]"
+          >
+            continue
+          </button>
+        </div>
+      )}
+
       {/* ── Row 2 · scrub ──────────────────────────────────────────────── */}
       <div className="scrub relative h-[6px] bg-bg-3 rounded-sm overflow-visible">
         <span
@@ -559,11 +799,13 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
       <div className="dens flex-1 flex flex-col gap-1 min-h-0">
         <div
           ref={stripRef}
-          className="relative flex-1 min-h-[30px] border border-line rounded-sm bg-bg-2 overflow-hidden select-none cursor-crosshair"
-          onMouseDown={onStripMouseDown}
-          onMouseMove={onStripMouseMove}
-          onMouseUp={onStripMouseUp}
-          onMouseLeave={() => setDrag(null)}
+          className="relative flex-1 min-h-[30px] border border-line rounded-sm bg-bg-2 overflow-hidden select-none cursor-ew-resize"
+          onPointerDown={onStripPointerDown}
+          onPointerMove={onStripPointerMove}
+          onPointerUp={onStripPointerUp}
+          onPointerCancel={onStripPointerUp}
+          onPointerLeave={() => setHoverMs(null)}
+          title="Drag to scrub. Drag across to replay that span."
         >
           <svg width="100%" height="100%" preserveAspectRatio="none" viewBox={`0 0 ${bins} 100`}>
             {/* faint vertical gridlines */}
@@ -607,6 +849,28 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
               />
             )}
           </svg>
+
+          {/* Playhead on the strip the operator actually drags. Row 2 shows the
+              same position, but the control and its indicator being different
+              elements is half of why the transport read as unresponsive. */}
+          <span
+            className="pointer-events-none absolute top-0 bottom-0 w-[2px] bg-accent"
+            style={{ left: `calc(${playPct}% - 1px)` }}
+          />
+
+          {/* Time under the pointer. Follows the cursor so a scrub reads as a
+              time, not a fraction of a rectangle. */}
+          {hoverMs != null && (
+            <span
+              className="pointer-events-none absolute top-0 mono text-[10px] tabular-nums text-txt-2 bg-bg-1/85 px-1 rounded-sm whitespace-nowrap"
+              style={{
+                left: `${hoverPct}%`,
+                transform: hoverPct > 80 ? 'translateX(-100%)' : 'none',
+              }}
+            >
+              {isoStamp(hoverMs).slice(5)}
+            </span>
+          )}
         </div>
 
         {/* legend + window/total labels */}
@@ -650,6 +914,13 @@ function isoStamp(ms: number): string {
 
 function jdToMs(jd: Cesium.JulianDate): number {
   return (jd.dayNumber - 2440587) * 86400_000 + jd.secondsOfDay * 1000 - 0.5 * 86400_000;
+}
+
+// Inverse of msToJulian. Cesium is imported as a TYPE here (the module is only
+// ever handed to us by the viewer), so the conversion is done by hand rather
+// than via Cesium.JulianDate.toDate.
+function julianToMs(j: Cesium.JulianDate): number {
+  return ((j.dayNumber - 2440587) * 86400 + j.secondsOfDay - 0.5 * 86400) * 1000;
 }
 
 function msToJulian(ms: number): Cesium.JulianDate {

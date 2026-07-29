@@ -100,8 +100,11 @@ def test_mcp_http_handshake_lists_all_tools(keyed: str) -> None:
         # + travel_advisories/displacement/nas_status/climate_anomalies/
         #   markets_snapshot/market_stress (2026-07-21 context+markets wave)
         # + quakes_near/track_history/create_watch_rule/list_watch_rules/
-        #   delete_watch_rule (2026-07-24 REST-parity wave).
-        assert len(names) == 46, sorted(names)
+        #   delete_watch_rule (2026-07-24 REST-parity wave)
+        # + answer/contact_provenance/history_diff/system_doctor (2026-07-29
+        #   provenance+answers wave) — the agent surface for the four
+        #   capabilities no competitor exposes at all.
+        assert len(names) == 50, sorted(names)
         assert {"get_situation", "intel_brief", "query_aircraft", "deep_analyze"} <= names
         assert {"disaster_alerts", "maritime_chokepoints", "space_weather"} <= names
         assert {

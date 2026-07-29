@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
 import { useSelection, useAlerts } from '../state/stores.js';
 import { aircraftStyle, vesselStyle } from '../globe/adapters/styles.js';
+import { CONFIDENCE_RULE } from '../globe/adapters/freshness.js';
+import { ArchiveSeriesCard } from './ArchiveSeriesCard.js';
 import { tracks } from '../intel/tracks.js';
 import {
   fetchEnrichment,
@@ -476,6 +478,8 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
       <ImageryCard id={id} kind={snap?.kind ?? ''} />
 
       <TrackCard kind={snap?.kind ?? ''} points={track} />
+
+      <ArchiveSeriesCard id={id} kind={snap?.kind ?? ''} />
 
       <ConnectionsCard
         entityId={id}
@@ -1044,6 +1048,36 @@ function DetailsCard({
     if (seenMs != null) {
       const seenAge = now - seenMs;
       fRows.push(<KVRow key="ls" k="Last seen" v={`${relAge(seenAge)} ago`} warn={seenAge >= 120_000} />);
+    }
+    // Corroboration. The backend records which independent tiers reported this
+    // contact this cycle; one observer and four observers are very different
+    // claims and the panel used to present them identically. `title` carries the
+    // confidence rule itself, because a verdict whose rule is hidden reads as no
+    // verdict at all (docs/research-last30days-2026-07-29.md §3).
+    const sources = Array.isArray(p['sources'])
+      ? (p['sources'] as unknown[]).map(String).filter(Boolean)
+      : null;
+    if (sources && sources.length > 0) {
+      fRows.push(
+        <KVRow
+          key="src"
+          k="Seen by"
+          v={`${sources.length} ${sources.length === 1 ? 'source' : 'sources'} · ${sources.join(', ')}`}
+          warn={sources.length === 1}
+        />,
+      );
+    }
+    const confidence = typeof p['confidence'] === 'string' ? p['confidence'] : null;
+    if (confidence) {
+      fRows.push(
+        <KVRow
+          key="conf"
+          k="Confidence"
+          v={confidence}
+          warn={confidence === 'low'}
+          title={CONFIDENCE_RULE}
+        />,
+      );
     }
   }
 

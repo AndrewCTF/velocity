@@ -1231,6 +1231,90 @@ async def aoi_imagery(
 # ── entrypoint ─────────────────────────────────────────────────────────────────
 
 
+@mcp.tool()
+async def answer(question_id: str = "") -> dict[str, Any]:
+    """Named questions answered with a verdict, its rule, and the evidence age.
+
+    The one call that returns a CONCLUSION rather than data to interpret. Each
+    answer carries `verdict` (open / reduced / closed / unknown), `threshold`
+    (the rule that produced it, in words), `data_lag_s` (how old the newest
+    evidence is), and `stale`.
+
+    Two contracts worth relaying to a user verbatim rather than paraphrasing:
+    `unknown` is a real answer and its `detail` says why we cannot answer yet,
+    and `data_lag_s` of null means NO EVIDENCE WAS OBSERVED - never "fresh".
+    Report `stale` alongside any verdict you quote.
+
+    Omit question_id to list every registered question."""
+    if question_id:
+        return await _get(f"/api/answers/{question_id}")
+    return await _get("/api/answers")
+
+
+@mcp.tool()
+async def contact_provenance() -> dict[str, Any]:
+    """Which sources are seeing the sky right now, and how much they agree.
+
+    Per tier: how many contacts it reported and how many ONLY it reported, plus
+    the share of contacts with two or more independent observers and the
+    confidence rule in force.
+
+    The exclusive count is the column that matters. Crowd-sourced ADS-B accepts
+    whatever is uploaded to it, so a contact only one tier can see is not
+    corroborated, and a tier contributing thousands of exclusive contacts is
+    either unique coverage or an unverifiable claim. Say which when you report
+    it, and never present an uncorroborated contact as confirmed."""
+    return await _get("/api/status/provenance")
+
+
+@mcp.tool()
+async def history_diff(
+    lamin: float,
+    lomin: float,
+    lamax: float,
+    lomax: float,
+    at_a: float,
+    at_b: float | None = None,
+    window_sec: int = 600,
+    kind: str | None = None,
+) -> dict[str, Any]:
+    """What changed inside a box between two moments: arrived, departed, stayed.
+
+    Answers from OWNED history, so it works for any past window still retained
+    rather than only the present instant. `at_a` and `at_b` are epoch seconds
+    (at_b defaults to now); each is widened by `window_sec` because a stored
+    position is a sample rather than a continuous truth.
+
+    `recorded: false` means nothing was in the archive for that box and window -
+    which is NOT the same as "nothing changed". Do not report an empty archive
+    as a quiet period."""
+    params: dict[str, Any] = {
+        "lamin": lamin,
+        "lomin": lomin,
+        "lamax": lamax,
+        "lomax": lomax,
+        "at_a": at_a,
+        "window_sec": window_sec,
+    }
+    if at_b is not None:
+        params["at_b"] = at_b
+    if kind:
+        params["kind"] = kind
+    return await _get("/api/history/diff", params)
+
+
+@mcp.tool()
+async def system_doctor() -> dict[str, Any]:
+    """What is configured, what is missing, and the exact line that fixes it.
+
+    Use this when a layer looks empty before concluding the world is quiet: a
+    blank layer is far more often an unconfigured optional source than an
+    absence of activity. Every capability listed is optional - the console runs
+    keyless - so a long `problems` list is not a fault list. Never report a
+    missing optional key as a defect."""
+    return await _get("/api/status/doctor")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="OSINT GEOINT MCP server")
     parser.add_argument("--http", action="store_true", help="serve over streamable-HTTP")

@@ -128,10 +128,89 @@ async def test_supervise_restarts_a_feeder_that_stopped_serving(
     await _run_one_supervise_pass(monkeypatch)
     assert started == []
 
-    # Up but wedged on a stale union → also restarted (start() evicts the holder).
+    # Up but wedged on a stale union → NOT restarted on sight. The poller already
+    # refuses a union past the cap, so nothing wrong is being served; killing a
+    # browser the site is merely blocking is what produced the respawn storm
+    # (2026-07-27: 61 chrome processes, 8.9 GB). Staleness escalates on a clock,
+    # which test_supervise_escalates_staleness_on_a_clock covers.
+    started.clear()
+    ais_sidecar._stale_since.clear()
     _patch_health(monkeypatch, _Resp(200, {"total": 22837, "age_s": 1631}))
     await _run_one_supervise_pass(monkeypatch)
+    assert started == []
+
+
+async def test_supervise_escalates_staleness_on_a_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A feeder that is UP but serving a stale union is respawned only after
+    _STALE_HARD_S of continuous staleness, and never more than the budget allows.
+
+    Staleness and death are different failures. A dead port needs a process; a
+    blocked scraper needs patience. Conflating them meant a 60 s kill/respawn
+    loop for as long as the site kept refusing us, which is the condition under
+    which commit 2ff71f9 measured 496 leaked renderers in 1h40m.
+    """
+    sc = _sidecar()
+    monkeypatch.setattr(ais_sidecar, "_SIDECARS", [sc])
+    ais_sidecar._stale_since.clear()
+    ais_sidecar._restarts.clear()
+    started: list[str] = []
+
+    async def _record() -> None:
+        started.append(sc.name)
+
+    monkeypatch.setattr(sc, "start", _record)
+    _patch_health(monkeypatch, _Resp(200, {"total": 22837, "age_s": 1631}))
+
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(ais_sidecar.time, "monotonic", lambda: clock["t"])
+
+    # First stale reading only arms the timer.
+    await _run_one_supervise_pass(monkeypatch)
+    assert started == []
+    assert sc.name in ais_sidecar._stale_since
+
+    # Still inside the window → still nothing.
+    clock["t"] += ais_sidecar._STALE_HARD_S - 1
+    await _run_one_supervise_pass(monkeypatch)
+    assert started == []
+
+    # Past the window → exactly one respawn, and the timer re-arms.
+    clock["t"] += 2
+    await _run_one_supervise_pass(monkeypatch)
     assert started == ["probe"]
+    assert sc.name not in ais_sidecar._stale_since
+
+    # A fresh union clears the state entirely.
+    _patch_health(monkeypatch, _Resp(200, {"total": 22837, "age_s": 30}))
+    await _run_one_supervise_pass(monkeypatch)
+    assert started == ["probe"]  # unchanged
+    assert sc.name not in ais_sidecar._stale_since
+
+
+async def test_supervise_restart_budget_stops_a_pointless_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A feeder a restart cannot fix must not be restarted forever."""
+    sc = _sidecar()
+    monkeypatch.setattr(ais_sidecar, "_SIDECARS", [sc])
+    ais_sidecar._stale_since.clear()
+    ais_sidecar._restarts.clear()
+    started: list[str] = []
+
+    async def _record() -> None:
+        started.append(sc.name)
+
+    monkeypatch.setattr(sc, "start", _record)
+    _patch_health(monkeypatch, ConnectionRefusedError("dead"))
+
+    for _ in range(6):
+        await _run_one_supervise_pass(monkeypatch)
+
+    assert len(started) == ais_sidecar._RESTART_BUDGET
+    state = ais_sidecar.supervision_state()
+    assert state[sc.name]["budget_exhausted"] is True
 
 
 async def _run_one_supervise_pass(monkeypatch: pytest.MonkeyPatch) -> None:

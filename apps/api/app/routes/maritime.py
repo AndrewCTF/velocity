@@ -16,17 +16,20 @@ same module/router because `router` here is already registered in
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import hashlib
 import logging
 import re
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from app import maritime_keyless
 from app.config import get_settings
 from app.correlate.store import store
 from app.correlate.types import Observation
+from app.routes import adsb as adsb_routes
 from app.routes.adsb import viewport_filter
 from app.upstream import cache, get_client
 
@@ -304,9 +307,21 @@ def _obs_to_vessel_feature(o: Observation) -> dict[str, Any]:
 # dropped (it departed the anchorage). This is what makes "parking mode" carry a
 # lot more stationary vessels than the live snapshot alone.
 _PARKED: dict[str, dict[str, Any]] = {}
+# Count cap. Retention was time-only (12 h), so the dict was unbounded in COUNT:
+# it held 28117 entries on 2026-07-27 and grows with every anchorage the feed has
+# ever seen. Everything downstream pays for that — the blob build, the parked
+# layer, and this sweep itself. Oldest fix evicted first when over.
+_PARKED_MAX = 20000
 
 
 def _update_parked() -> None:
+    """Refresh the parked cache from the live store.
+
+    Runs in a WORKER THREAD (see _poll_forever): it walks every vessel in the
+    store — ~40k measured — and rebuilds a feature for each stationary one, once
+    per poll. On the event loop that is a slice of the lag tail for work no
+    request is waiting on.
+    """
     s = get_settings()
     for o in store.latest("vessel"):
         sog = (o.attrs or {}).get("sog")
@@ -317,6 +332,13 @@ def _update_parked() -> None:
     cutoff = time.time() - s.parked_ttl_s
     for k in [k for k, v in _PARKED.items() if (v["properties"].get("t") or 0) < cutoff]:
         _PARKED.pop(k, None)
+    if len(_PARKED) > _PARKED_MAX:
+        # Oldest fix first — a parked ship's value is that its old fix is still
+        # its current position, so the stalest entries are the least useful.
+        for k, _v in sorted(
+            _PARKED.items(), key=lambda kv: kv[1]["properties"].get("t") or 0
+        )[: len(_PARKED) - _PARKED_MAX]:
+            _PARKED.pop(k, None)
 
 
 def parked_count() -> int:
@@ -338,18 +360,125 @@ def vessel_snapshot(parked_only: bool = False) -> dict[str, Any]:
     return {"type": "FeatureCollection", "features": list(by_id.values())}
 
 
-@router.get("/api/maritime/snapshot")
+# ── pre-rendered world payload ───────────────────────────────────────────────
+#
+# vessel_snapshot() rebuilt EVERY feature on EVERY request, and the response then
+# took the full pydantic -> json.dumps -> gzip chain. Measured 2026-07-27 at
+# ~40k vessels: 45 ms to build + 46 ms pydantic + 56 ms json + 38 ms gzip, so
+# ~185 ms of blocking event-loop work per request, at a 30 s client TTL, with a
+# SECOND uncapped variant (?parked=1) at 60 s, and both re-fired on every camera
+# move. During that stall the 1 s ADS-B snapshot cycle cannot run.
+#
+# Same shape as the ADS-B world blob (routes/adsb.py `_build_hot_blob`): build
+# once per cycle in a thread, serve the bytes verbatim with ETag/304. This only
+# READS store.latest("vessel") — it must never touch Observation.t, merge, or
+# dedup differently (docs/decisions.md, 2026-07-15 post-mortem).
+_VESSEL_BLOB: bytes | None = None
+_VESSEL_ETAG = ""
+_VESSEL_BLOB_PARKED: bytes | None = None
+_VESSEL_ETAG_PARKED = ""
+_VESSEL_BUILT_AT = 0.0
+_VESSEL_CYCLE_S = 5.0  # six builds per client poll, so nobody waits for one
+# Same idle back-pressure as the ADS-B cycle (routes/adsb.py _target_cycle_s).
+# Two blobs, each walking ~40k observations and serialising ~1.4 MB, were being
+# rebuilt every 5 s whether or not anything had ever asked for one. A read
+# re-arms the fast cycle and is still answered from the existing blob, so no
+# client waits; _VESSEL_IDLE_CYCLE_S stays well inside the freshness the vessel
+# layer polls at (30 s).
+_VESSEL_IDLE_AFTER_S = 60.0
+_VESSEL_IDLE_CYCLE_S = 20.0
+_VESSEL_LAST_DEMAND_AT = 0.0
+_VESSEL_BLOB_TASK: asyncio.Task[None] | None = None
+
+
+def note_vessel_demand() -> None:
+    global _VESSEL_LAST_DEMAND_AT
+    _VESSEL_LAST_DEMAND_AT = time.monotonic()
+
+
+def _vessel_cycle_s() -> float:
+    if _VESSEL_LAST_DEMAND_AT and (
+        time.monotonic() - _VESSEL_LAST_DEMAND_AT
+    ) < _VESSEL_IDLE_AFTER_S:
+        return _VESSEL_CYCLE_S
+    return _VESSEL_IDLE_CYCLE_S
+
+
+def _build_vessel_blob(parked: bool) -> tuple[bytes, str]:
+    fc = vessel_snapshot(parked_only=parked)
+    blob = adsb_routes._gzip_blob(adsb_routes._dumps_compact(fc))
+    return blob, hashlib.md5(blob).hexdigest()  # noqa: S324 — cache validator, not security
+
+
+async def _refresh_vessel_blob_forever() -> None:
+    global _VESSEL_BLOB, _VESSEL_ETAG, _VESSEL_BLOB_PARKED, _VESSEL_ETAG_PARKED
+    global _VESSEL_BUILT_AT
+    while True:
+        t0 = time.monotonic()
+        try:
+            _VESSEL_BLOB, _VESSEL_ETAG = await asyncio.to_thread(_build_vessel_blob, False)
+            _VESSEL_BLOB_PARKED, _VESSEL_ETAG_PARKED = await asyncio.to_thread(
+                _build_vessel_blob, True
+            )
+            _VESSEL_BUILT_AT = time.time()
+        except Exception:  # noqa: BLE001 — the loop must never die
+            log.warning("vessel blob build failed", exc_info=True)
+        await asyncio.sleep(max(0.0, _vessel_cycle_s() - (time.monotonic() - t0)))
+
+
+def start_vessel_blob() -> None:
+    global _VESSEL_BLOB_TASK
+    if _VESSEL_BLOB_TASK is None or _VESSEL_BLOB_TASK.done():
+        _VESSEL_BLOB_TASK = asyncio.create_task(_refresh_vessel_blob_forever())
+
+
+async def stop_vessel_blob() -> None:
+    global _VESSEL_BLOB_TASK
+    t = _VESSEL_BLOB_TASK
+    _VESSEL_BLOB_TASK = None
+    if t and not t.done():
+        t.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await t
+
+
+def vessel_blob_state() -> dict[str, Any]:
+    """For /api/status/perf — is the pre-rendered payload live, and how big?"""
+    return {
+        "built_at": _VESSEL_BUILT_AT or None,
+        "age_s": round(time.time() - _VESSEL_BUILT_AT, 1) if _VESSEL_BUILT_AT else None,
+        "bytes": len(_VESSEL_BLOB) if _VESSEL_BLOB else 0,
+        "bytes_parked": len(_VESSEL_BLOB_PARKED) if _VESSEL_BLOB_PARKED else 0,
+        "cycle_s": _vessel_cycle_s(),
+    }
+
+
+@router.get("/api/maritime/snapshot", response_model=None)
 async def maritime_snapshot(
+    request: Request,
     lamin: float | None = Query(None, ge=-90, le=90),
     lomin: float | None = Query(None, ge=-180, le=180),
     lamax: float | None = Query(None, ge=-90, le=90),
     lomax: float | None = Query(None, ge=-180, le=180),
     limit: int | None = Query(None, ge=1, le=20000),
     parked: int | None = Query(None, description="1 = parking mode: stationary vessels only"),
-) -> dict[str, Any]:
+) -> Any:
+    note_vessel_demand()
+    world = lamin is None and lomin is None and lamax is None and lomax is None and limit is None
+    if world:
+        blob = _VESSEL_BLOB_PARKED if parked else _VESSEL_BLOB
+        etag = _VESSEL_ETAG_PARKED if parked else _VESSEL_ETAG
+        if blob is not None and "gzip" in request.headers.get("accept-encoding", ""):
+            headers = {"ETag": etag, "Cache-Control": "no-cache"}
+            if request.headers.get("if-none-match") == etag:
+                return Response(status_code=304, headers=headers)
+            return Response(
+                content=blob,
+                media_type="application/json",
+                headers={**headers, "Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+            )
+        return vessel_snapshot(parked_only=bool(parked))
     full = vessel_snapshot(parked_only=bool(parked))
-    if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
-        return full
     return viewport_filter(full, lamin, lomin, lamax, lomax, limit)
 
 
@@ -367,7 +496,9 @@ async def _poll_forever() -> None:
     while True:
         try:
             await digitraffic_snapshot()  # store.add_many runs inside load()
-            _update_parked()  # refresh the long-retained parked cache from the store
+            # Off the loop: this walks the whole vessel store (~40k) and rebuilds
+            # a feature per stationary ship. Nothing is waiting on it.
+            await asyncio.to_thread(_update_parked)
         except Exception:  # noqa: BLE001 — one bad poll must not kill the loop
             pass
         await asyncio.sleep(interval)

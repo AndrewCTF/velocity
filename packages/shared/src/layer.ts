@@ -83,6 +83,23 @@ export interface LayerDescriptor {
   opacity: number;
   visibleByDefault: boolean;
   emits?: readonly EmitsKind[];
+  /**
+   * Hard client-side entity cap for this layer, applied as the existing stable
+   * subset (hash-keyed, so the SAME features persist across polls — a random
+   * per-poll subset churns the upsert and freezes motion).
+   *
+   * There was no per-layer cap at all: `MAX_PER_LAYER` was
+   * `Number.MAX_SAFE_INTEGER`. Measured 2026-07-27 with every toggle on, that
+   * left 59942 Cesium entities across 78 data sources at 5 fps, and the single
+   * largest layer was not aircraft but NASA FIRMS at 14818 fire detections.
+   * Cesium walks every entity of every data source every frame, so an uncapped
+   * long-tail layer costs exactly as much as the feed everyone actually watches.
+   *
+   * Omit to inherit the kind's default (globe/adapters/PollGeoJsonAdapter
+   * `effectiveLayerCap`). Aircraft stay exempt on desktop: the operator
+   * invariant requires >= 8000 in the world view.
+   */
+  maxEntities?: number;
 }
 
 export function isLayerDescriptor(v: unknown): v is LayerDescriptor {

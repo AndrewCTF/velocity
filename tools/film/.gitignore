@@ -1,0 +1,9 @@
+# Render intermediates: 5+ GB of segments and the uncompressed picture. The
+# deliverables live in website/assets/; everything here is reproducible with
+# render-segments.sh.
+*.mp4
+*.m4a
+*.jpg
+*.log
+concat*.txt
+music/

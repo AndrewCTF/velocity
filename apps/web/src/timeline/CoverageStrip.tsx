@@ -99,21 +99,53 @@ export function CoverageStrip({ windowHours, onCoverage }: Props): JSX.Element {
 
   const buckets = coverage?.buckets ?? [];
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+  const gaps = countGaps(buckets);
 
   return (
     <div
       className="relative h-[8px] w-full bg-bg-3 border border-line rounded-sm overflow-hidden"
       role="img"
-      aria-label="History coverage: recorded-fix density per hour"
-      title="Recorded-fix coverage: taller/brighter bars mean more history is retained for that hour"
+      aria-label={coverageSummary(buckets)}
+      title={coverageSummary(buckets)}
     >
       <svg width="100%" height="100%" preserveAspectRatio="none" viewBox={`0 0 ${Math.max(buckets.length, 1)} 100`}>
         {buckets.map((b, i) => {
           const h = (b.count / maxCount) * 100;
-          if (h <= 0) return null;
+          if (h <= 0) {
+            // An hour we recorded NOTHING is drawn, not skipped. Skipping it
+            // left a hole indistinguishable from the strip's own background, so
+            // "we were down" and "there is simply no bar here" looked identical
+            // — which is the archive telling a confident story about a period it
+            // never saw. A visible mark is the whole point of a coverage strip.
+            return <rect key={b.t} x={i} y={0} width={1} height={100} fill="var(--alert)" opacity={0.22} />;
+          }
           return <rect key={b.t} x={i} y={100 - h} width={1} height={h} fill="var(--accent)" opacity={0.7} />;
         })}
       </svg>
+      {gaps > 0 && <span className="sr-only">{gaps} hours with no recorded fixes</span>}
     </div>
+  );
+}
+
+/** Hours in the window for which nothing was recorded. */
+export function countGaps(buckets: readonly CoverageBucket[]): number {
+  return buckets.filter((b) => b.count <= 0).length;
+}
+
+/** What the strip actually shows, in words.
+ *
+ *  Stated rather than implied: a coverage strip whose gaps you have to infer
+ *  from missing ink is a strip that lets an operator read "quiet" where the
+ *  truth is "not recorded". */
+export function coverageSummary(buckets: readonly CoverageBucket[]): string {
+  if (buckets.length === 0) return 'History coverage: nothing recorded yet.';
+  const gaps = countGaps(buckets);
+  if (gaps === 0) {
+    return `History coverage: continuous across all ${buckets.length} hours shown.`;
+  }
+  return (
+    `History coverage: ${buckets.length - gaps} of ${buckets.length} hours have ` +
+    `recorded fixes. ${gaps} shown in red were not recorded, so they are unknown ` +
+    `rather than quiet.`
   );
 }

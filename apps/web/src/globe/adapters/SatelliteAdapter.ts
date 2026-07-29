@@ -146,6 +146,7 @@ export class SatelliteAdapter implements LayerAdapter {
     await viewer.dataSources.add(this.ds);
     if (this.detached || viewer.isDestroyed()) return;
     this.prim = new PrimitiveEntityLayer(viewer.scene, {
+      poolKey: 'satellite', // SGP4 pump ticks on its own cadence
       // Satellites carry no heading and a fixed accent tint; one style for all.
       styleFn: () => {
         const s = satelliteStyle();

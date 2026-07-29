@@ -27,6 +27,7 @@ import {
   vesselLabelText,
   warningLabelText,
 } from './labelStyle.js';
+import { withStaleness } from './freshness.js';
 import {
   resolveAircraftFamily,
   aircraftSilhouette,
@@ -36,6 +37,7 @@ import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
 import { ingestFix, projectAt, type DrFix, type DrState } from './deadReckon.js';
 import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { perfSetDrain } from '../perf.js';
+import { onMoveSettle, cancelMoveSettle } from '../pollGate.js';
 import { isCameraMoving, cameraMovingForMs } from '../cameraMotion.js';
 import { VesselClusterPrimitive } from './VesselClusterPrimitive.js';
 import { tracks } from '../../intel/tracks.js';
@@ -198,8 +200,32 @@ const VESSEL_FREEZE_HYSTERESIS_M = 250_000; // 250 km
 export function refreshBagInPlace(bag: Cesium.PropertyBag, props: Record<string, unknown>): void {
   const raw = bag as unknown as Record<string, unknown>;
   for (const key in props) {
-    if (bag.hasProperty(key)) raw[key] = props[key];
-    else bag.addProperty(key, props[key]);
+    if (bag.hasProperty(key)) {
+      // Assign ONLY on a real change. PropertyBag's generated setter raises
+      // definitionChanged unconditionally, and that event is not cheap: it walks
+      // to Entity.definitionChanged, then EntityCollection._onEntityDefinitionChanged,
+      // which marks the entity changed so every visualizer reprocesses it next
+      // frame. At ~30 000 entities x ~15 properties that was ~450 000 event
+      // raises per poll for values that were mostly identical — profiled at
+      // ~6 % of the main thread in Event.raiseEvent alone, plus the allocation
+      // churn behind a 7.7 % GC share.
+      //
+      // Compare against the property's VALUE, not the property object.
+      // PropertyBag's getter hands back a Cesium Property (ConstantProperty),
+      // never the raw value, so a naive `raw[key] !== props[key]` compares a
+      // wrapper to a primitive and is true every single time — the guard would
+      // read correctly and do nothing. ConstantProperty.getValue ignores its
+      // time argument, so this is a field read, not an interpolation.
+      const cur = raw[key] as { getValue?: (t: unknown) => unknown } | undefined;
+      const curVal = typeof cur?.getValue === 'function' ? cur.getValue(undefined) : cur;
+      // Strict equality: the properties that actually move are primitives
+      // (lat/lon/alt/speed/track/seen). An object-valued prop rebuilt per poll
+      // still writes, which is correct — knowing it is unchanged would need a
+      // deep compare costing more than the write.
+      if (curVal !== props[key]) raw[key] = props[key];
+    } else {
+      bag.addProperty(key, props[key]);
+    }
   }
 }
 
@@ -302,10 +328,17 @@ interface FeatureCollection {
   note?: string;
 }
 
-// Per-layer entity cap removed — clustering at world/continent scale means
-// unlimited entities stay responsive. Clustering aggregates far-away entities
-// into count bubbles; individual icons appear only when zoomed in.
-const MAX_PER_LAYER = Number.MAX_SAFE_INTEGER;
+// Clustering keeps the VESSEL layer responsive at world scale, so that layer
+// carries its own cap and does not need this one. Everything else did: with the
+// cap at Number.MAX_SAFE_INTEGER, a single long-tail layer could out-weigh the
+// feed the operator is actually watching. Measured 2026-07-27, all toggles on:
+// 59942 entities across 78 data sources at 5 fps, of which NASA FIRMS alone was
+// 14818 — more than the 14458 aircraft. Cesium's DataSourceDisplay walks every
+// entity of every data source every frame, so those two cost the same.
+//
+// This is the DEFAULT for a layer that declares no `maxEntities`; per-layer
+// values live in the registry next to the endpoint they describe.
+const DEFAULT_LAYER_CAP = 6000;
 
 // djb2 string hash → unsigned 32-bit, base36 for compact ids. Used only to
 // synthesise a stable id when the upstream feature carries no id but does
@@ -342,15 +375,25 @@ const MOBILE_LAYER_CAP = isMobileDevice() ? 2000 : Number.POSITIVE_INFINITY;
 const REFERENCE_LAYER_CAP = 1500;
 const REFERENCE_KINDS: ReadonlySet<string> = new Set(['facility', 'airport', 'port', 'base']);
 
-function effectiveLayerCap(styleKind: string): number {
-  const presetLayer =
-    styleKind === 'aircraft' && !isMobileDevice()
-      ? Number.POSITIVE_INFINITY
-      : presetKnobs(useSettings.getState().mapQuality).layerCap;
+function effectiveLayerCap(styleKind: string, declared?: number): number {
+  const isAircraft = styleKind === 'aircraft' && !isMobileDevice();
+  const presetLayer = isAircraft
+    ? Number.POSITIVE_INFINITY
+    : presetKnobs(useSettings.getState().mapQuality).layerCap;
   const reference = REFERENCE_KINDS.has(styleKind)
     ? REFERENCE_LAYER_CAP
     : Number.POSITIVE_INFINITY;
-  return Math.min(MOBILE_LAYER_CAP, presetLayer, reference);
+  // Aircraft keep the desktop exemption (>= 8000 world-view invariant); every
+  // other kind gets its declared cap, else the default.
+  const generic = isAircraft
+    ? Number.POSITIVE_INFINITY
+    : (declared ?? DEFAULT_LAYER_CAP);
+  // A shared global entity budget was tried here on 2026-07-29 and REMOVED.
+  // It did what it said -- entity count fell 24 %, 44 912 to 34 013 -- and frame
+  // time did not move at all (123.5 to 125.2 ms), because the cost was per
+  // collection and per visualizer, not per entity. Keeping it would have traded
+  // real data for no measured gain, which is the opposite of what was asked for.
+  return Math.min(MOBILE_LAYER_CAP, presetLayer, reference, generic);
 }
 
 function stableSubset(feats: Feature[], cap: number): Feature[] {
@@ -399,6 +442,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // their per-entity Cesium graphics. One adapter instance is a single styleKind,
   // so this serves whichever (aircraft or vessel) needs it.
   private primRenderer: PrimitiveEntityLayer | null = null;
+  /** True for batched layers whose contacts never move and never restyle. */
+  private primStatic = false;
   // Vessels only: world-view count bubbles (replaces Cesium EntityCluster, which
   // needed the entity billboards that are now graphics-less).
   private vesselCluster: VesselClusterPrimitive | null = null;
@@ -555,6 +600,56 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // Aircraft render as batched primitives (see PrimitiveEntityLayer). The
     // entities still hold position/name/props for watchbox/histogram/selection;
     // only the pixels move to the collection. Dead-reckon + clock read live.
+    // Billboard-shaped layers: one icon, optional name label, no rotation and no
+    // per-poll restyle. Every one of these already returns {imageUri, scale},
+    // which is exactly PrimitiveEntityLayer's styleFn shape — so they can share
+    // the batched path aircraft and vessels already use instead of each getting
+    // per-entity Cesium graphics that DataSourceDisplay walks every frame.
+    //
+    // Measured 2026-07-27: the largest layer with everything on was NOT the
+    // aircraft feed but hazards.nasa.firms at 14 818 entities, and ~45 layers
+    // were still on the Entity API. This is the batching the perf wave named and
+    // did not do.
+    //
+    // maxAlt mirrors the distanceDisplayCondition each kind used as an entity,
+    // so nothing starts painting at a zoom it did not before.
+    const nameOf = (props: Record<string, unknown>): string | null => {
+      const n = props['name'];
+      return typeof n === 'string' && n.length > 0 ? n : null;
+    };
+    const BATCHED: Partial<
+      Record<
+        StyleKind,
+        {
+          style: (p: Record<string, unknown>) => { imageUri: string; scale: number };
+          label: (p: Record<string, unknown>) => string | null;
+          maxAlt: number;
+          vertical?: Cesium.VerticalOrigin;
+          /** Never moves and never restyles, so it is synced once on add and
+           * never again. The entity path had exactly this rule ("static
+           * reference marker — no rotation, no per-poll restyle"); routing every
+           * batched kind through sync() on every poll threw it away and put the
+           * whole collection's vertex buffer back in play each cycle. */
+          static?: boolean;
+        }
+      >
+    > = {
+      // maxAlt mirrors each kind's previous distanceDisplayCondition exactly, so
+      // nothing starts painting at a zoom it did not before. 0 = no gate; the
+      // global layers (warning/hazard) had none.
+      fire: { style: fireStyle, label: () => null, maxAlt: 8_000_000, vertical: Cesium.VerticalOrigin.BOTTOM },
+      camera: { static: true, style: () => cameraStyle(), label: nameOf, maxAlt: 4_000_000 },
+      facility: { static: true, style: facilityStyle, label: facilityLabelText, maxAlt: 1_500_000 },
+      warning: { style: warningStyle, label: warningLabelText, maxAlt: 0 },
+      hazard: { style: hazardStyle, label: nameOf, maxAlt: 0 },
+      // Static reference markers. Zoom-gating already happens upstream in the
+      // compositor's placesBboxQuery (world view returns an empty payload); the
+      // maxAlt here is the same belt-and-braces DDC they carried as entities.
+      airport: { static: true, style: airportStyle, label: airportLabelText, maxAlt: 1_500_000 },
+      port: { static: true, style: () => portStyle(), label: portLabelText, maxAlt: 1_500_000 },
+      base: { static: true, style: baseStyle, label: baseLabelText, maxAlt: 1_500_000 },
+    };
+
     if (this.props.styleKind === 'aircraft') {
       this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
         styleFn: (props) => {
@@ -575,7 +670,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           const hex = aircraftStyle(props).color.toCssHexString().slice(0, 7);
           return { imageUri: aircraftSilhouette(fam ?? 'narrowbody', hex), scale: 0.62 };
         },
-        labelFn: aircraftLabelText,
+        // Identifier plus, when the fix is old, its real age ("DAL123 · 6h ago").
+        // aircraftLabelText stays a pure callsign→registration→ICAO24 resolver
+        // (a guarded invariant); the age is composed on top here.
+        labelFn: (p) => withStaleness(aircraftLabelText(p), p),
         billboardBase: () => ({
           alignedAxis: Cesium.Cartesian3.UNIT_Z,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
@@ -589,6 +687,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         shouldAnimate: () => useSettings.getState().aircraftDeadReckon,
         pulse: true,
         filter: true,
+        // Aircraft layers all tick together, so they share a pool with each
+        // other and with nothing else. Merging them into the STATIC pool
+        // measured worse (renderMs p95 44-46 ms against 31-36): a
+        // BillboardCollection rebuilds its whole vertex buffer when any member
+        // is dirty, so a per-tick layer must not share with static ones.
+        poolKey: 'aircraft',
       });
     } else if (this.props.styleKind === 'vessel') {
       this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
@@ -623,6 +727,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           viewer.camera.positionCartographic.height <= VESSEL_GLIDE_FREEZE_ALTITUDE_M,
         pulse: false,
         filter: true,
+        poolKey: 'vessel', // ticks with the other vessel layers, not with static markers
       });
       this.vesselCluster = new VesselClusterPrimitive(viewer, () => {
         const t = viewer.clock.currentTime;
@@ -635,24 +740,52 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         }
         return out;
       });
+    } else if (BATCHED[this.props.styleKind]) {
+      const cfg = BATCHED[this.props.styleKind]!;
+      this.primStatic = !!cfg.static;
+      this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
+        styleFn: (props) => cfg.style(props),
+        labelFn: cfg.label,
+        billboardBase: () => ({
+          verticalOrigin: cfg.vertical ?? Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          heightReference: Cesium.HeightReference.NONE,
+          ...(cfg.maxAlt > 0
+            ? { distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, cfg.maxAlt) }
+            : {}),
+        }),
+        labelBase: (text) => labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
+        getClock: () => viewer.clock.currentTime,
+        shouldAnimate: () => false,
+      });
     }
     if (this.props.refreshOnMove) {
-      // Debounce so a multi-step zoom/pan coalesces into one re-poll of the
-      // new viewport (not one per intermediate camera event).
-      let t: number | null = null;
-      const onMove = (): void => {
-        if (t != null) window.clearTimeout(t);
-        t = window.setTimeout(() => {
-          // §5.6.3: skip the moveEnd re-poll when the WS push owns this view and a
-          // frame landed <1 s ago — it's already fresher than an HTTP poll. Zoomed-in
-          // (bbox) views still poll: WS is suppressed there and the bbox just changed.
-          if (this.wsActive && this.isWorldView() && Date.now() - this.lastWsMs < 1000) return;
-          this.refresh();
-        }, 200);
+      // ONE settle timer for the whole map, with a concurrency cap, instead of a
+      // private 200 ms debounce per adapter. Sixteen layers register for
+      // moveEnd; privately debounced they all fired at the same instant, and the
+      // nine infra.* layers share a single endpoint, so one settle cost nine
+      // identical requests to the same route (measured 144 in 74 s). See
+      // globe/pollGate.ts.
+      const release = (): void => {
+        // Skip the moveEnd re-poll when the WS push owns this view and a frame
+        // landed <1 s ago — it is already fresher than an HTTP poll. Zoomed-in
+        // (bbox) views still poll: WS is suppressed there and the bbox changed.
+        if (this.wsActive && this.isWorldView() && Date.now() - this.lastWsMs < 1000) return;
+        // A move-refresh exists to fetch a DIFFERENT viewport. If the URL this
+        // layer would request is the one it already fetched, the camera moved
+        // but this layer's request did not change, and the scheduled poll on
+        // the TTL grid is already keeping that same URL fresh. Orbiting or
+        // nudging the camera used to re-fire all sixteen move-refreshing layers
+        // regardless, which is most of the 3.3x gap between the request rate
+        // the TTLs predict and the 282/min actually measured.
+        const url = this.buildUrl();
+        if (url === this.lastFetchedUrl) return;
+        this.refresh();
       };
+      const onMove = (): void => onMoveSettle(this.props.ctx.descriptor.id, release);
       viewer.camera.moveEnd.addEventListener(onMove);
       this.detachMove = () => {
-        if (t != null) window.clearTimeout(t);
+        cancelMoveSettle(release);
         if (!viewer.isDestroyed()) viewer.camera.moveEnd.removeEventListener(onMove);
       };
     }
@@ -690,8 +823,31 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // poll loop still starts — it gives instant first paint before the socket
     // opens and is the fallback while the socket is down / when zoomed in.
     if (this.props.ws) this.connectWs();
-    this.scheduleNext(0);
+    // First fetch goes through the SHARED gate, not straight out.
+    //
+    // Enabling a layer used to call scheduleNext(0) — an immediate, ungated
+    // request plus a synchronous entity build of up to MAX_PER_LAYER features.
+    // That is fine for one layer and awful for the two surfaces that toggle in
+    // bulk: LayerCatalog's toggleFolder and LayerRail's mission presets each
+    // enable a whole set at once, so N ungated fetches and N entity builds
+    // landed in the same frame. The move-settle gate already existed and
+    // already solved exactly this shape for camera moves — it was simply never
+    // applied to enables.
+    //
+    // Reusing onMoveSettle means a folder toggle collapses into ONE release,
+    // then batches of MAX_CONCURRENT spaced BATCH_GAP_MS apart, in the same
+    // priority order a camera move uses. cancelMoveSettle in detach() drops the
+    // job if the layer is switched off again before its turn — a user flicking
+    // a toggle must not spend a request on a layer they no longer want.
+    onMoveSettle(this.props.ctx.descriptor.id, this.firstFetch);
   }
+
+  /** Gate job for the initial fetch. A stable reference so cancelMoveSettle can
+   * find it, and a no-op once detached. */
+  private firstFetch = (): void => {
+    if (this.detached || this.props.ctx.viewer.isDestroyed()) return;
+    this.scheduleNext(0);
+  };
 
   // Forced re-poll — used when the AOI changes so the bbox query updates
   // without waiting for the next scheduled tick.
@@ -713,6 +869,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
 
   detach(): void {
     this.detached = true;
+    // Drop the queued first fetch if the layer is switched off before its turn
+    // in the gate — flicking a toggle must not spend a request on a layer the
+    // user no longer wants.
+    cancelMoveSettle(this.firstFetch);
     this.detachMove?.();
     this.detachMove = null;
     this.detachZoom?.();
@@ -771,6 +931,16 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   private scheduleNext(delayMs: number): void {
     if (this.detached || this.props.ctx.viewer.isDestroyed()) return;
     this.timer = window.setTimeout(() => {
+      // A backgrounded tab has nothing to paint, but every layer kept polling:
+      // with all toggles on that is ~282 requests a minute of pure waste, and
+      // the frames the drain produces are thrown away. Re-anchor the grid and
+      // wait — `visibilitychange` already forces one immediate catch-up refresh
+      // when the tab comes back, so nothing is lost by not polling meanwhile.
+      if (typeof document !== 'undefined' && document.hidden) {
+        this.nextAt = Date.now();
+        this.scheduleNext(this.props.intervalSec * 1000);
+        return;
+      }
       if (this.nextAt === 0) this.nextAt = Date.now();
       void this.poll().finally(() => {
         const ttl = this.props.intervalSec * 1000;
@@ -781,6 +951,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       });
     }, delayMs);
   }
+
+  /** URL of the most recent poll — lets a move-refresh skip an unchanged viewport. */
+  private lastFetchedUrl = '';
 
   private buildUrl(): string {
     const bbox = this.props.bboxQuery?.();
@@ -815,7 +988,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // ETag): an unchanged blob returns 304 and we skip the parse + entity walk
       // entirely. The bbox path has no ETag, so it always renders.
       if (worldView && this.lastEtag) headers['If-None-Match'] = this.lastEtag;
-      const r = await apiFetch(this.buildUrl(), { signal: this.aborter.signal, headers });
+      const url = this.buildUrl();
+      this.lastFetchedUrl = url;
+      const r = await apiFetch(url, { signal: this.aborter.signal, headers });
       if (r.status === 304) {
         this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
         return;
@@ -949,15 +1124,17 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // Bound the world-view vessel set (they cluster at this zoom anyway). djb2-
     // keyed stableSubset → the same ships persist across polls, so the upsert-by-id
     // never churns. Lifts when zoomed in past the freeze altitude.
-    let cap = effectiveLayerCap(this.props.styleKind);
+    let cap = effectiveLayerCap(
+      this.props.styleKind,
+      this.props.ctx.descriptor.maxEntities,
+    );
     if (
       this.props.styleKind === 'vessel' &&
       this.props.ctx.viewer.camera.positionCartographic.height > VESSEL_GLIDE_FREEZE_ALTITUDE_M
     ) {
       cap = Math.min(cap, presetKnobs(useSettings.getState().mapQuality).vesselCap);
     }
-    const capped = incoming.length > cap ? stableSubset(incoming, cap) : incoming;
-    this.pendingFeats = capped.slice(0, MAX_PER_LAYER);
+    this.pendingFeats = incoming.length > cap ? stableSubset(incoming, cap) : incoming;
     this.pendingIds = new Set<string>();
     this.pendingIdx = 0;
     if (this.drainHandle == null) {
@@ -1349,9 +1526,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         const added = entities.add(opts);
         // Aircraft/vessel pixels live in the primitive collection — paint the
         // icon+label for the freshly-created (graphics-less) entity.
-        if (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') {
-          this.primRenderer?.sync(added, props);
-        }
+        // Any layer with a primitive renderer paints there, not on the entity.
+        if (this.primRenderer) this.primRenderer.sync(added, props);
       }
     }
     // Charge this drain's main-thread time against the frame's shared budget so a
@@ -1478,16 +1654,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText) opts.name = labelText;
         break;
       }
-      case 'fire': {
-        const s = fireStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 8_000_000),
-        };
+      case 'fire':
+        // Graphics-less: the icon is painted by the batched primitive layer
+        // (BATCHED above). FIRMS was the single largest layer on the globe at
+        // 14 818 entities, and every one of them was a Cesium billboard that
+        // DataSourceDisplay walked per frame.
         break;
-      }
       case 'quake': {
         const mag = (props['mag'] as number | null) ?? null;
         const { color, pixelSize } = quakeStyle(mag);
@@ -1517,20 +1689,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         break;
       }
       case 'camera': {
-        const s = cameraStyle();
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          // Cams are dense city furniture — only paint below ~4,000 km.
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4_000_000),
-        };
+        // Graphics-less — pixels come from the batched layer. e.name stays so
+        // selection, the watchbox evaluator and the facet counts still read it.
         const name = props['name'];
-        if (typeof name === 'string' && name.length > 0) {
-          opts.label = labelFor(name);
-          opts.name = name;
-        }
+        if (typeof name === 'string' && name.length > 0) opts.name = name;
         break;
       }
       case 'airport': {
@@ -1539,55 +1701,25 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // compositor's placesBboxQuery (world/continental view → empty payload);
         // the DDC here is belt-and-suspenders so a stray marker never paints
         // from continental altitude even if a bbox request slips through.
-        const s = airportStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
-        };
+        // Graphics-less — painted by the batched primitive layer.
         const labelText = airportLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'port': {
         // FR24/marine-style port tile. Static reference marker (same zoom-gate +
         // belt DDC as airport). No rotation, no per-poll restyle.
-        const s = portStyle();
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
-        };
+        // Graphics-less — painted by the batched primitive layer.
         const labelText = portLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'base': {
         // Military base — category SVG by branch (air/naval/army), same
         // zoom-gated static-reference-marker treatment as airport/port.
-        const s = baseStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
-        };
+        // Graphics-less — painted by the batched primitive layer.
         const labelText = baseLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'facility': {
@@ -1595,37 +1727,18 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // SVG dispatched on props.category (power/nuclear/water/datacenter/
         // telecom/ground_station/telescope/launch/military_*), same zoom-gated
         // static-reference-marker treatment as airport/port/base.
-        const s = facilityStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
-        };
+        // Graphics-less — the batched layer paints it. e.name stays for
+        // selection / watchbox / facets.
         const labelText = facilityLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'warning': {
         // NGA naval broadcast warning — triangle glyph, distinct red mine
         // glyph when props.mine is true. Global layer (no zoom-gate DDC —
         // 386 active warnings worldwide is cheap to keep resident).
-        const s = warningStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        };
         const labelText = warningLabelText(props);
-        if (labelText) {
-          opts.label = labelFor(labelText);
-          opts.name = labelText;
-        }
+        if (labelText) opts.name = labelText;
         break;
       }
       case 'hazard': {
@@ -1633,13 +1746,6 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // radiation/relief/chokepoint/buoy/airquality/aurora. Category tile SVG
         // dispatched on props.kind. Global layers (no zoom-gate DDC): counts are
         // in the hundreds, cheap to keep resident.
-        const s = hazardStyle(props);
-        opts.billboard = {
-          image: s.imageUri,
-          scale: s.scale,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        };
         const name = props['name'];
         if (typeof name === 'string' && name.length > 0) opts.name = name;
         break;
@@ -1689,6 +1795,24 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   }
 
   private refreshStyle(e: Cesium.Entity, props: Record<string, unknown>): void {
+    // Batched kinds (BATCHED in attach) paint through the primitive layer, so a
+    // re-poll has to upsert THERE — an entity restyle would be a no-op and the
+    // icon would silently keep its first-seen image (e.g. a facility that
+    // changes category, a hazard whose kind is upgraded).
+    if (
+      this.primRenderer &&
+      this.props.styleKind !== 'aircraft' &&
+      this.props.styleKind !== 'vessel'
+    ) {
+      // A static reference marker was already painted when its entity was added
+      // and cannot have changed, so re-syncing it re-runs styleFn, rebuilds its
+      // data-URI, re-compares a long string and can dirty the billboard —
+      // multiplied by every airport, port, base, facility and camera in view,
+      // every poll. Profiling put ~21 % of the main thread in
+      // BillboardCollection's vertex writes; this is the half of it we create.
+      if (!this.primStatic) this.primRenderer.sync(e, props);
+      return;
+    }
     switch (this.props.styleKind) {
       case 'aircraft': {
         // Pixels live in the batched primitive collection — upsert icon image /

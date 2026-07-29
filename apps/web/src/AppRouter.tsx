@@ -12,6 +12,7 @@ import { hasSeenAiSetup } from './settings/localAi/aiSetupSeen.js';
 import { fetchModelsOnce } from './settings/localAi/LocalAiSection.js';
 import { ToastHost } from './shell/toast.js';
 import { LowEndBanner } from './globe/LowEndBanner.js';
+import { DegradedBanner } from './globe/DegradedBanner.js';
 
 // Served under the Vite base path (e.g. "/app" in production, "/" in dev), so
 // the router's basename tracks it — keeps client routes correct behind /app.
@@ -46,6 +47,7 @@ export function AppRouter(): JSX.Element {
         <TopBar />
         <PredictedMotionBadge />
         <LowEndBanner />
+        <DegradedBanner />
         <OnboardingGate />
         <AiSetupGate />
         <Suspense fallback={<RouteLoading />}>

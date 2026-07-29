@@ -103,14 +103,49 @@
   </div>
 </section>
 
-<!-- 5. Full-bleed console band, recorded live rather than a still -->
-<div class="bleed bleed-console">
-  <video class="bleed-video wipe reveal" poster="assets/console-live.jpg" autoplay muted loop playsinline preload="none"
-         aria-label="The Velocity console running: the layer rail, the live globe, and the feed and alert counters updating in real time">
-    <source src="assets/console-live.webm" type="video/webm">
-    <source src="assets/console-live.mp4" type="video/mp4">
+<!-- 5. The launch film. Replaces the 16 s console loop that used to sit here:
+     same job, but it carries the whole argument instead of one shot. Scored,
+     so it waits for a click rather than autoplaying. -->
+<div class="bleed bleed-console film" id="film">
+  <video class="bleed-video" id="film-video" poster="assets/launch.jpg" playsinline preload="none"
+         aria-label="Velocity launch film: the live world, the seven public feeds behind it, the satellite constellation, the console, an aircraft selected with its recorded track, the six domains, and the archive rewound">
+    <source src="assets/launch.mp4" type="video/mp4">
   </video>
-  <span class="chip"><i></i>Live console · 15,774 entities, every counter moving in real time</span>
+  <!-- A real poster layer, not the video's poster attribute: browsers ignore
+       preload="none" often enough that the element sits decoded at frame 0, and
+       this film opens on black. -->
+  <img class="film-poster" id="film-poster" src="assets/launch.jpg" alt="" aria-hidden="true" decoding="async">
+
+  <button class="film-play" id="film-play" type="button" aria-label="Play the launch film">
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="26" height="26"><path d="M8 5.2v13.6L19 12z" fill="currentColor"/></svg>
+  </button>
+  <!-- Says what this is before anyone commits 52 seconds to it. Fades with the
+       play button once it is running. -->
+  <div class="film-label" id="film-label">
+    <span class="film-kicker">The launch film · 52 seconds</span>
+    <h3>Velocity in 52 seconds.</h3>
+    <p>Every public feed, the satellite constellation, an aircraft with its recorded track, then the archive rewound. All of it the running console on live data.</p>
+  </div>
+
+  <div class="film-bar" id="film-bar">
+    <div class="film-track" id="film-track" role="slider" tabindex="0" aria-label="Seek"
+         aria-valuemin="0" aria-valuemax="52" aria-valuenow="0" aria-valuetext="0 seconds">
+      <span class="film-fill" id="film-fill"></span>
+    </div>
+    <div class="film-row">
+      <button class="film-btn" id="film-toggle" type="button" aria-label="Pause">
+        <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15"><path d="M7 5h3.4v14H7zM13.6 5H17v14h-3.4z" fill="currentColor"/></svg>
+      </button>
+      <span class="film-time" id="film-time">0:00 / 0:52</span>
+      <span class="film-spacer"></span>
+      <button class="film-btn" id="film-mute" type="button" aria-label="Mute">
+        <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15"><path d="M4 9.5h3.4L12 5.6v12.8L7.4 14.5H4z" fill="currentColor"/><path d="M15.4 9.2a4 4 0 0 1 0 5.6M17.9 6.7a7.5 7.5 0 0 1 0 10.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </button>
+      <button class="film-btn" id="film-full" type="button" aria-label="Full screen">
+        <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- 6. Capabilities -->
@@ -417,6 +452,7 @@
           <li><a href="https://github.com/AndrewCTF/velocity/releases" rel="noopener">Releases</a></li>
           <li><a href="https://github.com/AndrewCTF/velocity#readme" rel="noopener">README</a></li>
           <li><a href="https://github.com/AndrewCTF/velocity/issues" rel="noopener">Issues</a></li>
+          <li><a href="press.html">Press kit</a></li>
           <li><a href="https://github.com/AndrewCTF/velocity/blob/master/NOTICE" rel="noopener">Data notices</a></li>
           <li><a href="https://github.com/AndrewCTF/velocity/blob/master/DISCLAIMER.md" rel="noopener">Disclaimer</a></li>
         </ul>
@@ -424,7 +460,7 @@
     </div>
     <div class="footer-base">
       <span>Velocity · AGPL-3.0-or-later · v1.0.1</span>
-      <span>Thanks to the volunteer feeder communities that make public tracking possible.</span>
+      <span>Thanks to the volunteer feeder communities that make public tracking possible. Film music: &ldquo;Rising Dawn&rdquo; by Ethereal88, <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>.</span>
     </div>
   </div>
 </footer>

@@ -105,3 +105,102 @@ document.querySelectorAll('.copy-btn').forEach((btn) => {
     setTimeout(() => (btn.textContent = 'copy'), 1600);
   });
 });
+
+// ---------- launch film player ----------
+// The native controls are replaced, not restyled: browsers will not let you
+// touch their chrome, and a stock control bar is the one element on the page
+// that looks like every other page. Guarded so the rest of main.js is unaffected
+// if the band is ever removed.
+const film = document.getElementById('film');
+if (film) {
+  const video = document.getElementById('film-video');
+  const bigPlay = document.getElementById('film-play');
+  const bar = document.getElementById('film-bar');
+  const track = document.getElementById('film-track');
+  const fill = document.getElementById('film-fill');
+  const time = document.getElementById('film-time');
+  const toggleBtn = document.getElementById('film-toggle');
+  const muteBtn = document.getElementById('film-mute');
+  const fullBtn = document.getElementById('film-full');
+
+  const ICON = {
+    play: '<svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15"><path d="M8 5.2v13.6L19 12z" fill="currentColor"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15"><path d="M7 5h3.4v14H7zM13.6 5H17v14h-3.4z" fill="currentColor"/></svg>',
+    loud: '<svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15"><path d="M4 9.5h3.4L12 5.6v12.8L7.4 14.5H4z" fill="currentColor"/><path d="M15.4 9.2a4 4 0 0 1 0 5.6M17.9 6.7a7.5 7.5 0 0 1 0 10.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+    muted: '<svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15"><path d="M4 9.5h3.4L12 5.6v12.8L7.4 14.5H4z" fill="currentColor"/><path d="M15.6 9.6l4.8 4.8M20.4 9.6l-4.8 4.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  };
+  const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  // The bar lives only while the pointer is in the frame, and retreats a beat
+  // after it stops moving — the film should be the only thing on screen.
+  let idle;
+  const show = () => {
+    film.classList.add('is-live');
+    clearTimeout(idle);
+    if (!video.paused) idle = setTimeout(() => film.classList.remove('is-live'), 2200);
+  };
+  film.addEventListener('mousemove', show);
+  film.addEventListener('mouseleave', () => { if (!video.paused) film.classList.remove('is-live'); });
+  film.addEventListener('focusin', show);
+
+  const play = () => video.play().catch(() => {});
+  const flip = () => (video.paused ? play() : video.pause());
+  bigPlay.addEventListener('click', play);
+  video.addEventListener('click', flip);
+  toggleBtn.addEventListener('click', flip);
+
+  video.addEventListener('play', () => {
+    film.classList.add('is-playing');
+    toggleBtn.innerHTML = ICON.pause;
+    toggleBtn.setAttribute('aria-label', 'Pause');
+    show();
+  });
+  video.addEventListener('pause', () => {
+    toggleBtn.innerHTML = ICON.play;
+    toggleBtn.setAttribute('aria-label', 'Play');
+    show();
+  });
+  video.addEventListener('ended', () => {
+    // load() drops the decoded media so the poster comes back. Seeking to 0
+    // instead leaves the film's own first frame on screen, which is black.
+    film.classList.remove('is-playing', 'is-live');
+    video.load();
+  });
+  video.addEventListener('timeupdate', () => {
+    const d = video.duration || 52;
+    const p = Math.min(1, video.currentTime / d);
+    fill.style.width = `${(p * 100).toFixed(2)}%`;
+    time.textContent = `${clock(video.currentTime)} / ${clock(d)}`;
+    track.setAttribute('aria-valuenow', Math.round(video.currentTime));
+    track.setAttribute('aria-valuetext', `${Math.round(video.currentTime)} seconds`);
+  });
+
+  const seekTo = (clientX) => {
+    const r = track.getBoundingClientRect();
+    video.currentTime = ((clientX - r.left) / r.width) * (video.duration || 52);
+  };
+  track.addEventListener('pointerdown', (e) => {
+    seekTo(e.clientX);
+    const move = (m) => seekTo(m.clientX);
+    const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+  });
+  track.addEventListener('keydown', (e) => {
+    const step = { ArrowLeft: -5, ArrowRight: 5, Home: -1e4, End: 1e4 }[e.key];
+    if (step === undefined) return;
+    e.preventDefault();
+    video.currentTime = Math.max(0, Math.min(video.duration || 52, video.currentTime + step));
+  });
+
+  muteBtn.addEventListener('click', () => {
+    video.muted = !video.muted;
+    muteBtn.innerHTML = video.muted ? ICON.muted : ICON.loud;
+    muteBtn.setAttribute('aria-label', video.muted ? 'Unmute' : 'Mute');
+  });
+  fullBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else film.requestFullscreen?.().catch(() => {});
+  });
+}
+

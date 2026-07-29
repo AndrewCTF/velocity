@@ -421,12 +421,19 @@ async def test_python_exec_output_over_cap_fails_fast_not_timeout() -> None:
 
     # ~6MB of row data → serialized JSON exceeds the 5MB stdout cap.
     code = 'def run(rows, memory):\n    return [{"blob": "x" * 6_000_000}]\n'
+    timeout_s = 30
     t0 = time.monotonic()
     with pytest.raises(python_exec.PythonExecError) as exc:
-        await python_exec.run_python_block(code, [], {}, timeout_s=30)
+        await python_exec.run_python_block(code, [], {}, timeout_s=timeout_s)
     elapsed = time.monotonic() - t0
     assert "cap" in str(exc.value)
-    assert elapsed < 15.0, f"cap breach should fail fast, took {elapsed:.1f}s"
+    # The claim is "fails on the cap instead of blocking to the wall timeout",
+    # so bound it RELATIVE to that timeout. An absolute 15 s was a wall-clock
+    # assertion around a subprocess spawn, and it began failing intermittently
+    # once the suite went parallel (-n auto, 32 workers) — a scheduling delay on
+    # a loaded box is not the regression this test exists to catch. Half the
+    # timeout still fails loudly if the parent ever waits on a full pipe.
+    assert elapsed < timeout_s / 2, f"cap breach should fail fast, took {elapsed:.1f}s"
 
 
 async def test_python_exec_timeout_s_clamped_to_max() -> None:

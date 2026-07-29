@@ -155,12 +155,15 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **1972 passed + 2 skipped** (skip = opt-in live probes; measured
-  2026-07-24, branch worldmonitor-gaps-2026-07, persona waves 2+3 — see
-  `docs/user-feedback-personas-wave2-2026-07.md`). Never commit below the baseline you inherited. When you raise it,
-  update the number/date/wave here and move the displaced line to
-  `docs/decisions.md#backend-test-baseline-history` — this bullet stays a
-  three-line fact, not a changelog.
+  Baseline: **2108 passed + 2 skipped in ~110 s** (skip = opt-in live probes;
+  measured 2026-07-30, branch overnight-provenance-answers-2026-07-29 — see
+  `docs/exec-report-2026-07-29.md`). Runs SERIAL by default: `-n auto --dist
+  loadfile` groups different files per worker on different core counts, so a
+  suite with module-state leaks answers differently per machine and CI (4 cores)
+  failed a branch that was green locally (16). Opt in per-machine, never commit
+  it as the default. Never commit below the baseline you inherited. When you raise it, update the number/date/wave here and move the
+  displaced line to `docs/decisions.md#backend-test-baseline-history` — this
+  bullet stays a three-line fact, not a changelog.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
   = typecheck + lint + web unit + api tests in one command.
 - Boot: `bash scripts/run-api.sh` from repo ROOT (:8000, jemalloc preload —
@@ -197,3 +200,11 @@ Never default every subagent to the biggest model.
 `bash scripts/verify.sh` green. For UI claims: boot the app, drag to Europe —
 hundreds of category icons (not dots); click an aircraft — EntityPanel +
 magenta track within 4 s; click empty — both clear; 30 s with no blink-off.
+
+For PERFORMANCE claims the harnesses already exist — use them, don't invent a
+number: `tools/perf/measure_ui.mjs` (real Chrome on the GPU, `--profile
+all-toggles`, reads `window.__perf`), `measure_api.py` (/proc sampling +
+per-route cost table), `measure_sidecars.sh --soak`, `measure_llm.py`. Backend
+lag/cycle attribution is live at `/api/status/perf`. A before/after is only a
+comparison if BOTH runs had the same tiers live — see `docs/decisions.md`
+(2026-07-27) for the retraction that rule came from.

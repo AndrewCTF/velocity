@@ -40,7 +40,16 @@ describe('settings store', () => {
       selectionAiModel: null,
       selectionAiPosition: 'top',
       leftRailExpanded: false,
+      corroboratedOnly: false,
     });
+  });
+
+  it('corroboratedOnly is OFF by default', async () => {
+    // Single-source is completely normal over open ocean, where one breadth
+    // tier may be the only thing that can see an aircraft at all. Fading those
+    // by default would hide real traffic, so the corroboration lens is opt-in.
+    const { useSettings } = await import('./settings.js');
+    expect(useSettings.getState().corroboratedOnly).toBe(false);
   });
 
   it('selectionAiEnabled/selectionAiModel mirror the backend selection-brief state, OFF/null by default', async () => {

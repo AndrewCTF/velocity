@@ -629,10 +629,18 @@ _WORLD_LIMIT = 20000
 # stays ~13k (>=8000 guardrail held). Applied at the serve boundary (viewport_filter)
 # so BOTH the world blob and the zoomed bbox path are covered; internal readers
 # (jamming via global_snapshot) are untouched and still see every cell.
-# ponytail: known ceiling — the OpenSky cache freezes seen_pos_s, so a contact whose
-# fix was fresh at pull can read "fresh" all day; that's the existing count-holding
-# tradeoff, not fixed here — the cap only removes the visibly-stale stragglers.
+# The frozen-age ceiling this used to carry is gone: cached tiers now stamp an
+# absolute `pos_epoch` and `_age_cached_positions` re-derives the duration at the
+# serve boundary, so a contact reports the age of the DATA rather than the age of
+# the pull. See `_age_cached_positions` for why they are marked rather than dropped.
 _STALE_POS_CAP_S = 900.0
+# Serve cap for CACHED tiers. OpenSky pulls once per UTC day, so a fix is legitimately
+# up to ~24 h old; past a day plus slack the aircraft is unaccounted for, not merely
+# un-refreshed, and it leaves the union.
+_CACHED_POS_CAP_S = 26 * 3600.0
+# Age past which a fix stops counting as live. Drives the `stale` flag the globe
+# renders dimmed with a real "last seen" readout instead of a live-looking icon.
+_FRESH_POS_S = 120.0
 _HOT_BLOB: bytes | None = None  # gzip-compressed JSON of the decimated world FC
 _HOT_ETAG: str = ""  # md5 of the blob — drives ETag/304 (poll inside a cycle → 304)
 # WebSocket push subscribers. The refresher fans _HOT_BLOB out to these on each new
@@ -780,6 +788,16 @@ async def _try_opensky_global() -> dict[str, Any] | None:
     # frontend's monotonic fix guard accepted the STALE OpenSky position and the
     # icon teleported backwards. With an honest seen_pos_s the stale fix loses
     # the freshness comparison and the icon holds its live track instead.
+    # `pos_epoch` is the ABSOLUTE wall-clock instant of the fix, and it is what
+    # makes a cached tier honest. seen_pos_s is a DURATION computed at pull time,
+    # so once this FC is cached it freezes: an aircraft whose fix was 5 s old at
+    # 0000 UTC still claimed "5 s old" at 2300 UTC, and rode the union all day as
+    # a live-looking contact that never moved (the operator's "so many dead
+    # planes"). Storing the instant instead lets the serve boundary recompute the
+    # duration against the current clock — CLAUDE.md's standing rule that a tier
+    # which can serve a CACHE must publish the age of the DATA, never the age of
+    # the response. Same fix already applied to the :8093 AIS sidecar via
+    # last_good/age_s; OpenSky is the tier that never got it.
     now = time.time()
     for f in fc["features"]:
         props = f.setdefault("properties", {})
@@ -787,6 +805,7 @@ async def _try_opensky_global() -> dict[str, Any] | None:
         props["seen_at"] = now
         tp = props.get("time_position")
         if isinstance(tp, (int, float)) and tp > 0:
+            props["pos_epoch"] = float(tp)
             props["seen_pos_s"] = max(0.0, now - float(tp))
     return fc
 
@@ -1084,7 +1103,14 @@ def _sync_feed_client() -> httpx.Client:
     return _SYNC_FEED_CLIENT
 
 
-def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]]]:
+# Per-feed ETag, so a poll landing inside the source's own build window costs a
+# 304 instead of a multi-MB body AND its parse. Only the localhost sidecar sets
+# one today; upstream mirrors simply never send the header and fall through.
+_FEED_ETAGS: dict[str, str] = {}
+_UNCHANGED = object()  # sentinel: 304, caller keeps the slice it already has
+
+
+def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]] | Any]:
     """Blocking fetch+parse of ONE feed, run via asyncio.to_thread so a saturated
     event loop can't starve the socket read. The async path's read is a sequence
     of per-chunk awaits, so a busy loop dribbles the 3.6 MB loopback body out over
@@ -1092,14 +1118,36 @@ def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]]]:
     (benchmarked: 9.0 s on-loop -> 0.9 s threaded under identical contention).
     Returns (monotonic_ts, aircraft); ts is captured HERE in the thread so the
     slice's age is independent of when the loop resumes to store it. Mirrors
-    _fetch_one_feed's parsing (readsb 'aircraft' / ADSBx-v2 'ac')."""
+    _fetch_one_feed's parsing (readsb 'aircraft' / ADSBx-v2 'ac').
+
+    Returns `_UNCHANGED` in place of the list on a 304 — the caller keeps its
+    existing slice and skips both the transfer and the parse."""
     ac: list[dict[str, Any]] = []
     try:
-        r = _sync_feed_client().get(
-            url, timeout=_feed_timeout(url), headers={"User-Agent": _FEED_UA}
-        )
+        # Ask remote mirrors for gzip; do NOT ask the localhost sidecar. Measured
+        # 2026-07-27: compressing its ~2.8 MB union once a second took node from
+        # 44% to 109% CPU, to save a loopback transfer that costs ~1 ms. The
+        # ETag below is the part that actually pays.
+        local = "127.0.0.1" in url or "localhost" in url
+        headers = {"User-Agent": _FEED_UA}
+        if not local:
+            headers["Accept-Encoding"] = "gzip"
+        prev = _FEED_ETAGS.get(url)
+        if prev:
+            headers["If-None-Match"] = prev
+        r = _sync_feed_client().get(url, timeout=_feed_timeout(url), headers=headers)
+        if r.status_code == 304:
+            return time.monotonic(), _UNCHANGED
         if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
-            j = r.json()
+            etag = r.headers.get("etag")
+            if etag:
+                _FEED_ETAGS[url] = etag
+            else:
+                _FEED_ETAGS.pop(url, None)
+            # orjson over stdlib: measured 7.8x faster on a payload this shape,
+            # and the whole point of this thread is to give the loop its slot
+            # back sooner.
+            j = orjson.loads(r.content) if orjson is not None else r.json()
             ac = j.get("aircraft") or j.get("ac") or []
     except Exception:  # noqa: BLE001 — timeout / transport / non-JSON body
         ac = []
@@ -1143,6 +1191,14 @@ async def _pull_one_feed(url: str) -> None:
         ts, ac = await asyncio.to_thread(_fetch_one_feed_sync, url)
     finally:
         _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
+    if ac is _UNCHANGED:
+        # 304 — the source has not rebuilt since our last pull, so we saved the
+        # body and the parse. Leave the slice ENTIRELY alone: its `ts` is when
+        # the DATA was produced, and re-stamping it here would advertise an
+        # unchanged cache as freshly observed. That is precisely the immortal
+        # cached-tier bug (docs/decisions.md, 2026-07-15). An honest slice ages
+        # out under _FEED_SLICE_MAX_AGE_S if the source really has stopped.
+        return
     if ac:
         # Stamp receipt time so these mirror aircraft carry a `seen_at` like the
         # grid + firehose tiers do (_aircraft_geojson reads `_seen_at`). Without
@@ -1229,9 +1285,157 @@ def _feat_obs_at(f: dict[str, Any]) -> float | None:
     return float(seen_at) - (float(sp) if isinstance(sp, (int, float)) else 0.0)
 
 
-def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]]) -> None:
+def _raw_obs_at(a: dict[str, Any]) -> float | None:
+    """`_feat_obs_at` computed straight off the RAW record.
+
+    Same arithmetic (`_seen_at - seen_pos`), same meaning, but available before a
+    feature exists — which is what lets the union decide whether it wants a
+    record at all before paying to build one.
+    """
+    seen_at = a.get("_seen_at")
+    if not isinstance(seen_at, (int, float)):
+        return None
+    sp = a.get("seen_pos")
+    return float(seen_at) - (float(sp) if isinstance(sp, (int, float)) else 0.0)
+
+
+# Retained feature objects, keyed by feature id. The snapshot cycle UPDATES
+# these in place instead of allocating four fresh containers per aircraft per
+# second (measured 44 ms / 20 000 contacts, 43 % of it allocation).
+#
+# Safety rests on two things, both enforced elsewhere in this module:
+#   * every mutation happens under `_SNAPSHOT_LOCK` (see `_do_global_fanout`);
+#   * `global_snapshot()` copies under the same lock, so a consumer that retains
+#     its result across `await`s — `intel/analytics.py` and `intel/incidents.py`
+#     both do — holds objects nothing will mutate. `snapshot_view()` is the
+#     opt-in shared, read-now-do-not-retain accessor for the hot paths.
+_FEATURE_CACHE: dict[str, dict[str, Any]] = {}
+# Last cycle (monotonic) each id was refreshed, for eviction. Kept well above
+# the 180 s carry-forward window so a contact that blinks out and returns keeps
+# its object.
+_FEATURE_CACHE_TTL_S = 900.0
+_FEATURE_CACHE_SEEN: dict[str, float] = {}
+
+
+def _prune_feature_cache(now: float | None = None) -> int:
+    """Drop retained features nothing has refreshed lately. Returns how many."""
+    t = time.monotonic() if now is None else now
+    dead = [k for k, seen in _FEATURE_CACHE_SEEN.items() if t - seen > _FEATURE_CACHE_TTL_S]
+    for k in dead:
+        _FEATURE_CACHE.pop(k, None)
+        _FEATURE_CACHE_SEEN.pop(k, None)
+    return len(dead)
+
+
+def _apply_raw_to_feature(
+    f: dict[str, Any] | None,
+    fid: str,
+    a: dict[str, Any],
+    icao24: str,
+    source: str | None,
+) -> dict[str, Any]:
+    """Build the feature for one raw record, reusing `f` if we already have it.
+
+    The field set and every derivation are identical to `_aircraft_geojson` —
+    that function remains the definition and the seven per-request callers still
+    use it; this is the hot-path twin, and `test_adsb_feature_reuse.py` diffs the
+    two over a multi-cycle sequence so they cannot drift.
+
+    Leaf values are REPLACED, never edited in place (a new `coordinates` list
+    rather than three index assignments), so a concurrent reader of a nested
+    container sees the old one or the new one, never a half-written one.
+    """
+    callsign = (a.get("flight") or a.get("r") or "").strip() or None
+    alt_baro = a.get("alt_baro")
+    alt_geom = a.get("alt_geom")
+    try:
+        alt_baro_m = float(alt_baro) * 0.3048 if isinstance(alt_baro, (int, float)) else None
+    except (TypeError, ValueError):
+        alt_baro_m = None
+    try:
+        alt_geom_m = float(alt_geom) * 0.3048 if isinstance(alt_geom, (int, float)) else None
+    except (TypeError, ValueError):
+        alt_geom_m = None
+
+    props: dict[str, Any] = {
+        "icao24": icao24,
+        "callsign": callsign,
+        "registration": a.get("r"),
+        "type": a.get("t"),
+        "category": a.get("category"),
+        "on_ground": (a.get("alt_baro") == "ground"),
+        "velocity_ms": _to_ms(a.get("gs")),
+        "track_deg": a.get("track"),
+        "baro_alt_m": alt_baro_m,
+        "geo_alt_m": alt_geom_m,
+        "squawk": a.get("squawk"),
+        "emergency": a.get("emergency"),
+        "nac_p": a.get("nac_p"),
+        "nic": a.get("nic"),
+        "sil": a.get("sil"),
+        "nac_v": a.get("nac_v"),
+        "kind": "aircraft",
+        "source": source or "adsb",
+    }
+    seen_pos = a.get("seen_pos")
+    if isinstance(seen_pos, (int, float)):
+        props["seen_pos_s"] = float(seen_pos)
+    seen_at = a.get("_seen_at")
+    if isinstance(seen_at, (int, float)):
+        props["seen_at"] = float(seen_at)
+    coords = [float(a["lon"]), float(a["lat"]), alt_geom_m or alt_baro_m or 0]
+
+    if f is None:
+        return {
+            "type": "Feature",
+            "id": fid,
+            "geometry": {"type": "Point", "coordinates": coords},
+            "properties": props,
+        }
+    # Reuse: replace the two leaves. `properties` is rebuilt rather than
+    # key-by-key updated because a fresh dict is one allocation against ~20
+    # stores, AND it drops keys the new record no longer carries — which
+    # key-by-key updating would leave stale (seen_pos_s / seen_at are optional).
+    f["geometry"]["coordinates"] = coords
+    f["properties"] = props
+    return f
+
+
+def _merge_raw_into(
+    by_id: dict[Any, dict[str, Any]],
+    raw: list[dict[str, Any]],
+    seen_by: dict[Any, set[str]] | None = None,
+    tier: str = "",
+) -> None:
     """Convert raw aggregator aircraft dicts → features and union into by_id,
     keeping the FRESHEST OBSERVATION per id.
+
+    ALWAYS CALL THIS VIA ``asyncio.to_thread``. It is the most expensive
+    on-loop work in the snapshot cycle — 44 ms at 20 000 aircraft, of which 43 %
+    is allocating four containers per contact (feature, geometry, coordinates,
+    properties) and the rest is ~15 `.get()`s, the filter chain and two
+    float conversions.
+
+    Threading pure-Python work buys no parallelism, but it does buy PREEMPTION,
+    and a latency tail is made of preemption. Measured 2026-07-27 with a 5 ms
+    probe against this exact call at 20 000 aircraft:
+
+        inline:  probe lag p95 62.59 ms, MAX 68.27 ms
+        thread:  probe lag p95 15.15 ms, MAX 24.09 ms
+
+    The loop is serviced every `sys.getswitchinterval()` (5 ms) instead of
+    waiting out the whole call. The median lag rises (0.10 → 5.17 ms) because
+    the loop now shares the GIL while the work runs; that is the correct trade
+    for a tail.
+
+    NOT solved by retaining and mutating the feature dicts across cycles, which
+    is the obvious next idea: `global_snapshot()` hands consumers a shallow copy
+    that SHARES these dicts, and `intel/analytics.py` passes that list across
+    `await`s and re-consumes it (`features=features`, :501→:510, :613-614), as
+    does `intel/incidents.py` (:95→:121). Mutating in place would let one
+    analysis compute half its answer from cycle N and half from N+1.
+
+    Thread-safe: `by_id` is the caller's local dict and `raw` is read-only here.
 
     Was: overwrite unconditionally, relying on the caller to merge the freshest
     tier last. That ordering assumption is what made aircraft fly BACKWARDS.
@@ -1257,22 +1461,62 @@ def _merge_raw_into(by_id: dict[Any, dict[str, Any]], raw: list[dict[str, Any]])
     the historical last-writer-wins. An unstamped newcomer never displaces a
     stamped incumbent — that would be trading a known age for an unknown one.
     """
-    for f in _aircraft_geojson(raw).get("features") or []:
-        fid = f.get("id")
-        if fid is None:
+    now = time.monotonic()
+    for a in raw:
+        # Filter chain, byte-for-byte the one in `_aircraft_geojson` — see the
+        # differential test. Run FIRST so a rejected record costs only this.
+        lon = a.get("lon")
+        lat = a.get("lat")
+        if lon is None or lat is None:
             continue
+        icao24 = (a.get("hex") or a.get("icao") or "").lower()
+        if not icao24:
+            continue
+        flight = (a.get("flight") or "").strip().upper()
+        type_code = (a.get("t") or "").strip().upper()
+        emitter_cat = (a.get("category") or "").strip().upper()
+        if emitter_cat in _SURFACE_EMITTER_CATEGORIES:
+            continue
+        if flight in _GROUND_INFRA_CALLSIGNS or type_code in _GROUND_INFRA_TYPES:
+            continue
+        if not emitter_cat:
+            on_ground = a.get("alt_baro") == "ground"
+            has_callsign = any(c.isalnum() for c in flight)
+            if on_ground and not has_callsign and not type_code:
+                continue
+
+        fid = f"aircraft:{icao24}"
+        # Record that THIS tier saw this aircraft, whether or not its fix wins
+        # the freshness comparison below. Corroboration is about how many
+        # independent observers reported the contact at all; a tier that lost by
+        # a second still saw it, and a contact only one tier has ever seen is
+        # exactly the shape of the fake-ADS-B problem (see docs/research-
+        # last30days-2026-07-29.md §4). Recorded AFTER the filter chain so a
+        # rejected record never counts as an observation.
+        if seen_by is not None and tier:
+            seen_by.setdefault(fid, set()).add(tier)
         cur = by_id.get(fid)
-        if cur is None:
-            by_id[fid] = f
-            continue
-        new_obs = _feat_obs_at(f)
-        cur_obs = _feat_obs_at(cur)
-        if new_obs is None and cur_obs is None:
-            by_id[fid] = f  # no freshness signal either side → tier order decides
-        elif new_obs is None:
-            continue  # unjudgeable → don't displace a stamped incumbent
-        elif cur_obs is None or new_obs > cur_obs:
-            by_id[fid] = f
+        if cur is not None:
+            # Decide freshest-wins from the RAW record, before building anything.
+            # Identical rule to before; it just no longer needs a feature to
+            # compare, so a losing record costs nothing.
+            new_obs = _raw_obs_at(a)
+            cur_obs = _feat_obs_at(cur)
+            if new_obs is None and cur_obs is None:
+                pass  # no freshness signal either side → tier order decides
+            elif new_obs is None:
+                continue  # unjudgeable → don't displace a stamped incumbent
+            elif not (cur_obs is None or new_obs > cur_obs):
+                continue
+
+        # `cur` and the cached object are the SAME object whenever this id was
+        # already placed this fanout, so updating in place is what we want: the
+        # comparison above has already run against its pre-update values.
+        f = _apply_raw_to_feature(_FEATURE_CACHE.get(fid), fid, a, icao24, None)
+        _FEATURE_CACHE[fid] = f
+        _FEATURE_CACHE_SEEN[fid] = now
+        by_id[fid] = f
+    _prune_feature_cache(now)
 
 
 async def _grid_fanout() -> list[dict[str, Any]]:
@@ -1380,16 +1624,33 @@ async def _do_global_fanout() -> dict[str, Any]:
     # floor (Chromium crash / cold start), so the map can't go empty.
     if get_settings().adsb_sidecar_only:
         sidecar: dict[Any, dict[str, Any]] = {}
+        _t0 = time.monotonic()
         feeds0 = await _await_within(
             asyncio.ensure_future(_readsb_feeds()), time.monotonic() + _FANOUT_BUDGET_S
         )
+        _t1 = time.monotonic()
         if feeds0:
-            _merge_raw_into(sidecar, feeds0)
+            # Under the lock: _merge_raw_into UPDATES retained feature objects in
+            # place, and global_snapshot() copies them. Without this a consumer
+            # could copy a set that is half cycle N and half cycle N+1.
+            async with _SNAPSHOT_LOCK:
+                await asyncio.to_thread(_merge_raw_into, sidecar, feeds0)
+        _t2 = time.monotonic()
+        # Split the fan-out's wall time into "waiting for the feed" and "turning
+        # it into features". Only the second is loop-blocking CPU, and telling
+        # them apart is the difference between optimising the right thing and
+        # guessing (the aggregate alone read 324 ms and explained nothing).
+        _CYCLE_MS["fanout_wait"] = round((_t1 - _t0) * 1000, 1)
+        _CYCLE_MS["fanout_cpu"] = round((_t2 - _t1) * 1000, 1)
         if len(sidecar) >= _SIDECAR_ONLY_FLOOR:
             return {"type": "FeatureCollection", "features": list(sidecar.values())}
         # sidecar thin/down → fall through to the full multi-tier union.
 
     by_id: dict[Any, dict[str, Any]] = {}
+    # id -> the set of tiers that reported it THIS fanout. Rebuilt every cycle
+    # (never carried forward) so corroboration describes the current picture, not
+    # an accumulated history that only ever grows.
+    seen_by: dict[Any, set[str]] = {}
 
     osky_task = asyncio.ensure_future(_opensky_cached())
     feeds_task = asyncio.ensure_future(_readsb_feeds())
@@ -1404,6 +1665,7 @@ async def _do_global_fanout() -> dict[str, Any]:
             fid = f.get("id")
             if fid is not None:
                 by_id[fid] = f
+                seen_by.setdefault(fid, set()).add("opensky")
 
     # 2. Keyless full-feed readsb instances (theairtraffic, hpradar, the user's
     #    ultrafeeder) — full global aircraft.json at ~1s. Adds the aircraft
@@ -1411,12 +1673,14 @@ async def _do_global_fanout() -> dict[str, Any]:
     #    AFTER OpenSky.
     feeds = await _await_within(feeds_task, deadline)
     if feeds:
-        _merge_raw_into(by_id, feeds)
+        async with _SNAPSHOT_LOCK:
+            await asyncio.to_thread(_merge_raw_into, by_id, feeds, seen_by, "feeds")
 
     # 3. Opportunistic firehose (deploy hosts with a reachable global verb).
     firehose = await _await_within(fh_task, deadline)
     if firehose:
-        _merge_raw_into(by_id, firehose)
+        async with _SNAPSHOT_LOCK:
+            await asyncio.to_thread(_merge_raw_into, by_id, firehose, seen_by, "firehose")
 
     # 4. Per-cell grid — ONLY as a FALLBACK when the fast tiers came up thin. The
     #    keyless feeds now supply ~11k at ~0.1s; on a datacenter IP every
@@ -1434,9 +1698,70 @@ async def _do_global_fanout() -> dict[str, Any]:
             except TimeoutError:
                 grid = []
             if grid:
-                _merge_raw_into(by_id, grid)
+                async with _SNAPSHOT_LOCK:
+                    await asyncio.to_thread(_merge_raw_into, by_id, grid, seen_by, "grid")
 
+    _stamp_sources(by_id, seen_by)
     return {"type": "FeatureCollection", "features": list(by_id.values())}
+
+
+def _stamp_sources(
+    by_id: dict[Any, dict[str, Any]], seen_by: dict[Any, set[str]]
+) -> None:
+    """Publish, per contact, WHICH tiers observed it and how many.
+
+    The union keeps one winning fix per aircraft, so by itself it throws away the
+    most useful thing it knows: whether three independent observers agree that a
+    contact exists, or whether exactly one does. That distinction is the
+    community's own test for fabricated ADS-B - "it was not found if you looked
+    on other platforms" - and it is what lets an operator tell a real oceanic
+    contact from a single-source artefact.
+
+    `sources` is sorted so the value is stable across cycles and does not churn
+    the payload (and therefore the ETag) for no reason.
+    """
+    for fid, feat in by_id.items():
+        tiers = seen_by.get(fid)
+        if not tiers:
+            continue
+        props = feat.setdefault("properties", {})
+        props["sources"] = sorted(tiers)
+        props["source_count"] = len(tiers)
+        props["confidence"] = _confidence(len(tiers), props.get("seen_pos_s"))
+
+
+# The confidence rule, in the words shown to the operator. Kept next to the
+# function that implements it so the two cannot drift, and exported so the panel
+# renders THIS string rather than a hand-written paraphrase.
+#
+# Stating the rule is not decoration. The first question asked of the highest
+# scoring thing in this category ("Is Hormuz open yet?", 484 points) was "what's
+# the threshold function?" - a technical audience treats an unexplained verdict
+# as no verdict at all. See docs/research-last30days-2026-07-29.md §3.
+CONFIDENCE_RULE = (
+    "high: two or more independent sources and a fix under 2 minutes old. "
+    "medium: one source with a fresh fix, or several sources with an ageing one. "
+    "low: a single source and a fix older than 2 minutes."
+)
+
+
+def _confidence(source_count: int, seen_pos_s: Any) -> str:
+    """How much this contact should be trusted, from corroboration and freshness.
+
+    Deliberately coarse. Three buckets an operator can act on beat a score that
+    looks precise and is not; we can distinguish "several observers agree, just
+    now" from "one observer, a while ago", and inventing resolution between
+    those is the kind of false certainty this whole change exists to remove.
+
+    An unknown age is treated as ageing rather than fresh: not knowing when a fix
+    was taken is a reason for less confidence, never more.
+    """
+    fresh = isinstance(seen_pos_s, (int, float)) and float(seen_pos_s) <= _FRESH_POS_S
+    if source_count >= 2 and fresh:
+        return "high"
+    if source_count >= 2 or fresh:
+        return "medium"
+    return "low"
 
 
 # Along-track regression guard. An AIRBORNE aircraft cannot move backwards along
@@ -1557,6 +1882,52 @@ def _merge_with_previous(
     return {"type": "FeatureCollection", "features": list(by_id.values())}
 
 
+# Per-phase timings of the last snapshot cycle, in ms. The 2026-07-27 baseline
+# could attribute a 500 ms loop-lag p95 to nothing in particular; these say which
+# phase owns it. Cheap (six floats) and read by /api/status/perf.
+_CYCLE_MS: dict[str, float] = {}
+
+# Idle back-pressure.
+#
+# The snapshot cycle ran at 1 Hz forever, whether or not anything was reading
+# it. Measured 2026-07-27 at ~17k contacts, one cycle costs 200-410 ms of which
+# 56-84 ms is loop-blocking CPU (_aircraft_geojson rebuilding a nested dict per
+# aircraft). With no browser attached that is a permanent 20-40% tax on the box
+# for a payload nobody has asked for, and it is the floor under the event-loop
+# lag tail.
+#
+# This is Palantir's own rule for Gaia's collaborative state, applied to our
+# own fan-out: state is "only stored and synced across clients when a user is
+# actively being followed" (docs/palantir-reference-2026-07.md §7).
+#
+# The GUARDED 1.0 s cadence is unchanged whenever anything is watching: a WS
+# subscriber, or an HTTP read of the world blob within _IDLE_AFTER_S. The first
+# request after an idle period re-arms it immediately AND is still answered from
+# the sticky snapshot, so no reader ever waits for a cycle. _SNAPSHOT_STALE_S is
+# 30 s, comfortably above the idle cycle, so the staleness gate is unaffected.
+_IDLE_AFTER_S = 30.0
+_IDLE_CYCLE_S = 5.0
+_LAST_DEMAND_AT: float = 0.0
+
+
+def note_demand() -> None:
+    """Something read the snapshot. Re-arm the fast cadence."""
+    global _LAST_DEMAND_AT
+    _LAST_DEMAND_AT = time.monotonic()
+
+
+def _target_cycle_s() -> float:
+    if _WS_SUBSCRIBERS:
+        return _SNAPSHOT_TARGET_CYCLE_S
+    if _LAST_DEMAND_AT and (time.monotonic() - _LAST_DEMAND_AT) < _IDLE_AFTER_S:
+        return _SNAPSHOT_TARGET_CYCLE_S
+    return _IDLE_CYCLE_S
+
+
+def cycle_timings() -> dict[str, float]:
+    return dict(_CYCLE_MS)
+
+
 async def _refresh_snapshot_forever() -> None:
     """Background task: refresh the sticky snapshot on a 5s target cycle.
 
@@ -1574,10 +1945,23 @@ async def _refresh_snapshot_forever() -> None:
         t0 = time.monotonic()
         try:
             fc = await _do_global_fanout()
+            # Re-derive position age for cached tiers against the current clock,
+            # BEFORE the carry-forward merge and every downstream serve path, so
+            # the merge's own staleness checks and the frontend both read the age
+            # of the data rather than the age of the pull.
+            _age_cached_positions(fc)
+            t_fanout = time.monotonic()
             async with _SNAPSHOT_LOCK:
                 # Carry forward recently-seen aircraft so host-coverage flips
                 # between fan-outs never blank half the map.
-                fc = _merge_with_previous(fc, _LATEST_SNAPSHOT)
+                #
+                # OFF the loop: this rebuilds an id index over both the new and
+                # the previous feature lists and re-materialises the result —
+                # 62 ms per cycle at 16k contacts, measured 2026-07-27, once a
+                # second, for work no request is awaiting. Pure function over
+                # plain dicts, and it already runs under _SNAPSHOT_LOCK, so a
+                # thread hop changes nothing about who may touch the snapshot.
+                fc = await asyncio.to_thread(_merge_with_previous, fc, _LATEST_SNAPSHOT)
                 new_count = len(fc.get("features") or [])
                 prev_count = len(_LATEST_SNAPSHOT.get("features") or [])
                 age = (
@@ -1594,16 +1978,25 @@ async def _refresh_snapshot_forever() -> None:
                 if accept:
                     _LATEST_SNAPSHOT = fc
                     _LATEST_SNAPSHOT_AT = time.monotonic()
+            t_merge = time.monotonic()
             # Mirror accepted aircraft fixes into the history store for 3D
             # replay. Outside the snapshot lock; ingest_aircraft only buffers
             # in memory (rate-limited, no I/O) so it can't stall the tick.
+            t_history = t_merge
             if accept:
                 try:
                     from app import history  # noqa: PLC0415
 
-                    history.ingest_aircraft(fc.get("features") or [])
+                    # OFF the loop. ingest_aircraft walks EVERY feature (16.9k
+                    # measured 2026-07-27) building per-contact ring buffers, once
+                    # a second, and it was doing that on the event loop. The
+                    # comment claiming it "can't stall the tick" was written when
+                    # the union was a third of the size; at 16.9k it is a
+                    # measurable slice of the 500 ms lag tail.
+                    await asyncio.to_thread(history.ingest_aircraft, fc.get("features") or [])
                 except Exception:  # noqa: BLE001
                     pass
+                t_history = time.monotonic()
                 # Rebuild the pre-gzipped world-view blob ONCE per cycle (off the
                 # event loop via a worker thread) and push it to WS subscribers.
                 # This is the decimate/serialize/gzip work that used to run on
@@ -1614,22 +2007,82 @@ async def _refresh_snapshot_forever() -> None:
                     await _broadcast_blob(_HOT_BLOB)
                 except Exception:  # noqa: BLE001
                     pass
+            now = time.monotonic()
+            _CYCLE_MS.update(
+                fanout=round((t_fanout - t0) * 1000, 1),
+                merge=round((t_merge - t_fanout) * 1000, 1),
+                history=round((t_history - t_merge) * 1000, 1),
+                blob=round((now - t_history) * 1000, 1),
+                total=round((now - t0) * 1000, 1),
+                features=float(len(fc.get("features") or [])),
+            )
         except Exception:
             # Never let the background loop die — a transient httpx /
             # cancellation / asyncio exception just rolls into the next tick.
             pass
         elapsed = time.monotonic() - t0
-        await asyncio.sleep(max(0.0, _SNAPSHOT_TARGET_CYCLE_S - elapsed))
+        _CYCLE_MS["target_s"] = _target_cycle_s()
+        await asyncio.sleep(max(0.0, _target_cycle_s() - elapsed))
+
+
+def _age_cached_positions(fc: dict[str, Any], now: float | None = None) -> int:
+    """Recompute position age for every feature carrying an absolute `pos_epoch`.
+
+    A cached tier (OpenSky: one pull per UTC day, served from memory on every
+    tick) stamps seen_pos_s ONCE, at pull time, so the duration freezes while the
+    clock keeps moving. Rewriting it here from the absolute fix instant is what
+    turns "5 s old, all day" into the truth.
+
+    Both fields move together so the freshest-observation-wins union is
+    unchanged: it keys on `seen_at - seen_pos_s`, which still evaluates to
+    pos_epoch, the real observation time. seen_at becomes the serve instant,
+    which is what the carry-forward breadth merge means by "this tier answered".
+
+    Marks rather than drops. `stale` is advisory - the renderer dims these and
+    labels them with a real age instead of showing a live-looking icon parked on
+    a fix from this morning. Dropping them instead would cut the union from ~13k
+    to the per-cell grid's ~1.5-3k and break the >=8000 breadth guardrail, which
+    is the trade the old frozen-age behaviour was silently buying.
+
+    Returns the number of features re-aged (0 when no cached tier is present).
+    """
+    t = time.time() if now is None else now
+    n = 0
+    for f in fc.get("features") or []:
+        props = f.get("properties")
+        if not isinstance(props, dict):
+            continue
+        pe = props.get("pos_epoch")
+        if not isinstance(pe, (int, float)) or pe <= 0:
+            continue
+        age = max(0.0, t - float(pe))
+        props["seen_pos_s"] = age
+        props["seen_at"] = t
+        props["stale"] = age > _FRESH_POS_S
+        n += 1
+    return n
 
 
 def _pos_stale(f: dict[str, Any]) -> bool:
-    """True when a feature's last real position fix is older than the serve cap.
+    """True when a feature's last real position fix is older than its serve cap.
 
     Reads seen_pos_s (position age in seconds, stamped by each tier). Absent or
     non-numeric → False (keep): an unknown age isn't evidence of staleness.
+
+    Two caps, because the tiers mean different things by "old". A LIVE tier that
+    reports a 20-minute-old fix has lost the aircraft, so 900 s drops it. A
+    CACHED tier (`pos_epoch` present) is expected to age between its daily pulls;
+    dropping it at 900 s would blank the breadth layer 15 minutes into every UTC
+    day. It keeps its slot, marked `stale`, until the fix is older than a full
+    pull interval plus slack — past that the aircraft is genuinely unaccounted
+    for rather than merely un-refreshed.
     """
-    sp = (f.get("properties") or {}).get("seen_pos_s")
-    return isinstance(sp, (int, float)) and float(sp) > _STALE_POS_CAP_S
+    props = f.get("properties") or {}
+    sp = props.get("seen_pos_s")
+    if not isinstance(sp, (int, float)):
+        return False
+    cap = _CACHED_POS_CAP_S if props.get("pos_epoch") else _STALE_POS_CAP_S
+    return float(sp) > cap
 
 
 def viewport_filter(
@@ -1757,6 +2210,34 @@ async def _broadcast_blob(blob: bytes) -> None:
     await asyncio.gather(*(_send(ws) for ws in subs))
 
 
+def isolate_fc(fc: dict[str, Any]) -> dict[str, Any]:
+    """An independent copy of a FeatureCollection whose features the cycle owns.
+
+    The snapshot cycle updates retained feature objects in place, so anything
+    that outlives one event-loop turn — a value held across an `await`, or a
+    response body FastAPI serializes after the handler returns — needs its own
+    copy or it can be read while a field is being replaced.
+
+    Copy depth is exactly what the mutation touches: the feature dict, its
+    `geometry`, the `coordinates` list and the `properties` dict.
+    """
+    return {
+        "type": fc.get("type", "FeatureCollection"),
+        "features": [
+            {
+                "type": f.get("type", "Feature"),
+                "id": f.get("id"),
+                "geometry": {
+                    "type": ((f.get("geometry") or {}).get("type", "Point")),
+                    "coordinates": list((f.get("geometry") or {}).get("coordinates") or []),
+                },
+                "properties": dict(f.get("properties") or {}),
+            }
+            for f in (fc.get("features") or [])
+        ],
+    }
+
+
 async def global_snapshot() -> dict[str, Any]:
     """The full aircraft snapshot (no viewport filter), bootstrapping the
     background refresher on first call.
@@ -1786,8 +2267,58 @@ async def global_snapshot() -> dict[str, Any]:
                 _SNAPSHOT_TASK = asyncio.create_task(_refresh_snapshot_forever())
                 _SNAPSHOT_STARTED = True
     async with _SNAPSHOT_LOCK:
-        # Shallow copy so callers can't mutate the live snapshot dict.
-        return dict(_LATEST_SNAPSHOT)
+        # ISOLATED copy. The cycle now UPDATES retained feature objects in place
+        # rather than allocating fresh ones (see `_apply_raw_to_feature`), so a
+        # shallow `dict(...)` would hand back containers that mutate under the
+        # caller. `intel/analytics.py` retains this list across `await`s and
+        # re-consumes it (`features=features`, :501→:510, :613-614), as does
+        # `intel/incidents.py` (:95→:121) — under a shallow copy those would
+        # compute half an answer from one cycle and half from the next.
+        #
+        # Copying HERE rather than rebuilding in the cycle is the right side to
+        # pay on: the cycle runs at 1 Hz, these consumers run per request and
+        # most are themselves cached for 60 s. Hot readers that do not retain
+        # use `snapshot_view()` and pay nothing.
+        return isolate_fc(_LATEST_SNAPSHOT)
+
+
+def snapshot_view() -> dict[str, Any]:
+    """The live snapshot WITHOUT copying. Read it now; do NOT retain it.
+
+    For callers that filter-and-serialize inside one event-loop turn — the bbox
+    branch of `adsb_global`, the blob builder — where an isolated copy would be
+    ~20 000 wasted allocations per request. Anything that holds the list across
+    an `await` must use `global_snapshot()` instead, because the cycle updates
+    these feature objects in place.
+    """
+    return _LATEST_SNAPSHOT
+
+
+def snapshot_count() -> int:
+    """Aircraft in the live snapshot, without the lock and without a copy.
+
+    `/api/status` is PUBLIC, unauthenticated, and polled by status pages and
+    measurement harnesses, and it was calling `global_snapshot()` for nothing but
+    this number. That does three things it should not: it takes
+    `_SNAPSHOT_LOCK`, which the 1 Hz refresher holds across its merge; it
+    shallow-copies the snapshot dict; and on a cold process it would kick a
+    synchronous fan-out from an anonymous request.
+
+    Measured 2026-07-27, equal 30 s sampling windows: `/api/status` p50 12.5 ms
+    before, 10.1 ms after. Be precise about what that is and is not — the route's
+    multi-second TAIL is NOT from this and did not change. Sampled properly,
+    `/api/health`, which returns a literal dict and touches no state, shows the
+    same tail (MAX 2470 ms vs status's 2272 ms). It is the event loop being
+    blocked by the snapshot cycle's own CPU, and every request pays it equally.
+    An earlier "757 ms → 12.5 ms" reading here was an artifact of comparing runs
+    that observed unequal wall-clock windows.
+
+    No lock is needed to read a count: `_LATEST_SNAPSHOT` is REBOUND wholesale by
+    the refresher (`_LATEST_SNAPSHOT = fc`) and never mutated in place, so this
+    reads either the old list or the new one, never a torn one, and both are
+    honest. The value is identical to what the locked path returned.
+    """
+    return len(_LATEST_SNAPSHOT.get("features") or [])
 
 
 def snapshot_age_s() -> float | None:
@@ -1833,6 +2364,10 @@ async def adsb_global(
     # everywhere below. lamin/... (the live globe) wins; min_lat/... (API/curl) fills
     # in only when its lamin counterpart is absent. Keeps the world gate + viewport_filter
     # downstream untouched while making a supplied bbox in EITHER spelling take effect.
+    # Someone is reading the snapshot → hold the fast 1 s cadence (see
+    # _target_cycle_s). Idle, the cycle relaxes to _IDLE_CYCLE_S rather than
+    # rebuilding 17k features a second for nobody.
+    note_demand()
     if lamin is None:
         lamin = min_lat
     if lomin is None:
@@ -1862,10 +2397,17 @@ async def adsb_global(
             media_type="application/json",
             headers={**headers, "Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
         )
-    snap = await global_snapshot()
     if lamin is None and lomin is None and lamax is None and lomax is None and limit is None:
-        return snap
-    return viewport_filter(snap, lamin, lomin, lamax, lomax, limit)
+        # Bare full snapshot (MCP / intel tools) — isolated, because FastAPI
+        # serializes this after the handler returns.
+        return await global_snapshot()
+    # Viewport query: filter against the SHARED view first, then isolate only
+    # the survivors. Copying all ~20 000 features to return a few hundred would
+    # be the expensive way round, and this path runs at 1 Hz per zoomed-in
+    # client.
+    async with _SNAPSHOT_LOCK:
+        filtered = viewport_filter(snapshot_view(), lamin, lomin, lamax, lomax, limit)
+        return isolate_fc(filtered)
 
 
 @router.websocket("/ws/adsb")
@@ -1888,6 +2430,7 @@ async def adsb_ws(ws: WebSocket) -> None:
     # Ensure the refresher is running even if no HTTP poll kicked it off (idempotent).
     await start_snapshot()
     _WS_SUBSCRIBERS.add(ws)
+    note_demand()
     try:
         if _HOT_BLOB is not None:
             await ws.send_bytes(_HOT_BLOB)

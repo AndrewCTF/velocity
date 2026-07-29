@@ -11,15 +11,15 @@ from app.routes import status as status_mod
 def _patch_snapshot(
     monkeypatch: pytest.MonkeyPatch, n: int, age: float | None, vessels: int = 50
 ) -> None:
-    async def fake_snap() -> dict:
-        return {"type": "FeatureCollection", "features": [{} for _ in range(n)]}
-
     async def fake_vessels() -> dict:
         return {"type": "FeatureCollection", "features": [{} for _ in range(vessels)]}
 
     from app.routes import maritime
 
-    monkeypatch.setattr(status_mod.adsb_routes, "global_snapshot", fake_snap)
+    # /api/status reads the COUNT, not the snapshot: calling global_snapshot()
+    # for a number took _SNAPSHOT_LOCK and copied the dict on a public route
+    # (see adsb_routes.snapshot_count). Patch the seam the route actually uses.
+    monkeypatch.setattr(status_mod.adsb_routes, "snapshot_count", lambda: n)
     monkeypatch.setattr(status_mod.adsb_routes, "snapshot_age_s", lambda: age)
     monkeypatch.setattr(maritime, "digitraffic_snapshot", fake_vessels)
 
@@ -116,9 +116,12 @@ def test_status_never_500s_on_snapshot_error(
     async def boom() -> dict:
         raise RuntimeError("snapshot down")
 
+    def boom_sync() -> int:
+        raise RuntimeError("snapshot down")
+
     from app.routes import maritime
 
-    monkeypatch.setattr(status_mod.adsb_routes, "global_snapshot", boom)
+    monkeypatch.setattr(status_mod.adsb_routes, "snapshot_count", boom_sync)
     monkeypatch.setattr(status_mod.adsb_routes, "snapshot_age_s", lambda: None)
     monkeypatch.setattr(maritime, "digitraffic_snapshot", boom)
     r = client.get("/api/status")

@@ -9,7 +9,8 @@ import { create } from 'zustand';
 const LS_RIGHT = 'csl.rightW';
 export const RIGHT_MIN = 260;
 export const RIGHT_MAX = 680;
-const DEFAULT = 360;
+export const RIGHT_DEFAULT = 360;
+const DEFAULT = RIGHT_DEFAULT;
 // The "Wide" reading width — enough for the EntityPanel card stack to reflow to
 // two columns (see theme/reflow.css `@container` breakpoint at 500px content).
 export const RIGHT_WIDE = 560;

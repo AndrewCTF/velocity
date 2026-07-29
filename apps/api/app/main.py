@@ -40,6 +40,13 @@ _LIBC = _get_libc()
 # boot so a memory investigation can tell which allocator is actually in play.
 _JEMALLOC = "jemalloc" in os.environ.get("LD_PRELOAD", "")
 
+# Deployment profile FIRST: it seeds environment defaults, and pydantic-settings
+# reads the environment once and caches. Anything importing get_settings() before
+# this would bake in the unprofiled values.
+from app import profile as _profile  # noqa: E402
+
+_PROFILE = _profile.apply()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -62,6 +69,7 @@ from app.routes import airspace as airspace_routes
 from app.routes import ais as ais_routes
 from app.routes import alert_rules as alert_rules_routes
 from app.routes import alerts as alerts_routes
+from app.routes import answers as answers_routes
 from app.routes import audit as audit_routes
 from app.routes import aviation as aviation_routes
 from app.routes import cables as cables_routes
@@ -209,13 +217,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # without the extra feed. Torn down in the finally block.
             from app import adsb_sidecar  # noqa: PLC0415
 
-            await adsb_sidecar.start()
+            # ADSB_SIDECAR_ENABLED=0 (seeded by the `lite` profile) skips the
+            # whole Chromium tier: 25 processes and 4.4 GB measured. Aircraft
+            # breadth then rides OpenSky, the documented breadth source, so
+            # coverage degrades rather than disappearing.
+            if settings.adsb_sidecar_enabled:
+                await adsb_sidecar.start()
             # Same reason as the AIS twin below: start() runs once, so a sidecar
             # that dies later would stay dead until the next restart and the feed
             # tier would silently fall back to the OpenSky floor.
-            adsb_supervise_task = asyncio.create_task(
-                adsb_sidecar.supervise(), name="adsb_sidecar_supervise"
-            )
+            # The supervisor must not respawn a tier the operator switched off.
+            if settings.adsb_sidecar_enabled:
+                adsb_supervise_task = asyncio.create_task(
+                    adsb_sidecar.supervise(), name="adsb_sidecar_supervise"
+                )
             # AIS twin: a second headless Chromium clears VesselFinder's
             # Cloudflare gate and serves ~21k vessels worldwide as localhost
             # vessels.json (the only keyless GLOBAL AIS). Spawn it here; the
@@ -274,6 +289,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # the unified vessel store (/api/maritime/snapshot) without a viewer.
             # maritime_routes is module-imported — do NOT re-import locally.
             maritime_routes.start_background_poll()
+            # Pre-render the world vessel payload on a short cycle so
+            # /api/maritime/snapshot serves bytes instead of rebuilding ~40k
+            # features per request (measured 185 ms of blocking loop work each,
+            # at a 30 s poll, twice, re-fired on every camera move).
+            maritime_routes.start_vessel_blob()
+            # Event-loop lag probe — the number the 2026-07-27 baseline could
+            # not report, and the one that says whether the loop is starving.
+            status_routes.start_lag_probe()
             # AISStream global firehose (opt-in, keyed): when AISSTREAM_FIREHOSE
             # is set, run the keyed upstream always-on from boot so global
             # vessels stream without needing a browser on /ws/ais. Off by default
@@ -305,7 +328,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # per cycle) so starting at boot is free. Torn down in the finally block.
             from app.intel import watch_officer  # noqa: PLC0415
 
-            await watch_officer.start()
+            # AI_BACKGROUND_ENABLED=0 (seeded by the `lite` profile) stops loops
+            # running model inference unprompted. A brief loop pulled a 21 GB
+            # model into VRAM on a box whose own /api/ai/local reported the
+            # feature disabled. A user ASKING for a brief is unaffected; only the
+            # machine deciding to on its own is.
+            if settings.ai_background_enabled:
+                await watch_officer.start()
             # Country Instability Index: standing loop that scores + persists a
             # snapshot per country on a 15-min cadence (app/routes/instability.py).
             # Idles cheaply like the other standing loops above. Torn down below.
@@ -394,6 +423,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await ais_keyless.stop()
             await marinetraffic.stop()
             await maritime_routes.stop_background_poll()
+            await maritime_routes.stop_vessel_blob()
+            await status_routes.stop_lag_probe()
             await history.stop()
             await watch_eval.stop()
             from app.intel import watch_officer  # noqa: PLC0415
@@ -502,6 +533,8 @@ def create_app() -> FastAPI:
     app.include_router(hazards_routes.router)
     app.include_router(env_routes.router)
     app.include_router(oceans_routes.router)
+    # Named questions with published thresholds (app/intel/answers.py).
+    app.include_router(answers_routes.router)
     app.include_router(spacewx_routes.router)
     app.include_router(infra_routes.router)
     app.include_router(airhazards_routes.router)

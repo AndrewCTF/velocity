@@ -23,6 +23,13 @@ export interface Settings {
   // last reported speed BETWEEN fixes; those positions are ESTIMATED, not
   // observed. Operator-sanctioned opt-in (2026-06-28).
   aircraftDeadReckon: boolean;
+  // Show only contacts that at least two independent sources reported this
+  // cycle. OFF by default: hiding single-source contacts hides real oceanic
+  // traffic that genuinely only one tier can see, so this is an investigative
+  // lens rather than a correctness setting. When ON, what remains is what the
+  // community's own test for fabricated telemetry would accept - a contact
+  // absent everywhere but one feed is exactly the shape of injected ADS-B.
+  corroboratedOnly: boolean;
   // Globe render sharpness ↔ FPS. The MAX device-pixel multiplier the 3D globe
   // renders at: the drawing buffer is css_pixels × min(window.devicePixelRatio,
   // renderPixelCap). 2.0 = native sharp on a 2× / Retina / 200%-scaled display
@@ -64,6 +71,7 @@ export interface Settings {
 const DEFAULTS: Settings = {
   mapQuality: 'high',
   aircraftDeadReckon: false,
+  corroboratedOnly: false,
   renderPixelCap: 2.0,
   continuousRenderGovernor: false,
   selectionAiEnabled: false,

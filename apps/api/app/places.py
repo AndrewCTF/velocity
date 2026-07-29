@@ -384,22 +384,12 @@ def bbox_features(
     click and a search-result click land on the identical entity id.
     """
 
-    def _in_box(lat: float, lon: float) -> bool:
-        if not (minlat <= lat <= maxlat):
-            return False
-        if minlon <= maxlon:  # normal box
-            return minlon <= lon <= maxlon
-        return lon >= minlon or lon <= maxlon  # antimeridian wrap
-
     features: list[dict[str, Any]] = []
 
     if kind == "airport":
-        rows = [
-            a
-            for a in airports()
-            if (not large_only or str(a.get("type") or "") == "large")
-            and _in_box(float(a["lat"]), float(a["lon"]))
-        ]
+        rows = _rows_in_box("airport", minlon, minlat, maxlon, maxlat)
+        if large_only:
+            rows = [a for a in rows if str(a.get("type") or "") == "large"]
         if len(rows) > limit:
             # Stable sort by type rank keeps large before medium; Python's sort
             # is stable so original order is preserved within each rank.
@@ -423,7 +413,7 @@ def bbox_features(
                 }
             )
     elif kind == "port":
-        rows = [p for p in ports() if _in_box(float(p["lat"]), float(p["lon"]))]
+        rows = _rows_in_box("port", minlon, minlat, maxlon, maxlat)
         for p in rows[:limit]:
             wpi = p.get("wpi")
             features.append(
@@ -441,7 +431,7 @@ def bbox_features(
                 }
             )
     else:  # base
-        rows = [b for b in bases() if _in_box(float(b["lat"]), float(b["lon"]))]
+        rows = _rows_in_box("base", minlon, minlat, maxlon, maxlat)
         for b in rows[:limit]:
             features.append(
                 {
@@ -461,6 +451,112 @@ def bbox_features(
     return {"type": "FeatureCollection", "features": features}
 
 
+# ── coarse spatial index ─────────────────────────────────────────────────────
+#
+# Every /api/places/* request used to scan its whole dataset in Python and filter
+# by bbox (and, for infrastructure, by category too). That is ~5.3k airports,
+# ~3.8k ports, ~7.2k bases and ~125k facility rows, per request, on the event
+# loop. It matters because the frontend re-fires these on every camera settle
+# and the nine generated infra.* layers all share ONE endpoint: measured
+# 2026-07-27, /api/places/infrastructure alone took 144 requests in 74 seconds,
+# each a full pass over the same rows for a different category.
+#
+# A 10-degree lat/lon bucket index (648 cells) built once per (dataset,
+# category) turns that into "visit the handful of cells the viewport touches".
+# Rows are still filtered exactly inside the visited cells, so results are
+# identical — this only skips rows that could not have matched.
+_GRID_DEG = 10.0
+
+
+def _cell(lat: float, lon: float) -> tuple[int, int]:
+    return (int((lat + 90.0) // _GRID_DEG), int((lon + 180.0) // _GRID_DEG))
+
+
+def _cells_for_box(
+    minlon: float, minlat: float, maxlon: float, maxlat: float
+) -> list[tuple[int, int]]:
+    """Every grid cell a bbox touches, antimeridian-aware."""
+    y0 = int((max(-90.0, minlat) + 90.0) // _GRID_DEG)
+    y1 = int((min(90.0, maxlat) + 90.0) // _GRID_DEG)
+    if minlon <= maxlon:
+        spans = [(minlon, maxlon)]
+    else:  # wrapped box → two spans
+        spans = [(minlon, 180.0), (-180.0, maxlon)]
+    out: list[tuple[int, int]] = []
+    for lo, hi in spans:
+        x0 = int((max(-180.0, lo) + 180.0) // _GRID_DEG)
+        x1 = int((min(180.0, hi) + 180.0) // _GRID_DEG)
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                out.append((y, x))
+    return out
+
+
+@lru_cache(maxsize=64)
+def _grid(key: str, category: str | None = None) -> dict[tuple[int, int], list[dict[str, Any]]]:
+    """Bucket one dataset (optionally one category of it) by 10-degree cell.
+
+    Cached per (key, category); the datasets themselves are already
+    ``lru_cache``d and never change at runtime, so this is built once.
+    """
+    if key == "airport":
+        rows = airports()
+    elif key == "port":
+        rows = ports()
+    elif key == "base":
+        rows = bases()
+    elif key == "infrastructure":
+        rows = infrastructure()
+    elif key == "military":
+        rows = military()
+    else:  # pragma: no cover — callers pass a literal
+        rows = []
+    grid: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    for r in rows:
+        if category is not None:
+            if str(r.get("category") or "") != category:
+                # `nuclear` is a filter over power rows, not a stored category.
+                if not (category == "nuclear" and r.get("nuclear")):
+                    continue
+        try:
+            lat, lon = float(r["lat"]), float(r["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            continue
+        grid.setdefault(_cell(lat, lon), []).append(r)
+    return grid
+
+
+def _rows_in_box(
+    key: str,
+    minlon: float,
+    minlat: float,
+    maxlon: float,
+    maxlat: float,
+    category: str | None = None,
+) -> list[dict[str, Any]]:
+    """Rows whose lat/lon fall inside the bbox, visiting only the cells it touches."""
+
+    def _in_box(lat: float, lon: float) -> bool:
+        if not (minlat <= lat <= maxlat):
+            return False
+        if minlon <= maxlon:
+            return minlon <= lon <= maxlon
+        return lon >= minlon or lon <= maxlon  # antimeridian wrap
+
+    grid = _grid(key, category)
+    out: list[dict[str, Any]] = []
+    for c in _cells_for_box(minlon, minlat, maxlon, maxlat):
+        bucket = grid.get(c)
+        if not bucket:
+            continue
+        for r in bucket:
+            if _in_box(float(r["lat"]), float(r["lon"])):
+                out.append(r)
+    return out
+
+
 def facility_bbox_features(
     dataset: Literal["infrastructure", "military"],
     minlon: float,
@@ -475,26 +571,16 @@ def facility_bbox_features(
     ``military:{id}`` per the ID CONTRACT (module docstring) so map clicks
     resolve through ``/api/entity/{id}`` and the selection AI brief."""
 
-    def _in_box(lat: float, lon: float) -> bool:
-        if not (minlat <= lat <= maxlat):
-            return False
-        if minlon <= maxlon:
-            return minlon <= lon <= maxlon
-        return lon >= minlon or lon <= maxlon
-
-    rows = infrastructure() if dataset == "infrastructure" else military()
+    # The grid is keyed by (dataset, category), so the category filter is applied
+    # ONCE at index build instead of on every row of every request — which is the
+    # whole cost when nine category layers share this endpoint.
+    rows = _rows_in_box(dataset, minlon, minlat, maxlon, maxlat, category or None)
     prefix = "facility" if dataset == "infrastructure" else "military"
     features: list[dict[str, Any]] = []
     for r in rows:
-        if category and str(r.get("category") or "") != category:
-            # `nuclear` is a filter over power rows, not a stored category.
-            if not (category == "nuclear" and r.get("nuclear")):
-                continue
         try:
             lat, lon = float(r["lat"]), float(r["lon"])
         except (KeyError, TypeError, ValueError):
-            continue
-        if not _in_box(lat, lon):
             continue
         props = {
             "name": r.get("name") or "",

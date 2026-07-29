@@ -4,6 +4,8 @@ import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
 import { setRenderNeed } from '../renderNeeds.js';
 import { useSelection } from '../../state/stores.js';
 import { perfSetAnimated } from '../perf.js';
+import { isStale, isCorroborated, STALE_ALPHA, UNCORROBORATED_ALPHA } from './freshness.js';
+import { useSettings } from '../../state/settings.js';
 
 // Generic batched-primitive renderer for high-count map layers. Renders icons +
 // labels as ONE Cesium.BillboardCollection + ONE Cesium.LabelCollection
@@ -57,13 +59,24 @@ const STANDUP_MAX_HEIGHT_M = 2_500_000; // ~2500 km
 // the ddc far bound → the visible set is pixel-identical to today. Selected +
 // emergency contacts are always materialized regardless of zoom.
 const LABEL_MATERIALIZE_ALT_M = 400_000;
+// Max Cesium Label add/remove operations per frame, across one layer. Sized so a
+// full crossing settles within a couple of polls while no single frame pays for
+// the whole layer.
+const LABEL_OPS_PER_FRAME = 250;
 // §5.4 animated-mirror LOD: rebuild the frustum-visible set at 2 Hz; between
 // rebuilds, mirror only visible prims each frame. Off-screen prims refresh at 2 Hz
 // (a vessel at ≤15 m/s moves ≤7.5 m in 500 ms — invisible when it scrolls in).
 const VISIBLE_RECOMPUTE_MS = 500;
 // Hard cap on prims mirrored per frame — a backstop for a pathological
 // everything-on-screen case; capped by stable Map insertion order (no churn).
+// Lowering this from 4000 was tried on 2026-07-29 and reverted: measured
+// animatedPrims p50 of 22, so the cap never binds — the frustum-visible set is
+// tiny and the cost attributed to it was actually the 500 ms full pass below.
 const MAX_ANIMATED = 4000;
+// Chunking this full pass across frames was tried on 2026-07-29 and REVERTED:
+// spreading it kept the mirror busy every frame instead of leaving idle ones, and
+// measured renderMs p95 39.9 then 53.2 ms against 17.3 un-chunked. The periodic
+// full pass is cheaper than a permanently busy one.
 const _cullSphere = new Cesium.BoundingSphere();
 const _upScratch = new Cesium.Cartesian3();
 
@@ -101,6 +114,25 @@ export interface PrimitiveLayerOpts {
   // while the camera is tilted toward the horizon, so you see the plane/ship
   // from the side. Omit for layers that must stay flat (satellites).
   sideStyleFn?: (props: Record<string, unknown>) => PrimitiveStyle;
+  /** Give this layer its OWN BillboardCollection/LabelCollection instead of the
+   * shared pair.
+   *
+   * Nothing uses this any more and nothing should: measured 2026-07-29, frame
+   * cost tracks the COLLECTION count, not the entity count. 26 841 entities in
+   * 11 collections rendered in 2.09 ms; 53 934 entities in 49 collections took
+   * 11.26 ms. Aircraft and vessels opted out on the assumption that tilt, the
+   * emergency pulse and the cluster hand-off were per-collection behaviour —
+   * they are not. Every one of them operates on this layer's own `prims`; a grep
+   * for `this.bbColl.` / `this.lblColl.` outside add/remove returns nothing.
+   *
+   * Kept as an escape hatch for a future layer that genuinely needs its own
+   * collection (a different blend mode, say). Using it costs a per-frame
+   * collection update. */
+  ownCollections?: boolean;
+  /** Which shared pool this layer joins. Layers that go dirty together should
+   * share one; layers on different update cadences must not. Defaults to
+   * 'static' — the long tail of reference markers that never tick. */
+  poolKey?: string;
 }
 
 interface Prim {
@@ -124,10 +156,83 @@ interface Prim {
   sideScale: number;
 }
 
+
+// ── shared collections ────────────────────────────────────────────────────────
+//
+// One BillboardCollection + one LabelCollection PER LAYER looked like the right
+// shape until it was measured: with every layer on, the scene held **55 billboard
+// collections and 55 label collections**, and Cesium updates each one every
+// frame — bounding-volume recompute, actualPosition recompute, vertex-buffer
+// bookkeeping — whether or not anything in it changed.
+//
+// That cost is per COLLECTION, not per entity, and the evidence is direct:
+// cutting the entity count by 24 % (44 912 -> 34 013, via the shared entity
+// budget) moved frame time by nothing at all (123.5 -> 125.2 ms). Two rounds of
+// batching had already moved it very little for the same reason.
+//
+// So layers that need no per-layer collection behaviour share ONE pair. Aircraft
+// and vessels keep their own, because they own tilt/pulse/cluster state that is
+// genuinely per-layer. Every Billboard and Label still carries its own style,
+// DDC and id — sharing the CONTAINER changes nothing about what is drawn, which
+// is why `remove`, `setLayerOpacity` and `destroy` needed no changes: all three
+// already operated on this layer's own `prims`, never on the collection.
+interface SharedPool {
+  bb: Cesium.BillboardCollection;
+  lbl: Cesium.LabelCollection;
+  refs: number;
+}
+// Pools are keyed by KIND, not global, because a BillboardCollection rebuilds its
+// entire vertex buffer when any member is dirty.
+//
+// One global pool measured WORSE than per-layer (renderMs p95 44-46 ms against
+// 31-36): merging aircraft and vessels — which change every tick — meant every
+// tick rebuilt a buffer holding every static airport and facility too. One pool
+// per layer is also wrong: frame cost tracks collection count (26 841 entities in
+// 11 collections rendered in 2.09 ms; 53 934 in 49 took 11.26 ms).
+//
+// So: layers that go dirty TOGETHER share a pool, layers on different update
+// cadences do not. Aircraft tick together, vessels tick together, and the long
+// tail of static reference markers never ticks at all.
+const sharedPools = new WeakMap<Cesium.Scene, Map<string, SharedPool>>();
+
+function acquireShared(scene: Cesium.Scene, key: string): SharedPool {
+  let byKey = sharedPools.get(scene);
+  if (!byKey) {
+    byKey = new Map();
+    sharedPools.set(scene, byKey);
+  }
+  let pool = byKey.get(key);
+  if (!pool) {
+    const bb = new Cesium.BillboardCollection({ scene });
+    const lbl = new Cesium.LabelCollection({ scene });
+    scene.primitives.add(bb);
+    scene.primitives.add(lbl);
+    pool = { bb, lbl, refs: 0 };
+    byKey.set(key, pool);
+  }
+  pool.refs += 1;
+  return pool;
+}
+
+function releaseShared(scene: Cesium.Scene, key: string): void {
+  const byKey = sharedPools.get(scene);
+  const pool = byKey?.get(key);
+  if (!byKey || !pool) return;
+  pool.refs -= 1;
+  if (pool.refs > 0) return;
+  byKey.delete(key);
+  try { scene.primitives.remove(pool.bb); } catch { /* viewer gone */ }
+  try { scene.primitives.remove(pool.lbl); } catch { /* viewer gone */ }
+}
+
 export class PrimitiveEntityLayer {
   private static seq = 0;
   private readonly bbColl: Cesium.BillboardCollection;
   private readonly lblColl: Cesium.LabelCollection;
+  /** True when bbColl/lblColl belong to the shared pool and must not be removed
+   * from the scene by this layer's destroy(). */
+  private readonly usesShared: boolean;
+  private readonly poolKey: string;
   private readonly prims = new Map<string, Prim>();
   private readonly emergencyIds = new Set<string>();
   // §5.1 render-governor need: unique per instance so multiple aircraft tiers
@@ -142,6 +247,7 @@ export class PrimitiveEntityLayer {
   private removePreUpdate: (() => void) | null = null;
   private removeCameraChanged: (() => void) | null = null;
   private removeFilterSub: (() => void) | null = null;
+  private removeCorroborationSub: (() => void) | null = null;
   // Camera tilted toward the horizon → icons stand up as side silhouettes.
   private tiltActive = false;
 
@@ -149,10 +255,21 @@ export class PrimitiveEntityLayer {
     private readonly scene: Cesium.Scene,
     private readonly opts: PrimitiveLayerOpts,
   ) {
-    this.bbColl = new Cesium.BillboardCollection({ scene });
-    this.lblColl = new Cesium.LabelCollection({ scene });
-    scene.primitives.add(this.bbColl);
-    scene.primitives.add(this.lblColl);
+    // Layers with no per-layer collection behaviour share one pair (see
+    // SharedPool above). Aircraft and vessels opt out via `ownCollections`
+    // because they own tilt / pulse / cluster state that is genuinely per-layer.
+    this.usesShared = !opts.ownCollections;
+    this.poolKey = opts.poolKey ?? 'static';
+    if (this.usesShared) {
+      const pool = acquireShared(scene, this.poolKey);
+      this.bbColl = pool.bb;
+      this.lblColl = pool.lbl;
+    } else {
+      this.bbColl = new Cesium.BillboardCollection({ scene });
+      this.lblColl = new Cesium.LabelCollection({ scene });
+      scene.primitives.add(this.bbColl);
+      scene.primitives.add(this.lblColl);
+    }
     if (opts.sideStyleFn) {
       // Re-evaluate stand-up mode whenever the camera moves (ctrl-drag tilt).
       // §5.2.2: 0.15 (was 0.05) — 0.05 fired camera.changed every ~5% viewport
@@ -188,6 +305,11 @@ export class PrimitiveEntityLayer {
       this.removeFilterSub = useFilters.subscribe((st, prev) => {
         if (st.clauses !== prev.clauses) this.reapplyDim();
       });
+      // Same one-pass re-dim when the corroboration lens flips, so toggling it
+      // does not re-style every contact on the next poll instead.
+      this.removeCorroborationSub = useSettings.subscribe((st, prev) => {
+        if (st.corroboratedOnly !== prev.corroboratedOnly) this.reapplyDim();
+      });
     }
   }
 
@@ -202,7 +324,11 @@ export class PrimitiveEntityLayer {
     const active = clauses.length > 0;
     let changed = false;
     for (const p of this.prims.values()) {
-      const dim = active && !entityPassesFilter(p.props, clauses) ? FILTER_DIM_ALPHA : 1;
+      const stale = isStale(p.props) ? STALE_ALPHA : 1;
+      const dim =
+        (active && !entityPassesFilter(p.props, clauses) ? FILTER_DIM_ALPHA : 1) *
+        stale *
+        this.corroborationFactor(p.props);
       if (dim === p.dimFactor) continue;
       p.dimFactor = dim;
       changed = true;
@@ -219,15 +345,63 @@ export class PrimitiveEntityLayer {
     }
   }
 
+  // Two independent reasons an icon dims, multiplied so they compose:
+  //   1. the map-side facet filter excluded it (FILTER_DIM_ALPHA), and
+  //   2. its position is stale (STALE_ALPHA) — the fix is real but old.
+  // Staleness applies whether or not this layer has filtering, because it is a
+  // statement about the DATA, not about the operator's current selection. A
+  // stale contact stays drawn: it is still where the aircraft was, and deleting
+  // it would shrink the picture silently, which is the failure this whole change
+  // exists to end (see freshness.ts).
   private dimFactorFor(props: Record<string, unknown>): number {
-    if (!this.opts.filter) return 1;
+    const stale = isStale(props) ? STALE_ALPHA : 1;
+    const uncorroborated = this.corroborationFactor(props);
+    if (!this.opts.filter) return stale * uncorroborated;
     const clauses = useFilters.getState().clauses;
-    return clauses.length > 0 && !entityPassesFilter(props, clauses) ? FILTER_DIM_ALPHA : 1;
+    const filtered =
+      clauses.length > 0 && !entityPassesFilter(props, clauses) ? FILTER_DIM_ALPHA : 1;
+    return stale * filtered * uncorroborated;
+  }
+
+  // The corroboration lens: with it on, a contact only one source reported
+  // recedes so what remains is what two or more independent observers agree is
+  // there. Off by default, because single-source is normal over open ocean.
+  private corroborationFactor(props: Record<string, unknown>): number {
+    if (!useSettings.getState().corroboratedOnly) return 1;
+    return isCorroborated(props) ? 1 : UNCORROBORATED_ALPHA;
   }
 
   // §5.5: should this contact's label be materialized right now? Inside the ddc
   // draw window (< 400 km) always; selected + emergency contacts always (cheap
   // insurance — the label spec is preserved for every contact via labelFn).
+  // Label churn is amortised across frames.
+  //
+  // wantLabel flips for EVERY contact the moment the camera crosses
+  // LABEL_MATERIALIZE_ALT_M, and sync() runs over the whole layer in one drain —
+  // so a single altitude crossing added or removed thousands of Cesium Labels at
+  // once and forced a full LabelCollection vertex rebuild. That is the frame-time
+  // tail: measured frameMsEMA p95 of 61-85 ms against a p50 of 26-34 ms, i.e. the
+  // rendersPerSec p05 the harness grades on.
+  //
+  // A budget per frame spreads the transition over a few polls instead. Skipping
+  // a label this pass is safe: the next sync for that id re-evaluates and
+  // converges, and an icon without its label for one poll is invisible to the
+  // operator at these zoom levels.
+  private labelOps = 0;
+  private labelOpsAt = 0;
+
+  /** Self-resetting: preUpdate is only hooked for animating layers, so the
+   * window is measured against the clock rather than a frame callback. One
+   * frame at 60 Hz is ~16 ms. */
+  private labelBudgetLeft(): boolean {
+    const now = performance.now();
+    if (now - this.labelOpsAt >= 16) {
+      this.labelOpsAt = now;
+      this.labelOps = 0;
+    }
+    return this.labelOps < LABEL_OPS_PER_FRAME;
+  }
+
   private wantLabel(id: string, emergency: boolean): boolean {
     if (emergency) return true;
     if (useSelection.getState().selectedEntityId === id) return true;
@@ -265,8 +439,10 @@ export class PrimitiveEntityLayer {
         id: { id },
       });
       let lbl: Cesium.Label | null = null;
-      if (labelText && this.wantLabel(id, !!s.emergency))
+      if (labelText && this.wantLabel(id, !!s.emergency) && this.labelBudgetLeft()) {
         lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
+        this.labelOps++;
+      }
       p = {
         bb, lbl, entity, props, emergency: !!s.emergency, dimFactor, labelText, tint,
         topImage: s.imageUri, topRot: rot, topScale: s.scale,
@@ -299,14 +475,19 @@ export class PrimitiveEntityLayer {
       // selected/emergency). Beyond it, destroy the label so world view holds ~0
       // labels. Recreated lazily on zoom-in — same visible set as today.
       if (labelText && this.wantLabel(id, !!s.emergency)) {
-        if (!p.lbl) p.lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
-        else {
+        if (!p.lbl) {
+          if (this.labelBudgetLeft()) {
+            p.lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
+            this.labelOps++;
+          }
+        } else {
           p.lbl.position = pos;
           if (p.labelText !== labelText) p.lbl.text = labelText;
         }
-      } else if (p.lbl) {
+      } else if (p.lbl && this.labelBudgetLeft()) {
         this.lblColl.remove(p.lbl);
         p.lbl = null;
+        this.labelOps++;
       }
       p.labelText = labelText;
       p.emergency = !!s.emergency;
@@ -401,8 +582,20 @@ export class PrimitiveEntityLayer {
     this.removeCameraChanged = null;
     this.removeFilterSub?.();
     this.removeFilterSub = null;
-    try { this.scene.primitives.remove(this.bbColl); } catch { /* viewer gone */ }
-    try { this.scene.primitives.remove(this.lblColl); } catch { /* viewer gone */ }
+    this.removeCorroborationSub?.();
+    this.removeCorroborationSub = null;
+    if (this.usesShared) {
+      // Only OUR billboards/labels leave the shared collection; the container
+      // itself outlives this layer and is torn down when the last ref goes.
+      for (const p of this.prims.values()) {
+        try { this.bbColl.remove(p.bb); } catch { /* collection gone */ }
+        if (p.lbl) { try { this.lblColl.remove(p.lbl); } catch { /* gone */ } }
+      }
+      releaseShared(this.scene, this.poolKey);
+    } else {
+      try { this.scene.primitives.remove(this.bbColl); } catch { /* viewer gone */ }
+      try { this.scene.primitives.remove(this.lblColl); } catch { /* viewer gone */ }
+    }
     this.prims.clear();
     this.emergencyIds.clear();
     this.lastPulseNeed = false;
@@ -441,6 +634,12 @@ export class PrimitiveEntityLayer {
           let pos: Cesium.Cartesian3 | undefined;
           try { pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined; } catch { pos = undefined; }
           if (!pos) continue;
+          // Write EVERY prim's position here, on screen or not. Culling first and
+          // writing only the visible ones was tried on 2026-07-29 and measured
+          // consistently WORSE (renderMs p95 ~40 ms across three runs against
+          // ~31 un-culled), and there is a mechanism: deferring the writes means
+          // they all land in one frame the moment the camera moves, which is
+          // exactly when the p95 is taken. Spread beats deferred here.
           p.bb.position = pos;
           if (p.lbl) p.lbl.position = pos;
           _cullSphere.center = pos;
