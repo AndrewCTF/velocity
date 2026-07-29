@@ -4,7 +4,8 @@ import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
 import { setRenderNeed } from '../renderNeeds.js';
 import { useSelection } from '../../state/stores.js';
 import { perfSetAnimated } from '../perf.js';
-import { isStale, STALE_ALPHA } from './freshness.js';
+import { isStale, isCorroborated, STALE_ALPHA, UNCORROBORATED_ALPHA } from './freshness.js';
+import { useSettings } from '../../state/settings.js';
 
 // Generic batched-primitive renderer for high-count map layers. Renders icons +
 // labels as ONE Cesium.BillboardCollection + ONE Cesium.LabelCollection
@@ -246,6 +247,7 @@ export class PrimitiveEntityLayer {
   private removePreUpdate: (() => void) | null = null;
   private removeCameraChanged: (() => void) | null = null;
   private removeFilterSub: (() => void) | null = null;
+  private removeCorroborationSub: (() => void) | null = null;
   // Camera tilted toward the horizon → icons stand up as side silhouettes.
   private tiltActive = false;
 
@@ -303,6 +305,11 @@ export class PrimitiveEntityLayer {
       this.removeFilterSub = useFilters.subscribe((st, prev) => {
         if (st.clauses !== prev.clauses) this.reapplyDim();
       });
+      // Same one-pass re-dim when the corroboration lens flips, so toggling it
+      // does not re-style every contact on the next poll instead.
+      this.removeCorroborationSub = useSettings.subscribe((st, prev) => {
+        if (st.corroboratedOnly !== prev.corroboratedOnly) this.reapplyDim();
+      });
     }
   }
 
@@ -318,7 +325,10 @@ export class PrimitiveEntityLayer {
     let changed = false;
     for (const p of this.prims.values()) {
       const stale = isStale(p.props) ? STALE_ALPHA : 1;
-      const dim = (active && !entityPassesFilter(p.props, clauses) ? FILTER_DIM_ALPHA : 1) * stale;
+      const dim =
+        (active && !entityPassesFilter(p.props, clauses) ? FILTER_DIM_ALPHA : 1) *
+        stale *
+        this.corroborationFactor(p.props);
       if (dim === p.dimFactor) continue;
       p.dimFactor = dim;
       changed = true;
@@ -345,11 +355,20 @@ export class PrimitiveEntityLayer {
   // exists to end (see freshness.ts).
   private dimFactorFor(props: Record<string, unknown>): number {
     const stale = isStale(props) ? STALE_ALPHA : 1;
-    if (!this.opts.filter) return stale;
+    const uncorroborated = this.corroborationFactor(props);
+    if (!this.opts.filter) return stale * uncorroborated;
     const clauses = useFilters.getState().clauses;
     const filtered =
       clauses.length > 0 && !entityPassesFilter(props, clauses) ? FILTER_DIM_ALPHA : 1;
-    return stale * filtered;
+    return stale * filtered * uncorroborated;
+  }
+
+  // The corroboration lens: with it on, a contact only one source reported
+  // recedes so what remains is what two or more independent observers agree is
+  // there. Off by default, because single-source is normal over open ocean.
+  private corroborationFactor(props: Record<string, unknown>): number {
+    if (!useSettings.getState().corroboratedOnly) return 1;
+    return isCorroborated(props) ? 1 : UNCORROBORATED_ALPHA;
   }
 
   // §5.5: should this contact's label be materialized right now? Inside the ddc
@@ -563,6 +582,8 @@ export class PrimitiveEntityLayer {
     this.removeCameraChanged = null;
     this.removeFilterSub?.();
     this.removeFilterSub = null;
+    this.removeCorroborationSub?.();
+    this.removeCorroborationSub = null;
     if (this.usesShared) {
       // Only OUR billboards/labels leave the shared collection; the container
       // itself outlives this layer and is torn down when the last ref goes.

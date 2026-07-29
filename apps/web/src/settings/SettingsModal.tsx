@@ -101,6 +101,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
             Aircraft motion
           </div>
           <DeadReckonToggle />
+      <CorroborationToggle />
 
           <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
             Display
@@ -194,6 +195,48 @@ function DashboardToggle(): JSX.Element {
 // ADS-B fixes only. When ON, aircraft glide forward along their last reported
 // track/speed BETWEEN fixes; those positions are ESTIMATED (a map badge says
 // so). Operator-sanctioned opt-in (2026-06-28) over the real-fix-only guardrail.
+// Corroboration lens. OFF by default. When ON, a contact that only ONE source
+// reported this cycle fades, so what stays bright is what two or more
+// independent observers agree is there.
+//
+// It is a lens, not a correctness setting: single-source is completely normal
+// over open ocean, where one breadth tier may be the only thing that can see an
+// aircraft at all. What it answers is the question the community actually asks
+// of a suspicious contact, which is whether it shows up anywhere else.
+function CorroborationToggle(): JSX.Element {
+  const on = useSettings((s) => s.corroboratedOnly);
+  const set = useSettings((s) => s.set);
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => set('corroboratedOnly', !on)}
+      className={`w-full text-left rounded-sm border px-2.5 py-2 transition-colors ${
+        on
+          ? 'border-accent-line bg-accent-dim text-txt-0'
+          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="mono text-[11px] font-medium">Fade single-source contacts</span>
+        <span
+          className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
+            on ? 'border-accent-line text-accent' : 'border-line text-txt-3'
+          }`}
+        >
+          {on ? 'ON' : 'OFF'}
+        </span>
+      </div>
+      <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
+        Dim contacts only one feed reported, so what stays bright is corroborated by
+        two or more. Single-source is normal over open ocean, so this is an
+        investigative lens rather than a filter. Off by default.
+      </div>
+    </button>
+  );
+}
+
 function DeadReckonToggle(): JSX.Element {
   const on = useSettings((s) => s.aircraftDeadReckon);
   const set = useSettings((s) => s.set);

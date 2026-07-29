@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   FRESH_POS_S,
   agoText,
+  isCorroborated,
   isStale,
   positionAgeS,
   staleLabelSuffix,
@@ -79,5 +80,23 @@ describe('label suffix', () => {
 
   it('passes a null identifier through unchanged', () => {
     expect(withStaleness(null, { stale: true, seen_pos_s: 300 })).toBeNull();
+  });
+});
+
+describe('isCorroborated', () => {
+  it('needs two independent observers', () => {
+    expect(isCorroborated({ source_count: 2 })).toBe(true);
+    expect(isCorroborated({ source_count: 3 })).toBe(true);
+    expect(isCorroborated({ source_count: 1 })).toBe(false);
+    expect(isCorroborated({ source_count: 0 })).toBe(false);
+  });
+
+  it('treats an unknown observer count as corroborated', () => {
+    // A contact carried forward from an earlier cycle has no observer set for
+    // THIS one. Reading "we did not record it" as "only one source saw it"
+    // would fade real traffic for a bookkeeping reason.
+    expect(isCorroborated({})).toBe(true);
+    expect(isCorroborated({ source_count: 'two' })).toBe(true);
+    expect(isCorroborated({ source_count: Number.NaN })).toBe(true);
   });
 });

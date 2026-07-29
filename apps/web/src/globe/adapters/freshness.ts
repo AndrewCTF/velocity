@@ -98,3 +98,24 @@ export function withStaleness(
   const suffix = staleLabelSuffix(props);
   return suffix ? `${text}${suffix}` : text;
 }
+
+/** Opacity applied to a contact only one source reported, while the
+ *  corroboration lens is on. Low enough to recede behind confirmed traffic,
+ *  not zero: deleting it would hide real oceanic contacts that genuinely only
+ *  one tier can see, and silently shrinking the picture is the failure this
+ *  whole wave pushes back on. */
+export const UNCORROBORATED_ALPHA = 0.18;
+
+/**
+ * True when at least two independent sources reported this contact in the
+ * current cycle.
+ *
+ * Unknown counts as corroborated. A contact carried forward from an earlier
+ * cycle has no observer set for THIS one, and treating "we did not record it"
+ * as "only one source saw it" would fade real traffic for a bookkeeping reason.
+ */
+export function isCorroborated(props: Record<string, unknown>): boolean {
+  const n = props['source_count'];
+  if (typeof n !== 'number' || !Number.isFinite(n)) return true;
+  return n >= 2;
+}
