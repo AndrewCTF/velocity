@@ -209,11 +209,19 @@ export function refreshBagInPlace(bag: Cesium.PropertyBag, props: Record<string,
       // ~6 % of the main thread in Event.raiseEvent alone, plus the allocation
       // churn behind a 7.7 % GC share.
       //
-      // Strict equality, deliberately: the properties that actually move are
-      // primitives (lat/lon/alt/speed/track/seen). An object-valued prop that is
-      // rebuilt per poll still writes, which is correct — we cannot know it is
-      // unchanged without a deep compare that would cost more than the write.
-      if (raw[key] !== props[key]) raw[key] = props[key];
+      // Compare against the property's VALUE, not the property object.
+      // PropertyBag's getter hands back a Cesium Property (ConstantProperty),
+      // never the raw value, so a naive `raw[key] !== props[key]` compares a
+      // wrapper to a primitive and is true every single time — the guard would
+      // read correctly and do nothing. ConstantProperty.getValue ignores its
+      // time argument, so this is a field read, not an interpolation.
+      const cur = raw[key] as { getValue?: (t: unknown) => unknown } | undefined;
+      const curVal = typeof cur?.getValue === 'function' ? cur.getValue(undefined) : cur;
+      // Strict equality: the properties that actually move are primitives
+      // (lat/lon/alt/speed/track/seen). An object-valued prop rebuilt per poll
+      // still writes, which is correct — knowing it is unchanged would need a
+      // deep compare costing more than the write.
+      if (curVal !== props[key]) raw[key] = props[key];
     } else {
       bag.addProperty(key, props[key]);
     }
