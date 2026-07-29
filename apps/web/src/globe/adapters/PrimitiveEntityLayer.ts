@@ -67,6 +67,9 @@ const LABEL_OPS_PER_FRAME = 250;
 const VISIBLE_RECOMPUTE_MS = 500;
 // Hard cap on prims mirrored per frame — a backstop for a pathological
 // everything-on-screen case; capped by stable Map insertion order (no churn).
+// Lowering this from 4000 was tried on 2026-07-29 and reverted: measured
+// animatedPrims p50 of 22, so the cap never binds — the frustum-visible set is
+// tiny and the cost attributed to it was actually the 500 ms full pass below.
 const MAX_ANIMATED = 4000;
 // Chunking this full pass across frames was tried on 2026-07-29 and REVERTED:
 // spreading it kept the mirror busy every frame instead of leaving idle ones, and
@@ -564,6 +567,12 @@ export class PrimitiveEntityLayer {
           let pos: Cesium.Cartesian3 | undefined;
           try { pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined; } catch { pos = undefined; }
           if (!pos) continue;
+          // Write EVERY prim's position here, on screen or not. Culling first and
+          // writing only the visible ones was tried on 2026-07-29 and measured
+          // consistently WORSE (renderMs p95 ~40 ms across three runs against
+          // ~31 un-culled), and there is a mechanism: deferring the writes means
+          // they all land in one frame the moment the camera moves, which is
+          // exactly when the p95 is taken. Spread beats deferred here.
           p.bb.position = pos;
           if (p.lbl) p.lbl.position = pos;
           _cullSphere.center = pos;
