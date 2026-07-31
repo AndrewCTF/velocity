@@ -18,19 +18,55 @@ import httpx
 _CLIENT: httpx.AsyncClient | None = None
 
 
+def _transport(proxy: str | None = None) -> httpx.AsyncHTTPTransport:
+    """One transport shape, optionally routed through `proxy`.
+
+    local_address pins outbound sockets to IPv4. Several upstreams
+    (CloudFront-backed weathercam.digitraffic.fi, cwwp2.dot.ca.gov) publish
+    AAAA records; on hosts with broken IPv6 egress httpx exhausts the v6
+    attempts and reports "All connection attempts failed" while curl quietly
+    falls back. One retry absorbs transient resets on long-lived pooled
+    connections.
+    """
+    return httpx.AsyncHTTPTransport(
+        local_address="0.0.0.0",
+        retries=1,
+        proxy=httpx.Proxy(proxy) if proxy else None,
+    )
+
+
+def _env_proxy_mounts() -> dict[str, httpx.AsyncHTTPTransport]:
+    """Per-pattern transports mirroring HTTPS_PROXY / NO_PROXY.
+
+    httpx only consults the proxy environment when `transport` is left unset
+    (`allow_env_proxies = trust_env and transport is None`), and we must pass a
+    transport for the IPv4 pin above. That combination silently drops proxy
+    support, so behind an egress proxy every upstream reachable ONLY through it
+    dies as a ReadTimeout — measured on celestrak.org, which took the satellite
+    layer to zero while the direct-routable feeds looked fine.
+
+    Rebuild the map httpx would have built. A `None` entry is a NO_PROXY host
+    (loopback, so the localhost sidecars keep bypassing the proxy). Returns
+    empty when nothing is configured, which is the unproxied default and leaves
+    behaviour exactly as it was.
+    """
+    try:
+        from httpx._utils import get_environment_proxies  # noqa: PLC0415
+    except ImportError:  # pragma: no cover — private helper moved
+        return {}
+    return {
+        pattern: _transport(url) for pattern, url in get_environment_proxies().items()
+    }
+
+
 def get_client() -> httpx.AsyncClient:
     global _CLIENT
     if _CLIENT is None:
         _CLIENT = httpx.AsyncClient(
             timeout=httpx.Timeout(15.0, connect=5.0),
             headers={"User-Agent": "osint-console/0.1"},
-            # local_address pins outbound sockets to IPv4. Several upstreams
-            # (CloudFront-backed weathercam.digitraffic.fi, cwwp2.dot.ca.gov)
-            # publish AAAA records; on hosts with broken IPv6 egress httpx
-            # exhausts the v6 attempts and reports "All connection attempts
-            # failed" while curl quietly falls back. One retry absorbs
-            # transient resets on long-lived pooled connections.
-            transport=httpx.AsyncHTTPTransport(local_address="0.0.0.0", retries=1),
+            transport=_transport(),
+            mounts=_env_proxy_mounts(),
         )
     return _CLIENT
 
