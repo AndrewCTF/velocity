@@ -155,9 +155,9 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **2108 passed + 2 skipped in ~110 s** (skip = opt-in live probes;
-  measured 2026-07-30, branch overnight-provenance-answers-2026-07-29 — see
-  `docs/exec-report-2026-07-29.md`). Runs SERIAL by default: `-n auto --dist
+  Baseline: **2141 passed + 2 skipped in ~333 s** (skip = opt-in live probes;
+  measured 2026-07-31, branch repo-setup-ui-access, upstream proxy pool wave).
+  Runs SERIAL by default: `-n auto --dist
   loadfile` groups different files per worker on different core counts, so a
   suite with module-state leaks answers differently per machine and CI (4 cores)
   failed a branch that was green locally (16). Opt in per-machine, never commit

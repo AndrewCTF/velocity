@@ -127,6 +127,28 @@ class Settings(BaseSettings):
     # union for deploys without a sidecar; the local .env sets ADSB_SIDECAR_ONLY=1.
     adsb_sidecar_only: bool = False
 
+    # ── outbound proxy pool (app.upstream_proxy) ──
+    # Comma-separated proxy URLs the shared upstream client rotates over, e.g.
+    # "http://user:pass@host:8080,socks5://host:1080". EMPTY = off, which is the
+    # default and leaves the client wired exactly as it was.
+    # Point this ONLY at egress you own or pay for. There is no discovery and no
+    # bundled list: public "free proxy" pools are mostly malware-enrolled home
+    # machines and interception points, so they would route this console's
+    # queries through devices whose owners never agreed to carry them.
+    # Useful because several upstreams gate on the caller's IP rather than a
+    # key — airplanes.live 403s a datacenter address, adsb.lol rate-limits per
+    # source IP, OpenSky's anonymous credit budget is per IP.
+    upstream_proxies: str = ""  # UPSTREAM_PROXIES
+    # A proxy that errors is skipped for this long before being retried.
+    upstream_proxy_cooldown_s: float = 300.0
+    # How many pool members one request may try before giving up.
+    upstream_proxy_max_tries: int = 3
+    # When every proxy is cooling down: False (default) fails the request, True
+    # sends it directly. Default False on purpose — configuring a proxy usually
+    # means "not from my own address", and a silent direct fallback would leak
+    # exactly what the proxy was there to avoid.
+    upstream_proxy_fallback_direct: bool = False
+
     # ── infra ──
     database_url: str = "postgresql+asyncpg://osint:osint@localhost:5432/osint"
     redis_url: str = "redis://localhost:6379/0"

@@ -18,21 +18,104 @@ import httpx
 _CLIENT: httpx.AsyncClient | None = None
 
 
+def _transport(proxy: str | None = None) -> httpx.AsyncHTTPTransport:
+    """One transport shape, optionally routed through `proxy`.
+
+    local_address pins outbound sockets to IPv4. Several upstreams
+    (CloudFront-backed weathercam.digitraffic.fi, cwwp2.dot.ca.gov) publish
+    AAAA records; on hosts with broken IPv6 egress httpx exhausts the v6
+    attempts and reports "All connection attempts failed" while curl quietly
+    falls back. One retry absorbs transient resets on long-lived pooled
+    connections.
+    """
+    return httpx.AsyncHTTPTransport(
+        local_address="0.0.0.0",
+        retries=1,
+        proxy=httpx.Proxy(proxy) if proxy else None,
+    )
+
+
+def _env_proxy_map() -> dict[str, str | None]:
+    """The raw HTTPS_PROXY / NO_PROXY map httpx would have built.
+
+    httpx only consults the proxy environment when `transport` is left unset
+    (`allow_env_proxies = trust_env and transport is None`), and we must pass a
+    transport for the IPv4 pin above. That combination silently drops proxy
+    support, so behind an egress proxy every upstream reachable ONLY through it
+    dies as a ReadTimeout — measured on celestrak.org, which took the satellite
+    layer to zero while the direct-routable feeds looked fine.
+
+    A `None` value is a NO_PROXY host (loopback, so the localhost sidecars keep
+    bypassing the proxy). Returns empty when nothing is configured, which is the
+    unproxied default and leaves behaviour exactly as it was.
+    """
+    try:
+        from httpx._utils import get_environment_proxies  # noqa: PLC0415
+    except ImportError:  # pragma: no cover — private helper moved
+        return {}
+    return dict(get_environment_proxies())
+
+
+def _default_transport() -> httpx.AsyncBaseTransport:
+    """The pool when UPSTREAM_PROXIES is set, otherwise the plain transport."""
+    from app import upstream_proxy  # noqa: PLC0415 — avoids a config import cycle
+    from app.config import get_settings  # noqa: PLC0415
+
+    settings = get_settings()
+    pool = upstream_proxy.build(
+        settings.upstream_proxies,
+        _transport,
+        cooldown_s=settings.upstream_proxy_cooldown_s,
+        max_tries=settings.upstream_proxy_max_tries,
+        fallback_direct=settings.upstream_proxy_fallback_direct,
+    )
+    return pool or _transport()
+
+
 def get_client() -> httpx.AsyncClient:
     global _CLIENT
     if _CLIENT is None:
+        from app import upstream_proxy  # noqa: PLC0415
+
+        default = _default_transport()
+        env = _env_proxy_map()
+        pooled = isinstance(default, upstream_proxy.RotatingProxyTransport)
+        mounts: dict[str, httpx.AsyncBaseTransport | None] = {}
+        for pattern, url in env.items():
+            # With a pool active, an explicit UPSTREAM_PROXIES outranks the
+            # ambient environment proxy: keeping the env's scheme mount (e.g.
+            # "https://") would shadow the default transport and the pool would
+            # never see a single request. Its NO_PROXY exclusions still apply —
+            # those are "do not proxy this host", which the pool must honour too.
+            if pooled and url is not None:
+                continue
+            mounts[pattern] = _transport(url)
+        if pooled:
+            # Same-host sidecars (:8090 ADS-B, :8093 AIS) must not ride the pool:
+            # an external hop cannot reach them and would publish their traffic.
+            # The env map already pins loopback when NO_PROXY is set; add it
+            # explicitly for the case where only UPSTREAM_PROXIES is configured.
+            for pattern in upstream_proxy.LOOPBACK_PATTERNS:
+                mounts.setdefault(pattern, _transport())
         _CLIENT = httpx.AsyncClient(
             timeout=httpx.Timeout(15.0, connect=5.0),
             headers={"User-Agent": "osint-console/0.1"},
-            # local_address pins outbound sockets to IPv4. Several upstreams
-            # (CloudFront-backed weathercam.digitraffic.fi, cwwp2.dot.ca.gov)
-            # publish AAAA records; on hosts with broken IPv6 egress httpx
-            # exhausts the v6 attempts and reports "All connection attempts
-            # failed" while curl quietly falls back. One retry absorbs
-            # transient resets on long-lived pooled connections.
-            transport=httpx.AsyncHTTPTransport(local_address="0.0.0.0", retries=1),
+            transport=default,
+            mounts=mounts,
         )
     return _CLIENT
+
+
+def proxy_stats() -> list[dict[str, object]] | None:
+    """Per-proxy health when a pool is active, else None. Credentials redacted."""
+    from app import upstream_proxy  # noqa: PLC0415
+
+    if _CLIENT is None:
+        return None
+    transport = _CLIENT._transport  # noqa: SLF001 — httpx exposes no public getter
+    if isinstance(transport, upstream_proxy.RotatingProxyTransport):
+        return transport.stats()
+    return None
 
 
 T = TypeVar("T")

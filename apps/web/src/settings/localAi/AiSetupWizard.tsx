@@ -131,9 +131,9 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
                         </span>
                         <StatusDot tone={p.fits ? 'green' : 'red'} />
                       </div>
-                      <div className="mono text-[10px] text-txt-3 mt-0.5 truncate">{p.repo_id}</div>
+                      <div className="mono text-[10px] text-txt-3 mt-0.5 truncate">{p.repo_id ?? '—'}</div>
                       <div className="mono text-[10px] text-txt-3">
-                        {p.quant} · ~{p.est_size_gb.toFixed(0)} GB
+                        {p.quant ?? '—'} · {p.est_size_gb === null ? '—' : `~${p.est_size_gb.toFixed(0)} GB`}
                       </div>
                       <p className="mono text-[10px] text-txt-3 mt-0.5 leading-snug">
                         {recommended ? hardware.recommendation.reason : p.reason}
@@ -205,17 +205,20 @@ function ConfirmStep({
   diskFreeMb: number;
   error: string | null;
 }): JSX.Element {
-  const estBytes = preset.est_size_gb * 1024 * 1024 * 1024;
+  // A preset that does not fit reports no size, so there is nothing to compare
+  // against free disk — skip the warning rather than guess at a figure.
   const freeBytes = diskFreeMb * 1024 * 1024;
-  const tight = estBytes > freeBytes * 0.8;
+  const tight =
+    preset.est_size_gb !== null && preset.est_size_gb * 1024 * 1024 * 1024 > freeBytes * 0.8;
   return (
     <div className="space-y-1.5">
       <p className="mono text-[11px] text-txt-2">Confirm download:</p>
       <div className="rounded-sm border border-line bg-bg-2/50 p-2.5">
-        <div className="mono text-[11px] text-txt-1">{preset.repo_id}</div>
-        <div className="mono text-[10px] text-txt-3 mt-0.5">{preset.quant}</div>
+        <div className="mono text-[11px] text-txt-1">{preset.repo_id ?? '—'}</div>
+        <div className="mono text-[10px] text-txt-3 mt-0.5">{preset.quant ?? '—'}</div>
         <div className="mono text-[10px] text-txt-3 mt-1">
-          ~{preset.est_size_gb.toFixed(1)} GB to download · {humanBytes(diskFreeMb * 1024 * 1024)} free
+          {preset.est_size_gb === null ? '—' : `~${preset.est_size_gb.toFixed(1)} GB`} to download ·{' '}
+          {humanBytes(diskFreeMb * 1024 * 1024)} free
         </div>
       </div>
       {tight && (
