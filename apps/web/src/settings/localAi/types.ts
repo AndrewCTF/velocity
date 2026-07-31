@@ -70,11 +70,16 @@ export interface HardwareGpu {
   vram_mb: number;
 }
 
+// A preset the hardware cannot run carries NO catalog entry: the backend's
+// `_preset_dict(entry=None, ...)` nulls tier/repo_id/quant/est_size_gb and sets
+// fits=false (app/localllm/hardware.py). Typing these non-nullable is what let
+// `est_size_gb.toFixed()` take the whole shell down on any box where a tier
+// does not fit (no GPU → the speed preset is always null).
 export interface HardwarePreset {
-  tier: string;
-  repo_id: string;
-  quant: string;
-  est_size_gb: number;
+  tier: string | null;
+  repo_id: string | null;
+  quant: string | null;
+  est_size_gb: number | null;
   fits: boolean;
   reason: string;
   refused_reason?: string;

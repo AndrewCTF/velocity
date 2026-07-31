@@ -55,6 +55,10 @@ function PresetCard({
   onDownload: (repoId: string, quant: string) => void;
 }): JSX.Element {
   const refused = !preset.fits && Boolean(preset.refused_reason);
+  // Consts, not property reads: narrowing a property does not survive into the
+  // onClick closure below, so the download call would not typecheck.
+  const repoId = preset.repo_id;
+  const quant = preset.quant;
   const already = installed.some((m) => m.repo_id === preset.repo_id && m.quant === preset.quant);
   const [settingActive, setSettingActive] = useState(false);
 
@@ -83,19 +87,22 @@ function PresetCard({
         <span className="mono text-[11px] font-medium text-txt-1">{PRESET_LABEL[id]}</span>
         {recommended && <Badge tone="accent">recommended</Badge>}
       </div>
-      <div className="mono text-[10px] text-txt-3">{preset.tier} tier</div>
-      <div className="mono text-[10px] text-txt-2 truncate" title={preset.repo_id}>
-        {preset.repo_id}
+      <div className="mono text-[10px] text-txt-3">{preset.tier ?? '—'} tier</div>
+      <div className="mono text-[10px] text-txt-2 truncate" title={preset.repo_id ?? undefined}>
+        {preset.repo_id ?? '—'}
       </div>
       <div className="mono text-[10px] text-txt-3">
-        {preset.quant} · ~{preset.est_size_gb.toFixed(0)} GB
+        {preset.quant ?? '—'} ·{' '}
+        {preset.est_size_gb === null ? '—' : `~${preset.est_size_gb.toFixed(0)} GB`}
       </div>
       <p className="mono text-[10px] text-txt-3 leading-snug">
         {recommended ? recommendationReason : preset.reason}
       </p>
       {refused && <p className="mono text-[10px] text-alert leading-snug">{preset.refused_reason}</p>}
       <div className="mt-auto pt-1">
-        {refused ? (
+        {/* No catalog entry fit this hardware, so there is no repo/quant to
+            pull — the card offers nothing to download, same as a refusal. */}
+        {refused || repoId === null || quant === null ? (
           <Btn size="sm" disabled className="w-full">
             unavailable
           </Btn>
@@ -104,7 +111,7 @@ function PresetCard({
             {settingActive ? '…' : 'Set as main'}
           </Btn>
         ) : (
-          <Btn size="sm" tone="accent" onClick={() => onDownload(preset.repo_id, preset.quant)} className="w-full">
+          <Btn size="sm" tone="accent" onClick={() => onDownload(repoId, quant)} className="w-full">
             ⭳ Download &amp; use
           </Btn>
         )}
