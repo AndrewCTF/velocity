@@ -741,6 +741,7 @@ Findings from the same-day state-of-project audit
 
 ## Backend test baseline history
 
+- 2108 + 2 skipped — 2026-07-30, overnight-provenance-answers-2026-07-29
 - 1985 + 2 skipped — 2026-07-27, perf-annotate-sidecars-2026-07-27, performance wave
 - 1972 + 2 skipped — 2026-07-24, worldmonitor-gaps-2026-07, persona waves 2+3
 
