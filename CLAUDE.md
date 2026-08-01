@@ -109,6 +109,33 @@ Cadence / backend:
 - Satellites: `/api/space/gp` requests `FORMAT=tle` (JSON variant → 0 sats);
   client SGP4 via `SampledPositionProperty` is real physics, exempt from the
   no-synthesis rule; propagation stays chunked. → `tests/test_invariants.py`
+- Egress tiers, both OFF by default (2026-08-01,
+  docs/decisions.md#getting-past-cloudflare-what-a-different-address-buys-and-what-it-doesnt-2026-08-01):
+  Cloudflare WARP (`app/warp.py`, keyless `warp-cli mode proxy` → loopback
+  SOCKS5) and a real-Chrome fetch tier (`tools/browser-fetch` :8095). `warp_hosts`
+  ships EMPTY on purpose — measured from this egress WARP unblocked nothing and
+  made OpenSky unreachable; run `tools/probe_warp.py` from the deployment that
+  is actually blocked before listing a host. `/data/aircraft.json` on
+  airplanes.live/adsb.fi/adsbexchange is a WAF PATH rule: 403 to every client
+  from every address INCLUDING real Chrome. Do not "fix" it with headers, a
+  proxy or TLS impersonation — load the page and read the request IT made
+  (`/fetch?url=<page>&capture=<regex>`). Browser and poller must share one exit
+  or a clearance cookie is bound to an address nobody is using. The browser tier
+  paces itself: one load at a time per host, jittered floor, per-host cookie
+  profile saved after EVERY load (Playwright's own SIGTERM handler kills Chrome
+  before a shutdown-only flush can run). Never add a stealth plugin or a UA
+  override — real Chrome plus a returning-visitor profile is the whole trick.
+  Against a REAL managed challenge ("Just a moment", adsb.fi) headless Chrome
+  fails and `browser_headful` (headful under `xvfb-run`) is the ONE lever that
+  worked — not the proxy, not headers, not the exit address. Headful NEVER
+  touches the operator's session: `xvfb-run -a` picks its own display, and
+  headful pins `--ozone-platform=x11` because `WAYLAND_DISPLAY` is inherited
+  even inside `xvfb-run` and a Chrome that preferred Wayland would draw on the
+  real desktop. Never launch it on `:0` and never drop the pin. Before spending a
+  browser on a host, check whether it is blocked at all: airplanes.live's
+  `/re-api/` answers BARE httpx 200, so the browser there is for DISCOVERY.
+  → `tests/test_warp.py`, `tests/test_browser_fetch.py`,
+  `tools/browser-fetch/selftest.js` (in `scripts/verify.sh`)
 - Keyless layers keep working with no API key: ADS-B grid, Baltic AIS,
   MyShipTracking, ShipXplorer, USGS quakes, Carto basemap, CelesTrak. FIRMS
   degrades gracefully without MAP_KEY.
@@ -155,8 +182,8 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **2141 passed + 2 skipped in ~333 s** (skip = opt-in live probes;
-  measured 2026-07-31, branch repo-setup-ui-access, upstream proxy pool wave).
+  Baseline: **2162 passed + 2 skipped in ~121 s** (skip = opt-in live probes;
+  measured 2026-08-01, branch gotham-console-mockup, Cloudflare egress wave).
   Runs SERIAL by default: `-n auto --dist
   loadfile` groups different files per worker on different core counts, so a
   suite with module-state leaks answers differently per machine and CI (4 cores)

@@ -118,7 +118,10 @@ class Settings(BaseSettings):
     # app.adsb_sidecar) runs REAL tar1090 against globe.airplanes.live +
     # globe.adsbexchange and reads its decoded store — the only form of tar1090's
     # direct method reachable from a datacenter IP (the binary re-api is
-    # Cloudflare-403, measured). It's the freshest + biggest single path
+    # Cloudflare-403, measured — but NOT from this dev host on 2026-08-01, where
+    # /re-api/?binCraft answered BARE httpx with 200; re-probe from the droplet
+    # before assuming this tier is still required there, see docs/decisions.md).
+    # It's the freshest + biggest single path
     # (~18k aircraft, position age p50 ~0.4 s), so when this is on the snapshot is
     # served from the sidecar ALONE: the remote readsb mirrors are dropped from the
     # pull list (less event-loop load = fresher) and OpenSky/firehose/grid run only
@@ -148,6 +151,42 @@ class Settings(BaseSettings):
     # means "not from my own address", and a silent direct fallback would leak
     # exactly what the proxy was there to avoid.
     upstream_proxy_fallback_direct: bool = False
+
+    # ── Cloudflare WARP egress (app.warp) ──
+    # A keyless, no-login SOCKS5 proxy the WARP daemon publishes on loopback
+    # (`warp-cli mode proxy`). Same purpose as the pool above — change the
+    # address upstreams see — but free and self-contained. OFF by default.
+    warp_enabled: bool = False
+    warp_proxy_port: int = 40000
+    # Comma-separated hosts routed through WARP. EMPTY ON PURPOSE: measured
+    # 2026-08-01 from this (residential) egress, WARP unblocked nothing and made
+    # OpenSky unreachable. Run `tools/probe_warp.py` from the deployment that is
+    # actually being blocked and list only the hosts it measurably fixes.
+    warp_hosts: str = ""  # WARP_HOSTS
+    # Route EVERY upstream through the tunnel. Costs latency on the 1 s snapshot
+    # fan-out; prefer warp_hosts.
+    warp_all: bool = False
+    # Give the headless-Chrome feeders the same egress. Must match the httpx
+    # side: a Cloudflare clearance cookie is bound to the address that earned it,
+    # so a browser on a different exit than the poller invalidates it.
+    warp_sidecars: bool = False
+    # False: a dead tunnel falls back to a direct connection (degraded but live).
+    # True: WARP-routed hosts fail closed and nothing leaves via this address.
+    warp_kill_switch: bool = False
+
+    # ── real-browser fetch tier (app.browser_fetch, tools/browser-fetch) ──
+    # A shared Chrome that fetches URLs no HTTP client can: JS challenges, and
+    # bulk endpoints only reachable as the page's own request. OFF by default —
+    # it is a third Chromium tier (see app/profile.py on the cost of the first
+    # two) and belongs to minute-cadence callers, never the 1 s snapshot loop.
+    browser_fetch_enabled: bool = False
+    browser_fetch_port: int = 8095
+    browser_max_pages: int = 4
+    # Run Chrome HEADFUL under xvfb-run. Headless is itself a detection signal:
+    # measured 2026-08-01 on globe.adsb.fi, headless got a 403 challenge that
+    # never cleared and headful under Xvfb got 200 from the same address.
+    browser_headful: bool = False
+    browser_idle_s: float = 300.0
 
     # ── infra ──
     database_url: str = "postgresql+asyncpg://osint:osint@localhost:5432/osint"

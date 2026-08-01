@@ -154,6 +154,9 @@ function launchOpts() {
   };
   if (process.env.CHROME_PATH) o.executablePath = process.env.CHROME_PATH;
   else o.channel = 'chrome';
+  // Optional Cloudflare WARP egress (app/warp.py publishes the loopback SOCKS5
+  // port). Unset = direct, which is what has been clearing the gate here.
+  if (process.env.WARP_PROXY) o.proxy = { server: process.env.WARP_PROXY };
   return o;
 }
 

@@ -237,6 +237,18 @@ async def start() -> None:
             "CHROME_PATH", "/usr/bin/google-chrome-stable"
         ),
     }
+    # Optional WARP egress for the browser tier (WARP_SIDECARS=1, default off).
+    # Off on purpose: this sidecar clears Cloudflare today, and a clearance
+    # cookie is bound to the address that earned it — moving the browser to a
+    # different exit than the poller invalidates it. Flip only with a probe and
+    # a live /health aircraft count behind it.
+    from app.config import get_settings  # noqa: PLC0415
+
+    _settings = get_settings()
+    if _settings.warp_enabled and _settings.warp_sidecars:
+        from app import warp  # noqa: PLC0415
+
+        env["WARP_PROXY"] = warp.socks_url()
     # The backend runs under jemalloc (scripts/run-api.sh exports LD_PRELOAD +
     # MALLOC_CONF with background_thread:true). Chrome inherits them through this
     # env and its zygote fork dies at spawn ("GPU process launch failed:

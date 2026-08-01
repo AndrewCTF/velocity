@@ -174,6 +174,9 @@ function launchOpts() {
   if (BLOCK_IMAGES) o.args.push('--blink-settings=imagesEnabled=false');
   if (process.env.CHROME_PATH) o.executablePath = process.env.CHROME_PATH;
   else o.channel = 'chrome';
+  // Optional Cloudflare WARP egress (app/warp.py publishes the loopback SOCKS5
+  // port). Unset = direct, which is what has been clearing Cloudflare here.
+  if (process.env.WARP_PROXY) o.proxy = { server: process.env.WARP_PROXY };
   return o;
 }
 

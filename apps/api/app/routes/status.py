@@ -29,6 +29,16 @@ def _feed(name: str, ok: bool, detail: str, **extra: Any) -> dict[str, Any]:
     return {"name": name, "status": "green" if ok else "degraded", "detail": detail, **extra}
 
 
+def _extra(payload: dict[str, Any]) -> dict[str, Any]:
+    """Health payload minus the keys :func:`_feed` owns.
+
+    A sidecar's own /health speaks its own vocabulary — the browser tier answers
+    `{"ok": true, ...}` — and splatting that straight into `_feed(name, ok, ...)`
+    raised "got multiple values for argument 'ok'" and 500'd this route.
+    """
+    return {k: v for k, v in payload.items() if k not in ("name", "ok", "status", "detail")}
+
+
 @router.get("/api/status")
 async def status() -> dict[str, Any]:
     s = get_settings()
@@ -156,6 +166,49 @@ async def status() -> dict[str, Any]:
             "BYOK, on-demand." if s.aisstream_key else "BYOK — bring a key to enable.",
         ),
     ]
+
+    # Egress tiers. Both are off by default and both are the kind of thing that
+    # fails silently — a tunnel that dropped or a browser tier that died still
+    # leaves every route answering, just from the wrong address or not at all.
+    # `proxy_stats()` existed since the pool landed and was never surfaced.
+    if s.warp_enabled or s.upstream_proxies or s.browser_fetch_enabled:
+        from app import browser_fetch, upstream, warp  # noqa: PLC0415
+
+        if s.warp_enabled:
+            w = await warp.health()
+            fallback = "kill switch on" if s.warp_kill_switch else "direct fallback"
+            feeds.append(
+                _feed(
+                    "Cloudflare WARP egress",
+                    bool(w.get("tunnelled")),
+                    f"Exit {w.get('exit_ip')} · {fallback}."
+                    if w.get("tunnelled")
+                    else f"Tunnel down ({w.get('error') or 'not serving'}).",
+                    **_extra(w),
+                )
+            )
+        if s.browser_fetch_enabled:
+            b = await browser_fetch.health()
+            feeds.append(
+                _feed(
+                    "Browser fetch tier",
+                    bool(b.get("serving")),
+                    f"Real Chrome on :{s.browser_fetch_port}, {b.get('contexts', 0)} live contexts."
+                    if b.get("serving")
+                    else "Sidecar not answering.",
+                    **_extra(b),
+                )
+            )
+        stats = upstream.proxy_stats()
+        if stats:
+            feeds.append(
+                _feed(
+                    "Outbound proxy pool",
+                    any(p.get("available") for p in stats),
+                    f"{len(stats)} configured.",
+                    proxies=stats,
+                )
+            )
 
     overall = "operational" if aircraft >= _AIRCRAFT_FLOOR else ("degraded" if aircraft else "down")
     return {

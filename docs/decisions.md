@@ -739,8 +739,165 @@ Findings from the same-day state-of-project audit
   process-memory, so the story holds — the audit's first draft misread this
   as rot); replay interpolation; anything guarded above.
 
+## Getting past Cloudflare: what a different address buys, and what it doesn't (2026-08-01)
+
+Operator report: "a lot of our data sources block us, the Cloudflare captchas
+make it hard to scrape — can you build in WARP without signing in, with 1.1.1.1
+DNS". Both tiers were built. The measurements are the point of the entry,
+because they contradict the premise for half the hosts.
+
+**The tunnel is real and keyless.** `warp-cli mode proxy` + `proxy port <p>`
+makes the WARP daemon publish a SOCKS5 proxy on 127.0.0.1 whose exit is a
+Cloudflare consumer address. Consumer free tier registers anonymously — no
+account, no key, no login. Nothing system-wide changes: host routing and DNS are
+untouched, no root, and only traffic sent to that port is tunnelled. Traffic
+through it resolves at the exit on Cloudflare's own resolver, so "1.1.1.1 DNS"
+comes free for proxied hosts (verified: `curl --socks5-hostname` →
+`warp=on`, exit 104.28.208.41 vs direct 115.164.37.206).
+
+**It unblocked nothing here** (`tools/probe_warp.py`, 2026-08-01, direct vs
+WARP): theairtraffic 10581/10570 aircraft, hpradar 11203/11203, adsb.lol
+11754/11752 ac, celestrak 22/22 TLE — all 200 both ways. airplanes.live,
+adsb.fi and adsbexchange 403 **both** ways. OpenSky was 200 direct and
+`ProxyError: Host unreachable` through the tunnel. So WARP LOSES a feed here and
+wins none. The reason is in the trace: this box's own egress is 115.164.37.206,
+a consumer ISP address. The 451/403s in `upstream_proxy.py` were measured from
+the **datacenter** deployment, which is where the tier is worth enabling. Hence
+`warp_hosts` ships EMPTY and the whole tier ships OFF — re-run the probe from
+the deployment that is actually being blocked, and list only what it fixes.
+
+**The remaining 403s are not a bot check and not an address problem.** Measured
+against globe.airplanes.live/data/aircraft.json: 403 from httpx, 403 from curl
+with a bare UA, 403 from curl with a full Chrome header set (UA, sec-ch-ua,
+sec-fetch-\*, referer, accept-language), 403 from both exits — **and 403 from
+real headless Chrome that had just loaded the site**. It is a WAF PATH rule on
+the bulk endpoint, not a fingerprint gate. No proxy, header set, TLS
+impersonation (`curl_cffi`) or stealth plugin opens it; none was added.
+
+**What does work is what the repo already does.** In the same real Chrome, the
+map at `globe.airplanes.live/` loads (nav 200), populates `g.planesOrdered`, and
+makes its own `GET /re-api/?binCraft&zstd&box=…` which returns **200**. So the
+generic primitive is not "fetch this URL in a browser" — it is "load the page
+and read the request IT made". `tools/browser-fetch` (:8095) does both:
+`/fetch?url=` navigates (which clears a genuine JS challenge), and
+`/fetch?url=<page>&capture=<regex>` returns the body of the first matching
+response the page made. Proven live: capture → 200, 14 734 bytes from the
+re-api endpoint; plain navigate on the blocked path → 403, as expected.
+
+**THREE things look like "Cloudflare is blocking us" and only one of them is.**
+This is the most useful result of the wave; check which one you have before
+spending anything on a fix.
+1. *A WAF path rule.* `globe.airplanes.live/data/aircraft.json`: 403 to httpx, to
+   curl with a full Chrome header set, through WARP, and to real Chrome that had
+   just loaded the site. Nothing opens it — read the page's own request instead.
+2. *Not blocked at all, just undiscovered.* The endpoint that page actually uses,
+   `/re-api/?binCraft&zstd&box=…`, answers **bare httpx with no headers at all**
+   with 200 (15 762 bytes), including with the `osint-console/0.1` UA the backend
+   already sends. The browser's value there is DISCOVERY, not bypass. NOTE: this
+   contradicts the standing comment in `config.py` (`the binary re-api is
+   Cloudflare-403, measured`), which was measured from the DATACENTER droplet —
+   either it changed upstream or it is address-dependent. Not resolved here, and
+   the ADS-B sidecar was left alone; worth re-probing from the droplet, because
+   if it holds there too, a 25-process 4.4 GB Chromium tier has a two-line
+   replacement.
+3. *A real managed challenge.* `globe.adsb.fi` answers 403 with a "Just a
+   moment..." interstitial (5 596 bytes).
+
+**Headless Chrome is itself the tell — headful on Xvfb is the lever that works.**
+On that challenge, same box, same address, minutes apart: httpx 403; HEADLESS
+Chrome sat on the interstitial for the full 25 s wait and never cleared; HEADFUL
+Chrome under `xvfb-run` got **200, 51 989 bytes, title "adsb.fi - live aircraft
+tracking"** — it was never even challenged. That is `browser_headful` (off by
+default, needs `xvfb-run`, falls back to headless with a warning). It is the only
+thing in this whole wave that beat a genuine challenge — not the proxy, not the
+headers, not the exit address. Returning the interstitial as if it were the page
+was its own bug: the tier now detects the challenge and waits `BROWSER_CHALLENGE_MS`
+(25 s) for the document to be replaced, and says so honestly when it is not.
+
+**Headful without hijacking the operator's desktop.** `xvfb-run -a
+--server-args="-screen 0 1280x800x24"` gives Chrome a real X server that paints
+into a memory framebuffer — genuinely headful (window manager surface,
+compositing, all of it) with nothing on screen, and `-a` auto-picks a free
+display so it can never collide with `:0`. Measured: the sidecar's node process
+ran on `DISPLAY=:99`/`:100`, its windows appeared on the Xvfb root (3 and 7
+top-levels), and zero Chrome windows appeared on `:0` across the whole session —
+the only Chrome there was the operator's own, started an hour earlier.
+Two things this depends on, both now enforced:
+- **Pin `--ozone-platform=x11` when headful.** `WAYLAND_DISPLAY` is inherited
+  even inside `xvfb-run` and Chrome chooses its Ozone backend automatically.
+  Today it picks X11 and honours `DISPLAY`, but that is Chrome's default doing
+  us a favour — a release that started preferring Wayland would open a window on
+  the operator's actual desktop. `selftest.js` fails if the pin is removed
+  (verified by removing it).
+- **`stop()` must take the whole tree.** It kills the process GROUP, which is
+  why `start_new_session=True` is there. Measured before/during/after through the
+  real path: chrome 8 → 16 → 8, Xvfb 0 → 1 → 0, node 1 → 3 → 1. Zero orphans.
+  Note `scripts/kill-port.sh` only signals the node pid — fine because our own
+  SIGTERM handler closes the browser, but that handler only exists because
+  Playwright's was disabled, so do not remove one without the other.
+On a headless deployment (the droplet) Xvfb is not politeness, it is required —
+there is no display at all. To watch a session, attach with
+`x11vnc -display :99`; never point the tier at `:0` to "see what it is doing".
+
+**Behaving like a person, in the order the effect is real.** Not folklore — each
+of these is either measured here or structural: (1) real Chrome via
+`channel: 'chrome'`, not bundled Chromium; (2) a per-host profile that persists
+cookies, so a session arrives as a returning visitor; (3) no UA override at all —
+a hand-set UA that disagrees with the JS fingerprint reads worse than none;
+(4) navigate and let the page make its own request, rather than XHR-ing an
+endpoint the page would never call that way; (5) one page load at a time per
+host, never closer than `BROWSER_PACE_MS` (2 s) plus up to `BROWSER_JITTER_MS`
+(1.5 s) of jitter — measured on a 4-way concurrent burst: gaps 2753/2828/2963 ms,
+serialized, no two identical, because a metronome is itself a tell;
+(6) `--disable-blink-features=AutomationControlled`, and nothing past it. No
+stealth plugin: they are fingerprinted in their own right and would be a new
+dependency in the hot path.
+
+Two bugs the live runs caught that tests would not have:
+- **Playwright owns SIGTERM unless you take it back.** Its default handlers tore
+  the browser down before our flush ran, so the shutdown save failed with
+  "Failed to open a new tab" and the session's cookies were lost — precisely
+  what the persistent profile exists to prevent. Fixed with
+  `handleSIGTERM/SIGINT/SIGHUP: false` plus a save after EVERY successful load,
+  so a SIGKILL or an OOM cannot cost an earned clearance either.
+- **A profile proves nothing on a host that sets no cookies.** globe.airplanes.live
+  and globe.adsb.fi issue ZERO cookies — they are not challenging us at all, which
+  is more evidence that their 403 is a path rule rather than a bot verdict. The
+  cookie path was proven instead against www.cloudflare.com: 46 cookies written
+  including `__cf_bm`, and `restored 46 cookies from www.cloudflare.com.json`
+  after a sidecar restart.
+
+Consequences worth keeping:
+- **Egress must be consistent per host.** A Cloudflare clearance cookie is bound
+  to the address that earned it, so `warp_sidecars` moves the browsers onto the
+  same exit as the poller or neither works. Default off: the feeders clear their
+  gates today and changing their egress can only break that.
+- **No auto-escalation ladder.** The plan had direct→warp→browser escalation on
+  a 403. Dropped after measurement: the hosts that 403 cannot be fixed by ANY
+  tier, so the ladder would spend a browser launch per host per TTL to re-learn
+  a permanent no. Routing stays explicit config.
+- **`_feed(name, ok, detail, **extra)` and sidecar `/health` payloads collide.**
+  The browser tier answers `{"ok": true, …}`; splatting that 500'd `/api/status`
+  with "got multiple values for argument 'ok'". Caught by booting, not by tests
+  — `_extra()` now strips the keys `_feed` owns.
+- **The adopt-then-killed race is real and the supervisor is what saves you.**
+  A restart's `start()` adopted the outgoing backend's :8095 sidecar seconds
+  before that backend's `stop()` killed it, exactly as the 2026-07-15 AIS
+  post-mortem describes; `supervise()` brought it back on its next cycle
+  (observed live).
+
+Guards: `tools/browser-fetch/selftest.js` (in `scripts/verify.sh` — the pace gate
+has real concurrency semantics and lives out of pytest's reach: serialize per
+host, clear the jittered floor, and never let one failure wedge a host's queue),
+`tests/test_warp.py`, `tests/test_browser_fetch.py` (20 tests: off by
+default, empty host list, loopback never tunnelled in either mode, kill switch
+removes the direct fallback, pool outranks WARP, SSRF check before the sidecar,
+jemalloc scrubbed from the Chrome env, supervise cancel-safe, an operator's own
+tunnel survives our shutdown). Baseline 2141 → 2162.
+
 ## Backend test baseline history
 
+- 2141 + 2 skipped — 2026-07-31, repo-setup-ui-access, upstream proxy pool wave
 - 2108 + 2 skipped — 2026-07-30, overnight-provenance-answers-2026-07-29
 - 1985 + 2 skipped — 2026-07-27, perf-annotate-sidecars-2026-07-27, performance wave
 - 1972 + 2 skipped — 2026-07-24, worldmonitor-gaps-2026-07, persona waves 2+3
