@@ -1,0 +1,1003 @@
+/* Velocity · Gotham-grammar console.
+   ────────────────────────────────────────────────────────────────────────────
+   Layered ON TOP of mock.css, which already carries the Blueprint colour ramp.
+   This file adds only the STRUCTURAL grammar the earlier mockups did not have,
+   and every metric in it was measured off the real Palantir crops in _ref/
+   rather than chosen.
+
+   How the numbers were derived (see _calibrate.py, _measure.py):
+     Gotham is Blueprint. Blueprint v5 publishes $pt-button-height: 30px. The
+     two accent-filled buttons in _ref/oe-full.png ("Add to filter path" and
+     "Actions") both measure 19px tall, so that screenshot sits at 19/30 =
+     0.633 of true scale. Its 1161px width is therefore a 1834px viewport, i.e.
+     a 1920 screen. Every raw measurement below is divided by 0.633.
+
+     element              raw px   -> CSS px   Blueprint variable
+     classification band     12         19     (Gotham-specific)
+     title / tab bar         25         39.5   ~$pt-button-height-large 40px
+     menu bar                19         30      $pt-button-height 30px
+     icon shortcut rail      27         42.6   ~40px
+     left panel             195        308     ~300px
+     right panel            181        286     ~280px
+     dense list row pitch    13         20.5    $pt-button-height-smaller 20px
+     bottom action bar       31         49      $pt-navbar-height 50px
+     primary button          19         30      $pt-button-height 30px
+
+   The finding that mattered: Gotham's dense row is 20px, and Blueprint pairs
+   $pt-button-height-smaller: 20px with $pt-font-size-small: 12px. So Gotham
+   density and the 12px accessibility floor are NOT in tension. The earlier
+   mockups used 26px rows and recorded the remaining gap as "deliberate"; it was
+   an artefact of never having measured the real row. */
+
+:root {
+  /* structural metrics, all measured */
+  --g-band: 20px;      /* classification band */
+  --g-title: 40px;     /* window title + menu row */
+  --g-menu: 30px;      /* application menu bar */
+  --g-rail: 40px;      /* icon shortcut rail */
+  --g-left: 308px;
+  --g-right: 286px;
+  --g-action: 50px;    /* bottom action bar */
+  /* Status strip REMOVED. It was Gaia's device, and Gaia is a different product
+     with different rules. Gotham carries system state in the title bar, so that
+     is where it went. 22px back to the map. */
+  --g-time: 30px;      /* transport and event lanes, merged */
+  --g-tabs: 32px;      /* tab strip */
+
+  /* control scale, Blueprint v5 verbatim */
+  --g-btn: 30px;
+  --g-btn-sm: 24px;
+  --g-btn-xs: 20px;
+  --g-row: 20px;       /* dense list row */
+  --g-row-2: 26px;     /* row carrying a control */
+  --g-row-3: 38px;     /* two-line row */
+  --g-icon: 16px;
+
+  /* Blueprint v5 radius is 2px. v6 moved to 4px, but the 2024 screenshots this
+     is built against are v5-era, so 2px is the faithful value. */
+  --g-r: 2px;
+
+  --g-transition: 100ms cubic-bezier(0.4, 1, 0.75, 0.9); /* $pt-transition-* */
+
+  /* ── Type ──────────────────────────────────────────────────────────────────
+     Blueprint's $pt-font-family verbatim. The earlier mockups asked for
+     'Inter', 'IBM Plex Sans' first; NEITHER IS INSTALLED on this machine
+     (fc-list: 0 faces each), so the stack fell through to the browser default
+     and the pages rendered in Noto Sans. That is not a font choice, it is an
+     accident, and it is a large part of why the result read as "not Gotham".
+
+     Blueprint names no webfont. It asks for the platform UI font and takes what
+     it gets, which is why Gotham looks native on every OS. On this box the
+     first available entry is Cantarell (11 faces), with Open Sans (10) behind
+     it. Both are in Blueprint's own list. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
+  /* $pt-font-family-monospace is the bare keyword; Blueprint does not name one. */
+  --font-mono: monospace;
+
+  /* Row hover, and why it is not dark-gray3.
+     Moving panels onto dark-gray2 (#252a31, Gotham's real 64% surface) makes the
+     natural hover the next Blueprint step, dark-gray3 #2f343c. Measured, the
+     muted text tier --txt-3 #8f99a8 lands at 4.35:1 on that, under the 4.5 floor
+     that theme/contrast.test.ts enforces. Layer subtitles ARE --txt-3 and rows
+     DO hover, so this pairing is real, not theoretical.
+
+     Solved against the constraint rather than around it, which is the same move
+     the light surface's --txt-3 needed (#66738a measured 4.26 and became
+     #616d83). A half-step to #2a2f37 stays a visible hover and measures 4.67:1
+     with margin. The full Blueprint step is the wrong value here; the floor
+     wins. */
+  --g-hover: #2a2f37;
+}
+
+/* ── Window shell ─────────────────────────────────────────────────────────── */
+
+.gk {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: var(--g-band) var(--g-title) 1fr;
+  background: var(--bg-0);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  color: var(--txt-1);
+  overflow: hidden;
+}
+
+/* Classification band. Gotham runs marking as a full-width band across the very
+   top, centred, not as a pill tucked in a corner. It is the first thing on
+   screen because it governs everything below it. */
+.gk-band {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ok);
+  color: #04120a;
+  font-size: var(--fs-cap);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.gk-band.warn  { background: var(--warn);  color: #1a0e00; }
+.gk-band.alert { background: var(--alert); color: #1a0000; }
+
+/* Title bar: brand, menu, save state, centred document identity, right tools. */
+.gk-title {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-2);
+  background: var(--bg-0);
+  border-bottom: 1px solid var(--line);
+}
+.gk-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-right: var(--sp-2);
+  font-weight: 650;
+  color: var(--txt-0);
+  font-size: var(--fs-dense);
+}
+.gk-brand svg { width: 18px; height: 18px; color: var(--accent-fg); }
+
+/* Application menu. A real menu bar is the single loudest signal that a surface
+   is a workstation rather than a web page, and Gotham has one on every app. */
+.gk-menu { display: flex; align-items: center; }
+.gk-menu > button {
+  height: var(--g-btn-sm);
+  padding: 0 var(--sp-2);
+  background: none;
+  border: 0;
+  border-radius: var(--g-r);
+  color: var(--txt-1);
+  font: inherit;
+  font-size: var(--fs-cap);
+  cursor: pointer;
+}
+.gk-menu > button:hover { background: var(--bg-2); color: var(--txt-0); }
+
+.gk-saved {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--ok-fg);
+  font-size: var(--fs-cap);
+  white-space: nowrap;
+}
+.gk-saved svg { width: 13px; height: 13px; }
+
+/* Centred document identity, exactly where Gotham puts the investigation name */
+.gk-doc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--txt-0);
+  font-size: var(--fs-dense);
+  font-weight: 550;
+}
+.gk-doc .chip-ico {
+  width: 14px; height: 14px;
+  flex: none;
+  border-radius: var(--g-r);
+  background: var(--warn);
+}
+.gk-doc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gk-doc button {
+  height: var(--g-btn-xs);
+  width: var(--g-btn-xs);
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  border-radius: var(--g-r);
+  color: var(--txt-3);
+  cursor: pointer;
+}
+.gk-doc button:hover { background: var(--bg-2); color: var(--txt-0); }
+.gk-doc button svg { width: 13px; height: 13px; }
+
+.gk-tools { display: flex; align-items: center; gap: var(--sp-1); }
+.gk-tools .ico-btn {
+  height: var(--g-btn-sm); width: var(--g-btn-sm);
+  display: grid; place-items: center;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-2); cursor: pointer;
+}
+.gk-tools .ico-btn:hover { background: var(--bg-2); color: var(--txt-0); }
+.gk-tools .ico-btn svg { width: var(--g-icon); height: var(--g-icon); }
+.gk-tools .lnk {
+  height: var(--g-btn-sm);
+  padding: 0 var(--sp-2);
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--accent-fg); font: inherit; font-size: var(--fs-cap);
+  cursor: pointer;
+}
+.gk-tools .lnk:hover { background: var(--bg-2); }
+.gk-mark {
+  display: flex; align-items: center; gap: var(--sp-1);
+  padding: 0 var(--sp-2);
+  height: var(--g-btn-sm);
+  color: var(--ok-fg); font-size: var(--fs-cap); font-weight: 600;
+}
+.gk-mark svg { width: 13px; height: 13px; }
+
+/* Environment search, right-anchored, as in the Graph window chrome */
+.gk-envsearch {
+  display: flex; align-items: center; gap: var(--sp-2);
+  height: var(--g-btn-sm);
+  width: 200px;
+  padding: 0 var(--sp-2);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--g-r);
+  color: var(--txt-3);
+  font-size: var(--fs-cap);
+}
+.gk-envsearch svg { width: 13px; height: 13px; flex: none; }
+.gk-envsearch input {
+  flex: 1; min-width: 0;
+  background: none; border: 0; outline: none;
+  color: var(--txt-1); font: inherit;
+}
+.gk-envsearch input::placeholder { color: var(--txt-3); }
+
+/* ── Body: shortcut rail + workspace ──────────────────────────────────────── */
+
+.gk-body {
+  display: grid;
+  grid-template-columns: var(--g-rail) 1fr;
+  min-height: 0;
+}
+
+/* The narrow icon rail is NOT navigation between panels. In Gotham it switches
+   applications, which is why it survives here even though the panel rail was
+   replaced with named text tabs: they answer different questions. */
+.gk-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-1) 0;
+  background: var(--bg-0);
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+}
+.gk-rail button {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  flex: none;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-3); cursor: pointer;
+  transition: background var(--g-transition);
+}
+.gk-rail button:hover { background: var(--bg-2); color: var(--txt-0); }
+.gk-rail button[aria-current='true'] {
+  background: var(--accent-dim);
+  color: var(--accent-fg);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.gk-rail button svg { width: var(--g-icon); height: var(--g-icon); }
+.gk-rail hr {
+  width: 20px; height: 0; flex: none;
+  margin: var(--sp-1) 0;
+  border: 0; border-top: 1px solid var(--line);
+}
+.gk-rail .spacer { flex: 1 1 auto; }
+
+.gk-work {
+  display: grid;
+  grid-template-rows: var(--g-tabs) 1fr var(--g-time) var(--g-action);
+  min-width: 0; min-height: 0;
+}
+
+/* ── Tab strip with count badges ──────────────────────────────────────────── */
+
+.gk-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0 var(--sp-2);
+  background: var(--bg-0);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+/* Tab metrics corrected against _ref/oe-tabs.png normalised to 1:1 CSS.
+   Four differences the first build got wrong, all visible side by side:
+     label was 12px, Gotham's is 14px ($pt-font-size, not -small)
+     inactive label was muted grey, Gotham's are near-white and only the
+       ACTIVE one changes colour
+     active was white + bold, Gotham's is accent-coloured and stays regular
+       weight; the underline already carries the state, so bolding it too
+       makes the row jump as selection moves
+     badge was a heavy filled block, Gotham's is a small quiet grey chip */
+.gk-tab {
+  display: flex; align-items: center; gap: var(--sp-2);
+  height: 100%;
+  padding: 0 var(--sp-3);
+  background: none; border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--txt-0); font: inherit; font-size: var(--fs-body);
+  white-space: nowrap; cursor: pointer;
+  transition: color var(--g-transition);
+}
+.gk-tab:hover { background: var(--bg-1); }
+.gk-tab[aria-selected='true'] {
+  color: var(--accent-fg);
+  border-bottom-color: var(--accent);
+}
+.gk-tab[aria-selected='true'] svg { color: var(--accent-fg); }
+.gk-tab svg { width: 14px; height: 14px; color: var(--txt-3); }
+
+/* Count badge. Gotham puts the number IN the tab, so the operator never has to
+   open a panel to learn whether it holds anything. */
+.gk-count {
+  min-width: 18px; height: 16px;
+  padding: 0 5px;
+  display: grid; place-items: center;
+  background: var(--bg-3);
+  border-radius: var(--g-r);
+  color: var(--txt-2);
+  font-size: var(--fs-cap);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+/* The active tab's badge stays quiet. Colouring it too competes with the
+   label and the underline for the same one bit of information. */
+.gk-tab[aria-selected='true'] .gk-count { background: var(--bg-4); color: var(--txt-1); }
+.gk-count.none { background: transparent; color: var(--txt-3); }
+.gk-tabs .grow { flex: 1 1 auto; }
+.gk-tabs .pin {
+  align-self: center;
+  height: var(--g-btn-xs); width: var(--g-btn-xs);
+  display: grid; place-items: center;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-3); cursor: pointer;
+}
+.gk-tabs .pin:hover { background: var(--bg-2); color: var(--txt-0); }
+.gk-tabs .pin svg { width: 13px; height: 13px; }
+
+/* ── Three-column workspace ───────────────────────────────────────────────── */
+
+/* ── Edge-to-edge map, panels floating over it ───────────────────────────────
+   The first build used a three-column grid with the map as a middle track, so
+   opening a panel made the map narrower. The spec forbids exactly that:
+     "edge-to-edge map with panels docked flush over it; nothing owns a grid
+      track ... A 336px column that permanently steals width is exactly the
+      'covered by permanent chrome' that docs/frontend.md:99 forbids"
+   Map goes from ~65% of the window to 100%, with panels overlaying ~34%. */
+.gk-cols { position: relative; min-height: 0; overflow: hidden; }
+.gk-panel {
+  position: absolute; top: 0; bottom: 0; z-index: 4;
+  width: var(--g-left);
+  display: flex; flex-direction: column; min-height: 0;
+  background: rgba(37, 42, 49, 0.94);
+  overflow: hidden;
+}
+.gk-panel.l { left: 0; border-right: 1px solid var(--line-2); }
+.gk-panel.r { right: 0; left: auto; width: var(--g-right); border-left: 1px solid var(--line-2); }
+
+.gk-phead {
+  display: flex; align-items: center; gap: var(--sp-2);
+  height: var(--g-row-3);
+  flex: none;
+  padding: 0 var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.gk-ptitle {
+  flex: 1 1 auto; min-width: 0;
+  color: var(--txt-0);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gk-phead .ico-btn {
+  height: var(--g-btn-xs); width: var(--g-btn-xs);
+  display: grid; place-items: center; flex: none;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-3); cursor: pointer;
+}
+.gk-phead .ico-btn:hover { background: var(--g-hover); color: var(--txt-0); }
+.gk-phead .ico-btn svg { width: 14px; height: 14px; }
+.gk-phead .rule {
+  width: 1px; height: 16px; flex: none;
+  background: var(--line-2);
+}
+
+.gk-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+/* Section label. Uppercase, muted, with an optional right-aligned total, which
+   is how Gotham labels the property and histogram groups. */
+.gk-sect {
+  display: flex; align-items: center; gap: var(--sp-2);
+  height: var(--g-row-2);
+  padding: 0 var(--sp-3);
+  color: var(--txt-3);
+  font-size: var(--fs-cap);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.gk-sect .tri { width: 10px; height: 10px; flex: none; color: var(--txt-3); }
+.gk-sect .n {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ── Dense list rows: the 20px grammar ────────────────────────────────────── */
+
+.gk-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  width: 100%;
+  min-height: var(--g-row);
+  padding: 0 var(--sp-3);
+  background: none; border: 0;
+  color: var(--txt-1); font: inherit; font-size: var(--fs-cap);
+  text-align: left; cursor: pointer;
+}
+.gk-row:hover { background: var(--g-hover); }
+.gk-row[aria-selected='true'] {
+  /* Gotham marks selection with an accent OUTLINE, not a fill, so the row's own
+     colour coding survives selection. */
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--accent-dim);
+  color: var(--txt-0);
+}
+.gk-row .ico { width: 13px; height: 13px; flex: none; color: var(--txt-3); }
+.gk-row .lbl {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gk-row .n {
+  flex: none;
+  color: var(--txt-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The two-tone mini bar beside a count. Filled portion = matched, track = total.
+   This is the single densest information device in Object Explorer. */
+/* Gotham's list bar, measured off _ref/graph-panel.png: it is ~26% of the panel
+   width, not the 15% the first build used, and it is TWO-TONE. The light fill is
+   the matched subset, the mid fill is the type's total, the dark track is the
+   remainder. That is how "1/12" is legible as a shape and not just as digits. */
+.gk-bar {
+  width: 78px; height: 9px; flex: none;
+  background: var(--bg-4);
+  border-radius: 1px;
+  overflow: hidden;
+  position: relative;
+}
+.gk-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+.gk-bar b { position: absolute; inset: 0 auto 0 0; background: var(--accent-fg); }
+.gk-bar.warn i  { background: var(--warn); }
+.gk-bar.alert i { background: var(--alert); }
+
+/* Row that owns a control becomes a group, so focus lands on the label and a
+   control is never nested inside another control. */
+.gk-grow {
+  display: flex; align-items: center; gap: var(--sp-2);
+  min-height: var(--g-row-2);
+  padding: 0 var(--sp-3);
+  color: var(--txt-1); font-size: var(--fs-cap);
+}
+.gk-grow:hover { background: var(--g-hover); }
+.gk-grow .lbl { flex: 1 1 auto; min-width: 0; }
+.gk-grow .lbl b {
+  display: block;
+  font-weight: 500;
+  color: var(--txt-0);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gk-grow .lbl s {
+  display: block;
+  text-decoration: none;
+  color: var(--txt-3);
+  font-size: var(--fs-cap);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gk-grow.two { min-height: var(--g-row-3); }
+
+/* Health dot. aria-hidden; the adjacent word carries the meaning. */
+.dot {
+  width: 6px; height: 6px; flex: none;
+  border-radius: 50%;
+  background: var(--txt-3);
+}
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.alert { background: var(--alert); }
+
+/* Small rectangular switch. Not a lozenge with a ball in it. */
+.sw {
+  width: 26px; height: 14px; flex: none;
+  padding: 2px;
+  display: flex; align-items: center;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--g-r);
+  cursor: pointer;
+}
+.sw i {
+  width: 9px; height: 8px;
+  background: var(--txt-3);
+  border-radius: 1px;
+  transition: transform var(--g-transition);
+}
+.sw[aria-checked='true'] { background: var(--accent); border-color: var(--accent); }
+.sw[aria-checked='true'] i { background: #fff; transform: translateX(11px); }
+
+/* Filter chip */
+.chip {
+  height: var(--g-btn-xs);
+  padding: 0 var(--sp-2);
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: var(--g-r);
+  color: var(--txt-2); font: inherit; font-size: var(--fs-cap);
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--line-2); color: var(--txt-0); }
+.chip[aria-pressed='true'] {
+  background: var(--accent-dim);
+  border-color: var(--accent-line);
+  color: var(--accent-fg);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+
+.btn {
+  height: var(--g-btn);
+  padding: 0 var(--sp-3);
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--g-r);
+  color: var(--txt-0); font: inherit; font-size: var(--fs-cap);
+  white-space: nowrap; cursor: pointer;
+  transition: background var(--g-transition);
+}
+.btn:hover { background: var(--bg-4); }
+.btn svg { width: 14px; height: 14px; }
+.btn.sm { height: var(--g-btn-sm); padding: 0 var(--sp-2); }
+.btn.ghost { background: none; border-color: transparent; color: var(--txt-2); }
+.btn.ghost:hover { background: var(--bg-2); color: var(--txt-0); }
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.btn.primary:hover { background: #3b82e0; }
+.btn.wide { width: 100%; justify-content: center; }
+
+/* ── The bottom action bar ────────────────────────────────────────────────── */
+/* Gotham's most distinctive and most copied-wrong device. It states, as an
+   English sentence, what the pending operation WILL do, with the operator's own
+   choices rendered as underlined tokens inside that sentence, and it carries
+   exactly one filled button: the commit. */
+
+.gk-action {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 0 var(--sp-3);
+  background: var(--bg-2);
+  border-top: 1px solid var(--line);
+  overflow: hidden;
+}
+.gk-sentence {
+  flex: 1 1 auto; min-width: 0;
+  color: var(--txt-2);
+  font-size: var(--fs-cap);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gk-sentence .verb { color: var(--accent-fg); }
+/* A dotted underline marks a token the operator chose and can change. It is a
+   control living inside a sentence. */
+.gk-sentence .tok {
+  color: var(--txt-0);
+  border-bottom: 1px dotted var(--txt-3);
+  cursor: pointer;
+}
+.gk-action .right { display: flex; align-items: center; gap: var(--sp-2); flex: none; }
+
+/* ── Status strip (Gaia) ──────────────────────────────────────────────────── */
+
+.gk-status {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 0 var(--sp-3);
+  background: var(--bg-0);
+  border-top: 1px solid var(--line);
+  color: var(--txt-3);
+  font-size: var(--fs-cap);
+  overflow: hidden;
+}
+.gk-status .on { color: var(--txt-0); font-weight: 600; }
+.gk-status .lnk { color: var(--accent-fg); }
+.gk-status .grow { flex: 1 1 auto; }
+.gk-status .sep { color: var(--txt-4); }
+
+/* ── Map ──────────────────────────────────────────────────────────────────── */
+
+.gk-map { position: absolute; inset: 0; z-index: 1; overflow: hidden; background: #16191d; }
+.gk-map .sky { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Basemap cast correction.
+   _globe.svg was authored for the earlier mockups with a saturated blue sea
+   (#0d1821 to #091219) and blue-grey land (#22303a). Sampled on the rendered
+   page that land alone was 25.4% of all pixels, so the map was applying a blue
+   cast to a console whose chrome is deliberately neutral. Two competing casts
+   is most of what reads as "off" even when every chrome token is correct.
+
+   Real Gaia is satellite imagery, which is brown and green and grey, and its
+   side panel is white over it. Until a real tile layer lands, the honest move
+   is a near-neutral basemap in the same family as the chrome rather than a
+   blue one fighting it.
+
+   Overridden here rather than edited in _globe.svg because that file is shared
+   with a-panel-parity.html and the other direction pages, which are the record
+   of what was compared and must not shift underneath. CSS beats presentation
+   attributes, so no markup changes. */
+.gk-map .sky > rect:first-of-type { fill: #16191d; }
+.gk-map .sky g[fill="#22303a"] { fill: #23282e; stroke: rgba(190, 205, 220, 0.34); }
+.gk-map .sky g[fill="#0e1a23"] { fill: #1b1f24; }
+/* Place labels and the graticule: strip the blue tint, keep the hierarchy. */
+.gk-map .sky g[fill="#9fb3c0"] { fill: #aab2bd; }
+.gk-map .sky g[fill="#6f8494"] { fill: #7d848f; }
+.gk-map .sky g[fill="#7c8f9c"] { fill: #878e99; }
+.gk-map .sky g[stroke^="rgba(150,190,220"] { stroke: rgba(200, 208, 218, 0.09); }
+.gk-map .sky g[fill^="rgba(150,190,220"] { fill: rgba(200, 208, 218, 0.32); }
+/* The SVG hardcodes Inter and IBM Plex Mono, neither of which is installed. */
+.gk-map .sky text { font-family: var(--font-mono); }
+.gk-map .sky g[letter-spacing] text { font-family: var(--font-sans); }
+
+/* Gaia's map tools are a small HORIZONTAL cluster at the top-left of the map,
+   about 30px tall. Not a vertical rail down one side. */
+/* Vertical tool rail on the RIGHT map edge, which is where the shipped app
+   (_ref/inspector-selection.jpeg) puts it. Gaia uses a horizontal cluster at the
+   top-left, but that corner belongs to the legend here and two things cannot own
+   it. Following the product over the reference is the right call: the legend is
+   read constantly, the tools are reached deliberately. */
+.gk-maptools {
+  position: absolute; top: var(--sp-2); right: calc(var(--g-right) + var(--sp-2));
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 2px;
+  background: rgba(28, 33, 39, 0.94);
+  border: 1px solid var(--line-2);
+  border-radius: var(--g-r);
+  z-index: 3;
+}
+.gk-maptools button {
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  background: none; border: 0; border-radius: 1px;
+  color: var(--txt-2); cursor: pointer;
+}
+.gk-maptools button:hover { background: var(--bg-3); color: var(--txt-0); }
+.gk-maptools button[aria-pressed='true'] { background: var(--accent); color: #fff; }
+.gk-maptools button svg { width: var(--g-icon); height: var(--g-icon); }
+.gk-maptools .rule { width: 18px; height: 1px; background: var(--line-2); margin: 3px 0; }
+
+.gk-readout {
+  position: absolute; bottom: var(--sp-2); right: calc(var(--g-right) + var(--sp-2)); z-index: 2;
+  display: flex; align-items: center; gap: var(--sp-2);
+  height: var(--g-btn-sm);
+  padding: 0 var(--sp-2);
+  background: rgba(17, 20, 24, 0.85);
+  border: 1px solid var(--line);
+  border-radius: var(--g-r);
+  color: var(--txt-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-cap);
+  z-index: 2;
+}
+.gk-basemap { display: none; }
+
+
+/* Time dock, floating over the map, collapsed by default */
+.gk-dock { display: none;
+  position: absolute; bottom: var(--sp-2);
+  left: calc(var(--g-left) + var(--sp-2));
+  right: calc(var(--g-right) + var(--sp-2));
+  background: rgba(37, 42, 49, 0.94);
+  border: 1px solid var(--line-2);
+  border-radius: var(--g-r);
+  z-index: 3;
+}
+.gk-dockbar {
+  display: flex; align-items: center; gap: var(--sp-2);
+  height: var(--g-row-2);
+  padding: 0 var(--sp-2);
+}
+.gk-dockbar .t {
+  font-family: var(--font-mono);
+  font-size: var(--fs-cap);
+  color: var(--txt-1);
+}
+.gk-track {
+  flex: 1 1 auto;
+  height: 4px;
+  background: var(--bg-3);
+  border-radius: 1px;
+  position: relative;
+}
+.gk-track i {
+  position: absolute; top: -3px;
+  width: 2px; height: 10px;
+  background: var(--accent-fg);
+}
+
+/* ── Selection detail rows ────────────────────────────────────────────────── */
+
+.gk-kv {
+  display: flex; align-items: baseline; gap: var(--sp-2);
+  min-height: var(--g-row);
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-cap);
+}
+.gk-kv dt { flex: none; width: 108px; color: var(--txt-3); }
+.gk-kv dd {
+  flex: 1 1 auto; min-width: 0;
+  margin: 0;
+  color: var(--txt-0);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gk-kv dd.mono { font-family: var(--font-mono); }
+/* A lone em dash means "no value reported". It is the never-guess rule made
+   visible and it must survive any copy pass. */
+.gk-kv dd.none { color: var(--txt-3); }
+
+.gk-pfoot {
+  flex: none;
+  padding: var(--sp-2) var(--sp-3);
+  border-top: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+/* ── States ───────────────────────────────────────────────────────────────── */
+
+.gk-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-5) var(--sp-4);
+  text-align: center;
+  color: var(--txt-3);
+  font-size: var(--fs-cap);
+}
+.gk-state b { color: var(--txt-1); font-size: var(--fs-dense); font-weight: 550; }
+.gk-state svg { width: 22px; height: 22px; color: var(--txt-4); }
+.gk-state.err b { color: var(--alert-fg); }
+.gk-state.deg b { color: var(--warn-fg); }
+
+.sk {
+  height: 8px;
+  margin: 6px var(--sp-3);
+  background: linear-gradient(90deg, var(--bg-3), var(--bg-4), var(--bg-3));
+  border-radius: 1px;
+}
+
+/* Degraded banner. The fourth state: some data present, the rest quietly
+   missing. A count that reads low because one source is wedged must say so. */
+.gk-degraded {
+  display: flex; align-items: flex-start; gap: var(--sp-2);
+  margin: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2);
+  background: var(--warn-bg);
+  border-left: 2px solid var(--warn);
+  border-radius: var(--g-r);
+  color: var(--warn-fg);
+  font-size: var(--fs-cap);
+  line-height: 1.4;
+}
+.gk-degraded svg { width: 13px; height: 13px; flex: none; margin-top: 1px; }
+
+/* ── Focus, always visible ────────────────────────────────────────────────── */
+
+.gk :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gk * { transition: none !important; animation: none !important; }
+}
+
+/* ── Selection panel, matched to the shipped app ──────────────────────────────
+   _ref/inspector-selection.jpeg is Velocity v1.0.0, and it is a higher bar than
+   the first pass of this mockup cleared. That pass replaced an identity-led
+   panel with a flat key/value table, which is a regression dressed as a
+   redesign. These rules put the shipped structure back, in Gotham's grammar. */
+
+.gk-stabs {
+  display: flex; align-items: stretch; justify-content: space-between;
+  flex: none; height: 28px;
+  padding: 0 var(--sp-1);
+  border-bottom: 1px solid var(--line);
+}
+.gk-stab {
+  padding: 0 6px;
+  background: none; border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--txt-2); font: inherit; font-size: var(--fs-cap);
+  letter-spacing: 0.04em; text-transform: uppercase;
+  cursor: pointer; white-space: nowrap;
+}
+.gk-stab:hover { color: var(--txt-0); }
+.gk-stab[aria-selected='true'] {
+  color: var(--txt-0);
+  border-bottom-color: var(--accent);
+}
+
+.gk-ident { padding: var(--sp-3); border-bottom: 1px solid var(--line); }
+.gk-ident-top { display: flex; align-items: center; gap: var(--sp-2); }
+.gk-ident-ico {
+  width: 26px; height: 26px; flex: none;
+  display: grid; place-items: center;
+  background: var(--bg-3);
+  border-radius: var(--g-r);
+  color: var(--warn);
+}
+.gk-ident-ico svg { width: var(--g-icon); height: var(--g-icon); }
+.gk-ident-sub {
+  font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-3);
+}
+/* The callsign is the thing an analyst reads first, so it gets display size. */
+.gk-ident-name {
+  font-size: var(--fs-title); font-weight: 600; color: var(--txt-0);
+  line-height: 1.15;
+}
+.gk-tags { display: flex; gap: var(--sp-1); margin-top: var(--sp-2); }
+.gk-tag {
+  padding: 2px 6px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--g-r);
+  color: var(--accent-fg);
+  font-size: var(--fs-cap); letter-spacing: 0.05em;
+}
+.gk-ident-op { margin-top: var(--sp-2); font-size: var(--fs-cap); color: var(--txt-1); }
+.gk-ident-fresh {
+  display: flex; align-items: center; gap: var(--sp-1);
+  margin-top: var(--sp-1); font-size: var(--fs-cap); color: var(--txt-3);
+}
+
+.gk-profile { margin: var(--sp-3); border: 1px solid var(--line); border-radius: var(--g-r); }
+.gk-profile-h {
+  padding: 6px var(--sp-2);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-cap); font-weight: 600; color: var(--txt-0);
+}
+.gk-profile-b {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-2); padding: var(--sp-2);
+}
+.gk-silhouette { width: 108px; height: 36px; color: var(--txt-2); }
+.gk-profile-t { font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-1); }
+
+/* ── Map furniture the shipped app has and this mockup had dropped ─────────── */
+
+.gk-legend {
+  position: absolute; bottom: var(--sp-2); left: calc(var(--g-left) + var(--sp-2)); z-index: 2;
+  display: flex; flex-direction: row; gap: var(--sp-3);
+  font-size: var(--fs-cap); color: var(--txt-1);
+  text-shadow: 0 1px 3px rgba(0,0,0,.85);
+}
+.gk-legend span { display: flex; align-items: center; gap: var(--sp-2); line-height: 1.5; }
+.gk-legend i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+.gk-feeds {
+  position: absolute; top: var(--sp-2);
+  left: calc(var(--g-left) + (100% - var(--g-left) - var(--g-right)) / 2);
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex; align-items: center; gap: var(--sp-3);
+  height: var(--g-btn-sm); padding: 0 var(--sp-3);
+  background: rgba(17, 20, 24, 0.88);
+  border: 1px solid var(--line);
+  border-radius: var(--g-r);
+  font-size: var(--fs-cap); color: var(--txt-1);
+}
+.gk-feeds span { display: flex; align-items: center; gap: var(--sp-1); }
+
+/* Contact name chips. The shipped app labels contacts with a boxed monospace
+   chip, which is what makes a crowded map readable instead of a dot field. */
+.gk-map .chipl {
+  font-family: var(--font-mono); font-size: 11px;
+  fill: var(--txt-0);
+}
+.gk-map .chipbg { fill: rgba(17, 20, 24, 0.82); stroke: rgba(255,255,255,0.14); }
+
+/* ── Replay transport + event lanes ──────────────────────────────────────────
+   A whole row of the shipped product that this mockup did not have at all. */
+
+
+
+
+
+
+
+
+/* Lanes sit INSIDE the transport row now rather than owning 40px of their own.
+   Two 7px strips fit in a 30px row beside the controls; a separate band for them
+   was 40px spent on two hairlines of data. */
+
+
+
+
+
+
+/* transport + lanes are one grid child, not two. Emitting them as siblings put
+   the action bar into an unsized implicit row and collapsed it to 31px. */
+.gk-timeblock {
+  display: flex; align-items: center; gap: var(--sp-3);
+  min-height: 0; padding: 0 var(--sp-2);
+  background: var(--bg-0); border-top: 1px solid var(--line);
+}
+
+/* Monospace matched/total fraction, as Gotham shows it. A bare count cannot say
+   "1 of 12 are in view"; the fraction is the whole point of the row. */
+.gk-frac {
+  flex: none; min-width: 34px; text-align: right;
+  font-family: var(--font-mono); font-size: var(--fs-cap);
+  color: var(--txt-2); font-variant-numeric: tabular-nums;
+}
+/* Labelled toolbar groups, from _ref/graph-toolbar.png: a muted label above each
+   cluster, vertical hairline dividers between clusters. Gotham never shows a
+   bare row of unexplained icons. */
+.gk-maptools { flex-direction: row; align-items: stretch; width: auto; height: auto; padding: 3px 4px; top: var(--sp-2); }
+.gk-tgroup { display: flex; flex-direction: column; gap: 1px; padding: 0 5px; }
+.gk-tgroup > .lab {
+  font-size: var(--fs-cap); color: var(--txt-3); line-height: 1.2;
+  letter-spacing: .03em; white-space: nowrap;
+}
+.gk-tgroup > .btns { display: flex; align-items: center; gap: 1px; }
+.gk-maptools .vr { width: 1px; align-self: stretch; background: var(--line-2); margin: 0 2px; }
+
+/* System state in the title bar, where the deleted status strip's content went. */
+.gk-sys {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-cap); color: var(--txt-2); white-space: nowrap;
+}
+.gk-sys .sep { color: var(--txt-4); }
+/* Legend is one horizontal strip at the map's bottom edge, not a four-row stack
+   in the corner competing with the toolbar. */
+.gk-legend span { line-height: 1; }
+
+/* Gotham's transport: centred cluster, one filled button, speed as a step. */
+.gk-timeblock .t { font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--accent-fg); }
+.gk-timeblock .grow { flex: 1 1 auto; }
+.gk-tp { display: flex; align-items: center; gap: var(--sp-1); }
+.gk-tp > button {
+  height: 22px; padding: 0 7px;
+  display: flex; align-items: center; gap: 3px;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-1); font: inherit; font-size: var(--fs-cap);
+  cursor: pointer;
+}
+.gk-tp > button b { font-weight: 400; color: var(--txt-2); }
+.gk-tp > button:hover { background: var(--bg-2); color: var(--txt-0); }
+.gk-tp > button.on {
+  background: var(--accent); color: #fff; font-weight: 600;
+}
+.gk-tp > button.on:hover { background: #3b82e0; }
+.gk-tp > button.live {
+  background: var(--alert-bg); color: var(--alert-fg);
+  border: 1px solid rgba(231,106,110,.4);
+}
+.gk-timeblock .ico-btn {
+  height: 22px; width: 22px; display: grid; place-items: center;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-3); cursor: pointer;
+}
+.gk-timeblock .ico-btn:hover { background: var(--bg-2); color: var(--txt-0); }
+.gk-timeblock .ico-btn svg { width: 14px; height: 14px; }
