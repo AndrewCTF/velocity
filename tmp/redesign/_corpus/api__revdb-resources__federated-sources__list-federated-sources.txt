@@ -1,0 +1,25 @@
+List federated sources GET /api/gotham/v1/federatedSources Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Get a list of all federated sources. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Response body GetFederatedSourceResponse object A list of federated sources. Hide child attributes Hide child attributes Expand all nextPageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request.
+To fetch the next page, clients should take the value from the nextPageToken field of the previous response
+and populate the next request's pageToken field with it. data list<FederatedSource> optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/federatedSources?preview=true" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ [
+ {
+ "name": "My Federated Source"
+ },
+ {
+ "name": "My Other Federated Source"
+ }
+] © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Response body Examples Request Response

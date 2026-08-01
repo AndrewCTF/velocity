@@ -1,0 +1,10 @@
+Rendering Symbology PUT /api/gotham/v1/maps/rendering/symbol Fetches the PNG for the given symbol identifier Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body GaiaSymbol union Hide child attributes Hide child attributes Expand all MilsymSymbol object optional Show child attributes Show child attributes IconSymbol object optional Show child attributes Show child attributes Response body body string A successful render response. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/maps/rendering/symbol?preview=true" \
+ -d '{"type":"MilsymSymbol","sidc":"SHG-USTI-------"}' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Request body Response body Examples Request Response

@@ -1,0 +1,13 @@
+Link track to object POST /api/gotham/v1/tracks/linkToObject Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Links a Geotime Track with an Object, by ensuring that the Track has a "pointer"
+to its Object, and vice versa. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body LinkTrackAndObjectRequest object A request to link a Geotime Track to an Object Hide child attributes Hide child attributes Collapse all trackRid string Globally unique identifier for a Geotime Track. This is synonymous with a Gotham Identifier and contains information like SourceSystemId, CollectionId, SpecId and TrackId. objectRid string Globally unique identifier for an Object Rid. Response body EmptySuccessResponse object A successful response means that the Track has been linked to the Object. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/tracks/linkToObject?preview=true" \
+ -d '[{"trackRid":"ri.gotham.1-1.geotime-track.foo.bar.baz.track0","objectRid":"ri.gotham.1-1.object.someString"}]' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Request body Response body Examples Request Response

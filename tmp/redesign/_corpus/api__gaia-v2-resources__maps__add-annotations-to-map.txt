@@ -1,0 +1,19 @@
+Add Annotations To Map POST /api/v2/gaia/maps/{mapRid}/addAnnotationsTo Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Add annotations to a map. Currently only Line, Polygon, Rectangle, Point, and tactical graphic annotations
+may be added. If any provided parameters are unknown, invalid, or do not satisfy the security requirements,
+the entire request will fail.
+For each request, a new element is created for each annotation, as well as a new layer if no parent layer
+is specified; thus not idempotent. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:map-write . Path parameters mapRid string The RID of a Gaia map. Query parameters preview boolean optional Enables the use of preview functionality. Request body AddAnnotationsToMapRequest object Hide child attributes Hide child attributes Expand all parentLayerId string optional If provided, the created annotations will be nested under this layer ID. The layer ID must be an
+annotation layer that already exists. If not provided, a new layer will be created. layerLabel string optional If provided AND no existing parentLayerId is provided, the new layer created will be set with the
+provided label. annotations list<GaiaAnnotation> optional The annotations to create on the map. Show child attributes Show child attributes Response body AddAnnotationsToMapResponse object The response body to add annotations to a map, containing the ID of the created layer. Hide child attributes Hide child attributes Expand all parentLayerId string The annotation data layer ID containing the created annotations annotationIds list<GaiaElementId> optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/gaia/maps/ri.gotham-artifact.0-1.gaia-map.a1A2bcD3e45fg6h7ij/addAnnotationsTo?preview=true" \
+ -d '{"layerLabel":"Example label","annotations":[{"title":"Example Point Annotation","annotationDescription":"An example point annotation","annotationType":{"type":"point","coordinate":{"lon":0.0,"lat":0.0},"symbol":{"type":"IconSymbol","id":"marker"}},"style":{"stroke":{"color":"#FFFFFF","width":2,"opacity":1.0}}}]}' Error responses Error Name Expected Map Gid Error Code INVALID_ARGUMENT Status Code 400 Description Expected a map Gid. Parameters mapId Add Annotations To Map Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not addAnnotationsTo the Map. Parameters mapRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response Error responses

@@ -1,0 +1,10 @@
+Remove Intel From a Target PUT /api/gotham/v1/twb/removeTargetIntel/{rid} Remove Intel on Target by RID Path parameters rid string Target RID Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body RemoveTargetIntelRequest object Request body to remove intel from situation based on ID. Hide child attributes Hide child attributes Collapse all id string Response body EmptySuccessResponse object Success response. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/twb/removeTargetIntel/ri.gotham-artifact.0-0.target.example?preview=true" \
+ -d '{"id":"Example Intel Id"}' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

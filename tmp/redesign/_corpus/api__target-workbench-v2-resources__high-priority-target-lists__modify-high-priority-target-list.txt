@@ -1,0 +1,20 @@
+Modify High Priority Target List PUT /api/v2/targetWorkbench/highPriorityTargetLists/{highPriorityTargetListRid}/modify Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Modify a High Priority Target (HPTL) List by RID. 
+ Sets the current state of a HPTL. Any fields not supplied, except target board, will result in removal if there was a value present.
+Trying to set target board to empty when there is already a value will result in an INVALID_ARGUMENT exception.
+You cannot modify the target board field if a value is already set. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-write . Path parameters highPriorityTargetListRid string The unique identifier for a High Priority Target List Query parameters preview boolean optional Enables the use of preview functionality. Request body ModifyHighPriorityTargetListRequest object Hide child attributes Hide child attributes Expand all targetBoard string optional The unique identifier for a Target Board targets list<HighPriorityTargetListTarget> optional A list of HighPriorityTargetListTargets Show child attributes Show child attributes areaObjectRid string optional The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. areaGeo object optional A Polygon representing the area where this High Priority Target List is applicable. If areaObjectRid exists, that field/area will be used and this field will be ignored. Show child attributes Show child attributes targetAois list<HptlTargetAoi> optional Show child attributes Show child attributes baseRevisionId integer The current version of the retrieved HighPriorityTargetList.
+Any modifying operations should be accompanied by this version to avoid concurrent operations
+made since this version. If there are any conflicting edits that result in changes to
+these operations when they are applied, it will be noted in the response. Response body EmptySuccessResponse any An empty response object indicating the request was successful. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/highPriorityTargetLists/ri.gotham-artifact.0-0.hptl.example/modify?preview=true" \
+ -d '{"targetBoard":"ri.gotham-artifact.0-0.target-board.example","areaGeo":{"points":[{"elevation":0.0,"latitude":0.0,"longitude":0.0}]},"areaObjectRid":"ri.gotham.123-456.object-internal.example","baseRevisionId":1,"targets":[{"targetSubtypes":["Red Car"],"when":"ACQUIRED"}]}' Error responses Error Name High Priority Target List Not Found Error Code INVALID_ARGUMENT Status Code 400 Description Cannot find High Priority Target List from provided RID
+ Parameters highPriorityTargetListRid Modify High Priority Target List Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not modify the HighPriorityTargetList. Parameters highPriorityTargetListRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response Error responses

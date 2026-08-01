@@ -1,0 +1,19 @@
+Modify Target Board PUT /api/v2/targetWorkbench/targetBoards/{targetBoardRid}/modify Modify a Target Board by RID. 
+ Sets the current state of a Collection. Any fields, except hptl , not supplied will result in
+removal if there was a value present. Trying to set hptl to empty when there's already a value will
+result in an INVALID_ARGUMENT exception. You cannot modify the hptl field if a value is already set.
+Fields that are not supported by the OpenAPI layer will remain unmodified. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-write . Path parameters targetBoardRid string The unique identifier for a Target Board Request body ModifyTargetBoardRequest object Hide child attributes Hide child attributes Expand all name string description string optional highPriorityTargetList string optional configuration object optional Configuration for a target board Show child attributes Show child attributes baseRevisionId string The current version of the Target Board to be modified.
+The archive operation will be transformed against any concurrent operations
+made since this version. If there are any conflicting edits that result in changes to
+these operations when they're applied, that will be noted in the response. Response body EmptySuccessResponse any An empty response object indicating the request was successful. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/targetBoards/ri.gotham-artifact.0-0.target-board.example/modify" \
+ -d '{"highPriorityTargetList":"ri.gotham-artifact.0-0.hptl.example","configuration":{"columns":[{"id":"EXECUTION","name":"IN PROGRESS","color":"RED"}],"targetIdentifiers":["CUSTOM"]},"name":"Example target board name.","description":"Example target board description.","baseRevisionId":1}' Error responses Error Name Cannot Update Columns With Targets Error Code INVALID_ARGUMENT Status Code 400 Description Cannot update a target board's columns if targets are present in the column.
+ Parameters targetBoardRid Revision Outdated Error Code INVALID_ARGUMENT Status Code 400 Description The provided revision id is behind the current id. Parameters id, revisionId Modify Target Board Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not modify the TargetBoard. Parameters targetBoardRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Request body Response body Examples Request Response Error responses

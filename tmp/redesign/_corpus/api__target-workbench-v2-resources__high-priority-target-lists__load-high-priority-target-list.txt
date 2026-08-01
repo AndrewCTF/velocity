@@ -1,0 +1,58 @@
+Load High Priority Target List GET /api/v2/targetWorkbench/highPriorityTargetLists/{highPriorityTargetListRid}/load Load a High Priority Target List by RID. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-read . Path parameters highPriorityTargetListRid string The unique identifier for a High Priority Target List Response body LoadHighPriorityTargetListResponse object Success response with the requested Target Board. Hide child attributes Hide child attributes Expand all highPriorityTargetList object The High Priority Target List object. Show child attributes Show child attributes baseRevisionId integer The current version of the retrieved HighPriorityTargetList.
+Any modifying operations should be accompanied by this version to avoid concurrent operations
+made since this version. If there are any conflicting edits that result in changes to
+these operations when they are applied, it will be noted in the response. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/highPriorityTargetLists/ri.gotham-artifact.0-0.hptl.example/load" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ {
+ "highPriorityTargetList": {
+ "areaGeo": {
+ "points": [
+ {
+ "elevation": 0,
+ "latitude": 0,
+ "longitude": 0
+ }
+ ]
+ },
+ "areaObjectId": "ri.gotham.123-456.object-internal.example",
+ "rid": "ri.gotham-artifact.0-0.hptl.example",
+ "targets": [
+ {
+ "targetSubtypes": [
+ "Red Car"
+ ],
+ "when": "ACQUIRED"
+ }
+ ]
+ },
+ "baseRevisionId": 1
+} Error responses Error Name High Priority Target List Not Found Error Code INVALID_ARGUMENT Status Code 400 Description Cannot find High Priority Target List from provided RID
+ Parameters highPriorityTargetListRid Load High Priority Target List Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not load the HighPriorityTargetList. Parameters highPriorityTargetListRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Response body Examples Request Response Error responses

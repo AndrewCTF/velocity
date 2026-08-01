@@ -1,0 +1,25 @@
+Modify Target PUT /api/v2/targetWorkbench/targets/{targetRid}/modify Set current state of Target by RID. 
+ If sidc field is specified and invalid according to MIL-STD-2525C specification,
+an InvalidSidc error is thrown. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-write . Path parameters targetRid string The unique identifier for a Target Request body ModifyTargetRequest object Hide child attributes Hide child attributes Expand all name string description string optional targetType string optional The resource type of the target. entityRid string optional The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. sidc string optional MIL-STD 2525C Symbol Identification Code. targetIdentifier object optional Target identifier object for different identifier types. Show child attributes Show child attributes location object optional An object containing the location source for a target.
+This can either be a manual location, a geotimeTrack, and/or a geotrackable entity providing location updates.
+The entity, if present, is always the same as the backing entity of the target. Show child attributes Show child attributes highPriorityTargetListTargetSubtype string optional This subtype will be matched against the subType stored on High Priority Target List Target (HPTLTarget) in order to determine a target's
+subPriority, in addition to priority and Attack Guidance Matrix (AGM). aimpoints list<TargetAimpointV2> optional Show child attributes Show child attributes baseRevisionId string The version of the Target to be modified.
+The modifying operations will be transformed against any concurrent operations
+made since this version. 
+ If the supplied version is outdated, the server will respond back with RevisionOutdated exception and
+the client must resend the request with the updated baseRevisionId. clientId string optional The client id is used to identify conflicting edits made by the same client,
+typically due to retries, and discard them. Clients should choose an arbitrary random
+identifier to distinguish themselves. There is no need persist and re-use the same
+client id over multiple sessions. 
+ The client id is also used to avoid broadcasting operations to the client who
+submitted them. Response body EmptySuccessResponse any An empty response object indicating the request was successful. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/targets/ri.gotham-artifact.0-0.target.example/modify" \
+ -d '{"sidc":"SEGPU-------","entityRid":"ri.gotham.123-456.object-internal.example","highPriorityTargetListTargetSubtype":"Red Car","targetIdentifier":{"customTargetIdentifier":"Example Identifier 000"},"clientId":"123e4567-e89b-12d3-a456-426614174000","aimpoints":[{"entityRid":"ri.gotham.123-456.object-internal.example","geotimeTrack":"ri.gotham.0-0.geotime-track.aa.bb.cc.example","name":"Example targetAimPoint name","location":{"circularErrorInMeters":0.0,"lng":0.0,"msl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"agl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"hae":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"lat":0.0},"id":"f81d4fae-7dec-11d0-a765-00a0c91e6bf6"}],"name":"Example target name.","description":"Example target description.","targetType":"Building","location":{"manualLocation":{"circularErrorInMeters":0.0,"lng":0.0,"msl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"agl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"hae":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"lat":0.0},"geotimeTrack":"ri.gotham.0-0.geotime-track.aa.bb.cc.example","geotrackableEntity":"ri.gotham.123-456.object-internal.example"},"baseRevisionId":1}' Error responses Error Name Invalid Geotrackable Entity Error Code INVALID_ARGUMENT Status Code 400 Description The supplied geotrackable entity does not match the backing entity of the target. Parameters targetEntity, geotrackableEntity Revision Outdated Error Code INVALID_ARGUMENT Status Code 400 Description The provided revision id is behind the current id. Parameters id, revisionId Modify Target Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not modify the Target. Parameters targetRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Request body Response body Examples Request Response Error responses

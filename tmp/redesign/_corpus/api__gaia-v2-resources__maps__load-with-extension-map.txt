@@ -1,0 +1,18 @@
+Load With Extension Map PUT /api/v2/gaia/maps/{mapRid}/loadWithExtension Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Same as /gotham/v1/maps/load/{mapGid}, but allows you to pass in a request body for further configuration. 
+ Loads the structure and basic metadata of a Gaia map, given a map GID. Metadata includes the map's title and
+layer labels. 
+ The response contains a mapping of all layers contained in the map. The map's layer hierarchy can be recreated
+by using the rootLayerIds in the response along with the subLayerIds field in the layer's metadata. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:map-read . Path parameters mapRid string The RID of a Gaia map. Query parameters preview boolean optional Enables the use of preview functionality. Request body LoadWithExtensionMapRequest object Hide child attributes Hide child attributes Expand all extensions object Describes extensions that this API should apply to the loaded data Show child attributes Show child attributes Response body LoadMapResponse object Contains information related to a Gaia map's structure and basic metadata. Hide child attributes Hide child attributes Expand all title string The title of the loaded Gaia map. rootLayerIds list<GaiaLayerId> optional The root layers of the loaded Gaia map. This does not include sub-layers, i.e. layers nested within a parent
+layer in a Gaia map. Show child attributes Show child attributes layers map<GaiaLayerId, GaiaLayerMetadata> optional A mapping of all the layers contained in the Gaia map. Includes layers nested under the root layers. Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/gaia/maps/ri.gotham-artifact.0-1.gaia-map.a1A2bcD3e45fg6h7ij/loadWithExtension?preview=true" \
+ -d '' Error responses Error Name Map Not Found Error Code NOT_FOUND Status Code 404 Description Map not found Parameters mapId Load With Extension Map Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not loadWithExtension the Map. Parameters mapRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response Error responses

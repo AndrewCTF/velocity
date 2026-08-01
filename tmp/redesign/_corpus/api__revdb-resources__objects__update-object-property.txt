@@ -1,0 +1,62 @@
+Update object property PUT /api/gotham/v1/objects/{primaryKey}/properties/{propertyId} Update property details. By default, writes to property values from multiple sources will fail.
+To override this behavior, clients may specify to 'applyToAllSources', which defaults to false.
+Clients must ensure this behavior matches expectations when changing multi-sourced property values. 
+ If the property to update has multiple sources and applyToAllSources is not set to true,
+UnclearMultiSourcePropertyUpdateRequest will be raised. If setting applyToAllSources to true, ensure intention matches
+expected result. Path parameters primaryKey string The primary key of the requested object. propertyId string The identifier of the property to update. Request body UpdatePropertyRequest object Request to update a specific property value. Hide child attributes Hide child attributes Collapse all value any Represents the value of a property. The following table provides expected representations of scalar data types: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Type JSON encoding Example Date ISO 8601 extended local date string "2021-05-01" Decimal string "2.718281828" Double number 3.14159265 Integer number 238940 Long string "58319870951433" String string "Call me Ishmael" Timestamp ISO 8601 extended offset date-time string in UTC zone "2021-01-04T05:00:00Z" applyToAllSources boolean optional Whether to update the property value across all sources if there are multiple. Defaults to false.
+If not specified or false, and existing property value has multiple sources, the write will fail. Response body EmptySuccessResponse object Success response Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111/properties/abc123" \
+ -d '{"value":{"FIRST_NAME":"Johnny","LAST_NAME":"Smith"}}' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Request body Response body Examples Request Response

@@ -1,0 +1,73 @@
+Object resolution basics Object resolution is the act of combining two or more Objects. For instance, it may be useful to resolve objects from
+two different Source Systems that refer to the same real-world entity, to prevent duplicate objects from being created. 
+ When objects are resolved, their independent histories are preserved and updates to each of the sub-objects will be
+preserved in case objects ever need to be un-resolved later, eg, if an error in resolution was made. Additionally,
+properties written directly to the resolved object can later be partitioned to any of the constituents upon unresolve. 
+ These concepts can be described and investigated by loading the resolution metadata, which has a few components 
+ 
+ A canonicalObjectPrimaryKey which is the primary key of the resolved object. 
+ A winnerObjectPrimaryKey , which is created internally when objects are resolved. New property writes for the
+resolved object will be associated with the winnerObjectPrimaryKey , so that on unresolve, they can be
+cleanly separated from the constituent objects. 
+ A list of otherObjectPrimaryKeys which are other objects that have been resolved into the bag. 
+ 
+ In the case that objects are resolved recursively, all components of the constituent objects are flattened into
+this field, except for the objectPrimaryKey which becomes the canonicalObjectPrimaryKey of the
+newly-resolved object. 
+ For example, if objects ri.gotham.111111-0.object-internal.111111 and
+ ri.gotham.111111-0.object-internal.222222 are resolved, you will get resolution metadata of 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ {
+ "canonicalObjectPrimaryKey": ri.gotham.111111-0.object-internal.111111,
+ "winnerObjectPrimaryKey": ri.gotham.111111-0.object-internal.333333,
+ "otherObjectPrimaryKeys": [ri.gotham.111111-0.object-internal.222222]
+} 
+ If ri.gotham.111111-0.object-internal.111111 and ri.gotham.111111-0.object-internal.444444 are then
+resolved, you will get resolution metadata of 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ {
+ "canonicalObjectPrimaryKey": ri.gotham.111111-0.object-internal.111111,
+ "winnerObjectPrimaryKey": ri.gotham.111111-0.object-internal.555555,
+ "otherObjectPrimaryKeys": [
+ ri.gotham.111111-0.object-internal.222222, 
+ ri.gotham.111111-0.object-internal.333333, 
+ ri.gotham.111111-0.object-internal.444444]
+} 
+ You may then unresolve ri.gotham.111111-0.object-internal.222222 from ri.gotham.111111-0.object-internal.111111 ,
+which will result in two objects, ri.gotham.111111-0.object-internal.111111 and
+ ri.gotham.111111-0.object-internal.222222 , with the following resolution metadata: 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ [{
+ "canonicalObjectPrimaryKey": ri.gotham.111111-0.object-internal.111111,
+ "winnerObjectPrimaryKey": ri.gotham.111111-0.object-internal.555555,
+ "otherObjectPrimaryKeys": [
+ ri.gotham.111111-0.object-internal.333333, 
+ ri.gotham.111111-0.object-internal.444444]
+},
+{
+ "canonicalObjectPrimaryKey": ri.gotham.111111-0.object-internal.222222,
+ "winnerObjectPrimaryKey": ri.gotham.111111-0.object-internal.222222,
+ "otherObjectPrimaryKeys": []
+}] © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings

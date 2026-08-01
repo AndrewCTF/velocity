@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Velocity redesign · Re-homing and side by side</title>
+<link rel="stylesheet" href="mock.css" />
+<style>
+  tr.hid td { color: var(--txt-3); }
+  .sbs { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); align-items: start; }
+  .sbs figure { border-radius: var(--r-lg); overflow: hidden; background: var(--bg-1); }
+  .sbs figcaption { padding: 10px 14px; font-size: var(--fs-cap); color: var(--txt-3); }
+  .sbs img { display: block; width: 100%; height: auto; }
+  .tally { display: flex; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+  .tally > div b { display: block; font-family: var(--font-mono); font-size: 22px; font-weight: 600; }
+  .tally > div span { font-size: var(--fs-cap); color: var(--txt-3); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="00-index.html">Board</a>
+  <a href="a-panel-parity.html">A · Panel parity</a>
+  <a href="b-verb-first.html">B · Verb first</a>
+  <a href="c-palette-first.html">C · Palette first</a>
+  <a href="panels.html">Panels</a>
+  <a href="gotham-parity.html">Gotham parity</a>
+  <a href="foundry.html">Foundry</a>
+  <a href="components.html">Components</a>
+  <a href="states.html">States and keyboard</a>
+  <a href="rehoming.html" class="on">Re-homing</a>
+</nav>
+
+<div class="doc">
+
+<h1>Re-homing and side by side</h1>
+<p class="lead">
+  The complete surface inventory of the current console, every row mapped to a home
+  in the new shell. Nothing is dropped. Counts are extracted from source, not typed
+  by hand: layer ids and titles from <code>registry/defaults.ts</code>, folders from
+  <code>normal/layerCatalog.ts</code>, apps from <code>state/appView.ts:30</code>,
+  rail items from <code>App.tsx:179-204</code>, routes from
+  <code>AppRouter.tsx:55-65</code>.
+</p>
+
+<div class="tally">
+  <div><b>14</b><span>apps</span></div>
+  <div><b>18</b><span>rail items</span></div>
+  <div><b>9</b><span>routes</span></div>
+  <div><b>64</b><span>layers</span></div>
+  <div><b>105</b><span>surfaces mapped</span></div>
+  <div><b>0</b><span>dropped</span></div>
+</div>
+
+<h2>Side by side against the current console</h2>
+<p>
+  Left is the shipped UI, from <code>docs/media/panels/</code>. Right is the proposal.
+  These are the same product at the same job.
+</p>
+
+<h3>The map console</h3>
+<div class="sbs">
+  <figure><img src="_ref/app-map.png" alt="Current Velocity map console" /><figcaption>Today · docs/media/panels/app-map.png</figcaption></figure>
+  <figure><img src="_shots/a-panel-parity.png" alt="Proposed map console" /><figcaption>Proposed · Direction A</figcaption></figure>
+</div>
+
+<h3>Foundry</h3>
+<div class="sbs">
+  <figure><img src="_ref/app-foundry.png" alt="Current Foundry" /><figcaption>Today · docs/media/panels/app-foundry.png</figcaption></figure>
+  <figure><img src="_shots/foundry.png" alt="Proposed Foundry" /><figcaption>Proposed · light analytical surface</figcaption></figure>
+</div>
+
+<h3>Layers, and the selection panel</h3>
+<div class="sbs">
+  <figure><img src="_ref/rail-layers.jpeg" alt="Current layer catalog" /><figcaption>Today · rail item "Layers"</figcaption></figure>
+  <figure><img src="_ref/inspector-selection.jpeg" alt="Current inspector" /><figcaption>Today · the object inspector</figcaption></figure>
+</div>
+
+<h3>The departures, named</h3>
+<table class="t">
+  <thead><tr><th>Axis</th><th>Today</th><th>Proposed</th><th>Justification</th></tr></thead>
+  <tbody>
+    <tr><td>Shell structure</td><td>4 grid rows: 26px classification band, 42px command bar, globe, 158px timeline footer (<code>ConsoleShell.tsx:240</code>)</td><td>2 grid rows: 48px bar, globe. Marking is an inline pill; time is a collapsible dock over the map.</td><td>Returns about 140px of vertical to the globe. <code>docs/frontend.md:99</code> says the globe must never be covered by permanent chrome, and two of the four rows were permanent chrome.</td></tr>
+    <tr><td>Type scale</td><td>body 13px, floor 11px, 780 literals below it (748 at 10px, 31 at 9px), uppercase 0.8px-tracked labels</td><td>body 14px, floor 12px, sentence case, one weight step</td><td><code>docs/decisions.md:1017</code> already concluded the density, not the typeface, was what read as "AI dashboard". The 11px floor was set and then never enforced.</td></tr>
+    <tr><td>Density</td><td>~24px rows, 5 to 7px padding, nested bordered boxes</td><td>32px rows, 8 to 16px rhythm on a spacing scale that is actually used</td><td>Counts collided with labels at 24px. <code>--sp-*</code> was declared in tokens.css with 0 consumers.</td></tr>
+    <tr><td>Chrome</td><td>accent-tinted section labels with a 3px left edge; <code>Widget</code> boxes inside bordered panels; rules between rows</td><td>plain type hierarchy; grouping by space and weight; hairlines only where two surfaces meet</td><td>The tinted eyebrow is the most recognisable ornament of the current UI and carries no information.</td></tr>
+    <tr><td>Colour</td><td>warm ink <code>#191817</code>, accent <code>#6fb1dd</code>, one dark theme everywhere</td><td>cool near-black <code>#0B0E13</code>, accent <code>#4C9AFF</code>, and a light surface for the analytical apps</td><td>Colour is the strongest signal of "same product". The dark and light split also encodes Gotham versus Foundry: dark when you are watching, light when you are building.</td></tr>
+    <tr><td>Navigation</td><td>44px icon rail, 18 items, 10 of them in a "more" drawer, tooltips only</td><td>4 named text tabs, apps behind one launcher, palette over all 41 surfaces</td><td>An icon with a tooltip is the reachable-but-invisible pattern the persona studies kept finding.</td></tr>
+  </tbody>
+</table>
+
+<div class="note warn">
+  Unchanged on purpose: the map data palette. The eight category hex values and the
+  absence of <code>PointGraphics</code> are asserted as literal strings in
+  <code>globe/invariants.test.ts</code>. The rule that the only saturated colour
+  belongs to data is why the chrome went calmer rather than louder.
+</div>
+
+<h2>All 64 layers</h2>
+<p>
+  61 sit in one of the seven Layers-panel groups. 3 are hidden today
+  (<code>normal/layerCatalog.ts:159</code>) and stay reachable rather than being
+  dropped: they move behind a "Show superseded sources" disclosure in the group they
+  belong to, because each duplicates a source that is already on.
+</p>
+<table class="t">
+  <thead><tr><th>Layer id</th><th>Title</th><th>Registry group</th><th>New home</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">airspace.nasstatus</td><td>NAS ground stops · FAA</td><td class="mono">hazards</td><td>Layers · Air</td></tr>
+    <tr><td class="mono">airspace.tfr</td><td>TFR / Airspace restrictions</td><td class="mono">infra</td><td>Layers · Air</td></tr>
+    <tr><td class="mono">aviation.adsb.global</td><td>Aircraft · Global (multi-source ADS-B)</td><td class="mono">aviation</td><td>Layers · Air</td></tr>
+    <tr><td class="mono">aviation.adsb.live.emergencies</td><td>Aircraft · Emergency squawks (7500/7600/7700)</td><td class="mono">aviation</td><td>Layers · Air</td></tr>
+    <tr><td class="mono">aviation.adsb.live.mil</td><td>Aircraft · Military (airplanes.live)</td><td class="mono">aviation</td><td>Layers · Air</td></tr>
+    <tr><td class="mono">aviation.sigmet</td><td>SIGMET / AIRMET hazards</td><td class="mono">aviation</td><td>Layers · Air</td></tr>
+    <tr><td class="mono">maritime.buoys</td><td>Marine buoys · NDBC</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.chokepoints</td><td>Chokepoint congestion</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.digitraffic</td><td>Vessels · Digitraffic Baltic (no key)</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.keyless</td><td>Vessels · live (all AIS sources, 24/7)</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.parked</td><td>Parking mode · parked / anchored ships</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.sar.bab-el-mandeb</td><td>Vessels · Sentinel-1 SAR (Bab-el-Mandeb, no key)</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.sar.gulf-of-aden</td><td>Vessels · Sentinel-1 SAR (Gulf of Aden, no key)</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.sar.hormuz</td><td>Vessels · Sentinel-1 SAR (Hormuz, no key)</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.sar.kerch-strait</td><td>Vessels · Sentinel-1 SAR (Kerch Strait, no key)</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.sar.suez-gulf-approach</td><td>Vessels · Sentinel-1 SAR (Suez approach, no key)</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.sar.taiwan-strait</td><td>Vessels · Sentinel-1 SAR (Taiwan Strait, no key)</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">maritime.warnings</td><td>Naval warnings · NGA broadcast</td><td class="mono">maritime</td><td>Layers · Maritime</td></tr>
+    <tr><td class="mono">space.celestrak.gps</td><td>Satellites · GPS</td><td class="mono">space</td><td>Layers · Space</td></tr>
+    <tr><td class="mono">space.celestrak.starlink</td><td>Satellites · Starlink</td><td class="mono">space</td><td>Layers · Space</td></tr>
+    <tr><td class="mono">space.celestrak.stations</td><td>Satellites · Space stations (ISS)</td><td class="mono">space</td><td>Layers · Space</td></tr>
+    <tr><td class="mono">space.celestrak.visual</td><td>Satellites · Visual (brightest)</td><td class="mono">space</td><td>Layers · Space</td></tr>
+    <tr><td class="mono">weather.spacewx.aurora</td><td>Space weather / aurora · SWPC</td><td class="mono">space</td><td>Layers · Space</td></tr>
+    <tr><td class="mono">climate.anomalies</td><td>Climate anomalies · Open-Meteo ERA5</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">env.airquality</td><td>Air quality · Open-Meteo</td><td class="mono">env</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">env.jamming.nacp</td><td>GPS jamming · ADS-B NACp cells</td><td class="mono">env</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.cyclones</td><td>Tropical cyclones · NHC</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.emsc.quakes</td><td>Quakes · EMSC (24h, M≥2.5)</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.fireperimeters</td><td>Wildfire perimeters · NIFC</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.gdacs</td><td>Disaster alerts · GDACS</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.nasa.eonet</td><td>Events · NASA EONET (open)</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.nasa.firms</td><td>Fires · NASA FIRMS VIIRS</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.nws.alerts</td><td>NWS · Active alerts (US)</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.radiation</td><td>Radiation · Safecast</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.reliefweb</td><td>Humanitarian disasters · ReliefWeb</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.usgs.quakes</td><td>Quakes · USGS (24h)</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">hazards.volcanoes</td><td>Volcanoes · Smithsonian GVP</td><td class="mono">hazards</td><td>Layers · Ground and hazards</td></tr>
+    <tr><td class="mono">conflict.gdelt.live</td><td>Conflict · armed events (GDELT, live)</td><td class="mono">conflict</td><td>Layers · Signals and events</td></tr>
+    <tr><td class="mono">conflict.ucdp</td><td>Conflict · UCDP actor-coded events</td><td class="mono">conflict</td><td>Layers · Signals and events</td></tr>
+    <tr><td class="mono">cyber.ioda.outages</td><td>Internet outages · IODA (areas)</td><td class="mono">cyber</td><td>Layers · Signals and events</td></tr>
+    <tr><td class="mono">intel.incidents.live</td><td>Signals · fused warnings (areas)</td><td class="mono">conflict</td><td>Layers · Signals and events</td></tr>
+    <tr><td class="mono">news.acled.events</td><td>ACLED conflict events (7d)</td><td class="mono">news</td><td>Layers · Signals and events</td></tr>
+    <tr><td class="mono">news.gdelt.events</td><td>GDELT 2.0 · 24h events</td><td class="mono">news</td><td>Layers · Signals and events</td></tr>
+    <tr><td class="mono">infra.cables.landings</td><td>Cable landing points</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.cables.lines</td><td>Submarine cables</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.cams.public</td><td>CCTV · public road/weather cams</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.datacenters</td><td>Datacenters</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.desalination</td><td>Desalination plants</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.ground_stations</td><td>Satellite ground stations</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.launch</td><td>Launch facilities</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.nuclear</td><td>Nuclear facilities</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.power</td><td>Power plants</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.powerplants</td><td>Power plants · WRI (≥500 MW)</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.telecom</td><td>Telecom hubs</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.telescopes</td><td>Telescopes / observatories</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">infra.water</td><td>Water treatment / desalination</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">military.installations</td><td>Military installations (MIRTA + garrisons/training)</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">places.airports</td><td>Airports</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">places.bases</td><td>Military bases</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">places.ports</td><td>Ports</td><td class="mono">infra</td><td>Layers · Infrastructure</td></tr>
+    <tr><td class="mono">mil.cop.notional</td><td>COP · Notional units (MIL-STD-2525)</td><td class="mono">reference</td><td>Layers · Reference</td></tr>
+    <tr class="hid"><td class="mono">aviation.adsb.fi.global</td><td>Aircraft · adsb.fi (global snapshot)</td><td class="mono">aviation</td><td>Layers · Air, behind "Show superseded sources". Kept, not dropped: it is a redundant feed of a source already on by default.</td></tr>
+    <tr class="hid"><td class="mono">aviation.opensky.states</td><td>Aircraft · OpenSky (auth optional)</td><td class="mono">aviation</td><td>Layers · Air, behind "Show superseded sources". Kept, not dropped: it is a redundant feed of a source already on by default.</td></tr>
+    <tr class="hid"><td class="mono">maritime.aisstream</td><td>Vessels · AISStream (live)</td><td class="mono">maritime</td><td>Layers · Maritime, behind "Show superseded sources". Kept, not dropped: needs a key and duplicates the keyless union.</td></tr>  </tbody>
+</table>
+
+<h2>All 14 apps</h2>
+<table class="t">
+  <thead><tr><th>App</th><th>Today</th><th>New home</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">map</td><td>the globe, always mounted</td><td>the substrate. Unchanged.</td></tr>
+    <tr><td class="mono">ai</td><td>full-bleed app</td><td>Decide group in the launcher, plus the ⌘J console overlay</td></tr>
+    <tr><td class="mono">explorer</td><td>globe-chrome app</td><td>Find panel, promotes to a full-screen light surface</td></tr>
+    <tr><td class="mono">graph</td><td>globe-chrome app</td><td>full screen, entered by Search around</td></tr>
+    <tr><td class="mono">investigate</td><td>globe-chrome app</td><td>Find panel, non-geographic entities</td></tr>
+    <tr><td class="mono">targeting</td><td>globe-chrome app</td><td>full-screen board, Decide group</td></tr>
+    <tr><td class="mono">video</td><td>globe-chrome app, 2 tabs</td><td>full screen, FMV and ground recon</td></tr>
+    <tr><td class="mono">sim</td><td>overlay driven by setApp</td><td>overlay mode. Unchanged.</td></tr>
+    <tr><td class="mono">reports</td><td>globe-chrome app, 7 tabs</td><td>full screen, 7 tabs kept</td></tr>
+    <tr><td class="mono">foundry</td><td>full-bleed app, 5 views</td><td>full screen, light surface, 5 views plus Health, Lineage, Analysis</td></tr>
+    <tr><td class="mono">workflows</td><td>full-bleed app, 3 views</td><td>full screen, light surface, beside Foundry</td></tr>
+    <tr><td class="mono">city</td><td>full-bleed app, lazy</td><td>full screen, Build group</td></tr>
+    <tr><td class="mono">country</td><td>full-bleed app</td><td>full screen, also opens from a selection</td></tr>
+    <tr><td class="mono">markets</td><td>full-bleed app</td><td>full screen, Analyse group</td></tr>
+  </tbody>
+</table>
+
+<h2>All 18 left rail items</h2>
+<table class="t">
+  <thead><tr><th>Rail item</th><th>Group today</th><th>New home</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">layers</td><td>primary</td><td>Layers panel, merged with All sources</td></tr>
+    <tr><td class="mono">search-objects</td><td>primary</td><td>Find panel</td></tr>
+    <tr><td class="mono">feeds</td><td>primary</td><td>Info panel, feed health section</td></tr>
+    <tr><td class="mono">ops</td><td>primary</td><td>Info panel, operations section</td></tr>
+    <tr><td class="mono">watch</td><td>primary</td><td>Draw tool output, listed in Info</td></tr>
+    <tr><td class="mono">annotate</td><td>primary</td><td>Annotate, a toolbar tool</td></tr>
+    <tr><td class="mono">inbox</td><td>primary</td><td>right-side queue, the Gotham Inbox</td></tr>
+    <tr><td class="mono">answers</td><td>primary</td><td>Info panel top block, and the AI app</td></tr>
+    <tr><td class="mono">imagery</td><td>more</td><td>Layers panel, imagery group</td></tr>
+    <tr><td class="mono">chokepoints</td><td>more</td><td>Find panel, saved areas</td></tr>
+    <tr><td class="mono">acars</td><td>more</td><td>Selection panel card, plus a Find source</td></tr>
+    <tr><td class="mono">extract</td><td>more</td><td>Find panel, extract from text</td></tr>
+    <tr><td class="mono">countries</td><td>more</td><td>Country app, sources tab</td></tr>
+    <tr><td class="mono">allsources</td><td>more</td><td>merged into Layers. One layer surface, not two.</td></tr>
+    <tr><td class="mono">filters</td><td>more</td><td>Histogram panel, under its real name</td></tr>
+    <tr><td class="mono">field</td><td>more</td><td>Info panel, field collection section</td></tr>
+    <tr><td class="mono">tasking</td><td>more</td><td>Decide group, beside Targeting</td></tr>
+    <tr><td class="mono">cop</td><td>more</td><td>Layers panel, reference group, edit mode</td></tr>
+  </tbody>
+</table>
+
+<h2>All 9 routes</h2>
+<table class="t">
+  <thead><tr><th>Route</th><th>Today</th><th>New home</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">/</td><td>the console</td><td>unchanged</td></tr>
+    <tr><td class="mono">/2d</td><td>MapLibre mirror</td><td>a scene mode on the same console, offered from Info when the GPU is weak. Route kept as the fallback it is.</td></tr>
+    <tr><td class="mono">/studio</td><td>splat reconstruction jobs</td><td>an app beside City 3D. Same SplatView, never a second renderer.</td></tr>
+    <tr><td class="mono">/news</td><td>news feed page</td><td>an app, and a Reports tab. Route kept for deep links.</td></tr>
+    <tr><td class="mono">/news/:id</td><td>story detail</td><td>unchanged</td></tr>
+    <tr><td class="mono">/login</td><td>Supabase sign-in</td><td>unchanged. Auth stays outside the console.</td></tr>
+    <tr><td class="mono">/signup</td><td>sign-up</td><td>unchanged</td></tr>
+    <tr><td class="mono">/forgot</td><td>reset request</td><td>unchanged</td></tr>
+    <tr><td class="mono">/reset</td><td>reset commit</td><td>unchanged</td></tr>
+  </tbody>
+</table>
+
+<h2>Surfaces that are not layers, apps, rail items or routes</h2>
+<table class="t">
+  <thead><tr><th>Surface</th><th>New home</th></tr></thead>
+  <tbody>
+    <tr><td>Settings modal</td><td><b>Set up</b>, a real place, absorbing the 8 preferences that live in their own localStorage keys today</td></tr>
+    <tr><td>Alerts slide-over</td><td>merged into the Inbox queue as one of its four channels</td></tr>
+    <tr><td>Agent console</td><td>unchanged on ⌘J, plus a permanent home in the AI app</td></tr>
+    <tr><td>Omnibar</td><td>the palette, indexing all 41 surfaces instead of 3 kinds</td></tr>
+    <tr><td>Context menu</td><td>unchanged, and mirrored into the palette so its 16 actions are searchable</td></tr>
+    <tr><td>Timeline footer</td><td>the collapsible time dock</td></tr>
+    <tr><td>Object inspector</td><td>the Selection panel. Re-framed, not rewritten.</td></tr>
+    <tr><td>Mode surfaces (tasking, targeting, fmv, cop)</td><td>folded into the apps that own them. The parallel mode concept goes away.</td></tr>
+    <tr><td>COP control</td><td>Layers panel, saved pictures</td></tr>
+    <tr><td><code>rightTabs</code>, <code>leftTabs</code>, <code>overlayLeft</code></td><td><b>Dropped.</b> The two tab arrays are built every render and only reach the mobile chooser; <code>overlayLeft</code> is a slot nothing passes. The mobile chooser reads the same panel registry as desktop.</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  That last row is the only thing this redesign deletes, and all three are dead code
+  today rather than user-facing capability.
+</div>
+
+</div>
+</body>
+</html>

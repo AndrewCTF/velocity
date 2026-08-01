@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Velocity redesign · All seven panels</title>
+<link rel="stylesheet" href="mock.css" />
+<style>
+  .gal { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: var(--sp-5); align-items: start; }
+  .gcard { border-radius: var(--r-lg); background: var(--glass); box-shadow: var(--sh-2); overflow: hidden; display: flex; flex-direction: column; height: 720px; }
+  .gcard > .gcap { padding: 12px 18px; font-size: var(--fs-cap); color: var(--txt-3); border-bottom: 1px solid var(--line); flex: 0 0 auto; }
+  .gcard > .gcap b { color: var(--accent-fg); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true"><defs>
+<g id="i-search" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g>
+<g id="i-grid" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></g>
+<g id="i-select" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="m9 9 8 3-3.4 1.6L12 17Z"/></g>
+<g id="i-around" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="2.6"/><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="m10.2 10.4-3.4-2.8M13.8 10.4l3.4-2.8M13.8 13.6l3.4 2.8"/></g>
+<g id="i-draw" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3Z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5Z"/><path d="m2 2 7.6 7.6"/></g>
+<g id="i-camera" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L8 6.5H4.5A1.5 1.5 0 0 0 3 8v10a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 18V8a1.5 1.5 0 0 0-1.5-1.5H16Z"/><circle cx="12" cy="12.5" r="3.4"/></g>
+<g id="i-ruler" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 14.1 14.1 2.6a2 2 0 0 1 2.8 0l4.5 4.5a2 2 0 0 1 0 2.8L9.9 21.4a2 2 0 0 1-2.8 0l-4.5-4.5a2 2 0 0 1 0-2.8Z"/><path d="m7 10 2 2M10 7l2 2M13 4l2 2M4 13l2 2"/></g>
+<g id="i-pin" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 5.5-8 12-8 12s-8-6.5-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="2.6"/></g>
+<g id="i-trash" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6"/><path d="M10 11v6M14 11v6"/></g>
+<g id="i-hand" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6.5a1.5 1.5 0 0 0-3 0V11"/><path d="M15 10.5V4.5a1.5 1.5 0 0 0-3 0V11"/><path d="M12 10.5V5.5a1.5 1.5 0 0 0-3 0V13"/><path d="M9 12V9a1.5 1.5 0 0 0-3 0v6.5c0 3.6 2.4 5.5 6 5.5s6-1.9 6-5.5V11"/></g>
+<g id="i-bell" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 6-3 7-3 7h18s-3-1-3-7"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></g>
+<g id="i-pause" fill="currentColor" stroke="none"><rect x="6" y="4.5" width="4" height="15" rx="1.5"/><rect x="14" y="4.5" width="4" height="15" rx="1.5"/></g>
+<g id="i-chev" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
+<g id="i-up" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></g>
+<g id="i-lock" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></g>
+<g id="i-x" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></g>
+<g id="i-eye" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></g>
+<g id="i-graph" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="2.6"/><circle cx="18" cy="7" r="2.6"/><circle cx="12" cy="18" r="2.6"/><path d="m8.3 7.3 2 8.4M16.6 9.2l-3 6.9M8.5 6.4l7-.3"/></g>
+<g id="i-target" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></g>
+<g id="i-db" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><ellipse cx="12" cy="5.5" rx="8" ry="3.2"/><path d="M4 5.5v13c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2v-13"/><path d="M4 12c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2"/></g>
+<g id="i-gear" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8.5"/></g>
+<g id="i-plane" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 8 14h8L12 2Z"/><path d="M10 17h4v3l-2-1.2L10 20v-3Z"/></g>
+<g id="i-layers" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></g>
+<g id="i-hist" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 21V10"/><path d="M9 21V4"/><path d="M15 21v-8"/><path d="M21 21V8"/></g>
+<g id="i-info" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><path d="M12 8h.01"/></g>
+<g id="i-series" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3.5-4 3 2.6L20 6"/></g>
+<g id="i-clock" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></g>
+</defs></svg>
+
+<nav class="topnav">
+  <a href="00-index.html">Board</a>
+  <a href="a-panel-parity.html">A · Panel parity</a>
+  <a href="b-verb-first.html">B · Verb first</a>
+  <a href="c-palette-first.html">C · Palette first</a>
+  <a href="panels.html" class="on">Panels</a>
+  <a href="foundry.html">Foundry</a>
+  <a href="components.html">Components</a>
+  <a href="rehoming.html">Re-homing</a>
+  <a href="states.html">States and keyboard</a>
+</nav>
+
+<div class="doc" style="max-width:1500px">
+<h1>All seven panels, at fidelity</h1>
+<p class="lead">
+  The Palantir map grammar in full: four left panels and three right panels, each
+  built out rather than sketched. This is the same markup the direction pages use, so
+  a panel cannot be convincing here and thin there. Scroll each card.
+</p>
+<div class="note">
+  Left panels are peers and only one is open at a time, so the map is never covered by
+  more than one. Right panels stack in a single scrolling column, because Selection,
+  Series and Time selection are all answering questions about the same thing.
+</div>
+
+<h2>Left · what exists</h2>
+<div class="gal">
+  <div class="gcard" id="layers"><div class="gcap"><b>Layers</b> · add, manage and style object and overlay layers</div><div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div class="phead"><h2>Layers</h2><span class="badge">18 of 64 on</span><span style="flex:1"></span><button class="btn sm quiet">Presets</button></div>
+<div class="pbody">
+  <div class="input" style="margin-bottom:14px"><svg width="15" height="15" style="opacity:.55" viewBox="0 0 24 24"><use href="#i-search"/></svg><span class="ph">Filter sources</span></div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap">
+    <button type="button" class="chip on" aria-pressed="true">Air picture</button><button type="button" class="chip" aria-pressed="false">Maritime</button><button type="button" class="chip" aria-pressed="false">Conflict</button><button type="button" class="chip" aria-pressed="false">Cyber</button>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Air</h3><span class="ct">3 of 6</span></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Aircraft<span class="sub">Multi-source ADS-B · 1 s</span></span><span class="ct">12,418</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div style="display:flex;align-items:center;gap:11px;padding:2px 0 14px 19px">
+      <div class="meter" style="flex:1"><i style="width:100%"></i></div>
+      <span class="mono" style="font-size:var(--fs-cap);color:var(--txt-3)">100%</span>
+      <button type="button" class="chip on" aria-pressed="true">Auto</button>
+      <svg width="15" height="15" style="color:var(--txt-4)" title="Lock layer" viewBox="0 0 24 24"><use href="#i-lock"/></svg>
+    </div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Military<span class="sub">airplanes.live</span></span><span class="ct">284</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot warn"></span><span class="nm" role="button" tabindex="0">Emergency<span class="sub">Squawk 7500, 7600, 7700</span></span><span class="ct">3</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">TFR and airspace</span><span class="ct">&mdash;</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">SIGMET and AIRMET</span><span class="ct">&mdash;</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot alert"></span><span class="nm" role="button" tabindex="0">Ground stops<span class="sub">Unavailable (HTTP 503)</span></span><span class="ct">&mdash;</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Maritime</h3><span class="ct">3 of 11</span></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Vessels<span class="sub">All AIS sources</span></span><span class="ct">31,204</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Baltic AIS</span><span class="ct">1,842</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Dark-vessel SAR<span class="sub">Sentinel-1 · 6 areas</span></span><span class="ct">6</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot"></span><span class="nm" role="button" tabindex="0">Parking mode</span><span class="ct">&mdash;</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Naval warnings</span><span class="ct">311</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Marine buoys</span><span class="ct">1,204</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Chokepoint congestion</span><span class="ct">9</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Ground and hazards</h3><span class="ct">4 of 13</span></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Earthquakes</span><span class="ct">118</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot warn"></span><span class="nm" role="button" tabindex="0">Fires<span class="sub">Largest layer in view. Switch to Tile loading?</span></span><span class="ct">14,818</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Wildfire perimeters</span><span class="ct">204</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Tropical cyclones</span><span class="ct">3</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Space</h3><span class="ct">1 of 5</span></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Stations and ISS</span><span class="ct">12</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Starlink</span><span class="ct">7,412</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+  </div>
+  <div class="sec"><div class="sech"><h3>Signals and events</h3><span class="ct">2 of 6</span></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Armed conflict</span><span class="ct">642</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Internet outages</span><span class="ct">17</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+  </div>
+  <div class="sec"><div class="sech"><h3>Infrastructure</h3><span class="ct">5 of 18</span></div>
+    <div class="row on" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Submarine cables</span><span class="ct">486</span><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot ok"></span><span class="nm" role="button" tabindex="0">Power plants</span><span class="ct">2,000</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+  </div>
+  <div class="sec"><div class="sech"><h3>Reference</h3><span class="ct">1 of 1</span></div>
+    <div class="row" role="group"><span aria-hidden="true" class="dot"></span><span class="nm" role="button" tabindex="0">COP units<span class="sub">MIL-STD-2525, notional</span></span><span class="ct">&mdash;</span><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button></div>
+  </div>
+  <div class="sec"><div class="sech"><h3>Superseded</h3><span class="ct">3 hidden</span></div>
+    <p style="font-size:var(--fs-cap);color:var(--txt-3);line-height:1.6">adsb.fi, OpenSky states and AISStream each duplicate a source that is already on. Kept and reachable, not dropped.</p>
+  </div>
+</div></div></div>
+  <div class="gcard" id="find"><div class="gcap"><b>Find</b> · find objects and locations, and navigate to coordinates</div><div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div class="phead"><h2>Find</h2><span class="badge accent">MGRS</span><span style="flex:1"></span><button class="btn sm quiet">Saved</button></div>
+<div class="pbody">
+  <div class="input focus" style="margin-bottom:12px"><span class="mono">33UXP 0421 5518</span></div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
+    <button class="btn sm accent">Fly here</button><button class="btn sm">Drop a pin</button><button class="btn sm">Search 50 km</button>
+  </div>
+  <p style="font-size:var(--fs-cap);color:var(--txt-3)">Reads as MGRS · 54.3181 N, 18.7122 E</p>
+
+  <div class="sec"><div class="sech"><h3>Contacts</h3><span class="ct">2</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">RCH471<span class="sub">C-17A · FL310 · 12 km away</span></span><span class="ct">aircraft</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">NORDIC STAR<span class="sub">MMSI 273441000 · 4 km away</span></span><span class="ct">vessel</span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Places</h3><span class="ct">3</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Gdansk Lech Walesa<span class="sub">EPGD · airport</span></span><span class="ct">8 km</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Port of Gdansk<span class="sub">PLGDN · port</span></span><span class="ct">3 km</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Gdynia naval base<span class="sub">military base</span></span><span class="ct">21 km</span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Saved areas</h3><span class="ct">6</span></div>
+    <div class="row on" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Baltic approaches</span><span class="ct">active</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Bab-el-Mandeb</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Taiwan Strait</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Hormuz</span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Non-geographic</h3></div>
+    <p style="font-size:var(--fs-cap);color:var(--txt-3);line-height:1.6;margin-bottom:9px">Domains, people, usernames, companies and wallets resolve here too, and open in the Investigate surface.</p>
+    <div class="state warn"><b>OSINT lookups need a key</b><p>Object search works keyless. Sanctions, registry and breach lookups do not.</p></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Formats accepted</h3></div>
+    <p style="font-size:var(--fs-cap);color:var(--txt-3);line-height:1.8">Decimal degrees · degrees minutes seconds · MGRS · UTM · MMSI · IMO · ICAO24 · callsign · vessel name · place name · domain · wallet</p>
+  </div>
+</div></div></div>
+  <div class="gcard" id="histogram"><div class="gcap"><b>Histogram</b> · analyse and filter by property and time series values</div><div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div class="phead"><h2>Histogram</h2><span class="badge">13,204</span><span style="flex:1"></span><button class="btn sm quiet">Clear 2</button></div>
+<div class="pbody">
+  <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
+    <button type="button" class="chip on" aria-pressed="true">Military</button><button type="button" class="chip on" aria-pressed="true">FL300 to FL800</button>
+  </div>
+  <div class="sec"><div class="sech"><h3>Aircraft category</h3><span class="ct">12,418</span></div>
+    <div class="hbar sel"><span class="hb-l">Military</span><span class="hb-t"><i style="width:9%"></i></span><span class="hb-c">284</span></div>
+    <div class="hbar"><span class="hb-l">Airliner</span><span class="hb-t"><i style="width:96%"></i></span><span class="hb-c">9,914</span></div>
+    <div class="hbar"><span class="hb-l">Private</span><span class="hb-t"><i style="width:18%"></i></span><span class="hb-c">1,806</span></div>
+    <div class="hbar"><span class="hb-l">Helicopter</span><span class="hb-t"><i style="width:4%"></i></span><span class="hb-c">371</span></div>
+    <div class="hbar"><span class="hb-l">Glider</span><span class="hb-t"><i style="width:1%"></i></span><span class="hb-c">43</span></div>
+  </div>
+  <div class="sec"><div class="sech"><h3>Altitude band</h3></div>
+    <div class="hbar"><span class="hb-l">On ground</span><span class="hb-t"><i style="width:21%"></i></span><span class="hb-c">2,104</span></div>
+    <div class="hbar"><span class="hb-l">0 to 1 km</span><span class="hb-t"><i style="width:9%"></i></span><span class="hb-c">918</span></div>
+    <div class="hbar"><span class="hb-l">1 to 3 km</span><span class="hb-t"><i style="width:14%"></i></span><span class="hb-c">1,402</span></div>
+    <div class="hbar sel"><span class="hb-l">3 to 8 km</span><span class="hb-t"><i style="width:32%"></i></span><span class="hb-c">3,211</span></div>
+    <div class="hbar sel"><span class="hb-l">8 to 12 km</span><span class="hb-t"><i style="width:41%"></i></span><span class="hb-c">4,118</span></div>
+    <div class="hbar"><span class="hb-l">12 km and up</span><span class="hb-t"><i style="width:6%"></i></span><span class="hb-c">602</span></div>
+    <div class="hbar"><span class="hb-l">Not reported</span><span class="hb-t"><i style="width:1%"></i></span><span class="hb-c">63</span></div>
+  </div>
+  <div class="sec"><div class="sech"><h3>Vessel type</h3><span class="ct">31,204</span></div>
+    <div class="hbar"><span class="hb-l">Cargo</span><span class="hb-t"><i style="width:74%"></i></span><span class="hb-c">11,842</span></div>
+    <div class="hbar"><span class="hb-l">Tanker</span><span class="hb-t"><i style="width:41%"></i></span><span class="hb-c">6,551</span></div>
+    <div class="hbar"><span class="hb-l">Fishing</span><span class="hb-t"><i style="width:28%"></i></span><span class="hb-c">4,470</span></div>
+    <div class="hbar"><span class="hb-l">Passenger</span><span class="hb-t"><i style="width:12%"></i></span><span class="hb-c">1,918</span></div>
+    <div class="hbar"><span class="hb-l">Military</span><span class="hb-t"><i style="width:2%"></i></span><span class="hb-c">204</span></div>
+  </div>
+  <div class="sec"><div class="sech"><h3>Flag, derived</h3><span class="ct">top 12</span></div>
+    <div class="hbar"><span class="hb-l">US</span><span class="hb-t"><i style="width:88%"></i></span><span class="hb-c">3,914</span></div>
+    <div class="hbar"><span class="hb-l">DE</span><span class="hb-t"><i style="width:34%"></i></span><span class="hb-c">1,502</span></div>
+    <div class="hbar"><span class="hb-l">GB</span><span class="hb-t"><i style="width:31%"></i></span><span class="hb-c">1,371</span></div>
+    <div class="hbar"><span class="hb-l">PA</span><span class="hb-t"><i style="width:22%"></i></span><span class="hb-c">981</span></div>
+  </div>
+  <div class="sec"><div class="sech"><h3>Squawk</h3><span class="ct">top 12</span></div>
+    <div class="hbar"><span class="hb-l">Emergency</span><span class="hb-t"><i style="width:2%;background:var(--alert)"></i></span><span class="hb-c">3</span></div>
+    <div class="hbar"><span class="hb-l">2000</span><span class="hb-t"><i style="width:44%"></i></span><span class="hb-c">1,912</span></div>
+    <div class="hbar"><span class="hb-l">7000</span><span class="hb-t"><i style="width:38%"></i></span><span class="hb-c">1,644</span></div>
+  </div>
+  <p style="font-size:var(--fs-cap);color:var(--txt-3);line-height:1.6;margin-top:var(--sp-4)">
+    Brushing a bucket dims the contacts that do not match. It never removes them, so a filter can never be mistaken for an empty feed.
+  </p>
+</div></div></div>
+  <div class="gcard" id="info"><div class="gcap"><b>Info</b> · an overall summary of the map</div><div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div class="phead"><h2>Info</h2><span class="badge warn">2 degraded</span><span style="flex:1"></span><button class="btn sm quiet">Export</button></div>
+<div class="pbody">
+  <div class="state warn" style="padding-top:0">
+    <b>Showing 2 of 3 vessel sources</b>
+    <p>The MyShipTracking sidecar has been silent for 6 minutes, so vessel counts read low. Last good data 06:14Z.</p>
+    <button class="btn sm">Restart the sidecar</button>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>What you are looking at</h3></div>
+    <dl class="kv">
+      <dt>Contacts on screen</dt><dd>13,204</dd>
+      <dt>Aircraft</dt><dd>12,418</dd>
+      <dt>Vessels</dt><dd>31,204</dd>
+      <dt>Layers on</dt><dd>18 of 64</dd>
+      <dt>Cesium data sources</dt><dd>78</dd>
+      <dt>Viewport</dt><dd>54.3 N to 55.9 N</dd>
+    </dl>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Feeds</h3><span class="ct">11 of 13 healthy</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">OpenSky<span class="sub">breadth · 1 pull per UTC day</span></span><span class="ct">2 s</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">airplanes.live<span class="sub">grid overlay</span></span><span class="ct">1 s</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">ShipXplorer<span class="sub">direct</span></span><span class="ct">4 s</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot warn"></span><span class="nm">MyShipTracking<span class="sub">sidecar :8093 · silent</span></span><span class="ct">6 min</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">USGS quakes</span><span class="ct">58 s</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">NASA FIRMS</span><span class="ct">4 min</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot alert"></span><span class="nm">FAA NAS status<span class="sub">Unavailable (HTTP 503)</span></span><span class="ct">&mdash;</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">CelesTrak<span class="sub">TLE · 2 h cache</span></span><span class="ct">41 min</span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Render</h3></div>
+    <dl class="kv">
+      <dt>Frames per second</dt><dd>58</dd>
+      <dt>Renders per second</dt><dd>6.0</dd>
+      <dt>Push drain</dt><dd>41 ms</dd>
+      <dt>Frame time p50</dt><dd>148.7 ms</dd>
+      <dt>JS heap</dt><dd>2,476 MB</dd>
+    </dl>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Backend</h3></div>
+    <dl class="kv">
+      <dt>Event loop lag p99</dt><dd>18 ms</dd>
+      <dt>Snapshot cycle</dt><dd>1.0 s</dd>
+      <dt>Snapshot age</dt><dd>0.4 s</dd>
+      <dt>Upstream requests</dt><dd>221 per min</dd>
+    </dl>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Recording</h3></div>
+    <dl class="kv">
+      <dt>Since</dt><dd>2026-06-14</dd>
+      <dt>On disk</dt><dd>4.1 GB</dd>
+      <dt>Fixes</dt><dd>25.7 M</dd>
+      <dt>Retention</dt><dd>byte capped</dd>
+    </dl>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Watchboxes</h3><span class="ct">3</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Gdansk approach<span class="sub">any military aircraft</span></span><span class="ct">2 hits</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot"></span><span class="nm">Kerch Strait<span class="sub">AIS gap over 2 h</span></span><span class="ct">0</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Bornholm cable<span class="sub">vessel loitering</span></span><span class="ct">1 hit</span></div>
+  </div>
+</div></div></div>
+</div>
+
+<h2>Right · what is selected</h2>
+<div class="gal">
+  <div class="gcard" id="selection"><div class="gcap"><b>Selection</b> · analyse details about and act on the selected items</div><div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div class="phead"><h2>RYR4213</h2><span class="badge accent">Aircraft</span><span style="flex:1"></span><button class="btn sm quiet">Compact</button></div>
+<div class="pbody">
+  <div class="mono" style="font-size:var(--fs-cap);color:var(--txt-3);margin-bottom:11px">ICAO24 4CA2D3 · IE · updated 1 s ago</div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:var(--sp-4)">
+    <span class="badge">Airliner</span><span class="badge ok">3 sources</span><span class="badge">Boeing 737-800</span>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn sm accent">Slew to</button><button class="btn sm">Follow</button>
+    <button class="btn sm">Search around</button><button class="btn sm">Pattern of life</button>
+    <button class="btn sm">Flag</button>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Details</h3></div>
+    <dl class="kv">
+      <dt>Callsign</dt><dd>RYR4213</dd>
+      <dt>ICAO24</dt><dd>4CA2D3</dd>
+      <dt>Squawk</dt><dd>2117</dd>
+      <dt>ADS-B category</dt><dd>A3</dd>
+      <dt>Ground speed</dt><dd>449 kn</dd>
+      <dt>Track</dt><dd>024&deg;</dd>
+      <dt>Vertical rate</dt><dd>+4.2 m/s</dd>
+      <dt>Altitude</dt><dd>9,754 m</dd>
+      <dt>Position</dt><dd>54.3181, 18.7122</dd>
+      <dt>Registration</dt><dd class="na">&mdash;</dd>
+    </dl>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Flight</h3><span class="ct">DUB to GDN</span></div>
+    <dl class="kv">
+      <dt>Departed</dt><dd>Dublin 06:12Z</dd>
+      <dt>Arriving</dt><dd>Gdansk 09:05Z</dd>
+      <dt>Progress</dt><dd>78%</dd>
+    </dl>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Correlations</h3><span class="ct">1</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot warn"></span><span class="nm">Crossed a naval warning area 14 min ago<span class="sub">NAVAREA I broadcast 311</span></span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Freshness</h3></div>
+    <dl class="kv">
+      <dt>Last refresh</dt><dd>1 s</dd>
+      <dt>Last position fix</dt><dd>2 s</dd>
+      <dt>Seen by</dt><dd>3 sources</dd>
+      <dt>Confidence</dt><dd>high</dd>
+    </dl>
+  </div>
+</div></div></div>
+  <div class="gcard" id="time"><div class="gcap"><b>Time selection</b> · set the range and current timestamp</div><div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div class="phead"><h2>Time selection</h2><span class="badge accent">Live</span><span style="flex:1"></span><button class="btn sm quiet">UTC</button></div>
+<div class="pbody">
+  <dl class="kv" style="margin-bottom:var(--sp-4)">
+    <dt>Window</dt><dd>07:42Z to 08:42Z</dd>
+    <dt>Current timestamp</dt><dd>08:42:17Z</dd>
+    <dt>Time zone</dt><dd>UTC</dd>
+    <dt>Playback</dt><dd>live</dd>
+  </dl>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn sm on">View latest</button><button class="btn sm">Local time</button>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Speed</h3></div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <button type="button" class="chip on" aria-pressed="true">1&times;</button><button type="button" class="chip" aria-pressed="false">10&times;</button><button type="button" class="chip" aria-pressed="false">60&times;</button>
+      <button type="button" class="chip" aria-pressed="false">600&times;</button><button type="button" class="chip" aria-pressed="false">3600&times;</button>
+    </div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Replay window</h3></div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:11px">
+      <button type="button" class="chip" aria-pressed="false">1 h</button><button type="button" class="chip on" aria-pressed="true">6 h</button><button type="button" class="chip" aria-pressed="false">24 h</button>
+      <button type="button" class="chip" aria-pressed="false">3 d</button><button type="button" class="chip" aria-pressed="false">7 d</button>
+    </div>
+    <div class="input"><span class="mono">2026-08-01</span><span style="flex:1"></span><span style="font-size:var(--fs-cap);color:var(--txt-3)">UTC day</span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Auto pause at</h3><span class="ct">3</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot alert"></span><span class="nm">Emergency squawk<span class="sub">N612DA · 08:11Z</span></span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot warn"></span><span class="nm">AIS gap opened<span class="sub">SPARTA IV · 08:26Z</span></span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot warn"></span><span class="nm">Watchbox hit<span class="sub">Gdansk approach · 08:39Z</span></span></div>
+    <p style="font-size:var(--fs-cap);color:var(--txt-3);line-height:1.6;margin-top:11px">
+      Replay stops itself at the moments that matter, which turns a scrub into a briefing.
+    </p>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Archive</h3></div>
+    <dl class="kv">
+      <dt>Recording since</dt><dd>2026-06-14</dd>
+      <dt>On disk</dt><dd>4.1 GB</dd>
+      <dt>Fixes</dt><dd>25.7 M</dd>
+      <dt>Tracks in window</dt><dd>1,204</dd>
+    </dl>
+  </div>
+</div></div></div>
+  <div class="gcard" id="series"><div class="gcap"><b>Series</b> · temporal analysis of time series and event data</div><div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div class="phead"><h2>Series</h2><span class="badge">last 60 min</span><span style="flex:1"></span><button class="btn sm quiet">6 h</button></div>
+<div class="pbody">
+  <div class="sec" style="margin-top:0">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px">
+      <span style="font-size:var(--fs-dense);color:var(--txt-2)">Altitude</span>
+      <span class="mono" style="font-size:var(--fs-dense)">9,754 m</span></div>
+    <svg class="spark" viewBox="0 0 320 58" preserveAspectRatio="none">
+      <polygon class="fill" points="0,56 24,52 48,45 72,36 96,26 120,20 144,16 168,14 192,13 216,12 240,11 264,10 288,9 320,9 320,58 0,58"/>
+      <polyline points="0,56 24,52 48,45 72,36 96,26 120,20 144,16 168,14 192,13 216,12 240,11 264,10 288,9 320,9"/></svg>
+  </div>
+  <div class="sec">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px">
+      <span style="font-size:var(--fs-dense);color:var(--txt-2)">Ground speed</span>
+      <span class="mono" style="font-size:var(--fs-dense)">449 kn</span></div>
+    <svg class="spark mag" viewBox="0 0 320 58" preserveAspectRatio="none">
+      <polygon class="fill" points="0,50 24,42 48,33 72,27 96,21 120,19 144,18 168,21 192,18 216,17 240,18 264,16 288,16 320,17 320,58 0,58"/>
+      <polyline points="0,50 24,42 48,33 72,27 96,21 120,19 144,18 168,21 192,18 216,17 240,18 264,16 288,16 320,17"/></svg>
+  </div>
+  <div class="sec">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px">
+      <span style="font-size:var(--fs-dense);color:var(--txt-2)">Vertical rate</span>
+      <span class="mono" style="font-size:var(--fs-dense)">+4.2 m/s</span></div>
+    <svg class="spark" viewBox="0 0 320 58" preserveAspectRatio="none">
+      <polyline points="0,14 24,18 48,22 72,20 96,26 120,30 144,29 168,33 192,31 216,34 240,32 264,35 288,33 320,34"/></svg>
+    <div style="display:flex;justify-content:space-between;margin-top:7px">
+      <span class="mono" style="font-size:var(--fs-cap);color:var(--txt-3)">07:42Z</span>
+      <span class="mono" style="font-size:var(--fs-cap);color:var(--txt-3)">08:42Z</span></div>
+  </div>
+  <div class="sec"><div class="sech"><h3>Coverage</h3></div>
+    <div class="state warn" style="padding-bottom:0"><b>47 of 60 minutes recorded</b>
+      <p>The archive has gaps where the feed was silent. The chart does not interpolate across them.</p></div>
+  </div>
+  <p style="font-size:var(--fs-cap);color:var(--txt-3);line-height:1.6;margin-top:var(--sp-4)">
+    The panel the reference has and we do not. It turns a position into a behaviour, and shares its implementation with the Foundry series workbench.
+  </p>
+</div></div></div>
+</div>
+
+<h2>What each panel answers</h2>
+<table class="t">
+  <thead><tr><th>Panel</th><th>Palantir's own description</th><th>The question it answers</th><th>Built from</th></tr></thead>
+  <tbody>
+    <tr><td>Layers</td><td>"Add, manage, and style object and overlay layers; set the base layer"</td><td>What is on the map, and is it healthy</td><td><code>LayerCatalog</code> + <code>LayerRail</code> merged, plus <code>setTimeWindow</code> and a loading method</td></tr>
+    <tr><td>Find</td><td>"Find objects and locations; navigate to specific geospatial coordinates"</td><td>Where is the thing I am thinking of</td><td><code>SearchObjectsSidebar</code> + <code>CoordEntry</code> + chokepoints + extract, behind one sniffing input</td></tr>
+    <tr><td>Histogram</td><td>"Analyze and filter objects based on property and time series values"</td><td>What is the shape of what I am looking at</td><td><code>explorer/facets.ts:322</code> already returns exactly these five</td></tr>
+    <tr><td>Info</td><td>"Display an overall summary of the map"</td><td>What am I looking at, and why is it slow or low</td><td><code>FeedsPanel</code> + <code>OpsPanel</code> + <code>SysStats</code> + <code>MapHealthStrip</code></td></tr>
+    <tr><td>Selection</td><td>"Analyze details about and take actions on the selected items"</td><td>What is this contact</td><td><code>EntityPanel</code>, 27 blocks, re-framed not rewritten</td></tr>
+    <tr><td>Time selection</td><td>"Set the time range and current timestamp to apply to the map and time series views"</td><td>When am I looking at</td><td><code>Timeline</code> controls, including the auto-pause idea the reference singles out</td></tr>
+    <tr><td>Series</td><td>"Enables temporal analysis of time series and event data"</td><td>What has this contact been doing</td><td><b>New.</b> Reads <code>/api/history/tracks</code>; shares its implementation with the Foundry series workbench</td></tr>
+  </tbody>
+</table>
+</div>
+</body>
+</html>

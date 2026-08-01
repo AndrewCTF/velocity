@@ -1,0 +1,10 @@
+Modify Intel On a Target PUT /api/gotham/v1/twb/modifyTargetIntel/{rid} Modify Intel on Target by RID and IntelId Path parameters rid string Target RID Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body ModifyTargetIntelRequest object Request body to modify intel attached to a Target by TargetRID and IntelId. Hide child attributes Hide child attributes Expand all intel list<ModifyTargetIntelData> optional Show child attributes Show child attributes Response body ModifyTargetIntelResponse object Success response. Hide child attributes Hide child attributes Expand all updatedIntelIds list<IntelId> optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/twb/modifyTargetIntel/ri.gotham-artifact.0-0.target.example?preview=true" \
+ -d '{"intel":[{"id":"Example Intel Id","name":"Example Intel Name","description":"Intel containing location.","intelDomain":"GEOINT","validTime":"2023-10-04T14:48:00.000Z","location":{"center":{"longitude":0.0,"latitude":0.0,"elevation":0.0},"radius":1.1},"confidence":3.0,"intelType":{"type":"geotimeObservation","geotimeTrack":"ri.gotham.0-0.geotime-track.aa.bb.cc.example"}}]}' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

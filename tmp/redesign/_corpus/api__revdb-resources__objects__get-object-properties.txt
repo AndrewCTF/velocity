@@ -1,0 +1,40 @@
+Get object properties GET /api/gotham/v1/objects/{primaryKey}/properties Return the full object property details for an object with the given primary key.
+Full property details includes ID, in addition to value. If the object exists. Path parameters primaryKey string The primary key of the requested object. Response body GetPropertiesResponse object Property details response Hide child attributes Hide child attributes Expand all properties list<Property> optional Show child attributes Show child attributes securityDetails map<SecurityKey, ObjectComponentSecurity> optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111/properties" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ {
+ "properties": [
+ {
+ "propertyId": "abc123",
+ "propertyType": "com.palantir.property.name",
+ "value": {
+ "FIRST_NAME": "John",
+ "LAST_NAME": "Smith"
+ }
+ },
+ {
+ "propertyId": "def456",
+ "propertyType": "com.palantir.property.age",
+ "value": 37
+ }
+ ]
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Response body Examples Request Response

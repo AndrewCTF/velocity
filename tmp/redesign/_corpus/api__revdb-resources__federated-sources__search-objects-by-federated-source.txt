@@ -1,0 +1,61 @@
+Search objects by federated source POST /api/gotham/v1/federatedSources/{federatedSource}/namespaces/{namespace}/objects/search Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Search for objects in the specified federated source. The request body is used to filter objects based on the
+specified query. The supported queries depend on what is supported by the federated source. Returns the full
+object. Path parameters federatedSource string The name of the federated source to search in. namespace string The namespace of the federated source to search in. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body SearchFederatedSourceObjectsRequest object Search request to issue against a federated federated source for finding and returning objects.
+ query is required, and represents the query to execute when searching for objects. The exact types of queries
+allowed depends on the federated source. 
+ pageSize and pageToken are optional and are used for pagination of large result sets;
+see the Paging instructions for more information. 
+ If not specified, pageSize defaults to a page size of 100 results; 100 is also the maximum allowed page size. 
+ Specifying an invalid page size results in an InvalidPageSize general error . Hide child attributes Hide child attributes Expand all query union Show child attributes Show child attributes pageSize integer optional The page size to use for the endpoint. pageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request.
+To fetch the next page, clients should take the value from the nextPageToken field of the previous response
+and populate the next request's pageToken field with it. Response body SearchObjectsResponse object A list of the objects that match the search query. Hide child attributes Hide child attributes Expand all data list<GothamOntologyObject> optional Show child attributes Show child attributes nextPageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request.
+To fetch the next page, clients should take the value from the nextPageToken field of the previous response
+and populate the next request's pageToken field with it. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/federatedSources/My%20Federated%20Source/namespaces/My%20Federated%20Source%20namespace/objects/search?preview=true" \
+ -d '{"query":{"type":"and","value":[{"type":"term","field":"com.palantir.property.name:FIRST_NAME","value":"John"},{"type":"term","field":"com.palantir.property.age","value":24}]}}' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ {
+ "data": [
+ {
+ "primaryKey": "ri.gotham.111111-0.object-internal.111111",
+ "objectType": "com.palantir.object.person",
+ "properties": {
+ "com.palantir.property.name": [
+ {
+ "FIRST_NAME": "John",
+ "LAST_NAME": "Smith"
+ }
+ ],
+ "com.palantir.property.age": [
+ 37
+ ]
+ }
+ }
+ ]
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

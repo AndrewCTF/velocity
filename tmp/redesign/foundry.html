@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en" class="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Velocity redesign · Foundry</title>
+<link rel="stylesheet" href="mock.css" />
+<style>
+  .fshell { display: grid; grid-template-rows: 48px 1fr; height: 100vh; overflow: hidden; }
+  .fnav { width: 208px; flex: 0 0 208px; background: var(--bg-0); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: var(--sp-3) 10px; gap: 1px; }
+  .fnav .grp { font-size: var(--fs-cap); color: var(--txt-3); padding: var(--sp-3) 10px 5px; }
+  .fnav a {
+    display: block; text-decoration: none; padding: 8px 10px;
+    border-radius: var(--r-md); color: var(--txt-1); font-size: var(--fs-dense);
+  }
+  .fnav a:hover { background: var(--bg-3); color: var(--txt-0); }
+  .fnav a.on { background: var(--accent); color: #fff; font-weight: 500; }
+  .fnav a em { font-style: normal; float: right; font-family: var(--font-mono); font-size: var(--fs-cap); opacity: .75; }
+  .fnav .new::after { content: 'new'; float: right; font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--ok); }
+  .fnav a.on.new::after { color: rgba(255,255,255,.85); }
+
+  .ftabs { display: flex; gap: 2px; padding: 0 var(--sp-5); border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .ftabs span { font-size: var(--fs-dense); padding: 11px 12px; color: var(--txt-2); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .ftabs span:hover { color: var(--txt-0); }
+  .ftabs span.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+  .ftabs span.new::after { content: 'new'; margin-left: 6px; font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--ok); }
+
+  .dt { width: 100%; border-collapse: collapse; font-size: var(--fs-dense); }
+  .dt th { position: sticky; top: 0; background: var(--bg-1); text-align: left; padding: 10px var(--sp-3); border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+  .dt th b { display: block; font-size: var(--fs-dense); font-weight: 600; color: var(--txt-0); }
+  .dt th span { display: block; font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-3); font-weight: 400; }
+  .dt td { padding: 9px var(--sp-3); border-bottom: 1px solid var(--line); font-family: var(--font-mono); color: var(--txt-1); white-space: nowrap; }
+  .dt tr:hover td { background: var(--bg-2); }
+  .dt tr.q td { background: var(--warn-bg); color: var(--warn-fg); }
+
+  .board { display: flex; align-items: stretch; overflow-x: auto; padding-bottom: 6px; }
+  .bstep { flex: 0 0 208px; border-radius: var(--r-lg); background: var(--bg-2); padding: var(--sp-3); margin-right: 34px; position: relative; }
+  .bstep:last-child { margin-right: 0; }
+  .bstep::after {
+    content: ''; position: absolute; right: -24px; top: 50%; width: 13px; height: 13px;
+    border-top: 1.5px solid var(--line-2); border-right: 1.5px solid var(--line-2);
+    transform: translateY(-50%) rotate(45deg);
+  }
+  .bstep:last-child::after { display: none; }
+  .bstep b { display: block; font-size: var(--fs-dense); margin-bottom: 6px; font-family: var(--font-mono); }
+  .bstep p { font-size: var(--fs-cap); color: var(--txt-2); margin: 7px 0 0; }
+  .hist { font-family: var(--font-mono); letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true"><defs>
+<g id="i-search" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g>
+<g id="i-grid" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></g>
+<g id="i-bell" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 6-3 7-3 7h18s-3-1-3-7"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></g>
+<g id="i-chev" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
+</defs></svg>
+
+<div class="fshell">
+
+  <header class="topbar">
+    <div class="brand"><i></i><b>Velocity</b></div>
+    <div class="input" style="flex:0 0 340px">
+      <svg width="15" height="15" style="opacity:.55" viewBox="0 0 24 24"><use href="#i-search"/></svg>
+      <span class="ph">Find anything</span><span style="flex:1"></span><kbd>⌘K</kbd>
+    </div>
+    <button class="btn on"><svg width="14" height="14" viewBox="0 0 24 24"><use href="#i-grid"/></svg> Foundry <svg width="12" height="12" viewBox="0 0 24 24"><use href="#i-chev"/></svg></button>
+    <span style="font-size:var(--fs-cap);color:var(--txt-3)">Map is still live. Press esc to go back.</span>
+    <div class="spacer"></div>
+    <button class="btn quiet"><svg width="14" height="14" viewBox="0 0 24 24"><use href="#i-bell"/></svg> 2</button>
+    <span class="mono" style="font-size:var(--fs-dense);color:var(--txt-2)">08:42:17Z</span>
+    <span class="cls"><i></i> Unclassified</span>
+  </header>
+
+  <div class="main">
+
+    <nav class="fnav">
+      <div class="grp">Data</div>
+      <a href="#">Overview</a>
+      <a href="#" class="on">Datasets <em>9</em></a>
+      <a href="#">Pipeline</a>
+      <a href="#">Builds</a>
+      <a href="#">Ontology</a>
+      <div class="grp">Trust</div>
+      <a href="#health" class="new">Health</a>
+      <a href="#lineage" class="new">Lineage</a>
+      <div class="grp">Analysis</div>
+      <a href="#analysis" class="new">Boards</a>
+      <a href="#analysis" class="new">Series</a>
+      <div style="flex:1"></div>
+      <div style="font-size:var(--fs-cap);color:var(--txt-3);padding:10px">Keyless · local SQLite</div>
+    </nav>
+
+    <aside class="panel" style="width:264px;flex:0 0 264px;background:var(--bg-0)">
+      <div class="phead"><h2>Datasets</h2><span style="flex:1"></span><button class="btn sm accent">Upload</button></div>
+      <div class="pbody" style="padding:0 14px 20px">
+        <div class="input" style="margin-bottom:12px"><svg width="14" height="14" style="opacity:.5" viewBox="0 0 24 24"><use href="#i-search"/></svg><span class="ph">Filter</span></div>
+        <div class="row on" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">baltic_port_calls</span><span class="ct">v7</span></div>
+        <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">vessel_registry</span><span class="ct">v3</span></div>
+        <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot warn"></span><span class="nm">sanctions_list</span><span class="ct">v12</span></div>
+        <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">airfield_master</span><span class="ct">v2</span></div>
+        <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot alert"></span><span class="nm">ais_gap_events</span><span class="ct">v19</span></div>
+        <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">operator_notes</span><span class="ct">v1</span></div>
+        <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">icao24_blocks</span><span class="ct">v4</span></div>
+        <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">port_master_wpi</span><span class="ct">v1</span></div>
+        <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot"></span><span class="nm">draft_import</span><span class="ct">—</span></div>
+      </div>
+    </aside>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-1);overflow:hidden">
+      <div style="padding:var(--sp-4) var(--sp-5) var(--sp-3)">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <h1 class="mono" style="font-size:22px;font-weight:600">baltic_port_calls</h1>
+          <span class="badge accent">v7</span>
+          <span class="badge ok">Checks passed</span>
+          <span class="badge">Bound to ontology</span>
+          <span style="flex:1"></span>
+          <button class="btn sm quiet">Rollback</button>
+          <button class="btn sm quiet">Schedule</button>
+          <button class="btn sm accent">Build</button>
+        </div>
+        <p style="font-size:var(--fs-dense);color:var(--txt-2);margin-top:7px">
+          41,208 rows · 11 columns · 6.2 MB · built 2026-08-01 07:14Z in 3.1 s · 4 rows quarantined
+        </p>
+      </div>
+
+      <div class="ftabs">
+        <span>Schema</span><span class="on">Preview</span><span>Stats</span><span>Versions</span>
+        <span>Lineage</span><span>Dead letter</span><span>Checks</span><span>Docs</span>
+        <span>Map</span><span>SQL</span><span>Monitors</span>
+        <span class="new">Health</span><span class="new">Series</span>
+      </div>
+
+      <div style="flex:1;overflow:auto">
+        <table class="dt">
+          <thead><tr>
+            <th><b>call_id</b><span>string</span></th>
+            <th><b>mmsi</b><span>string · pinned</span></th>
+            <th><b>vessel_name</b><span>string</span></th>
+            <th><b>port_unlocode</b><span>string</span></th>
+            <th><b>arrived_at</b><span>timestamp</span></th>
+            <th><b>departed_at</b><span>timestamp</span></th>
+            <th><b>draught_m</b><span>float</span></th>
+            <th><b>flag_cc</b><span>string</span></th>
+          </tr></thead>
+          <tbody>
+            <tr><td>PC-00041207</td><td>273441000</td><td>NORDIC STAR</td><td>PLGDN</td><td>2026-07-31T22:14Z</td><td>2026-08-01T04:02Z</td><td>11.4</td><td>RU</td></tr>
+            <tr><td>PC-00041206</td><td>219018712</td><td>MAERSK KOTKA</td><td>DKCPH</td><td>2026-07-31T21:47Z</td><td>2026-08-01T02:31Z</td><td>9.8</td><td>DK</td></tr>
+            <tr><td>PC-00041205</td><td>265512340</td><td>STENA GERMANICA</td><td>SEGOT</td><td>2026-07-31T20:12Z</td><td>2026-07-31T23:55Z</td><td>6.4</td><td>SE</td></tr>
+            <tr><td>PC-00041204</td><td>230982000</td><td>FINNMAID</td><td>FIHEL</td><td>2026-07-31T19:58Z</td><td>2026-08-01T01:10Z</td><td>6.1</td><td>FI</td></tr>
+            <tr><td>PC-00041203</td><td>276814000</td><td>ISABELLE</td><td>EETLL</td><td>2026-07-31T18:33Z</td><td>2026-07-31T22:44Z</td><td>5.9</td><td>EE</td></tr>
+            <tr class="q"><td>PC-00041202</td><td>0074410x2</td><td>—</td><td>—</td><td>not a timestamp</td><td>—</td><td>—</td><td>—</td></tr>
+            <tr><td>PC-00041201</td><td>244660000</td><td>EEMSLIFT HENDRIKA</td><td>NLRTM</td><td>2026-07-31T17:21Z</td><td>2026-07-31T21:03Z</td><td>4.7</td><td>NL</td></tr>
+            <tr><td>PC-00041200</td><td>209471000</td><td>BBC OHIO</td><td>DEHAM</td><td>2026-07-31T16:44Z</td><td>2026-07-31T23:19Z</td><td>8.2</td><td>CY</td></tr>
+            <tr><td>PC-00041199</td><td>273812900</td><td>SPARTA IV</td><td>RUKGD</td><td>2026-07-31T15:02Z</td><td>2026-07-31T19:48Z</td><td>7.1</td><td>RU</td></tr>
+            <tr><td>PC-00041198</td><td>257038000</td><td>HOEGH TARGET</td><td>NOOSL</td><td>2026-07-31T14:19Z</td><td>2026-07-31T20:07Z</td><td>10.3</td><td>NO</td></tr>
+          </tbody>
+        </table>
+
+        <div style="padding:var(--sp-5);max-width:1040px">
+          <div class="note warn">
+            One row is quarantined and shown in place rather than hidden. A transform
+            that raises on a single row quarantines that row and the build continues.
+            The dead letter tab holds all 4.
+          </div>
+
+          <div class="grid2">
+            <div>
+              <div class="sech"><h3>Checks on this version</h3><span class="ct">5 passed</span></div>
+              <dl class="kv">
+                <dt>Row count within 10% of previous</dt><dd>pass</dd>
+                <dt>mmsi not null</dt><dd>pass</dd>
+                <dt>mmsi matches ^[0-9]{9}$</dt><dd>4 quarantined</dd>
+                <dt>arrived_at parses</dt><dd>pass</dd>
+                <dt>Schema unchanged</dt><dd>pass</dd>
+              </dl>
+            </div>
+            <div>
+              <div class="sech"><h3>Ontology binding</h3><span class="ct">auto sync</span></div>
+              <dl class="kv">
+                <dt>Object type</dt><dd>vessel</dd>
+                <dt>Key column</dt><dd>mmsi</dd>
+                <dt>Mapped properties</dt><dd>6</dd>
+                <dt>Provenance source</dt><dd>foundry:baltic_port_calls</dd>
+                <dt>Last sync</dt><dd>07:14Z</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── The three surfaces Foundry is missing, at the same fidelity ─────────── -->
+<div class="doc" style="max-width:1280px">
+
+  <h2 id="health">Health</h2>
+  <p class="lead">
+    The reference names Data Health as its own Foundry application, where checks are
+    declared per dataset and carry a pass and fail history. Velocity computes
+    freshness ad hoc and buries checks one dataset deep. This promotes them into the
+    surface that answers one question: what is broken right now.
+  </p>
+
+  <div class="stage">
+    <div class="cap">Foundry · Health</div>
+    <div class="in">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:var(--sp-4)">
+        <span class="badge alert">1 failing</span>
+        <span class="badge warn">2 degraded</span>
+        <span class="badge ok">6 healthy</span>
+        <span class="badge">9 datasets · 31 checks</span>
+      </div>
+      <table class="t">
+        <thead><tr>
+          <th>Dataset</th><th>Freshness</th><th>Row delta</th><th>Null rate</th>
+          <th>Schema drift</th><th>Quarantined</th><th>Last 14 builds</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="mono">ais_gap_events</td><td><span class="badge alert">stale 4 d</span></td><td class="num">-98%</td><td class="num">0.2%</td><td>none</td><td class="num">0</td>
+            <td class="hist" style="color:var(--alert)">✓✓✓✓✓✓✓✓✓✗✗✗✗✗</td></tr>
+          <tr><td class="mono">sanctions_list</td><td><span class="badge warn">14 h</span></td><td class="num">+3%</td><td class="num">1.9%</td><td><span class="badge warn">1 column added</span></td><td class="num">27</td>
+            <td class="hist" style="color:var(--warn)">✓✓✓✓✓✓✓✓✓✓✓✓~~</td></tr>
+          <tr><td class="mono">baltic_port_calls</td><td><span class="badge ok">1 h</span></td><td class="num">+0.4%</td><td class="num">0.0%</td><td>none</td><td class="num">4</td>
+            <td class="hist" style="color:var(--ok)">✓✓✓✓✓✓✓✓✓✓✓✓✓✓</td></tr>
+          <tr><td class="mono">vessel_registry</td><td><span class="badge ok">6 h</span></td><td class="num">0%</td><td class="num">0.1%</td><td>none</td><td class="num">0</td>
+            <td class="hist" style="color:var(--ok)">✓✓✓✓✓✓✓✓✓✓✓✓✓✓</td></tr>
+          <tr><td class="mono">draft_import</td><td><span class="badge">never built</span></td><td class="num">—</td><td class="num">—</td><td>—</td><td class="num">—</td>
+            <td class="hist" style="color:var(--txt-4)">··············</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:var(--fs-cap);color:var(--txt-3)">
+        A dataset that has never built shows <b>—</b> in every measured column rather
+        than a confident zero. Never state a number the pipeline has not produced.
+      </p>
+    </div>
+  </div>
+
+  <h2 id="lineage">Lineage</h2>
+  <p class="lead">
+    Lineage today is a tab inside one dataset, so it answers "where did this dataset
+    come from". The question an analyst actually asks is "if this upload is wrong,
+    what on my globe is wrong", and that needs the whole chain in one view, ending at
+    the ontology objects and the map layer that render it.
+  </p>
+
+  <div class="stage">
+    <div class="cap">Foundry · Lineage</div>
+    <div class="in">
+      <div class="board">
+        <div class="bstep"><b>baltic_port_calls.csv</b><span class="badge">upload</span>
+          <p>41,208 rows · 6.2 MB<br/>2026-08-01 07:12Z</p></div>
+        <div class="bstep"><b>normalise_mmsi</b><span class="badge accent">transform</span>
+          <p>derive · regex_replace<br/>4 rows quarantined</p></div>
+        <div class="bstep"><b>join vessel_registry</b><span class="badge accent">transform</span>
+          <p>left join on mmsi<br/>1,204 unmatched</p></div>
+        <div class="bstep"><b>v7</b><span class="badge ok">build</span>
+          <p>3.1 s · 5 checks passed</p></div>
+        <div class="bstep"><b>vessel</b><span class="badge mag">ontology</span>
+          <p>6 properties bound<br/>39,914 objects touched</p></div>
+        <div class="bstep"><b>Vessels · live</b><span class="badge">map layer</span>
+          <p>Visible on the globe now</p></div>
+      </div>
+      <p style="font-size:var(--fs-cap);color:var(--txt-3);margin-top:var(--sp-4)">
+        Every node is clickable and every edge carries its row counts, so a wrong
+        number on the map walks back to the upload that produced it.
+      </p>
+    </div>
+  </div>
+
+  <h2 id="analysis">Analysis</h2>
+  <p class="lead">
+    The reference draws Palantir's split clearly: Contour is tabular and top down, a
+    chain of boards where each board is one step; Quiver is object and time series.
+    Velocity has neither, and it is the largest gap between this surface and the
+    product it borrowed its name from. Both are built from data the platform already
+    holds.
+  </p>
+
+  <div class="grid2">
+    <div class="stage">
+      <div class="cap">Analysis · board chain, in the Contour idiom</div>
+      <div class="in">
+        <div style="display:flex;flex-direction:column">
+          <div class="bstep" style="flex:none;margin:0 0 26px;width:100%">
+            <b>1 · Source</b><span class="badge">baltic_port_calls v7</span><p>41,208 rows</p></div>
+          <div class="bstep" style="flex:none;margin:0 0 26px;width:100%">
+            <b>2 · Filter</b><span class="badge accent">flag_cc in (RU, BY)</span><p>3,914 rows</p></div>
+          <div class="bstep" style="flex:none;margin:0 0 26px;width:100%">
+            <b>3 · Pivot</b><span class="badge accent">port_unlocode by month</span><p>28 rows</p></div>
+          <div class="bstep" style="flex:none;margin:0;width:100%">
+            <b>4 · Chart</b><span class="badge ok">stacked bars</span>
+            <svg class="spark" viewBox="0 0 320 54" preserveAspectRatio="none" style="margin-top:10px">
+              <polygon class="fill" points="0,44 40,39 80,40 120,31 160,23 200,26 240,14 280,10 320,9 320,54 0,54"/>
+              <polyline points="0,44 40,39 80,40 120,31 160,23 200,26 240,14 280,10 320,9"/>
+            </svg>
+          </div>
+        </div>
+        <p style="font-size:var(--fs-cap);color:var(--txt-3);margin-top:var(--sp-3)">
+          Each board is one step over the one before it. The chain is the analysis,
+          and it is saveable, shareable and re-runnable against a new version.
+        </p>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="cap">Analysis · series workbench, in the Quiver idiom</div>
+      <div class="in">
+        <div style="margin-bottom:var(--sp-4)">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:var(--fs-dense);color:var(--txt-2)">Port calls per day · Gdansk</span>
+            <span class="badge accent">RU flag</span>
+          </div>
+          <svg class="spark" viewBox="0 0 320 54" preserveAspectRatio="none" style="height:72px">
+            <polygon class="fill" points="0,38 27,36 54,42 81,33 108,28 135,32 162,21 189,24 216,16 243,19 270,11 297,14 320,8 320,54 0,54"/>
+            <polyline points="0,38 27,36 54,42 81,33 108,28 135,32 162,21 189,24 216,16 243,19 270,11 297,14 320,8"/>
+          </svg>
+        </div>
+        <div style="margin-bottom:var(--sp-4)">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:var(--fs-dense);color:var(--txt-2)">Mean draught</span>
+            <span class="badge">derived · 7 d rolling</span>
+          </div>
+          <svg class="spark mag" viewBox="0 0 320 54" preserveAspectRatio="none" style="height:72px">
+            <polyline points="0,26 27,27 54,24 81,29 108,26 135,23 162,25 189,20 216,22 243,17 270,19 297,14 320,16"/>
+          </svg>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button class="btn sm quiet">Overlay</button>
+          <button class="btn sm quiet">Smooth</button>
+          <button class="btn sm quiet">Difference</button>
+          <button class="btn sm quiet">Resample</button>
+          <button class="btn sm accent">Save analysis</button>
+        </div>
+        <p style="font-size:var(--fs-cap);color:var(--txt-3);margin-top:var(--sp-3)">
+          The same component renders the Series panel on the map. One implementation,
+          two homes: the map answers "this contact", the workbench answers "this fleet".
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Why this surface is light</h2>
+  <p>
+    Gotham is dark because it is operational: a dark substrate so the only bright
+    thing on screen is data or an anomaly. Foundry is light because it is analytical:
+    tables, schemas, charts and long reading, where a light surface is measurably
+    easier. Palantir ships both, and the mode switch is itself information. When the
+    chrome goes light you are building; when it is dark you are watching.
+  </p>
+  <p>
+    This costs almost nothing to implement. <code>theme/tokens.css</code> already has
+    a complete light token set, applied by <code>data-theme</code> pre-paint, and it
+    is currently unreachable in the console because the light palette was scoped to a
+    shell that has since been retired.
+  </p>
+
+  <h2>What Foundry deliberately does not become</h2>
+  <div class="note warn">
+    Recorded operator decisions, not open questions. Multi-tenant ACL and MLS,
+    distributed compute, streaming change data capture, and connector catalogues are
+    out of scope. Re-opening any of them needs a new decision, not a cleanup.
+  </div>
+  <p>
+    Scope stays keyless single-operator local SQLite. Everything above is built from
+    data the platform already stores, which is why it fits inside that fence.
+  </p>
+
+</div>
+
+<div class="mocknote">
+  <b>Foundry</b>
+  <span>Light surface · shared by all three directions</span>
+  <a href="00-index.html">Back to the board</a>
+</div>
+
+</body>
+</html>

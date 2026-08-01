@@ -1,0 +1,27 @@
+Create a Target POST /api/gotham/v1/twb/target Create a Target.
+Returns the RID of the created Target. 
+ If sidc field is specified and invalid according to MIL-STD-2525C specification,
+an InvalidSidc error is thrown. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body CreateTargetRequestV2 object The request body to create a Target. The entityRid is the RID of the object being targeted.
+If a geotrackableEntity is supplied, it must match the entityRid. Otherwise, 'InvalidGeotrackableEntity' will be
+thrown. Hide child attributes Hide child attributes Expand all name string description string optional targetBoard string The unique resource identifier of a Target Board. This is equivalent to a collection RID. column string Equivalent to a collection column ID. The ID of a TargetCollectionColumn, default values are:
+DRAFT (Identified target), PLAN_DEVELOPMENT (Prioritized target), PLANNED (In coordination), EXECUTION (In execution), CLOSED (Complete). targetType string optional The resource type of the target.
+Example: Building entityRid string optional The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. entityObjectReference object optional A reference to an entity using object type api name and primary key. Show child attributes Show child attributes sidc string optional MIL-STD 2525C Symbol Identification Code targetIdentifier object optional Target identifier object for different identifier types Show child attributes Show child attributes location object optional An object containing the location source for a target.
+This can either be a manual location, a geotimeTrack, and/or a geotrackable entity providing location updates.
+The entity, if present, is always the same as the backing entity of the target. Show child attributes Show child attributes highPriorityTargetListTargetSubtype string optional This subtype will be matched against the subType stored on HptlTarget in order to determine a target's
+subPriority, as well as priority in addition to priority and AGM. aimpoints list<TargetAimpointV2> optional Show child attributes Show child attributes security object Security mutation details for a target, target board, or hptl.
+Specifying security overrides the system's default security when creating and updating data.
+This model may evolve over time for other security features. Show child attributes Show child attributes detectionReasoning object optional Show child attributes Show child attributes Response body CreateTargetResponseV2 object Success response with the RID of the created target. Hide child attributes Hide child attributes Collapse all targetRid string Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/twb/target?preview=true" \
+ -d '{"name":"Enemy Building","description":"Known enemy building.","targetBoard":"ri.gotham-artifact.0-0.target-board.example","column":"DRAFT","targetType":"Building","entityRid":"ri.gotham.123-456.object-internal.example","sidc":"SEGPU-------","aimpoints":[{"id":"f81d4fae-7dec-11d0-a765-00a0c91e6bf6","number":1,"name":"Example targetAimPoint name","location":{"center":{"longitude":0.0,"latitude":0.0,"elevation":0.0},"radius":1.1},"geotimeTrack":"ri.gotham.0-0.geotime-track.aa.bb.cc.example","entityRid":"ri.gotham.123-456.object-internal.example"},{"id":"54ac3383-b953-4d65-8f98-7c3fbbbb481a","number":1,"name":"Example targetAimPoint name","location":{"center":{"longitude":0.0,"latitude":0.0,"elevation":0.0},"radius":1.1},"geotimeTrack":"ri.gotham.0-0.geotime-track.aa.bb.cc.example","entityRid":"ri.gotham.123-456.object-internal.example"}],"targetIdentifier":{"customTargetIdentifier":"Example Identifier 000"},"location":{"manualLocation":{"lat":0.0,"lng":0.0,"circularErrorInMeters":0.0,"hae":0.0,"msl":0.0,"agl":0.0},"geotrackableEntity":"ri.gotham.123-456.object-internal.example"},"highPriorityTargetListTargetSubtype":"Red Car","security":{"portionMarkings":["SENSITIVE"]},"detectionReasoning":{"algorithmName":"Example Algorithm","aiReasoning":{"debugLogs":"Debug log example","model":"LLM Model v1.0","systemPrompt":"Identify potential targets in the area.","taskPrompt":"Analyze satellite images for unusual activity."},"configurationObjectRid":"ri.foundry.0-0.config-object.example","detectionType":"AI_AUTO_DETECTION","location":{"center":{"longitude":0.0,"latitude":0.0,"elevation":0.0},"radius":1.1},"reasoning":"The target was identified based on unusual heat signatures detected in the area.","timestamp":"2025-04-11T10:00:00Z","agentVersion":"1.2.3"}}' Response Copied! 1
+ 2
+ 3
+ {
+ "targetRid": "ri.gotham-artifact.0-0.target.example"
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Request body Response body Examples Request Response

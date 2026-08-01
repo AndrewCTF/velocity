@@ -1,0 +1,30 @@
+Get object media GET /api/gotham/v1/objects/{primaryKey}/media Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Get media metadata for object. Media metadata contains an identifier and other
+attributes suitable for display/download, such as content type and title. Path parameters primaryKey string The primary key of the requested object. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Response body GetMediaResponse object Success response Hide child attributes Hide child attributes Expand all media list<Media> optional Show child attributes Show child attributes securityDetails map<SecurityKey, ObjectComponentSecurity> optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111/media?preview=true" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ {
+ "media": [
+ {
+ "rid": "ri.gotham.111111-0.media-internal.111111.xtdsXlRMFmRRUdwQsD2kZOYOLY_2FS0VQ9SviNM6AJ_2FJM_3D",
+ "title": "myimage.jpg",
+ "description": "My Image Description",
+ "sizeBytes": 10312,
+ "mediaType": "image/jpeg"
+ }
+ ]
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Response body Examples Request Response

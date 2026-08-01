@@ -1,0 +1,61 @@
+Add property to object POST /api/gotham/v1/objects/{primaryKey}/properties Add a new property value to an existing object. Path parameters primaryKey string The primary key of the object to add a property to. Request body AddPropertyRequest object Adds a property to an existing object. This is similar but different from an initial
+creation in that it does require security to be specified. Hide child attributes Hide child attributes Expand all propertyType string The name of the property in the API - also called the Property Type URI. value any Represents the value of a property. The following table provides expected representations of scalar data types: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Type JSON encoding Example Date ISO 8601 extended local date string "2021-05-01" Decimal string "2.718281828" Double number 3.14159265 Integer number 238940 Long string "58319870951433" String string "Call me Ishmael" Timestamp ISO 8601 extended offset date-time string in UTC zone "2021-01-04T05:00:00Z" security object Security mutation details for a component of an object - property, media, link.
+Specifying security overrides the system's default security when creating and updating data.
+If portion markings are specified, permissions may be specified. If portion markings are not specified,
+permissions must be specified. 
+ This model may evolve over time for other security features. Show child attributes Show child attributes Response body EmptySuccessResponse object Success response Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111/properties" \
+ -d '{"propertyType":"com.palantir.property.name","value":{"FIRST_NAME":"John","LAST_NAME":"Smith"},"security":{"portionMarkings":["SENSITIVE"]}}' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Request body Response body Examples Request Response

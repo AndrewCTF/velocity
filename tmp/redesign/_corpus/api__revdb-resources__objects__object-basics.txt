@@ -1,0 +1,317 @@
+Object basics An Object is a data container for a specific instance of an Object Type. For instance, the com.palantir.object.employee object type may contain data about several employees, and each one is represented as a single Object. 
+ Searching objects 
+ The search objects endpoint allows searching by properties and other attributes of objects of a given type. The search query is provided as a JSON request body. 
+ Search Query types 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Query type Description empty Apply no filter (i.e., list all objects of type objectType). eq The provided property is exactly equal to the provided value. and All the sub-queries match. or At least one of the sub-queries matches. keyword The objects' contents match the specified keyword query. lt The provided property is less than the provided value. gt The provided property is greater than the provided value. lte The provided property is less than or equal to the provided value. gte The provided property is greater than or equal to the provided value. not The sub-query does not match. geoPointWithin Filter objects whose intrinsic coordinates are within the provided polygon 
+ Example queries 
+ Equality query ( eq ) 
+ Description 
+ The provided property is exactly equal to the provided value. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ {
+ "query": {
+ "type": "eq",
+ "field": "com.palantir.property.name:FIRST_NAME",
+ "value": "John"
+ }
+} 
+ Case-sensitive: yes 
+ 
+ And query ( and ) 
+ Description 
+ All the sub-queries match. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ {
+ "query": {
+ "type": "and",
+ "value": [
+ {
+ "type": "eq",
+ "field": "com.palantir.property.name:FIRST_NAME",
+ "value": "John"
+ },
+ {
+ "type": "eq",
+ "field": "com.palantir.property.name:LAST_NAME",
+ "value": "Smith"
+ }
+ ]
+ }
+} 
+ 
+ Or query ( or ) 
+ Description 
+ At least one of the sub-queries matches. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ {
+ "query": {
+ "type": "or",
+ "value": [
+ {
+ "type": "eq",
+ "field": "com.palantir.property.name:FIRST_NAME",
+ "value": "John"
+ },
+ {
+ "type": "eq",
+ "field": "com.palantir.property.name:FIRST_NAME",
+ "value": "Jane"
+ }
+ ]
+ }
+} 
+ 
+ Keyword query ( keyword ) 
+ Description 
+ The objects' contents match the specified keyword query. Keyword queries support flexible, advanced syntax. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ {
+ "query": {
+ "type": "keyword",
+ "query": "quick brown fox"
+ }
+} 
+ 
+ Empty query ( empty ) 
+ Description 
+ A query that matches all objects for the specified object type. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ {
+ "query": {
+ "type": "empty"
+ }
+} 
+ Less than query ( lt ) 
+ Description 
+ The provided property is less than the provided value. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ {
+ "query": {
+ "type": "lt",
+ "field": "com.palantir.property.age",
+ "value": 10
+ }
+} 
+ 
+ Greater than query ( gt ) 
+ Description 
+ The provided property is greater than the provided value. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ {
+ "query": {
+ "type": "gt",
+ "field": "com.palantir.property.age",
+ "value": 10
+ }
+} 
+ 
+ Less than or equal query ( lte ) 
+ Description 
+ The provided property is less than or equal to the provided value. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ {
+ "query": {
+ "type": "lte",
+ "field": "com.palantir.property.age",
+ "value": 10
+ }
+} 
+ 
+ Greater than or equal query ( gte ) 
+ Description 
+ The provided property is greater than or equal to the provided value. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ {
+ "query": {
+ "type": "gte",
+ "field": "com.palantir.property.age",
+ "value": 10
+ }
+} 
+ 
+ Not query ( not ) 
+ Description 
+ The sub-query does not match. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ {
+ "query": {
+ "type": "not",
+ "value": {
+ "type": "eq",
+ "field": "com.palantir.property.name:FIRST_NAME",
+ "value": "John"
+ }
+ }
+} 
+ 
+ GeoPoint Within Polygon query ( geoPointWithin ) 
+ Description 
+ The objects' intrinsic coordinates are within the provided polygon. 
+ Example 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ {
+ "query": {
+ "type": "geoPointWithin",
+ "polygon": [
+ {"longitude":-77.05974824713265,"latitude":38.903335277742656},
+ {"longitude":-77.06130631105295,"latitude":38.90278989613124},
+ {"longitude":-77.0628268311872,"latitude":38.905175909773085},
+ {"longitude":-77.06011742685993,"latitude":38.905195387105344},
+ {"longitude":-77.05974824713265,"latitude":38.903335277742656}
+ ]
+ }
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Object basics Searching objects Search Query types Example queries

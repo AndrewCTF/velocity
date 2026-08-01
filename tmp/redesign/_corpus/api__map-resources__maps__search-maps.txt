@@ -1,0 +1,33 @@
+Search Maps GET /api/gotham/v1/maps Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Retrieves all published maps containing the mapName (does not have to be exact). Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. mapName string The name of the map(s) to be queried. pageSize integer optional The maximum number of matching Gaia maps to return. Defaults to 50. pageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request. Response body SearchMapsResponse object Success response. Hide child attributes Hide child attributes Expand all results list<GaiaMapMetadata> optional Show child attributes Show child attributes nextPageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request.
+To fetch the next page, clients should take the value from the nextPageToken field of the previous response
+and populate the next request's pageToken field with it. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/maps?preview=true&mapName=Example+Map+Name&pageSize=10" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ {
+ "results": [
+ {
+ "mapRid": "ri..map.a1A2bcD3e45fg6h7ij",
+ "name": "Example Map Name",
+ "createAt": "2023-03-21T01:14:20.326Z",
+ "lastModified": "2023-03-23T17:38:29.323Z",
+ "numLayers": 1,
+ "numElements": 5
+ }
+ ]
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Response body Examples Request Response

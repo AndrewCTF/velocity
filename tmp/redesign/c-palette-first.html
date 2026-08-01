@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Velocity redesign · Direction C · Palette first</title>
+<link rel="stylesheet" href="mock.css" />
+<style>
+  .float { position: absolute; z-index: var(--z-dock); background: var(--glass); backdrop-filter: var(--blur);
+           border-radius: var(--r-lg); box-shadow: var(--sh-2); display: flex; flex-direction: column;
+           overflow: hidden; max-height: calc(100% - 110px); }
+  .float > .fh { display: flex; align-items: center; gap: 11px; height: 42px; padding: 0 12px 0 18px; cursor: move; }
+  .float > .fh h2 { font-size: var(--fs-body); font-weight: 600; }
+  .float .pbody { padding: 0 18px 18px; }
+  .pinstrip { position: absolute; left: 12px; bottom: 12px; z-index: var(--z-dock); display: flex; gap: 3px; padding: 6px;
+              background: var(--glass); backdrop-filter: var(--blur); border-radius: var(--r-lg); box-shadow: var(--sh-2); }
+  .pinstrip .p { padding: 7px 13px; border-radius: var(--r-md); font-size: var(--fs-cap); color: var(--txt-3); cursor: pointer; }
+  .pinstrip .p:hover { background: var(--glass-2); color: var(--txt-0); }
+  .pinstrip .p.on { color: var(--txt-0); background: var(--glass-2); }
+</style>
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true"><defs>
+<g id="i-search" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g>
+<g id="i-grid" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></g>
+<g id="i-select" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="m9 9 8 3-3.4 1.6L12 17Z"/></g>
+<g id="i-around" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="2.6"/><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="m10.2 10.4-3.4-2.8M13.8 10.4l3.4-2.8M13.8 13.6l3.4 2.8"/></g>
+<g id="i-draw" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3Z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5Z"/><path d="m2 2 7.6 7.6"/></g>
+<g id="i-camera" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L8 6.5H4.5A1.5 1.5 0 0 0 3 8v10a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 18V8a1.5 1.5 0 0 0-1.5-1.5H16Z"/><circle cx="12" cy="12.5" r="3.4"/></g>
+<g id="i-ruler" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 14.1 14.1 2.6a2 2 0 0 1 2.8 0l4.5 4.5a2 2 0 0 1 0 2.8L9.9 21.4a2 2 0 0 1-2.8 0l-4.5-4.5a2 2 0 0 1 0-2.8Z"/><path d="m7 10 2 2M10 7l2 2M13 4l2 2M4 13l2 2"/></g>
+<g id="i-pin" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 5.5-8 12-8 12s-8-6.5-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="2.6"/></g>
+<g id="i-trash" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6"/><path d="M10 11v6M14 11v6"/></g>
+<g id="i-hand" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6.5a1.5 1.5 0 0 0-3 0V11"/><path d="M15 10.5V4.5a1.5 1.5 0 0 0-3 0V11"/><path d="M12 10.5V5.5a1.5 1.5 0 0 0-3 0V13"/><path d="M9 12V9a1.5 1.5 0 0 0-3 0v6.5c0 3.6 2.4 5.5 6 5.5s6-1.9 6-5.5V11"/></g>
+<g id="i-bell" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 6-3 7-3 7h18s-3-1-3-7"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></g>
+<g id="i-pause" fill="currentColor" stroke="none"><rect x="6" y="4.5" width="4" height="15" rx="1.5"/><rect x="14" y="4.5" width="4" height="15" rx="1.5"/></g>
+<g id="i-chev" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
+<g id="i-up" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></g>
+<g id="i-lock" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></g>
+<g id="i-x" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></g>
+<g id="i-eye" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></g>
+<g id="i-graph" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="2.6"/><circle cx="18" cy="7" r="2.6"/><circle cx="12" cy="18" r="2.6"/><path d="m8.3 7.3 2 8.4M16.6 9.2l-3 6.9M8.5 6.4l7-.3"/></g>
+<g id="i-target" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></g>
+<g id="i-db" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><ellipse cx="12" cy="5.5" rx="8" ry="3.2"/><path d="M4 5.5v13c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2v-13"/><path d="M4 12c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2"/></g>
+<g id="i-gear" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8.5"/></g>
+<g id="i-plane" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 8 14h8L12 2Z"/><path d="M10 17h4v3l-2-1.2L10 20v-3Z"/></g>
+<g id="i-layers" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></g>
+<g id="i-hist" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 21V10"/><path d="M9 21V4"/><path d="M15 21v-8"/><path d="M21 21V8"/></g>
+<g id="i-info" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><path d="M12 8h.01"/></g>
+<g id="i-series" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3.5-4 3 2.6L20 6"/></g>
+<g id="i-clock" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></g>
+</defs></svg>
+
+<div class="shell">
+  <div class="globe">
+    <svg class="sky" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <!-- Baltic approaches basemap. The scenario is 54.318 N 018.712 E with a
+       200 km scale bar, which is a zoomed-in coastal view, not a globe: a globe
+       at that scale is the wrong instrument and reads as decoration.
+
+       Projection is a plain equirectangular fit so the geometry is checkable:
+         x = (lon - 14.0) * 200        lon 14.0 E to 22.0 E
+         y = (55.9 - lat) * 333.33     lat 53.2 N to 55.9 N
+       Coastlines are simplified, not survey grade, and the graticule labels are
+       computed from those two formulas rather than typed by eye. -->
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#0d1821"/>
+      <stop offset="100%" stop-color="#091219"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#sea)"/>
+
+  <!-- graticule: 1 degree of longitude, half a degree of latitude -->
+  <g stroke="rgba(150,190,220,0.09)" stroke-width="1" fill="none">
+    <path d="M200 0V900M400 0V900M600 0V900M800 0V900M1000 0V900M1200 0V900M1400 0V900"/>
+    <path d="M0 133H1600M0 300H1600M0 467H1600M0 633H1600M0 800H1600"/>
+  </g>
+  <g fill="rgba(150,190,220,0.34)" font-family="IBM Plex Mono, monospace" font-size="12">
+    <text x="205" y="122">15°E</text><text x="405" y="122">16°E</text><text x="605" y="122">17°E</text>
+    <text x="805" y="122">18°E</text><text x="1005" y="122">19°E</text><text x="1205" y="122">20°E</text>
+    <text x="1405" y="122">21°E</text>
+    <text x="6" y="129">55°30'N</text><text x="6" y="296">55°00'N</text><text x="6" y="463">54°30'N</text>
+    <text x="6" y="629">54°00'N</text><text x="6" y="796">53°30'N</text>
+  </g>
+
+  <!-- land -->
+  <g fill="#22303a" stroke="rgba(160,205,230,0.5)" stroke-width="1" stroke-linejoin="round">
+    <!-- Poland, Kaliningrad oblast and the Lithuanian coast -->
+    <path d="M0 690 L50 663 L180 620 L316 573 L450 500 L572 440 L650 405 L710 380 L800 372
+             L880 370 L890 420 L906 460 L915 490 L930 517 L985 528 L1010 520 L1120 470
+             L1180 417 L1250 405 L1302 397 L1360 300 L1400 180 L1428 63 L1600 20
+             L1600 900 L0 900 Z"/>
+    <!-- Hel peninsula -->
+    <path d="M879 367 L921 391 L961 419 L986 437 L991 447 L967 433 L927 405 L876 379 Z"/>
+    <!-- Vistula Spit -->
+    <path d="M1004 522 L1080 492 L1150 455 L1178 431 L1181 443 L1152 467 L1082 504 L1005 533 Z"/>
+    <!-- Bornholm -->
+    <path d="M160 240 q30 -14 46 6 q10 26 -14 38 q-34 10 -44 -16 Z"/>
+    <!-- southern Sweden -->
+    <path d="M0 0 L300 0 L250 60 L140 96 L60 130 L0 150 Z"/>
+  </g>
+
+  <!-- inland water: the Vistula Lagoon behind the spit -->
+  <path d="M1010 519 L1120 469 L1176 429 L1150 452 L1080 489 L1008 517 Z" fill="#0e1a23"
+        stroke="rgba(160,205,230,0.28)" stroke-width="0.8"/>
+
+  <!-- place labels -->
+  <g font-family="IBM Plex Mono, monospace" font-size="12" fill="#9fb3c0">
+    <g fill="#6f8494">
+      <circle cx="930" cy="517" r="2.6"/><circle cx="906" cy="460" r="2.6"/>
+      <circle cx="985" cy="437" r="2.6"/><circle cx="1302" cy="397" r="2.6"/>
+      <circle cx="1428" cy="63" r="2.6"/><circle cx="316" cy="573" r="2.6"/>
+      <circle cx="1180" cy="417" r="2.6"/>
+    </g>
+    <text x="939" y="521">GDANSK</text>
+    <text x="915" y="464">GDYNIA</text>
+    <text x="994" y="441">HEL</text>
+    <text x="1311" y="401">KALININGRAD</text>
+    <text x="1437" y="67">KLAIPEDA</text>
+    <text x="325" y="577">KOLOBRZEG</text>
+    <text x="1189" y="421">BALTIYSK</text>
+    <text x="150" y="300" fill="#7c8f9c">BORNHOLM</text>
+  </g>
+  <g font-family="Inter, sans-serif" font-size="13" fill="rgba(150,190,220,0.28)" letter-spacing="3">
+    <text x="470" y="248">BALTIC&#160;&#160;SEA</text>
+    <text x="946" y="602" font-size="12" letter-spacing="2">GULF&#160;OF&#160;GDANSK</text>
+  </g>
+
+  <!-- 200 km scale bar. 1 degree of longitude at 54.5 N is about 64.7 km and
+       1 degree is 200 units here, so 100 km is about 309 units. -->
+  <g transform="translate(430,672)">
+    <rect x="0" y="-6" width="309" height="6" fill="rgba(150,190,220,0.5)"/>
+    <rect x="0" y="-6" width="154.5" height="6" fill="rgba(20,30,38,0.9)"/>
+    <g fill="rgba(160,200,225,0.62)" font-family="IBM Plex Mono, monospace" font-size="12">
+      <text x="-2" y="14">0</text><text x="146" y="14">50</text><text x="292" y="14">100 km</text>
+    </g>
+  </g>
+
+  <!-- north arrow -->
+  <g transform="translate(1120,672)" fill="rgba(160,200,225,0.55)">
+    <path d="M0 -22 L7 0 L0 -5 L-7 0 Z"/>
+    <text x="-4" y="14" font-family="IBM Plex Mono, monospace" font-size="12">N</text>
+  </g>
+</svg>
+    
+  <!-- Positions are over water and inside the map window. Screen percent maps
+       back to the basemap through the SVG's slice transform, so a contact drawn
+       at 43% / 28% sits in the open Baltic rather than on Poland. -->
+  <div class="contact" style="left:43.1%;top:27.8%;color:var(--d-airliner);transform:rotate(64deg)"><i></i></div>
+  <div class="contact" style="left:53.4%;top:34.4%;color:var(--d-airliner);transform:rotate(-108deg)"><i></i></div>
+  <div class="contact" style="left:63.9%;top:30.0%;color:var(--d-mil);transform:rotate(212deg)"><i></i></div>
+  <div class="contact" style="left:37.5%;top:36.7%;color:var(--d-heli);transform:rotate(18deg)"><i></i></div>
+  <div class="contact" style="left:69.4%;top:22.2%;color:var(--d-private);transform:rotate(-42deg)"><i></i></div>
+  <div class="contact" style="left:30.6%;top:27.8%;color:var(--d-glider);transform:rotate(96deg)"><i></i></div>
+  <div class="contact sq" style="left:47.2%;top:46.7%;color:var(--d-cargo)"><i></i></div>
+  <div class="contact sq" style="left:56.9%;top:48.9%;color:var(--d-tanker)"><i></i></div>
+  <div class="contact sq" style="left:59.7%;top:52.2%;color:var(--d-fishing)"><i></i></div>
+  <div class="contact sq" style="left:51.0%;top:41.0%;color:var(--d-passenger)"><i></i></div>
+  <div class="contact" style="left:73.8%;top:36.7%;color:var(--d-emergency);transform:rotate(140deg)"><i></i></div>
+  <div class="track" style="left:52.4%;top:44.0%;width:118px;transform:rotate(-24deg)"></div>
+  <div class="contact sel" style="left:59.4%;top:37.0%;color:var(--d-select);transform:rotate(24deg)"><i></i></div>
+    <div class="osd" style="left:12px;bottom:74px">54.3181 N &nbsp;018.7122 E &nbsp;·&nbsp; MGRS 33UXP 0421 5518</div>
+    <div class="toolbar" style="left:12px;top:58px">
+  <button type="button" class="tool" title="Pan" aria-label="Pan"><svg viewBox="0 0 24 24"><use href="#i-hand"/></svg></button>
+  <div class="tool-div"></div>
+  <button type="button" class="tool" title="Select" aria-label="Select"><svg viewBox="0 0 24 24"><use href="#i-select"/></svg></button>
+  <button type="button" class="tool" title="Search around" aria-label="Search around"><svg viewBox="0 0 24 24"><use href="#i-around"/></svg></button>
+  <button type="button" class="tool" title="Draw" aria-label="Draw"><svg viewBox="0 0 24 24"><use href="#i-draw"/></svg></button>
+  <button type="button" class="tool" title="Capture" aria-label="Capture"><svg viewBox="0 0 24 24"><use href="#i-camera"/></svg></button>
+  <button type="button" class="tool on" title="Measure" aria-label="Measure"><svg viewBox="0 0 24 24"><use href="#i-ruler"/></svg></button>
+  <button type="button" class="tool" title="Annotate" aria-label="Annotate"><svg viewBox="0 0 24 24"><use href="#i-pin"/></svg></button>
+  <button type="button" class="tool" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24"><use href="#i-trash"/></svg></button>
+</div>
+
+    <div class="float" style="left:12px;top:76px;width:340px">
+      <div class="fh"><h2>Find</h2><span style="flex:1"></span><span class="badge accent">pinned</span>
+        <svg width="15" height="15" style="color:var(--txt-3);cursor:pointer" viewBox="0 0 24 24"><use href="#i-x"/></svg></div>
+      
+<div class="phead" style="display:none"><h2>Find</h2><span class="badge accent">MGRS</span><span style="flex:1"></span><button class="btn sm quiet">Saved</button></div>
+<div class="pbody">
+  <div class="input focus" style="margin-bottom:12px"><span class="mono">33UXP 0421 5518</span></div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
+    <button class="btn sm accent">Fly here</button><button class="btn sm">Drop a pin</button><button class="btn sm">Search 50 km</button>
+  </div>
+  <p style="font-size:var(--fs-cap);color:var(--txt-3)">Reads as MGRS · 54.3181 N, 18.7122 E</p>
+
+  <div class="sec"><div class="sech"><h3>Contacts</h3><span class="ct">2</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">RCH471<span class="sub">C-17A · FL310 · 12 km away</span></span><span class="ct">aircraft</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">NORDIC STAR<span class="sub">MMSI 273441000 · 4 km away</span></span><span class="ct">vessel</span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Places</h3><span class="ct">3</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Gdansk Lech Walesa<span class="sub">EPGD · airport</span></span><span class="ct">8 km</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Port of Gdansk<span class="sub">PLGDN · port</span></span><span class="ct">3 km</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Gdynia naval base<span class="sub">military base</span></span><span class="ct">21 km</span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Saved areas</h3><span class="ct">6</span></div>
+    <div class="row on" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Baltic approaches</span><span class="ct">active</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Bab-el-Mandeb</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Taiwan Strait</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot ok"></span><span class="nm">Hormuz</span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Non-geographic</h3></div>
+    <p style="font-size:var(--fs-cap);color:var(--txt-3);line-height:1.6;margin-bottom:9px">Domains, people, usernames, companies and wallets resolve here too, and open in the Investigate surface.</p>
+    <div class="state warn"><b>OSINT lookups need a key</b><p>Object search works keyless. Sanctions, registry and breach lookups do not.</p></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Formats accepted</h3></div>
+    <p style="font-size:var(--fs-cap);color:var(--txt-3);line-height:1.8">Decimal degrees · degrees minutes seconds · MGRS · UTM · MMSI · IMO · ICAO24 · callsign · vessel name · place name · domain · wallet</p>
+  </div>
+</div>
+    </div>
+
+    <div class="float" style="right:84px;top:76px;width:360px">
+      <div class="fh"><h2>Selection</h2><span style="flex:1"></span><span class="badge accent">pinned</span>
+        <svg width="15" height="15" style="color:var(--txt-3);cursor:pointer" viewBox="0 0 24 24"><use href="#i-x"/></svg></div>
+      
+<div class="phead" style="display:none"><h2>RYR4213</h2><span class="badge accent">Aircraft</span><span style="flex:1"></span><button class="btn sm quiet">Compact</button></div>
+<div class="pbody">
+  <div class="mono" style="font-size:var(--fs-cap);color:var(--txt-3);margin-bottom:11px">ICAO24 4CA2D3 · IE · updated 1 s ago</div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:var(--sp-4)">
+    <span class="badge">Airliner</span><span class="badge ok">3 sources</span><span class="badge">Boeing 737-800</span>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn sm accent">Slew to</button><button class="btn sm">Follow</button>
+    <button class="btn sm">Search around</button><button class="btn sm">Pattern of life</button>
+    <button class="btn sm">Flag</button>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Details</h3></div>
+    <dl class="kv">
+      <dt>Callsign</dt><dd>RYR4213</dd>
+      <dt>ICAO24</dt><dd>4CA2D3</dd>
+      <dt>Squawk</dt><dd>2117</dd>
+      <dt>ADS-B category</dt><dd>A3</dd>
+      <dt>Ground speed</dt><dd>449 kn</dd>
+      <dt>Track</dt><dd>024&deg;</dd>
+      <dt>Vertical rate</dt><dd>+4.2 m/s</dd>
+      <dt>Altitude</dt><dd>9,754 m</dd>
+      <dt>Position</dt><dd>54.3181, 18.7122</dd>
+      <dt>Registration</dt><dd class="na">&mdash;</dd>
+    </dl>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Flight</h3><span class="ct">DUB to GDN</span></div>
+    <dl class="kv">
+      <dt>Departed</dt><dd>Dublin 06:12Z</dd>
+      <dt>Arriving</dt><dd>Gdansk 09:05Z</dd>
+      <dt>Progress</dt><dd>78%</dd>
+    </dl>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Correlations</h3><span class="ct">1</span></div>
+    <div class="row" role="button" tabindex="0"><span aria-hidden="true" class="dot warn"></span><span class="nm">Crossed a naval warning area 14 min ago<span class="sub">NAVAREA I broadcast 311</span></span></div>
+  </div>
+
+  <div class="sec"><div class="sech"><h3>Freshness</h3></div>
+    <dl class="kv">
+      <dt>Last refresh</dt><dd>1 s</dd>
+      <dt>Last position fix</dt><dd>2 s</dd>
+      <dt>Seen by</dt><dd>3 sources</dd>
+      <dt>Confidence</dt><dd>high</dd>
+    </dl>
+  </div>
+</div>
+    </div>
+
+    <div class="pinstrip">
+      <button type="button" class="p on" aria-pressed="true">Find</button><button type="button" class="p on" aria-pressed="true">Selection</button><button type="button" class="p" aria-pressed="false">Layers</button>
+      <button type="button" class="p" aria-pressed="false">Histogram</button><button type="button" class="p" aria-pressed="false">Series</button><button type="button" class="p" aria-pressed="false">Time selection</button>
+      <button type="button" class="p" aria-pressed="false">Info</button><button type="button" class="p" aria-pressed="false">+ pin</button>
+    </div>
+
+    <div class="scrim">
+      <div class="palette">
+        <div class="pq"><svg width="21" height="21" style="color:var(--txt-3)" viewBox="0 0 24 24"><use href="#i-search"/></svg>
+          <span class="fake">mil<span class="cur">&nbsp;</span></span><span class="badge">32 results</span></div>
+        <div class="plist">
+          <div class="pgroup">Apps · 3 of 14</div>
+          <div class="pitem on" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-target"/></svg><span class="pi-n">Targeting</span><span class="pi-h">kill-chain board</span><kbd>&crarr;</kbd></div>
+          <div class="pitem" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-graph"/></svg><span class="pi-n">Graph</span><span class="pi-h">link analysis</span></div>
+          <div class="pitem" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-db"/></svg><span class="pi-n">Foundry</span><span class="pi-h">datasets, pipelines, ontology</span></div>
+          <div class="pgroup">Layers · 4 of 64</div>
+          <div class="pitem" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-layers"/></svg><span class="pi-n">Aircraft · Military (airplanes.live)</span><span class="pi-h">on · 284</span></div>
+          <div class="pitem" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-layers"/></svg><span class="pi-n">Military bases</span><span class="pi-h">off</span></div>
+          <div class="pitem" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-layers"/></svg><span class="pi-n">Military installations (MIRTA)</span><span class="pi-h">off</span></div>
+          <div class="pgroup">Panels</div>
+          <div class="pitem" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-hist"/></svg><span class="pi-n">Histogram · filter by aircraft category</span><span class="pi-h">military</span></div>
+          <div class="pgroup">Contacts · 18 live</div>
+          <div class="pitem" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-plane"/></svg><span class="pi-n">RCH471</span><span class="pi-h">C-17A · FL310 · 4 min ago</span></div>
+          <div class="pgroup">Settings</div>
+          <div class="pitem" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-gear"/></svg><span class="pi-n">Military callsign matching</span><span class="pi-h">Set up · Classification</span></div>
+          <div class="pgroup">Saved</div>
+          <div class="pitem" role="option" tabindex="0"><svg viewBox="0 0 24 24"><use href="#i-bell"/></svg><span class="pi-n">Military over the Baltic</span><span class="pi-h">saved search · 7 new</span></div>
+        </div>
+        <div class="pfoot"><span><kbd>&uarr;</kbd> <kbd>&darr;</kbd> move</span><span><kbd>&crarr;</kbd> open</span>
+          <span><kbd>&#8679;&crarr;</kbd> open beside</span><span><kbd>&#8984;&crarr;</kbd> pin</span>
+          <span><kbd>esc</kbd> close</span><span style="flex:1"></span><span><kbd>?</kbd> all shortcuts</span></div>
+      </div>
+    </div>
+    <div class="statusbar"><b>Online</b><span class="sep"></span><span>Baltic approaches</span><span class="sep"></span><span>18 layers · 13,204 contacts</span><span class="sep"></span><span>1 s refresh</span><span style="flex:1"></span><span>Carto dark · OSM · CARTO</span></div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand"><i></i><b>Velocity</b></div>
+    <button class="btn accent"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#i-search"/></svg> Find anything
+      <kbd style="background:rgba(255,255,255,.22);color:#fff;margin-left:5px">&#8984;K</kbd></button>
+    <span style="font-size:var(--fs-cap);color:var(--txt-3)">One index · 14 apps · 64 layers · 18 panels · 7 tools · every setting</span>
+    <div class="spacer"></div>
+    <button class="btn quiet" style="color:var(--alert-fg)"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#i-bell"/></svg> 2</button>
+    <span class="stat"><b>13,204</b><span>contacts</span></span>
+    <span class="mono" style="font-size:var(--fs-dense);color:var(--txt-2)">08:42:17Z</span>
+    <span class="cls"><i></i> Unclassified</span>
+  </header>
+</div>
+
+<div class="mocknote"><b>Direction C · Palette first</b><span>Minimal chrome, everything summoned, one index</span><a href="00-index.html">Back to the board</a></div>
+</body>
+</html>

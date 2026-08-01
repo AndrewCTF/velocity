@@ -1,0 +1,13 @@
+Export Map as KMZ POST /api/gotham/v1/maps/{mapId}/kmz Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Export all map elements from a Gaia map to a KMZ file suitable for rendering in external applications, such as Google Earth. There are no schema compatibility guarantees provided for internal KMZ content exported by this endpoint.
+Only local map elements will be exported i.e. no elements from linked maps. Path parameters mapId string The artifact identifier of the Gaia map being exported, which can be copied via Help > Developer > Copy id . The export call will download all elements in the referenced map. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body GaiaExportRequest object The request body to export elements to a KMZ/SHP file. Hide child attributes Hide child attributes Collapse all name string optional The name of the exported file. Defaults to 'palantir-export'. Response body body string Success response. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/maps/ri.gotham-artifact.1234567890123456789-0987654321123456789.gaia-map.a1A2bcD3e45fg6h7ij/kmz?preview=true" \
+ -d '{"name":"Example file name"}' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

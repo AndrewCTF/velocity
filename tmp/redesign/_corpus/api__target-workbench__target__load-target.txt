@@ -1,0 +1,120 @@
+Load a Target GET /api/gotham/v1/twb/target/{rid} Load a Target by RID. Path parameters rid string Target RID Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Response body LoadTargetResponseV2 object Success response with the requested Target. Hide child attributes Hide child attributes Expand all target object The Target object. Show child attributes Show child attributes baseRevisionId string The current version of the Target retrieved.
+Any modifying operations should be accompanied by this version to avoid concurrent operations
+made since this version. If there are any conflicting edits that result in changes to
+these operations when they're applied, that will be noted in the response. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/twb/target/{rid}?preview=true" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+ 35
+ 36
+ 37
+ 38
+ 39
+ 40
+ 41
+ 42
+ 43
+ 44
+ 45
+ 46
+ 47
+ 48
+ 49
+ 50
+ 51
+ 52
+ 53
+ 54
+ 55
+ 56
+ {
+ "rid": "ri.gotham-artifact.0-0.target.example",
+ "name": "Enemy Building",
+ "description": "Known enemy building.",
+ "targetBoard": "ri.gotham-artifact.0-0.target-collection.example",
+ "column": "DRAFT",
+ "targetType": "Building",
+ "entityRid": "ri.gotham.123-456.object-internal.example",
+ "sidc": "SEGPU-------",
+ "aimpoints": [
+ {
+ "id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+ "number": 1,
+ "name": "Example targetAimPoint name",
+ "location": {
+ "center": {
+ "longitude": 0,
+ "latitude": 0,
+ "elevation": 0
+ },
+ "radius": 1.1
+ },
+ "geotimeTrack": "ri.gotham.0-0.geotime-track.aa.bb.cc.example",
+ "entityRid": "ri.gotham.123-456.object-internal.example"
+ },
+ {
+ "id": "54ac3383-b953-4d65-8f98-7c3fbbbb481a",
+ "number": 1,
+ "name": "Example targetAimPoint name",
+ "location": {
+ "center": {
+ "longitude": 0,
+ "latitude": 0,
+ "elevation": 0
+ },
+ "radius": 1.1
+ },
+ "geotimeTrack": "ri.gotham.0-0.geotime-track.aa.bb.cc.example",
+ "entityRid": "ri.gotham.123-456.object-internal.example"
+ }
+ ],
+ "targetIdentifier": {
+ "customTargetIdentifier": "Example Identifier 000"
+ },
+ "location": {
+ "manualLocation": {
+ "lat": 0,
+ "lng": 0,
+ "circularErrorInMeters": 0,
+ "hae": 0,
+ "msl": 0,
+ "agl": 0
+ }
+ },
+ "highPriorityTargetListTargetSubtype": "Red Car"
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Response body Examples Request Response

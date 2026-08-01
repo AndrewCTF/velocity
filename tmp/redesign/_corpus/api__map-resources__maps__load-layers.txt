@@ -1,0 +1,94 @@
+Load Map Layers PUT /api/gotham/v1/maps/load/{mapGid}/layers Loads the elements contained in the requested layers of a Gaia map. The response includes the geometries
+associated with the elements. Path parameters mapGid string The GID of the map containing the layers to be loaded. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body LoadLayersRequest object Hide child attributes Hide child attributes Expand all layerIds list<GaiaLayerId> optional The set of layer IDs to load from a Gaia map. Show child attributes Show child attributes includeDisplayFields boolean optional If set to true, the response will include generic fields associated with a Gaia element. Note that
+this does not guarantee that all element fields will be included; fields are loaded on a best effort basis.
+Defaults to false. Response body LoadLayersResponse object A successful load layers response. Hide child attributes Hide child attributes Expand all layers map<GaiaLayerId, GaiaLayer> optional A mapping of the requested layer IDs to a Gaia layer. Any invalid layer IDs will be omitted from this field. Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/maps/load/ri.gotham-artifact.0-1.gaia-map.a1A2bcD3e45fg6h7ij/layers?preview=true" \
+ -d '{"layerIds":["exampleLayerId"]}' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+ 35
+ 36
+ 37
+ 38
+ 39
+ 40
+ 41
+ {
+ "layers": {
+ "exampleLayerId": {
+ "id": "exampleLayerId",
+ "elements": [
+ {
+ "id": "exampleElementId",
+ "parentId": "exampleLayerId",
+ "features": [
+ {
+ "geometry": {
+ "type": "Point",
+ "coordinates": [
+ 0,
+ 0
+ ]
+ },
+ "style": {
+ "label": {
+ "text": "sample-text",
+ "textRotation": 40.1,
+ "textColor": "#000000",
+ "textAlignment": "RIGHT"
+ }
+ }
+ },
+ {
+ "geometry": {
+ "type": "Point",
+ "coordinates": [
+ 0,
+ 0
+ ]
+ }
+ }
+ ]
+ }
+ ]
+ }
+ }
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

@@ -1,0 +1,12 @@
+Remove Target Intel Target PUT /api/v2/targetWorkbench/targets/{targetRid}/removeTargetIntel Remove Intel on Target by RID. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-write . Path parameters targetRid string The unique identifier for a Target Request body RemoveTargetIntelTargetRequest object Hide child attributes Hide child attributes Collapse all id string Response body EmptySuccessResponse any An empty response object indicating the request was successful. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/targets/ri.gotham-artifact.0-0.target.example/removeTargetIntel" \
+ -d '{"id":"Example Intel Id"}' Error responses Error Name Target Not Found Error Code INVALID_ARGUMENT Status Code 400 Description Cannot find target from provided rid.
+ Parameters targetRid Remove Target Intel Target Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not removeTargetIntel the Target. Parameters targetRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Request body Response body Examples Request Response Error responses

@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Velocity redesign · Gotham parity</title>
+<link rel="stylesheet" href="mock.css" />
+<style>
+  .pcmp { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); align-items: start; margin-bottom: var(--sp-5); }
+  .pcmp figure { background: var(--bg-1); border-radius: var(--r-md); overflow: hidden; }
+  .pcmp img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+  .pcmp figcaption { padding: 8px 12px; font-size: var(--fs-cap); color: var(--txt-3); }
+  .pcmp .stagein { padding: 0; display: flex; gap: 12px; align-items: flex-start; background: var(--bg-0);
+                   transform-origin: top left; }
+  .pcmp figure.mine { overflow: hidden; }
+  .pcmp figure.mine > .stagein { margin: 6px 0 0 6px; }
+  .stagein { background: var(--bg-0); }
+</style>
+</head>
+<body>
+<svg style="display:none" aria-hidden="true"><defs>
+<g id="k-filter" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v7l-4-2v-5Z"/></g>
+<g id="k-select" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h4M16 4h4M20 8v4M4 8v4M4 16v4h4M16 20h4v-4"/><path d="m10 10 7 3-3 1.3L12.7 17Z"/></g>
+<g id="k-around" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="2.2"/><circle cx="5" cy="6" r="1.9"/><circle cx="19" cy="6" r="1.9"/><circle cx="19" cy="18" r="1.9"/><path d="m10.4 10.7-3.7-3M13.6 10.7l3.7-3M13.6 13.3l3.7 3"/></g>
+<g id="k-layout" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6" cy="16" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="19" cy="15" r="2"/><path d="m7.6 14.6 3.8-4.4M14.7 9.4l3 4.2"/></g>
+<g id="k-layers" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 7.5 12 12l9-4.5L12 3Z"/><path d="m3 16.5 9 4.5 9-4.5"/><path d="m3 12 9 4.5L21 12"/></g>
+<g id="k-actions" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></g>
+<g id="k-style" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h9M4 4v9"/><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="m10 15 5-5 2 2-5 5h-2Z"/></g>
+<g id="k-edit" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="11" height="8" rx="1.5"/><path d="M14 12h6M17 9l3 3-3 3"/></g>
+<g id="k-merge" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><path d="M8 6h5a4 4 0 0 1 4 4v4M8 18h5"/><path d="M20 12h-6"/></g>
+<g id="k-unresolve" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="12" r="3.4"/><circle cx="16" cy="12" r="3.4"/></g>
+<g id="k-remove" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/></g>
+<g id="k-doc" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5Z"/><path d="M14 3v4.5h4.5"/></g>
+<g id="k-entity" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="9" cy="8" r="2.6"/><circle cx="16" cy="9" r="2.1"/><path d="M4 18c0-2.8 2.2-4.6 5-4.6s5 1.8 5 4.6"/><path d="M15 13.6c2.5 0 4.4 1.6 4.4 4.4"/></g>
+<g id="k-event" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="1.5"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3"/></g>
+<g id="k-props" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></g>
+<g id="k-record" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5Z"/><path d="M14 3v4.5h4.5M8.5 13h7M8.5 16.5h4"/></g>
+<g id="k-search" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="11" cy="11" r="6.6"/><path d="m20.5 20.5-4-4"/></g>
+<g id="k-sort" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14M8 5 5 8M8 5l3 3M16 19V5M16 19l-3-3M16 19l3-3"/></g>
+<g id="k-collapse" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5 19 19M19 5 5 19"/></g>
+<g id="k-x" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></g>
+<g id="k-map" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z"/><path d="M9 4v13.5M15 6.5V20"/></g>
+<g id="k-db" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="3"/><path d="M4.5 5.5v13c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-13"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></g>
+<g id="k-wrench" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6a4.5 4.5 0 0 0-6 5.6L4 16.6 7.4 20l5-5A4.5 4.5 0 0 0 18 9l-2.6 2.6-2.4-2.4L15.6 6.6Z"/></g>
+<g id="k-plane" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 8.5 13.5h7L12 3Z"/><path d="M10 17h4v3l-2-1.2L10 20Z"/></g>
+<g id="k-ship" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 14h17l-2.2 6H5.7Z"/><path d="M6.5 14V7L12 4.4 17.5 7v7M12 4.4V14"/></g>
+<g id="k-sat" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 9.5 5 5"/><path d="m6 6 3-3 4 4-3 3Z"/><path d="m15 15 3 3 3.5-3.5-3-3Z"/><path d="M4 20a5.5 5.5 0 0 0 5.5-5.5"/></g>
+<g id="k-fire" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3 4 6 5.5 6 9.5A6 6 0 0 1 6 12.5C6 9 8 7 9 5c.6 1.8 1.6 2.6 3 3 0-2-.4-3.6 0-5Z"/></g>
+<g id="k-bolt" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7Z"/></g>
+<g id="k-tri" fill="currentColor" stroke="none"><path d="M6 9h12l-6 7Z"/></g>
+<g id="k-funnel" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v7l-4-2v-5Z"/></g>
+<g id="k-plus" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></g>
+<g id="k-chev" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
+<g id="k-gear" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></g>
+<g id="k-bell" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 6-3 7-3 7h18s-3-1-3-7"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></g>
+</defs></svg>
+<nav class="topnav">
+  <a href="00-index.html">Board</a>
+  <a href="a-panel-parity.html">A</a><a href="b-verb-first.html">B</a><a href="c-palette-first.html">C</a>
+  <a href="panels.html">Panels</a><a href="foundry.html">Foundry</a>
+  <a href="gotham-parity.html" class="on">Gotham parity</a>
+  <a href="components.html">Components</a><a href="rehoming.html">Re-homing</a><a href="states.html">States</a>
+</nav>
+
+<div class="doc" style="max-width:1400px">
+<h1>Gotham parity, component by component</h1>
+<p class="lead">
+  Left is Palantir, cropped straight out of the official G-Cloud 14 Gotham
+  service definition PDF and upscaled 3x with nearest-neighbour so nothing is
+  smoothed away. Right is this design. The measurements under each pair are what
+  was taken off the original and applied.
+</p>
+<div class="note">
+  Method: <code>pdfimages</code> on the SDD, then pixel sampling for colour and
+  column or row profiles for geometry. Everything asserted below is a number
+  taken from the image, not an impression of it.
+  <br/><br/>
+  <b>On scale.</b> The PDF screenshots are themselves a downscale of a real
+  window, and the capture width is unknown, so a raw 3x blow-up of theirs is not
+  comparable to a raw 3x of mine. Both sides are therefore normalised on a
+  measured component: their context-menu item pitch is 20 image pixels and mine
+  is 26 CSS pixels, so their crop is shown at 3x and mine at 2.3x. Rows in the
+  two columns are then the same height on screen and the rest can be judged.
+</div>
+
+
+<h3>Context menu</h3>
+<p>Item pitch measured at 20px with a 24px hover band. Bold section header with no icon and no hover. 15px monochrome line icon, label, right-aligned submenu chevron. Hairline separators with 4px of air. The submenu opens to the right and is top-aligned with its parent row. Hover is a background step, not an accent fill.</p>
+<div class="pcmp">
+  <figure><img src="_ref/graph-dropdown.png" alt="Palantir Context menu" /><figcaption>Palantir, from the G-Cloud SDD (3x)</figcaption></figure>
+  <figure class="mine"><div class="stagein" style="transform:scale(2.3);width:43.478%"><div class="gmenu" style="width:212px">
+  <div class="gsec">1 selected item</div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-filter"/></svg><span class="lbl">Add selection as filter</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-select"/></svg><span class="lbl">Select on map</span><span class="arw" aria-hidden="true">&#9656;</span></div>
+  <div class="gitem on"><svg viewBox="0 0 24 24"><use href="#k-around"/></svg><span class="lbl">Search around</span><span class="arw" aria-hidden="true">&#9656;</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-layout"/></svg><span class="lbl">Layout</span><span class="arw" aria-hidden="true">&#9656;</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-layers"/></svg><span class="lbl">Layers</span><span class="arw" aria-hidden="true">&#9656;</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-actions"/></svg><span class="lbl">Actions</span><span class="arw" aria-hidden="true">&#9656;</span></div>
+  <div class="gsep"></div>
+  <div class="gsec">1 selected contact</div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-style"/></svg><span class="lbl">Style</span><span class="arw" aria-hidden="true">&#9656;</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-edit"/></svg><span class="lbl">Edit label&#8230;</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-merge"/></svg><span class="lbl">Merge</span><span class="arw" aria-hidden="true">&#9656;</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-unresolve"/></svg><span class="lbl">Unresolve</span></div>
+  <div class="gsep"></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-remove"/></svg><span class="lbl">Remove</span><span class="arw" aria-hidden="true">&#9656;</span></div>
+</div>
+<div class="gmenu" style="width:190px;align-self:flex-start;margin-top:66px">
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-doc"/></svg><span class="lbl">Documents</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-entity"/></svg><span class="lbl">Entities</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-event"/></svg><span class="lbl">Events</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-props"/></svg><span class="lbl">Properties</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-record"/></svg><span class="lbl">Record sourcing</span></div>
+  <div class="gitem"><svg viewBox="0 0 24 24"><use href="#k-around"/></svg><span class="lbl">Related artifacts</span></div>
+  <div class="gitem plain"><span class="lbl">More&#8230;</span></div>
+  <div class="gsep"></div>
+  <div class="gitem plain"><span class="lbl">Create new search&#8230;</span></div>
+</div></div>
+    <figcaption>This design (2.3x)</figcaption></figure>
+</div>
+
+
+<h3>Histogram tree</h3>
+<p>Title row 28px with a close affordance on the right, then a separate 26px icon bar right-aligned with a vertical rule before search. Uppercase group headers carry a disclosure triangle and a right-aligned total. Item rows are 22px: type icon, label, a monospace fraction, then a two-tone bar on a dark track where the lighter segment is the matching portion. Selection is an accent outline, not a fill.</p>
+<div class="pcmp">
+  <figure><img src="_ref/graph-panel.png" alt="Palantir Histogram tree" /><figcaption>Palantir, from the G-Cloud SDD (3x)</figcaption></figure>
+  <figure class="mine"><div class="stagein" style="transform:scale(1.9);width:52.632%"><div style="width:300px;background:var(--bg-1)">
+  <div class="ghdr"><h2>Histogram</h2><svg class="x" width="14" height="14" viewBox="0 0 24 24"><use href="#k-x"/></svg></div>
+  <div class="gbar">
+    <span class="ib"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#k-sort"/></svg></span>
+    <span class="ib"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#k-collapse"/></svg></span>
+    <span class="rule"></span>
+    <span class="ib"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#k-search"/></svg></span>
+  </div>
+  <div class="gtree" style="padding:10px">
+    <div style="font-size:var(--fs-cap);font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-1);margin-bottom:6px">Object types</div>
+    <div class="ghead"><span class="tri" aria-hidden="true">&#9662;</span><span>Summary</span><span class="n">2</span></div>
+    <div class="kids">
+      <div class="grow sel"><svg viewBox="0 0 24 24"><use href="#k-plane"/></svg><span class="lbl">Aircraft</span><span class="frac">1/12</span><span class="bar"><i class="hit" style="width:8%"></i><i style="width:92%"></i></span></div>
+      <div class="grow"><svg viewBox="0 0 24 24"><use href="#k-ship"/></svg><span class="lbl">Vessel</span><span class="frac">0/4</span><span class="bar"><i class="hit" style="width:0%"></i><i style="width:62%"></i></span></div>
+    </div>
+    <div class="ghead"><span class="tri" aria-hidden="true">&#9662;</span><span>Aircraft</span><span class="n">7</span></div>
+    <div class="kids">
+      <div class="grow sel"><svg viewBox="0 0 24 24"><use href="#k-plane"/></svg><span class="lbl">Airliner</span><span class="frac">1/5</span><span class="bar"><i class="hit" style="width:20%"></i><i style="width:80%"></i></span></div>
+      <div class="grow"><svg viewBox="0 0 24 24"><use href="#k-plane"/></svg><span class="lbl">Military</span><span class="frac">0/2</span><span class="bar"><i class="hit" style="width:0%"></i><i style="width:34%"></i></span></div>
+      <div class="grow"><svg viewBox="0 0 24 24"><use href="#k-plane"/></svg><span class="lbl">Private</span><span class="frac">0/1</span><span class="bar"><i class="hit" style="width:0%"></i><i style="width:20%"></i></span></div>
+      <div class="grow"><svg viewBox="0 0 24 24"><use href="#k-plane"/></svg><span class="lbl">Helicopter</span><span class="frac">0/1</span><span class="bar"><i class="hit" style="width:0%"></i><i style="width:20%"></i></span></div>
+      <div class="grow"><svg viewBox="0 0 24 24"><use href="#k-plane"/></svg><span class="lbl">Glider</span><span class="frac">0/1</span><span class="bar"><i class="hit" style="width:0%"></i><i style="width:20%"></i></span></div>
+      <div class="more">Show more&#8230;</div>
+    </div>
+    <div class="ghead"><span class="tri" aria-hidden="true">&#9662;</span><span>Vessel</span><span class="n">2</span></div>
+  </div>
+</div></div>
+    <figcaption>This design (1.9x)</figcaption></figure>
+</div>
+
+
+<h3>Toolbar groups</h3>
+<p>Each group carries a small muted label above its controls and is divided from the next by a vertical hairline. Controls are split buttons: a 15px icon and a chevron, or a bare value and a chevron. This is the most distinctive piece of Gotham chrome and this design did not have it at all.</p>
+<div class="pcmp">
+  <figure><img src="_ref/graph-toolbar.png" alt="Palantir Toolbar groups" /><figcaption>Palantir, from the G-Cloud SDD (3x)</figcaption></figure>
+  <figure class="mine"><div class="stagein" style="transform:scale(1.1);width:90.909%"><div class="gtools" style="width:520px">
+  <div class="grp"><span>Organise</span><div>
+    <span class="gsplit"><svg viewBox="0 0 24 24"><use href="#k-layout"/></svg><span class="cv">&#9662;</span></span>
+    <span class="gsplit"><svg viewBox="0 0 24 24"><use href="#k-layers"/></svg><span class="cv">&#9662;</span></span>
+  </div></div>
+  <div class="grp"><span>Annotations</span><div>
+    <span class="gsplit"><svg viewBox="0 0 24 24"><use href="#k-edit"/></svg></span>
+    <span class="gsplit"><svg viewBox="0 0 24 24"><use href="#k-around"/></svg></span>
+  </div></div>
+  <div class="grp"><span>Contact styling</span><div>
+    <span class="gsplit"><svg viewBox="0 0 24 24"><use href="#k-style"/></svg><span class="cv">&#9662;</span></span>
+    <span class="gsplit"><span class="cv">4 &#9662;</span></span>
+    <span class="gsplit"><span class="cv">A &#9662;</span></span>
+  </div></div>
+  <div class="grp"><span>Track styling</span><div>
+    <span class="gsplit"><svg viewBox="0 0 24 24"><use href="#k-style"/></svg><span class="cv">&#9662;</span></span>
+    <span class="gsplit"><span class="cv">&#8212; &#9662;</span></span>
+    <span class="gsplit"><span class="cv">1px &#9662;</span></span>
+  </div></div>
+</div></div>
+    <figcaption>This design (1.1x)</figcaption></figure>
+</div>
+
+
+<h3>Panel tabs</h3>
+<p>Icon plus label, active in full-strength text with a 2px accent underline and an accent-tinted icon, inactive muted. Below it a filter row with a funnel, then a tree with a disclosure triangle, a coloured type icon and indented children. Note the real panel is light; the same rules hold on either surface.</p>
+<div class="pcmp">
+  <figure><img src="_ref/gaia-tabs.png" alt="Palantir Panel tabs" /><figcaption>Palantir, from the G-Cloud SDD (3x)</figcaption></figure>
+  <figure class="mine"><div class="stagein" style="transform:scale(1.9);width:52.632%"><div style="width:300px">
+  <div class="gtabs">
+    <a href="#" class="on"><svg viewBox="0 0 24 24"><use href="#k-layers"/></svg> Map layers</a>
+    <a href="#"><svg viewBox="0 0 24 24"><use href="#k-db"/></svg> Data sources</a>
+    <a href="#"><svg viewBox="0 0 24 24"><use href="#k-wrench"/></svg> Tools</a>
+  </div>
+  <div style="background:var(--bg-1);padding:10px">
+    <div class="row" role="button" tabindex="0"><svg width="15" height="15" style="color:var(--txt-3)" viewBox="0 0 24 24"><use href="#k-filter"/></svg><span class="nm" style="color:var(--txt-3)">Find&#8230;</span></div>
+    <div class="gtree" style="margin-top:6px">
+      <div class="ghead"><span class="tri" aria-hidden="true">&#9662;</span><svg width="14" height="14" style="color:var(--accent)" viewBox="0 0 24 24"><use href="#k-map"/></svg><span>Baltic approaches</span></div>
+      <div class="kids">
+        <div class="row" role="button" tabindex="0"><svg width="14" height="14" style="color:var(--accent)" viewBox="0 0 24 24"><use href="#k-plane"/></svg><span class="nm">Aircraft, multi-source</span></div>
+        <div class="row" role="button" tabindex="0"><svg width="14" height="14" style="color:var(--accent)" viewBox="0 0 24 24"><use href="#k-ship"/></svg><span class="nm">Vessels, all AIS</span></div>
+        <div class="row" role="button" tabindex="0"><svg width="14" height="14" style="color:var(--accent)" viewBox="0 0 24 24"><use href="#k-sat"/></svg><span class="nm">Dark-vessel SAR</span></div>
+      </div>
+    </div>
+  </div>
+</div></div>
+    <figcaption>This design (1.9x)</figcaption></figure>
+</div>
+
+
+
+<h3>Filter path</h3>
+<p>Object Explorer builds a query as a stack of cards. Each carries a funnel icon, a sentence with the matched values as underlined accent chips, a remove affordance top-right, and a footer showing the narrowing as a count transition. The transition is the point of the card: it says what the step actually did.</p>
+<div class="pcmp">
+  <figure><img src="_ref/oe-filterpath.png" alt="Palantir Filter path" /><figcaption>Palantir, from the G-Cloud SDD (3x)</figcaption></figure>
+  <figure class="mine"><div class="stagein" style="transform:scale(2.3);width:43.478%"><div style="width:200px">
+  <div style="display:flex;align-items:baseline;margin-bottom:8px">
+    <span style="font-size:var(--fs-cap);color:var(--txt-2)">Filter path</span>
+    <span style="margin-left:auto;font-size:var(--fs-cap);color:var(--accent-fg)">Clear all</span></div>
+  <div class="gcard"><svg viewBox="0 0 24 24"><use href="#k-funnel"/></svg>
+    <p>Keeping contacts matching any of <button type="button" class="chip2" aria-pressed="false">Aircraft</button></p>
+    <span class="rm"><svg width="12" height="12" viewBox="0 0 24 24"><use href="#k-x"/></svg></span>
+    <div class="foot"><span>Contacts</span><b>44,408 &#8250; 12,418</b></div></div>
+  <div class="gcard"><svg viewBox="0 0 24 24"><use href="#k-funnel"/></svg>
+    <p>Keeping contacts with category matching any of <button type="button" class="chip2" aria-pressed="false">Military</button></p>
+    <span class="rm"><svg width="12" height="12" viewBox="0 0 24 24"><use href="#k-x"/></svg></span>
+    <div class="foot"><span>Contacts</span><b>12,418 &#8250; 284</b></div></div>
+  <div class="gcard"><svg viewBox="0 0 24 24"><use href="#k-funnel"/></svg>
+    <p>Keeping contacts with altitude in <button type="button" class="chip2" aria-pressed="false">FL300 to FL800</button></p>
+    <span class="rm"><svg width="12" height="12" viewBox="0 0 24 24"><use href="#k-x"/></svg></span>
+    <div class="foot"><span>Contacts</span><b>284 &#8250; 47</b></div></div>
+</div></div>
+    <figcaption>This design (2.3x)</figcaption></figure>
+</div>
+
+
+<h3>Alert queue</h3>
+<p>Channel list with collapsible groups and right-aligned counts; a header row with an overflow affordance; a filter row carrying a funnel and a grouping control. Message rows are avatar, bold subject line, detail, timestamp. Selection is a FILLED accent row here, unlike the tree where it is an outline, and unread carries a dot in the left gutter.</p>
+<div class="pcmp">
+  <figure><img src="_ref/inbox-msgs.png" alt="Palantir Alert queue" /><figcaption>Palantir, from the G-Cloud SDD (3x)</figcaption></figure>
+  <figure class="mine"><div class="stagein" style="transform:scale(1.2);width:83.333%"><div style="display:flex;width:470px;background:var(--bg-1)">
+  <div class="gchan" style="width:170px;padding:6px;border-right:1px solid var(--line)">
+    <div class="top on">All alerts</div>
+    <div class="top">Needs triage</div>
+    <div class="top">Assigned to me</div>
+    <div class="grp"><span class="tri" aria-hidden="true">&#9662;</span><span>Watchbox alerts</span><span class="n">2</span></div>
+    <div class="sub"><span>Gdansk approach</span><span class="n">2</span></div>
+    <div class="grp"><span class="tri" aria-hidden="true">&#9662;</span><span>Saved searches</span><span class="n">7</span></div>
+    <div class="sub"><span>Military over the Baltic</span><span class="n">7</span></div>
+    <div class="grp"><span class="tri" aria-hidden="true">&#9656;</span><span>Geofence</span><span class="n">0</span></div>
+    <div class="grp"><span class="tri" aria-hidden="true">&#9656;</span><span>Sharing</span><span class="n">0</span></div>
+  </div>
+  <div style="flex:1;min-width:0">
+    <div style="display:flex;align-items:center;height:26px;padding:0 10px;font-size:var(--fs-cap);color:var(--txt-0)">All alerts
+      <span style="margin-left:auto;color:var(--txt-3)">&#8943;</span></div>
+    <div style="display:flex;align-items:center;gap:8px;height:24px;padding:0 10px;border-bottom:1px solid var(--line);font-size:var(--fs-cap);color:var(--txt-2)">
+      <svg width="12" height="12" viewBox="0 0 24 24"><use href="#k-funnel"/></svg><span>Filters (0)</span>
+      <span style="margin-left:auto">No groups</span></div>
+    <div class="gmsg sel"><span class="av"></span><span class="b"><b>N612DA</b><span>Emergency squawk 7700</span><em>08:11Z</em></span></div>
+    <div class="gmsg"><span class="unread"></span><span class="av"></span><span class="b"><b>SPARTA IV</b><span>AIS gap opened, 2 h 14 m</span><em>08:26Z</em></span></div>
+    <div class="gmsg"><span class="av"></span><span class="b"><b>Gdansk approach</b><span>2 military contacts entered the box</span><em>08:39Z</em></span></div>
+  </div>
+</div></div>
+    <figcaption>This design (1.2x)</figcaption></figure>
+</div>
+
+
+<h3>Entity tabs and change history</h3>
+<p>The entity header is avatar, name, type, and an actions menu on the right. Tabs carry count badges only where a count exists, and overflow into a More menu rather than wrapping. Below, change history is a date gutter on the left against plus-marked group headers with their lines indented, and redacted values render as a grey bar rather than being omitted.</p>
+<div class="pcmp">
+  <figure><img src="_ref/inbox-tabs.png" alt="Palantir Entity tabs and change history" /><figcaption>Palantir, from the G-Cloud SDD (3x)</figcaption></figure>
+  <figure class="mine"><div class="stagein" style="transform:scale(1.1);width:90.909%"><div style="width:520px;background:var(--bg-1);padding:10px">
+  <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+    <span style="width:24px;height:24px;border-radius:2px;background:var(--bg-4);display:block"></span>
+    <span><b style="font-size:var(--fs-dense)">RYR4213</b>
+      <span style="display:block;font-size:var(--fs-cap);color:var(--txt-3)">Aircraft</span></span>
+    <span style="margin-left:auto;font-size:var(--fs-cap);color:var(--txt-2)">Actions &#9662;</span></div>
+  <div class="gtabs2">
+    <a href="#">Overview</a><a href="#">Properties</a><a href="#">Links</a>
+    <a href="#">Track <span class="cnt">412</span></a><a href="#">Correlations <span class="cnt">1</span></a>
+    <a href="#">Notes</a><a href="#">Imagery</a><a href="#" class="on">History</a>
+    <a href="#">Sources</a><a href="#">More &#9662;</a></div>
+  <div class="input" style="margin:9px 0"><span class="ph">Filter&#8230;</span></div>
+  <div class="ghist">
+    <div class="when">2026-08-01</div>
+    <div><div class="grp"><svg viewBox="0 0 24 24"><use href="#k-plus"/></svg>Added 7 position fixes</div>
+      <div class="ln">Fix from <b>OpenSky</b> at 08:41:58Z, 3 sources agreeing</div>
+      <div class="ln">Fix from <b>airplanes.live</b> at 08:42:01Z</div>
+      <div class="ln">Squawk changed from <b>2000</b> to <b>2117</b></div></div>
+    <div class="when">2026-07-31</div>
+    <div><div class="grp"><svg viewBox="0 0 24 24"><use href="#k-plus"/></svg>Added 2 enrichments</div>
+      <div class="ln">Registration resolved by <span class="redact"></span> to <b>&#8212;</b></div>
+      <div class="ln">Operator resolved to <b>Ryanair</b></div></div>
+  </div>
+</div></div>
+    <figcaption>This design (1.1x)</figcaption></figure>
+</div>
+
+
+<h3>Bottom action bar</h3>
+<p>A dropdown on the left, then a sentence describing what the current selection would do with its operative words in accent, a dismissive text link, and the primary commit button on the right. The sentence is the confirmation, so the button needs no explanation.</p>
+<div class="pcmp">
+  <figure><img src="_ref/oe-actionbar.png" alt="Palantir Bottom action bar" /><figcaption>Palantir, from the G-Cloud SDD (3x)</figcaption></figure>
+  <figure class="mine"><div class="stagein" style="transform:scale(0.95);width:105.263%"><div style="width:620px">
+  <div class="gactions">
+    <span class="btn sm">Filter contact type &#9662;</span>
+    <span class="desc"><b>Keeping</b> contacts with category matching any of <b>Military</b></span>
+    <span class="lnk">Clear selection</span>
+    <span class="btn sm accent"><svg width="13" height="13" viewBox="0 0 24 24"><use href="#k-funnel"/></svg> Add to filter path</span>
+  </div>
+</div></div>
+    <figcaption>This design (0.95x)</figcaption></figure>
+</div>
+
+
+<h2>Predicting the panels Palantir has not shown</h2>
+<p class="lead">
+  The grammar above is consistent enough to extend. Every panel below is built
+  from the same parts: a title row with a close affordance, a right-aligned icon
+  bar, uppercase group headers with a disclosure triangle and a right-aligned
+  count, 22px rows, a monospace numeric column, and selection as an outline
+  rather than a fill. None of these panels appears in the source PDFs; they are
+  what the rules produce when applied to what this product actually holds.
+</p>
+<div class="grid2">
+  <div class="stage"><div class="cap">Predicted &#183; <b>Info</b>, the map summary Gaia never shows expanded</div><div class="stagein" style="padding:0">
+    <div style="width:100%;background:var(--bg-1)">
+      <div class="ghdr"><h2>Info</h2><svg class="x" width="14" height="14" viewBox="0 0 24 24"><use href="#k-x"/></svg></div>
+      <div class="gbar"><span class="ib"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#k-sort"/></svg></span><span class="rule"></span><span class="ib"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#k-search"/></svg></span></div>
+      <div class="gtree" style="padding:10px">
+        <div class="ghead"><span class="tri" aria-hidden="true">&#9662;</span><span>Feeds</span><span class="n">11/13</span></div>
+        <div class="kids">
+          <div class="grow"><svg viewBox="0 0 24 24"><use href="#k-plane"/></svg><span class="lbl">OpenSky</span><span class="frac">12418/12418</span><span class="bar"><i class="hit" style="width:100%"></i><i style="width:0%"></i></span></div>
+          <div class="grow"><svg viewBox="0 0 24 24"><use href="#k-ship"/></svg><span class="lbl">ShipXplorer</span><span class="frac">31204/31204</span><span class="bar"><i class="hit" style="width:100%"></i><i style="width:0%"></i></span></div>
+          <div class="grow"><svg viewBox="0 0 24 24"><use href="#k-ship"/></svg><span class="lbl">MyShipTracking</span><span class="frac">0/1</span><span class="bar"><i class="hit" style="width:0%"></i><i style="width:8%"></i></span></div>
+          <div class="grow"><svg viewBox="0 0 24 24"><use href="#k-fire"/></svg><span class="lbl">NASA FIRMS</span><span class="frac">14818/14818</span><span class="bar"><i class="hit" style="width:100%"></i><i style="width:0%"></i></span></div>
+        </div>
+        <div class="ghead"><span class="tri" aria-hidden="true">&#9662;</span><span>Render</span><span class="n">58 fps</span></div>
+        <div class="kids"><dl class="kv" style="padding:2px 0">
+          <dt>Renders per second</dt><dd>6.0</dd>
+          <dt>Push drain</dt><dd>41 ms</dd>
+          <dt>Cesium data sources</dt><dd>78</dd></dl></div>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="stage"><div class="cap">Predicted &#183; <b>Series</b>, the panel the reference names but never pictures</div><div class="stagein" style="padding:0">
+    <div style="width:100%;background:var(--bg-1)">
+      <div class="ghdr"><h2>Series</h2><svg class="x" width="14" height="14" viewBox="0 0 24 24"><use href="#k-x"/></svg></div>
+      <div class="gbar"><span class="ib"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#k-sort"/></svg></span><span class="ib"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#k-collapse"/></svg></span><span class="rule"></span><span class="ib"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#k-search"/></svg></span></div>
+      <div class="gtree" style="padding:10px">
+        <div class="ghead"><span class="tri" aria-hidden="true">&#9662;</span><span>RYR4213</span><span class="n">60 min</span></div>
+        <div class="kids" style="padding-top:4px">
+          <div style="display:flex;justify-content:space-between;font-size:var(--fs-cap);color:var(--txt-2)"><span>Altitude</span><span class="mono">9,754 m</span></div>
+          <svg class="spark" viewBox="0 0 320 44" preserveAspectRatio="none" style="height:44px">
+            <polygon class="fill" points="0,42 40,36 80,26 120,18 160,13 200,10 240,9 280,8 320,8 320,44 0,44"/>
+            <polyline points="0,42 40,36 80,26 120,18 160,13 200,10 240,9 280,8 320,8"/></svg>
+          <div style="display:flex;justify-content:space-between;font-size:var(--fs-cap);color:var(--txt-2);margin-top:8px"><span>Ground speed</span><span class="mono">449 kn</span></div>
+          <svg class="spark mag" viewBox="0 0 320 44" preserveAspectRatio="none" style="height:44px">
+            <polyline points="0,38 40,30 80,23 120,18 160,16 200,18 240,15 280,15 320,16"/></svg>
+        </div>
+        <div class="ghead"><span class="tri" aria-hidden="true">&#9662;</span><span>Coverage</span><span class="n">47/60</span></div>
+        <div class="kids"><div class="more" style="text-align:left;color:var(--warn-fg)">13 minutes not recorded. The chart does not interpolate across the gap.</div></div>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<h2>What this changed</h2>
+<table class="t">
+  <thead><tr><th>Component</th><th>Before</th><th>After</th></tr></thead>
+  <tbody>
+    <tr><td>Context menu</td><td>did not exist</td><td>section headers, 24px rows, icons, submenu chevrons, separators</td></tr>
+    <tr><td>Histogram</td><td>label, plain track, count on the right</td><td>grouped tree, disclosure triangles, type icons, monospace fraction, two-tone bar, outlined selection</td></tr>
+    <tr><td>Toolbar</td><td>a row of bare icons</td><td>labelled groups divided by hairlines, split buttons with chevrons</td></tr>
+    <tr><td>Panel header</td><td>title and a badge</td><td>title with close, then a right-aligned icon bar with a rule before search</td></tr>
+    <tr><td>Tabs</td><td>text only</td><td>icon plus label, accent underline, accent-tinted active icon</td></tr>
+    <tr><td>Icons</td><td>mixed weights</td><td>one family, 1.5px stroke, 15px, monochrome, inheriting colour</td></tr>
+  </tbody>
+</table>
+
+<div class="note warn">
+  Still not matched, and it will not be from a static mockup: Gaia's basemap is
+  Mapbox Streets and Satellite, real aerial imagery with roads, place labels and
+  highway shields. That closes with a real tile layer in the app, not here.
+</div>
+</div>
+</body>
+</html>

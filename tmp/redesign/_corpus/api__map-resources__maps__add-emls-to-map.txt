@@ -1,0 +1,24 @@
+Add Enterprise Map Layers To Map POST /api/gotham/v1/maps/{mapRid}/layers/emls Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Add enterprise map layers to a map. If unknown enterprise map layers or enterprise map layers that don't
+satisfy the security requirements are provided, the entire request will fail. For each request, a new layer
+is created for each enterprise map layer provided, thus not idempotent.
+Returns the IDs of the layers created. Path parameters mapRid string The RID of the Gaia map that you wish to add objects to. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body AddEnterpriseMapLayersToMapRequest object The request body to add enterprise map layers to a map Hide child attributes Hide child attributes Expand all emlIds list<EmlId> optional The IDs of the enterprise map layers to be added to the map. Show child attributes Show child attributes Response body AddEnterpriseMapLayersToMapResponse object Success response. Hide child attributes Hide child attributes Expand all dataLayerIds list<GaiaLayerId> optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/maps/ri.gaia..map.a1A2bcD3e45fg6h7ij/layers/emls?preview=true" \
+ -d '{"emlIds":["0123456789012345678901234567890123456789012345678901234567890123",1234567890123456789012345678901234567890123456789012345678901234]}' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ {
+ "dataLayerIds": [
+ "exampleLayerId"
+ ]
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

@@ -1,0 +1,115 @@
+Search objects POST /api/gotham/v1/objects/types/{objectType}/search Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Search for objects of the given object type. The request body is used
+to filter objects based on the specified query. The supported queries are: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Query type Description empty Apply no filter (i.e., list all objects of type objectType). eq Filter objects that have the exact value for the provided property and Filter objects that match all the provided queries or Filter objects that match at least one of the provided queries keyword The objects' contents match the specified keyword query lt Filter objects where the provided property is less than the provided value gt Filter objects where the provided property is greater than the provided value lte Filter objects where the provided property is less than or equal to the provided value gte Filter objects where the provided property is greater than or equal to the provided value not Filter objects that do not match the provided query geoPointWithin Filter objects whose intrinsic coordinates are within the provided polygon 
+ For more details about available queries,
+see search query types . Path parameters objectType string The type of the requested objects to search for. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body SearchObjectsRequest object Search request to issue against the RevDB Object Index for finding and returning objects.
+ query is required, and represents the query to execute when searching for objects. 
+ pageSize and pageToken are optional and are used for pagination of large result sets;
+see the Paging instructions for more information. 
+ If not specified, pageSize defaults to a page size of 100 results; 100 is also the maximum allowed page size. 
+ Specifying an invalid page size results in an InvalidPageSize general error . Hide child attributes Hide child attributes Expand all query union Show child attributes Show child attributes pageSize integer optional The page size to use for the endpoint. pageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request.
+To fetch the next page, clients should take the value from the nextPageToken field of the previous response
+and populate the next request's pageToken field with it. Response body SearchObjectsResponse object Search Result Payload Hide child attributes Hide child attributes Expand all data list<GothamOntologyObject> optional Show child attributes Show child attributes nextPageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request.
+To fetch the next page, clients should take the value from the nextPageToken field of the previous response
+and populate the next request's pageToken field with it. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/types/com.palantir.object.person/search?preview=true" \
+ -d '{"query":{"type":"and","value":[{"type":"eq","field":"com.palantir.property.name:FIRST_NAME","value":"John"},{"type":"gte","field":"com.palantir.property.age","value":24}]}}' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ {
+ "data": [
+ {
+ "primaryKey": "ri.gotham.111111-0.object-internal.111111",
+ "objectType": "com.palantir.object.person",
+ "properties": {
+ "com.palantir.property.name": [
+ {
+ "FIRST_NAME": "John",
+ "LAST_NAME": "Smith"
+ }
+ ],
+ "com.palantir.property.age": [
+ 37
+ ]
+ }
+ }
+ ]
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

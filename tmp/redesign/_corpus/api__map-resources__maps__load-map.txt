@@ -1,0 +1,49 @@
+Load a Map GET /api/gotham/v1/maps/load/{mapGid} Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Loads the structure and basic metadata of a Gaia map, given a map GID. Metadata includes the map's title and
+layer labels. 
+ The response contains a mapping of all layers contained in the map. The map's layer hierarchy can be recreated
+by using the rootLayerIds in the response along with the subLayerIds field in the layer's metadata. Path parameters mapGid string The GID of the map to be loaded. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Response body LoadMapResponse object A successful map load response. Hide child attributes Hide child attributes Expand all title string The title of the loaded Gaia map. rootLayerIds list<GaiaLayerId> optional The root layers of the loaded Gaia map. This does not include sub-layers, i.e. layers nested within a parent
+layer in a Gaia map. Show child attributes Show child attributes layers map<GaiaLayerId, GaiaLayerMetadata> optional A mapping of all the layers contained in the Gaia map. Includes layers nested under the root layers. Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/maps/load/ri.gotham-artifact.0-1.gaia-map.a1A2bcD3e45fg6h7ij?preview=true" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ {
+ "title": "Example Gaia Map Title",
+ "rootLayerIds": [
+ "exampleRootLayerId"
+ ],
+ "layers": {
+ "exampleRootLayerId": {
+ "id": "exampleRootLayerId",
+ "subLayerIds": [
+ "exampleNestedLayerId"
+ ],
+ "label": "Root layer label"
+ },
+ "exampleNestedLayerId": {
+ "id": "exampleNestedLayerId",
+ "label": "Nested layer label"
+ }
+ }
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Response body Examples Request Response

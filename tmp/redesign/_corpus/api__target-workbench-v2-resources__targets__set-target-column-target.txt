@@ -1,0 +1,20 @@
+Set Target Column Target PUT /api/v2/targetWorkbench/targets/{targetRid}/setTargetColumn Move a Target into a TargetBoardColumn from an old column. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-write . Path parameters targetRid string The unique identifier for a Target Request body SetTargetColumnTargetRequest object Hide child attributes Hide child attributes Collapse all boardRid string The unique identifier for a Target Board newColumnId string Equivalent to a collection column ID. The ID of a TargetCollectionColumn, default values are:
+DRAFT (Identified target), PLAN_DEVELOPMENT (Prioritized target), PLANNED (In coordination), EXECUTION (In execution), CLOSED (Complete). baseRevisionId string The version of Target Board you are working with.
+The set operation will be transformed against any concurrent operations
+made since this version. If there are any conflicting edits that result in changes to
+these operations when they're applied, that will be noted in the response. clientId string optional The client id is used to identify conflicting edits made by the same client,
+typically due to retries, and discard them. Clients should choose an arbitrary random
+identifier to distinguish themselves. There is no need persist and re-use the same
+client id over multiple sessions. 
+ The client id is also used to avoid broadcasting operations to the client who
+submitted them. Response body EmptySuccessResponse any An empty response object indicating the request was successful. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/targets/ri.gotham-artifact.0-0.target.example/setTargetColumn" \
+ -d '{"clientId":"123e4567-e89b-12d3-a456-426614174000","boardRid":"ri.gotham-artifact.0-0.target-board.example","baseRevisionId":1,"newColumnId":"CLOSED"}' Error responses Error Name Target Not On Target Board Error Code INVALID_ARGUMENT Status Code 400 Description Target must be located on the request target board. Parameters targetRid, boardRid Revision Outdated Error Code INVALID_ARGUMENT Status Code 400 Description The provided revision id is behind the current id. Parameters id, revisionId Set Target Column Target Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not setTargetColumn the Target. Parameters targetRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Request body Response body Examples Request Response Error responses

@@ -1,0 +1,19 @@
+Map as a WFS Source /ogc/api/map/{mapGid}/wfs 
+ Web Feature Service (WFS) is an OGC standard that allows clients to request geographical features from servers. This endpoint sets up a Gaia map as a WFS source; all geographical features in that map will be exposed as a WFS feature. The following WFS operations are supported by this endpoint: 
+ 
+ GetCapabilities 
+ DescribeFeatureType 
+ GetFeature 
+ 
+ Map features will be exposed as a single WFS type: GaiaGeoFeature . The endpoint supports GET and POST requests for WFS versions 1.1.0 and 2.00. More information on the WFS specification can be found here . 
+ Authorization 
+ The preferred mode of sending the bearer token would be setting it in the Authorization request headers as standard. However, this is not possible in some client applications. We support the following alternative authentication schemes: 
+ 
+ Using ESRI Token authentication. This sets the bearer token in the X-Esri-Authentication request header. 
+ Providing the bearer token as a PALANTIR_TOKEN query parameter. 
+ 
+ Path parameters 
+ mapGid: String 
+ The Gaia map identifier that will be exposed as a WFS source. 
+ Example integration with QGIS 
+ When adding a WFS layer in QGIS, add the complete endpoint URL, i.e. https://{url}/ogc/api/map/{mapGid}/wfs . Select ESRI token as the authentication configuration type and add your bearer token. Although this sends the token as X-Esri-Authentication in the request headers, this is handled as a Authorization header. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Map as a WFS Source Authorization Path parameters Example integration with QGIS
