@@ -1,0 +1,8 @@
+Get media content GET /api/gotham/v1/media/{mediaRid}/content Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Get the content of media. Path parameters mediaRid string The RID of the media. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Response body body string Success response. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/media/ri.gotham.111111-0.media-internal.111111.xtdsXlRMFmRRUdwQsD2kZOYOLY_2FS0VQ9SviNM6AJ_2FJM_3D/content?preview=true" © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Response body Examples Request Response

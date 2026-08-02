@@ -206,8 +206,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # earlier start() raises, and would NameError on an unbound handle.
     adsb_supervise_task: asyncio.Task[None] | None = None
     ais_supervise_task: asyncio.Task[None] | None = None
+    warp_supervise_task: asyncio.Task[None] | None = None
+    browser_fetch_supervise_task: asyncio.Task[None] | None = None
     try:
         if background:
+            # Cloudflare WARP egress FIRST: it publishes the loopback SOCKS5 port
+            # that app.upstream mounts and that the browser tiers below inherit,
+            # so it has to exist before the first client is built. Keyless, no
+            # login, OFF unless warp_enabled. Best-effort — a missing warp-cli
+            # logs the install command and everything runs unproxied as before.
+            if settings.warp_enabled:
+                from app import warp  # noqa: PLC0415
+
+                await warp.ensure()
+                warp_supervise_task = asyncio.create_task(
+                    warp.supervise(), name="warp_supervise"
+                )
+            # Generic real-Chrome fetch tier (:8095) for URLs no HTTP client can
+            # reach. OFF by default; a third Chromium tier is not free.
+            if settings.browser_fetch_enabled:
+                from app import browser_fetch  # noqa: PLC0415
+
+                await browser_fetch.start()
+                browser_fetch_supervise_task = asyncio.create_task(
+                    browser_fetch.supervise(), name="browser_fetch_supervise"
+                )
             # Headless-browser tar1090 sidecar: a real Chromium clears the
             # Cloudflare 403 that blocks server httpx from airplanes.live and
             # reads its g.planesOrdered store (~13k @ ~0.4s) served on localhost.
@@ -468,6 +491,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 except asyncio.CancelledError:
                     pass
             await ais_sidecar.stop()
+            # Tear down the generic browser fetch tier, then WARP (in that order:
+            # the browser egresses through the tunnel). Supervision is cancelled
+            # BEFORE each stop() or it races the teardown and respawns it.
+            if browser_fetch_supervise_task is not None:
+                browser_fetch_supervise_task.cancel()
+                try:
+                    await browser_fetch_supervise_task
+                except asyncio.CancelledError:
+                    pass
+            from app import browser_fetch  # noqa: PLC0415
+
+            await browser_fetch.stop()
+            if warp_supervise_task is not None:
+                warp_supervise_task.cancel()
+                try:
+                    await warp_supervise_task
+                except asyncio.CancelledError:
+                    pass
+            from app import warp  # noqa: PLC0415
+
+            await warp.stop()
             # Tear down the MAVLink bridge (no-op if it never started).
             from app import mavlink_sidecar  # noqa: PLC0415
 

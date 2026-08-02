@@ -1,0 +1,14 @@
+Load Layers Map PUT /api/v2/gaia/maps/{mapRid}/loadLayers Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Loads the elements contained in the requested layers of a Gaia map. The response includes the geometries
+associated with the elements. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:map-read . Path parameters mapRid string The RID of a Gaia map. Query parameters preview boolean optional Enables the use of preview functionality. Request body LoadLayersMapRequest object Hide child attributes Hide child attributes Expand all layerIds list<GaiaLayerId> optional The set of layer IDs to load from a Gaia map. Show child attributes Show child attributes Response body LoadLayersResponse object Hide child attributes Hide child attributes Expand all layers map<GaiaLayerId, GaiaLayer> optional A mapping of the requested layer IDs to a Gaia layer. Any invalid layer IDs will be omitted from this field. Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/gaia/maps/ri.gotham-artifact.0-1.gaia-map.a1A2bcD3e45fg6h7ij/loadLayers?preview=true" \
+ -d '{"layerIds":[1,2,3]}' Error responses Error Name Load Layers Map Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not loadLayers the Map. Parameters mapRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response Error responses

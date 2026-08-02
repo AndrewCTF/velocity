@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Velocity redesign · States and keyboard</title>
+<link rel="stylesheet" href="mock.css" />
+<style>
+  .four { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--sp-4); }
+  .kbdtable td:first-child { white-space: nowrap; width: 1%; }
+  .kbdtable kbd + kbd { margin-left: 4px; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="00-index.html">Board</a>
+  <a href="a-panel-parity.html">A · Panel parity</a>
+  <a href="b-verb-first.html">B · Verb first</a>
+  <a href="c-palette-first.html">C · Palette first</a>
+  <a href="panels.html">Panels</a>
+  <a href="gotham-parity.html">Gotham parity</a>
+  <a href="foundry.html">Foundry</a>
+  <a href="components.html">Components</a>
+  <a href="rehoming.html">Re-homing</a>
+  <a href="states.html" class="on">States and keyboard</a>
+</nav>
+
+<div class="doc">
+
+<h1>States and keyboard</h1>
+<p class="lead">
+  Ease of use is mostly what a surface does when it has nothing to show. This page
+  fixes the four states every panel must have, the one place Escape is handled, and
+  the complete keyboard registry. It is the part of the redesign that is a contract
+  rather than a look.
+</p>
+
+<h2>Four states, because three was not enough</h2>
+<p>
+  <code>docs/frontend.md:147</code> already requires loading, empty and error to be
+  three distinct states, and <code>layer-rail/OpsPanel.test.tsx:34</code> already
+  guards it: a healthy 200 that returns nothing must render a real empty result, and
+  a non-2xx must say <code>unavailable (HTTP &lt;code&gt;)</code> rather than a
+  confident zero. Two persona waves found silent failure anyway, because the real
+  case was missing: <b>degraded</b>, where the surface has some data and is quietly
+  missing the rest.
+</p>
+
+<div class="four">
+  <div class="stage">
+    <div class="cap">Loading</div>
+    <div class="in">
+      <div class="sech"><h3>Vessels</h3><span class="ct">loading…</span></div>
+      <div class="skel" style="width:88%"></div>
+      <div class="skel" style="width:64%"></div>
+      <div class="skel" style="width:79%"></div>
+      <div class="skel" style="width:52%"></div>
+      <p style="font-size:var(--fs-cap);color:var(--txt-3);margin-top:var(--sp-3)">
+        The shape of the answer, not a spinner. Lowercase <code>loading…</code>
+        stays: that register is deliberate.
+      </p>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="cap">Empty · the feed answered</div>
+    <div class="in">
+      <div class="state">
+        <b>No vessels in view</b>
+        <p>The feed answered normally and reported nothing inside this box. Zoom out
+           or widen the time window.</p>
+        <button class="btn sm">Clear the box</button>
+      </div>
+      <p style="font-size:var(--fs-cap);color:var(--txt-3);margin-top:var(--sp-3)">
+        It says the feed worked. This is the state the current UI cannot tell apart
+        from an outage.
+      </p>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="cap">Error · the feed did not answer</div>
+    <div class="in">
+      <div class="state error">
+        <b>Vessels unavailable (HTTP 503)</b>
+        <p>The upstream did not answer. The last good fix was 4 minutes ago and is
+           still on the globe, marked stale.</p>
+        <button class="btn sm">Retry</button>
+      </div>
+      <p style="font-size:var(--fs-cap);color:var(--txt-3);margin-top:var(--sp-3)">
+        A sentence that keeps the code. Never <code>cams 503</code>.
+      </p>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="cap">Degraded · partly answered</div>
+    <div class="in">
+      <div class="state warn">
+        <b>Showing 2 of 3 sources</b>
+        <p>ShipXplorer is answering. The MyShipTracking sidecar has been silent for
+           6 minutes, so counts here read low.</p>
+        <button class="btn sm">What is missing</button>
+      </div>
+      <p style="font-size:var(--fs-cap);color:var(--txt-3);margin-top:var(--sp-3)">
+        The state two persona waves asked for by name. A low count must never look
+        like a quiet world.
+      </p>
+    </div>
+  </div>
+</div>
+
+<h3>Applied per surface</h3>
+<table class="t">
+  <thead><tr><th>Surface</th><th>Loading</th><th>Empty</th><th>Error</th><th>Degraded</th></tr></thead>
+  <tbody>
+    <tr><td>Layer row</td><td>count reads <code>loading…</code></td><td>count reads <code>0</code>, dot green</td><td>count reads <code>—</code>, dot red, reason in the row</td><td>count shown, dot amber, "1 of 2 sources"</td></tr>
+    <tr><td>Selection</td><td>skeleton card stack</td><td>"No entity selected. Click an object on the globe."</td><td>"Details unavailable (HTTP 502)"</td><td>card renders; the missing enrichment block says what is absent</td></tr>
+    <tr><td>Series</td><td>axis with a skeleton line</td><td>"No history recorded for this contact yet"</td><td>"History unavailable (HTTP 500)"</td><td>"12 of 60 minutes recorded"</td></tr>
+    <tr><td>Histogram</td><td>bars at zero width</td><td>"No contacts match the current filters"</td><td>"Facets unavailable"</td><td>"Computed from 8,000 of 13,204 contacts"</td></tr>
+    <tr><td>Find</td><td>three skeleton rows</td><td>"Nothing matches <span class="mono">nordic sta</span>"</td><td>"Search unavailable (HTTP 429). Try again in a moment."</td><td>"Objects only. OSINT lookups need a key."</td></tr>
+    <tr><td>Foundry dataset</td><td>skeleton table</td><td>"This dataset has no rows yet. Upload a file to start."</td><td>"Build failed. See the dead letter tab for 4 quarantined rows."</td><td>"Built, 27 rows quarantined"</td></tr>
+    <tr><td>Globe layer</td><td>contacts fade in</td><td>layer row shows <code>0</code></td><td>layer row red, the row names the reason</td><td>layer row amber</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  A value that was never reported renders as a lone <b>—</b>. That is the never-guess
+  rule and it is guarded by <code>entity-panel/placeCards.test.tsx</code>. It is not
+  an em dash to be tidied away.
+</div>
+
+<h2>Escape, in one place</h2>
+<p>
+  Four separate components bind Escape today and none knows about the others. One
+  handler, one documented order, taken from the existing z-scale. Escape dismisses
+  the topmost live layer and stops.
+</p>
+<table class="t">
+  <thead><tr><th>Order</th><th>Layer</th><th>Escape does</th><th>Token</th></tr></thead>
+  <tbody>
+    <tr><td class="num">1</td><td>First-run gate</td><td>nothing. Onboarding is never dismissed by accident</td><td class="mono">--z-wizard</td></tr>
+    <tr><td class="num">2</td><td>Modal or slide-over</td><td>closes it and restores focus to whatever opened it</td><td class="mono">--z-modal</td></tr>
+    <tr><td class="num">3</td><td>Dropdown or context menu</td><td>closes it</td><td class="mono">--z-dropdown</td></tr>
+    <tr><td class="num">4</td><td>Full-screen app</td><td>returns to the map, app state preserved</td><td class="mono">--z-overlay</td></tr>
+    <tr><td class="num">5</td><td>Active map tool</td><td>returns to Pan and discards the shape in progress</td><td class="mono">--z-dock</td></tr>
+    <tr><td class="num">6</td><td>Selection</td><td>clears it</td><td class="mono">--z-map</td></tr>
+  </tbody>
+</table>
+
+<h2>Keyboard registry</h2>
+<p>
+  One file declares every binding, the help sheet is generated from it, and the
+  palette shows a binding next to any action that has one. Today the bindings live in
+  12 unrelated <code>addEventListener('keydown')</code> sites, which is why no help
+  sheet can exist and why collisions are invisible.
+</p>
+
+<h3>Global</h3>
+<table class="t kbdtable">
+  <thead><tr><th>Keys</th><th>Action</th><th>Today</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>⌘K</kbd></td><td>Command palette</td><td>exists, indexes layers and entities only</td></tr>
+    <tr><td><kbd>?</kbd></td><td>Show every shortcut</td><td>new</td></tr>
+    <tr><td><kbd>⌘,</kbd></td><td>Open settings</td><td>new, button only today</td></tr>
+    <tr><td><kbd>⌘J</kbd></td><td>Analyst console</td><td>exists</td></tr>
+    <tr><td><kbd>/</kbd></td><td>Focus find</td><td>exists</td></tr>
+    <tr><td><kbd>esc</kbd></td><td>Dismiss the topmost layer</td><td>4 conflicting handlers today</td></tr>
+  </tbody>
+</table>
+
+<h3>Navigation</h3>
+<table class="t kbdtable">
+  <thead><tr><th>Keys</th><th>Action</th><th>Today</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></td><td>Layers · Find · Histogram · Info</td><td>new</td></tr>
+    <tr><td><kbd>⌘1</kbd> to <kbd>⌘9</kbd></td><td>Jump to an app</td><td>new</td></tr>
+    <tr><td><kbd>⇧esc</kbd></td><td>Return to the map from any app</td><td>new</td></tr>
+    <tr><td><kbd>⌘B</kbd> / <kbd>⌘⇧B</kbd></td><td>Collapse the left / right panel</td><td>new, drag only today</td></tr>
+    <tr><td><kbd>a</kbd></td><td>Alerts</td><td>exists</td></tr>
+    <tr><td><kbd>i</kbd></td><td>Inbox</td><td>new</td></tr>
+  </tbody>
+</table>
+
+<h3>Map tools</h3>
+<table class="t kbdtable">
+  <thead><tr><th>Keys</th><th>Action</th><th>Today</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>h</kbd></td><td>Pan</td><td>reachable via Escape only</td></tr>
+    <tr><td><kbd>v</kbd></td><td>Select</td><td>new</td></tr>
+    <tr><td><kbd>r</kbd></td><td>Search around</td><td>right-click only today</td></tr>
+    <tr><td><kbd>d</kbd></td><td>Draw</td><td>new</td></tr>
+    <tr><td><kbd>c</kbd></td><td>Capture</td><td>no map entry point today</td></tr>
+    <tr><td><kbd>m</kbd></td><td>Measure</td><td>exists</td></tr>
+    <tr><td><kbd>n</kbd></td><td>Annotate</td><td>exists</td></tr>
+    <tr><td><kbd>⌫</kbd></td><td>Delete the selected map item</td><td>does not exist today</td></tr>
+    <tr><td><kbd>g</kbd> <kbd>c</kbd> <kbd>2</kbd></td><td>Scene mode 3D · Columbus · 2D</td><td>specified in frontend.md, never bound</td></tr>
+  </tbody>
+</table>
+
+<h3>Time</h3>
+<table class="t kbdtable">
+  <thead><tr><th>Keys</th><th>Action</th><th>Today</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>space</kbd></td><td>Play or pause</td><td>specified, never bound</td></tr>
+    <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Step one frame</td><td>specified, never bound</td></tr>
+    <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>Speed down and up the 1 to 3600 ladder</td><td>new</td></tr>
+    <tr><td><kbd>l</kbd></td><td>View latest</td><td>new</td></tr>
+    <tr><td><kbd>t</kbd></td><td>Expand or collapse the time dock</td><td>new</td></tr>
+  </tbody>
+</table>
+
+<h3>Selection</h3>
+<table class="t kbdtable">
+  <thead><tr><th>Keys</th><th>Action</th><th>Today</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>⌘A</kbd></td><td>Select all in view</td><td>new, needs multi-select</td></tr>
+    <tr><td><kbd>⌘I</kbd></td><td>Invert selection</td><td>new, needs multi-select</td></tr>
+    <tr><td><kbd>⌘⇧A</kbd></td><td>Clear selection</td><td>new</td></tr>
+    <tr><td><kbd>f</kbd></td><td>Flag selected</td><td>specified, never bound</td></tr>
+    <tr><td><kbd>⌘⇧F</kbd></td><td>Follow selected</td><td>button only</td></tr>
+  </tbody>
+</table>
+
+<h3>Lists and editors</h3>
+<table class="t kbdtable">
+  <thead><tr><th>Keys</th><th>Action</th><th>Today</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>Move down and up</td><td>exists, inbox only</td></tr>
+    <tr><td><kbd>g</kbd> <kbd>G</kbd></td><td>First and last</td><td>exists, inbox only</td></tr>
+    <tr><td><kbd>e</kbd></td><td>Archive</td><td>exists</td></tr>
+    <tr><td><kbd>⌘Z</kbd> <kbd>⌘⇧Z</kbd></td><td>Undo and redo an annotation</td><td>exists</td></tr>
+    <tr><td><kbd>⌘↵</kbd></td><td>Run query</td><td>exists, Foundry workbench</td></tr>
+  </tbody>
+</table>
+
+<h2>The help sheet</h2>
+<p>Pressing <kbd>?</kbd> renders the registry, filtered to what is live in the current context.</p>
+
+<div class="stage">
+  <div class="cap">Overlay · <kbd>?</kbd></div>
+  <div class="in" style="background:var(--bg-0)">
+    <div style="max-width:660px;margin:0 auto;border-radius:var(--r-lg);background:var(--bg-1);box-shadow:var(--sh-2);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)">
+        <b style="font-size:var(--fs-lg)">Keyboard shortcuts</b>
+        <span class="badge">42 bindings</span>
+        <span style="flex:1"></span>
+        <span style="font-size:var(--fs-cap);color:var(--txt-3)">context: map</span>
+      </div>
+      <div style="padding:var(--sp-4) 20px;display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-5)">
+        <div>
+          <div class="sech"><h3>Global</h3></div>
+          <dl class="kv">
+            <dt>Command palette</dt><dd>⌘K</dd>
+            <dt>This sheet</dt><dd>?</dd>
+            <dt>Settings</dt><dd>⌘,</dd>
+            <dt>Analyst console</dt><dd>⌘J</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="sech"><h3>Map tools</h3></div>
+          <dl class="kv">
+            <dt>Select</dt><dd>V</dd>
+            <dt>Search around</dt><dd>R</dd>
+            <dt>Draw</dt><dd>D</dd>
+            <dt>Measure</dt><dd>M</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="pfoot"><span>Filtered to what works right now</span><span style="flex:1"></span><span><kbd>esc</kbd> close</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>Palette states</h2>
+<div class="four">
+  <div class="stage"><div class="cap">Opened, no query</div><div class="in">
+    <div class="pgroup">Recent</div>
+    <div class="pitem" role="option" tabindex="0"><span class="pi-n">Targeting</span><span class="pi-h">app</span></div>
+    <div class="pitem" role="option" tabindex="0"><span class="pi-n">Baltic approaches</span><span class="pi-h">area</span></div>
+    <div class="pgroup">Suggested</div>
+    <div class="pitem" role="option" tabindex="0"><span class="pi-n">Aircraft · Military</span><span class="pi-h">layer, off</span></div>
+    <p style="font-size:var(--fs-cap);color:var(--txt-3);margin-top:var(--sp-3)">Never blank. An empty palette teaches nothing.</p>
+  </div></div>
+
+  <div class="stage"><div class="cap">Searching</div><div class="in">
+    <div class="skel" style="width:72%"></div><div class="skel" style="width:56%"></div><div class="skel" style="width:64%"></div>
+    <p style="font-size:var(--fs-cap);color:var(--txt-3);margin-top:var(--sp-3)">
+      Local results appear immediately. Only the live entity lookup can be slow, and
+      it fills in under its own group.
+    </p>
+  </div></div>
+
+  <div class="stage"><div class="cap">No match</div><div class="in">
+    <div class="state"><b>Nothing matches <span class="mono">zzq</span></b>
+      <p>Try a callsign, an MMSI, a place, a layer name, or a coordinate.</p></div>
+  </div></div>
+
+  <div class="stage"><div class="cap">Partly available</div><div class="in">
+    <div class="pgroup">Apps · 2</div>
+    <div class="pitem" role="option" tabindex="0"><span class="pi-n">Investigate</span><span class="pi-h">app</span></div>
+    <div class="pgroup">Contacts</div>
+    <div class="state warn"><b>Live lookup unavailable (HTTP 429)</b>
+      <p>Apps, panels, layers and settings still match.</p></div>
+  </div></div>
+</div>
+
+<h2>First run</h2>
+<p>
+  The persona studies found new users do not know where to start, and the reference
+  names Walkthroughs as the Palantir answer. The redesign keeps the existing
+  four-step gate and adds one thing that matters more: the palette affordance is a
+  visible, labelled control in the top bar at all times, so the primary navigation is
+  never invisible.
+</p>
+
+</div>
+</body>
+</html>

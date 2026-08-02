@@ -1,0 +1,12 @@
+Unlink tracks POST /api/gotham/v1/tracks/unlinkTracks Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Unlinks a Geotime Track from another Track, removing any "pointers" between the Tracks. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body UnlinkTracksRequest object A request to unlink a Geotime Track from another Track. Hide child attributes Hide child attributes Collapse all trackRid string Globally unique identifier for a Geotime Track. This is synonymous with a Gotham Identifier and contains information like SourceSystemId, CollectionId, SpecId and TrackId. otherTrackRid string Globally unique identifier for a Geotime Track. This is synonymous with a Gotham Identifier and contains information like SourceSystemId, CollectionId, SpecId and TrackId. Response body EmptySuccessResponse object A successful response means that the Tracks have been unlinked. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/tracks/unlinkTracks?preview=true" \
+ -d '[{"trackRid":"ri.gotham.1-1.geotime-track.foo.bar.baz.track0","otherTrackRid":"ri.gotham.1-1.geotime-track.foo.bar.baz.track1"}]' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Request body Response body Examples Request Response

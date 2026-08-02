@@ -201,7 +201,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
 
       {/* scale bar — bottom-left above the coords */}
       {scale && (
-        <div className="hidden md:block absolute bottom-[62px]" style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)' }}>
+        <div className="hidden md:block absolute bottom-[62px] map-foot-item-2" style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)' }}>
           <div
             className="h-[5px]"
             style={{
@@ -217,7 +217,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
 
       {/* cursor + selection coordinates — bottom-left */}
       <div
-        className="hidden md:block absolute bottom-[14px] text-[10px] text-txt-2 leading-[1.7]"
+        className="hidden md:block absolute bottom-[14px] map-foot-item text-[10px] text-txt-2 leading-[1.7]"
         style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)' }}
       >
         <div>
@@ -234,7 +234,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
 
       {/* projection / center / zoom — bottom-right, hugs the live right rail */}
       <div
-        className="hidden md:block absolute bottom-[14px] text-[10px] text-txt-3 tracking-[0.5px] text-right leading-[1.7]"
+        className="hidden md:block absolute bottom-[14px] map-foot-item text-[10px] text-txt-3 tracking-[0.5px] text-right leading-[1.7]"
         style={{ right: 'calc(var(--rail-right-w, 360px) + 12px)' }}
       >
         <div>

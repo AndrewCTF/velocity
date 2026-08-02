@@ -278,9 +278,12 @@ export function buildAreas(kind: AreaKind, json: unknown): Area[] {
         glyph: sym.glyph,
         color: sym.color,
         pulse: sym.pulse,
-        // Only the prominent cells get a text label (keeps the map readable).
+        // Only the genuinely prominent cells get a text label. The threshold was
+        // 6 mentions, which labelled hundreds of cells across Europe at once;
+        // the glyph still marks every cell and the panels still list them all,
+        // so raising it hides no data, only text.
         // strip the per-event "(Nx)" the backend baked in, show the merged total.
-        label: v.ment >= 6 ? `${v.label.replace(/\s*\(\d+x\)\s*$/, '')} (${v.ment}x)`.slice(0, 80) : '',
+        label: v.ment >= 20 ? `${v.label.replace(/\s*\(\d+x\)\s*$/, '')} (${v.ment}x)`.slice(0, 80) : '',
         radiusM: v.rad,
         iso3: v.iso3,
         shapeLevel: v.lvl,
@@ -530,7 +533,16 @@ export class AreaAdapter implements LayerAdapter {
           pixelOffset: new Cesium.Cartesian2(0, -16),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          translucencyByDistance: new Cesium.NearFarScalar(2.0e6, 1.0, 2.0e7, 0.0),
+          // A HARD cull, not just a fade. translucencyByDistance alone only
+          // began fading at 2 000 km and reached zero at 20 000 km, so at any
+          // normal working altitude every labelled cell in Europe drew at full
+          // opacity at once and the map became a wall of overlapping text.
+          // Aircraft labels have carried a 400 km distanceDisplayCondition for
+          // exactly this reason (labelStyle.ts); event labels never got one.
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 9.0e5),
+          translucencyByDistance: new Cesium.NearFarScalar(5.0e5, 1.0, 9.0e5, 0.0),
+          // Let Cesium drop a label rather than overprint one already drawn.
+          disableDepthTestDistance: 0,
         };
       }
       const ent = this.ds.entities.add(opts);

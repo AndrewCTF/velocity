@@ -1,0 +1,14 @@
+Create a Target Board POST /api/gotham/v1/twb/targetBoard By default, create a TargetBoard with default columns: IDENTIFIED TARGET, PRIORITIZED TARGET, IN COORDINATION, IN EXECUTION, COMPLETE.
+Returns the RID of the created TargetBoard. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body CreateTargetBoardRequestV2 object The request body to create a Target Board Hide child attributes Hide child attributes Expand all name string description string optional highPriorityTargetList string optional configuration object optional Configuration for the target board. If present, must have at least one column Show child attributes Show child attributes security object Security mutation details for a target, target board, or hptl.
+Specifying security overrides the system's default security when creating and updating data.
+This model may evolve over time for other security features. Show child attributes Show child attributes Response body CreateTargetBoardResponseV2 object Success response with the ID of the created Target Board. Hide child attributes Hide child attributes Collapse all targetBoardRid string The unique resource identifier of a Target Board. This is equivalent to a collection RID. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/twb/targetBoard?preview=true" \
+ -d '{"name":"Example target board name.","description":"Example description.","highPriorityTargetList":"ri.gotham-artifact.0-0.hptl.example","configuration":{"columns":[{"id":"id12345","name":"DONE","color":"RED"}],"targetIdentifiers":["CUSTOM"]},"security":{"portionMarkings":["SENSITIVE"]}}' Response Copied! 1
+ ri.gotham-artifact.0-0.target-collection.example © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Request body Response body Examples Request Response

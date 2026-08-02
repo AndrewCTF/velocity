@@ -69,32 +69,109 @@ def _default_transport() -> httpx.AsyncBaseTransport:
         max_tries=settings.upstream_proxy_max_tries,
         fallback_direct=settings.upstream_proxy_fallback_direct,
     )
-    return pool or _transport()
+    if pool is not None:
+        return pool
+    # WARP_ALL routes everything through the tunnel. An explicit UPSTREAM_PROXIES
+    # pool outranks it: that one is egress the operator chose and pays for.
+    if settings.warp_enabled and settings.warp_all:
+        from app import warp  # noqa: PLC0415
+
+        return _warp_transport(warp.socks_url(), settings.warp_kill_switch)
+    return _transport()
+
+
+def _warp_transport(
+    socks: str, kill_switch: bool
+) -> httpx.AsyncBaseTransport:
+    """WARP-routed transport, optionally with a direct fallback.
+
+    With the kill switch OFF a dead tunnel falls back to a direct connection:
+    the goal here is reaching an upstream that dislikes our address, so serving
+    it from our own address is degraded, not a leak. With it ON there is no
+    fallback and the request fails — the `upstream_proxy` reasoning, applied to
+    an operator who does mean "not from this address".
+    """
+    direct = None if kill_switch else _transport()
+    return _WarpTransport(_transport(socks), direct=direct, socks=socks)
+
+
+class _WarpTransport(httpx.AsyncBaseTransport):
+    """One WARP hop with an optional direct fallback. Deliberately not the
+    rotating pool: there is exactly one free-tier exit, so rotation and
+    per-entry cooldown would model capacity that does not exist."""
+
+    def __init__(
+        self,
+        tunnel: httpx.AsyncBaseTransport,
+        *,
+        direct: httpx.AsyncBaseTransport | None,
+        socks: str,
+    ) -> None:
+        self._tunnel = tunnel
+        self._direct = direct
+        self._socks = socks
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        try:
+            return await self._tunnel.handle_async_request(request)
+        except Exception as exc:  # noqa: BLE001 — tunnel down / SOCKS refused
+            if self._direct is None:
+                raise
+            import logging  # noqa: PLC0415
+
+            logging.getLogger("warp").warning(
+                "WARP %s unusable for %s (%s) — falling back to a direct connection",
+                self._socks,
+                request.url.host,
+                type(exc).__name__,
+            )
+            return await self._direct.handle_async_request(request)
+
+    async def aclose(self) -> None:
+        await self._tunnel.aclose()
+        if self._direct is not None:
+            await self._direct.aclose()
 
 
 def get_client() -> httpx.AsyncClient:
     global _CLIENT
     if _CLIENT is None:
         from app import upstream_proxy  # noqa: PLC0415
+        from app.config import get_settings  # noqa: PLC0415
 
+        settings = get_settings()
         default = _default_transport()
         env = _env_proxy_map()
         pooled = isinstance(default, upstream_proxy.RotatingProxyTransport)
+        warp_all = settings.warp_enabled and settings.warp_all
         mounts: dict[str, httpx.AsyncBaseTransport | None] = {}
         for pattern, url in env.items():
-            # With a pool active, an explicit UPSTREAM_PROXIES outranks the
-            # ambient environment proxy: keeping the env's scheme mount (e.g.
+            # With a pool or WARP_ALL active, our explicit configuration outranks
+            # the ambient environment proxy: keeping the env's scheme mount (e.g.
             # "https://") would shadow the default transport and the pool would
             # never see a single request. Its NO_PROXY exclusions still apply —
             # those are "do not proxy this host", which the pool must honour too.
-            if pooled and url is not None:
+            if (pooled or warp_all) and url is not None:
                 continue
             mounts[pattern] = _transport(url)
-        if pooled:
-            # Same-host sidecars (:8090 ADS-B, :8093 AIS) must not ride the pool:
-            # an external hop cannot reach them and would publish their traffic.
+        # Per-host WARP mounts. These are what the tier normally uses: only the
+        # hosts measurably fixed by a different address pay the tunnel, so the
+        # 1 s ADS-B cycle and its 10 s fan-out budget stay on the direct path.
+        warped: list[str] = []
+        if settings.warp_enabled and not warp_all:
+            from app import warp  # noqa: PLC0415
+
+            socks = warp.socks_url()
+            for host in warp.hosts():
+                warped.append(host)
+                mounts[f"all://{host}"] = _warp_transport(
+                    socks, settings.warp_kill_switch
+                )
+        if pooled or warp_all or warped:
+            # Same-host sidecars (:8090 ADS-B, :8093 AIS) must not ride an
+            # external hop: it cannot reach them and would publish their traffic.
             # The env map already pins loopback when NO_PROXY is set; add it
-            # explicitly for the case where only UPSTREAM_PROXIES is configured.
+            # explicitly for the case where only UPSTREAM_PROXIES / WARP is set.
             for pattern in upstream_proxy.LOOPBACK_PATTERNS:
                 mounts.setdefault(pattern, _transport())
         _CLIENT = httpx.AsyncClient(

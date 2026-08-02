@@ -1,0 +1,79 @@
+List linked objects GET /api/gotham/v1/objects/{primaryKey}/links/{linkType} Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Lists the linked objects for a specific object and the given link type. 
+ Invalid link type results in an InvalidOntologyTypes error . Path parameters primaryKey string The primary key of the object from which the links originate. linkType string The type of the link that exists between the object and the requested objects. Query parameters pageSize integer optional The maximum size of the page to return. The default is 1,000
+and the maximum allowed is 1,000. If a page size greater than 1,000 is
+requested, then it will default to 1,000. The service may return fewer
+or more results than requested, but will always return at least one result
+per page as long as there are more results. pageToken string optional The page token indicates where to start paging. This should be omitted from the first page request and
+populated from the nextPageToken field of the previous response in subsequent requests preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Response body ListLinkedObjectsResponse object Success response Hide child attributes Hide child attributes Expand all nextPageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request.
+To fetch the next page, clients should take the value from the nextPageToken field of the previous response
+and populate the next request's pageToken field with it. data list<GothamOntologyObject> optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111/links/com.palantir.link.parentof?preview=true" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ [
+ {
+ "primaryKey": "ri.gotham.111111-0.object-internal.222222",
+ "objectType": "com.palantir.object.person",
+ "properties": {
+ "com.palantir.property.name": [
+ {
+ "FIRST_NAME": "Chris",
+ "LAST_NAME": "Smith"
+ }
+ ],
+ "com.palantir.property.age": [
+ 78
+ ]
+ }
+ },
+ {
+ "primaryKey": "ri.gotham.111111-0.object-internal.333333",
+ "objectType": "com.palantir.object.person",
+ "properties": {
+ "com.palantir.property.name": [
+ {
+ "FIRST_NAME": "Mary",
+ "LAST_NAME": "Smith"
+ }
+ ],
+ "com.palantir.property.age": [
+ 79
+ ]
+ }
+ }
+] © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Response body Examples Request Response

@@ -16,6 +16,7 @@ import {
 } from '../transport/search.js';
 import { useSelection, useSearchTarget } from '../state/stores.js';
 import { useUiMode, type UiMode } from '../state/uiMode.js';
+import { usePalette } from '../state/palette.js';
 import { flyToPosition } from '../globe/camera.js';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 
@@ -52,7 +53,8 @@ export function Omnibar({
   viewer: Cesium.Viewer | null;
   registry: LayerRegistry;
 }): JSX.Element | null {
-  const [open, setOpen] = useState(false);
+  const open = usePalette((st) => st.open);
+  const setOpen = usePalette((st) => st.setOpen);
   const [q, setQ] = useState('');
   const [ents, setEnts] = useState<SearchResult[]>([]);
   const [active, setActive] = useState(0);
@@ -63,7 +65,7 @@ export function Omnibar({
     const onKey = (e: KeyboardEvent): void => {
       if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((o) => !o);
+        usePalette.getState().toggle();
       }
     };
     window.addEventListener('keydown', onKey, true);

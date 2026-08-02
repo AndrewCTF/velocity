@@ -1,0 +1,86 @@
+Search latest observations POST /api/gotham/v1/observations/latest/{observationSpecId}/search Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Gets the latest Observation along each Geotime Track matching the supplied query. Only returns Observations
+conforming to the given Observation Spec. Path parameters observationSpecId string Search results will be constrained to Observations conforming to this Observation Spec. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body SearchLatestObservationsRequest object Hide child attributes Hide child attributes Expand all query object The query to match to Geotime Tracks. Show child attributes Show child attributes pageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request.
+To fetch the next page, clients should take the value from the nextPageToken field of the previous response
+and populate the next request's pageToken field with it. Response body SearchLatestObservationsResponse object Success response Hide child attributes Hide child attributes Expand all data list<Observation> optional Show child attributes Show child attributes nextPageToken string optional The page token indicates where to start paging. This should be omitted from the first page's request.
+To fetch the next page, clients should take the value from the nextPageToken field of the previous response
+and populate the next request's pageToken field with it. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/observations/latest/baz/search?preview=true" \
+ -d '{"query":{"time":{"start":"2023-01-01T12:00:00Z","end":"2023-03-07T12:10:00Z"}}}' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+ 35
+ [
+ {
+ "sourceSystemId": "foo",
+ "collectionId": "bar",
+ "observationSpecId": "baz",
+ "trackId": "track0",
+ "position": {
+ "longitude": 0,
+ "latitude": 0
+ },
+ "timestamp": "2023-03-05T17:00:00Z",
+ "name": "name0",
+ "staticProperties": [],
+ "liveProperties": [
+ {
+ "propertyType": "liveProperty",
+ "value": 0
+ }
+ ]
+ },
+ {
+ "sourceSystemId": "foo",
+ "collectionId": "bar",
+ "observationSpecId": "baz",
+ "trackId": "track1",
+ "position": {
+ "longitude": 11,
+ "latitude": 1
+ },
+ "timestamp": "2023-03-05T17:10:00Z",
+ "name": "name1",
+ "staticProperties": [],
+ "liveProperties": []
+ }
+] © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

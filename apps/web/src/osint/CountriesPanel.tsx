@@ -10,6 +10,7 @@ import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch } from '../transport/http.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { useSelection } from '../state/stores.js';
+import { Icon } from '../normal/Icon.js';
 
 interface CountrySummary {
   code: string;
@@ -216,7 +217,7 @@ export function CountriesPanel(): JSX.Element {
             <div key={region} style={{ marginBottom: 4 }}>
               <button type="button" onClick={() => toggleRegion(region)} style={sectionBtnStyle}>
                 <span>
-                  {collapsedRegions[region] ? '▸' : '▾'} {region}
+                  <Icon name={collapsedRegions[region] ? 'chevron-right' : 'chevron-down'} className="w-3.5 h-3.5" /> {region}
                 </span>
                 <span style={{ color: 'var(--txt-3)' }}>{countries.length}</span>
               </button>

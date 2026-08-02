@@ -7,6 +7,7 @@ import { useSearchRegions, SLOTS, type Slot } from '../state/searchRegions.js';
 import { haversineKm, getDrawController } from '../globe/draw.js';
 import { flyToPosition } from '../globe/camera.js';
 import { CoordEntry } from '../globe/CoordEntry.js';
+import { Icon } from '../normal/Icon.js';
 
 // Palantir-Gotham "Search Objects" left sidebar. A single scoping surface: object
 // type + intrinsic date (static range OR rolling window) + keyword + up to four
@@ -453,9 +454,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                       onClick={() => setRegion(slot, null)}
                       aria-label={`Clear region ${slot}`}
                       className="mono text-[11px] px-1 text-txt-3 hover:text-alert"
-                    >
-                      ✕
-                    </button>
+                    ><Icon name="x" className="w-3 h-3" /></button>
                   )}
                 </div>
                 {r && (

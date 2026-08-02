@@ -1,0 +1,14 @@
+Versioning Every endpoint of this API is versioned using a version number that appears in the URL. For example, v1 endpoints look like this: 
+ https://<hostname>/api/gotham/v1/...
+ 
+ Breaking changes to non-preview endpoints will use new version numbers. If you're happy with an older version of an endpoint, you may continue to use it unless it's deprecated. 
+ Deprecation 
+ In some cases, we may have to remove a non-preview endpoint or older versions of an endpoint. We might do this, for example, if the platform no longer supports the underlying functionality exposed by the endpoint. 
+ If we have to replace or remove a stable endpoint, we will document and announce the change at least twelve months in advance, and provide continued support and SLA guarantees in the meantime 
+ Endpoints which have been deprecated but not yet removed will include an HTTP Response Header with name deprecation indicating endpoint deprecation status, for example: deprecation: true . Stable and Public Preview endpoints do not include this header in responses. 
+ Public Preview 
+ During the initial phase of an endpoint's development lifecycle, an endpoint may be in "Public Preview" state. This indicates that the endpoint is in active development and is intended for non-production use only. 
+ To opt in to usage of an endpoint in public preview state, you must also include the preview=true query parameter in your request. This is to acknowledge that usage is for experimental/development purposes only and that the endpoint may be changed or removed at any time without notice. 
+ Endpoints that are in Public Preview state will include the following warning in endpoint documentation: 
+ Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Versioning Deprecation Public Preview

@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Velocity beside Gotham · pixel, language, design, professionalism</title>
+<style>
+:root{--bg:#111418;--p:#1c2127;--p2:#252a31;--p3:#2f343c;--e:#383e47;
+--t0:#f6f7f9;--t1:#c5cbd3;--t2:#abb3bf;--t3:#8f99a8;--a:#2d72d2;--af:#8abbff;
+--ok:#32a467;--okf:#72ca9b;--warn:#ec9a3c;--warnf:#fbb360;--alert:#e76a6e;
+--mono:'IBM Plex Mono',ui-monospace,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);
+font:14px/1.55 'Inter','IBM Plex Sans',system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 96px}
+h1{font-size:26px;color:var(--t0);margin:0 0 6px;font-weight:650}
+.sub{color:var(--t3);font-size:14px;margin:0 0 8px}
+h2{font-size:20px;color:var(--t0);margin:56px 0 4px;font-weight:600;
+padding-top:22px;border-top:1px solid rgba(255,255,255,.08)}
+h2 .ax{color:var(--af);font-family:var(--mono);font-size:12px;display:block;
+margin-bottom:6px;letter-spacing:.06em}
+h3{font-size:14px;color:var(--t0);margin:22px 0 6px;font-weight:600}
+p{margin:0 0 12px}
+code{font-family:var(--mono);font-size:12px;background:var(--p2);
+padding:1px 4px;border-radius:2px;color:var(--t0)}
+table{width:100%;border-collapse:collapse;margin:14px 0 8px;font-size:12px}
+th{text-align:left;color:var(--t3);font-weight:600;padding:7px 10px;
+border-bottom:1px solid var(--e);white-space:nowrap;text-transform:uppercase;
+letter-spacing:.05em;font-size:12px}
+td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.06);
+vertical-align:top}
+td.n{font-family:var(--mono);text-align:right;color:var(--t0)}
+tr.why td{color:var(--t3);font-size:12px;padding-top:0;padding-bottom:12px;
+border-bottom:1px solid rgba(255,255,255,.06)}
+.lang td{vertical-align:top}
+.ok{color:var(--okf)}.warn{color:var(--warnf)}.bad{color:var(--alert)}
+.lead{background:var(--p);border-left:2px solid var(--a);padding:14px 16px;
+margin:18px 0;border-radius:2px;color:var(--t1)}
+.lead b{color:var(--t0)}
+.pair{background:var(--p);border:1px solid rgba(255,255,255,.08);
+border-radius:2px;padding:16px;margin:16px 0}
+.pair .note{color:var(--t3);font-size:12px;margin-bottom:12px}
+.pimg{margin-bottom:12px}
+.pimg .lab,.pgrid .lab{display:block;font-family:var(--mono);font-size:12px;
+color:var(--t3);margin-bottom:5px}
+.pimg img{display:block;width:100%;height:auto;background:#0b0e11;
+border:1px solid rgba(255,255,255,.1);border-radius:2px}
+.pro{background:var(--p);border:1px solid rgba(255,255,255,.08);
+border-radius:2px;padding:14px 16px;margin:12px 0}
+.pro h3{margin:0 0 10px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:10px}
+.pgrid p{margin:0;font-size:12px;color:var(--t1)}
+.pro .why{margin:0;color:var(--t3);font-size:12px;padding-top:10px;
+border-top:1px solid rgba(255,255,255,.06)}
+.sw{display:inline-block;width:34px;height:14px;border-radius:2px;
+border:1px solid rgba(255,255,255,.14);vertical-align:middle;margin-right:7px}
+.shot{width:100%;border:1px solid rgba(255,255,255,.1);border-radius:2px;
+display:block;margin:12px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:820px){.pgrid,.grid2{grid-template-columns:1fr}}
+ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:5px}
+.gap{background:rgba(236,154,60,.1);border-left:2px solid var(--warn);
+padding:12px 14px;border-radius:2px;margin:14px 0;font-size:12px}
+.gap b{color:var(--warnf)}
+</style></head><body><div class="wrap">
+
+<h1>Velocity beside Gotham</h1>
+<p class="sub">Four axes, each with the evidence that produced it.
+Built 2026-08-01 from the G-Cloud 14 service definition PDFs, 115 pages of published
+Palantir Gotham documentation, and @blueprintjs source.</p>
+
+<div class="lead">
+<b>The one number everything else rests on: 0.633.</b> Gotham is Blueprint, and
+Blueprint publishes <code>$pt-button-height: 30px</code>. The two accent-filled
+buttons in the Object Explorer screenshot both measure 19px, so that capture sits
+at 19/30 = 0.633 of true scale, and its 1161px width is a 1834px viewport, i.e. a
+1920 screen. Every raw measurement divides by that. Without this the two sides
+cannot be compared at all, only eyeballed.
+</div>
+
+<h2><span class="ax">AXIS 1</span>Pixel</h2>
+<p>Measured off the crops in <code>_ref/</code> with <code>_measure.py</code> and
+<code>_calibrate.py</code>, then checked against the built page in a real browser
+by <code>_verify.mjs</code>. Nothing here is eyeballed.</p>
+<table>
+<thead><tr><th>Element</th><th>Gotham raw</th><th>÷0.633</th><th>Velocity built</th>
+<th>Blueprint variable</th><th>Verdict</th></tr></thead>
+<tbody><tr><td>Classification band</td><td class='n'>12</td><td class='n'>20</td><td class='n'>20</td><td>Gotham-specific</td><td><span class="ok">match</span></td></tr><tr><td>Title and menu bar</td><td class='n'>25</td><td class='n'>40</td><td class='n'>40</td><td>~$pt-button-height-large 40px</td><td><span class="ok">match</span></td></tr><tr><td>Application menu row</td><td class='n'>19</td><td class='n'>30</td><td class='n'>30</td><td>$pt-button-height 30px</td><td><span class="ok">match</span></td></tr><tr><td>Icon shortcut rail (width)</td><td class='n'>27</td><td class='n'>43</td><td class='n'>40</td><td>~40px</td><td><span class="warn">off by 3px</span></td></tr><tr><td>Left panel (width)</td><td class='n'>195</td><td class='n'>308</td><td class='n'>308</td><td>~300px</td><td><span class="ok">match</span></td></tr><tr><td>Right panel (width)</td><td class='n'>181</td><td class='n'>286</td><td class='n'>286</td><td>~280px</td><td><span class="ok">match</span></td></tr><tr><td>Dense list row pitch</td><td class='n'>13</td><td class='n'>21</td><td class='n'>20</td><td>$pt-button-height-smaller 20px</td><td><span class="ok">match</span></td></tr><tr><td>Bottom action bar</td><td class='n'>31</td><td class='n'>49</td><td class='n'>50</td><td>$pt-navbar-height 50px</td><td><span class="ok">match</span></td></tr><tr><td>Primary button</td><td class='n'>19</td><td class='n'>30</td><td class='n'>30</td><td>$pt-button-height 30px</td><td><span class="ok">match</span></td></tr><tr><td>Tab strip</td><td class='n'>20</td><td class='n'>32</td><td class='n'>32</td><td>—</td><td><span class="ok">match</span></td></tr><tr><td>Status strip</td><td class='n'>14</td><td class='n'>22</td><td class='n'>22</td><td>—</td><td><span class="ok">match</span></td></tr></tbody></table>
+<p class="sub">Every derived value lands on a published Blueprint control size.
+That is the confirmation the calibration is right: an arbitrary scale factor
+would not put nine independent measurements onto the same 10px-grid ladder.</p>
+<p class="sub"><b>On the one row that does not match.</b> The icon rail derives to
+43px and is built at 40px. The band detector cuts on colour change, so it counted
+the rail's 1px border on each side plus antialiasing: 40px built back through the
+scale is 25.3 raw px against 27 measured, which is that border. 40px is both the
+Blueprint value and within measurement error, so it is what is built. Recorded
+rather than quietly rounded, because the whole point of the table is that it can
+be checked.</p>
+
+<div class="gap"><b>What this corrected.</b> The earlier mockups used 26px rows
+and recorded the remaining density gap against Gotham as "deliberate", on the
+belief that Gotham ran small text in a roomy row and the 12px floor forbade
+matching it. Gotham's dense row is <b>20px</b>, and Blueprint pairs
+<code>$pt-button-height-smaller: 20px</code> with
+<code>$pt-font-size-small: 12px</code>. The floor and Gotham density were never
+in tension. The gap was an artefact of never having measured the row.</div>
+
+<h3>Component crops, side by side</h3>
+<p class="sub">Reference crops are shown at the width they were captured;
+ours are 1:1 CSS pixels from the rendered page.</p>
+<div class="pair">
+  <h3>Window chrome</h3>
+  <p class="note">Band, brand, menu, save state, centred document identity, right tools. Ours adds the marking pill and the environment search from the same crop.</p>
+  <div class="pimg"><span class="lab">Palantir, from the G-Cloud PDFs</span>
+    <img src="_ref/graph-window.png" alt="Palantir Window chrome"></div>
+  <div class="pimg"><span class="lab">Velocity, rebuilt</span>
+    <img src="_crops/titlebar.png" alt="Velocity Window chrome"></div>
+</div><div class="pair">
+  <h3>Bottom action bar</h3>
+  <p class="note">Left select, sentence with underlined tokens, plain secondary, one filled primary. Same order, same weights.</p>
+  <div class="pimg"><span class="lab">Palantir, from the G-Cloud PDFs</span>
+    <img src="_ref/oe-actionbar.png" alt="Palantir Bottom action bar"></div>
+  <div class="pimg"><span class="lab">Velocity, rebuilt</span>
+    <img src="_crops/actionbar.png" alt="Velocity Bottom action bar"></div>
+</div><div class="pair">
+  <h3>Tabs with count badges</h3>
+  <p class="note">Icon, label, count. Accent underline plus accent-tinted icon when active.</p>
+  <div class="pimg"><span class="lab">Palantir, from the G-Cloud PDFs</span>
+    <img src="_ref/oe-tabs.png" alt="Palantir Tabs with count badges"></div>
+  <div class="pimg"><span class="lab">Velocity, rebuilt</span>
+    <img src="_crops/tabs.png" alt="Velocity Tabs with count badges"></div>
+</div><div class="pair">
+  <h3>Status strip</h3>
+  <p class="note">Gaia's strip, rebuilt at 22px. Ours carries feed state where Gaia carries element count.</p>
+  <div class="pimg"><span class="lab">Palantir, from the G-Cloud PDFs</span>
+    <img src="_ref/gaia-status.png" alt="Palantir Status strip"></div>
+  <div class="pimg"><span class="lab">Velocity, rebuilt</span>
+    <img src="_crops/status.png" alt="Velocity Status strip"></div>
+</div>
+
+<h2><span class="ax">AXIS 2</span>Language</h2>
+<p>Evidence is 115 scraped pages of Palantir's own Gotham documentation
+(<code>_corpus/</code>, 34,119 words), not recollection.</p>
+<table class="lang">
+<thead><tr><th style="width:15%">Axis</th><th style="width:34%">Gotham, from its own docs</th>
+<th style="width:34%">Velocity</th><th>State</th></tr></thead>
+<tbody><tr>
+<td><b>Em dashes in prose</b></td><td>3 across 34,119 words of published Gotham documentation</td><td>Zero in dashboard copy, guarded; ` · ` separates instead</td>
+<td><span class="ok">aligned</span></td></tr>
+<tr class="why"><td></td><td colspan="3">Velocity's no-em-dash rule was an operator decision made independently. Palantir writes the same way. The rule is not a quirk.</td></tr><tr>
+<td><b>Core noun for a timestamped fix</b></td><td><b>Observation</b>. "An Observation is a data container for the most granular unit of data that can be stored in Geotime."</td><td><b>Observation</b>. <code>ObservationStore</code>, <code>Observation.t</code>, <code>_latest[id]</code></td>
+<td><span class="ok">aligned</span></td></tr>
+<tr class="why"><td></td><td colspan="3">Velocity already names this concept exactly as Palantir does, in the store layer, without having read this page.</td></tr><tr>
+<td><b>Core noun for a series of fixes</b></td><td><b>Track</b>. "A Track is a collection of Observations of the same entity over some period of time."</td><td><b>Track</b>. <code>tracks.ts</code>, the selection polyline</td>
+<td><span class="ok">aligned</span></td></tr>
+<tr class="why"><td></td><td colspan="3">Same word, same definition, same role.</td></tr><tr>
+<td><b>How a pending filter is described</b></td><td>A sentence: "Keeping Objects with property types matching any of <u>Marital Status</u>", with the operator's own choices as underlined tokens inside it</td><td>Was a label ("Filters · 2 active"). Now the same sentence form: "Keeping Aircraft with <u>Category</u> matching any of <u>Military</u>"</td>
+<td><span class="ok">closed</span></td></tr>
+<tr class="why"><td></td><td colspan="3">This was the single largest language gap and it is the device most often copied wrong. The UI narrates the query; it does not label it.</td></tr><tr>
+<td><b>Query vocabulary behind that sentence</b></td><td><code>eq · and · or · not · keyword · lt · gt · lte · gte · geoPointWithin</code></td><td>Layer filters, viewport filter, category filter, all unnamed</td>
+<td><span class="warn">open</span></td></tr>
+<tr class="why"><td></td><td colspan="3">Naming Velocity's filter primitives after these would let one sentence renderer serve every panel. Not built.</td></tr><tr>
+<td><b>Error shape</b></td><td><code>errorCode</code> + <code>errorName</code> + <code>errorInstanceId</code>, e.g. <code>INVALID_ARGUMENT</code> / <code>MalformedObjectPrimaryKeys</code></td><td>A sentence that keeps the code: <code>Cameras unavailable (HTTP 503)</code>, never <code>cams 503</code></td>
+<td><span class="ok">aligned</span></td></tr>
+<tr class="why"><td></td><td colspan="3">Different shape, same principle: the operator gets a name they can quote to support, not an internal fragment.</td></tr></tbody></table>
+
+<h2><span class="ax">AXIS 3</span>Design</h2>
+<p>Gotham is built on Blueprint, which Palantir publishes. So "matching Gotham's
+design system" is not interpretation, it is reading
+<code>@blueprintjs/core/src/common/_variables.scss</code>.</p>
+<div class="grid2">
+<div><h3>Metrics, Blueprint v5</h3><table><thead><tr><th>Blueprint variable</th><th>Value</th><th>Velocity token</th></tr></thead><tbody><tr><td>$pt-spacing / $pt-grid-size</td><td>4px / 10px</td><td>--sp-1: 4px, scale in 4s</td></tr><tr><td>$pt-font-size</td><td>14px</td><td>--fs-body: 14px</td></tr><tr><td>$pt-font-size-small</td><td>12px</td><td>--fs-cap: 12px, and the floor</td></tr><tr><td>$pt-font-size-large</td><td>16px</td><td>--fs-lg: 16px</td></tr><tr><td>$pt-line-height</td><td>1.28581</td><td>inherited</td></tr><tr><td>$pt-border-radius (v5)</td><td>2px</td><td>--g-r: 2px</td></tr><tr><td>$pt-button-height</td><td>30px</td><td>--g-btn: 30px</td></tr><tr><td>$pt-button-height-small</td><td>24px</td><td>--g-btn-sm: 24px</td></tr><tr><td>$pt-button-height-smaller</td><td>20px</td><td>--g-btn-xs: 20px, --g-row: 20px</td></tr><tr><td>$pt-input-height</td><td>30px</td><td>--g-btn: 30px</td></tr><tr><td>$pt-navbar-height</td><td>50px</td><td>--g-action: 50px</td></tr><tr><td>$pt-icon-size-standard</td><td>16px</td><td>--g-icon: 16px</td></tr><tr><td>$pt-transition-duration</td><td>100ms</td><td>--g-transition: 100ms</td></tr><tr><td>$pt-transition-ease</td><td>cubic-bezier(0.4, 1, 0.75, 0.9)</td><td>same, verbatim</td></tr></tbody></table></div>
+<div><h3>Colour, @blueprintjs/colors 5.1.16</h3><table><thead><tr><th>Blueprint</th><th>Hex</th><th>Velocity</th></tr></thead><tbody><tr><td><span class="sw" style="background:#111418"></span><code>$black</code></td><td class='n'>#111418</td><td><code>--bg-0</code></td></tr><tr><td><span class="sw" style="background:#1c2127"></span><code>$dark-gray1</code></td><td class='n'>#1c2127</td><td><code>--bg-1</code></td></tr><tr><td><span class="sw" style="background:#252a31"></span><code>$dark-gray2</code></td><td class='n'>#252a31</td><td><code>--bg-2</code></td></tr><tr><td><span class="sw" style="background:#2f343c"></span><code>$dark-gray3</code></td><td class='n'>#2f343c</td><td><code>--bg-3</code></td></tr><tr><td><span class="sw" style="background:#383e47"></span><code>$dark-gray4</code></td><td class='n'>#383e47</td><td><code>--bg-4</code></td></tr><tr><td><span class="sw" style="background:#f6f7f9"></span><code>$light-gray5</code></td><td class='n'>#f6f7f9</td><td><code>--txt-0</code></td></tr><tr><td><span class="sw" style="background:#c5cbd3"></span><code>$gray5</code></td><td class='n'>#c5cbd3</td><td><code>--txt-1</code></td></tr><tr><td><span class="sw" style="background:#abb3bf"></span><code>$gray4</code></td><td class='n'>#abb3bf</td><td><code>--txt-2</code></td></tr><tr><td><span class="sw" style="background:#8f99a8"></span><code>$gray3</code></td><td class='n'>#8f99a8</td><td><code>--txt-3</code></td></tr><tr><td><span class="sw" style="background:#2d72d2"></span><code>$blue3</code></td><td class='n'>#2d72d2</td><td><code>--accent</code></td></tr><tr><td><span class="sw" style="background:#8abbff"></span><code>$blue5</code></td><td class='n'>#8abbff</td><td><code>--accent-fg</code></td></tr><tr><td><span class="sw" style="background:#32a467"></span><code>$green4</code></td><td class='n'>#32a467</td><td><code>--ok</code></td></tr><tr><td><span class="sw" style="background:#ec9a3c"></span><code>$orange4</code></td><td class='n'>#ec9a3c</td><td><code>--warn</code></td></tr><tr><td><span class="sw" style="background:#e76a6e"></span><code>$red4</code></td><td class='n'>#e76a6e</td><td><code>--alert</code></td></tr></tbody></table></div>
+</div>
+<div class="gap"><b>Version note.</b> Blueprint v6 moved
+<code>$pt-border-radius</code> from 2px to 4px and the spacing base from a 10px
+grid to 4px. The 2024 screenshots this is built against are v5-era, so v5's 2px
+radius is the faithful value and is what is built. If Velocity ever wants to
+track current Blueprint instead of the screenshots, that is a deliberate
+decision with a visible consequence, not a detail.</div>
+
+<h2><span class="ax">AXIS 4</span>Professionalism</h2>
+<p>What actually makes Gotham read as an instrument. Each of these is a
+structural device, not a style, which is why the earlier mockups could match the
+palette exactly and still read as a web app.</p>
+<div class="pro">
+  <h3>Application menu bar</h3>
+  <div class="pgrid">
+    <div><span class="lab">Gotham</span><p>File · Edit · View · Insert · Selection · Support on every Gotham app</p></div>
+    <div><span class="lab">Velocity</span><p>Built. File · Edit · View · Collect · Exploration · Window · Help</p></div>
+  </div>
+  <p class="why">A menu bar is the loudest single signal that a surface is a workstation rather than a web page. It also gives every command a discoverable home, which is the exact defect the persona waves reported.</p>
+</div><div class="pro">
+  <h3>Classification as a band</h3>
+  <div class="pgrid">
+    <div><span class="lab">Gotham</span><p>Full-width coloured band across the very top, centred marking</p></div>
+    <div><span class="lab">Velocity</span><p>Built, 20px, green for UNCLASSIFIED</p></div>
+  </div>
+  <p class="why">Marking governs everything below it, so it sits above everything. A pill tucked in a corner reads as a badge, not a control.</p>
+</div><div class="pro">
+  <h3>Counts inside the tab</h3>
+  <div class="pgrid">
+    <div><span class="lab">Gotham</span><p>Types 47 · Properties 332 · Links 14</p></div>
+    <div><span class="lab">Velocity</span><p>Built. Layers 18 of 64 · Histogram 6 · Info 2 · Series 5</p></div>
+  </div>
+  <p class="why">The operator learns whether a panel holds anything without opening it. This is most of what "reachable but invisible" was asking for.</p>
+</div><div class="pro">
+  <h3>One filled button per surface</h3>
+  <div class="pgrid">
+    <div><span class="lab">Gotham</span><p>"Add to filter path" in the action bar, "Actions" in the right panel. Everything else is bordered or plain</p></div>
+    <div><span class="lab">Velocity</span><p>Built, both</p></div>
+  </div>
+  <p class="why">When exactly one thing is filled, the commit action is unmissable and the accent keeps its meaning. Velocity's map palette already reserves saturation for data; this extends the same discipline to chrome.</p>
+</div><div class="pro">
+  <h3>Selection as outline, not fill</h3>
+  <div class="pgrid">
+    <div><span class="lab">Gotham</span><p>Object Explorer's selected property row is an accent outline</p></div>
+    <div><span class="lab">Velocity</span><p>Built</p></div>
+  </div>
+  <p class="why">A fill destroys the row's own colour coding. An outline lets a selected degraded layer still read as degraded.</p>
+</div><div class="pro">
+  <h3>Two-tone mini bars beside counts</h3>
+  <div class="pgrid">
+    <div><span class="lab">Gotham</span><p>Property list shows matched-of-total as a filled bar on a dark track</p></div>
+    <div><span class="lab">Velocity</span><p>Built, on every layer row</p></div>
+  </div>
+  <p class="why">The densest information device in Object Explorer: proportion without a chart, at 20px.</p>
+</div><div class="pro">
+  <h3>Status strip along the bottom</h3>
+  <div class="pgrid">
+    <div><span class="lab">Gotham</span><p>Gaia: "Online · View · 3 interactive elements", panel stops above it</p></div>
+    <div><span class="lab">Velocity</span><p>Built, 22px</p></div>
+  </div>
+  <p class="why">A permanent, quiet home for system state. It is where degraded belongs.</p>
+</div><div class="pro">
+  <h3>A fourth state: degraded</h3>
+  <div class="pgrid">
+    <div><span class="lab">Gotham</span><p>Not a Gotham device. This one is Velocity's own</p></div>
+    <div><span class="lab">Velocity</span><p>Built, in both panels and the status strip</p></div>
+  </div>
+  <p class="why">Loading, empty and error were already required and guarded. Both persona waves still found silent failure, because the real case is a surface with SOME data quietly missing the rest. Gotham does not solve this; Velocity has to, because its feeds degrade independently.</p>
+</div>
+
+<h2>The console</h2>
+<img class="shot" src="_shots/gotham-console.png" alt="Velocity console, Gotham grammar">
+<h3>The fourth state</h3>
+<img class="shot" src="_shots/gotham-degraded.png" alt="Velocity console, degraded state">
+
+<h2>Honestly not closed</h2>
+<div class="gap">
+<ul>
+<li><b>The basemap is still hand-drawn.</b> Gaia runs Mapbox Streets and
+Satellite: real aerial imagery, roads, place labels, highway shields. This has a
+projected Baltic coastline with a labelled graticule, scale bar and north arrow.
+That gap closes with a real tile layer in the running app, not in static HTML.</li>
+<li><b>Nothing under <code>apps/</code> has changed.</b> This is a mockup. The
+file mapping that turns it into code is §8 of
+<code>docs/dashboard-redesign-2026-08.md</code>, and it is unstarted.</li>
+<li><b>Velocity's filter primitives are still unnamed.</b> Adopting Palantir's
+query vocabulary would let one sentence renderer serve every panel. Not built.</li>
+<li><b>The 780 sub-11px literals in the shipped app are untouched.</b> This
+mockup holds the 12px floor at 0 violations; sweeping the app is a separate
+sequenced pass.</li>
+<li><b>Slides, Chat and Dossier were catalogued and not rebuilt.</b> None maps
+onto a Velocity surface that exists. Rebuilding them would be copying rather
+than extending the grammar.</li>
+</ul>
+</div>
+
+</div></body></html>

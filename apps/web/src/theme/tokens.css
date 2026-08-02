@@ -8,65 +8,85 @@
   color-scheme: dark;
   /* substrate — warm dark ink (slightly amber-shifted grey, not blue-black).
      Lifted well off pure black so panels read as material, not void. */
-  --bg-0: #191817;
-  --bg-1: #201f1d;
-  --bg-2: #282623;
-  --bg-3: #322f2b;
-  --bg-4: #3f3b36;
+  --bg-0: #111418;
+  --bg-1: #1c2127;
+  --bg-2: #252a31;
+  --bg-3: #2f343c;
+  --bg-4: #383e47;
   /* left tool panels (icon rail + flyout) — a neutral dark grey, deliberately
      cooler/greyer than the warm substrate so the panels read as their own
      surface. Light theme keeps the white panel below. */
-  --panel-bg: #26282c;
+  --panel-bg: #1c2127;
   /* hairlines — warm white; a notch stronger since the lighter bg eats alpha */
-  --line: rgba(255, 246, 234, 0.08);
-  --line-2: rgba(255, 246, 234, 0.15);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.16);
 
   /* text — warm greys, a real contrast ramp. WCAG-AA pass (2026-07-13): every
      tier now clears 4.5:1 on both bg-1 and the lighter card bg-2, including the
      muted txt-3/txt-4 tiers that previously failed (2.81:1 / 1.71:1) and were
      carrying live text. txt-2 lifted to open headroom for a descending ramp. */
-  --txt-0: #f5f2ed;
-  --txt-1: #c0b9ae;
-  --txt-2: #a8a29c;
-  --txt-3: #96908a;
-  --txt-4: #948e88;
+  --txt-0: #f6f7f9;
+  --txt-1: #c5cbd3;
+  --txt-2: #abb3bf;
+  --txt-3: #8f99a8;
+  --txt-4: #8f99a8;
 
   /* accent — soft sky-steel blue (interactive / focus / active). Lighter than
      the old cobalt so it sits comfortably on the warmer substrate. */
-  --accent: #6fb1dd;
-  --accent-dim: rgba(111, 177, 221, 0.14);
-  --accent-line: rgba(111, 177, 221, 0.45);
+  --accent: #2d72d2;
+  --accent-dim: rgba(45, 114, 210, 0.20);
+  --accent-line: rgba(45, 114, 210, 0.55);
 
   /* SEMANTIC — threat state ONLY */
-  --warn: #f5a524;
-  --warn-bg: rgba(245, 165, 36, 0.12);
-  --warn-line: rgba(245, 165, 36, 0.38);
+  --warn: #ec9a3c;
+  --warn-bg: rgba(236, 154, 60, 0.16);
+  --warn-line: rgba(236, 154, 60, 0.40);
   /* warn "foreground" — the lightened text hue used on a --warn-bg tint (a raw
      --warn is too saturated to read as body text). */
-  --warn-fg: #fcd9a0;
-  --alert: #ff5a52;
-  --alert-bg: rgba(255, 90, 82, 0.13);
-  --alert-line: rgba(255, 90, 82, 0.38);
-  --alert-fg: #ffc9c5;
-  --ok: #4ed3a1;
-  --ok-bg: rgba(78, 211, 161, 0.12);
-  --ok-line: rgba(78, 211, 161, 0.35);
+  --warn-fg: #fbb360;
+  --alert: #cd4246;
+  --alert-bg: rgba(205, 66, 70, 0.16);
+  --alert-line: rgba(205, 66, 70, 0.40);
+  --alert-fg: #fa999c;
+  --ok: #32a467;
+  --ok-bg: rgba(50, 164, 103, 0.16);
+  --ok-line: rgba(50, 164, 103, 0.38);
   /* accent "foreground" — lightened accent text on an --accent-dim tint. */
-  --accent-fg: #9cc2ff;
+  --accent-fg: #8abbff;
   /* magenta — selection / correlation lineage (matches the globe selection
      polyline family; distinct from the blue interactive accent). */
-  --mag: #e25bef;
-  --mag-dim: rgba(226, 91, 239, 0.14);
-  --mag-line: rgba(226, 91, 239, 0.5);
+  --mag: #d946ef;
+  --mag-dim: rgba(217, 70, 239, 0.16);
+  --mag-line: rgba(217, 70, 239, 0.5);
   --mag-fg: #f0a8f8;
   /* Low severity — kept distinct from the selection accent so a "low" alert
      badge doesn't read as "selected". Mirrors --txt-1. */
-  --sev-low: #cdc9c0;
+  --sev-low: #c5cbd3;
+
+  /* ── Structural metrics, measured against the reference (2026-08-02).
+     Derivation and the calibration that produced them:
+     docs/mockups/console-2026-08/README.md. Blueprint v5 publishes
+     $pt-button-height: 30px, which is what pins the scale. */
+  --g-band: 20px;   --g-title: 40px;  --g-menu: 30px;   --g-rail: 40px;
+  --g-left: 336px;  --g-right: 308px; --g-action: 50px; --g-tabs: 32px;
+  --g-btn: 30px;    --g-btn-sm: 24px; --g-btn-xs: 20px;
+  --g-row: 20px;    /* dense LIST row */
+  --g-row-2: 26px;  /* row carrying a control */
+  --g-row-3: 38px;  /* two-line row */
+  --g-row-tbl: 40px;   /* DATA TABLE row. Measured at ~42 in the reference; a
+                          list row and a table row are not the same object. */
+  --g-row-tbl-h: 32px;
+  --g-icon: 16px;
+  --g-pad: 14px;    /* panel gutter, left and right */
+  --g-gap: 8px;     /* gutter BETWEEN regions, so nothing shares an edge */
+  /* Row hover is a HALF step, not the full Blueprint one: --txt-3 measures
+     4.35:1 on dark-gray3 and layer subtitles ARE --txt-3 on rows that hover. */
+  --hover: #2a2f37;
 
   /* radii — hard-cornered, instrument-grade */
   --r-sm: 2px;
-  --r-md: 3px;
-  --r-lg: 5px;
+  --r-md: 2px;   /* Blueprint v5 radius is 2px throughout */
+  --r-lg: 4px;
 
   /* ── spacing scale (design §6.2 — promoted out of normal/.nrm so BOTH shells
      share one rhythm). px here (global chrome isn't --ui-scale'd like .nrm). */
@@ -127,35 +147,35 @@
    dark (a light basemap would be a separate change). */
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg-0: #eef1f5;
+  --bg-0: #f6f7f9;
   --bg-1: #ffffff;
-  --bg-2: #f3f5f8;
-  --bg-3: #e7ebf0;
-  --bg-4: #d9dfe6;
+  --bg-2: #edeff2;
+  --bg-3: #e5e8eb;
+  --bg-4: #d3d8de;
   --panel-bg: #ffffff;
-  --line: rgba(15, 22, 32, 0.1);
-  --line-2: rgba(15, 22, 32, 0.16);
-  --txt-0: #10151c;
-  --txt-1: #33414f;
-  --txt-2: #5d6776;
+  --line: rgba(17, 20, 24, 0.10);
+  --line-2: rgba(17, 20, 24, 0.18);
+  --txt-0: #111418;
+  --txt-1: #1c2127;
+  --txt-2: #5f6b7c;
   /* txt-3/txt-4 darkened to clear AA on white AND the pale card bg-2 (were
      3.04:1 / 2.14:1 — both failed while carrying live text). See contrast.test.ts */
-  --txt-3: #636d79;
-  --txt-4: #66707c;
-  --accent: #2575c0;
-  --accent-dim: rgba(37, 117, 192, 0.12);
-  --accent-line: rgba(37, 117, 192, 0.4);
+  --txt-3: #5f6b7c;
+  --txt-4: #5f6b7c;
+  --accent: #215db0;
+  --accent-dim: rgba(33, 93, 176, 0.10);
+  --accent-line: rgba(33, 93, 176, 0.34);
   /* accent/threat "foreground" hues — darkened for legibility on the pale tints */
-  --accent-fg: #1d5aa0;
-  --warn: #b7791f;
+  --accent-fg: #184a90;
+  --warn: #935610;
   --warn-bg: rgba(183, 121, 31, 0.12);
   --warn-line: rgba(183, 121, 31, 0.4);
-  --warn-fg: #8a5a0d;
-  --alert: #d8392f;
+  --warn-fg: #77450d;
+  --alert: #a82a2a;
   --alert-bg: rgba(216, 57, 47, 0.12);
   --alert-line: rgba(216, 57, 47, 0.4);
-  --alert-fg: #a51f16;
-  --ok: #1f9d6b;
+  --alert-fg: #8e292c;
+  --ok: #1c6e42;
   --ok-bg: rgba(31, 157, 107, 0.12);
   --ok-line: rgba(31, 157, 107, 0.35);
   --mag: #b13fc4;

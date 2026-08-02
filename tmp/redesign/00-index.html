@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Velocity dashboard redesign · the board</title>
+<link rel="stylesheet" href="mock.css" />
+<style>
+  .hero { border-bottom: 1px solid var(--line); background: var(--bg-1); }
+  .hero .in { max-width: 1160px; margin: 0 auto; padding: 40px var(--sp-5) 34px; }
+  .kpi { display: flex; gap: var(--sp-6); flex-wrap: wrap; margin-top: var(--sp-5); }
+  .kpi > div b { display: block; font-family: var(--font-mono); font-size: 28px; font-weight: 600; line-height: 1.1; }
+  .kpi > div span { font-size: var(--fs-cap); color: var(--txt-3); }
+  .sbs3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3); }
+  .sbs3 figure { border-radius: var(--r-lg); overflow: hidden; background: var(--bg-1); }
+  .sbs3 img { display: block; width: 100%; height: auto; }
+  .sbs3 figcaption { padding: 10px 14px; font-size: var(--fs-cap); color: var(--txt-3); }
+  .sbs3 figcaption b { color: var(--txt-0); font-weight: 600; }
+  table.cmp th:first-child { width: 210px; }
+  table.cmp th.h { color: var(--txt-0); font-size: var(--fs-body); font-weight: 600; }
+  table.cmp td { font-size: var(--fs-dense); }
+  td.d { font-family: var(--font-mono); text-align: center; }
+  td.d.z { color: var(--ok); }
+  td.d.three { color: var(--warn); }
+  .before-after { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+  .ba { border-radius: var(--r-lg); overflow: hidden; }
+  .ba .cap { padding: 10px 14px; font-size: var(--fs-cap); color: var(--txt-3); }
+  .ba .body { padding: var(--sp-4); font-family: var(--font-mono); font-size: var(--fs-cap); line-height: 1.7; white-space: pre; overflow-x: auto; }
+  .ba.old { background: #201f1d; color: #c0b9ae; }
+  .ba.old .cap { background: #191817; color: #8e8880; }
+  .ba.new { background: var(--bg-1); color: var(--txt-1); }
+  .ba.new .cap { background: var(--bg-2); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="00-index.html" class="on">Board</a>
+  <a href="a-panel-parity.html">A · Panel parity</a>
+  <a href="b-verb-first.html">B · Verb first</a>
+  <a href="c-palette-first.html">C · Palette first</a>
+  <a href="panels.html">Panels</a>
+  <a href="gotham-parity.html">Gotham parity</a>
+  <a href="foundry.html">Foundry</a>
+  <a href="components.html">Components</a>
+  <a href="rehoming.html">Re-homing</a>
+  <a href="states.html">States and keyboard</a>
+  <span class="sp"></span>
+  <span style="font-size:var(--fs-cap);color:var(--txt-3)">mockups, not shipped code</span>
+</nav>
+
+<div class="hero"><div class="in">
+  <h1>Velocity dashboard redesign</h1>
+  <p class="lead">
+    Three navigation models for the same console, built against
+    <code>docs/palantir-reference-2026-07.md</code>. They share one globe, one panel
+    grammar, one token set and one component sheet, and differ only in how you get to
+    things, which is the actual problem. The rule for choosing is fixed:
+    <b>ease of navigation and use beats prettiness.</b>
+  </p>
+  <div class="kpi">
+    <div><b>41</b><span>entry points today</span></div>
+    <div><b>14</b><span>in-console apps</span></div>
+    <div><b>64</b><span>layers</span></div>
+    <div><b>18</b><span>left rail items</span></div>
+    <div><b>0</b><span>apps the palette indexes today</span></div>
+    <div><b>12</b><span>separate keydown handlers</span></div>
+  </div>
+</div></div>
+
+<div class="doc">
+
+<h2>Checked against Palantir's own material</h2>
+<p>
+  The palette is not designed from memory. Two official Palantir G-Cloud 14
+  service definition PDFs were downloaded, their embedded UI screenshots
+  extracted, and the chrome <b>pixel-sampled</b>. The dominant colours in the
+  Gotham Video and Graph screenshots are <code>#30404D</code>,
+  <code>#293742</code>, <code>#202B33</code>, <code>#394B59</code> and accent
+  <code>#137CBD</code>, which are <b>classic Blueprint</b> to a delta of zero.
+  Gotham is built on Blueprint, which Palantir publishes.
+</p>
+<p>
+  So every colour token here is a Blueprint value, verbatim, from the current
+  release 5.1.16 rather than the older ramp in the 2024 screenshots. Verified
+  programmatically: <b>0 tokens outside the published palette</b>, and every text
+  tier still clears 4.5:1 in both themes.
+</p>
+<div class="note warn">
+  Three things the screenshots proved this design had wrong, now fixed: Gaia's
+  map is a <b>real basemap</b> with roads and place labels, its toolbar is a
+  <b>small horizontal cluster at the top-left</b> rather than a vertical rail, and
+  it carries a <b>thin status strip</b> along the bottom with the side panel
+  stopping above it. A fourth finding is worth keeping in mind: <b>Gotham is not
+  uniformly dark</b>. Dossier is light, Graph and Video are dark, and Gaia's own
+  side panel is white over satellite imagery, so the light analytical surface
+  here is consistent with the product rather than a departure from it.
+</div>
+
+<h2>What is actually different</h2>
+<p>
+  The first pass of these mockups was rejected for looking like the current console,
+  and it did: it reused <code>theme/tokens.css</code> verbatim, the four-row
+  <code>ConsoleShell</code> grid, the tinted section-label bars and the 11px density.
+  Five signatures of the existing UI, carried over unchanged. This pass departs on
+  each of them, and every departure is a fix for something already recorded as a
+  problem.
+</p>
+
+<div class="before-after">
+  <div class="ba old">
+    <div class="cap">Today</div>
+    <div class="body">┌──────────────────────────────┐
+│ UNCLASSIFIED // OSINT   26px │
+├──────────────────────────────┤
+│ command bar             42px │
+├────┬────────────────┬────────┤
+│ ▤  │                │        │
+│ 44 │     GLOBE      │  360   │
+│ px │                │        │
+├────┴────────────────┴────────┤
+│ timeline               158px │
+└──────────────────────────────┘
+ warm ink #191817 · accent #6fb1dd
+ 11px floor · uppercase tracked labels
+ tinted label bars · boxes in boxes</div>
+  </div>
+  <div class="ba new">
+    <div class="cap">Proposed</div>
+    <div class="body">╭─ Velocity  Find ⌘K  Apps ▾ ····· ⬤ UNCLAS ─╮ float
+╰─────────────────────────────────────────────╯
+ ╭Layers──────╮                    ╭Selection─╮
+ │ Find       │   M A P            │ RYR4213  │
+ │ Histogram  │   edge to edge     │ Details  │
+ │ Info       │   never boxed      │ Series   │
+ │            │  ╭─ time ⌃ ─╮      │ Time sel │
+ ╰────────────╯  ╰──────────╯      ╰──────────╯
+
+ cool near-black #0B0E13 · #5CA8FF
+ 14px body, 12px floor · 20px panel titles
+ panels dock flush, 1px hairlines, 2/3/4px radii
+ no blur, no glow, no pills, no shadows
+ Foundry and Explorer go LIGHT</div>
+  </div>
+</div>
+
+<table class="t" style="margin-top:var(--sp-4)">
+  <thead><tr><th>Axis</th><th>Departure</th><th>The problem it fixes</th></tr></thead>
+  <tbody>
+    <tr><td>Colour</td><td>Warm ink to cool near-black, and a genuinely <b>light</b> surface for Foundry, Workflows and Explorer</td><td>Colour is the strongest signal of "same product". It also encodes the Gotham and Foundry split: dark when you are watching, light when you are building.</td></tr>
+    <tr><td>Layout</td><td>Three columns that shrink the map when a panel opens, replaced by an <b>edge-to-edge map with floating glass panels</b>. Nothing owns a grid track.</td><td>Opening a panel no longer makes the globe narrower, and the globe is never boxed in. <code>docs/frontend.md:99</code> says the map must never be covered by permanent chrome; a column that steals 336px is permanent chrome.</td></tr>
+    <tr><td>Shell</td><td>The 26px classification band and the 158px timeline footer are gone. A floating 52px bar, marking as an inline pill, time as a collapsible dock over the map.</td><td>Four grid rows down to zero. About 230px of vertical returned to the map.</td></tr>
+    <tr><td>Type</td><td>Body 13px to 14px, floor 11px to 12px, and a real jump to 20px panel titles so a panel reads at a glance</td><td><code>docs/decisions.md:1017</code> already concluded the density was what read as "AI dashboard". The app still carries 780 sub-11px literals against its own floor.</td></tr>
+    <tr><td>Map</td><td>An abstract globe with amoeba landmasses. Replaced by a <b>real basemap at the zoom the data implies</b>: the Baltic approaches at a 100 km scale bar, with coastlines, the Hel peninsula and the Vistula Spit, named places, a labelled lat/lon graticule, a scale bar and a north arrow.</td><td>The scenario reads 54.3181 N 018.7122 E. A globe at that scale is the wrong instrument and reads as decoration. A geoint console is judged on its map before anything else.</td></tr>
+    <tr><td>Density</td><td>Row height 46px to 38px, panel padding 24px to 16px, section rhythm tightened. 17 layer rows visible per screen instead of 14.</td><td>Professional density is not small type. The type scale is unchanged at 14px body with a 12px floor; only the whitespace moved.</td></tr>
+    <tr><td>Surface</td><td>Flat. Panels are solid surfaces separated by 1px hairlines, radii 2/3/4px, badges and chips are rectangles, the switch is a small rectangle, no backdrop blur, no accent glow, and shadow only on things that genuinely float (palette, launcher).</td><td>The first flat pass used 14px radii, 28px blur, pill badges, a lozenge switch and a glowing accent. That is consumer-app language. Instruments use a background step and a hairline.</td></tr>
+    <tr><td>Chrome</td><td>No tinted label bars, no nested bordered boxes, no rules between rows</td><td>The accent-tinted eyebrow with a 3px left edge is the single most recognisable ornament of the current UI, and it carries no information.</td></tr>
+    <tr><td>Navigation</td><td>Icon rail replaced by named text tabs; apps behind one launcher; palette indexes everything</td><td>An icon with a tooltip is exactly the reachable-but-invisible pattern the persona studies kept finding.</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  What deliberately did <b>not</b> change: the map symbology. The eight category hex
+  values and the absence of <code>PointGraphics</code> are asserted as literal
+  strings in <code>globe/invariants.test.ts</code>, and the rule that the only
+  saturated colour belongs to data is why the chrome went calmer rather than louder.
+</div>
+
+<h2>The problem, stated as measurements</h2>
+<p>Every number below came from reading the source. None of it is a matter of taste.</p>
+<ul>
+  <li><b>The command palette does not know about the product.</b>
+    <code>command-bar/Omnibar.tsx:48</code> indexes four workspace actions, layer
+    toggles and live entities. Zero of the 14 apps, zero of the 9 routes, zero of the
+    18 rail items, zero settings.</li>
+  <li><b>Nobody owns the keyboard.</b> Twelve separate
+    <code>window.addEventListener('keydown')</code> sites, four binding Escape.</li>
+  <li><b>The better layer panel is buried.</b> <code>LayerCatalog</code> sits at rail
+    position one with folders but no opacity, counts or feed health.
+    <code>LayerRail</code>, which has all three plus mission presets, sits inside a
+    "more" drawer. <code>setTimeWindow</code> exists in the registry with no UI at all.</li>
+  <li><b>Two tab sets are built every render for nobody.</b> <code>rightTabs</code>
+    (9) and <code>leftTabs</code> (10) only surface in the mobile panel chooser.</li>
+  <li><b>Settings is a modal, not a place</b>, and eight more preferences live outside
+    it in their own localStorage keys.</li>
+  <li><b>Two persona waves said the same thing.</b> Capability that is "reachable but
+    invisible", that "fails silently", with "no in-app way to discover" a degraded
+    feed. Finding six is titled "Built-but-unreachable capability keeps not converting".</li>
+</ul>
+
+<h2>What all three directions share</h2>
+<ol>
+  <li><b>The globe is the substrate.</b> It mounts once, never unmounts, and no
+    permanent chrome covers it.</li>
+  <li><b>The palette indexes everything</b>: 14 apps, 9 routes, 18 panels, 64 layers,
+    7 tools, every setting, live entities and saved searches.</li>
+  <li><b>One keyboard registry</b>, a <kbd>?</kbd> sheet generated from it, and one
+    documented Escape order.</li>
+  <li><b>The Palantir panel grammar, named</b>: left Layers · Find · Histogram · Info;
+    right Selection · Time selection · Series; toolbar Select · Search around · Draw ·
+    Capture · Measure · Annotate · Delete.</li>
+  <li><b>Four states per surface</b>: loading, empty, error, degraded.</li>
+  <li><b>Foundry works like Foundry</b>, on a light surface, with the health, lineage
+    and analysis surfaces it is missing.</li>
+  <li><b>The copy rules hold</b>: no em dashes, ` · ` separators subject first, a lone
+    <b>—</b> means no value reported, errors are sentences that keep the code.</li>
+</ol>
+
+<h2>The three directions</h2>
+<p>
+  Same globe, same seven panels at the same fidelity, same tokens, same keyboard
+  registry, same Foundry surface. They differ on one thing: how you reach things.
+  <b>Pick whichever you would rather use every day.</b>
+</p>
+
+<div class="sbs3">
+  <figure><a href="a-panel-parity.html"><img src="_shots/a-panel-parity.png" alt="Direction A" /></a>
+    <figcaption><b>A · Panel parity</b><br/>Named panels, always in the same place</figcaption></figure>
+  <figure><a href="b-verb-first.html"><img src="_shots/b-verb-first.png" alt="Direction B" /></a>
+    <figcaption><b>B · Verb first</b><br/>The rail is the analyst loop</figcaption></figure>
+  <figure><a href="c-palette-first.html"><img src="_shots/c-palette-first.png" alt="Direction C" /></a>
+    <figcaption><b>C · Palette first</b><br/>Minimal chrome, everything summoned</figcaption></figure>
+</div>
+
+<h3>Compared on the same dimensions</h3>
+<table class="t cmp">
+  <thead><tr><th></th><th class="h">A · Panel parity</th><th class="h">B · Verb first</th><th class="h">C · Palette first</th></tr></thead>
+  <tbody>
+    <tr><td><b>What is always visible</b></td>
+      <td>Four panel names, the open panel, Selection</td>
+      <td>Six verbs and what is inside each, the open panel, Selection</td>
+      <td>The map, a tool dock, and whatever you pinned</td></tr>
+    <tr><td><b>How you reach a panel</b></td>
+      <td>Click its name, or press <kbd>1</kbd> to <kbd>4</kbd></td>
+      <td>Click the verb, then the panel. Two steps.</td>
+      <td><kbd>⌘K</kbd> and type, or click a pin</td></tr>
+    <tr><td><b>How you reach an app</b></td>
+      <td>Apps launcher, grouped by what you are doing. Two clicks.</td>
+      <td>Inside the verb that owns it. Two clicks.</td>
+      <td><kbd>⌘K</kbd> and type. One keystroke.</td></tr>
+    <tr><td><b>How the map behaves</b></td>
+      <td colspan="3" style="text-align:center;color:var(--txt-2)">Identical. Edge to edge in all three; panels float over it and never make it narrower.</td></tr>
+    <tr><td><b>What a new user sees</b></td>
+      <td>Every panel named on screen. Nothing to learn.</td>
+      <td>Six verbs to learn, but each one lists its own contents.</td>
+      <td>A map and a search box. Needs the tour or a guess.</td></tr>
+    <tr><td><b>Cost of the 48th feature</b></td>
+      <td>A row in a panel, or a tile in the launcher</td>
+      <td>A line under a verb, or a new verb if it fits none</td>
+      <td>Nothing. The shell does not grow.</td></tr>
+    <tr><td><b>Where it is weakest</b></td>
+      <td>Least original. The long tail sits one level deeper.</td>
+      <td>Some surfaces genuinely belong to two verbs.</td>
+      <td>Worst first run. What you cannot see, you may not ask for.</td></tr>
+    <tr><td><b>Where it is strongest</b></td>
+      <td>Nothing is hidden and nothing needs explaining.</td>
+      <td>Groups by intent, which is how a question actually arrives.</td>
+      <td>Highest ceiling for someone who already knows the product.</td></tr>
+    <tr><td><b>Closest Palantir analogue</b></td>
+      <td>Gaia map panels</td>
+      <td>The Gotham understand, decide, act loop</td>
+      <td>Carbon workspaces</td></tr>
+  </tbody>
+</table>
+
+<h3>Chosen: A, with C's pinning</h3>
+<div class="note new">
+  <b>A is the base, and C's pinning is folded into it.</b> The two compose rather
+  than compete: A's four named panels stay fixed and always visible, and the tab row
+  also carries whatever you pin, so the set is extensible without any name ever
+  moving. The palette stays a visible labelled control in the bar rather than an
+  invisible keystroke.
+  <br/><br/>
+  B is not carried forward as a shell, but its verb grouping is the right way to
+  group the <b>app launcher</b>, and that is where it lands. The multi-select
+  summary header comes across too, because the Select tool needs it anyway.
+  <br/><br/>
+  All three mockups stay here as the record of what was compared. None is deleted.
+</div>
+
+<h3>Accessibility, measured rather than asserted</h3>
+<p>
+  The palette was solved against the rule <code>theme/contrast.test.ts</code>
+  enforces, and computing it caught a real failure: the light surface's
+  <code>--txt-3</code> was <b>4.26:1</b> on <code>--bg-2</code>, under the 4.5 floor.
+  It is now <code>#616d83</code>. Worst case per tier, across both surface levels:
+</p>
+<table class="t" style="max-width:520px">
+  <thead><tr><th>Tier</th><th class="num">Dark</th><th class="num">Light</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">--txt-0</td><td class="num">16.11</td><td class="num">16.54</td></tr>
+    <tr><td class="mono">--txt-1</td><td class="num">11.69</td><td class="num">9.35</td></tr>
+    <tr><td class="mono">--txt-2</td><td class="num">8.08</td><td class="num">5.25</td></tr>
+    <tr><td class="mono">--txt-3</td><td class="num">5.36</td><td class="num">4.64</td></tr>
+    <tr><td class="mono">--txt-4</td><td class="num">5.36</td><td class="num">4.64</td></tr>
+  </tbody>
+</table>
+<p>
+  All clear 4.5:1 and the muted ramp stays monotonic in both themes. Over the map,
+  where panels are translucent glass, the worst case is the brightest ocean point
+  showing through at 14%, which computes to 5.62:1 for <code>--txt-3</code>.
+</p>
+<p>
+  The keyboard claim got the same treatment, and it did not survive first contact:
+  measured in a browser, the mockups had <b>76 clickable-looking elements that no
+  keyboard could reach</b> and 8 map tools whose only name was a tooltip. Rows,
+  chips, switches, palette results and every tool are now real controls with roles
+  and names. Measured across all nine pages: <b>0 text nodes below 12px, 0
+  unreachable controls, 0 focusable elements without an accessible name.</b> The map
+  console alone has 98 focusable controls. Tab through it.
+</p>
+
+<h2>Where the 14 apps went</h2>
+<p>
+  One launcher in the top bar, grouped by what you are doing. Everything in it is also
+  in the palette, so it is a browse surface, not the only route.
+</p>
+<div class="stage"><div class="in">
+  <div class="launcher" style="position:static;width:100%;box-shadow:none;padding:0">
+    <div class="lhead">Operate</div>
+    <div class="lgrid">
+      <a href="#" class="on"><b>Map</b><span>Live picture</span></a>
+      <a href="#"><b>Inbox</b><span>7 to triage</span></a>
+      <a href="#"><b>Sim</b><span>War game</span></a>
+    </div>
+    <div class="lhead">Analyse</div>
+    <div class="lgrid">
+      <a href="#"><b>Explorer</b><span>Object sets</span></a>
+      <a href="#"><b>Graph</b><span>Link analysis</span></a>
+      <a href="#"><b>Investigate</b><span>Digital OSINT</span></a>
+      <a href="#"><b>Country</b><span>249 profiles</span></a>
+      <a href="#"><b>Markets</b><span>Stress index</span></a>
+      <a href="#"><b>Video</b><span>FMV and ground recon</span></a>
+    </div>
+    <div class="lhead">Build</div>
+    <div class="lgrid">
+      <a href="foundry.html"><b>Foundry</b><span>Datasets and ontology</span></a>
+      <a href="#"><b>Workflows</b><span>Pipelines</span></a>
+      <a href="#"><b>City 3D</b><span>Splat scenes</span></a>
+    </div>
+    <div class="lhead">Decide</div>
+    <div class="lgrid">
+      <a href="#"><b>Targeting</b><span>Kill chain</span></a>
+      <a href="#"><b>Reports</b><span>Cases and briefs</span></a>
+      <a href="#"><b>AI</b><span>Watch officer</span></a>
+    </div>
+  </div>
+</div></div>
+
+<h2>Click depth to every surface</h2>
+<p>
+  Clicks from a cold start on the map, with the keyboard route beside it. This is the
+  acceptance test for ease of navigation, and it covers all 41 entry points that exist
+  today.
+</p>
+
+<h3>The seven panels of the reference grammar</h3>
+<table class="t">
+  <thead><tr><th>Panel</th><th>Today</th><th>A</th><th>B</th><th>C</th><th>Keys</th></tr></thead>
+  <tbody>
+    <tr><td>Layers</td><td>rail item, 1 click</td><td class="d">1</td><td class="d">2</td><td class="d">1</td><td><kbd>1</kbd></td></tr>
+    <tr><td>Find</td><td>split across 3 surfaces</td><td class="d">1</td><td class="d">2</td><td class="d">1</td><td><kbd>2</kbd> or <kbd>/</kbd></td></tr>
+    <tr><td>Histogram</td><td>named "Filters", in the more drawer, 2 clicks</td><td class="d">1</td><td class="d">2</td><td class="d">1</td><td><kbd>3</kbd></td></tr>
+    <tr><td>Info</td><td>4 numbers in the top bar, 2 hidden below 1920px</td><td class="d">1</td><td class="d">2</td><td class="d">1</td><td><kbd>4</kbd></td></tr>
+    <tr><td>Selection</td><td>always visible</td><td class="d z">0</td><td class="d z">0</td><td class="d">1</td><td>click a contact</td></tr>
+    <tr><td>Time selection</td><td>partial, in the footer</td><td class="d z">0</td><td class="d z">0</td><td class="d">1</td><td><kbd>t</kbd></td></tr>
+    <tr><td>Series</td><td>does not exist</td><td class="d z">0</td><td class="d z">0</td><td class="d">1</td><td>with selection</td></tr>
+  </tbody>
+</table>
+
+<h3>The seven map tools</h3>
+<table class="t">
+  <thead><tr><th>Tool</th><th>Today</th><th>A · B · C</th><th>Key</th></tr></thead>
+  <tbody>
+    <tr><td>Select</td><td>box only, no invert, no select all</td><td class="d">1</td><td><kbd>v</kbd></td></tr>
+    <tr><td>Search around</td><td>right-click only, single hop</td><td class="d">1</td><td><kbd>r</kbd></td></tr>
+    <tr><td>Draw</td><td>2 of 5 modes need the Annotate kind picker first</td><td class="d">1</td><td><kbd>d</kbd></td></tr>
+    <tr><td>Capture</td><td>no map entry point at all</td><td class="d">1</td><td><kbd>c</kbd></td></tr>
+    <tr><td>Measure</td><td>distance only</td><td class="d">1</td><td><kbd>m</kbd></td></tr>
+    <tr><td>Annotate</td><td>8 of 11 kinds reachable</td><td class="d">1</td><td><kbd>n</kbd></td></tr>
+    <tr><td>Delete</td><td>does not exist on the map</td><td class="d">1</td><td><kbd>⌫</kbd></td></tr>
+  </tbody>
+</table>
+
+<h3>The 14 apps</h3>
+<table class="t">
+  <thead><tr><th>App</th><th>New home</th><th>A</th><th>B</th><th>C</th></tr></thead>
+  <tbody>
+    <tr><td>Map</td><td>the substrate</td><td class="d z">0</td><td class="d z">0</td><td class="d z">0</td></tr>
+    <tr><td>Explorer</td><td>Find panel, promotes to full screen, light</td><td class="d">1</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Graph</td><td>full screen, entered by Search around</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Investigate</td><td>Find panel, non-geographic entities</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Targeting</td><td>full screen board, Decide</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Video</td><td>full screen, FMV and ground recon</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Sim</td><td>overlay mode, unchanged</td><td class="d">1</td><td class="d">1</td><td class="d">1</td></tr>
+    <tr><td>Reports</td><td>full screen, 7 tabs</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Foundry</td><td>full screen, light surface</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Workflows</td><td>full screen, light, beside Foundry</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>City 3D</td><td>full screen</td><td class="d">2</td><td class="d three">3</td><td class="d">1</td></tr>
+    <tr><td>Country</td><td>full screen, also opens from a selection</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Markets</td><td>full screen</td><td class="d">2</td><td class="d three">3</td><td class="d">1</td></tr>
+    <tr><td>AI</td><td>full screen, plus the console overlay on ⌘J</td><td class="d">1</td><td class="d">1</td><td class="d">1</td></tr>
+  </tbody>
+</table>
+
+<h3>The 18 left rail items</h3>
+<p>Nothing is dropped. Each becomes a section of a named panel, a tool, or an app.</p>
+<table class="t">
+  <thead><tr><th>Rail item today</th><th>New home</th><th>A</th><th>B</th><th>C</th></tr></thead>
+  <tbody>
+    <tr><td>Layers</td><td>Layers panel, merged with All sources</td><td class="d">1</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>All sources</td><td>merged into Layers. One layer surface, not two</td><td class="d">1</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Search Objects</td><td>Find panel</td><td class="d">1</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Filters</td><td>Histogram panel, under its real name</td><td class="d">1</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Feeds</td><td>Info panel, feed health</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Ops</td><td>Info panel, operations</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Inbox</td><td>right side queue, the Gotham Inbox</td><td class="d">1</td><td class="d">1</td><td class="d">1</td></tr>
+    <tr><td>Answers</td><td>Info panel top block, and the AI app</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Annotate</td><td>toolbar tool</td><td class="d">1</td><td class="d">1</td><td class="d">1</td></tr>
+    <tr><td>Watchboxes</td><td>Draw tool output, listed in Info</td><td class="d">1</td><td class="d">1</td><td class="d">1</td></tr>
+    <tr><td>Imagery</td><td>Layers panel, imagery group</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Chokepoints</td><td>Find panel, saved areas</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>ACARS</td><td>Selection panel card, plus a Find source</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Extract</td><td>Find panel, extract from text</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Country Sources</td><td>Country app, sources tab</td><td class="d three">3</td><td class="d three">3</td><td class="d">1</td></tr>
+    <tr><td>Field</td><td>Info panel, field collection</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>Sat tasking</td><td>Decide, beside Targeting</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+    <tr><td>COP editor</td><td>Layers panel, reference group, edit mode</td><td class="d">2</td><td class="d">2</td><td class="d">1</td></tr>
+  </tbody>
+</table>
+
+<h3>Routes and overlays</h3>
+<table class="t">
+  <thead><tr><th>Surface</th><th>Today</th><th>New home</th></tr></thead>
+  <tbody>
+    <tr><td>/ dashboard</td><td>the console</td><td>unchanged</td></tr>
+    <tr><td>/2d</td><td>MapLibre mirror</td><td>a scene mode on the same console, offered from Info when the GPU is weak. Route kept as the fallback it is.</td></tr>
+    <tr><td>/studio</td><td>splat reconstruction jobs</td><td>an app beside City 3D. Same <code>SplatView</code>, never a second renderer.</td></tr>
+    <tr><td>/news, /news/:id</td><td>separate pages</td><td>an app, and a Reports tab. Deep links preserved.</td></tr>
+    <tr><td>/login, /signup, /forgot, /reset</td><td>4 auth routes</td><td>unchanged. Auth stays outside the console.</td></tr>
+    <tr><td>Settings modal</td><td>modal from a floating button</td><td><b>Set up</b>, a real place, absorbing the 8 preferences that live in their own storage keys today.</td></tr>
+    <tr><td>Alerts slide-over</td><td><kbd>a</kbd> or the ticker</td><td>merged into the Inbox queue as one of its four channels.</td></tr>
+    <tr><td>Agent console</td><td>floating, <kbd>⌘J</kbd></td><td>unchanged, plus a permanent home in the AI app.</td></tr>
+    <tr><td>Omnibar</td><td><kbd>⌘K</kbd>, indexes 3 things</td><td>the palette, indexing all 41 surfaces.</td></tr>
+    <tr><td>Context menu</td><td>right-click, 16 actions</td><td>unchanged, and mirrored into the palette so the actions are searchable.</td></tr>
+    <tr><td>Timeline</td><td>158px permanent footer</td><td>a collapsible dock over the map in all three.</td></tr>
+    <tr><td>Object inspector</td><td>right rail, 4 tabs, 27 blocks</td><td>the Selection panel. Re-framed, not rewritten.</td></tr>
+    <tr><td>Mode surfaces</td><td>tasking, targeting, fmv, cop</td><td>folded into the apps that own them. The parallel mode concept goes away.</td></tr>
+    <tr><td>COP control</td><td>floating save and load</td><td>Layers panel, saved pictures.</td></tr>
+    <tr><td>rightTabs, leftTabs</td><td>built every render, mobile only</td><td>deleted. The mobile chooser reads the same panel registry as desktop.</td></tr>
+  </tbody>
+</table>
+
+<h2>How to judge these</h2>
+<ol>
+  <li><b>Point at a surface and ask how you would reach it cold.</b> The tables above
+    are the answer, so check three of them by hand against the mockups.</li>
+  <li><b>Read the panel names out loud.</b> If a name needs explaining, it is wrong.</li>
+  <li><b>Look at what happens with nothing to show.</b>
+    <a href="states.html">States and keyboard</a> is where the product either respects
+    the operator or lies to them.</li>
+  <li><b>Check Foundry against the name it borrowed.</b>
+    <a href="foundry.html">Foundry</a> is light, and carries the three surfaces it is
+    missing.</li>
+  <li><b>Ignore how pretty it is.</b> All three share one stylesheet on purpose. There
+    is no visual choice being made between them, only a navigational one.</li>
+</ol>
+
+<h2>What these mockups are not</h2>
+<ul>
+  <li>Not shipped code. Nothing under <code>apps/</code> changed.</li>
+  <li>Not a change to map symbology. The category icons, the eight palette hex values
+    and the selection polyline are guarded by string match in
+    <code>globe/invariants.test.ts</code> and are untouched.</li>
+  <li>Not a proposal to rewrite the entity panel, the timeline, or the Foundry
+    backend. All three are strong and stay.</li>
+</ul>
+
+<div class="note warn">
+  <code>tmp/</code> is gitignored, so these files will not be committed. That is
+  exactly how the previous mockups this codebase was built from
+  (<code>tmp/mock.css</code>, <code>tmp/power.css</code>, still cited at
+  <code>shell/instruments.tsx:4</code>) were lost. The decision itself lives in
+  <code>docs/dashboard-redesign-2026-08.md</code>.
+</div>
+
+</div>
+</body>
+</html>

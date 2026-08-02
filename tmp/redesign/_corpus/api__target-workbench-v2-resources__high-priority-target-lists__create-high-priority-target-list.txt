@@ -1,0 +1,74 @@
+Create High Priority Target List POST /api/v2/targetWorkbench/highPriorityTargetLists Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Create a High Priority Target List. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-write . Query parameters preview boolean optional Enables the use of preview functionality. Request body CreateHighPriorityTargetListRequest object Hide child attributes Hide child attributes Expand all targetBoard string optional The unique identifier for a Target Board targetAois list<HptlTargetAoi> optional Show child attributes Show child attributes security object Security settings for board content Show child attributes Show child attributes areaGeo object optional A Polygon representing the area where this High Priority Target List is applicable. If areaObjectRid exists, that field/area will be used and this field will be ignored. Show child attributes Show child attributes areaObjectRid string optional The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. name string description string optional targets list<HighPriorityTargetListTarget> optional Show child attributes Show child attributes Response body HighPriorityTargetList object The created HighPriorityTargetList Hide child attributes Hide child attributes Expand all rid string The unique identifier for a High Priority Target List name string description string optional targetBoard string optional The unique identifier for a Target Board targets list<HighPriorityTargetListTarget> optional Show child attributes Show child attributes areaObjectRid string optional The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. areaGeo object optional A Polygon representing the area where this High Priority Target List is applicable. If areaObjectRid exists, that field/area will be used and this field will be ignored. Show child attributes Show child attributes targetAois list<HptlTargetAoi> optional Show child attributes Show child attributes security object Security settings for board content Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/highPriorityTargetLists?preview=true" \
+ -d '{"targetBoard":"ri.gotham-artifact.0-0.target-board.example","security":{"portionMarkings":["SENSITIVE"],"spaceRid":"ri.compass.main.folder.12345"},"areaGeo":{"points":[{"elevation":0.0,"latitude":0.0,"longitude":0.0}]},"areaObjectRid":"ri.gotham.123-456.object-internal.example","name":"Example target board name.","description":"Example target board description.","targets":[{"targetSubtypes":["Red Car"],"when":"ACQUIRED"}]}' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ {
+ "targetBoard": "ri.gotham-artifact.0-0.target-board.example",
+ "security": {
+ "portionMarkings": [
+ "SENSITIVE"
+ ],
+ "spaceRid": "ri.compass.main.folder.12345"
+ },
+ "areaGeo": {
+ "points": [
+ {
+ "elevation": 0,
+ "latitude": 0,
+ "longitude": 0
+ }
+ ]
+ },
+ "areaObjectRid": "ri.gotham.123-456.object-internal.example",
+ "name": "Example target board name.",
+ "description": "Example target board description.",
+ "rid": "ri.gotham-artifact.0-0.hptl.example",
+ "targets": [
+ {
+ "targetSubtypes": [
+ "Red Car"
+ ],
+ "when": "ACQUIRED"
+ }
+ ]
+} Error responses Error Name Invalid Classification Portion Markings Error Code INVALID_ARGUMENT Status Code 400 Description The specified portion markings are not valid.
+ Parameters portionMarkings Invalid Space Rid Error Code INVALID_ARGUMENT Status Code 400 Description The space rid is missing or invalid.
+ Parameters spaceRid Create High Priority Target List Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not create the HighPriorityTargetList. Parameters See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Request body Response body Examples Request Response Error responses

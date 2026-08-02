@@ -92,7 +92,7 @@ export function DegradedBanner(): JSX.Element | null {
   return (
     <div
       role="status"
-      className="absolute bottom-[204px] left-1/2 -translate-x-1/2 z-[var(--z-dock)] flex items-center gap-2.5 mono text-[10px] px-3 py-1.5 rounded-sm border border-line bg-bg-1/95 text-txt-2 shadow-lg"
+      className="map-banner flex items-center gap-2.5 mono text-[10px] px-3 py-1.5 rounded-sm border border-line bg-bg-1/95 text-txt-2 shadow-lg"
     >
       <span>{text}</span>
       <Link to="/?panel=ops" className="text-accent hover:underline">

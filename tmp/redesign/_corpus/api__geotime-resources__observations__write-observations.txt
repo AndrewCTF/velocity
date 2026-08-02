@@ -1,0 +1,53 @@
+Write observations POST /api/gotham/v1/observations Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Writes Observations directly to Geotime. Returns the Observations that could not be written to Geotime with the
+reason for why they could not be written. Any Observations not in the response are guaranteed to have been
+written successfully to Geotime's backing data store. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body WriteObservationsRequest list<Observation> The list of Observations to write to Geotime. Hide child attributes Hide child attributes Expand all Observation object A geotemporal object along a Geotime Track (SSID, CID, SpecID, TrackID quadruplet). Show child attributes Show child attributes Response body WriteObservationsResponse list<InvalidObservation> Response with information about any Observations that failed to be written. Hide child attributes Hide child attributes Expand all InvalidObservation object Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/observations?preview=true" \
+ -d '[{"sourceSystemId":"foo","collectionId":"bar","observationSpecId":"baz","trackId":"track0","position":{"longitude":-122.16219,"latitude":37.44274},"timestamp":"2023-01-01T22:00:00Z","name":"name0","staticProperties":[],"liveProperties":[]},{"sourceSystemId":"foo","collectionId":"bar","observationSpecId":"baz","trackId":"track1","position":{"longitude":-122.16165,"latitude":37.44215},"timestamp":"fakeInvalidTimestamp","name":"name1","staticProperties":[],"liveProperties":[]}]' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ [
+ {
+ "observation": {
+ "sourceSystemId": "foo",
+ "collectionId": "bar",
+ "observationSpecId": "baz",
+ "trackId": "track1",
+ "position": {
+ "longitude": -122.16165,
+ "latitude": 37.44215
+ },
+ "timestamp": "fakeInvalidTimestamp",
+ "name": "name1",
+ "staticProperties": [],
+ "liveProperties": [],
+ "style": {}
+ },
+ "reason": "Invalid timestamp."
+ }
+] © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Request body Response body Examples Request Response

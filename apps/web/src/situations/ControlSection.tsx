@@ -17,6 +17,7 @@ import {
   type ZoneStatus,
   type LineStatus,
 } from './controlStore.js';
+import { Icon } from '../normal/Icon.js';
 
 const inputCls =
   'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-none focus:border-accent-line';
@@ -238,7 +239,7 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
             <button type="button" onClick={() => flyToZone(z.ring)} className="flex-1 text-left text-[10px] text-txt-1 mono truncate">
               area{z.label ? ` · ${z.label}` : ''}{z.status === 'contested' ? ' · contested' : ''}
             </button>
-            <button type="button" onClick={() => removeZone(z.id)} aria-label="Delete area" className="text-[11px] text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100">✕</button>
+            <button type="button" onClick={() => removeZone(z.id)} aria-label="Delete area" className="text-[11px] text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"><Icon name="x" className="w-3 h-3" /></button>
           </div>
         ))}
         {lines.map((l) => (
@@ -247,7 +248,7 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
             <span className="flex-1 text-[10px] text-txt-1 mono truncate">
               front line{l.label ? ` · ${l.label}` : ''}{l.status === 'contested' ? ' · contested' : ''}
             </span>
-            <button type="button" onClick={() => removeLine(l.id)} aria-label="Delete line" className="text-[11px] text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100">✕</button>
+            <button type="button" onClick={() => removeLine(l.id)} aria-label="Delete line" className="text-[11px] text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"><Icon name="x" className="w-3 h-3" /></button>
           </div>
         ))}
         {zones.length + lines.length === 0 && <MicroLabel>nothing drawn yet, draw or import</MicroLabel>}

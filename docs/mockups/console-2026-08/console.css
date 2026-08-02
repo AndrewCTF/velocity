@@ -1,0 +1,1360 @@
+/* console.css — Velocity console, Gotham grammar, one dark surface.
+   ────────────────────────────────────────────────────────────────────────────
+   The structural metrics and the colour ramp are NOT new. They were measured
+   off the real Palantir crops in ../gotham/_ref/ by tmp/redesign/_calibrate.py
+   and _measure.py, and are carried over verbatim. The derivation, kept so the
+   numbers stay falsifiable:
+
+     Gotham is Blueprint. Blueprint v5 publishes $pt-button-height: 30px. The
+     two accent-filled buttons in _ref/oe-full.png both measure 19px, so that
+     capture sits at 19/30 = 0.633 of true scale. Every raw measurement below
+     divides by 0.633, and nine of them then land on published Blueprint control
+     sizes, which is the confirmation the factor is right.
+
+   What IS new here, and why:
+
+   1. ONE DARK SURFACE. The earlier plan put Foundry, Workflows and Explorer on
+      a light surface. Operator decision 2026-08-01: dark everywhere, one token
+      set. The light block is gone rather than commented out.
+   2. Icons are real SVG (_sprite.svg, built from lucide-react's own path data
+      by _icons.mjs). No emoji. `.ic` is the only icon class.
+   3. Every count carries a mark. `.mark` is not decoration: a bare number was
+      the operator's specific complaint, and Gotham's Histogram panel puts a bar
+      on every single row.
+   4. The basemap is real Carto dark-matter raster, the same source
+      apps/api/app/routes/tiles.py:138 proxies, pre-fetched into _tiles/.
+
+   The 12px text floor holds throughout. Blueprint pairs
+   $pt-button-height-smaller: 20px with $pt-font-size-small: 12px, so Gotham
+   density and the floor were never in tension. */
+
+:root {
+  /* ── Structure, all measured ─────────────────────────────────────────── */
+  --g-band: 20px;    /* classification band */
+  --g-title: 40px;   /* window title bar */
+  --g-menu: 30px;    /* application menu bar */
+  --g-rail: 40px;    /* icon shortcut rail */
+  --g-left: 336px;   /* 308 + the extra gutter, so padding is not paid for
+                        with clipped names */
+  --g-right: 308px;  /* 286 + the same */
+  --g-pad: 14px;     /* panel gutter, left and right */
+  --g-gap: 8px;      /* gutter BETWEEN regions, so nothing shares an edge */
+  --g-action: 50px;  /* bottom action bar */
+  --g-tabs: 32px;
+  --g-time: 30px;    /* transport row */
+
+  /* ── Control scale, Blueprint v5 verbatim ────────────────────────────── */
+  --g-btn: 30px;
+  --g-btn-sm: 24px;
+  --g-btn-xs: 20px;
+  --g-row: 20px;     /* dense list row */
+  --g-row-2: 26px;   /* row carrying a control */
+  --g-row-3: 38px;   /* two-line row */
+  --g-row-tbl: 40px;    /* DATA TABLE row, measured against the reference at ~42 */
+  --g-row-tbl-h: 32px;  /* data table header, measured at ~34 */
+  --g-icon: 16px;
+  --g-r: 2px;        /* v5 radius. v6 moved to 4px; the source captures are v5 */
+
+  /* ── Type ────────────────────────────────────────────────────────────────
+     Blueprint names no webfont. It asks for the platform UI font and takes what
+     it gets, which is why Gotham looks native on every OS. The earlier mockups
+     asked for Inter and IBM Plex Sans, NEITHER OF WHICH IS INSTALLED here, so
+     they silently fell through to Noto Sans — a large part of why the result
+     read as not-Gotham. This is Blueprint's own stack. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
+  --font-mono: monospace;
+
+  --fs-cap: 12px;    /* section labels, the floor */
+  --fs-dense: 12px;  /* dense rows */
+  --fs-body: 13px;
+  --fs-lead: 15px;
+  --fs-hero: 19px;
+
+  /* ── Colour: Blueprint 5.1.16 dark ramp, 0 tokens outside it ─────────── */
+  --bg-0: #111418;   /* black, the map well */
+  --bg-1: #1c2127;   /* dark-gray1, panels */
+  --bg-2: #252a31;   /* dark-gray2, inset */
+  --bg-3: #2f343c;   /* dark-gray3 */
+  --bg-4: #383e47;   /* dark-gray4, borders */
+
+  --txt-0: #f6f7f9;  /* light-gray5 */
+  --txt-1: #c5cbd3;  /* gray5 */
+  --txt-2: #abb3bf;  /* gray4 */
+  --txt-3: #8f99a8;  /* gray3, muted */
+
+  --accent: #2d72d2;                       /* blue3 */
+  --accent-dim: rgba(45, 114, 210, 0.20);
+  --accent-line: rgba(45, 114, 210, 0.55);
+  --accent-fg: #8abbff;                    /* blue5 */
+
+  --ok: #32a467; --ok-fg: #72ca9b;         /* green4 / green5 */
+  --warn: #ec9a3c; --warn-fg: #fbb360;     /* orange4 / orange5 */
+  --err: #cd4246; --err-fg: #fa999c;       /* red3 / red5 */
+
+  /* Row hover is a HALF step, not the full Blueprint one.
+     On dark-gray3 (#2f343c) the muted tier --txt-3 measures 4.35:1, under the
+     4.5 floor theme/contrast.test.ts enforces, and layer subtitles ARE --txt-3
+     on rows that DO hover. #2a2f37 stays a visible hover and measures 4.67:1. */
+  --hover: #2a2f37;
+
+  --brd: #383e47;
+  --brd-soft: rgba(255, 255, 255, 0.08);
+  --tr: 100ms cubic-bezier(0.4, 1, 0.75, 0.9);  /* $pt-transition-* */
+
+  /* Map data palette. Deliberately a SEPARATE colour system from the chrome —
+     these eight are guarded literals in globe/adapters/styles.ts and
+     globe/invariants.test.ts fails if they change. */
+  --d-airliner: #facc15; --d-private: #2dd4bf; --d-heli: #c084fc;
+  --d-glider: #93c5fd;   --d-mil: #f59e0b;    --d-emerg: #ef4444;
+  --d-cargo: #14b8a6;    --d-tanker: #d97706; --d-select: #d946ef;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg-0);
+  color: var(--txt-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ── Icons ────────────────────────────────────────────────────────────────
+   One class. Stroke 1.8 matches normal/Icon.tsx:204 so the mockup and the app
+   render the same weight. viewBox is set on BOTH the <svg> and the <symbol>
+   because the gate checks the referencing element. */
+.ic {
+  width: var(--g-icon); height: var(--g-icon);
+  flex: 0 0 auto;
+  fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  vertical-align: -3px;
+}
+.ic-sm { width: 12px; height: 12px; vertical-align: -2px; }
+.ic-lg { width: 20px; height: 20px; }
+.ic-xl { width: 28px; height: 28px; }
+
+/* ══ Shell ═══════════════════════════════════════════════════════════════ */
+
+.shell {
+  display: grid;
+  height: 100vh;
+  /* Two content rows, not four. The classification band became a pill in the
+     bar and the timeline became a dock floating over the map, which is 52px of
+     chrome returned to the globe. The trailing `auto` collapses to 0 on pages
+     with no action bar. */
+  grid-template-rows: var(--g-title) var(--g-tabs) 1fr auto;
+  grid-template-columns: 100%;
+}
+
+/* ── Title bar ────────────────────────────────────────────────────────────
+   Gotham carries system state in the title bar, which is why there is no
+   separate status strip. That was Gaia's device and Gaia is a different
+   product; copying it cost 22px of map for no information. */
+.titlebar {
+  display: flex; align-items: center; gap: 0;
+  height: var(--g-title);
+  padding: 0 var(--g-pad);
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--brd);
+  font-size: var(--fs-cap);
+}
+.brand {
+  display: flex; align-items: center; gap: 7px;
+  padding-right: 14px;
+  color: var(--txt-0); font-weight: 600; font-size: var(--fs-body);
+  letter-spacing: 0.2px;
+}
+.brand .ic { color: var(--accent-fg); }
+
+/* Menu bar — real words, not glyphs. File Edit View ... is the single most
+   recognisable thing about the Gotham window and costs 30px once. */
+.menu { display: flex; align-items: center; gap: 0; }
+.menu button {
+  height: var(--g-menu); padding: 0 9px;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-1); font: inherit; font-size: var(--fs-cap);
+  cursor: pointer; transition: background var(--tr);
+}
+.menu button:hover { background: var(--hover); color: var(--txt-0); }
+
+.saved { display: flex; align-items: center; gap: 5px; margin: 0 12px 0 10px; color: var(--txt-3); }
+.saved .ic { color: var(--ok-fg); }
+
+.tb-spacer { flex: 1; }
+
+/* Centred document title with the favourite star, exactly as Gotham does it.
+   NOT absolutely positioned: that version sat on top of the right-hand items
+   the moment the bar got tight, and at 1366 it read
+   "Baltic approaches watch☆13,204". A flow item bounded by two equal spacers
+   centres the same way and truncates instead of overlapping. */
+.doctitle {
+  display: flex; align-items: center; gap: 8px;
+  min-width: 0; flex: 0 1 auto;
+  font-size: var(--fs-body); color: var(--txt-0); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.doctitle > span { overflow: hidden; text-overflow: ellipsis; }
+.doctitle .swatch { width: 10px; height: 10px; border-radius: 1px; background: var(--warn); }
+.doctitle .ic { color: var(--txt-3); }
+
+.tb-item {
+  display: flex; align-items: center; gap: 6px;
+  height: var(--g-btn-sm); padding: 0 8px; margin-left: 2px;
+  border-radius: var(--g-r); color: var(--txt-2);
+  white-space: nowrap;
+}
+.tb-item:hover { background: var(--hover); }
+.tb-item .spark { opacity: 0.75; }
+.tb-num { font-family: var(--font-mono); color: var(--txt-1); }
+
+/* The classification pill. NOT a full-width green band — that band was 20px of
+   screen spent on one word, and its saturated green is the loudest thing in a
+   product whose loudest thing should be the data. */
+.clas {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: var(--g-btn-xs); padding: 0 7px;
+  border: 1px solid var(--ok); border-radius: var(--g-r);
+  color: var(--ok-fg); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.5px;
+}
+/* 11px is below the 12px body floor and is deliberate: this is a non-prose
+   status token of one word, the same exemption lowercase micro-labels get. */
+
+.search {
+  display: flex; align-items: center; gap: 6px;
+  height: var(--g-btn-sm); width: 210px; padding: 0 8px; margin-left: 8px;
+  white-space: nowrap; overflow: hidden;
+  background: var(--bg-0); border: 1px solid var(--brd);
+  border-radius: var(--g-r); color: var(--txt-3);
+}
+
+/* ── Tab strip — four named panels, each on a number key ─────────────── */
+.tabs {
+  display: flex; align-items: stretch; gap: 0;
+  height: var(--g-tabs);
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--brd);
+  padding: 0 8px;
+}
+.tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 12px;
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  color: var(--txt-2); font: inherit; font-size: var(--fs-body);
+  cursor: pointer; transition: color var(--tr), border-color var(--tr);
+}
+.tab:hover { color: var(--txt-0); }
+.tab[aria-selected='true'] { color: var(--txt-0); border-bottom-color: var(--accent); }
+.tab .ic { color: var(--txt-3); }
+.tab[aria-selected='true'] .ic { color: var(--accent-fg); }
+
+/* Count badge. Gotham puts the count IN the tab, so you never open a panel to
+   discover it is empty. */
+.badge {
+  min-width: 17px; height: 16px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg-3); border-radius: 8px;
+  font-size: 11px; font-family: var(--font-mono); color: var(--txt-2);
+}
+.tab[aria-selected='true'] .badge { background: var(--accent-dim); color: var(--accent-fg); }
+
+/* ── Body ─────────────────────────────────────────────────────────────── */
+.body {
+  display: grid;
+  grid-template-columns: var(--g-left) 1fr var(--g-right);
+  gap: var(--g-gap);
+  padding: var(--g-gap);
+  background: var(--bg-0);
+  min-height: 0;
+}
+.body.no-right { grid-template-columns: var(--g-left) 1fr; }
+.body.wide { grid-template-columns: var(--g-left) 1fr 360px; }
+
+/* ══ Panels ══════════════════════════════════════════════════════════════ */
+
+.panel {
+  display: flex; flex-direction: column;
+  min-height: 0; min-width: 0;
+  background: var(--bg-1);
+  border: 1px solid var(--brd);
+  border-radius: var(--g-r);
+  overflow: hidden;
+}
+
+.panel-head {
+  display: flex; align-items: center; gap: 8px;
+  height: var(--g-btn); flex: 0 0 auto;
+  padding: 0 var(--g-pad);
+  border-bottom: 1px solid var(--brd);
+}
+.panel-title { font-size: var(--fs-body); font-weight: 600; color: var(--txt-0); }
+.panel-head .sp { flex: 1; }
+.iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--g-btn-xs); height: var(--g-btn-xs);
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-3); cursor: pointer; transition: background var(--tr), color var(--tr);
+}
+.iconbtn:hover { background: var(--hover); color: var(--txt-0); }
+.panel-body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+
+/* Sub-toolbar under a panel head — sort, collapse-all, search.
+   Gotham's Histogram panel has exactly this row and it is why the panel never
+   needs a context menu for its three commonest actions. */
+.panel-tools {
+  display: flex; align-items: center; gap: 2px;
+  height: var(--g-btn-sm); flex: 0 0 auto;
+  padding: 0 var(--g-pad);
+  border-bottom: 1px solid var(--brd-soft);
+}
+.panel-tools .sp { flex: 1; }
+
+/* Section label: uppercase, letterspaced, count on the right. */
+.sect {
+  display: flex; align-items: center; gap: 6px;
+  height: var(--g-row-2); padding: 0 var(--g-pad);
+  margin-top: 14px; padding-top: 6px;
+  border-top: 1px solid var(--brd-soft);
+  font-size: var(--fs-cap); font-weight: 600;
+  letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--txt-2);
+}
+.sect .sp { flex: 1; }
+/* The first group in a panel already has the panel head above it. */
+.panel-body > .sect:first-child,
+.card-b > .sect:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+/* The count keeps its own case. Letting the section's text-transform reach it
+   turned "3 of 6" into "3 OF 6". */
+.sect .n { font-family: var(--font-mono); font-weight: 400; color: var(--txt-3); letter-spacing: 0; text-transform: none; }
+.sect .ic { color: var(--txt-3); }
+
+/* ── The dense row, 20px ─────────────────────────────────────────────── */
+.row {
+  display: flex; align-items: center; gap: 8px;
+  min-height: var(--g-row); padding: 0 var(--g-pad);
+  font-size: var(--fs-dense); color: var(--txt-1);
+  cursor: default;
+}
+.row:hover { background: var(--hover); }
+.row.two { min-height: var(--g-row-3); }
+.row .ic { color: var(--txt-3); }
+.row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .sub {
+  display: block; color: var(--txt-3); font-size: var(--fs-cap);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row.on .ic { color: var(--accent-fg); }
+
+/* Selected row gets the accent BOX, not a fill. Gotham outlines the selection
+   so the row's own colour coding stays readable underneath. */
+.row.sel {
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+
+/* ══ Marks ═══════════════════════════════════════════════════════════════
+   The answer to "numbers do nothing". Gotham's Histogram panel puts a bar on
+   every row, and the bar carries TWO quantities: the light segment is the part
+   matching the current filter, the dark segment is the total. So one glance
+   gives you share as well as magnitude, which a number cannot do at all.
+
+   The gate refuses any .count in a panel body without a mark beside it. */
+
+.mark { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.count {
+  font-family: var(--font-mono); font-size: var(--fs-cap);
+  color: var(--txt-2); text-align: right; white-space: nowrap;
+}
+.count.frac { color: var(--txt-3); }
+
+.bar {
+  position: relative;
+  width: 66px; height: 10px; flex: 0 0 auto;
+  background: var(--bg-0);
+  border-radius: 1px; overflow: hidden;
+}
+.bar i { position: absolute; inset: 0 auto 0 0; display: block; background: var(--accent); }
+.bar i.part { background: var(--accent-fg); z-index: 1; }
+.bar.w-sm { width: 54px; }
+.bar.w-lg { width: 120px; }
+.bar i.warn { background: var(--warn); }
+.bar i.err { background: var(--err); }
+.bar i.ok { background: var(--ok); }
+
+/* Sparkline and density: same idiom the app already uses in
+   entity-panel/Sparkline.tsx and timeline/CoverageStrip.tsx. */
+.spark { width: 84px; height: 16px; flex: 0 0 auto; overflow: visible; }
+.spark polyline { fill: none; stroke: var(--accent-fg); stroke-width: 1.2; }
+.spark .area { fill: var(--accent-dim); stroke: none; }
+.spark.ok polyline { stroke: var(--ok-fg); }
+.spark.warn polyline { stroke: var(--warn-fg); }
+
+.meter { width: 100%; height: 3px; background: var(--bg-0); border-radius: 1px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--accent); }
+
+/* Dot matrix — for small-N health, where a bar is a lie about precision. */
+.dots { display: flex; gap: 2px; }
+.dots span { width: 6px; height: 6px; border-radius: 1px; background: var(--bg-3); }
+.dots span.ok { background: var(--ok); }
+.dots span.warn { background: var(--warn); }
+.dots span.err { background: var(--err); }
+
+.chart { display: block; width: auto; height: 118px; max-width: 100%; }
+.chart.dag { height: 210px; }
+.chart.tall { height: 150px; }
+.chart .grid-line { stroke: var(--brd-soft); stroke-width: 1; }
+.chart .ax { fill: var(--txt-3); font-size: 10px; font-family: var(--font-mono); }
+.chart .b-air { fill: var(--d-airliner); }
+.chart .b-mil { fill: var(--d-mil); }
+.chart .b-sea { fill: var(--d-cargo); }
+.chart .b-acc { fill: var(--accent); }
+.chart .b-mut { fill: var(--bg-4); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px var(--g-pad); font-size: var(--fs-cap); color: var(--txt-3); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 8px; height: 8px; border-radius: 1px; }
+
+/* ══ Object card — the thumbnail carrier ═════════════════════════════════
+   Gotham puts a picture on every object in every list. The mockup uses the
+   airframe silhouettes the app ALREADY has in entity-panel/silhouettes.ts and
+   real satellite chips, so this is a wiring job later, not new art. */
+.obj-card {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px var(--g-pad); min-height: 44px;
+  border-bottom: 1px solid var(--brd-soft);
+  cursor: default;
+}
+.obj-card:hover { background: var(--hover); }
+.obj-card.sel { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.thumb {
+  width: 40px; height: 40px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-0); border: 1px solid var(--brd);
+  border-radius: var(--g-r); overflow: hidden;
+  color: var(--txt-3);
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb svg.thumb-art { width: 34px; height: 34px; }
+.obj-main { flex: 1; min-width: 0; }
+.obj-t { color: var(--txt-0); font-size: var(--fs-body); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.obj-s { color: var(--txt-3); font-size: var(--fs-cap); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ══ Key/value ═══════════════════════════════════════════════════════════ */
+.kv { display: flex; align-items: baseline; gap: 10px; min-height: var(--g-row); padding: 0 var(--g-pad); font-size: var(--fs-dense); }
+.kv dt {
+  flex: 1 1 auto; min-width: 0; color: var(--txt-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.card .kv { padding: 0 4px; }
+.card .kv dt { flex: 1 1 auto; }
+.kv dd {
+  flex: 0 0 auto; max-width: 62%; margin: 0;
+  color: var(--txt-1); font-family: var(--font-mono);
+  text-align: right; white-space: nowrap;
+}
+.kv dd .mark { justify-content: flex-end; min-width: 0; }
+.kv dd .mark .bar { flex: 0 1 auto; min-width: 24px; }
+.kv dd.txt { font-family: var(--font-sans); }
+/* A lone em dash means "no value reported" and is the never-guess rule in the
+   UI. It is the ONE em dash the copy rules allow. */
+.kv dd.none { color: var(--txt-3); }
+
+/* ══ Controls ════════════════════════════════════════════════════════════ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--g-btn); padding: 0 11px;
+  background: var(--bg-3); border: 1px solid transparent; border-radius: var(--g-r);
+  color: var(--txt-0); font: inherit; font-size: var(--fs-body);
+  cursor: pointer; transition: background var(--tr);
+  white-space: nowrap;
+}
+.btn:hover { background: var(--bg-4); }
+.btn.pri { background: var(--accent); color: #fff; }
+.btn.pri:hover { background: #215db0; }
+.btn.sm { height: var(--g-btn-sm); padding: 0 9px; font-size: var(--fs-cap); }
+.btn.xs { height: var(--g-btn-xs); padding: 0 7px; font-size: var(--fs-cap); }
+.btn.gho { background: none; border-color: var(--brd); }
+.btn.gho:hover { background: var(--hover); }
+.btn.danger { background: var(--err); color: #fff; }
+.btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+.seg { display: inline-flex; border: 1px solid var(--brd); border-radius: var(--g-r); overflow: hidden; }
+.seg button {
+  height: var(--g-btn-xs); padding: 0 8px;
+  background: none; border: 0; border-right: 1px solid var(--brd);
+  color: var(--txt-2); font: inherit; font-size: var(--fs-cap); font-family: var(--font-mono);
+  cursor: pointer; transition: background var(--tr);
+}
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--hover); }
+.seg button[aria-pressed='true'] { background: var(--accent); color: #fff; }
+
+.sw {
+  position: relative; width: 26px; height: 14px; flex: 0 0 auto;
+  background: var(--bg-4); border-radius: 7px; cursor: pointer;
+  transition: background var(--tr);
+}
+.sw i { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--txt-2); transition: transform var(--tr); }
+.sw.on { background: var(--accent); }
+.sw.on i { transform: translateX(12px); background: #fff; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: var(--g-btn-xs); padding: 0 7px;
+  background: var(--accent-dim); border: 1px solid var(--accent-line);
+  border-radius: var(--g-r); color: var(--accent-fg); font-size: var(--fs-cap);
+}
+.chip.mut { background: var(--bg-2); border-color: var(--brd); color: var(--txt-2); }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; background: var(--txt-3); }
+.dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.err { background: var(--err); }
+
+/* ══ Map well ════════════════════════════════════════════════════════════ */
+.map {
+  position: relative; min-width: 0; overflow: hidden;
+  background: var(--bg-0);
+  border: 1px solid var(--brd); border-radius: var(--g-r);
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+/* @2x tiles displayed at their intended 256 CSS px. Displaying a @2x tile at
+   512 was the first render's mistake: every basemap label came out at double
+   size and the map read as a toy. */
+.tiles {
+  position: absolute; top: 0; left: 0;
+  width: 2304px; height: 1536px;   /* 9 x 6 tiles at 256 CSS px */
+  display: grid; grid-template-columns: repeat(9, 256px); grid-auto-rows: 256px;
+  transform: translate(-300px, -196px);
+  /* Knock the basemap back so the data sits on top of it rather than fighting
+     it. Carto's dark_all renders water lighter than land, which at operational
+     zoom competes with the contact palette. */
+  filter: brightness(0.78) saturate(0.85) contrast(1.04);
+}
+.tiles img { display: block; width: 256px; height: 256px; }
+
+.map-fade { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 42%, transparent 52%, rgba(17,20,24,0.62) 100%); }
+
+/* Floating map chrome */
+.map-strip {
+  position: absolute; top: 10px; left: 14px;
+  max-width: calc(100% - 28px);
+  display: flex; align-items: center; gap: 14px;
+  height: var(--g-btn-sm); padding: 0 11px;
+  background: rgba(28, 33, 39, 0.94); border: 1px solid var(--brd);
+  border-radius: var(--g-r); font-size: var(--fs-cap); color: var(--txt-2);
+  backdrop-filter: blur(3px);
+}
+.map-strip span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+/* Toolbar with GROUP LABELS. This is the device that reads as professional:
+   a bordered group with its purpose named above it, so a tool is never a
+   mystery glyph. Straight from tmp/palantir/parts/graph-toolbar.png. */
+.toolbar {
+  position: absolute; top: 10px; right: 10px;
+  display: flex; gap: 6px;
+  background: rgba(28, 33, 39, 0.94); border: 1px solid var(--brd);
+  border-radius: var(--g-r); padding: 4px; backdrop-filter: blur(3px);
+}
+.tgroup { display: flex; flex-direction: column; gap: 2px; padding: 0 6px; border-right: 1px solid var(--brd); }
+.tgroup:last-child { border-right: 0; }
+.tgroup b { font-size: 11px; font-weight: 400; color: var(--txt-3); letter-spacing: 0.3px; padding-left: 1px; }
+.tgroup div { display: flex; gap: 1px; }
+.tool {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--g-btn-sm); height: var(--g-btn-sm);
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-2); cursor: pointer; transition: background var(--tr);
+}
+.tool:hover { background: var(--hover); color: var(--txt-0); }
+.tool[aria-pressed='true'] { background: var(--accent); color: #fff; }
+
+/* The dock is 106px tall (30 transport + 18 ruler + 34 density + 24 foot), so
+   everything that reads over the map clears it. The first render put these at
+   bottom:58px and the dock ate all three. */
+.map-foot {
+  position: relative; z-index: 2; margin-top: auto;
+  padding: 0 14px 8px;
+  display: flex; align-items: flex-end; gap: 16px; pointer-events: none;
+}
+.scalebar { font-size: var(--fs-cap); color: var(--txt-1); text-shadow: 0 0 3px #000; }
+.scalebar .ln { height: 5px; border: 1px solid var(--txt-1); border-top: 0; margin-bottom: 3px; }
+
+.coords {
+  flex: 0 0 auto; white-space: nowrap;
+  padding: 3px 8px; background: rgba(17, 20, 24, 0.88);
+  border: 1px solid var(--brd); border-radius: var(--g-r);
+  font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-2);
+}
+
+.maplegend { flex: 0 1 auto; min-width: 0; display: flex; flex-wrap: nowrap; overflow: hidden;
+  gap: 6px 13px; white-space: nowrap; font-size: var(--fs-cap); color: var(--txt-1);
+  text-shadow: 0 0 3px #000; }
+.maplegend span { display: inline-flex; align-items: center; gap: 5px; }
+
+.attrib { font-size: 11px; color: var(--txt-2); opacity: 0.8; text-shadow: 0 0 3px #000; white-space: nowrap; }
+
+/* Map contacts — real category SVG, rotated by track. Never a bare point;
+   globe/invariants.test.ts fails if styles.ts ever grows a PointGraphics. */
+.ct { position: absolute; width: 14px; height: 14px; transform-origin: 50% 50%; }
+.ct svg { width: 100%; height: 100%; display: block; }
+.lbl {
+  position: absolute; font-size: 12px; font-family: var(--font-mono);
+  color: var(--txt-0); text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap;
+}
+.track { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.reticle {
+  position: absolute; width: 30px; height: 30px; transform: translate(-50%, -50%);
+  border: 1px solid var(--d-select); border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.7), 0 0 10px rgba(217,70,239,0.5);
+  pointer-events: none;
+}
+.reticle::before, .reticle::after {
+  content: ''; position: absolute; background: var(--d-select);
+}
+.reticle::before { left: 50%; top: -6px; width: 1px; height: 6px; }
+.reticle::after { left: 50%; bottom: -6px; width: 1px; height: 6px; }
+
+/* ══ Time dock ═══════════════════════════════════════════════════════════
+   Four rows, read off tmp/palantir/parts/video-transport.png:
+     1  transport, with one filled primary and a red Live
+     2  tick ruler with real time labels
+     3  event markers, clickable, on the ruler
+     4  density histogram — and this is the drag surface
+
+   Every control here has a handler in timeline/Timeline.tsx already. The ±15s
+   and frame-step buttons are the only new ones, and even those have their step
+   function at Timeline.tsx:467-476 with no control wired to it. */
+.dock {
+  position: relative; z-index: 2; margin: 0 10px 10px;
+  background: rgba(28, 33, 39, 0.97);
+  border: 1px solid var(--brd); border-radius: var(--g-r);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+}
+.transport {
+  display: flex; align-items: center; gap: 3px;
+  height: var(--g-time); padding: 0 10px;
+}
+.transport .clock {
+  font-family: var(--font-mono); font-size: var(--fs-body); color: var(--accent-fg);
+  min-width: 96px; letter-spacing: 0.3px;
+}
+.transport .sp { flex: 1; }
+.tbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  height: var(--g-btn-xs); min-width: var(--g-btn-xs); padding: 0 6px;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-1); font: inherit; font-size: 11px; font-family: var(--font-mono);
+  cursor: pointer; transition: background var(--tr);
+}
+.tbtn:hover { background: var(--hover); color: var(--txt-0); }
+.tbtn.pri { background: var(--accent); color: #fff; padding: 0 12px; font-family: var(--font-sans); font-size: var(--fs-cap); }
+.tbtn.pri:hover { background: #215db0; }
+.tbtn.live { background: var(--err); color: #fff; padding: 0 10px; font-family: var(--font-sans); font-size: var(--fs-cap); }
+.tbtn.live[aria-pressed='true'] { background: var(--bg-3); color: var(--txt-2); }
+
+/* The ruler. The operator's "so hard to rewind" is one hardcoded number:
+   Timeline.tsx:262 pins the density axis to window_sec=72000, so at 3d/7d the
+   playhead pegs at 0% and the strip cannot reach what is playing. Here the
+   ruler spans the LOADED range and says so. */
+/* Labels and event markers get separate lanes. Sharing one 18px band put a
+   marker on top of every second time label and made both unreadable. */
+.ruler { position: relative; height: 28px; border-top: 1px solid var(--brd-soft); }
+.ruler .tick { position: absolute; top: 0; height: 5px; width: 1px; background: var(--bg-4); }
+.ruler .tl { position: absolute; top: 6px; font-family: var(--font-mono); font-size: 10px; color: var(--txt-3); transform: translateX(3px); }
+.ruler .tl:last-of-type { transform: translateX(calc(-100% - 3px)); }
+.ruler .evlane { position: absolute; left: 0; right: 0; bottom: 0; height: 10px; border-top: 1px solid var(--brd-soft); }
+.ruler .ev {
+  position: absolute; bottom: 1px; width: 0; height: 0;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-bottom: 7px solid var(--warn);
+  transform: translateX(-4px); cursor: pointer;
+}
+.ruler .ev.alert { border-bottom-color: var(--err); }
+
+.density { position: relative; height: 40px; background: var(--bg-0); cursor: ew-resize; }
+.density svg { display: block; width: 100%; height: 100%; }
+.density .d-bar { fill: var(--ok); }
+.density .d-alert { fill: var(--err); }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--d-select); box-shadow: 0 0 4px rgba(217,70,239,0.7); pointer-events: none; }
+.playhead::before {
+  content: ''; position: absolute; top: -4px; left: -4px;
+  width: 10px; height: 10px; background: var(--d-select);
+  border-radius: 1px; transform: rotate(45deg);
+}
+.ph-stamp {
+  position: absolute; top: -19px; transform: translateX(-50%);
+  padding: 1px 5px; background: var(--d-select); color: #fff;
+  border-radius: 1px; font-family: var(--font-mono); font-size: 10px; white-space: nowrap;
+}
+.dock-foot {
+  display: flex; align-items: center; gap: 12px;
+  height: var(--g-btn-sm); padding: 0 10px;
+  border-top: 1px solid var(--brd-soft);
+  font-size: var(--fs-cap); color: var(--txt-3);
+}
+.dock-foot .sp { flex: 1; }
+
+/* ══ Action bar — the query as English ═══════════════════════════════════
+   Palantir's query vocabulary is eq / and / or / not / keyword / lt / gt /
+   lte / gte / geoPointWithin, and Object Explorer renders it as a sentence
+   with the operator's choices as underlined tokens. It is the single
+   most-copied-wrong device in the product. */
+.actionbar {
+  display: flex; align-items: center; gap: 10px;
+  height: var(--g-action); flex: 0 0 auto;
+  padding: 0 12px;
+  background: var(--bg-1); border-top: 1px solid var(--brd);
+  font-size: var(--fs-body);
+}
+.actionbar .sp { flex: 1; }
+.sentence { color: var(--txt-2); }
+.sentence u { color: var(--accent-fg); text-decoration-color: var(--accent-line); text-underline-offset: 3px; cursor: pointer; }
+.sentence b { color: var(--txt-0); font-weight: 600; }
+
+/* ══ Context menu ════════════════════════════════════════════════════════ */
+.ctx {
+  min-width: 210px; padding: 4px 0;
+  background: var(--bg-2); border: 1px solid var(--brd);
+  border-radius: var(--g-r); box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+}
+.ctx .hd { padding: 4px 11px; font-size: var(--fs-cap); font-weight: 600; color: var(--txt-0); }
+.ctx .sep { height: 1px; margin: 4px 0; background: var(--brd); }
+.ctx button {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  height: var(--g-row-2); padding: 0 11px;
+  background: none; border: 0; color: var(--txt-1);
+  font: inherit; font-size: var(--fs-dense); text-align: left; cursor: pointer;
+}
+.ctx button:hover, .ctx button.open { background: var(--hover); color: var(--txt-0); }
+.ctx button .ic { color: var(--txt-3); }
+.ctx button .sp { flex: 1; }
+
+/* ══ States ══════════════════════════════════════════════════════════════
+   Four, not three. docs/frontend.md:147 requires loading, empty and error to be
+   distinct. Both persona waves still found silent failure, because the real
+   case is DEGRADED: the surface has some data and is quietly missing the rest.
+   A vessel count that reads low because one of two sources is wedged must
+   say so. */
+.state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 32px calc(var(--g-pad) + 6px); text-align: center; }
+.state .ic { color: var(--txt-3); }
+.state h4 { margin: 0; font-size: var(--fs-body); font-weight: 600; color: var(--txt-1); }
+.state p { margin: 0; max-width: 240px; font-size: var(--fs-cap); color: var(--txt-3); line-height: 1.5; }
+.state.err .ic { color: var(--err-fg); }
+.state.deg .ic { color: var(--warn-fg); }
+
+.skel { background: var(--bg-2); border-radius: 1px; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.85; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+
+.banner {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 8px var(--g-pad); padding: 7px 9px;
+  border-radius: var(--g-r); font-size: var(--fs-cap); line-height: 1.5;
+}
+.banner.warn { background: rgba(236,154,60,0.12); border: 1px solid rgba(236,154,60,0.4); color: var(--warn-fg); }
+.banner.err { background: rgba(205,66,70,0.12); border: 1px solid rgba(205,66,70,0.4); color: var(--err-fg); }
+.banner .ic { flex: 0 0 auto; margin-top: 1px; }
+
+/* ══ App surfaces ════════════════════════════════════════════════════════ */
+.app { display: flex; flex-direction: column; min-height: 0; background: var(--bg-0); overflow: hidden; }
+/* A content area that is not inside `.body` has to earn its own gutter,
+   or it welds to the title bar the way the panels used to weld to the map. */
+.shell > .app {
+  margin: var(--g-gap); border: 1px solid var(--brd);
+  border-radius: var(--g-r); background: var(--bg-1);
+}
+.app-head {
+  display: flex; align-items: center; gap: 10px;
+  height: var(--g-btn); flex: 0 0 auto;
+  padding: 0 12px; background: var(--bg-1); border-bottom: 1px solid var(--brd);
+}
+.app-head .sp { flex: 1; }
+.subtabs .tab { padding: 0 9px; font-size: var(--fs-cap); }
+.subtabs { display: flex; align-items: stretch; height: var(--g-tabs); flex: 0 0 auto; padding: 0 8px; background: var(--bg-1); border-bottom: 1px solid var(--brd); }
+.app-body { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+
+.grid { display: grid; gap: 12px; }
+.app-body > .grid:only-child { min-height: 100%; grid-auto-rows: minmax(0, 1fr); }
+.card { min-height: 0; display: flex; flex-direction: column; }
+.card-h { flex: 0 0 auto; }
+.card-b { flex: 1; min-height: 0; overflow: auto; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.card { background: var(--bg-1); border: 1px solid var(--brd); border-radius: var(--g-r); overflow: hidden; }
+.card-h { display: flex; align-items: center; gap: 8px; height: var(--g-btn-sm); padding: 0 10px; border-bottom: 1px solid var(--brd-soft); font-size: var(--fs-cap); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--txt-2); }
+.card-h .sp { flex: 1; }
+.card-b { padding: 10px; }
+.card-b.flush { padding: 0; }
+
+/* A stat tile always carries its trend. A bare 24px number was the complaint. */
+.stat { padding: 9px 10px; }
+.stat .k { font-size: var(--fs-cap); color: var(--txt-3); }
+.stat .v { font-family: var(--font-mono); font-size: var(--fs-hero); color: var(--txt-0); line-height: 1.3; }
+.stat .r { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+
+table.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-dense); }
+table.tbl th { text-align: left; padding: 0 10px; height: var(--g-row-2); font-weight: 600; font-size: var(--fs-cap); letter-spacing: 0.4px; text-transform: uppercase; color: var(--txt-3); border-bottom: 1px solid var(--brd); }
+table.tbl td { padding: 0 10px; height: var(--g-row-2); color: var(--txt-1); border-bottom: 1px solid var(--brd-soft); }
+table.tbl td.num { font-family: var(--font-mono); text-align: right; }
+table.tbl tr:hover td { background: var(--hover); }
+
+/* Node-link graph. Gotham's flagship, and the reason its nodes carry
+   photographs: an unlabelled circle graph tells you topology and nothing else. */
+.graph { position: relative; width: 100%; height: 100%; background: var(--bg-0); }
+.gnode {
+  position: absolute; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  transform: translate(-50%, -50%); cursor: pointer;
+}
+.gnode .thumb { width: 44px; height: 44px; }
+.gnode.sel .thumb { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+.gnode b { font-size: 12px; font-weight: 400; color: var(--txt-1); text-shadow: 0 0 3px var(--bg-0); white-space: nowrap; }
+.glink { stroke: var(--bg-4); stroke-width: 1.2px; fill: none; }
+.glink.hot { stroke: var(--accent-line); stroke-width: 1.6px; }
+/* Link labels are HTML: inside the scaled viewBox an SVG <text> renders at
+   whatever the scale factor multiplies it to, which was ~90px here. */
+.gl-label {
+  position: absolute; transform: translate(-50%, -50%);
+  padding: 0 4px; background: rgba(17, 20, 24, 0.86);
+  font-size: 11px; color: var(--txt-3); white-space: nowrap; pointer-events: none;
+}
+
+.rail {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: var(--g-rail); flex: 0 0 auto; padding-top: 5px;
+  background: var(--bg-1); border-right: 1px solid var(--brd);
+}
+.rail button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-3); cursor: pointer; transition: background var(--tr), color var(--tr);
+}
+.rail button:hover { background: var(--hover); color: var(--txt-1); }
+.rail button[aria-pressed='true'] { background: var(--accent-dim); color: var(--accent-fg); }
+
+.hr { height: 1px; background: var(--brd); margin: 6px 0; }
+.mut { color: var(--txt-3); }
+.mono { font-family: var(--font-mono); }
+.pad { padding: 10px var(--g-pad); }
+.sp { flex: 1; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: var(--bg-1); }
+::-webkit-scrollbar-thumb { background: var(--bg-4); border-radius: 5px; border: 2px solid var(--bg-1); }
+::-webkit-scrollbar-thumb:hover { background: #4c5361; }
+
+:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 1px; }
+
+/* ══ Other computers ══════════════════════════════════════════════════════
+   The frontend this set specifies has FOUR `@media` queries in its entire
+   source (index.css:22, news/news.css:225,232,238), three of them on the news
+   page. That is the whole content of "it works on my computer": the console
+   was drawn once at one size and never checked at another. At 1366x768 the
+   first render of this set had the document title printing on top of the
+   contact count, the map strip clipped mid-word behind the toolbar, and the
+   legend cut after two entries.
+
+   So the rule here is that nothing is hidden that carries information the
+   operator cannot get elsewhere. What goes first is redundancy: the trend
+   sparklines beside numbers that are still shown, menu items that are also in
+   the palette, legend entries for categories already visible on the map.
+   Panels narrow before anything is dropped, and the map is the last thing to
+   give up pixels.
+
+   _gate.mjs runs every check at 1366x768, 1440x900, 1920x1080 and 2560x1440,
+   so this stops being a promise. */
+
+/* ── 1600px: a 1080p window with browser chrome ──────────────────────────── */
+/* The map legend is the first thing to go. It shares a flex row with the scale
+   bar, the attribution and the coordinate readout, and once it is squeezed it
+   renders a colour dot with its word cut off, which reads as a rendering fault
+   rather than as truncation. Every colour in it is also on a Layers row, so
+   dropping it whole loses nothing. */
+@media (max-width: 1500px) {
+  .maplegend { display: none; }
+  /* Both are in the card menu too; the verbs are not anywhere else. */
+  .ddock-h .iconbtn:not(:first-of-type) { display: none; }
+  .ddock-h .chip { display: none; }
+}
+
+@media (max-width: 1600px) {
+  /* The trend lines are context beside a number that is still there. */
+  .titlebar .tb-item .spark { display: none; }
+  .titlebar .search { width: 168px; }
+  .doctitle { max-width: 260px; }
+}
+
+/* ── 1450px: a 1440x900 laptop ───────────────────────────────────────────── */
+@media (max-width: 1450px) {
+  :root { --g-left: 296px; --g-right: 280px; --g-pad: 12px; }
+  /* Collect and Exploration are both reachable from the palette and from the
+     panel they open. File / Edit / View / Window / Help are not. */
+  .menu button:nth-child(4), .menu button:nth-child(5) { display: none; }
+  .titlebar .search { width: var(--g-btn-sm); padding: 0; justify-content: center; }
+  .titlebar .search .lbl-text { display: none; }
+  .saved { margin-right: 6px; }
+  .tb-item.long { display: none; }
+}
+
+/* ── 1300px: a 1366x768 laptop, the common floor ─────────────────────────── */
+@media (max-width: 1300px) {
+  :root { --g-left: 274px; --g-right: 264px; --g-pad: 11px; }
+  .doctitle { max-width: 170px; }
+  /* One tool group at a time is still every tool: the group labels stay, the
+     toolbar wraps instead of running under the strip. */
+  .toolbar { flex-wrap: wrap; max-width: 300px; }
+  .map-foot .attrib { display: none; }
+  .tab { padding: 0 9px; }
+}
+
+/* ── 1150px: a small window, not a phone ─────────────────────────────────── */
+@media (max-width: 1150px) {
+  :root { --g-left: 250px; --g-right: 0px; --g-pad: 11px; }
+  /* The right column becomes an overlay over the map rather than vanishing:
+     Selection is the panel the operator opened deliberately. */
+  .body { grid-template-columns: var(--g-left) 1fr; }
+  .panel.right {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 288px; z-index: 20;
+    box-shadow: -8px 0 20px rgba(0, 0, 0, 0.5);
+  }
+  .map { position: relative; }
+  .maplegend { display: none; }
+}
+
+/* ── Short viewports ─────────────────────────────────────────────────────── */
+@media (max-height: 800px) {
+  /* 122px of dock on a 768px screen is 16 % of the window. The density strip
+     is the part that survives: it is the drag surface and the only row that
+     shows WHERE the activity is. The tick ruler goes, the transport stays. */
+  .density { height: 30px; }
+  .dock-foot { height: var(--g-btn-xs); }
+}
+@media (max-height: 700px) {
+  .ruler { display: none; }
+  .actionbar { height: 40px; }
+}
+
+/* Pointer targets stay at least 24px on a touch device even though the mouse
+   grammar is 20px. Density is a mouse affordance, not a universal one. */
+@media (pointer: coarse) {
+  .row, .kv { min-height: 26px; }
+  .tool, .iconbtn, .tbtn { min-width: 26px; min-height: 26px; }
+}
+
+/* ══ Grammar taken from the live product demo ═════════════════════════════
+   The PDFs this set was first measured against are 2024 marketing captures.
+   A 2026 conference demo shows the shipping product, and it carries devices
+   the PDFs never showed. These are structural patterns applied to this
+   product's own content; no branding, wordmark, symbology or mission data is
+   reproduced from it. */
+
+/* ── Panel title: subject in caps, state underneath ───────────────────────
+   Panels announce themselves as ALL-CAPS letterspaced subjects with a live
+   state line beneath ("last refresh 0s ago"), not as a sentence-case word.
+   The state line is what makes a panel feel instrumented rather than static. */
+.ptitle {
+  display: flex; align-items: center; gap: 9px;
+  padding: 5px var(--g-pad); min-height: var(--g-row-3);
+  border-bottom: 1px solid var(--brd-soft);
+}
+.ptitle .ic { color: var(--accent-fg); }
+.ptitle b {
+  display: block; font-size: var(--fs-cap); font-weight: 600;
+  letter-spacing: 0.9px; text-transform: uppercase; color: var(--txt-0);
+}
+.ptitle .st { display: block; font-size: var(--fs-cap); color: var(--txt-3); }
+.ptitle .st a { color: var(--accent-fg); text-decoration: none; }
+
+/* ── Icon tab strip ───────────────────────────────────────────────────────
+   A panel's sibling views are icon tabs across its top, not text tabs. */
+.itabs {
+  display: flex; align-items: center; gap: 1px;
+  padding: 3px 6px; border-bottom: 1px solid var(--brd-soft);
+}
+.itabs button {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: var(--g-btn-sm); padding: 0 7px;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-3); font: inherit; font-size: var(--fs-cap); cursor: pointer;
+}
+.itabs button:hover { background: var(--hover); color: var(--txt-1); }
+.itabs button[aria-selected='true'] { background: var(--accent-dim); color: var(--accent-fg); }
+
+/* ── Filter chip row ──────────────────────────────────────────────────────
+   Scope filters sit directly under the title as a row of icon+label chips. */
+.chiprow { display: flex; align-items: center; gap: 4px; padding: 5px var(--g-pad); flex-wrap: wrap; }
+.fchip {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: var(--g-btn-xs); padding: 0 7px;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-2); font: inherit; font-size: var(--fs-cap); cursor: pointer;
+}
+.fchip:hover { background: var(--hover); color: var(--txt-0); }
+.fchip .ic { color: var(--txt-3); }
+
+/* ── Work card ────────────────────────────────────────────────────────────
+   The unit of a decision queue: a titled card carrying a STATUS CHIP, a
+   two-column micro key/value block where the label sits ABOVE its value
+   (not beside it, which is the console's grammar), nested sub-cards for the
+   things being related, and a footer strip with the one fact that decides
+   urgency plus a classification marker. */
+.wcard {
+  border: 1px solid var(--accent-line); border-radius: var(--g-r);
+  background: var(--bg-1); overflow: hidden; margin-bottom: 8px;
+}
+.wcard-h { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; }
+.wcard-h .t { flex: 1; min-width: 0; color: var(--txt-0); font-weight: 600; font-size: var(--fs-body); }
+.status {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 1px 6px; border-radius: var(--g-r);
+  font-size: var(--fs-cap); letter-spacing: 0.6px; text-transform: uppercase;
+  background: var(--bg-3); color: var(--txt-2); white-space: nowrap;
+}
+.status.proposed { background: var(--accent-dim); color: var(--accent-fg); }
+.status.live { background: rgba(50,164,103,.18); color: var(--ok-fg); }
+.status.hold { background: rgba(236,154,60,.18); color: var(--warn-fg); }
+
+/* Label ABOVE value. In a decision card the label is the question and the
+   value is the answer, so stacking reads faster than a right-aligned column. */
+.mkv { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; padding: 0 10px 8px; }
+.mkv dt { font-size: var(--fs-cap); color: var(--txt-3); }
+.mkv dd { margin: 0 0 6px; font-size: var(--fs-dense); color: var(--txt-1); font-family: var(--font-mono); }
+.mkv dd.txt { font-family: var(--font-sans); }
+
+.subcards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 10px 8px; }
+.subcard {
+  border: 1px solid var(--brd); border-radius: var(--g-r);
+  padding: 6px 8px; background: var(--bg-2);
+}
+.subcard .k { display: flex; align-items: center; gap: 6px; color: var(--txt-0); font-size: var(--fs-dense); }
+.subcard .v { display: flex; align-items: center; gap: 5px; margin-top: 4px; color: var(--txt-3); font-size: var(--fs-cap); }
+
+.wcard-f {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px; border-top: 1px solid var(--brd-soft);
+  background: var(--bg-2); font-size: var(--fs-cap); color: var(--warn-fg);
+}
+.wcard-f .sp { flex: 1; }
+.wcard-f .cls { color: var(--txt-3); letter-spacing: 0.5px; }
+
+/* ── Decision dock ────────────────────────────────────────────────────────
+   Distinct from the time dock: this one carries a proposal and the verbs that
+   resolve it. The destructive verb is left of the constructive one and the
+   constructive one is the only filled control in the row. */
+.ddock-h {
+  display: flex; align-items: center; gap: 8px;
+  height: var(--g-btn); padding: 0 10px;
+  border-bottom: 1px solid var(--brd-soft);
+}
+.ddock-h .t {
+  font-size: var(--fs-cap); font-weight: 600; letter-spacing: 0.7px;
+  text-transform: uppercase; color: var(--txt-0);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; flex: 0 1 auto;
+}
+.ddock-h .btn { flex: 0 0 auto; }
+.ddock-h .sp { flex: 1; }
+.btn.reject { background: none; border-color: var(--err); color: var(--err-fg); }
+.btn.reject:hover { background: rgba(205, 66, 70, 0.16); }
+
+/* ── Gantt ────────────────────────────────────────────────────────────────
+   Hour columns, one lane per asset, a red now-line. */
+.gantt { display: grid; grid-template-columns: 150px 1fr; font-size: var(--fs-cap); }
+.gantt .lanes { border-right: 1px solid var(--brd); }
+.gantt .lane {
+  display: flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 10px; border-bottom: 1px solid var(--brd-soft);
+  color: var(--txt-1);
+}
+.gantt .lane .sub { display: block; color: var(--txt-3); font-size: var(--fs-cap); }
+.gantt .grid-h { position: relative; }
+.gantt .hours { display: flex; height: 20px; border-bottom: 1px solid var(--brd-soft); }
+.gantt .hours span {
+  flex: 1; padding-left: 5px; border-left: 1px solid var(--brd-soft);
+  font-family: var(--font-mono); font-size: 11px; color: var(--txt-3);
+}
+/* class name matches the ruler tick exemption already named in _gate.mjs */
+.gantt .track { position: relative; height: 34px; border-bottom: 1px solid var(--brd-soft); }
+.gantt .track i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--brd-soft); }
+.gantt .blk {
+  position: absolute; top: 6px; height: 22px; border-radius: 1px;
+  background: var(--accent); display: flex; align-items: center;
+  padding: 0 6px; color: #fff; font-size: var(--fs-cap); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.gantt .now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--err); z-index: 2; }
+.gantt .now::before {
+  content: ''; position: absolute; top: -3px; left: -3px;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 6px solid var(--err);
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────────
+   Confirmation lands at the top of the surface the action changed. */
+.toast {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px; z-index: 30;
+  padding: 6px 10px; border-radius: var(--g-r);
+  background: rgba(50, 164, 103, 0.94); color: #0b1a12;
+  font-size: var(--fs-cap); font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.toast .ic { color: #0b1a12; }
+.toast button { background: none; border: 0; color: #0b1a12; cursor: pointer; padding: 0; }
+
+/* ── Map label as a chip ──────────────────────────────────────────────────
+   Bare text with a shadow disappears over bright imagery. A chip does not. */
+.lbl {
+  padding: 1px 5px; border-radius: 2px;
+  background: rgba(17, 20, 24, 0.82); border: 1px solid rgba(255, 255, 255, 0.10);
+  text-shadow: none;
+}
+.lbl.hot { border-color: var(--err); color: var(--err-fg); }
+
+/* ── Heading indicator ────────────────────────────────────────────────────
+   North-up is an assumption; a bearing readout states it. */
+.compass {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 7px 5px; z-index: 4;
+  background: rgba(28, 33, 39, 0.9); border: 1px solid var(--brd);
+  border-radius: var(--g-r);
+}
+.compass .deg { font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-1); }
+.compass .rose { width: 22px; height: 22px; color: var(--txt-2); }
+
+/* ── AI surface ───────────────────────────────────────────────────────────
+   Model-driven surfaces carry their own hue, so an operator can never mistake
+   a recommendation for a reading. Indigo, kept off the map data palette. */
+.ai-surface {
+  --accent: #6b5cd6; --accent-dim: rgba(107, 92, 214, 0.20);
+  --accent-line: rgba(107, 92, 214, 0.55); --accent-fg: #b3a8ff;
+  background: #1b1a2b; border-color: #322e50;
+}
+.ai-surface .card-h, .ai-surface .ptitle { border-color: rgba(255, 255, 255, 0.09); }
+
+/* Half-dial + stepper: a weight is a quantity you nudge, so it shows the
+   quantity and the nudge together. */
+.dial { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.dial svg { width: 74px; height: 42px; }
+.dial .arc-bg { fill: none; stroke: rgba(255, 255, 255, 0.12); stroke-width: 7; }
+.dial .arc { fill: none; stroke: var(--accent-fg); stroke-width: 7; stroke-linecap: butt; }
+.stepper { display: flex; align-items: center; gap: 8px; }
+.stepper button {
+  width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 0; border-radius: var(--g-r);
+  color: var(--txt-2); cursor: pointer;
+}
+.stepper button:hover { background: rgba(255, 255, 255, 0.08); color: var(--txt-0); }
+.stepper .n { font-family: var(--font-mono); font-size: var(--fs-body); color: var(--txt-0); min-width: 24px; text-align: center; }
+
+/* ── Layer tree ───────────────────────────────────────────────────────────
+   Layers nest in folders with disclosure triangles; a flat list cannot say
+   that six overlays belong to one operation. */
+.tree .row { padding-left: calc(var(--g-pad) + var(--lvl, 0) * 14px); }
+.tree .tw { width: 10px; color: var(--txt-3); flex: 0 0 auto; }
+
+/* ── Resolved state ───────────────────────────────────────────────────────
+   A decision dock is a state machine, not a toolbar. Once the proposal is
+   resolved the destructive verb LEAVES (there is nothing left to reject) and
+   the primary turns green and states what happened in the past tense. Keeping
+   a live "Approve" button next to an approved task is how someone approves the
+   same thing twice. */
+.btn.done { background: var(--ok); color: #08130d; }
+.btn.done:hover { background: #2b8f5a; }
+.status.approved { background: rgba(50, 164, 103, 0.20); color: var(--ok-fg); }
+.wcard.approved { border-color: rgba(50, 164, 103, 0.55); }
+.wcard.approved .wcard-f { color: var(--ok-fg); }
+
+/* ── Match card ───────────────────────────────────────────────────────────
+   Two entities judged against each other, attribute row aligned to attribute
+   row, so the comparison is read across rather than held in the head. */
+.match { border: 1px solid var(--brd); border-radius: var(--g-r); background: var(--bg-1); }
+.match-h {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 10px; border-bottom: 1px solid var(--brd-soft);
+  font-size: var(--fs-cap); color: var(--ok-fg);
+}
+.match-h .sp { flex: 1; }
+.match-b { display: grid; grid-template-columns: 1fr 1fr; }
+.match-b > div { padding: 8px 10px; }
+.match-b > div:first-child { border-right: 1px solid var(--brd-soft); }
+.match-t { display: flex; align-items: center; gap: 6px; color: var(--txt-0); font-size: var(--fs-body); font-weight: 600; }
+.match-s { color: var(--txt-3); font-size: var(--fs-cap); margin-top: 2px; }
+.match-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--brd-soft); font-size: var(--fs-dense);
+}
+.match-row > span { padding: 5px 10px; font-family: var(--font-mono); color: var(--txt-1); }
+.match-row > span:first-child { border-right: 1px solid var(--brd-soft); }
+.match-row.lab > span { font-family: var(--font-sans); color: var(--txt-3); font-size: var(--fs-cap); }
+.match-f {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; border-top: 1px solid var(--brd-soft);
+  font-size: var(--fs-cap); color: var(--ok-fg);
+}
+.match-f .sp { flex: 1; }
+
+/* ── Map analysis overlays ────────────────────────────────────────────────
+   A choropleth answers "where is it worst", a coverage wedge answers "what can
+   actually see it", and range rings answer "how far". None of the three are
+   answerable from point symbols alone. */
+.wedge { position: absolute; transform-origin: 0 50%; pointer-events: none; }
+.rings { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
+.rings circle { fill: none; stroke: var(--accent-line); stroke-width: 1; }
+.rings text { fill: var(--accent-fg); font-size: 9px; font-family: var(--font-mono); }
+.aoi-circle {
+  position: absolute; transform: translate(-50%, -50%);
+  border: 1px solid var(--d-select); border-radius: 50%;
+  background: rgba(217, 70, 239, 0.07); pointer-events: none;
+}
+.aoi-circle .dia {
+  position: absolute; top: 50%; left: 0; right: 0; height: 1px;
+  background: var(--d-select); opacity: 0.7;
+}
+.aoi-circle .dia b {
+  position: absolute; left: 50%; top: -8px; transform: translateX(-50%);
+  padding: 0 4px; background: rgba(17, 20, 24, 0.85);
+  color: var(--d-select); font-size: var(--fs-cap); font-family: var(--font-mono); font-weight: 400;
+}
+
+/* An empty state offers the action that fills it, and a second way out for the
+   operator who does not want that action. Without the escape the primary is a
+   dead end wearing a button. */
+.state .esc { font-size: var(--fs-cap); color: var(--txt-3); }
+.state .esc a { color: var(--accent-fg); text-decoration: none; }
+
+/* ── Field: label above control ───────────────────────────────────────────
+   A READOUT wants its label left and its value right, which is what `.kv`
+   does. A CONTROL wants its label above, so the input can take the full width
+   and so there is somewhere to hang an explanation. Using the readout grammar
+   for controls is why config panels end up cramped. */
+.field { padding: 6px var(--g-pad) 8px; }
+.field > label {
+  display: flex; align-items: center; gap: 5px; margin-bottom: 4px;
+  font-size: var(--fs-cap); letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--txt-3);
+}
+.field > label .help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 1px solid var(--txt-3); color: var(--txt-3);
+  font-size: var(--fs-cap); line-height: 1; cursor: help;
+}
+.field .control {
+  display: flex; align-items: center; gap: 6px;
+  height: var(--g-btn-sm); padding: 0 8px;
+  background: var(--bg-0); border: 1px solid var(--brd);
+  border-radius: var(--g-r); color: var(--txt-1); font-size: var(--fs-dense);
+}
+.field .control .sp { flex: 1; }
+
+/* The bound-value echo. One read-only row restating what a binding currently
+   resolves to is the difference between "I configured a binding" and "I know
+   what the binding is doing". */
+.echo {
+  display: flex; align-items: baseline; gap: 6px;
+  margin-top: 4px; padding: 3px 8px;
+  background: var(--bg-2); border-radius: var(--g-r);
+  font-size: var(--fs-cap); color: var(--txt-3);
+}
+.echo b { font-family: var(--font-mono); font-weight: 400; color: var(--txt-1); }
+.echo b.none { color: var(--txt-3); }
+
+/* A third heading level: subordinate to a SECTION, not to a name. */
+.sublabel {
+  padding: 8px var(--g-pad) 2px;
+  font-size: var(--fs-cap); letter-spacing: 0.6px;
+  text-transform: uppercase; color: var(--txt-3);
+}
+
+/* ── Mode bar ─────────────────────────────────────────────────────────────
+   A surface that is NOT showing reality has to say so on the surface itself,
+   and it has to offer the ways out. This repo already treats "simulated" as a
+   correctness concern; a caveat inside one card is not enough when the entire
+   workspace is a sandbox. */
+.modebar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px var(--g-pad);
+  background: rgba(107, 92, 214, 0.16);
+  border-bottom: 1px solid rgba(107, 92, 214, 0.45);
+  font-size: var(--fs-cap); color: #c9c0ff;
+}
+.modebar .ic { color: #b3a8ff; }
+.modebar b { font-family: var(--font-mono); font-weight: 400; color: var(--txt-0); }
+.modebar .sp { flex: 1; }
+
+/* ── Impact tiles, coloured by valence ────────────────────────────────────
+   The point of an impact readout is not the number, it is whether the number
+   is good. Tinting by valence answers that before the number is read. */
+.impact { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--brd); }
+.impact > div { padding: 8px 10px; background: var(--bg-1); }
+.impact .k { font-size: var(--fs-cap); color: var(--txt-3); }
+.impact .v { font-family: var(--font-mono); font-size: var(--fs-lead); color: var(--txt-0); margin-top: 2px; }
+.impact .good { background: rgba(50, 164, 103, 0.14); }
+.impact .good .v { color: var(--ok-fg); }
+.impact .bad { background: rgba(205, 66, 70, 0.14); }
+.impact .bad .v { color: var(--err-fg); }
+.impact .note { background: rgba(45, 114, 210, 0.14); }
+.impact .note .v { color: var(--accent-fg); }
+
+/* ── Scenario sweep ───────────────────────────────────────────────────────
+   One row per parameter value, outcomes aligned in columns, the chosen row
+   marked. A sweep read as three separate runs is three things to remember. */
+.sweep { width: 100%; border-collapse: collapse; font-size: var(--fs-dense); }
+.sweep td { padding: 8px 10px; border-bottom: 1px solid var(--brd-soft); color: var(--txt-1); }
+.sweep td.p { font-family: var(--font-mono); color: var(--txt-0); width: 96px; }
+.sweep td .u { color: var(--txt-3); font-size: var(--fs-cap); }
+.sweep tr.sel td { background: var(--accent-dim); box-shadow: inset 0 -2px 0 var(--accent); }
+.sweep tr:hover td { background: var(--hover); }
+
+/* ── Prompt bar ───────────────────────────────────────────────────────────
+   A conversational surface ends in one full-width input, not a floating box. */
+.prompt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px var(--g-pad); border-top: 1px solid var(--brd);
+  background: var(--bg-1);
+}
+.prompt .box {
+  flex: 1; display: flex; align-items: center; gap: 7px;
+  height: var(--g-btn); padding: 0 10px;
+  background: var(--bg-0); border: 1px solid var(--brd); border-radius: var(--g-r);
+  color: var(--txt-3); font-size: var(--fs-body);
+}
+
+/* ── App launcher with pinned favourites ──────────────────────────────────
+   Fourteen apps in a flat alphabetical list means the four an operator uses
+   daily are found by reading past ten they never open. Starred entries lift to
+   the top and the star stays on every row, so pinning is discovered by using
+   the list rather than by finding a setting.
+
+   docs/dashboard-redesign-2026-08.md §2.1 already carried this from direction
+   C ("the tab row also carries panels the operator pins") and it was never
+   built; the reference confirms the shape. */
+.applist { padding: 4px 0; }
+.applist .grp {
+  padding: 6px var(--g-pad) 3px;
+  font-size: var(--fs-cap); letter-spacing: 0.6px;
+  text-transform: uppercase; color: var(--txt-3);
+}
+.applist button {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  height: var(--g-row-2); padding: 0 var(--g-pad);
+  background: none; border: 0; color: var(--txt-1);
+  font: inherit; font-size: var(--fs-dense); text-align: left; cursor: pointer;
+}
+.applist button:hover { background: var(--hover); color: var(--txt-0); }
+.applist button .ic:first-child { color: var(--txt-3); }
+.applist button .sp { flex: 1; }
+.applist .star { color: var(--bg-4); }
+.applist .star.on { color: var(--warn); }
+.applist button:hover .star { color: var(--txt-3); }
+.applist button:hover .star.on { color: var(--warn); }

@@ -18,6 +18,8 @@ import { CameraCard } from './CameraCard.js';
 import { CaptureCard } from './CaptureCard.js';
 import type { Alert } from '@osint/shared';
 import { apiFetch } from '../transport/http.js';
+import { Icon, type IconName } from '../normal/Icon.js';
+import { findEntity, readProperties, readPosition } from './read.js';
 import { toast } from '../shell/toast.js';
 import { Flag, Crosshair, BellRing, ShieldCheck } from 'lucide-react';
 import { useEvidence } from '../evidence/evidenceStore.js';
@@ -60,7 +62,7 @@ interface Props {
   viewer?: Cesium.Viewer | null;
 }
 
-interface PanelSnapshot {
+export interface PanelSnapshot {
   id: string;
   name?: string;
   kind?: string;
@@ -534,7 +536,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
 // the live snapshot has a position; the other two work off the entity id alone.
 type ActionPhase = 'idle' | 'running' | 'ok' | 'error';
 
-function ActionsCard({
+export function ActionsCard({
   id,
   snap,
 }: {
@@ -790,49 +792,56 @@ function isDark(snap: PanelSnapshot | null): boolean {
   return snap?.properties?.['darkCandidate'] === true;
 }
 
-const AIRCRAFT_GLYPH: Record<string, string> = {
-  airliner: '✈',
-  private: '➤',
-  helicopter: '⊹',
-  glider: '◇',
-  military: '✦',
-  emergency: '⚠',
+// Category icons come from the shared registry (normal/Icon.tsx, lucide-backed)
+// rather than from typographic characters. The three maps below used to hold
+// glyphs like '✈' and '⛴', which render at whatever weight and baseline the
+// user's fallback font happens to have, are unaligned with the SVG symbology
+// on the map, and are invisible to a screen reader. 'jet' and 'heli' are the
+// two hand-drawn silhouettes the registry keeps because lucide has no
+// equivalent.
+const AIRCRAFT_ICON: Record<string, IconName> = {
+  airliner: 'plane',
+  private: 'jet',
+  helicopter: 'heli',
+  glider: 'plane',
+  military: 'shield',
+  emergency: 'warning',
 };
-const VESSEL_GLYPH: Record<string, string> = {
-  cargo: '▤',
-  tanker: '⬢',
-  fishing: '⚓',
-  passenger: '⛴',
-  military: '✦',
-  sailing: '⛵',
-  pleasure: '⛵',
-  tug: '⊕',
-  sar: '✚',
-  generic: '⛴',
+const VESSEL_ICON: Record<string, IconName> = {
+  cargo: 'ship',
+  tanker: 'ship',
+  fishing: 'anchor',
+  passenger: 'ship',
+  military: 'shield',
+  sailing: 'ship',
+  pleasure: 'ship',
+  tug: 'ship',
+  sar: 'crosshair',
+  generic: 'ship',
 };
-const OTHER_GLYPH: Record<string, string> = {
-  quake: '◉',
-  camera: '▣',
-  fire: '✦',
-  airport: '✈',
-  port: '⚓',
-  base: '⛨',
-  satellite: '◈',
+const OTHER_ICON: Record<string, IconName> = {
+  quake: 'quake',
+  camera: 'image',
+  fire: 'fire',
+  airport: 'plane',
+  port: 'anchor',
+  base: 'shield',
+  satellite: 'satellite',
 };
 
 interface Category {
-  glyph: string;
+  icon: IconName;
   color: string;
   label: string;
   tone: BadgeTone;
 }
 function categoryOf(snap: PanelSnapshot | null): Category {
   const p = snap?.properties ?? {};
-  if (isDark(snap)) return { glyph: '◆', color: 'var(--alert)', label: 'dark candidate', tone: 'alert' };
+  if (isDark(snap)) return { icon: 'warning', color: 'var(--alert)', label: 'dark candidate', tone: 'alert' };
   if (snap?.kind === 'aircraft') {
     const s = aircraftStyle(p);
     return {
-      glyph: AIRCRAFT_GLYPH[s.kind] ?? '✈',
+      icon: AIRCRAFT_ICON[s.kind] ?? 'plane',
       color: s.color.toCssHexString(),
       label: s.kind,
       tone: s.emergency ? 'alert' : 'accent',
@@ -841,14 +850,14 @@ function categoryOf(snap: PanelSnapshot | null): Category {
   if (snap?.kind === 'vessel') {
     const s = vesselStyle(p);
     return {
-      glyph: VESSEL_GLYPH[s.kind] ?? '⛴',
+      icon: VESSEL_ICON[s.kind] ?? 'ship',
       color: s.color.toCssHexString(),
       label: s.kind,
       tone: s.dark ? 'alert' : 'ok',
     };
   }
   return {
-    glyph: OTHER_GLYPH[snap?.kind ?? ''] ?? '◆',
+    icon: OTHER_ICON[snap?.kind ?? ''] ?? 'hexagon',
     color: 'var(--txt-1)',
     label: snap?.kind ?? 'object',
     tone: kindBadgeTone(snap?.kind),
@@ -927,7 +936,7 @@ function Header({
   return (
     <header className="flex items-start gap-3">
       <IconTile color={cat.color}>
-        <span aria-hidden>{cat.glyph}</span>
+        <Icon name={cat.icon} className="w-5 h-5" />
       </IconTile>
       <div className="min-w-0 flex-1">
         <div className="mono text-[10px] tracking-[0.03em] text-txt-2 truncate" title={idParts.join(' · ')}>
@@ -1119,7 +1128,7 @@ function Group({ icon, title, rows }: { icon: string; title: string; rows: JSX.E
 // ── freshness helpers ───────────────────────────────────────────────────────
 // AIS vessels carry the fix time in `t` (epoch seconds); ADS-B aircraft carry
 // `seen_at` with a `seen_pos_s` position-age offset. Normalise both to epoch ms.
-function lastSeenMs(p: Record<string, unknown>): number | null {
+export function lastSeenMs(p: Record<string, unknown>): number | null {
   const norm = (v: number): number => (v > 1e12 ? v : v * 1000); // sec → ms
   const t = p['t'];
   if (typeof t === 'number' && Number.isFinite(t)) return norm(t);
@@ -1154,7 +1163,7 @@ function freshnessTone(ageMs: number): string {
 
 // ITU-R M.1371 ship-type code (0-99) → human label. Same buckets as the map's
 // classifyShipType, expanded for the panel.
-function parseShipType(p: Record<string, unknown>): number | null {
+export function parseShipType(p: Record<string, unknown>): number | null {
   const raw = p['shipType'] ?? p['ship_type'] ?? p['shiptype'];
   if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
   if (typeof raw === 'string' && raw.trim() !== '') {
@@ -1163,7 +1172,7 @@ function parseShipType(p: Record<string, unknown>): number | null {
   }
   return null;
 }
-function shipTypeLabel(code: number | null): string | null {
+export function shipTypeLabel(code: number | null): string | null {
   if (code == null || code <= 0) return null;
   if (code === 30) return 'Fishing';
   if (code === 31 || code === 32) return 'Towing';
@@ -1209,7 +1218,7 @@ function airportLabel(a: Airport | null): string {
 // from the aircraft's LIVE position and groundspeed toward the destination, and
 // the current UTC time. Renders nothing for aircraft with no known route
 // (private / GA / unknown callsign) so it never shows an empty shell.
-function FlightCard({
+export function FlightCard({
   enrichment,
   snap,
 }: {
@@ -1269,7 +1278,7 @@ function FlightCard({
   );
 }
 
-function TrackCard({
+export function TrackCard({
   kind,
   points,
 }: {
@@ -1293,7 +1302,7 @@ function TrackCard({
 // family is known) plus the live reference photo (Planespotters / Wikipedia)
 // when one exists. The silhouette is the "SVG image for every plane": GA,
 // military and drones rarely have a photo but still get a recognition glyph.
-function ProfileCard({
+export function ProfileCard({
   enrichment,
   snap,
 }: {
@@ -1373,7 +1382,7 @@ function ProfileCard({
   );
 }
 
-function EnrichmentCard({
+export function EnrichmentCard({
   kind,
   enrichment,
   loading,
@@ -1464,7 +1473,7 @@ function EnrichmentCard({
   );
 }
 
-function PropertiesCard({ properties }: { properties: Record<string, unknown> }): JSX.Element {
+export function PropertiesCard({ properties }: { properties: Record<string, unknown> }): JSX.Element {
   return (
     <section>
       <SectionLabel title="Live properties" />
@@ -1485,7 +1494,7 @@ interface CorrelationsResponse {
   correlations: Alert[];
 }
 
-function CorrelationCard({
+export function CorrelationCard({
   entityId,
   viewer,
   entityPos,
@@ -1650,49 +1659,8 @@ function format(v: unknown): string {
   return String(v);
 }
 
-function findEntity(viewer: Cesium.Viewer, id: string): Cesium.Entity | undefined {
-  for (let i = 0; i < viewer.dataSources.length; i++) {
-    const ds = viewer.dataSources.get(i);
-    const e = ds.entities.getById(id);
-    if (e) return e;
-  }
-  return viewer.entities.getById(id);
-}
 
-function readProperties(e: Cesium.Entity): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  const props = e.properties;
-  if (!props) return out;
-  const names = props.propertyNames as readonly string[] | undefined;
-  if (!names) return out;
-  const now = Cesium.JulianDate.now();
-  for (const n of names) {
-    const p = (props as unknown as Record<string, Cesium.Property | undefined>)[n];
-    if (!p) continue;
-    try {
-      out[n] = p.getValue(now);
-    } catch {
-      /* skip */
-    }
-  }
-  return out;
-}
 
-function readPosition(
-  e: Cesium.Entity,
-  viewer: Cesium.Viewer,
-): { lon: number; lat: number; alt: number } | undefined {
-  if (!e.position) return undefined;
-  const t = viewer.clock.currentTime;
-  const cart = e.position.getValue(t);
-  if (!cart) return undefined;
-  const c = Cesium.Cartographic.fromCartesian(cart);
-  return {
-    lon: Cesium.Math.toDegrees(c.longitude),
-    lat: Cesium.Math.toDegrees(c.latitude),
-    alt: c.height,
-  };
-}
 
 function throttle<T extends () => void>(fn: T, ms: number): T {
   let last = 0;

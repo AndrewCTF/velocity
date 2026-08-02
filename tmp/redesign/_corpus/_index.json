@@ -1,0 +1,577 @@
+[
+  {
+    "url": "https://palantir.com/docs/gotham/api/general/",
+    "slug": "api__general",
+    "chars": 1353
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/general/overview/",
+    "slug": "api__general__overview",
+    "chars": 1353
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/general/overview/introduction/",
+    "slug": "api__general__overview__introduction",
+    "chars": 1353
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/general/overview/authentication/",
+    "slug": "api__general__overview__authentication",
+    "chars": 2446
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/general/overview/getting-started/",
+    "slug": "api__general__overview__getting-started",
+    "chars": 2578
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/general/overview/paging/",
+    "slug": "api__general__overview__paging",
+    "chars": 3228
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/general/overview/versioning/",
+    "slug": "api__general__overview__versioning",
+    "chars": 2007
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/general/overview/errors/",
+    "slug": "api__general__overview__errors",
+    "chars": 6166
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/",
+    "slug": "api__target-workbench-v2-resources",
+    "chars": 195
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/target-boards/",
+    "slug": "api__target-workbench-v2-resources__target-boards",
+    "chars": 195
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/target-boards/target-board-basics/",
+    "slug": "api__target-workbench-v2-resources__target-boards__target-board-basics",
+    "chars": 195
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/target-boards/create-target-board/",
+    "slug": "api__target-workbench-v2-resources__target-boards__create-target-board",
+    "chars": 3645
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/target-boards/delete-target-board/",
+    "slug": "api__target-workbench-v2-resources__target-boards__delete-target-board",
+    "chars": 1462
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/target-boards/modify-target-board/",
+    "slug": "api__target-workbench-v2-resources__target-boards__modify-target-board",
+    "chars": 2771
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/target-boards/load-target-board/",
+    "slug": "api__target-workbench-v2-resources__target-boards__load-target-board",
+    "chars": 2605
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/",
+    "slug": "api__target-workbench-v2-resources__targets",
+    "chars": 163
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/target-basics/",
+    "slug": "api__target-workbench-v2-resources__targets__target-basics",
+    "chars": 163
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/create-target/",
+    "slug": "api__target-workbench-v2-resources__targets__create-target",
+    "chars": 9515
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/delete-target/",
+    "slug": "api__target-workbench-v2-resources__targets__delete-target",
+    "chars": 1402
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/modify-target/",
+    "slug": "api__target-workbench-v2-resources__targets__modify-target",
+    "chars": 4729
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/load-target/",
+    "slug": "api__target-workbench-v2-resources__targets__load-target",
+    "chars": 3797
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/set-target-column-target/",
+    "slug": "api__target-workbench-v2-resources__targets__set-target-column-target",
+    "chars": 2779
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/create-target-intel-target/",
+    "slug": "api__target-workbench-v2-resources__targets__create-target-intel-target",
+    "chars": 2221
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/modify-target-intel-target/",
+    "slug": "api__target-workbench-v2-resources__targets__modify-target-intel-target",
+    "chars": 2115
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/targets/remove-target-intel-target/",
+    "slug": "api__target-workbench-v2-resources__targets__remove-target-intel-target",
+    "chars": 1450
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/high-priority-target-lists/",
+    "slug": "api__target-workbench-v2-resources__high-priority-target-lists",
+    "chars": 201
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/high-priority-target-lists/high-priority-target-list-basics/",
+    "slug": "api__target-workbench-v2-resources__high-priority-target-lists__high-priority-target-list-basics",
+    "chars": 201
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/high-priority-target-lists/create-high-priority-target-list/",
+    "slug": "api__target-workbench-v2-resources__high-priority-target-lists__create-high-priority-target-list",
+    "chars": 4459
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/high-priority-target-lists/modify-high-priority-target-list/",
+    "slug": "api__target-workbench-v2-resources__high-priority-target-lists__modify-high-priority-target-list",
+    "chars": 3449
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench-v2-resources/high-priority-target-lists/load-high-priority-target-list/",
+    "slug": "api__target-workbench-v2-resources__high-priority-target-lists__load-high-priority-target-list",
+    "chars": 2323
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/",
+    "slug": "api__revdb-resources",
+    "chars": 4646
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/",
+    "slug": "api__revdb-resources__objects",
+    "chars": 4646
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/object-basics/",
+    "slug": "api__revdb-resources__objects__object-basics",
+    "chars": 4646
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/get-object/",
+    "slug": "api__revdb-resources__objects__get-object",
+    "chars": 1911
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/get-object-properties/",
+    "slug": "api__revdb-resources__objects__get-object-properties",
+    "chars": 1356
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/create-object/",
+    "slug": "api__revdb-resources__objects__create-object",
+    "chars": 2895
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/search-objects/",
+    "slug": "api__revdb-resources__objects__search-objects",
+    "chars": 4086
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/add-object-property/",
+    "slug": "api__revdb-resources__objects__add-object-property",
+    "chars": 2124
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/update-object-property/",
+    "slug": "api__revdb-resources__objects__update-object-property",
+    "chars": 2188
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/delete-object-property/",
+    "slug": "api__revdb-resources__objects__delete-object-property",
+    "chars": 802
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/list-linked-objects/",
+    "slug": "api__revdb-resources__objects__list-linked-objects",
+    "chars": 2866
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/objects/create-object-link/",
+    "slug": "api__revdb-resources__objects__create-object-link",
+    "chars": 2275
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/media/",
+    "slug": "api__revdb-resources__media",
+    "chars": 1589
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/media/get-object-media/",
+    "slug": "api__revdb-resources__media__get-object-media",
+    "chars": 1589
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/media/get-media-content/",
+    "slug": "api__revdb-resources__media__get-media-content",
+    "chars": 949
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/resolution/",
+    "slug": "api__revdb-resources__resolution",
+    "chars": 3204
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/resolution/resolution-basics/",
+    "slug": "api__revdb-resources__resolution__resolution-basics",
+    "chars": 3204
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/resolution/get-resolution-metadata/",
+    "slug": "api__revdb-resources__resolution__get-resolution-metadata",
+    "chars": 2043
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/resolution/resolve-objects/",
+    "slug": "api__revdb-resources__resolution__resolve-objects",
+    "chars": 1270
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/resolution/unresolve-objects/",
+    "slug": "api__revdb-resources__resolution__unresolve-objects",
+    "chars": 1750
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/federated-sources/",
+    "slug": "api__revdb-resources__federated-sources",
+    "chars": 2890
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/federated-sources/federated-source-basics/",
+    "slug": "api__revdb-resources__federated-sources__federated-source-basics",
+    "chars": 2890
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/federated-sources/list-federated-sources/",
+    "slug": "api__revdb-resources__federated-sources__list-federated-sources",
+    "chars": 1389
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/revdb-resources/federated-sources/search-objects-by-federated-source/",
+    "slug": "api__revdb-resources__federated-sources__search-objects-by-federated-source",
+    "chars": 3516
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/",
+    "slug": "api__map-resources",
+    "chars": 1700
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/",
+    "slug": "api__map-resources__maps",
+    "chars": 1700
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/export-kmz/",
+    "slug": "api__map-resources__maps__export-kmz",
+    "chars": 1700
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/search-maps/",
+    "slug": "api__map-resources__maps__search-maps",
+    "chars": 1842
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/map-wfs/",
+    "slug": "api__map-resources__maps__map-wfs",
+    "chars": 1706
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/add-objects-to-map/",
+    "slug": "api__map-resources__maps__add-objects-to-map",
+    "chars": 1911
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/add-emls-to-map/",
+    "slug": "api__map-resources__maps__add-emls-to-map",
+    "chars": 2004
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/add-artifacts-to-map/",
+    "slug": "api__map-resources__maps__add-artifacts-to-map",
+    "chars": 1988
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/add-annotations-to-map/",
+    "slug": "api__map-resources__maps__add-annotations-to-map",
+    "chars": 2560
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/load-map/",
+    "slug": "api__map-resources__maps__load-map",
+    "chars": 2158
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/load-map-extension/",
+    "slug": "api__map-resources__maps__load-map-extension",
+    "chars": 2567
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/load-layers/",
+    "slug": "api__map-resources__maps__load-layers",
+    "chars": 2379
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/render-symbol/",
+    "slug": "api__map-resources__maps__render-symbol",
+    "chars": 1026
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/render-objects/",
+    "slug": "api__map-resources__maps__render-objects",
+    "chars": 3171
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/map-resources/maps/load-generic-symbol/",
+    "slug": "api__map-resources__maps__load-generic-symbol",
+    "chars": 1492
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/",
+    "slug": "api__target-workbench",
+    "chars": 5071
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/target/",
+    "slug": "api__target-workbench__target",
+    "chars": 5071
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/target/create-target/",
+    "slug": "api__target-workbench__target__create-target",
+    "chars": 5071
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/target/load-target/",
+    "slug": "api__target-workbench__target__load-target",
+    "chars": 2658
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/target/modify-target/",
+    "slug": "api__target-workbench__target__modify-target",
+    "chars": 4124
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/target/archive-target/",
+    "slug": "api__target-workbench__target__archive-target",
+    "chars": 957
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/targetBoard/",
+    "slug": "api__target-workbench__targetBoard",
+    "chars": 2101
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/targetBoard/create-target-board/",
+    "slug": "api__target-workbench__targetBoard__create-target-board",
+    "chars": 2101
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/targetBoard/load-target-board/",
+    "slug": "api__target-workbench__targetBoard__load-target-board",
+    "chars": 1937
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/targetBoard/modify-target-board/",
+    "slug": "api__target-workbench__targetBoard__modify-target-board",
+    "chars": 2071
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/targetBoard/set-target-column/",
+    "slug": "api__target-workbench__targetBoard__set-target-column",
+    "chars": 2215
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/targetBoard/archive-target-board/",
+    "slug": "api__target-workbench__targetBoard__archive-target-board",
+    "chars": 928
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/high-priority-target-list/",
+    "slug": "api__target-workbench__high-priority-target-list",
+    "chars": 3573
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/high-priority-target-list/create-hptl/",
+    "slug": "api__target-workbench__high-priority-target-list__create-hptl",
+    "chars": 3573
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/high-priority-target-list/load-hptl/",
+    "slug": "api__target-workbench__high-priority-target-list__load-hptl",
+    "chars": 3191
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/high-priority-target-list/modify-hptl/",
+    "slug": "api__target-workbench__high-priority-target-list__modify-hptl",
+    "chars": 3086
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/intel/",
+    "slug": "api__target-workbench__intel",
+    "chars": 1746
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/intel/create-target-intel/",
+    "slug": "api__target-workbench__intel__create-target-intel",
+    "chars": 1746
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/intel/remove-target-intel/",
+    "slug": "api__target-workbench__intel__remove-target-intel",
+    "chars": 1034
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/target-workbench/intel/modify-target-intel/",
+    "slug": "api__target-workbench__intel__modify-target-intel",
+    "chars": 1631
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/inbox-resources/",
+    "slug": "api__inbox-resources",
+    "chars": 2563
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/inbox-resources/messages/",
+    "slug": "api__inbox-resources__messages",
+    "chars": 2563
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/inbox-resources/messages/inbox-send-messages/",
+    "slug": "api__inbox-resources__messages__inbox-send-messages",
+    "chars": 2563
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/",
+    "slug": "api__geotime-resources",
+    "chars": 1835
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observations/",
+    "slug": "api__geotime-resources__observations",
+    "chars": 1835
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observations/observation-basics/",
+    "slug": "api__geotime-resources__observations__observation-basics",
+    "chars": 1835
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observations/search-latest-observations/",
+    "slug": "api__geotime-resources__observations__search-latest-observations",
+    "chars": 2940
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observations/search-observation-histories/",
+    "slug": "api__geotime-resources__observations__search-observation-histories",
+    "chars": 3936
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observations/write-observations/",
+    "slug": "api__geotime-resources__observations__write-observations",
+    "chars": 2541
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observations/subscribe-to-incoming-observations/",
+    "slug": "api__geotime-resources__observations__subscribe-to-incoming-observations",
+    "chars": 5575
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observation-linking/",
+    "slug": "api__geotime-resources__observation-linking",
+    "chars": 1671
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observation-linking/observation-linking-basics/",
+    "slug": "api__geotime-resources__observation-linking__observation-linking-basics",
+    "chars": 1671
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observation-linking/link-two-tracks/",
+    "slug": "api__geotime-resources__observation-linking__link-two-tracks",
+    "chars": 1645
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observation-linking/link-track-to-object/",
+    "slug": "api__geotime-resources__observation-linking__link-track-to-object",
+    "chars": 1536
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observation-linking/unlink-two-tracks/",
+    "slug": "api__geotime-resources__observation-linking__unlink-two-tracks",
+    "chars": 1647
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/geotime-resources/observation-linking/unlink-track-from-object/",
+    "slug": "api__geotime-resources__observation-linking__unlink-track-from-object",
+    "chars": 1557
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/",
+    "slug": "api__gaia-v2-resources",
+    "chars": 146
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/maps/",
+    "slug": "api__gaia-v2-resources__maps",
+    "chars": 146
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/maps/map-basics/",
+    "slug": "api__gaia-v2-resources__maps__map-basics",
+    "chars": 146
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/maps/search-maps/",
+    "slug": "api__gaia-v2-resources__maps__search-maps",
+    "chars": 2010
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/maps/add-artifacts-to-map/",
+    "slug": "api__gaia-v2-resources__maps__add-artifacts-to-map",
+    "chars": 2272
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/maps/add-annotations-to-map/",
+    "slug": "api__gaia-v2-resources__maps__add-annotations-to-map",
+    "chars": 3008
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/maps/load-map/",
+    "slug": "api__gaia-v2-resources__maps__load-map",
+    "chars": 2172
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/maps/load-with-extension-map/",
+    "slug": "api__gaia-v2-resources__maps__load-with-extension-map",
+    "chars": 2655
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/maps/load-layers-map/",
+    "slug": "api__gaia-v2-resources__maps__load-layers-map",
+    "chars": 1891
+  },
+  {
+    "url": "https://palantir.com/docs/gotham/api/gaia-v2-resources/maps/render-symbol-map/",
+    "slug": "api__gaia-v2-resources__maps__render-symbol-map",
+    "chars": 1821
+  }
+]

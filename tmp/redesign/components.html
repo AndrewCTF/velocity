@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Velocity redesign · Components</title>
+<link rel="stylesheet" href="mock.css" />
+<style>
+  .demo { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+  .demo > .lbl { font-size: var(--fs-cap); color: var(--txt-3); width: 88px; flex: 0 0 88px; }
+  .sw { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+  .sw i { width: 34px; height: 24px; border-radius: var(--r-sm); flex: 0 0 auto; box-shadow: inset 0 0 0 1px var(--line-2); }
+  .sw b { font-family: var(--font-mono); font-size: var(--fs-cap); width: 116px; font-weight: 400; }
+  .sw span { font-size: var(--fs-cap); color: var(--txt-3); }
+  .sel { display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 11px; background: var(--bg-2); border-radius: var(--r-md); font-size: var(--fs-dense); color: var(--txt-0); cursor: pointer; }
+  .sel.open { box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-dim); }
+  .sel svg { width: 12px; height: 12px; color: var(--txt-3); }
+  .menu { border-radius: var(--r-md); background: var(--bg-1); box-shadow: var(--sh-2); padding: 5px; width: 208px; }
+  .menu .mi { padding: 7px 10px; border-radius: var(--r-sm); font-size: var(--fs-dense); color: var(--txt-1); cursor: pointer; }
+  .menu .mi:hover { background: var(--bg-2); color: var(--txt-0); }
+  .menu .mi.on { background: var(--accent); color: #fff; }
+  .menu .sep { height: 1px; background: var(--line); margin: 5px 3px; }
+  .cbx { width: 17px; height: 17px; border-radius: var(--r-sm); background: var(--bg-2); box-shadow: inset 0 0 0 1px var(--line-2); display: inline-flex; align-items: center; justify-content: center; }
+  .cbx.on { background: var(--accent); box-shadow: none; color: #fff; }
+  .cbx.mixed::after { content: ''; width: 9px; height: 2px; border-radius: 1px; background: var(--accent); }
+  .rdo { width: 17px; height: 17px; border-radius: 50%; background: var(--bg-2); box-shadow: inset 0 0 0 1px var(--line-2); display: inline-flex; align-items: center; justify-content: center; }
+  .rdo.on { box-shadow: inset 0 0 0 2px var(--accent); }
+  .rdo.on::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .sld { width: 168px; height: 4px; background: var(--bg-3); border-radius: 3px; position: relative; }
+  .sld i { position: absolute; left: 0; top: 0; height: 100%; background: var(--accent); border-radius: 3px; }
+  .sld b { position: absolute; top: -6px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: var(--sh-1); }
+  .tip { position: relative; display: inline-flex; }
+  .tipbox { position: absolute; left: 50%; bottom: calc(100% + 9px); transform: translateX(-50%); background: var(--bg-4); border-radius: var(--r-md); padding: 7px 11px; font-size: var(--fs-cap); color: var(--txt-0); white-space: nowrap; box-shadow: var(--sh-2); z-index: 5; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); }
+  .tabs span { font-size: var(--fs-dense); padding: 9px 13px; color: var(--txt-3); cursor: pointer; border-bottom: 2px solid transparent; }
+  .tabs span.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+  .pager { display: flex; align-items: center; gap: 3px; }
+  .pager span { min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--fs-cap); border-radius: var(--r-md); color: var(--txt-2); cursor: pointer; }
+  .pager span:hover { background: var(--bg-2); }
+  .pager span.on { color: #fff; background: var(--accent); }
+  .lightbox { background: var(--bg-0); border-radius: var(--r-lg); padding: var(--sp-4); }
+</style>
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true"><defs>
+<g id="i-chev" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
+<g id="i-check" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L19 7"/></g>
+<g id="i-search" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></g>
+<g id="i-info" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><path d="M12 8h.01"/></g>
+</defs></svg>
+
+<nav class="topnav">
+  <a href="00-index.html">Board</a>
+  <a href="a-panel-parity.html">A · Panel parity</a>
+  <a href="b-verb-first.html">B · Verb first</a>
+  <a href="c-palette-first.html">C · Palette first</a>
+  <a href="panels.html">Panels</a>
+  <a href="gotham-parity.html">Gotham parity</a>
+  <a href="foundry.html">Foundry</a>
+  <a href="components.html" class="on">Components</a>
+  <a href="rehoming.html">Re-homing</a>
+  <a href="states.html">States and keyboard</a>
+</nav>
+
+<div class="doc">
+
+<h1>Components</h1>
+<p class="lead">
+  Velocity has a real primitive layer already: <code>shell/instruments.tsx</code>, 422
+  lines, imported by 79 files. It covers <b>display</b> atoms and stops there. Every
+  form control, select, table and empty state is re-implemented per panel, which is
+  why <code>foundry/ui.tsx</code> forked a second set and
+  <code>country/shared.tsx</code> forked a third that nothing imports.
+</p>
+
+<h2>What changed from the current system</h2>
+<table class="t">
+  <thead><tr><th>Axis</th><th>Today</th><th>Here</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Substrate</td><td class="mono">#191817 warm ink</td><td class="mono">#182026 instrument grey</td><td>Colour is the strongest signal that this is a different surface. Also the operational half of the Gotham and Foundry split.</td></tr>
+    <tr><td>Accent</td><td class="mono">#6fb1dd sky steel</td><td class="mono">#2B95D6 muted steel</td><td>Reads as interactive at a glance on the cooler substrate.</td></tr>
+    <tr><td>Analytical apps</td><td>dark, same as the map</td><td><b>light</b></td><td>Foundry is light because it is analytical. The mode switch is itself information.</td></tr>
+    <tr><td>Body type</td><td>13px, floor 11px, 780 sub-11px literals</td><td>14px, floor 12px</td><td>The 2026-07-13 pass found the density was what read as "AI dashboard". This finishes that argument.</td></tr>
+    <tr><td>Labels</td><td>uppercase, 0.8px tracked, tinted bar, 3px left accent edge</td><td>sentence case, plain weight, no bar</td><td>The tinted eyebrow bar is the single most recognisable ornament of the current UI.</td></tr>
+    <tr><td>Grouping</td><td>bordered boxes inside bordered panels</td><td>space and weight; hairlines only where surfaces meet</td><td>Boxes inside boxes cost pixels and add no information.</td></tr>
+    <tr><td>Radii</td><td>2 / 3 / 5px</td><td>2 / 3 / 4px</td><td>Kept tight. A 14px radius reads as a consumer app, not an instrument.</td></tr>
+    <tr><td>Row height</td><td>~24px</td><td>30px</td><td>Pointer targets, and the counts stop colliding with the labels.</td></tr>
+    <tr><td>Spacing</td><td><code>--sp-*</code> declared, 0 consumers</td><td>4 / 8 / 12 / 16 / 24 / 32, actually used</td><td>A scale nothing uses is not a scale.</td></tr>
+  </tbody>
+</table>
+
+<h2>Tokens</h2>
+<div class="grid2">
+  <div>
+    <h3>Operational surface, dark</h3>
+    <div class="sw"><i style="background:#10161c"></i><b>--bg-0</b><span>page and map</span></div>
+    <div class="sw"><i style="background:#182026"></i><b>--bg-1</b><span>bars and panels</span></div>
+    <div class="sw"><i style="background:#202b33"></i><b>--bg-2</b><span>inset and hover</span></div>
+    <div class="sw"><i style="background:#f5f8fa"></i><b>--txt-0</b><span>primary</span></div>
+    <div class="sw"><i style="background:#abb8c3"></i><b>--txt-2</b><span>secondary</span></div>
+    <div class="sw"><i style="background:#8a9ba8"></i><b>--txt-3</b><span>5.76:1 on bg-1, 5.04:1 on bg-2</span></div>
+    <div class="sw"><i style="background:#2b95d6"></i><b>--accent</b><span>interactive, focus, selected</span></div>
+  </div>
+  <div class="lightbox light">
+    <h3 style="margin-top:0">Analytical surface, light</h3>
+    <div class="sw"><i style="background:#f5f7fa"></i><b>--bg-0</b><span>page</span></div>
+    <div class="sw"><i style="background:#ffffff"></i><b>--bg-1</b><span>surface</span></div>
+    <div class="sw"><i style="background:#f0f3f7"></i><b>--bg-2</b><span>inset and hover</span></div>
+    <div class="sw"><i style="background:#0e1420"></i><b>--txt-0</b><span>primary</span></div>
+    <div class="sw"><i style="background:#5a6675"></i><b>--txt-2</b><span>secondary</span></div>
+    <div class="sw"><i style="background:#6b7684"></i><b>--txt-3</b><span>hints, still AA</span></div>
+    <div class="sw"><i style="background:#1f6feb"></i><b>--accent</b><span>interactive, focus, selected</span></div>
+  </div>
+</div>
+
+<h3>Threat state, never decoration</h3>
+<div class="demo">
+  <span class="lbl">Semantic</span>
+  <span class="badge ok">ok</span><span class="badge warn">warn</span><span class="badge alert">alert</span>
+  <span class="badge mag">selection lineage</span><span class="badge accent">accent</span><span class="badge">neutral</span>
+</div>
+<p style="font-size:var(--fs-dense);color:var(--txt-2)">
+  Colour must never lie about danger. Red, amber and green are reserved for threat
+  state. Magenta is selection and correlation lineage, matched to the globe polyline.
+</p>
+
+<h3>The map palette is a separate system, and it does not change</h3>
+<div class="demo">
+  <span class="lbl">Aircraft</span>
+  <span class="sw"><i style="background:var(--d-airliner)"></i><b>#facc15</b></span>
+  <span class="sw"><i style="background:var(--d-private)"></i><b>#2dd4bf</b></span>
+  <span class="sw"><i style="background:var(--d-heli)"></i><b>#c084fc</b></span>
+  <span class="sw"><i style="background:var(--d-glider)"></i><b>#93c5fd</b></span>
+  <span class="sw"><i style="background:var(--d-mil)"></i><b>#f59e0b</b></span>
+</div>
+<div class="demo">
+  <span class="lbl">Vessels</span>
+  <span class="sw"><i style="background:var(--d-cargo)"></i><b>#14b8a6</b></span>
+  <span class="sw"><i style="background:var(--d-tanker)"></i><b>#d97706</b></span>
+  <span class="sw"><i style="background:var(--d-fishing)"></i><b>#5eead4</b></span>
+  <span class="sw"><i style="background:var(--d-passenger)"></i><b>#38bdf8</b></span>
+</div>
+<div class="note warn">
+  These eight values are asserted as literal strings inside
+  <code>globe/invariants.test.ts</code>, which also rejects <code>PointGraphics</code>
+  anywhere in <code>styles.ts</code>. The redesign does not touch map symbology. Cool
+  saturated data over calm chrome stays the rule; only the chrome moved.
+</div>
+
+<h2>Primitives that exist today</h2>
+<p><code>shell/instruments.tsx</code>. These survive, restyled.</p>
+
+<div class="demo"><span class="lbl">Section</span>
+  <div style="flex:1;max-width:300px"><div class="sech"><h3>Details</h3><span class="ct">11</span></div></div>
+</div>
+<div class="demo"><span class="lbl">Button</span>
+  <button class="btn">Neutral</button><button class="btn accent">Accent</button>
+  <button class="btn quiet">Quiet</button><button class="btn" disabled>Disabled</button>
+  <button class="btn sm">Small</button>
+</div>
+<div class="demo"><span class="lbl">Toggle</span>
+  <button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Layer off"><i aria-hidden="true"></i></button><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Layer on"><i aria-hidden="true"></i></button>
+</div>
+<div class="demo"><span class="lbl">Status</span>
+  <span aria-hidden="true" class="dot"></span><span aria-hidden="true" class="dot ok"></span><span aria-hidden="true" class="dot warn"></span><span aria-hidden="true" class="dot alert"></span>
+</div>
+<div class="demo"><span class="lbl">Meter</span>
+  <div class="meter" style="width:140px"><i style="width:62%"></i></div>
+  <div class="meter warn" style="width:140px"><i style="width:38%"></i></div>
+  <div class="meter alert" style="width:140px"><i style="width:88%"></i></div>
+</div>
+<div class="demo"><span class="lbl">Key value</span>
+  <dl class="kv" style="flex:1;max-width:320px">
+    <dt>Callsign</dt><dd>RYR4213</dd>
+    <dt>Registration</dt><dd class="na">—</dd>
+  </dl>
+</div>
+
+<h2>Primitives that do not exist and must</h2>
+<p>
+  Each of these is currently re-implemented per panel or missing entirely. Every hover
+  explanation in the product today is a native <code>title=</code> attribute, because
+  there is no Tooltip.
+</p>
+
+<h3>Input</h3>
+<div class="demo"><span class="lbl">Rest</span><div class="input" style="width:260px"><span class="ph">Filter sources</span></div></div>
+<div class="demo"><span class="lbl">Focus</span><div class="input focus" style="width:260px"><span>Baltic</span></div></div>
+<div class="demo"><span class="lbl">With icon</span><div class="input" style="width:260px"><svg width="14" height="14" style="opacity:.55" viewBox="0 0 24 24"><use href="#i-search"/></svg><span class="ph">Find anything</span><span style="flex:1"></span><kbd>⌘K</kbd></div></div>
+<div class="demo"><span class="lbl">Invalid</span><div class="input" style="width:260px;box-shadow:0 0 0 1px var(--alert-line);background:var(--alert-bg)"><span style="color:var(--alert-fg)">54.3, 999.9</span></div>
+  <span style="font-size:var(--fs-cap);color:var(--alert-fg)">Longitude must be between -180 and 180</span></div>
+<div class="demo"><span class="lbl">Disabled</span><div class="input" style="width:260px;opacity:.4"><span class="ph">Needs an API key</span></div></div>
+
+<h3>Select and menu</h3>
+<div class="demo">
+  <span class="lbl">Select</span>
+  <div class="sel">2D dark <svg viewBox="0 0 24 24"><use href="#i-chev"/></svg></div>
+  <div class="sel open">3D satellite <svg viewBox="0 0 24 24"><use href="#i-chev"/></svg></div>
+  <div class="sel" style="opacity:.4">Unavailable <svg viewBox="0 0 24 24"><use href="#i-chev"/></svg></div>
+</div>
+<div class="demo" style="align-items:flex-start">
+  <span class="lbl">Menu</span>
+  <div class="menu">
+    <div class="mi on">2D dark</div>
+    <div class="mi">3D satellite</div>
+    <div class="mi">Esri imagery</div>
+    <div class="mi">Esri topographic</div>
+    <div class="sep"></div>
+    <div class="mi" style="color:var(--txt-4)">OpenTopoMap</div>
+  </div>
+</div>
+
+<h3>Checkbox, radio, slider</h3>
+<div class="demo"><span class="lbl">Checkbox</span>
+  <label style="display:flex;gap:9px;align-items:center;font-size:var(--fs-dense)"><span class="cbx"></span> Off</label>
+  <label style="display:flex;gap:9px;align-items:center;font-size:var(--fs-dense)"><span class="cbx on"><svg width="11" height="11" viewBox="0 0 24 24"><use href="#i-check"/></svg></span> On</label>
+  <label style="display:flex;gap:9px;align-items:center;font-size:var(--fs-dense)"><span class="cbx mixed"></span> Some of the folder</label>
+</div>
+<div class="demo"><span class="lbl">Radio</span>
+  <label style="display:flex;gap:9px;align-items:center;font-size:var(--fs-dense)"><span class="rdo on"></span> UTC</label>
+  <label style="display:flex;gap:9px;align-items:center;font-size:var(--fs-dense)"><span class="rdo"></span> Local</label>
+</div>
+<div class="demo"><span class="lbl">Slider</span>
+  <div class="sld"><i style="width:72%"></i><b style="left:calc(72% - 8px)"></b></div>
+  <span class="mono" style="font-size:var(--fs-dense);color:var(--txt-2)">72%</span>
+</div>
+
+<h3>Tooltip</h3>
+<div class="demo" style="padding-top:44px">
+  <span class="lbl">Tooltip</span>
+  <span class="tip">
+    <span class="tipbox">Age at upstream serve time. Not comparable across tiers.</span>
+    <span class="badge">seen_pos_s <svg width="12" height="12" style="opacity:.7" viewBox="0 0 24 24"><use href="#i-info"/></svg></span>
+  </span>
+  <span style="font-size:var(--fs-cap);color:var(--txt-3)">Replaces every native title= in the product. Keyboard reachable, dismissed by Escape.</span>
+</div>
+
+<h3>Tabs and table</h3>
+<div class="demo" style="display:block">
+  <div class="tabs" style="max-width:460px">
+    <span class="on">Overview</span><span>Properties</span><span>History</span><span>Dossier</span>
+  </div>
+</div>
+<table class="t" style="max-width:660px">
+  <thead><tr><th>Callsign</th><th>Type</th><th>Altitude</th><th>Seen</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">RCH471</td><td>C-17A</td><td class="num">9,449 m</td><td class="num">2 s</td></tr>
+    <tr><td class="mono">RYR4213</td><td>B738</td><td class="num">9,754 m</td><td class="num">1 s</td></tr>
+    <tr><td class="mono">N612DA</td><td>—</td><td class="num">—</td><td class="num">44 s</td></tr>
+  </tbody>
+</table>
+<div class="demo"><span class="lbl">Pagination</span>
+  <div class="pager"><span>‹</span><span class="on">1</span><span>2</span><span>3</span><span>…</span><span>28</span><span>›</span></div>
+  <span style="font-size:var(--fs-cap);color:var(--txt-3)">500 of 13,204 shown</span>
+</div>
+
+<h3>Empty state and skeleton</h3>
+<div class="grid2">
+  <div class="stage"><div class="in">
+    <div class="state">
+      <b>No contacts match the current filters</b>
+      <p>Two filters are active. Clearing them brings back 13,204 contacts.</p>
+      <button class="btn sm">Clear filters</button>
+    </div>
+  </div></div>
+  <div class="stage"><div class="in">
+    <div class="skel" style="width:84%"></div>
+    <div class="skel" style="width:62%"></div>
+    <div class="skel" style="width:73%"></div>
+    <div class="skel" style="width:48%"></div>
+  </div></div>
+</div>
+
+<h2>Copy rules the components carry</h2>
+<table class="t">
+  <thead><tr><th>Rule</th><th>Right</th><th>Wrong</th></tr></thead>
+  <tbody>
+    <tr><td>No em dashes in dashboard copy</td><td>Quakes · USGS (24h)</td><td>Quakes &#8212; USGS (24h)</td></tr>
+    <tr><td>Subject first, so siblings cluster</td><td>Vessels · Sentinel-1 SAR (Hormuz)</td><td>Hormuz SAR vessels</td></tr>
+    <tr><td>A lone <span class="mono">—</span> means no value reported</td><td><span class="mono">Registration —</span></td><td><span class="mono">Registration unknown</span></td></tr>
+    <tr><td>Errors keep the code, in a sentence</td><td>Cameras unavailable (HTTP 503)</td><td>cams 503</td></tr>
+    <tr><td>Micro labels stay lowercase</td><td><span class="mono">loading…</span></td><td><span class="mono">Loading…</span></td></tr>
+    <tr><td>Sentence case for structure, mono for machine values</td><td>Live properties · <span class="mono">ICAO24</span></td><td>LIVE PROPERTIES</td></tr>
+  </tbody>
+</table>
+
+<h2>Accessibility floor</h2>
+<ul>
+  <li>Every muted text tier clears 4.5:1 on both <code>--bg-1</code> and <code>--bg-2</code>, in both themes, and the ramp stays monotonic. Parsed and asserted by <code>theme/contrast.test.ts</code>, which is the first thing any palette change has to clear.</li>
+  <li>Focus is always visible: <code>2px solid var(--accent)</code> with a 2px offset.</li>
+  <li>Every interactive primitive is reachable and operable by keyboard, including the map toolbar and the link-analysis canvas, which are mouse only today.</li>
+  <li>Panels carry a role and a label. Rail resizers stay <code>role="separator"</code> with arrow, Home and End handling.</li>
+  <li><code>prefers-reduced-motion</code> disables the selection pulse, turns camera slew into an instant set, and removes fades.</li>
+  <li>Nothing renders below 12px. The 780 sub-11px literals in the current app migrate onto <code>--fs-cap</code>, <code>--fs-dense</code> and <code>--fs-body</code>.</li>
+</ul>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,6 @@
+Delete object property DELETE /api/gotham/v1/objects/{primaryKey}/properties/{propertyId} Delete a specific property from an object instance. Path parameters primaryKey string The primary key of the object to delete a property from. propertyId string The unique identifier of the property to be deleted. Response body EmptySuccessResponse object Empty response indicating success. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl -X DELETE \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111/properties/abc123" © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Response body Examples Request Response

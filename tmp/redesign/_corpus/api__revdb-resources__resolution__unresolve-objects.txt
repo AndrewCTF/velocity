@@ -1,0 +1,17 @@
+Unresolve objects PUT /api/gotham/v1/objects/{primaryKey}/resolution/unresolve Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Unresolves objects from each other. Path parameters primaryKey string The primary key of the object to unresolve sub-objects from. Query parameters unresolveObjectPrimaryKeys list<ObjectPrimaryKey> optional The primary key of the constituent objects to unresolve. This list must contain only objects which are
+sub-objects of the resolved object. It must have at least one object, and may not contain the resolved
+object. Show child attributes Show child attributes Expand all preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Response body body list<ObjectPrimaryKey> The primary keys for each of the unresolved objects. Hide child attributes Hide child attributes Collapse all ObjectPrimaryKey string The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl -X PUT \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111/resolution/unresolve?unresolveObjectPrimaryKeys=ri.gotham.111111-0.object-internal.222222&preview=true" Response Copied! 1
+ 2
+ 3
+ 4
+ [
+ "ri.gotham.111111-0.object-internal.111111",
+ "ri.gotham.111111-0.object-internal.222222"
+] © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Response body Examples Response

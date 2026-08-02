@@ -11,6 +11,7 @@ import { useSettings } from '../state/settings.js';
 import { Badge } from '../shell/instruments.js';
 import { Markdown } from '../shell/Markdown.js';
 import type { SelectionBriefResponse } from '../settings/localAi/types.js';
+import { Icon } from '../normal/Icon.js';
 
 // The backend is gaining an `enrichment` field on the selection-brief response
 // ("full" | "partial" | "skipped"); older backends omit it. Read it through a
@@ -186,7 +187,7 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
         className="w-full flex items-center justify-between gap-2 text-left"
       >
         <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2 flex items-center gap-1.5">
-          <span aria-hidden>{open ? '▾' : '▸'}</span>
+          <span aria-hidden><Icon name={open ? 'chevron-down' : 'chevron-right'} className="w-3.5 h-3.5" /></span>
           AI assessment
         </span>
         {loading && <span className="mono text-[10px] text-txt-3">…</span>}

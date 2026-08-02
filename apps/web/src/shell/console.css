@@ -1,0 +1,393 @@
+/* console.css — the rebuilt shell grammar.
+   ────────────────────────────────────────────────────────────────────────────
+   Ported from docs/mockups/console-2026-08, which measured it against the
+   reference rather than guessing. Colour comes from theme/tokens.css; this file
+   owns STRUCTURE only, so the two cannot drift.
+
+   What changes from the old shell, and why:
+
+   1. FOUR GRID ROWS BECOME TWO CONTENT ROWS. The old shell spent 26px on a
+      saturated green classification band and pinned a 158px timeline footer
+      open whether or not anyone was scrubbing. That is 184px of permanent
+      chrome on a surface whose whole job is the map. The marking becomes a pill
+      in the title bar and the timeline becomes a dock that floats over the map.
+
+   2. THE UNLABELLED ICON RAIL BECOMES FOUR NAMED TABS. Eighteen icons with no
+      words is a menu you learn by clicking every one. Four names, each on a
+      number key, is a menu you read. Where the other fourteen went is recorded
+      in panels.ts and asserted by panels.test.ts.
+
+   3. NOTHING SHARES AN EDGE. Panels, map and dock each get four borders and sit
+      in an 8px gutter, so each reads as a surface rather than a region of one
+      continuous slab. */
+
+/* The shell fills what the window has LEFT, not a flat 100vh. LowEndBanner and
+   DegradedBanner are router-level siblings that render ABOVE this element in
+   normal flow, so a fixed 100vh pushed the action bar 26px past the bottom edge
+   and it was invisible whenever either notice was up. Measured: .csl2 at
+   [0,26 1920x1080] inside a 1920x1080 window. */
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.csl2 {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* 100vw includes the scrollbar gutter and made the shell 10px wider than the
+     window it lives in. */
+  width: 100%;
+  overflow: hidden;
+  /* minmax(0, 1fr), not the implicit `auto`. A grid column defaults to a
+     min-content floor, so the title bar (which hosts a wide command bar) was
+     forcing the whole shell wider than the viewport and pushing the right
+     panel off-screen. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--g-title) var(--g-tabs) 1fr auto;
+  background: var(--bg-0);
+  color: var(--txt-1);
+}
+
+/* ── Title bar ─────────────────────────────────────────────────────────────
+   System state lives here, which is why there is no separate status strip. */
+.csl2-title {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+  height: var(--g-title);
+  padding: 0 10px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line-2);
+  font-size: var(--fs-dense);
+}
+
+/* The marking, as a pill. A full-width saturated band is the loudest thing on
+   a screen whose loudest thing should be the data. */
+.csl2-title > * {
+  min-width: 0;
+}
+.csl2-clas {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--g-btn-xs);
+  padding: 0 7px;
+  border: 1px solid var(--ok);
+  border-radius: var(--r-sm);
+  color: var(--ok);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.csl2-clas[data-kind='exercise'] {
+  border-color: var(--warn);
+  color: var(--warn-fg);
+}
+
+/* ── Named tab strip ─────────────────────────────────────────────────────── */
+.csl2-tabs {
+  display: flex;
+  align-items: stretch;
+  height: var(--g-tabs);
+  padding: 0 8px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line-2);
+}
+.csl2-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--txt-2);
+  font: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+  transition: color 100ms, border-color 100ms;
+  white-space: nowrap;
+}
+.csl2-tab:hover {
+  color: var(--txt-0);
+}
+.csl2-tab[aria-selected='true'] {
+  color: var(--txt-0);
+  border-bottom-color: var(--accent);
+}
+/* A count in the tab, so a panel is never opened just to find it empty. */
+.csl2-badge {
+  min-width: 17px;
+  height: 16px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bg-3);
+  color: var(--txt-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+}
+.csl2-tab[aria-selected='true'] .csl2-badge {
+  background: var(--accent-dim);
+  color: var(--accent-fg);
+}
+
+/* ── Body ───────────────────────────────────────────────────────────────── */
+.csl2-body {
+  display: grid;
+  overflow: hidden;
+  grid-template-columns: var(--g-left) 1fr var(--g-right);
+  gap: var(--g-gap);
+  padding: var(--g-gap);
+  min-height: 0;
+  background: var(--bg-0);
+}
+.csl2-body[data-right='0'] {
+  grid-template-columns: var(--g-left) 1fr;
+}
+/* A full-bleed app hides both rails, so the map is the ONLY grid item — and a
+   grid places its only item in the FIRST track. That track is `--g-left`, so
+   every `chrome: 'full'` app (AI, Foundry, Workflows, City 3D, Country,
+   Markets) rendered inside a 336px column with 1,560px of empty console beside
+   it. Measured: .csl2-map at 8,106 336x916 in a 1920px window. */
+.csl2-body[data-left='0'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.csl2-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--bg-1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.csl2-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: var(--g-btn);
+  padding: 0 var(--g-pad);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-body);
+  font-weight: 400;
+  color: var(--txt-0);
+}
+.csl2-panel-head-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--txt-3);
+}
+.csl2-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Inner tabs, for a named panel that hosts several former panels. Same
+   grammar as the top strip, one step quieter, and it scrolls sideways rather
+   than wrapping — a wrapped tab row changes the panel's header height every
+   time the set changes. */
+.csl2-subtabs {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 6px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.csl2-subtabs::-webkit-scrollbar {
+  display: none;
+}
+.csl2-subtab {
+  padding: 0 8px;
+  font-size: var(--fs-caption);
+  border-bottom-width: 2px;
+}
+
+.csl2-map {
+  /* Height the time dock occupies, plus its margin. Map furniture anchored to
+     the bottom of the map reads this rather than hard-coding an offset: the
+     scale bar sat at bottom:62px and the coordinate readout at bottom:14px,
+     both chosen for the old 158px footer, so both ended up underneath the
+     floating dock. */
+  /* Fallback only. Console.tsx overwrites this from the dock's measured height
+     on every resize, so nothing here has to guess. */
+  --dock-clear: 142px;
+  position: relative;
+  /* min-width:0 is load-bearing: without it the map's intrinsic content width
+     sets a floor on the 1fr track and shoves the right panel past the viewport
+     edge. */
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* The globe fills the whole well and everything else floats over it.
+   Without this it is an ordinary flex item: flex-shrink took 284px off it to
+   make room for the banners, the agent console and the dock, so the map ended
+   at 658px of a 942px well and the remaining band was dead black with the
+   scale bar and the coordinate readout stranded in it. Out of flow, the
+   bottom-anchored stack sits ON the map, which is what the dock comment
+   below already assumed. */
+.csl2-globe {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── Time dock ─────────────────────────────────────────────────────────────
+   Floats over the map instead of pinning a 158px footer open. Flow-anchored to
+   the bottom of the map column so it can never overlap the map furniture the
+   way a hand-tuned `bottom` did. */
+.csl2-dock {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  max-height: 148px;
+  overflow: auto;
+  margin: 0 10px 10px;
+  background: color-mix(in srgb, var(--bg-1) 97%, transparent);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-2);
+  overflow: hidden;
+}
+.csl2-dock[data-collapsed='true'] {
+  max-height: var(--g-time);
+}
+
+/* Bottom-left map furniture clears the dock by construction. */
+.csl2-map .map-foot-item {
+  bottom: calc(var(--dock-clear) + 8px) !important;
+}
+.csl2-map .map-foot-item-2 {
+  bottom: calc(var(--dock-clear) + 56px) !important;
+}
+
+/* Banners stack in flow at the bottom of the map column, above the dock.
+   They were each absolutely positioned at a hand-tuned `bottom` (204px, 172px,
+   16px) chosen against a dock height none of them could see, so they collided
+   with each other and with the console: measured 1156x57px and 600x87px of
+   overlap. In flow they cannot. */
+.csl2-map .map-banner {
+  position: relative;
+  z-index: 3;
+  align-self: center;
+  /* Capped, not full width. The bottom corners belong to the map furniture
+     (cursor/selection coordinates on the left, centre/altitude on the right).
+     A centred banner spanning the full width lands on top of both, which is
+     what moving the furniture clear of the dock exposed. */
+  max-width: min(680px, calc(100% - 420px));
+  margin: 0 auto 6px;
+}
+
+/* An app surface whose content is forms and prose holds a column instead of
+   stretching every control to the width of the console. See the MEASURED set in
+   AppSurface.tsx for why, and for which apps are deliberately full-bleed. */
+.csl2-app-measure {
+  max-width: 820px;
+  border-right: 1px solid var(--line-2);
+}
+
+/* ── Action bar ────────────────────────────────────────────────────────────
+   The query as a sentence, and the verbs that act on it. */
+.csl2-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  height: var(--g-action);
+  padding: 0 12px;
+  background: var(--bg-1);
+  border-top: 1px solid var(--line-2);
+  font-size: var(--fs-body);
+}
+.csl2-sentence {
+  color: var(--txt-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.csl2-sentence u {
+  color: var(--accent-fg);
+  text-decoration-color: var(--accent-line);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.csl2-sentence b {
+  color: var(--txt-0);
+  font-weight: 600;
+}
+
+/* ── Other computers ───────────────────────────────────────────────────────
+   The old shell had four @media queries in the entire frontend, three of them
+   on the news page. Redundancy goes first: panels narrow before anything is
+   dropped, and the map is the last thing to give up pixels. */
+@media (max-width: 1450px) {
+  .csl2 {
+    --g-left: 296px;
+    --g-right: 280px;
+    --g-pad: 12px;
+  }
+}
+@media (max-width: 1300px) {
+  .csl2 {
+    --g-left: 274px;
+    --g-right: 264px;
+    --g-pad: 11px;
+  }
+  .csl2-tab {
+    padding: 0 9px;
+  }
+}
+@media (max-width: 1150px) {
+  .csl2 {
+    --g-left: 250px;
+  }
+  /* Selection becomes an overlay rather than vanishing: it is the panel the
+     operator opened deliberately. */
+  .csl2-body {
+    grid-template-columns: var(--g-left) 1fr;
+  }
+  .csl2-body > .csl2-panel:last-child {
+    position: absolute;
+    right: var(--g-gap);
+    top: var(--g-gap);
+    bottom: var(--g-gap);
+    width: 288px;
+    z-index: 20;
+    box-shadow: -8px 0 20px rgb(0 0 0 / 50%);
+  }
+}
+@media (max-height: 800px) {
+  .csl2-action {
+    height: 40px;
+  }
+}
+@media (pointer: coarse) {
+  .csl2-tab {
+    min-height: 32px;
+  }
+}

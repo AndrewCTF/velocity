@@ -1,0 +1,19 @@
+Set the Target On a Column PUT /api/gotham/v1/twb/setTargetColumn/{targetRid} Move a Target into a TargetBoardColumn from an old column. Path parameters targetRid string Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body SetTargetColumnRequestV2 object Move a Target into a TargetBoardColumn, either from an old column or no column (newly created Target). Hide child attributes Hide child attributes Collapse all boardRid string The unique resource identifier of a Target Board. This is equivalent to a collection RID. newColumnId string Equivalent to a collection column ID. The ID of a TargetCollectionColumn, default values are:
+DRAFT (Identified target), PLAN_DEVELOPMENT (Prioritized target), PLANNED (In coordination), EXECUTION (In execution), CLOSED (Complete). baseRevisionId string The version of Target Board you are working with.
+The set operation will be transformed against any concurrent operations
+made since this version. If there are any conflicting edits that result in changes to
+these operations when they're applied, that will be noted in the response. clientId string optional The client id is used to identify conflicting edits made by the same client,
+typically due to retries, and discard them. Clients should choose an arbitrary random
+identifier to distinguish themselves. There is no need persist and re-use the same
+client id over multiple sessions. 
+ The client id is also used to avoid broadcasting operations to the client who
+submitted them. Response body EmptySuccessResponse object Success response. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/twb/setTargetColumn/ri.gotham-artifact.0-0.target.example?preview=true" \
+ -d '{"boardRid":"ri.gotham-artifact.0-0.target-board.example","newColumnId":"CLOSED"}' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

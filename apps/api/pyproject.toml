@@ -21,7 +21,7 @@ dependencies = [
   "isal>=1.6",
   "pydantic>=2.9.0",
   "pydantic-settings>=2.5.0",
-  "httpx>=0.27.2",
+  "httpx[socks]>=0.27.2",
   "websockets>=13.0",
   "pillow>=10.0",
   "python-pptx>=0.6.23",
@@ -61,7 +61,7 @@ dev = [
   "pytest>=8.3.3",
   "pytest-asyncio>=0.24.0",
   "pytest-xdist>=3.8.0",
-  "httpx>=0.27.2",
+  "httpx[socks]>=0.27.2",
   "ruff>=0.6.8",
 ]
 # MAVLink bridge sidecar (app.mavlink_bridge). Optional: without it the bridge

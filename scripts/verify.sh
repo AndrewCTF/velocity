@@ -30,6 +30,12 @@ step "typecheck (pnpm -r typecheck)" pnpm -r typecheck
 step "lint (pnpm -r lint)" pnpm -r lint
 step "web unit tests (vitest)" pnpm --dir "$ROOT/apps/web" test
 step "api lint (ruff)" "$ROOT/apps/api/.venv/bin/ruff" check "$ROOT/apps/api"
+# The browser-fetch pace gate is the one piece of sidecar logic with real
+# concurrency semantics (serialize per host, jittered floor, a failure must not
+# wedge the queue) and it lives in node, out of pytest's reach.
+step "browser-fetch pace gate (node selftest)" \
+  env NODE_PATH="$ROOT/tools/adsb-globe-feeder/node_modules" \
+  node "$ROOT/tools/browser-fetch/selftest.js"
 step "api tests (pytest, background feeds off)" \
   env OSINT_DISABLE_BACKGROUND=1 "$ROOT/apps/api/.venv/bin/pytest" "$ROOT/apps/api" -q
 

@@ -1,0 +1,680 @@
+/* Velocity redesign mockups · shared visual system, v4.
+   ────────────────────────────────────────────────────────────────────────────
+   v3 was rejected as childish. It was: 14px radii, 28px backdrop blur, pill
+   badges, an iOS-style switch, a glowing accent, and panels floating as cards
+   with margins on every side. That is consumer-app language, not instrument
+   language.
+
+   v4 is flat and docked, in the Gotham and Blueprint register:
+     · Panels DOCK flush to the viewport edge and are separated by 1px hairlines.
+       No margins, no floating cards, no drop shadows except on true overlays
+       (dropdown, palette, modal) where elevation carries meaning.
+     · No backdrop blur anywhere. No glow on the accent. Depth comes from a
+       background step and a hairline, which is how instruments do it.
+     · Radii 2 / 3 / 4px. Badges and chips are rectangles, not pills. The switch
+       is a small rectangle, not a lozenge with a ball in it.
+     · Muted steel-blue accent instead of a saturated one.
+     · The map is a dark basemap, not a bright cartoon globe.
+
+   Kept from v3, because those were right: 14px body with a 12px floor, 20px
+   panel titles, sentence case, named panels, the light analytical surface.
+
+   The map DATA palette is unchanged and must stay unchanged: those eight hex
+   values are asserted as literal strings in globe/invariants.test.ts. */
+
+:root {
+  color-scheme: dark;
+
+  /* substrate — deep cool blue-black. The map runs behind everything, so the
+     chrome sits ON it rather than beside it. */
+  /* Palantir's own published tokens, @blueprintjs/colors 5.1.16 (current).
+     Verified against the G-Cloud 14 Gotham screenshots: the panel greys sampled
+     out of those PDFs are #30404D / #293742 / #202B33 / #394B59 with accent
+     #137CBD, which are CLASSIC Blueprint exactly. Blueprint has since
+     modernised the ramp for contrast, so these are the newer values. */
+  --bg-0: #111418;   /* black */
+  --bg-1: #1c2127;   /* dark-gray1, panels */
+  --bg-2: #252a31;   /* dark-gray2, inset and hover */
+  --bg-3: #2f343c;   /* dark-gray3 */
+  --bg-4: #383e47;   /* dark-gray4 */
+
+  /* no glass: a panel is a solid surface with a hairline edge */
+  --glass: #182026;
+  --glass-2: #202b33;
+  --blur: none;
+
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.15);
+
+  /* text — every tier clears 4.5:1 on both bg-1 and bg-2, monotonic, because
+     theme/contrast.test.ts parses and asserts exactly that. */
+  --txt-0: #f6f7f9;  /* light-gray5 */
+  --txt-1: #c5cbd3;  /* gray5 */
+  --txt-2: #abb3bf;  /* gray4 */
+  --txt-3: #8f99a8;  /* gray3 */
+  --txt-4: #8f99a8;
+
+  --accent: #2d72d2;      /* blue3 */
+  --accent-dim: rgba(45, 114, 210, 0.2);
+  --accent-line: rgba(45, 114, 210, 0.55);
+  --accent-fg: #8abbff;   /* blue5 */
+  --accent-glow: none;
+
+  /* threat state ONLY, never decoration */
+  --warn: #ec9a3c;                        /* orange4 */
+  --warn-bg: rgba(236, 154, 60, 0.16);
+  --warn-fg: #fbb360;                     /* orange5 */
+  --alert: #e76a6e;                       /* red4 */
+  --alert-bg: rgba(231, 106, 110, 0.16);
+  --alert-fg: #fa999c;                    /* red5 */
+  --ok: #32a467;                          /* green4 */
+  --ok-bg: rgba(50, 164, 103, 0.16);
+  --ok-fg: #72ca9b;                       /* green5 */
+
+  /* selection lineage, matched to the globe polyline family */
+  --mag: #e25bef;
+  --mag-dim: rgba(226, 91, 239, 0.14);
+  --mag-fg: #f0a8f8;
+
+  --cls-fg: #72ca9b;
+  --cls-bg: rgba(50, 164, 103, 0.18);
+
+  --r-sm: 2px;
+  --r-md: 3px;
+  --r-lg: 4px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* elevation only where it means something: a thing floating ABOVE the plane */
+  --sh-1: none;
+  --sh-2: none;
+  --sh-pop: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  --z-map: 0;
+  --z-rail: 100;
+  --z-dock: 200;
+  --z-overlay: 400;
+  --z-dropdown: 500;
+  --z-modal: 600;
+  --z-wizard: 700;
+  --z-toast: 800;
+
+  /* type — floor 12px, body 14px, and a real jump to 20px panel titles so a
+     panel reads at a glance instead of as an even grey field. */
+  --fs-cap: 12px;
+  --fs-dense: 13px;
+  --fs-body: 14px;
+  --fs-lg: 16px;
+  --fs-title: 20px;
+  --fs-xl: 26px;
+
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+
+  /* map DATA palette — globe/adapters/styles.ts, guarded by string match. A
+     deliberately separate colour system: the only saturated colour is data. */
+  --d-airliner: #facc15;
+  --d-private: #2dd4bf;
+  --d-heli: #c084fc;
+  --d-glider: #93c5fd;
+  --d-mil: #f59e0b;
+  --d-cargo: #14b8a6;
+  --d-tanker: #d97706;
+  --d-fishing: #5eead4;
+  --d-passenger: #38bdf8;
+  --d-emergency: #ef4444;
+  --d-select: #d946ef;
+}
+
+/* ── The light surface, for the analytical apps ──────────────────────────────
+   Gotham is dark because it is operational; Foundry is light because it is
+   analytical. The mode switch is itself information. */
+.light {
+  color-scheme: light;
+  --bg-0: #f6f7f9;   /* light-gray5 */
+  --bg-1: #ffffff;
+  --bg-2: #edeff2;   /* light-gray4 */
+  --bg-3: #e5e8eb;   /* light-gray3 */
+  --bg-4: #d3d8de;   /* light-gray1 */
+  --glass: #ffffff;
+  --glass-2: #ebf1f5;
+  --blur: none;
+  --line: rgba(15, 23, 36, 0.08);
+  --line-2: rgba(15, 23, 36, 0.14);
+  --txt-0: #111418;  /* black */
+  --txt-1: #1c2127;  /* dark-gray1 */
+  --txt-2: #5f6b7c;  /* gray1 */
+  /* darkened from #66738a: that measured 4.26:1 on --bg-2, under the 4.5 floor
+     that theme/contrast.test.ts enforces. #616d83 is 4.64:1 on bg-2, 5.22:1 on
+     white, and keeps the muted ramp monotonic. */
+  --txt-3: #5f6b7c;
+  --txt-4: #5f6b7c;
+  --accent: #215db0;      /* blue2 */
+  --accent-dim: rgba(33, 93, 176, 0.10);
+  --accent-line: rgba(33, 93, 176, 0.34);
+  --accent-fg: #184a90;   /* blue1 */
+  --accent-glow: none;
+  --warn: #935610; --warn-bg: rgba(147, 86, 16, 0.11); --warn-fg: #77450d;
+  --alert: #ac2f33; --alert-bg: rgba(172, 47, 51, 0.10); --alert-fg: #8e292c;
+  --ok: #1c6e42; --ok-bg: rgba(28, 110, 66, 0.11); --ok-fg: #165a36;
+  --mag: #a839b8; --mag-dim: rgba(168, 57, 184, 0.09); --mag-fg: #832b91;
+  --cls-fg: #165a36; --cls-bg: rgba(28, 110, 66, 0.13);
+  --sh-1: none;
+  --sh-2: none;
+  --sh-pop: 0 8px 24px rgba(15, 23, 36, 0.18);
+}
+
+* {
+  box-sizing: border-box; margin: 0; padding: 0;
+  scrollbar-width: thin; scrollbar-color: var(--bg-4) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--bg-4); border-radius: 4px; border: 3px solid transparent; background-clip: padding-box; }
+
+/* Interactive elements in the mockups are real controls, not styled divs, so
+   the keyboard claim is demonstrable. Reset them so the component classes below
+   still own the look. */
+button { font: inherit; color: inherit; border: 0; background: none; text-align: inherit; }
+[role="button"], [role="switch"], [role="option"] { cursor: pointer; }
+
+html, body {
+  height: 100%; background: var(--bg-0); color: var(--txt-0);
+  font-family: var(--font-sans); font-size: var(--fs-body); line-height: 1.5;
+  -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ── Shell: the map is the whole viewport, everything floats on it ───────── */
+.shell { position: relative; height: 100vh; overflow: hidden; }
+
+.globe { position: absolute; inset: 0; overflow: hidden; background: #06090e; }
+.globe > svg.sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.contact { position: absolute; width: 11px; height: 11px; z-index: 3; }
+.contact i { display: block; width: 100%; height: 100%; clip-path: polygon(50% 0%, 100% 100%, 50% 76%, 0% 100%); background: currentColor; }
+.contact.sq i { clip-path: none; border-radius: 1px; transform: scale(0.68); }
+.contact.sel { width: 15px; height: 15px; color: var(--d-select); z-index: 4; }
+.track { position: absolute; z-index: 4; height: 0; border-top: 2px solid var(--d-select); box-shadow: 0 0 0 1px rgba(0,0,0,.85); transform-origin: left center; }
+
+.osd {
+  position: absolute; z-index: var(--z-dock);
+  font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-2);
+  background: rgba(16, 22, 28, 0.85); border: 1px solid var(--line);
+  padding: 4px 9px; border-radius: var(--r-sm);
+}
+
+/* ── Floating top bar ───────────────────────────────────────────────────── */
+/* In the map shell the bar floats over the edge-to-edge map, so it is absolute.
+   In a full-screen app it is a grid row, so it stays in flow. Scoping this to
+   .shell keeps both working from one rule. */
+.topbar {
+  position: relative; height: 46px; flex: 0 0 auto; z-index: var(--z-rail);
+  display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-3);
+  background: var(--bg-1); border-bottom: 1px solid var(--line-2);
+}
+.shell > .topbar { position: absolute; top: 0; left: 0; right: 0; }
+
+.brand { display: flex; align-items: center; gap: 10px; padding-right: var(--sp-2); }
+.brand i { width: 16px; height: 16px; flex: 0 0 auto; background: var(--accent); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.brand b { font-weight: 600; font-size: var(--fs-lg); letter-spacing: -0.01em; }
+.spacer { flex: 1; min-width: var(--sp-2); }
+
+.cls {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 9px; border-radius: var(--r-sm);
+  background: var(--cls-bg); color: var(--cls-fg);
+  font-family: var(--font-mono); font-size: var(--fs-cap);
+  letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+}
+.cls i { width: 5px; height: 5px; background: currentColor; }
+
+.stat { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.stat b { font-family: var(--font-mono); font-size: var(--fs-dense); font-weight: 500; color: var(--txt-0); }
+.stat span { font-size: var(--fs-cap); color: var(--txt-3); }
+
+/* ── Floating panels ────────────────────────────────────────────────────── */
+.dock {
+  position: absolute; z-index: var(--z-dock);
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  background: var(--bg-1);
+}
+.dock.left { left: 0; top: 46px; bottom: 22px; width: 344px; border-right: 1px solid var(--line-2); }
+.dock.right { right: 0; top: 46px; bottom: 22px; width: 384px; border-left: 1px solid var(--line-2); }
+
+.ptabs { display: flex; gap: 2px; padding: 10px 12px 0; flex: 0 0 auto; flex-wrap: wrap; }
+.ptabs { border-bottom: 1px solid var(--line); padding: 0 var(--sp-3); gap: 0; }
+.ptabs a {
+  text-decoration: none; font-size: var(--fs-dense); font-weight: 500;
+  color: var(--txt-3); padding: 11px 12px; border-bottom: 2px solid transparent;
+  margin-bottom: -1px; white-space: nowrap;
+}
+.ptabs a:hover { color: var(--txt-0); }
+.ptabs a.on { color: var(--txt-0); border-bottom-color: var(--accent); }
+.ptabs .key { font-family: var(--font-mono); font-size: var(--fs-cap); opacity: .65; margin-left: 6px; }
+
+.phead { display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4) var(--sp-2); flex: 0 0 auto; }
+.phead h2 { font-size: var(--fs-title); font-weight: 600; letter-spacing: -0.015em; }
+.pbody { flex: 1; overflow: auto; padding: 0 var(--sp-4) var(--sp-4); }
+
+.sec { margin-top: var(--sp-4); }
+.sec:first-child { margin-top: var(--sp-2); }
+.sech { display: flex; align-items: baseline; gap: var(--sp-2); margin-bottom: var(--sp-2); padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+.sech h3 { font-size: var(--fs-cap); font-weight: 600; color: var(--txt-2); text-transform: uppercase; letter-spacing: 0.07em; }
+.sech .ct { font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-3); margin-left: auto; }
+
+/* ── Rows ───────────────────────────────────────────────────────────────── */
+.row {
+  display: flex; align-items: center; gap: 9px;
+  min-height: 26px; padding: 3px 8px; margin: 0 -8px;
+  border-radius: var(--r-sm); cursor: pointer; line-height: 1.3;
+}
+.row:hover { background: var(--bg-2); }
+.row.on { background: var(--accent-dim); }
+.row .nm { flex: 1; min-width: 0; font-size: var(--fs-dense); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .ct { font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-2); }
+.row .sub { display: block; font-size: var(--fs-cap); color: var(--txt-3); line-height: 1.25; }
+
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: var(--txt-4); }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.alert { background: var(--alert); }
+
+.kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px var(--sp-4); align-items: baseline; }
+.kv dt { font-size: var(--fs-dense); color: var(--txt-2); }
+.kv dd { font-family: var(--font-mono); font-size: var(--fs-dense); color: var(--txt-0); text-align: right; }
+.kv dd.na { color: var(--txt-3); }
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: inherit; font-size: var(--fs-dense); font-weight: 500;
+  color: var(--txt-1); background: var(--bg-2);
+  border: 1px solid var(--line-2); border-radius: var(--r-md);
+  padding: 6px 11px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { background: var(--bg-3); color: var(--txt-0); }
+.btn.accent, .btn.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+.btn.quiet { background: transparent; border-color: transparent; color: var(--txt-2); }
+.btn.quiet:hover { background: var(--glass-2); color: var(--txt-0); }
+.btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+.btn.sm { padding: 6px 10px; font-size: var(--fs-cap); }
+
+.input {
+  display: flex; align-items: center; gap: 10px; height: 30px; padding: 0 10px;
+  background: var(--bg-0); border: 1px solid var(--line-2); border-radius: var(--r-md);
+  color: var(--txt-1); font-size: var(--fs-dense);
+}
+.input.focus { border-color: var(--accent); color: var(--txt-0); }
+.input .ph { color: var(--txt-3); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--fs-cap); padding: 2px 7px; border-radius: var(--r-sm);
+  background: var(--bg-3); color: var(--txt-2); white-space: nowrap;
+}
+.badge.accent { color: var(--accent-fg); background: var(--accent-dim); }
+.badge.warn { color: var(--warn-fg); background: var(--warn-bg); }
+.badge.alert { color: var(--alert-fg); background: var(--alert-bg); }
+.badge.ok { color: var(--ok-fg); background: var(--ok-bg); }
+.badge.mag { color: var(--mag-fg); background: var(--mag-dim); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--fs-cap); padding: 5px 11px; border-radius: var(--r-sm);
+  color: var(--txt-2); background: var(--bg-2); border: 1px solid var(--line);
+  cursor: pointer;
+}
+.chip:hover { color: var(--txt-0); }
+.chip.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+.toggle { width: 26px; height: 14px; border-radius: var(--r-sm); flex: 0 0 auto; background: var(--bg-4); position: relative; cursor: pointer; }
+.toggle i { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 1px; background: var(--txt-3); }
+.toggle.on { background: var(--accent); }
+.toggle.on i { left: auto; right: 2px; background: #fff; }
+
+.meter { height: 4px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.meter.warn i { background: var(--warn); }
+.meter.alert i { background: var(--alert); }
+
+kbd { font-family: var(--font-mono); font-size: var(--fs-cap); padding: 3px 7px; border-radius: var(--r-sm); background: var(--bg-3); color: var(--txt-2); white-space: nowrap; }
+
+/* ── Map toolbar, floating ──────────────────────────────────────────────── */
+/* Gaia puts its map tools in a small horizontal cluster at the top-left of the
+   map, about 30px tall, not in a vertical rail down one side. Measured from the
+   G-Cloud 14 Gotham SDD page 14. */
+.toolbar {
+  position: absolute; z-index: var(--z-dock);
+  display: flex; flex-direction: row; padding: 3px;
+  background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--r-md);
+}
+.tool { width: 28px; height: 28px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; color: var(--txt-2); cursor: pointer; margin: 0 1px; }
+.tool:hover { background: var(--bg-3); color: var(--txt-0); }
+.tool.on { background: var(--accent); color: #fff; }
+.tool svg { width: 15px; height: 15px; }
+.tool-div { width: 1px; background: var(--line-2); margin: 4px; }
+
+/* Gaia carries a thin status strip along the very bottom of the map. */
+.statusbar {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 22px; z-index: var(--z-rail);
+  display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-3);
+  background: var(--bg-1); border-top: 1px solid var(--line-2);
+  font-size: var(--fs-cap); color: var(--txt-3);
+}
+.statusbar b { font-weight: 500; color: var(--ok-fg); }
+.statusbar .sep { width: 1px; height: 11px; background: var(--line-2); }
+
+/* ── Time dock ──────────────────────────────────────────────────────────── */
+.timedock {
+  position: absolute; bottom: 0; z-index: var(--z-dock);
+  background: var(--bg-1); border-top: 1px solid var(--line-2); overflow: hidden;
+}
+.timedock .tbar { display: flex; align-items: center; gap: 11px; padding: 10px 14px; }
+.timedock .scrub { flex: 1; height: 5px; background: var(--bg-3); border-radius: 3px; position: relative; min-width: 120px; }
+.timedock .scrub i { position: absolute; top: -4px; width: 2px; height: 13px; background: var(--accent); }
+.timedock .exp { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.density { height: 38px; display: flex; align-items: flex-end; gap: 2px; }
+.density b { flex: 1; background: var(--bg-4); border-radius: 2px 2px 0 0; }
+.density b.a { background: var(--alert); }
+.density b.w { background: var(--warn); }
+.lanes { display: flex; flex-direction: column; gap: 5px; }
+.lane { display: flex; align-items: center; gap: 11px; }
+.lane .lb { width: 76px; flex: 0 0 76px; font-size: var(--fs-cap); color: var(--txt-3); text-align: right; }
+.lane .lt { flex: 1; height: 9px; background: var(--bg-2); border-radius: var(--r-lg); position: relative; }
+.lane .lt b { position: absolute; top: 1.5px; width: 4px; height: 6px; border-radius: 2px; }
+
+/* ── Series ─────────────────────────────────────────────────────────────── */
+.spark { width: 100%; height: 58px; display: block; }
+.spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.9; }
+.spark.mag polyline { stroke: var(--mag); }
+.spark .fill { fill: var(--accent-dim); stroke: none; }
+.spark.mag .fill { fill: var(--mag-dim); }
+
+/* ── Histogram bars ─────────────────────────────────────────────────────── */
+.hbar { display: grid; grid-template-columns: 108px 1fr 46px; gap: 10px; align-items: center; padding: 4px 0; cursor: pointer; }
+.hbar .hb-l { font-size: var(--fs-dense); color: var(--txt-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar .hb-t { height: 13px; background: var(--glass-2); border-radius: var(--r-sm); overflow: hidden; }
+.hbar .hb-t i { display: block; height: 100%; background: var(--accent); border-radius: var(--r-sm); }
+.hbar.sel .hb-t i { background: var(--mag); }
+.hbar:hover .hb-l { color: var(--txt-0); }
+.hbar .hb-c { font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-2); text-align: right; }
+
+/* ── Command palette ────────────────────────────────────────────────────── */
+.scrim { position: absolute; inset: 0; background: rgba(4, 7, 11, 0.5); z-index: var(--z-modal); display: flex; justify-content: center; padding-top: 9vh; }
+.palette { width: min(720px, 92%); max-height: 72vh; display: flex; flex-direction: column; background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: var(--sh-pop); overflow: hidden; }
+.palette .pq { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.palette .pq .fake { flex: 1; font-size: 22px; color: var(--txt-0); }
+.palette .pq .cur { border-left: 2px solid var(--accent); margin-left: 2px; }
+.plist { overflow: auto; padding: var(--sp-2); }
+.pgroup { padding: var(--sp-3) 12px 5px; font-size: var(--fs-cap); color: var(--txt-3); }
+.pitem { display: flex; align-items: center; gap: 13px; padding: 10px 12px; border-radius: var(--r-md); cursor: pointer; }
+.pitem:hover { background: var(--glass-2); }
+.pitem.on { background: var(--accent); }
+.pitem.on .pi-n, .pitem.on .pi-h { color: #fff; }
+.pitem.on svg { color: rgba(255,255,255,.85); }
+.pitem .pi-n { flex: 1; min-width: 0; font-size: var(--fs-body); }
+.pitem .pi-h { font-size: var(--fs-cap); color: var(--txt-3); }
+.pitem svg { width: 17px; height: 17px; color: var(--txt-3); flex: 0 0 auto; }
+.pfoot { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid var(--line); font-size: var(--fs-cap); color: var(--txt-3); }
+
+/* ── App launcher ───────────────────────────────────────────────────────── */
+.launcher { padding: var(--sp-3); border-radius: var(--r-lg); background: var(--bg-1); border: 1px solid var(--line-2); box-shadow: var(--sh-pop); }
+.lgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.lgrid a { text-decoration: none; display: flex; flex-direction: column; gap: 3px; padding: 12px; border-radius: var(--r-md); color: var(--txt-1); }
+.lgrid a:hover { background: var(--glass-2); }
+.lgrid a.on { background: var(--accent-dim); }
+.lgrid a b { font-size: var(--fs-dense); font-weight: 500; color: var(--txt-0); }
+.lgrid a span { font-size: var(--fs-cap); color: var(--txt-3); }
+.lhead { font-size: var(--fs-cap); color: var(--txt-3); padding: var(--sp-3) 12px 5px; }
+
+/* ── States ─────────────────────────────────────────────────────────────── */
+.state { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: var(--sp-4) 0; }
+.state b { font-size: var(--fs-body); font-weight: 600; color: var(--txt-1); }
+.state p { font-size: var(--fs-dense); color: var(--txt-2); max-width: 42ch; }
+.state.error b { color: var(--alert-fg); }
+.state.warn b { color: var(--warn-fg); }
+.skel { background: var(--glass-2); border-radius: var(--r-sm); height: 13px; }
+.skel + .skel { margin-top: 11px; }
+
+/* ── Solid panels, for full-screen apps that are not over the map ───────── */
+.panel { background: var(--bg-1); display: flex; flex-direction: column; min-height: 0; }
+.panel.edge { border-right: 1px solid var(--line); }
+.main { position: relative; display: flex; min-height: 0; overflow: hidden; }
+.appshell { display: grid; grid-template-rows: 56px 1fr; height: 100vh; overflow: hidden; }
+.appbar { display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-4); background: var(--bg-1); border-bottom: 1px solid var(--line); }
+
+/* ── Document pages ─────────────────────────────────────────────────────── */
+.doc { max-width: 1200px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) 96px; }
+.doc h1 { font-size: 34px; font-weight: 600; letter-spacing: -0.025em; margin-bottom: var(--sp-3); }
+.doc h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.015em; margin: var(--sp-6) 0 var(--sp-3); }
+.doc h3 { font-size: var(--fs-lg); font-weight: 600; margin: var(--sp-5) 0 var(--sp-2); }
+.doc p { color: var(--txt-1); margin-bottom: var(--sp-3); max-width: 76ch; }
+.doc ul, .doc ol { margin: 0 0 var(--sp-3) 0; padding-left: 24px; color: var(--txt-1); max-width: 76ch; }
+.doc li { margin-bottom: 8px; }
+.doc a { color: var(--accent); }
+.doc code { font-family: var(--font-mono); font-size: var(--fs-dense); background: var(--bg-2); padding: 2px 6px; border-radius: var(--r-sm); color: var(--txt-0); }
+.lead { font-size: 17px; line-height: 1.6; color: var(--txt-1); max-width: 72ch; }
+
+table.t { width: 100%; border-collapse: collapse; font-size: var(--fs-dense); margin-bottom: var(--sp-4); }
+table.t th { text-align: left; padding: 10px 13px; border-bottom: 1px solid var(--line-2); font-size: var(--fs-cap); color: var(--txt-3); font-weight: 500; white-space: nowrap; }
+table.t td { padding: 10px 13px; border-bottom: 1px solid var(--line); color: var(--txt-1); vertical-align: top; }
+table.t td.mono, table.t td .mono { font-family: var(--font-mono); }
+table.t td.num { text-align: right; font-family: var(--font-mono); }
+table.t tr:hover td { background: var(--bg-1); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-4); }
+.stage { border-radius: var(--r-lg); overflow: hidden; background: var(--bg-1); }
+.stage > .cap { padding: 12px 18px; border-bottom: 1px solid var(--line); font-size: var(--fs-cap); color: var(--txt-3); }
+.stage > .in { padding: var(--sp-4); }
+
+.topnav { position: sticky; top: 0; z-index: var(--z-dock); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 12px var(--sp-5); background: var(--bg-1); border-bottom: 1px solid var(--line); }
+.topnav a { font-size: var(--fs-dense); color: var(--txt-2); text-decoration: none; padding: 7px 12px; border-radius: var(--r-md); }
+.topnav a:hover { background: var(--bg-2); color: var(--txt-0); }
+.topnav a.on { color: #fff; background: var(--accent); }
+.topnav .sp { flex: 1; }
+
+.note { border-left: 3px solid var(--accent); background: var(--accent-dim); padding: 14px 18px; border-radius: 0 var(--r-md) var(--r-md) 0; font-size: var(--fs-dense); color: var(--txt-1); margin-bottom: var(--sp-4); max-width: 76ch; }
+.note.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.note.new { border-left-color: var(--ok); background: var(--ok-bg); }
+
+.mocknote {
+  position: fixed; right: 16px; bottom: 16px; z-index: 900;
+  display: flex; align-items: center; gap: 13px; padding: 10px 16px;
+  border-radius: var(--r-md); background: var(--bg-1);
+  border: 1px solid var(--line-2); font-size: var(--fs-cap); color: var(--txt-2);
+}
+.mocknote b { color: var(--accent-fg); font-weight: 600; }
+.mocknote a { color: var(--txt-1); }
+
+/* ══ Gotham parity components ═════════════════════════════════════════════
+   Measured from the G-Cloud 14 Gotham SDD screenshots, not designed from
+   memory. Each block records what was measured. */
+
+/* ── Dropdown and context menu ────────────────────────────────────────────
+   Gotham Graph, page 13. Item pitch measured at 20px with a 24px hover band;
+   a bold section header with no icon; 15px monochrome icon, label, right
+   submenu chevron; hairline separators; submenu opens right, top-aligned. */
+/* Gotham runs a row-height to font-size ratio near 2.4: small text in a roomy
+   row. We hold a 12px floor, so 26px over 12px (2.17) is as close as we get
+   without breaking the accessibility rule. */
+.gmenu {
+  min-width: 200px; padding: 4px 0; background: var(--bg-3);
+  border: 1px solid var(--line-2); border-radius: var(--r-md);
+  box-shadow: var(--sh-pop); font-size: var(--fs-cap);
+}
+.gmenu .gsec { padding: 5px 11px 4px; font-weight: 600; color: var(--txt-0); }
+.gmenu .gsep { height: 1px; background: var(--line-2); margin: 4px 0; }
+.gmenu .gitem {
+  display: flex; align-items: center; gap: 9px; height: 26px;
+  padding: 0 10px 0 11px; color: var(--txt-1); cursor: pointer; white-space: nowrap;
+}
+.gmenu .gitem:hover, .gmenu .gitem.on { background: var(--bg-4); color: var(--txt-0); }
+.gmenu .gitem svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--txt-2); }
+.gmenu .gitem .lbl { flex: 1; }
+.gmenu .gitem .arw { color: var(--txt-3); font-size: var(--fs-cap); line-height: 1; transform: scale(.72); }
+.gmenu .gitem.plain { padding-left: 12px; }
+
+/* ── Histogram tree ───────────────────────────────────────────────────────
+   Gotham Graph histogram panel. Uppercase group header with a disclosure
+   triangle and a right-aligned total; item rows carry a 15px type icon, the
+   label, a right-aligned "1/12" fraction, then a two-tone bar on a dark
+   track. The selected row is outlined in the accent, not filled. */
+.gtree { font-size: var(--fs-cap); }
+.gtree .ghead {
+  display: flex; align-items: center; gap: 7px; height: 22px;
+  color: var(--txt-2); font-size: var(--fs-cap); font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+}
+.gtree .ghead .tri { color: var(--txt-3); font-size: var(--fs-cap); line-height: 1; width: 10px; transform: scale(.8); }
+.gtree .ghead .n { margin-left: auto; font-family: var(--font-mono); font-weight: 400; letter-spacing: 0; }
+.gtree .grow {
+  display: grid; grid-template-columns: 15px 1fr auto 96px; gap: 8px;
+  align-items: center; height: 22px; padding: 0 5px; margin: 0 -5px 1px;
+  border: 1px solid transparent; border-radius: var(--r-sm); cursor: pointer;
+}
+.gtree .grow:hover { background: var(--bg-2); }
+.gtree .grow.sel { border-color: var(--accent); background: var(--accent-dim); }
+.gtree .grow > svg { width: 15px; height: 15px; color: var(--accent); }
+.gtree .ghead > svg { width: 14px; height: 14px; }
+.gtree .grow .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--txt-1); }
+.gtree .grow.sel .lbl { color: var(--txt-0); }
+.gtree .grow .frac { font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-3); }
+.gtree .grow .bar { height: 13px; background: var(--bg-0); border-radius: 1px; overflow: hidden; display: flex; }
+.gtree .grow .bar i { display: block; height: 100%; background: var(--accent); }
+.gtree .grow .bar i.hit { background: var(--accent-fg); }
+.gtree .more { text-align: center; color: var(--txt-3); font-size: var(--fs-cap); padding: 5px 0 2px; cursor: pointer; }
+.gtree .kids { padding-left: 14px; }
+
+/* ── Panel header ─────────────────────────────────────────────────────────
+   Title left, close right, then a separate right-aligned icon row with a
+   vertical rule before the search affordance. */
+.ghdr { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; }
+.ghdr h2 { font-size: var(--fs-dense); font-weight: 600; letter-spacing: 0; }
+.ghdr .x { margin-left: auto; color: var(--txt-3); cursor: pointer; }
+.gbar { display: flex; align-items: center; justify-content: flex-end; gap: 2px; height: 26px; padding: 0 8px; border-bottom: 1px solid var(--line); }
+.gbar .ib { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; color: var(--txt-2); border-radius: var(--r-sm); cursor: pointer; }
+.gbar .ib:hover { background: var(--bg-3); color: var(--txt-0); }
+.gbar .rule { width: 1px; height: 14px; background: var(--line-2); margin: 0 5px; }
+
+/* ── Labelled toolbar groups ──────────────────────────────────────────────
+   Gotham Graph's styling toolbar: a small muted label above each group, its
+   controls below, groups divided by a vertical hairline. */
+.gtools { display: flex; align-items: stretch; gap: 0; background: var(--bg-1); border-bottom: 1px solid var(--line-2); padding: 3px 6px; }
+.gtools .grp { display: flex; flex-direction: column; gap: 2px; padding: 0 10px; border-right: 1px solid var(--line-2); }
+.gtools .grp:last-child { border-right: 0; }
+.gtools .grp > span { font-size: var(--fs-cap); color: var(--txt-3); }
+.gtools .grp > div { display: flex; align-items: center; gap: 3px; }
+.gsplit { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 6px; border-radius: var(--r-sm); color: var(--txt-1); cursor: pointer; }
+.gsplit:hover { background: var(--bg-3); }
+.gsplit svg { width: 15px; height: 15px; }
+.gsplit .cv { font-size: var(--fs-cap); color: var(--txt-3); }
+
+/* ── Tab strip ────────────────────────────────────────────────────────────
+   Gaia's panel tabs: icon plus label, active is full-strength text with a
+   2px accent underline, inactive is muted. */
+.gtabs { display: flex; align-items: stretch; background: var(--bg-1); border-bottom: 1px solid var(--line-2); }
+.gtabs a {
+  display: flex; align-items: center; gap: 7px; padding: 8px 14px;
+  font-size: var(--fs-dense); color: var(--txt-3); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+}
+.gtabs a svg { width: 15px; height: 15px; }
+.gtabs a:hover { color: var(--txt-1); }
+.gtabs a.on { color: var(--txt-0); border-bottom-color: var(--accent); }
+.gtabs a.on svg { color: var(--accent); }
+
+/* ══ Gotham parity, second pass ═══════════════════════════════════════════
+   From Object Explorer (SDD p7), Inbox (p9) and Graph (p12). */
+
+/* ── Window chrome: classification strip, menu bar, centred document chip ── */
+.gcls { height: 16px; background: #0f7d56; color: #eafff4; font-family: var(--font-mono);
+        font-size: var(--fs-cap); display: flex; align-items: center; justify-content: center; letter-spacing: .1em; }
+.gmenubar { display: flex; align-items: center; gap: 2px; height: 28px; padding: 0 8px;
+            background: var(--bg-1); border-bottom: 1px solid var(--line); font-size: var(--fs-cap); }
+.gmenubar a { color: var(--txt-1); text-decoration: none; padding: 4px 8px; border-radius: var(--r-sm); }
+.gmenubar a:hover { background: var(--bg-3); }
+.gdoc { display: inline-flex; align-items: center; gap: 7px; margin: 0 auto; color: var(--txt-0); }
+.gdoc .dot { width: 11px; height: 11px; border-radius: 2px; background: var(--accent); }
+
+/* ── Narrow shortcut rail, about 26px, the app launcher column ──────────── */
+.grail { width: 30px; flex: 0 0 30px; background: var(--bg-0); border-right: 1px solid var(--line);
+         display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; }
+.grail i { width: 18px; height: 18px; border-radius: var(--r-sm); display: block; opacity: .85; }
+
+/* ── Tabs with a count badge, and a More overflow ───────────────────────── */
+.gtabs2 { display: flex; align-items: center; gap: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.gtabs2 a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; font-size: var(--fs-cap);
+            color: var(--txt-2); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.gtabs2 a:hover { color: var(--txt-0); }
+.gtabs2 a.on { color: var(--accent-fg); border-bottom-color: var(--accent); }
+.gtabs2 a .cnt { font-family: var(--font-mono); font-size: var(--fs-cap); color: var(--txt-3);
+                 background: var(--bg-2); border-radius: var(--r-sm); padding: 0 4px; }
+
+/* ── Filter path card ─────────────────────────────────────────────────────
+   Object Explorer builds a query as a stack of cards, each showing the
+   narrowing as "22,299 > 786". The transition count is the whole point. */
+.gcard { background: var(--bg-2); border-radius: var(--r-md); padding: 10px 11px; margin-bottom: 8px; position: relative; }
+.gcard > svg { width: 14px; height: 14px; color: var(--txt-3); float: left; margin: 1px 8px 0 0; }
+.gcard p { font-size: var(--fs-cap); color: var(--txt-1); margin: 0 16px 0 0; line-height: 1.45; }
+.gcard .chip2 { color: var(--accent-fg); border-bottom: 1px solid var(--accent-line); }
+.gcard .foot { display: flex; align-items: baseline; margin-top: 9px; clear: both; }
+.gcard .foot span { font-size: var(--fs-cap); color: var(--txt-3); }
+.gcard .foot b { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-cap); font-weight: 400; color: var(--txt-1); }
+.gcard .rm { position: absolute; top: 8px; right: 8px; color: var(--txt-3); cursor: pointer; }
+/* the notch between cards: the path flows downward, each step narrowing the set */
+.gcard + .gcard::before {
+  content: ''; position: absolute; top: -8px; left: 50%; width: 11px; height: 11px;
+  transform: translateX(-50%) rotate(45deg); background: var(--bg-2);
+}
+
+/* ── Message list ─────────────────────────────────────────────────────────
+   Selection is a FILLED accent row here, unlike the tree where it is an
+   outline. Unread carries a dot in the left gutter. */
+.gmsg { display: flex; gap: 9px; padding: 8px 10px 8px 20px; cursor: pointer; position: relative; border-bottom: 1px solid var(--line); }
+.gmsg:hover { background: var(--bg-2); }
+.gmsg.sel { background: var(--accent); }
+.gmsg.sel * { color: #fff !important; }
+.gmsg .av { width: 18px; height: 18px; border-radius: 2px; background: var(--bg-4); flex: 0 0 auto; }
+.gmsg .b { min-width: 0; }
+.gmsg .b b { display: block; font-size: var(--fs-cap); font-weight: 600; color: var(--txt-0); }
+.gmsg .b span { display: block; font-size: var(--fs-cap); color: var(--txt-1); }
+.gmsg .b em { display: block; font-style: normal; font-size: var(--fs-cap); color: var(--txt-3); margin-top: 2px; }
+.gmsg .unread { position: absolute; left: 8px; top: 14px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+/* ── Channel list with collapsible groups ──────────────────────────────── */
+.gchan { font-size: var(--fs-cap); }
+.gchan .top { display: flex; align-items: center; height: 26px; padding: 0 10px; border-radius: var(--r-sm); color: var(--txt-1); cursor: pointer; }
+.gchan .top:hover { background: var(--bg-2); }
+.gchan .top.on { background: var(--bg-3); color: var(--txt-0); }
+.gchan .grp { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; color: var(--txt-1); cursor: pointer; }
+.gchan .grp .tri { color: var(--txt-3); transform: scale(.8); }
+.gchan .grp .n { margin-left: auto; font-family: var(--font-mono); color: var(--txt-3); }
+.gchan .sub { display: flex; align-items: center; gap: 7px; height: 24px; padding: 0 10px 0 26px; color: var(--txt-2); cursor: pointer; }
+.gchan .sub .n { margin-left: auto; font-family: var(--font-mono); color: var(--txt-3); }
+
+/* ── Change history ───────────────────────────────────────────────────────
+   Date gutter on the left, then a plus-marked group header with its lines
+   indented beneath. */
+.ghist { display: grid; grid-template-columns: 128px 1fr; gap: 14px; font-size: var(--fs-cap); }
+.ghist .when { text-align: right; color: var(--txt-3); font-family: var(--font-mono); }
+.ghist .grp { display: flex; align-items: center; gap: 7px; color: var(--txt-0); font-weight: 600; margin-bottom: 5px; }
+.ghist .grp svg { width: 13px; height: 13px; color: var(--ok); }
+.ghist .ln { color: var(--txt-2); line-height: 1.5; margin-bottom: 3px; }
+.ghist .ln b { font-weight: 400; color: var(--txt-0); }
+.ghist .redact { display: inline-block; height: 10px; width: 88px; background: var(--bg-4); border-radius: 2px; vertical-align: -1px; }
+
+/* ── Bottom action bar ────────────────────────────────────────────────── */
+.gactions { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--bg-1); border-top: 1px solid var(--line); font-size: var(--fs-cap); }
+.gactions .desc { color: var(--txt-2); }
+.gactions .desc b { color: var(--accent-fg); font-weight: 400; }
+.gactions .lnk { margin-left: auto; color: var(--txt-2); cursor: pointer; }

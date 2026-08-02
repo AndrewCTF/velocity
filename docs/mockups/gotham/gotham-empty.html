@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Velocity · Gotham-grammar console</title>
+<link rel="stylesheet" href="mock.css">
+<link rel="stylesheet" href="gotham.css">
+</head><body style="margin:0;background:#111418">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-diamond" viewBox="0 0 24 24"><path d="M12 2l10 10-10 10L2 12z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 2l9 5-9 5-9-5zM3 12l9 5 9-5M3 17l9 5 9-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-search" viewBox="0 0 24 24"><path d="M11 4a7 7 0 100 14 7 7 0 000-14zM20 20l-4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-info" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zM12 11v6M12 7.5v.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.7 5.8 6.3.8-4.6 4.3 1.2 6.1-5.6-3-5.6 3 1.2-6.1L3 9.6l6.3-.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-chev" viewBox="0 0 24 24"><path d="M8 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-chevd" viewBox="0 0 24 24"><path d="M5 8l7 7 7-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 3v12M8 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-screen" viewBox="0 0 24 24"><path d="M3 4h18v12H3zM8 20h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-globe" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-graph" viewBox="0 0 24 24"><path d="M6 6a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM18 4a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM17 15a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM8 8.5l8-2M8 11l8 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-grid" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6zM14 2v4h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3.5 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-target" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zM12 8a4 4 0 100 8 4 4 0 000-8zM12 11v2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-video" viewBox="0 0 24 24"><path d="M3 6h12v12H3zM15 10l6-3v10l-6-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l2 3h4l2-3h5M3 13l3-9h12l3 9v7H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 4h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3v6L4 20h16L15 9V3M8 3h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-hand" viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 013 0V11M12 11V4.5a1.5 1.5 0 013 0V11M15 11V6.5a1.5 1.5 0 013 0V13c0 4-2.5 7-6.5 7S6 17.5 6 14l-1-3.5a1.4 1.4 0 012.4-1.4L9 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-marquee" viewBox="0 0 24 24"><path d="M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-around" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18M12 8a4 4 0 100 8M19 5l3-3M22 2v4h-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-draw" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 7h4l1.5-2h5L16 7h4v12H4zM12 16a3.5 3.5 0 100-7 3.5 3.5 0 000 7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3 15L15 3l6 6L9 21zM8 10l2 2M11 7l2 2M5 13l2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.5 7-12a7 7 0 10-14 0c0 5.5 7 12 7 12zM12 7a2.5 2.5 0 100 5 2.5 2.5 0 000-5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l9 17H3zM12 9v5M12 17v.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v6M12 16v.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-cross" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 5v5h-5M4 19v-5h5M5 10a7.5 7.5 0 0113-3M19 14a7.5 7.5 0 01-13 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 9a3 3 0 100 6 3 3 0 000-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-empty" viewBox="0 0 24 24"><path d="M4 7l8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-slider" viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h4M12 16h8M16 5v6M8 13v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol><symbol id="i-plane" viewBox="0 0 24 24"><path d="M12 2c1 0 1.6 1.6 1.8 4.4l.2 3.6 7 2.7v2l-7-1.3.1 5 2 1v1.5l-4.1-.9-4.1.9V19l2-1 .1-5-7 1.3v-2l7-2.7.2-3.6C10.4 3.6 11 2 12 2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol></svg>
+<div class="gk">
+  <div class="gk-band" role="note">UNCLASSIFIED</div>
+  <div class="gk-title">
+  <div class="gk-brand"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-diamond"/></svg><span>Velocity</span></div>
+  <nav class="gk-menu" aria-label="Application menu"><button type="button">File</button><button type="button">Edit</button><button type="button">View</button><button type="button">Collect</button><button type="button">Exploration</button><button type="button">Window</button><button type="button">Help</button></nav>
+  <div class="gk-saved"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"/></svg><span>Saved</span></div>
+  <div class="gk-doc">
+    <span class="chip-ico" aria-hidden="true"></span>
+    <span class="gk-doc-name">Baltic approaches watch</span>
+    <button type="button" aria-label="Star this workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-star"/></svg></button>
+    <button type="button" aria-label="Workspace menu"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevd"/></svg></button>
+  </div>
+  <div></div>
+  <div class="gk-tools">
+    <button type="button" class="ico-btn" aria-label="Add collaborator"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"/></svg></button>
+    <button type="button" class="ico-btn" aria-label="Presentation mode"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-screen"/></svg></button>
+    <button type="button" class="lnk">Share</button>
+    <span class="gk-sys"><span>13,204 contacts · 1 s</span><span class="sep" aria-hidden="true">·</span><span>58 fps</span></span>
+    <span class="gk-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-shield"/></svg><span>UNCLAS</span></span>
+    <div class="gk-envsearch">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"/></svg>
+      <input type="search" placeholder="Baltic staging" aria-label="Search this environment">
+    </div>
+  </div>
+</div>
+  <div class="gk-body">
+    <nav class="gk-rail" aria-label="Applications"><button type="button" aria-label="Map" aria-current="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-globe"/></svg></button><hr><button type="button" aria-label="Link analysis"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-graph"/></svg></button><button type="button" aria-label="Explorer"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid"/></svg></button><button type="button" aria-label="Reports"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-doc"/></svg></button><button type="button" aria-label="Replay"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg></button><button type="button" aria-label="Targeting"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-target"/></svg></button><hr><button type="button" aria-label="Full motion video"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-video"/></svg></button><button type="button" aria-label="Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-inbox"/></svg></button><button type="button" aria-label="Analyst console"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chat"/></svg></button><button type="button" aria-label="Foundry"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flask"/></svg></button></nav>
+    <div class="gk-work">
+      <div class="gk-tabs" role="tablist" aria-label="Panels">
+  <button type="button" class="gk-tab" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-layers"/></svg><span>Layers</span><span class="gk-count">18 of 64</span></button><button type="button" class="gk-tab" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"/></svg><span>Find</span></button><button type="button" class="gk-tab" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chart"/></svg><span>Histogram</span><span class="gk-count">6</span></button><button type="button" class="gk-tab" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info"/></svg><span>Info</span><span class="gk-count">2</span></button><button type="button" class="gk-tab" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-graph"/></svg><span>Series</span><span class="gk-count">5</span></button>
+  <span class="grow"></span>
+  <button type="button" class="pin" aria-label="Pin a panel to this row"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"/></svg></button>
+</div>
+      <div class="gk-cols">
+        <section class="gk-map" aria-label="Map">
+  <svg class="sky" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <!-- Baltic approaches basemap. The scenario is 54.318 N 018.712 E with a
+       200 km scale bar, which is a zoomed-in coastal view, not a globe: a globe
+       at that scale is the wrong instrument and reads as decoration.
+
+       Projection is a plain equirectangular fit so the geometry is checkable:
+         x = (lon - 14.0) * 200        lon 14.0 E to 22.0 E
+         y = (55.9 - lat) * 333.33     lat 53.2 N to 55.9 N
+       Coastlines are simplified, not survey grade, and the graticule labels are
+       computed from those two formulas rather than typed by eye. -->
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#0d1821"/>
+      <stop offset="100%" stop-color="#091219"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#sea)"/>
+
+  <!-- graticule: 1 degree of longitude, half a degree of latitude -->
+  <g stroke="rgba(150,190,220,0.09)" stroke-width="1" fill="none">
+    <path d="M200 0V900M400 0V900M600 0V900M800 0V900M1000 0V900M1200 0V900M1400 0V900"/>
+    <path d="M0 133H1600M0 300H1600M0 467H1600M0 633H1600M0 800H1600"/>
+  </g>
+  <g fill="rgba(150,190,220,0.34)" font-family="IBM Plex Mono, monospace" font-size="12">
+    <text x="205" y="122">15°E</text><text x="405" y="122">16°E</text><text x="605" y="122">17°E</text>
+    <text x="805" y="122">18°E</text><text x="1005" y="122">19°E</text><text x="1205" y="122">20°E</text>
+    <text x="1405" y="122">21°E</text>
+    <text x="6" y="129">55°30'N</text><text x="6" y="296">55°00'N</text><text x="6" y="463">54°30'N</text>
+    <text x="6" y="629">54°00'N</text><text x="6" y="796">53°30'N</text>
+  </g>
+
+  <!-- land -->
+  <g fill="#22303a" stroke="rgba(160,205,230,0.5)" stroke-width="1" stroke-linejoin="round">
+    <!-- Poland, Kaliningrad oblast and the Lithuanian coast -->
+    <path d="M0 690 L50 663 L180 620 L316 573 L450 500 L572 440 L650 405 L710 380 L800 372
+             L880 370 L890 420 L906 460 L915 490 L930 517 L985 528 L1010 520 L1120 470
+             L1180 417 L1250 405 L1302 397 L1360 300 L1400 180 L1428 63 L1600 20
+             L1600 900 L0 900 Z"/>
+    <!-- Hel peninsula -->
+    <path d="M879 367 L921 391 L961 419 L986 437 L991 447 L967 433 L927 405 L876 379 Z"/>
+    <!-- Vistula Spit -->
+    <path d="M1004 522 L1080 492 L1150 455 L1178 431 L1181 443 L1152 467 L1082 504 L1005 533 Z"/>
+    <!-- Bornholm -->
+    <path d="M160 240 q30 -14 46 6 q10 26 -14 38 q-34 10 -44 -16 Z"/>
+    <!-- southern Sweden -->
+    <path d="M0 0 L300 0 L250 60 L140 96 L60 130 L0 150 Z"/>
+  </g>
+
+  <!-- inland water: the Vistula Lagoon behind the spit -->
+  <path d="M1010 519 L1120 469 L1176 429 L1150 452 L1080 489 L1008 517 Z" fill="#0e1a23"
+        stroke="rgba(160,205,230,0.28)" stroke-width="0.8"/>
+
+  <!-- place labels -->
+  <g font-family="IBM Plex Mono, monospace" font-size="12" fill="#9fb3c0">
+    <g fill="#6f8494">
+      <circle cx="930" cy="517" r="2.6"/><circle cx="906" cy="460" r="2.6"/>
+      <circle cx="985" cy="437" r="2.6"/><circle cx="1302" cy="397" r="2.6"/>
+      <circle cx="1428" cy="63" r="2.6"/><circle cx="316" cy="573" r="2.6"/>
+      <circle cx="1180" cy="417" r="2.6"/>
+    </g>
+    <text x="939" y="521">GDANSK</text>
+    <text x="915" y="464">GDYNIA</text>
+    <text x="994" y="441">HEL</text>
+    <text x="1311" y="401">KALININGRAD</text>
+    <text x="1437" y="67">KLAIPEDA</text>
+    <text x="325" y="577">KOLOBRZEG</text>
+    <text x="1189" y="421">BALTIYSK</text>
+    <text x="150" y="300" fill="#7c8f9c">BORNHOLM</text>
+  </g>
+  <g font-family="Inter, sans-serif" font-size="13" fill="rgba(150,190,220,0.28)" letter-spacing="3">
+    <text x="470" y="248">BALTIC&#160;&#160;SEA</text>
+    <text x="946" y="602" font-size="12" letter-spacing="2">GULF&#160;OF&#160;GDANSK</text>
+  </g>
+
+  <!-- 200 km scale bar. 1 degree of longitude at 54.5 N is about 64.7 km and
+       1 degree is 200 units here, so 100 km is about 309 units. -->
+  <g transform="translate(430,672)">
+    <rect x="0" y="-6" width="309" height="6" fill="rgba(150,190,220,0.5)"/>
+    <rect x="0" y="-6" width="154.5" height="6" fill="rgba(20,30,38,0.9)"/>
+    <g fill="rgba(160,200,225,0.62)" font-family="IBM Plex Mono, monospace" font-size="12">
+      <text x="-2" y="14">0</text><text x="146" y="14">50</text><text x="292" y="14">100 km</text>
+    </g>
+  </g>
+
+  <!-- north arrow -->
+  <g transform="translate(1120,672)" fill="rgba(160,200,225,0.55)">
+    <path d="M0 -22 L7 0 L0 -5 L-7 0 Z"/>
+    <text x="-4" y="14" font-family="IBM Plex Mono, monospace" font-size="12">N</text>
+  </g>
+<g class="contacts"><g transform="translate(580.0 166.7) rotate(118)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(840.0 266.7) rotate(204)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1120.0 100.0) rotate(268)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-private)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(280.0 366.7) rotate(42)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(660.0 533.3) rotate(331)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-heli)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1280.0 300.0) rotate(155)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-mil)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(420.0 666.7) rotate(88)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(980.0 433.3) rotate(24)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-glider)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1420.0 500.0) rotate(190)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(200.0 233.3) rotate(305)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-private)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1020.0 733.3) rotate(76)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(760.0 66.7) rotate(240)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-mil)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1200.0 800.0) rotate(12)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-heli)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(120.0 566.7) rotate(133)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1500.0 200.0) rotate(281)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(500.0 450.0) rotate(60)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-private)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(900.0 833.3) rotate(348)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1180.0 333.3) rotate(99)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-emergency)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(340.0 116.7) rotate(95)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(470.0 283.3) rotate(212)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-private)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(610.0 216.7) rotate(340)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1070.0 183.3) rotate(58)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1360.0 116.7) rotate(176)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-private)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(180.0 766.7) rotate(22)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(540.0 783.3) rotate(264)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-heli)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1460.0 666.7) rotate(108)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(690.0 716.7) rotate(291)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1210.0 583.3) rotate(8)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-mil)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(310.0 483.3) rotate(149)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(810.0 650.0) rotate(316)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-private)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1110.0 850.0) rotate(71)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(70.0 350.0) rotate(233)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1550.0 383.3) rotate(128)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-heli)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(440.0 583.3) rotate(355)"><path d="M0 -9 L6 7 L0 3 L-6 7 Z" fill="var(--d-airliner)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(950.0 493.3) rotate(31)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-cargo)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(910.0 450.0) rotate(210)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-tanker)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1060.0 383.3) rotate(145)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-cargo)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(720.0 333.3) rotate(288)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-fishing)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(820.0 383.3) rotate(66)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-passenger)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1160.0 466.7) rotate(172)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-cargo)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(560.0 433.3) rotate(250)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-tanker)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1320.0 383.3) rotate(18)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-cargo)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(630.0 416.7) rotate(300)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-fishing)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(870.0 300.0) rotate(120)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-cargo)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(380.0 316.7) rotate(205)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-tanker)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1240.0 233.3) rotate(84)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-passenger)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(980.0 516.7) rotate(254)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-cargo)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1110.0 283.3) rotate(39)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-fishing)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(780.0 183.3) rotate(161)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-tanker)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(480.0 183.3) rotate(97)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-cargo)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1380.0 166.7) rotate(222)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-cargo)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(840.0 566.7) rotate(305)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-fishing)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1010.0 150.0) rotate(74)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-tanker)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(670.0 266.7) rotate(189)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-cargo)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(1440.0 283.3) rotate(15)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-passenger)" stroke="#0b1116" stroke-width="1"/></g><g transform="translate(430.0 500.0) rotate(268)"><path d="M0 -7 L4.5 2 L4.5 7 L-4.5 7 L-4.5 2 Z" fill="var(--d-fishing)" stroke="#0b1116" stroke-width="1"/></g><polyline points="860.0,580.0 872.0,546.7 882.0,516.7 890.0,490.0 900.0,466.7 910.0,446.7 918.0,430.0 924.0,413.3" fill="none" stroke="#000" stroke-width="6"/><polyline points="860.0,580.0 872.0,546.7 882.0,516.7 890.0,490.0 900.0,466.7 910.0,446.7 918.0,430.0 924.0,413.3" fill="none" stroke="#d946ef" stroke-width="4"/><g transform="translate(924.0 413.3) rotate(24)"><path d="M0 -11 L7 8 L0 4 L-7 8 Z" fill="#d946ef" stroke="#fff" stroke-width="1.4"/></g><text x="938" y="407" fill="#f6f7f9" font-size="13" font-family="IBM Plex Mono, monospace">RYR4213</text></g></svg>
+  <div class="gk-maptools" role="toolbar" aria-label="Map tools"><div class="gk-tgroup" role="group" aria-label="Navigate tools"><span class="lab" aria-hidden="true">Navigate</span><span class="btns"><button type="button" aria-label="Pan" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-hand"/></svg></button></span></div><span class="vr" aria-hidden="true"></span><div class="gk-tgroup" role="group" aria-label="Select tools"><span class="lab" aria-hidden="true">Select</span><span class="btns"><button type="button" aria-label="Select" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marquee"/></svg></button><button type="button" aria-label="Search around" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-around"/></svg></button></span></div><span class="vr" aria-hidden="true"></span><div class="gk-tgroup" role="group" aria-label="Draw tools"><span class="lab" aria-hidden="true">Draw</span><span class="btns"><button type="button" aria-label="Draw" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-draw"/></svg></button><button type="button" aria-label="Capture" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-camera"/></svg></button></span></div><span class="vr" aria-hidden="true"></span><div class="gk-tgroup" role="group" aria-label="Measure tools"><span class="lab" aria-hidden="true">Measure</span><span class="btns"><button type="button" aria-label="Measure" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ruler"/></svg></button><button type="button" aria-label="Annotate" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pin"/></svg></button><button type="button" aria-label="Delete" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash"/></svg></button></span></div></div>
+  <div class="gk-legend">
+    <span><i style="background:var(--d-airliner)" aria-hidden="true"></i>aircraft</span>
+    <span><i style="background:var(--d-cargo)" aria-hidden="true"></i>vessels</span>
+    <span><i style="background:var(--d-emergency)" aria-hidden="true"></i>dark candidate</span>
+    <span><i style="background:var(--d-heli)" aria-hidden="true"></i>GPS jamming</span>
+  </div>
+  <div class="gk-feeds">
+    <span><span class="dot alert" aria-hidden="true"></span>LINK down</span>
+    <span><span class="dot ok" aria-hidden="true"></span>FEEDS 6 of 8 live</span>
+    <span><span class="dot ok" aria-hidden="true"></span>CLOCK live</span>
+  </div>
+  <div class="gk-readout">54.3181 N &nbsp;018.7122 E<span style="color:var(--txt-3)">·</span>MGRS 33UXP 0421 5518</div>
+  <div class="gk-basemap"><b>Carto dark</b><span>·</span>OSM<span>·</span>CARTO</div>
+  <div class="gk-dock">
+    <div class="gk-dockbar">
+      <button type="button" class="ico-btn" aria-label="Pause playback"
+              style="height:20px;width:20px;display:grid;place-items:center;background:none;border:0;color:var(--txt-1);cursor:pointer"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pause"/></svg></button>
+      <span class="t">07:42Z</span>
+      <span class="gk-track" aria-hidden="true"><i style="left:62%"></i></span>
+      <span class="t">08:42Z</span>
+      <button type="button" class="btn sm primary" style="height:20px">Live</button>
+      <button type="button" class="btn sm" style="height:20px">6 h<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevd"/></svg></button>
+      <button type="button" class="ico-btn" aria-label="Expand the time dock"
+              style="height:20px;width:20px;display:grid;place-items:center;background:none;border:0;color:var(--txt-2);cursor:pointer"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev"/></svg></button>
+    </div>
+  </div>
+</section>
+        <section class="gk-panel l" aria-label="Layers">
+  <div class="gk-phead">
+    <h2 class="gk-ptitle">Layers</h2>
+    <button type="button" class="ico-btn" aria-label="Mission presets"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-grid"/></svg></button>
+    <span class="rule" aria-hidden="true"></span>
+    <button type="button" class="ico-btn" aria-label="Filter sources"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"/></svg></button>
+  </div>
+  <div class="gk-scroll"><div class="gk-state"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-empty"/></svg>
+          <b>No sources match this filter</b>
+          <span>Clear the filter to see all 64 registered sources.</span>
+          <button type="button" class="btn sm" style="margin-top:8px">Clear filter</button>
+        </div></div>
+</section>
+        <section class="gk-panel r" aria-label="Selection">
+  <div class="gk-phead"><h2 class="gk-ptitle">Selection</h2>
+    <button type="button" class="ico-btn" aria-label="Close panel"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cross"/></svg></button>
+  </div><div class="gk-scroll"><div class="gk-state"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-marquee"/></svg>
+          <b>No entity selected</b>
+          <span>Click an object on the globe, or press <kbd>v</kbd> and drag to
+          select several.</span>
+        </div></div></section>
+      </div>
+      <div class="gk-timeblock">
+  <span class="t">08:42:17 Z</span>
+  <span class="grow"></span>
+  <div class="gk-tp">
+    <button type="button" aria-label="Jump to start">&#9198;</button>
+    <button type="button" aria-label="Rewind 2x"><span>&#9194;</span><b>2x</b></button>
+    <button type="button" aria-label="Back 15 seconds"><span>&#8630;</span><b>15s</b></button>
+    <button type="button" aria-label="Step back one frame">&#9198;|</button>
+    <button type="button" class="on" aria-label="Pause">&#9208; Pause</button>
+    <button type="button" aria-label="Step forward one frame">|&#9197;</button>
+    <button type="button" aria-label="Forward 15 seconds"><b>15s</b><span>&#8631;</span></button>
+    <button type="button" aria-label="Fast forward 2x"><b>2x</b><span>&#9193;</span></button>
+    <button type="button" class="live" aria-label="Return to live">Live</button>
+  </div>
+  <span class="grow"></span>
+  <button type="button" class="ico-btn" aria-label="Playback settings"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-slider"/></svg></button>
+  <button type="button" class="ico-btn" aria-label="Coverage"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg></button>
+</div>
+      <div class="gk-action">
+  <button type="button" class="btn sm">Filter contact type<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevd"/></svg></button>
+  <span class="gk-sentence"><span style="color:var(--txt-3)">Select contacts to build a filter path.</span></span>
+  <span class="right"><button type="button" class="btn" disabled style="opacity:.5">Add to filter path</button></span>
+</div>
+    </div>
+  </div>
+  <div style="position:fixed;left:50%;transform:translateX(-50%);bottom:34px;z-index:900;background:var(--bg-3);border:1px solid var(--line-2);border-radius:2px;padding:4px 10px;font-size:12px;color:var(--txt-0)">State · empty</div>
+</div>
+</body></html>

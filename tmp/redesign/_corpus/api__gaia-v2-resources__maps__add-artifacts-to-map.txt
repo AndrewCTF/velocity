@@ -1,0 +1,16 @@
+Add Artifacts To Map POST /api/v2/gaia/maps/{mapRid}/addArtifactsTo Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Add artifacts to a map. Currently only Foundry-managed object types may be added. If unknown objects
+or objects that don't satisfy the security requirements are provided, the entire request will fail.
+This creates a new layer that includes all the provided objects per request, thus not idempotent.
+Returns the IDs of the layers created. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:map-write . Path parameters mapRid string The RID of a Gaia map. Query parameters preview boolean optional Enables the use of preview functionality. Request body AddArtifactsToMapRequest object Hide child attributes Hide child attributes Expand all artifactGids list<ArtifactGid> optional The GIDs of artifacts to be added to the map. Show child attributes Show child attributes label string The name of the layer to be created Response body AddArtifactsToMapResponse object The response body to add artifacts to a map, containing the IDs of the created layers. Hide child attributes Hide child attributes Expand all dataLayerIds list<GaiaLayerId> optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/gaia/maps/ri.gotham-artifact.0-1.gaia-map.a1A2bcD3e45fg6h7ij/addArtifactsTo?preview=true" \
+ -d '{"label":"Example layer"}' Error responses Error Name Expected Map Gid Error Code INVALID_ARGUMENT Status Code 400 Description Expected a map Gid. Parameters mapId Add Artifacts To Map Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not addArtifactsTo the Map. Parameters mapRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response Error responses

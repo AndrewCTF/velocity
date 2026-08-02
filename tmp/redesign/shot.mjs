@@ -1,0 +1,11 @@
+import { chromium } from 'playwright-core';
+const [file, out, offset] = process.argv.slice(2);
+const b = await chromium.launch({ executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome' });
+const p = await b.newPage({ viewport: { width: 1240, height: 1500 } });
+await p.goto('file://' + file, { waitUntil: 'load' });
+const h = await p.evaluate(() => document.body.scrollHeight);
+console.log('page height', h);
+await p.evaluate((o) => window.scrollTo(0, Number(o)), offset === 'end' ? h : offset);
+await p.waitForTimeout(400);
+await p.screenshot({ path: out });
+await b.close();

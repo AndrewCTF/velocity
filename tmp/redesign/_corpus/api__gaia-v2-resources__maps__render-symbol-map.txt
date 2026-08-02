@@ -1,0 +1,13 @@
+Render Symbol Map PUT /api/v2/gaia/maps/renderSymbol Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Fetches the PNG for the given symbol identifier 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:map-read . Query parameters preview boolean optional Enables the use of preview functionality. Request body RenderSymbolMapRequest object Hide child attributes Hide child attributes Expand all value union Show child attributes Show child attributes Response body body string Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/gaia/maps/renderSymbol?preview=true" \
+ -d '{"value":{"type":"MilsymSymbol","sidc":"SHG-USTI-------"}}' Error responses Error Name Error Exporting Symbol Error Code INTERNAL Status Code 500 Description Failed to export symbol. Parameters Unknown Symbol Type Error Code INVALID_ARGUMENT Status Code 400 Description Unknown symbol type not supported, must be either IconSymbol or MilsymSymbol. Parameters unknownType Invalid Url Symbol Error Code INVALID_ARGUMENT Status Code 400 Description Url Symbol not supported, must be either IconSymbol or MilsymSymbol. Parameters Render Symbol Map Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not renderSymbol the Map. Parameters See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Request body Response body Examples Request Response Error responses

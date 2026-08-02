@@ -8,6 +8,7 @@ import { usePolReplay } from '../state/polReplayStore.js';
 import { MicroLabel } from '../shell/instruments.js';
 import { CoverageStrip, type Coverage } from './CoverageStrip.js';
 import { dedupeMarks, markCrossed, type PauseMark } from '../globe/autoPause.js';
+import { Icon } from '../normal/Icon.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -568,7 +569,7 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
             aria-label="Jump to window start"
             className="tb w-6 h-6 grid place-items-center mono text-[11px] rounded-sm border border-line bg-bg-2 text-txt-2 hover:border-accent-line hover:text-txt-1 disabled:opacity-40"
           >
-            ⏮
+            <Icon name="step-b" className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
@@ -581,7 +582,7 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
                 : 'border-line bg-bg-2 text-txt-1 hover:border-accent-line'
             }`}
           >
-            {playing ? '◼' : '▶'}
+            <Icon name={playing ? 'pause' : 'play'} className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
@@ -590,7 +591,7 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
             aria-label="Jump to now"
             className="tb w-6 h-6 grid place-items-center mono text-[11px] rounded-sm border border-line bg-bg-2 text-txt-2 hover:border-accent-line hover:text-txt-1 disabled:opacity-40"
           >
-            ⏭
+            <Icon name="step-f" className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -683,7 +684,7 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
                 title="Back to rolling-window replay"
                 className="mono text-[10px] px-1 py-1 rounded-sm border border-line bg-bg-2 text-txt-3 hover:text-txt-1 hover:border-accent-line"
               >
-                ✕
+                <Icon name="x" className="w-3 h-3" />
               </button>
             )}
             <button
@@ -697,7 +698,14 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
                   : 'border-line bg-bg-2 text-txt-1 hover:border-accent-line'
               } disabled:opacity-40`}
             >
-              {replay.loading ? '…' : replay.active ? '◼ exit' : '▶ replay'}
+              {replay.loading ? (
+                'loading…'
+              ) : (
+                <>
+                  <Icon name={replay.active ? 'pause' : 'play'} className="w-3 h-3" />
+                  {replay.active ? 'exit' : 'replay'}
+                </>
+              )}
             </button>
             {replay.active && replay.info && (
               <span className="mono text-[10px] tabular-nums text-txt-3">

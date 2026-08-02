@@ -1,0 +1,13 @@
+Modify a Target Board PUT /api/gotham/v1/twb/targetBoard/{rid} Modify a Target Board by RID. Path parameters rid string TargetBoard RID Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body ModifyTargetBoardRequest object The request body to modify the Target Board. Hide child attributes Hide child attributes Expand all name string description string optional highPriorityTargetList string optional configuration object optional Configuration for the target board. If present, must have at least one column Show child attributes Show child attributes baseRevisionId string The current version of the Target Board to be modified.
+The archive operation will be transformed against any concurrent operations
+made since this version. If there are any conflicting edits that result in changes to
+these operations when they're applied, that will be noted in the response. Response body EmptySuccessResponse object Success response Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/twb/targetBoard/ri.gotham-artifact.0-0.target-collection.example?preview=true" \
+ -d '{"name":"New example target board name","description":"New example description.","highPriorityTargetList":"ri.gotham-artifact.0-0.hptl.example","configuration":{"columns":[{"id":"EXECUTION","name":"IN PROGRESS","color":"RED"}],"targetIdentifiers":["CUSTOM"]},"targetColumnIds":{"bi.2a46fbf6-ff93-4710-951a-015ed5c92441*ri.gotham-artifact.0-0.target.1":{"columnId":"EXECUTION","customSortPriority":4},"bi.8a66fbf3-ff93-4710-951a-015ee5c92441*ri.gotham-artifact.0-0.target.2":{"columnId":"EXECUTION","customSortPriority":4}},"baseRevisionId":1}' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

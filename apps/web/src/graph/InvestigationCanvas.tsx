@@ -27,6 +27,7 @@ import { useSelection } from '../state/stores.js';
 import { apiFetch } from '../transport/http.js';
 import { search, LOCATION_KINDS } from '../transport/search.js';
 import { SectionLabel, Btn, MicroLabel, Badge } from '../shell/instruments.js';
+import { Icon } from '../normal/Icon.js';
 
 // ── ontology wire types (mirror intel/ontology.py response models) ────────────
 
@@ -454,9 +455,7 @@ export function InvestigationCanvas(): JSX.Element {
           onClick={clear}
           className="mono text-[10px] text-txt-3 hover:text-alert px-1"
           title="Close investigation"
-        >
-          ✕
-        </button>
+        ><Icon name="x" className="w-3 h-3" /></button>
       </div>
 
       <div className="mono text-[10px] text-txt-3 leading-snug">

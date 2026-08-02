@@ -22,6 +22,7 @@ import { toast } from '../shell/toast.js';
 import { CoaCards } from './CoaCards.js';
 import { ImageryDiff } from '../imagery/ImageryDiff.js';
 import { AiAssessmentCard } from '../entity-panel/AiAssessmentCard.js';
+import { Icon, type IconName } from '../normal/Icon.js';
 
 const SEV_TONE: Record<Severity, BadgeTone> = {
   critical: 'alert',
@@ -45,13 +46,13 @@ const STATUS_DOT: Record<Status, string> = {
 };
 const SEVERITIES: Severity[] = ['critical', 'high', 'med', 'low'];
 const STATUSES: Status[] = ['active', 'monitoring', 'resolved', 'archived'];
-const KIND_GLYPH: Record<string, string> = {
-  aircraft: '✈',
-  vessel: '⛴',
-  incident: '◆',
-  sim: '◈',
-  coa: '⊳',
-  object: '◻',
+const KIND_ICON: Record<string, IconName> = {
+  aircraft: 'plane',
+  vessel: 'ship',
+  incident: 'warning',
+  sim: 'sparkle',
+  coa: 'route',
+  object: 'box',
 };
 
 interface OntObject {
@@ -144,7 +145,7 @@ export function SituationPanel({ id, viewer: _viewer }: Props): JSX.Element {
     <div className="h-full flex flex-col">
       {/* Header ribbon — IconTile glyph + id line + title + status/severity badges. */}
       <header className="flex items-start gap-3 px-4 pt-4 pb-3 border-b border-line-2">
-        <IconTile color={SEV_COLOR[sit.severity]}>◈</IconTile>
+        <IconTile color={SEV_COLOR[sit.severity]}><Icon name="box" className="w-3.5 h-3.5" /></IconTile>
         <div className="min-w-0 flex-1">
           <div className="mono text-[10px] tracking-[0.03em] text-txt-3 truncate" title={sit.id}>
             SITUATION · {sit.id.replace(/^situation:/, '')}
@@ -198,7 +199,7 @@ function SummaryTab({
             <span>{childTotal} linked</span>
             {Object.entries(childCounts).map(([k, n]) => (
               <span key={k}>
-                {KIND_GLYPH[k] ?? '◻'} {n} {k}
+                <Icon name={KIND_ICON[k] ?? 'box'} className="w-3 h-3" /> {n} {k}
               </span>
             ))}
           </div>
@@ -296,7 +297,7 @@ function IntelTab({ objects }: { objects: OntObject[] }): JSX.Element {
                 className="w-full text-left rounded-sm border border-line bg-bg-2/60 hover:border-accent-line px-2.5 py-1.5 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[12px] w-4 text-center text-txt-2">{KIND_GLYPH[o.kind] ?? '◻'}</span>
+                  <Icon name={KIND_ICON[o.kind] ?? 'box'} className="w-3.5 h-3.5 text-txt-2 shrink-0" />
                   <Badge tone="neutral">{o.kind}</Badge>
                   <span className="mono text-[10px] text-txt-1 truncate flex-1">{o.id}</span>
                 </div>
@@ -427,7 +428,7 @@ function PropertiesTab({
         ) : (
           <KV>
             {Object.entries(childCounts).map(([k, n]) => (
-              <KVRow key={k} k={`${KIND_GLYPH[k] ?? '◻'} ${k}`} v={n} />
+              <KVRow key={k} k={k} v={n} />
             ))}
           </KV>
         )}

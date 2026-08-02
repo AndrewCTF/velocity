@@ -2,7 +2,7 @@
 // from /api/markets/stress. Kept deliberately simple per the dataviz skill: a
 // component bar list using the app's own tokens, no chart library. Weight +
 // raw inputs surface as a title tooltip on hover rather than extra chrome.
-import { Widget, ErrorLine } from './primitives.js';
+import { Widget, ErrorLine, asOf } from './primitives.js';
 import type { FetchState, StressComponent, StressResponse } from './types.js';
 
 // Score → tone, tracking the same ok/warn/alert bands used elsewhere for a
@@ -55,7 +55,7 @@ export function StressCard({ state }: { state: FetchState<StressResponse> }): JS
   const { loading, error, data } = state;
   const tone = data ? scoreTone(data.score) : 'ok';
   return (
-    <Widget title="Stress index" {...(data?.asof_utc ? { count: data.asof_utc } : {})}>
+    <Widget title="Stress index" {...(asOf(data?.asof_utc) ? { count: asOf(data?.asof_utc) as string } : {})}>
       {loading && !data && <div className="mono text-[10px] text-txt-4">Loading…</div>}
       {!loading && error && <ErrorLine>Stress index unavailable ({error}).</ErrorLine>}
       {!loading && !error && data && (

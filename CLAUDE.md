@@ -4,10 +4,10 @@ Method + architecture map: `.claude/skills/osint-platform-dev/`. Full decision
 history, dates, and post-mortems: `docs/decisions.md` — read the entry before
 changing any guarded behavior. When files disagree, this one wins.
 
-Most invariants below are enforced by executable guards; `bash
-scripts/verify.sh` runs all of them (`--live` adds feed probes against :8000).
-A guard failure means an operator decision regressed — fix the code, or revoke
-the decision deliberately by changing BOTH the guard and this file.
+Most invariants are enforced by executable guards; `bash scripts/verify.sh`
+runs all of them (`--live` adds feed probes against :8000). A guard failure
+means an operator decision regressed — fix the code, or revoke the decision
+deliberately by changing BOTH the guard and the file that states it.
 
 ## Operating rules
 
@@ -29,134 +29,31 @@ the decision deliberately by changing BOTH the guard and this file.
    `scripts/verify.sh --live` does both). The frontend faithfully mirrors a
    frozen blob; no frontend change fixes a backend problem.
 
-## Sacred invariants → guards
+## Where the invariants live
 
-Icons / labels:
-- Category SVG icons only, never bare points; palette + dispatch in
-  `globe/adapters/styles.ts`; shared label style in `labelStyle.ts`
-  (callsign→reg→ICAO24, name→MMSI). → `apps/web/src/globe/invariants.test.ts`
-- Aircraft rotate by `track_deg`, vessels by `cog`/`heading`. Selection
-  polyline `#d946ef` w4 + black outline w6; `tracks.ts` dedup keeps ≥1 push
-  per 60 s or 5° so the polyline always has ≥2 points.
+Each directory states the rules that govern it, and they load when you work
+there. Read the one for the code you are about to touch — the guards fail loud
+regardless, but the file tells you which operator decision you are about to
+undo and why it was made.
 
-Refresh / motion:
-- `PollGeoJsonAdapter` upserts by id — never `removeAll()+add()`.
-  → eslint rule + `invariants.test.ts`
-- DEFAULT aircraft motion = TELEPORT to real fixes; never synthesize motion on
-  the default path (operator rejected glide/dead-reckoning repeatedly).
-  Sanctioned opt-in exceptions — do NOT delete as regressions:
-  `aircraftDeadReckon` toggle (OFF default) and `continuousRenderGovernor`
-  toggle (OFF default), both in `state/settings.ts`. → `docs/decisions.md`
-- With `aircraftDeadReckon` ON the motion model is ANALYTIC
-  (`globe/adapters/deadReckon.ts`): `pos(t) = advance(anchor, track_deg,
-  velocity_ms * max(0, t - t0))`. Speed is EXACTLY the reported `velocity_ms`
-  and it can NEVER reverse — both structural, both operator requirements
-  (2026-07-14). Never ease/interpolate TOWARD a fix (makes speed arbitrary +
-  glides backwards); never fit velocity from consecutive fixes (only 13.5% land
-  within ±10% of reported). → `globe/adapters/deadReckon.test.ts`
-- The snapshot union is FRESHEST-OBSERVATION-wins (`seen_at - seen_pos_s`), not
-  merge-order — a cached tier must never clobber a fresher fix — and a fix that
-  flies a fast airborne contact backwards along its own `track_deg` is dropped.
-  Raw `seen_pos_s` is the age at UPSTREAM serve time and a cached tier reports
-  it as fresh forever; never compare it across tiers.
-  → `tests/test_adsb_no_reverse.py`
-- Position-unchanged SKIP still refreshes the entity PropertyBag; only the
-  restyle is skipped. Vessels keep their `SampledPositionProperty` glide.
-- `requestRenderMode: true` + `maximumRenderTimeChange: 0` in GlobeCanvas
-  viewer opts. → `invariants.test.ts`
-- World-view decimation = stable `md5(id)` subset, never positional stride,
-  never age-keyed. → `tests/test_adsb_viewport_stable.py`
-
-Cadence / backend:
-- 1 s poll + sticky snapshot (1.0 s cycle, 10 s fan-out budget); backend hot
-  at boot (`start_snapshot()` in lifespan); world payload = pre-rendered
-  gzipped `_HOT_BLOB`, `/ws/adsb` push primary + HTTP poll fallback.
-  → `tests/test_adsb_hot_blob.py`
-- Frontend polls on an absolute wall-clock grid (`scheduleNext`), not
-  `ttl - elapsed`.
-- Internal consumers call `global_snapshot()`, never the `adsb_global()` route
-  handler in-process. → `tests/test_invariants.py`
-- Global snapshot carries **≥8 000 aircraft** (~13 k normal): OpenSky breadth
-  (1 pull/UTC-day, cached) + airplanes.live grid overlay (densify only).
-  → `OSINT_LIVE_PROBE=1` in `tests/test_invariants.py`
-- Upstream burst semaphore stays **8**; `_parse_ac` rejects non-JSON bodies
-  (airplanes.live throttles with HTTP 200 + text/plain); `load_cell` RAISES on
-  all-host failure. → `tests/test_invariants.py`
-- AIS = ShipXplorer direct httpx (needs `Referer`/`Origin`) + MyShipTracking
-  sidecar `:8093`, MMSI-deduped. SHIP_ID-keyed feeders (MarineTraffic,
-  VesselFinder) must never run alongside an MMSI source.
-- The vessel store is LAST-WRITE-WINS (`ObservationStore.add_many` assigns
-  `_latest[id]` unconditionally), so an optimistic `Observation.t` is a
-  CORRECTNESS bug, not a rounding one: it steals the MMSI from a live source AND
-  pins itself in retention. A tier that can serve a CACHE must publish the age of
-  the DATA, never the age of the response — the `:8093` sidecar carries
-  `last_good`/`age_s`, the poller stamps `t` from `last_good` and REFUSES a union
-  older than 180 s (going silent lets frozen fixes age out). A wedged AIS feeder
-  answers `/health` 200 forever, so it must be aged out and evicted, not adopted.
-  → `tests/test_ais_keyless.py`, `tests/test_ais_sidecar_reuse.py`,
-  `docs/decisions.md` (2026-07-15 post-mortem)
-- Both sidecars are SUPERVISED (`adsb_sidecar.supervise()` / `ais_sidecar.supervise()`,
-  lifespan tasks cancelled BEFORE `stop()` or they respawn the teardown).
-  `start()` alone runs once at boot, so a feeder dying later left the tier
-  silently empty until the next restart. For `:8090` the trigger is LIVENESS
-  (`_serving()`) and never `_already_healthy()` (`total > 0`): index.js binds the
-  port before browser init, so a healthy sidecar reads 0 aircraft for ~20-60 s
-  while clearing Cloudflare and a `total > 0` trigger respawn-storms the ≥8 000
-  feed. Same split governs `start()`: adopt a holder that IS serving (mid-warm),
-  evict only one that holds the port WITHOUT serving (it EADDRINUSEs the
-  replacement). A dry-but-serving sidecar self-heals internally — leave it.
-  → `tests/test_adsb_sidecar_supervise.py`, `tests/test_ais_sidecar_reuse.py`
-- Satellites: `/api/space/gp` requests `FORMAT=tle` (JSON variant → 0 sats);
-  client SGP4 via `SampledPositionProperty` is real physics, exempt from the
-  no-synthesis rule; propagation stays chunked. → `tests/test_invariants.py`
-- Keyless layers keep working with no API key: ADS-B grid, Baltic AIS,
-  MyShipTracking, ShipXplorer, USGS quakes, Carto basemap, CelesTrak. FIRMS
-  degrades gracefully without MAP_KEY.
-
-Copy / voice (2026-07-15, docs/decisions.md#dashboard-copy-one-voice-no-em-dashes-2026-07-15):
-- Dashboard copy carries NO em dashes. Labels separate with ` · ` (subject-first
-  order clusters sibling layers in the rail); prose gets a real rewrite, not a
-  blanket colon swap. Comments are NOT copy and keep their em dashes.
-- A lone `'—'` means "no value reported" and is the §7 never-guess rule in the
-  UI. Never strip it while "removing em dashes".
-  → `entity-panel/placeCards.test.tsx`
-- Model prose rendered in the dashboard (selection brief, pattern-of-life,
-  watch officer, country brief, news) goes through `llm.with_prose_style()`,
-  appended LAST so the caller's format contract wins, and BEFORE
-  `_INJECTION_GUARD` so the security boundary stays the final instruction.
-  → `tests/test_prose_style.py`
-- Errors the user sees are sentences that keep the code (`Cameras unavailable
-  (HTTP 503)`), never raw internals (`cams 503`). Lowercase micro-labels
-  (`loading…`, `saving…`) STAY: that register is deliberate, not sloppiness.
-- TRACE A STRING TO A RENDER BEFORE REWRITING IT. Three things look like copy
-  and are not: state enums (`setStatus('idle')`, build `'failed'`), parsed
-  sentinels (`'error:<msg>'` job ids, `=== 'model unavailable'`), and dead text
-  thrown into `.catch(() => …)` that never reaches the DOM.
-
-Auth:
-- `apiFetch` / `withWsKey` wrap every browser→backend call; raw `fetch` only
-  for third-party hosts via scoped eslint ignore. → eslint +
-  `invariants.test.ts`
-- WS handlers call `require_ws_key` BEFORE `accept`.
-
-Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
-- The ONLY backend = local SQLite (`intel/ontology_local.py`, via
-  `get_registry()`); the Supabase/PostgREST ontology backend was deleted the
-  same day (operator invoked the kill criterion). Ontology/situations/maps
-  routes must keep working keyless (`current_user_or_local`).
-  → `tests/test_ontology_local.py`
-- `objects.props` stays the exact last-written blob (wholesale replace,
-  removals included — the frontend round-trip contract); provenance lives in
-  the append-only `assertions` table, written by `upsert`'s diff /
-  `assert_props`. Never make upsert merge.
+| Directory | Covers |
+| --- | --- |
+| `apps/web/CLAUDE.md` | icons and labels, refresh and motion, the no-synthesis rule, auth wrappers, dashboard copy and voice |
+| `apps/api/CLAUDE.md` | snapshot cadence and union, AIS, sidecar supervision, egress tiers, ontology, model prose |
+| `apps/ml/CLAUDE.md` | which of the three venvs each module needs |
+| `apps/desktop/CLAUDE.md` | Tauri watcher excludes, YOLO sidecar env |
+| `packages/shared/CLAUDE.md` | the web↔api contract, `Observation.t` semantics |
+| `tools/CLAUDE.md` | feeder processes, the real-Chrome tier, perf harnesses |
+| `scripts/CLAUDE.md` | boot, verify, kill-port, deploy |
+| `infra/CLAUDE.md` | the two SQL trees and which one you actually want |
 
 ## Environment facts / traps
 
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **2141 passed + 2 skipped in ~333 s** (skip = opt-in live probes;
-  measured 2026-07-31, branch repo-setup-ui-access, upstream proxy pool wave).
+  Baseline: **2164 passed + 2 skipped in ~139 s** (skip = opt-in live probes;
+  measured 2026-08-02, branch gotham-console-mockup, profile dotenv-precedence fix).
   Runs SERIAL by default: `-n auto --dist
   loadfile` groups different files per worker on different core counts, so a
   suite with module-state leaks answers differently per machine and CI (4 cores)
@@ -166,26 +63,19 @@ Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07):
   bullet stays a three-line fact, not a changelog.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
   = typecheck + lint + web unit + api tests in one command.
-- Boot: `bash scripts/run-api.sh` from repo ROOT (:8000, jemalloc preload —
-  never `M_ARENA_MAX=2`; sidecar children scrub `LD_PRELOAD`, guarded). Vite
-  :5173. Kill servers by port: `scripts/kill-port.sh <port>`. Restart the
-  backend ONCE and wait — repeated restarts get the egress rate-limited.
-- Upstreams: adsb.lol 451s non-browser UAs; airplanes.live throttles with
-  HTTP 200+text; firehose URLs dead from datacenter egress; OpenSky is the
-  breadth source; CelesTrak 403-rate-limits bursts (2 h cache).
-- Wikidata SPARQL (country leadership): query-shape traps are documented in
-  `intel/country_profile.py` — a global rdfs:label join or `P279*` with a
-  non-constant class 504s; label service needs a language fallback chain;
-  serialize queries (bursts 429). Don't "simplify" the query.
-- Playwright: pass FUNCTIONS to `page.evaluate`, never strings. Headless
-  cannot measure GPU fps — verify fps on hardware or say unverified. Live
-  DEV globals: `window.__viewer` / `__Cesium` / `__useSelection`.
+- Boot: `bash scripts/run-api.sh` from repo ROOT (:8000), Vite :5173. Restart
+  the backend ONCE and wait — repeated restarts get the egress rate-limited.
+  Kill servers by port: `scripts/kill-port.sh <port>`. Details and the jemalloc
+  trap: `scripts/CLAUDE.md`.
+- Keyless is a product requirement, not a dev convenience: ADS-B grid, Baltic
+  AIS, MyShipTracking, ShipXplorer, USGS quakes, Carto basemap, and CelesTrak
+  all keep working with no API key. FIRMS degrades gracefully without MAP_KEY.
 
 ## Subagents
 
-One file, one owner — serialize edits to shared files. A subagent touching
-`styles.ts`, `PollGeoJsonAdapter`, `tracks.ts` dedup, or `requestRenderMode`
-must preserve the invariants above (the guards fail loud regardless).
+One file, one owner — serialize edits to shared files. A subagent editing under
+a directory must be given that directory's `CLAUDE.md` rules, or it will not see
+them.
 
 Match model to judgment density, not prestige (operator directive 2026-07-14;
 sunset when default routing catches up): breadth exploration and signature
@@ -197,14 +87,6 @@ Never default every subagent to the biggest model.
 
 ## Verification before claiming done
 
-`bash scripts/verify.sh` green. For UI claims: boot the app, drag to Europe —
-hundreds of category icons (not dots); click an aircraft — EntityPanel +
-magenta track within 4 s; click empty — both clear; 30 s with no blink-off.
-
-For PERFORMANCE claims the harnesses already exist — use them, don't invent a
-number: `tools/perf/measure_ui.mjs` (real Chrome on the GPU, `--profile
-all-toggles`, reads `window.__perf`), `measure_api.py` (/proc sampling +
-per-route cost table), `measure_sidecars.sh --soak`, `measure_llm.py`. Backend
-lag/cycle attribution is live at `/api/status/perf`. A before/after is only a
-comparison if BOTH runs had the same tiers live — see `docs/decisions.md`
-(2026-07-27) for the retraction that rule came from.
+`bash scripts/verify.sh` green. UI claims have a specific walkthrough and
+performance claims have existing harnesses — do not invent a number. See
+`apps/web/CLAUDE.md` and `tools/CLAUDE.md` respectively.

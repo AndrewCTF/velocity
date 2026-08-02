@@ -1,0 +1,37 @@
+Get object GET /api/gotham/v1/objects/{primaryKey} Gets a specific object with the given primary key. Path parameters primaryKey string The primary key of the requested object. Response body GetObjectResponse object Success response Hide child attributes Hide child attributes Expand all primaryKey string The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. title string optional The title of an object, which represents a display-friendly String of what the object represents. objectType string The name of the object in the API - also called the Object Type URI. properties map<PropertyApiName, array> optional A map of the property values of the object. Show child attributes Show child attributes intrinsicCoordinates object optional Show child attributes Show child attributes timeInterval object optional Represents a time interval by its start and end datetime. TimeInterval is generally used when an Object has
+a meaningful start and/or end datetime, such as an event. For example, a Meeting might have start and end datetimes
+corresponding to when the meeting began and ended. Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ {
+ "primaryKey": "ri.gotham.111111-0.object-internal.111111",
+ "objectType": "com.palantir.object.person",
+ "properties": {
+ "com.palantir.property.name": [
+ {
+ "FIRST_NAME": "John",
+ "LAST_NAME": "Smith"
+ }
+ ],
+ "com.palantir.property.age": [
+ 37
+ ]
+ }
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Response body Examples Request Response

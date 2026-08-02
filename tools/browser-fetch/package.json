@@ -1,0 +1,16 @@
+{
+  "name": "browser-fetch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generic real-Chrome fetch tier: serves URLs that no HTTP client can reach (JS challenges, and bulk endpoints only reachable as the page's own request) on 127.0.0.1:8095.",
+  "type": "commonjs",
+  "bin": {
+    "browser-fetch": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
+}

@@ -1,0 +1,24 @@
+Get resolution metadata GET /api/gotham/v1/objects/{primaryKey}/resolution Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Get metadata from previously-performed resolutions. If the object has not been resolved, the
+ canonicalObjectPrimaryKey and winnerObjectPrimaryKey will be identical, and the otherObjectPrimaryKeys 
+will be empty. Path parameters primaryKey string The primary key of the requested object. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Response body GetResolutionMetadataResponse object The resolution metadata the resolved object. Hide child attributes Hide child attributes Expand all canonicalObjectPrimaryKey string The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. winnerObjectPrimaryKey string The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. otherObjectPrimaryKeys list<ObjectPrimaryKey> optional All other sub-objects which compose this resolved object. This may include other winner object keys if some
+sub-objects have themselves been resolved. Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111/resolution?preview=true" Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ {
+ "canonicalObjectPrimaryKey": "ri.gotham.111111-0.object-internal.111111",
+ "winnerObjectPrimaryKey": "ri.gotham.111111-0.object-internal.333333",
+ "otherObjectPrimaryKeys": [
+ "ri.gotham.111111-0.object-internal.222222"
+ ]
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Response body Examples Request Response

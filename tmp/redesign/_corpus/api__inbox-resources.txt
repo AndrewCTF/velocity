@@ -1,0 +1,33 @@
+Send Inbox Messages POST /api/gotham/v1/inbox/messages Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Send messages in Global Inbox. 
+ Validation failure for any message will cause the entire request to throw before any messages are sent. 
+ The response reports all messages which were successfully sent, and any messages which failed to
+be sent due to a conflict with an existing message. 
+ Callers must be added to the internal "External Inbox Alert Producers" group in Gotham Security (multipass). 
+ Note that the recipient realm must be specified if the caller's realm is not identical. For
+example, to send to the "Everyone" group in the "palantir-internal-realm" realm, the caller must either specify the realm or already be
+in "palantir-internal-realm". Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body SendMessagesRequest object Hide child attributes Hide child attributes Expand all messages list<SendMessageRequest> optional Show child attributes Show child attributes Response body SendMessagesResponse object Success response Hide child attributes Hide child attributes Expand all responses list<SendMessageResponse> optional The list of messages which were sent successfully.
+Messages are returned in the order in which they were sent in the request. Show child attributes Show child attributes failures list<SendMessageFailure> optional The list of messages which failed to be sent in Inbox due to conflicts with existing messages. Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/inbox/messages?preview=true" \
+ -d '{"messages":[{"sender":{"displayName":"My External Message Sender"},"title":{"value":"Hello from the sendMessages API!"},"security":{"portionMarkings":["SENSITIVE"]},"groupRecipients":[{"name":"my-example-group"}],"body":{"value":"Some **styled** extra content for my message","formatStyle":"MARKDOWN"}}]}' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ {
+ "responses": [
+ {
+ "sourceId": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+ }
+ ]
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Query parameters Request body Response body Examples Request Response

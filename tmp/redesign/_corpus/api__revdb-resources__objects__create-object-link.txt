@@ -1,0 +1,19 @@
+Create object link POST /api/gotham/v1/objects/{primaryKey}/links/{linkType} Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Create a link. Both sides of the link must exist. 
+ Invalid link type result in an InvalidOntologyTypes error . Path parameters primaryKey string The primary key of the object from which the links originate (source object). linkType string The type of the link that exists between the object and the requested objects. Query parameters preview boolean optional Represents a boolean value that restricts an endpoint to preview mode when set to true. Request body CreateObjectLinkRequest object A request to create a link to a target object. Requires specifying the
+security for the link to create, which may be different from one or both sides
+of the objects being linked. Hide child attributes Hide child attributes Expand all targetPrimaryKey string The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. security object Security mutation details for a component of an object - property, media, link.
+Specifying security overrides the system's default security when creating and updating data.
+If portion markings are specified, permissions may be specified. If portion markings are not specified,
+permissions must be specified. 
+ This model may evolve over time for other security features. Show child attributes Show child attributes Response body CreateObjectLinkResponse object Success response indicating link was created successfully. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/gotham/v1/objects/ri.gotham.111111-0.object-internal.111111/links/com.palantir.link.parentof?preview=true" \
+ -d '{"targetPrimaryKey":"ri.gotham.111111-0.object-internal.222222","security":{"portionMarkings":["SENSITIVE"]}}' © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Request body Response body Examples Request Response

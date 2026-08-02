@@ -1,7 +1,7 @@
 // Snapshot card — four sections (indices/commodities/fx/crypto) from
 // /api/markets/snapshot. Each row is symbol · name · last · 24h change, with
 // change colored up/down and a `—` for any value the backend didn't report.
-import { Widget, Skeleton } from './primitives.js';
+import { Widget, Skeleton, asOf } from './primitives.js';
 import type { FetchState, SnapshotItem, SnapshotResponse } from './types.js';
 
 const SECTIONS: [keyof Pick<SnapshotResponse, 'indices' | 'commodities' | 'fx' | 'crypto'>, string][] = [
@@ -72,7 +72,7 @@ function Section({ label, items }: { label: string; items: SnapshotItem[] }): JS
 export function SnapshotCard({ state }: { state: FetchState<SnapshotResponse> }): JSX.Element {
   const { loading, error, data } = state;
   return (
-    <Widget title="Snapshot" {...(data?.asof_utc ? { count: data.asof_utc } : {})}>
+    <Widget title="Snapshot" {...(asOf(data?.asof_utc) ? { count: asOf(data?.asof_utc) as string } : {})}>
       {loading && !data && (
         <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
           {[0, 1, 2, 3].map((i) => (

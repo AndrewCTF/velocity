@@ -193,6 +193,16 @@ class _Sidecar:
             "CHROME_PATH": os.environ.get("CHROME_PATH", "/usr/bin/google-chrome-stable"),
             **self.extra_env,
         }
+        # Optional WARP egress (WARP_SIDECARS=1, default off) — same reasoning as
+        # adsb_sidecar: a clearance cookie is bound to the address that earned it,
+        # so browser and poller must share an exit or neither works.
+        from app.config import get_settings  # noqa: PLC0415
+
+        _settings = get_settings()
+        if _settings.warp_enabled and _settings.warp_sidecars:
+            from app import warp  # noqa: PLC0415
+
+            env["WARP_PROXY"] = warp.socks_url()
         # Chrome's zygote fork dies (error_code=1002 → 0 vessels) if it inherits
         # run-api.sh's jemalloc LD_PRELOAD / MALLOC_CONF(background_thread:true).
         # Scrub both from the child env — same fix as adsb_sidecar.

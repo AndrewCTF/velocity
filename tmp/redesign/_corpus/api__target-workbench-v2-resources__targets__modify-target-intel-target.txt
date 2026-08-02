@@ -1,0 +1,21 @@
+Modify Target Intel Target PUT /api/v2/targetWorkbench/targets/{targetRid}/modifyTargetIntel Modify Intel on Target by RID and IntelId. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-write . Path parameters targetRid string The unique identifier for a Target Request body ModifyTargetIntelTargetRequest object Hide child attributes Hide child attributes Expand all intel list<ModifyTargetIntelData> optional Show child attributes Show child attributes Response body ModifyTargetIntelResponse object The response body returned when modifying intel attached to a target. Hide child attributes Hide child attributes Expand all updatedIntelIds list<IntelId> optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X PUT \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/targets/ri.gotham-artifact.0-0.target.example/modifyTargetIntel" \
+ -d '{"intel":[{"domain":"SIGINT","confidence":3.0,"name":"Example Intel Name","description":"Intel containing location.","intelType":{"type":"geotimeObservation","geotimeTrack":"ri.gotham.0-0.geotime-track.aa.bb.cc.example"},"validTime":"2023-10-04T14:48:00.000Z","location":{"center":{"elevation":0.0,"latitude":0.0,"longitude":0.0},"radius":1.1},"id":"Example Intel Id"}]}' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ {
+ "updatedIntelIds": [
+ "Example Intel Id"
+ ]
+} Error responses Error Name Target Not Found Error Code INVALID_ARGUMENT Status Code 400 Description Cannot find target from provided rid.
+ Parameters targetRid Modify Target Intel Target Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not modifyTargetIntel the Target. Parameters targetRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Request body Response body Examples Request Response Error responses

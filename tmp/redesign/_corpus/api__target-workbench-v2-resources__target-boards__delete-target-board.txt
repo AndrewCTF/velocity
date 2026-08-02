@@ -1,0 +1,11 @@
+Delete Target Board DELETE /api/v2/targetWorkbench/targetBoards/{targetBoardRid} Warning This endpoint is in preview and may be modified or removed at any time.
+To use this endpoint, add preview=true to the request query parameters. 
+ Archive a Target Board by RID.
+The user is required to have OWN permissions on the target. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-write . Path parameters targetBoardRid string The unique identifier for a Target Board Query parameters preview boolean optional Enables the use of preview functionality. Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ curl -X DELETE \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/targetBoards/ri.gotham-artifact.0-0.target-board.example?preview=true" Error responses Error Name User Has No Owner Perms Error Code INVALID_ARGUMENT Status Code 400 Description The user is required to have owner permissions on the artifact.
+ Parameters artifactId Delete Target Board Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not delete the TargetBoard. Parameters targetBoardRid See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Path parameters Query parameters Examples Request Error responses

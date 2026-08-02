@@ -1,0 +1,156 @@
+Paging All endpoints that return multiple objects are paginated. For this reason, you might have to make more than one request to get all the objects you are interested in. Endpoints that require paging will include a nextPageToken field in their response. To get the next page, make the same request again, but append pageToken containing the page token as a query parameter for GET requests, or a body field for POST requests. If there is no nextPageToken field in the response, you are on the last page. 
+ Page sizes 
+ Optionally, some endpoints allow sending a requested number of results per page using the pageSize parameter. Endpoints that support pageSize will include this in their endpoint-specific definition. 
+ The page size requested by pageSize is a suggestion. Some responses may contain a different number of results (either fewer or more) than the requested pageSize value. 
+ The presence of the nextPageToken field indicates that there are more results. There will always be at least one result per page as long as there are more results. 
+ Example 
+ The code snippets below show an example of paging across multiple requests. Authentication must be sent in requests for each page. 
+ The first page of the request and the response will look like the following. Note the presence of the nextPageToken field indicating that there are more subsequent pages. 
+ First Request 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ POST /api/gotham/v1/objects/types/com.palantir.object.employee/search
+{
+ "query": {
+ "type": "empty"
+ }
+} 
+ First response 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ {
+ "nextPageToken": "v1.VGhlcmUgaXMgc28gbXVjaCBsZWZ0IHRvIGJ1aWxkIC0gcGFsYW50aXIuY29tL2NhcmVlcnMv",
+ "data": [
+ {
+ "properties": {
+ "name": [
+ {
+ "LAST_NAME": "croyle",
+ "FIRST_NAME": "john"
+ }
+ ],
+ ...
+ },
+ ...
+ }
+ ],
+} 
+ The second page request can be made by adding a pageToken query parameter. 
+ Second request 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ POST /api/gotham/v1/objects/types/com.palantir.object.employee/search
+{
+ "pageToken": "v1.VGhlcmUgaXMgc28gbXVjaCBsZWZ0IHRvIGJ1aWxkIC0gcGFsYW50aXIuY29tL2NhcmVlcnMv",
+ "query": {
+ "type": "empty"
+ }
+} 
+ Second response 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ {
+ "nextPageToken": "v1.VGhlcmUncyBhIHJvbGUgaGVyZSBmb3IgeW91IC0gcGFsYW50aXIuY29tL2NhcmVlcnMv",
+ "data": [
+ {
+ "properties": {
+ "name": [
+ {
+ "LAST_NAME": "smith",
+ "FIRST_NAME": "anna"
+ }
+ ],
+ ...
+ },
+ ...
+ }
+ ],
+} 
+ The third page request and response will look like the following. Note that nextPageToken is not present, which indicates that there are no more pages to fetch. 
+ Third request 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ POST /api/gotham/v1/objects/types/com.palantir.object.employee/search
+{
+ "pageToken": "v1.VGhlcmUncyBhIHJvbGUgaGVyZSBmb3IgeW91IC0gcGFsYW50aXIuY29tL2NhcmVlcnMv",
+ "query": {
+ "type": "empty"
+ }
+} 
+ Third response 
+ Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ {
+ "data": [
+ {
+ "properties": {
+ "name": [
+ {
+ "LAST_NAME": "Sindoni",
+ "FIRST_NAME": "Silvia"
+ }
+ ],
+ ...
+ },
+ ...
+ }
+ ],
+} © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Paging Page sizes Example

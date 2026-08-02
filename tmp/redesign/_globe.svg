@@ -1,0 +1,91 @@
+<svg class="sky" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <!-- Baltic approaches basemap. The scenario is 54.318 N 018.712 E with a
+       200 km scale bar, which is a zoomed-in coastal view, not a globe: a globe
+       at that scale is the wrong instrument and reads as decoration.
+
+       Projection is a plain equirectangular fit so the geometry is checkable:
+         x = (lon - 14.0) * 200        lon 14.0 E to 22.0 E
+         y = (55.9 - lat) * 333.33     lat 53.2 N to 55.9 N
+       Coastlines are simplified, not survey grade, and the graticule labels are
+       computed from those two formulas rather than typed by eye. -->
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#0d1821"/>
+      <stop offset="100%" stop-color="#091219"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#sea)"/>
+
+  <!-- graticule: 1 degree of longitude, half a degree of latitude -->
+  <g stroke="rgba(150,190,220,0.09)" stroke-width="1" fill="none">
+    <path d="M200 0V900M400 0V900M600 0V900M800 0V900M1000 0V900M1200 0V900M1400 0V900"/>
+    <path d="M0 133H1600M0 300H1600M0 467H1600M0 633H1600M0 800H1600"/>
+  </g>
+  <g fill="rgba(150,190,220,0.34)" font-family="IBM Plex Mono, monospace" font-size="12">
+    <text x="205" y="122">15°E</text><text x="405" y="122">16°E</text><text x="605" y="122">17°E</text>
+    <text x="805" y="122">18°E</text><text x="1005" y="122">19°E</text><text x="1205" y="122">20°E</text>
+    <text x="1405" y="122">21°E</text>
+    <text x="6" y="129">55°30'N</text><text x="6" y="296">55°00'N</text><text x="6" y="463">54°30'N</text>
+    <text x="6" y="629">54°00'N</text><text x="6" y="796">53°30'N</text>
+  </g>
+
+  <!-- land -->
+  <g fill="#22303a" stroke="rgba(160,205,230,0.5)" stroke-width="1" stroke-linejoin="round">
+    <!-- Poland, Kaliningrad oblast and the Lithuanian coast -->
+    <path d="M0 690 L50 663 L180 620 L316 573 L450 500 L572 440 L650 405 L710 380 L800 372
+             L880 370 L890 420 L906 460 L915 490 L930 517 L985 528 L1010 520 L1120 470
+             L1180 417 L1250 405 L1302 397 L1360 300 L1400 180 L1428 63 L1600 20
+             L1600 900 L0 900 Z"/>
+    <!-- Hel peninsula -->
+    <path d="M879 367 L921 391 L961 419 L986 437 L991 447 L967 433 L927 405 L876 379 Z"/>
+    <!-- Vistula Spit -->
+    <path d="M1004 522 L1080 492 L1150 455 L1178 431 L1181 443 L1152 467 L1082 504 L1005 533 Z"/>
+    <!-- Bornholm -->
+    <path d="M160 240 q30 -14 46 6 q10 26 -14 38 q-34 10 -44 -16 Z"/>
+    <!-- southern Sweden -->
+    <path d="M0 0 L300 0 L250 60 L140 96 L60 130 L0 150 Z"/>
+  </g>
+
+  <!-- inland water: the Vistula Lagoon behind the spit -->
+  <path d="M1010 519 L1120 469 L1176 429 L1150 452 L1080 489 L1008 517 Z" fill="#0e1a23"
+        stroke="rgba(160,205,230,0.28)" stroke-width="0.8"/>
+
+  <!-- place labels -->
+  <g font-family="IBM Plex Mono, monospace" font-size="12" fill="#9fb3c0">
+    <g fill="#6f8494">
+      <circle cx="930" cy="517" r="2.6"/><circle cx="906" cy="460" r="2.6"/>
+      <circle cx="985" cy="437" r="2.6"/><circle cx="1302" cy="397" r="2.6"/>
+      <circle cx="1428" cy="63" r="2.6"/><circle cx="316" cy="573" r="2.6"/>
+      <circle cx="1180" cy="417" r="2.6"/>
+    </g>
+    <text x="939" y="521">GDANSK</text>
+    <text x="915" y="464">GDYNIA</text>
+    <text x="994" y="441">HEL</text>
+    <text x="1311" y="401">KALININGRAD</text>
+    <text x="1437" y="67">KLAIPEDA</text>
+    <text x="325" y="577">KOLOBRZEG</text>
+    <text x="1189" y="421">BALTIYSK</text>
+    <text x="150" y="300" fill="#7c8f9c">BORNHOLM</text>
+  </g>
+  <g font-family="Inter, sans-serif" font-size="13" fill="rgba(150,190,220,0.28)" letter-spacing="3">
+    <text x="470" y="248">BALTIC&#160;&#160;SEA</text>
+    <text x="946" y="602" font-size="12" letter-spacing="2">GULF&#160;OF&#160;GDANSK</text>
+  </g>
+
+  <!-- 200 km scale bar. 1 degree of longitude at 54.5 N is about 64.7 km and
+       1 degree is 200 units here, so 100 km is about 309 units. -->
+  <g transform="translate(430,672)">
+    <rect x="0" y="-6" width="309" height="6" fill="rgba(150,190,220,0.5)"/>
+    <rect x="0" y="-6" width="154.5" height="6" fill="rgba(20,30,38,0.9)"/>
+    <g fill="rgba(160,200,225,0.62)" font-family="IBM Plex Mono, monospace" font-size="12">
+      <text x="-2" y="14">0</text><text x="146" y="14">50</text><text x="292" y="14">100 km</text>
+    </g>
+  </g>
+
+  <!-- north arrow -->
+  <g transform="translate(1120,672)" fill="rgba(160,200,225,0.55)">
+    <path d="M0 -22 L7 0 L0 -5 L-7 0 Z"/>
+    <text x="-4" y="14" font-family="IBM Plex Mono, monospace" font-size="12">N</text>
+  </g>
+</svg>

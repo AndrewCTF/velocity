@@ -1,0 +1,214 @@
+Create Target POST /api/v2/targetWorkbench/targets Create a Target.
+Returns the RID of the created Target. 
+ If sidc field is specified and invalid according to MIL-STD-2525C specification,
+an InvalidSidc error is thrown. 
+ Third-party applications using this endpoint via OAuth2 must request the following operation scope: api:target-write . Request body CreateTargetRequest object Hide child attributes Hide child attributes Expand all sidc string optional MIL-STD 2525C Symbol Identification Code. highPriorityTargetListTargetSubtype string optional This subtype will be matched against the subType stored on High Priority Target List Target (HPTLTarget) in order to determine a target's
+subPriority, in addition to priority and Attack Guidance Matrix (AGM). column string Equivalent to a collection column ID. The ID of a TargetCollectionColumn, default values are:
+DRAFT (Identified target), PLAN_DEVELOPMENT (Prioritized target), PLANNED (In coordination), EXECUTION (In execution), CLOSED (Complete). description string optional targetType string optional The resource type of the target. targetBoard string The unique identifier for a Target Board entityRid string optional The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. targetIdentifier object optional Target identifier object for different identifier types. Show child attributes Show child attributes security object Security settings for board content Show child attributes Show child attributes aimpoints list<TargetAimpointV2> optional Show child attributes Show child attributes detectionReasoning object optional Show child attributes Show child attributes name string location object optional An object containing the location source for a target.
+This can either be a manual location, a geotimeTrack, and/or a geotrackable entity providing location updates.
+The entity, if present, is always the same as the backing entity of the target. Show child attributes Show child attributes Response body Target object The created Target Hide child attributes Hide child attributes Expand all rid string The unique identifier for a Target name string description string optional targetBoard string The unique identifier for a Target Board column string Equivalent to a collection column ID. The ID of a TargetCollectionColumn, default values are:
+DRAFT (Identified target), PLAN_DEVELOPMENT (Prioritized target), PLANNED (In coordination), EXECUTION (In execution), CLOSED (Complete). targetType string optional The resource type of the target. entityRid string optional The primary key/unique identifier of an object, useful for interacting with Gotham APIs to load and mutate objects. sidc string optional MIL-STD 2525C Symbol Identification Code. targetIdentifier object optional Target identifier object for different identifier types. Show child attributes Show child attributes location object optional An object containing the location source for a target.
+This can either be a manual location, a geotimeTrack, and/or a geotrackable entity providing location updates.
+The entity, if present, is always the same as the backing entity of the target. Show child attributes Show child attributes highPriorityTargetListTargetSubtype string optional This subtype will be matched against the subType stored on High Priority Target List Target (HPTLTarget) in order to determine a target's
+subPriority, in addition to priority and Attack Guidance Matrix (AGM). aimpoints list<TargetAimpointV2> optional Show child attributes Show child attributes security object Security settings for board content Show child attributes Show child attributes detectionReasoning object optional Show child attributes Show child attributes Examples Request cURL Python Java JavaScript Powershell Copied! 1
+ 2
+ 3
+ 4
+ 5
+ curl -X POST \
+\t-H "Content-type: application/json" \
+\t-H "Authorization: Bearer $TOKEN" \
+ "https://$HOSTNAME/api/v2/targetWorkbench/targets" \
+ -d '{"sidc":"SEGPU-------","highPriorityTargetListTargetSubtype":"Red Car","column":"DRAFT","description":"Example target description.","targetType":"Building","targetBoard":"ri.gotham-artifact.0-0.target-board.example","entityRid":"ri.gotham.123-456.object-internal.example","targetIdentifier":{"customTargetIdentifier":"Example Identifier 000"},"security":{"portionMarkings":["SENSITIVE"],"spaceRid":"ri.compass.main.folder.12345"},"aimpoints":[{"entityRid":"ri.gotham.123-456.object-internal.example","geotimeTrack":"ri.gotham.0-0.geotime-track.aa.bb.cc.example","name":"Example targetAimPoint name","location":{"circularErrorInMeters":0.0,"lng":0.0,"msl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"agl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"hae":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"lat":0.0},"id":"f81d4fae-7dec-11d0-a765-00a0c91e6bf6"}],"detectionReasoning":{"detectionType":"AI_AUTO_DETECTION","aiReasoning":{"systemPrompt":"Identify potential targets in the area.","debugLogs":"Debug log example","model":"LLM Model v1.0","taskPrompt":"Analyze satellite images for unusual activity."},"reasoning":"The target was identified based on unusual heat signatures detected in the area.","agentVersion":"1.2.3","location":{"circularErrorInMeters":0.0,"lng":0.0,"msl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"agl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"hae":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"lat":0.0},"algorithmName":"Example Algorithm","timestamp":"2025-04-11T10:00:00Z"},"name":"Example target name.","location":{"manualLocation":{"circularErrorInMeters":0.0,"lng":0.0,"msl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"agl":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"hae":{"elevationInMeters":0.0,"linearErrorInMeters":0.0},"lat":0.0},"geotimeTrack":"ri.gotham.0-0.geotime-track.aa.bb.cc.example","geotrackableEntity":"ri.gotham.123-456.object-internal.example"}}' Response Copied! 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+ 35
+ 36
+ 37
+ 38
+ 39
+ 40
+ 41
+ 42
+ 43
+ 44
+ 45
+ 46
+ 47
+ 48
+ 49
+ 50
+ 51
+ 52
+ 53
+ 54
+ 55
+ 56
+ 57
+ 58
+ 59
+ 60
+ 61
+ 62
+ 63
+ 64
+ 65
+ 66
+ 67
+ 68
+ 69
+ 70
+ 71
+ 72
+ 73
+ 74
+ 75
+ 76
+ 77
+ 78
+ 79
+ 80
+ 81
+ 82
+ 83
+ 84
+ 85
+ 86
+ 87
+ 88
+ 89
+ 90
+ 91
+ 92
+ 93
+ 94
+ 95
+ 96
+ {
+ "sidc": "SEGPU-------",
+ "highPriorityTargetListTargetSubtype": "Red Car",
+ "column": "DRAFT",
+ "description": "Example target description.",
+ "targetType": "Building",
+ "rid": "ri.gotham-artifact.0-0.target.example",
+ "targetBoard": "ri.gotham-artifact.0-0.target-board.example",
+ "entityRid": "ri.gotham.123-456.object-internal.example",
+ "targetIdentifier": {
+ "customTargetIdentifier": "Example Identifier 000"
+ },
+ "security": {
+ "portionMarkings": [
+ "SENSITIVE"
+ ],
+ "spaceRid": "ri.compass.main.folder.12345"
+ },
+ "aimpoints": [
+ {
+ "entityRid": "ri.gotham.123-456.object-internal.example",
+ "geotimeTrack": "ri.gotham.0-0.geotime-track.aa.bb.cc.example",
+ "name": "Example targetAimPoint name",
+ "location": {
+ "circularErrorInMeters": 0,
+ "lng": 0,
+ "msl": {
+ "elevationInMeters": 0,
+ "linearErrorInMeters": 0
+ },
+ "agl": {
+ "elevationInMeters": 0,
+ "linearErrorInMeters": 0
+ },
+ "hae": {
+ "elevationInMeters": 0,
+ "linearErrorInMeters": 0
+ },
+ "lat": 0
+ },
+ "id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+ }
+ ],
+ "detectionReasoning": {
+ "detectionType": "AI_AUTO_DETECTION",
+ "aiReasoning": {
+ "systemPrompt": "Identify potential targets in the area.",
+ "debugLogs": "Debug log example",
+ "model": "LLM Model v1.0",
+ "taskPrompt": "Analyze satellite images for unusual activity."
+ },
+ "reasoning": "The target was identified based on unusual heat signatures detected in the area.",
+ "agentVersion": "1.2.3",
+ "location": {
+ "circularErrorInMeters": 0,
+ "lng": 0,
+ "msl": {
+ "elevationInMeters": 0,
+ "linearErrorInMeters": 0
+ },
+ "agl": {
+ "elevationInMeters": 0,
+ "linearErrorInMeters": 0
+ },
+ "hae": {
+ "elevationInMeters": 0,
+ "linearErrorInMeters": 0
+ },
+ "lat": 0
+ },
+ "algorithmName": "Example Algorithm",
+ "timestamp": "2025-04-11T10:00:00Z"
+ },
+ "name": "Example target name.",
+ "location": {
+ "manualLocation": {
+ "circularErrorInMeters": 0,
+ "lng": 0,
+ "msl": {
+ "elevationInMeters": 0,
+ "linearErrorInMeters": 0
+ },
+ "agl": {
+ "elevationInMeters": 0,
+ "linearErrorInMeters": 0
+ },
+ "hae": {
+ "elevationInMeters": 0,
+ "linearErrorInMeters": 0
+ },
+ "lat": 0
+ },
+ "geotimeTrack": "ri.gotham.0-0.geotime-track.aa.bb.cc.example",
+ "geotrackableEntity": "ri.gotham.123-456.object-internal.example"
+ }
+} Error responses Error Name Invalid Geotrackable Entity Error Code INVALID_ARGUMENT Status Code 400 Description The supplied geotrackable entity does not match the backing entity of the target. Parameters targetEntity, geotrackableEntity Invalid Sidc Error Code INVALID_ARGUMENT Status Code 400 Description The specified symbol identification code (SIDC) was not valid based on MIL-STD-2525C specification. Parameters invalidSidc Invalid Space Rid Error Code INVALID_ARGUMENT Status Code 400 Description The space rid is missing or invalid.
+ Parameters spaceRid Create Target Permission Denied Error Code PERMISSION_DENIED Status Code 403 Description Could not create the Target. Parameters See Errors for a general overview of errors in the platform. © 2026 Palantir Technologies Inc. All rights reserved. Cookies Statement ↗ Privacy Statement ↗ Terms of Use ↗ Cookie Settings Contents Request body Response body Examples Request Response Error responses

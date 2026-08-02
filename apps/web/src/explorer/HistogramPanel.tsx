@@ -30,6 +30,7 @@ export {
   ALT_BANDS,
 } from './facets.js';
 export type { EntityFacets, AltBand } from './facets.js';
+import { Icon } from '../normal/Icon.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -87,7 +88,8 @@ export function HistogramPanel({ viewer }: Props = {}): JSX.Element {
             >
               <Badge tone={c.mode === 'not' ? 'alert' : 'accent'}>
                 {c.mode === 'not' ? '⊘ ' : ''}
-                {bucketLabel(c.facet, c.value)} ✕
+                {bucketLabel(c.facet, c.value)}
+                <Icon name="x" className="w-3 h-3" />
               </Badge>
             </button>
           ))}
@@ -176,9 +178,7 @@ function HistogramBlock({
                     ? 'border-alert-line text-alert-fg bg-alert-bg'
                     : 'border-line text-txt-3 hover:text-alert-fg hover:border-alert-line'
                 }`}
-              >
-                ⊘
-              </button>
+              ><Icon name="eye-off" className="w-3.5 h-3.5" /></button>
             </div>
           );
         })}

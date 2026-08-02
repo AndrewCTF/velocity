@@ -4,6 +4,7 @@ import { useAlerts } from '../state/stores.js';
 import { slewToEntity } from '../globe/camera.js';
 import { SectionLabel, Badge, Btn, type BadgeTone } from '../shell/instruments.js';
 import type { Alert } from '@osint/shared';
+import { Icon } from '../normal/Icon.js';
 
 interface Props {
   open: boolean;
@@ -185,9 +186,7 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
               onClick={onClose}
               className="mono text-[11px] px-2 py-1 border border-line-2 bg-bg-2 rounded-sm text-txt-1 hover:border-accent-line hover:text-accent transition-colors"
               aria-label="Close"
-            >
-              ✕
-            </button>
+            ><Icon name="x" className="w-3 h-3" /></button>
           </div>
         </header>
 

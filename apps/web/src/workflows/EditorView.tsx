@@ -28,6 +28,7 @@ import {
   stamp,
   tableHeadCls,
 } from '../foundry/ui.js';
+import { Icon } from '../normal/Icon.js';
 
 // Editor — the heart of Workflows. A pan/zoom SVG DAG canvas (same pattern as
 // foundry/PipelineView.tsx: layered left-to-right auto-layout, node click to
@@ -477,9 +478,7 @@ function ScheduleModal({ workflowId, onClose }: { workflowId: string; onClose: (
                       onClick={() => void deleteSchedule(s.id)}
                       className="text-txt-3 hover:text-alert text-[12px]"
                       aria-label="Delete schedule"
-                    >
-                      ✕
-                    </button>
+                    ><Icon name="x" className="w-3 h-3" /></button>
                   </td>
                 </tr>
               ))}
@@ -875,9 +874,7 @@ export function EditorView(): JSX.Element {
                   onClick={() => void onDeleteWorkflow(w.id, w.name)}
                   className="text-txt-3 hover:text-alert text-[11px] shrink-0"
                   aria-label={`Delete ${w.name}`}
-                >
-                  ✕
-                </button>
+                ><Icon name="x" className="w-3 h-3" /></button>
               </div>
             ))}
             {workflows.length === 0 && <p className="px-2.5 py-3 text-[10px] text-txt-4">No workflows yet.</p>}

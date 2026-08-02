@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SectionLabel, MicroLabel, Caveat, Btn } from '../shell/instruments.js';
 import { useImageryDiff } from './imageryDiffStore.js';
+import { Icon } from '../normal/Icon.js';
 
 // Before/after satellite chips for an AOI (the Gotham "Satellite observation /
 // Ship Density Model" popup). Two dated chips side-by-side from the keyless chip
@@ -95,7 +96,8 @@ export function ImageryDiffPopup(): JSX.Element | null {
       <div className="flex items-center justify-between mb-2">
         <span className="mono text-[10px] tracking-[0.6px] uppercase text-txt-2">Imagery diff</span>
         <Btn size="sm" onClick={close}>
-          ✕ Close
+          <Icon name="x" className="w-3 h-3" />
+          Close
         </Btn>
       </div>
       <ImageryDiff aoi={aoi} />
