@@ -10,11 +10,12 @@ import { BlocksView } from './BlocksView.js';
 import { useWorkflowsNav, type WorkflowsView } from './nav.js';
 
 export type { WorkflowsView } from './nav.js';
+import { Icon, type IconName } from '../normal/Icon.js';
 
-const NAV: Array<{ id: WorkflowsView; label: string; glyph: string; hint: string }> = [
-  { id: 'workflows', label: 'Workflows', glyph: '⋔', hint: 'author + edit DAGs' },
-  { id: 'runs', label: 'Runs', glyph: '⧉', hint: 'run history + logs' },
-  { id: 'blocks', label: 'Blocks', glyph: '◈', hint: 'catalog reference' },
+const NAV: Array<{ id: WorkflowsView; label: string; icon: IconName; hint: string }> = [
+  { id: 'workflows', label: 'Workflows', icon: 'workflow', hint: 'author + edit DAGs' },
+  { id: 'runs', label: 'Runs', icon: 'copy', hint: 'run history + logs' },
+  { id: 'blocks', label: 'Blocks', icon: 'box', hint: 'catalog reference' },
 ];
 
 export function WorkflowsApp(): JSX.Element {
@@ -46,7 +47,7 @@ export function WorkflowsApp(): JSX.Element {
                 ].join(' ')}
               >
                 <span aria-hidden className={`mono text-[13px] leading-none mt-px ${on ? 'text-accent' : 'text-txt-3 group-hover:text-txt-1'}`}>
-                  {n.glyph}
+                  <Icon name={n.icon} className="w-4 h-4" />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-[11px] font-medium tracking-[0.06em] uppercase">{n.label}</span>

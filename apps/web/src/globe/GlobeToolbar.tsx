@@ -6,6 +6,8 @@ import { resetToTopDown } from './camera.js';
 import { useMapTools, type MapTool } from './mapTools.js';
 import { areaActions } from './mapActions.js';
 import { useAnnotations, useAnnoDraft, draftBase } from '../annotations/annotationStore.js';
+import { Icon } from '../normal/Icon.js';
+import { MAP_TOOL_PANELS, openMapToolPanel } from '../shell/panels/MapToolPanels.js';
 
 // Right-side globe toolbar (design §6.1) — quick map tools reachable without
 // leaving the current tab: pan (rest), measure, area-select, annotate, move
@@ -374,6 +376,25 @@ export function GlobeToolbar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
             </button>
           );
         })}
+
+        <div className="mx-2 my-1 h-px bg-line-2" />
+
+        {/* The settings behind the draw tools. `annotate` places whatever kind,
+            colour and label the Annotate panel holds, and until these buttons
+            existed that panel could not be opened at all in the rebuilt console,
+            so the tool could only ever drop the default marker. */}
+        {MAP_TOOL_PANELS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            title={`${p.label} · open the panel this tool draws from`}
+            aria-label={p.label}
+            onClick={() => openMapToolPanel(p.id)}
+            className="w-10 h-10 flex items-center justify-center text-txt-2 hover:text-accent hover:bg-bg-2"
+          >
+            <Icon name={p.icon} className="h-[17px] w-[17px]" />
+          </button>
+        ))}
 
         <div className="mx-2 my-1 h-px bg-line-2" />
 

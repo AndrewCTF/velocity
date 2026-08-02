@@ -30,6 +30,7 @@ import {
   type Window as TaskWindow,
 } from '../sim/tasking.js';
 import { SkyViewPlot } from './SkyViewPlot.js';
+import { Icon } from '../normal/Icon.js';
 
 // Collection planner — "when can a sensor satellite see my AOI, and how often?"
 // Reuses the SGP4 stack (satellite.js) via pure tasking.ts math. Pulls CelesTrak
@@ -347,9 +348,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
                   onClick={() => removeQuestion(q.id)}
                   aria-label="Remove question"
                   className="mono text-[10px] text-txt-3 hover:text-alert"
-                >
-                  ✕
-                </button>
+                ><Icon name="x" className="w-3 h-3" /></button>
               </li>
             ))}
           </ul>

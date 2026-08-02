@@ -23,6 +23,7 @@ import {
 import { apiFetch } from '../transport/http.js';
 import { SectionLabel, MeterBar, Caveat, Btn } from '../shell/instruments.js';
 import { TargetDetail } from './TargetDetail.js';
+import { Icon } from '../normal/Icon.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -534,7 +535,7 @@ function TargetCard({
           {label}
         </span>
         {locked ? (
-          <span className="text-[10px] leading-none shrink-0 text-alert" title="confirmation checklist incomplete: gates the next stage">🔒</span>
+          <span className="text-[10px] leading-none shrink-0 text-alert" title="confirmation checklist incomplete: gates the next stage"><Icon name="lock" className="w-3.5 h-3.5" /></span>
         ) : null}
         <button
           type="button"
@@ -545,9 +546,7 @@ function TargetCard({
             remove(entry.entityId);
           }}
           className="mono text-[10px] leading-none text-txt-4 opacity-0 group-hover:opacity-100 hover:text-alert px-0.5"
-        >
-          ✕
-        </button>
+        ><Icon name="x" className="w-3 h-3" /></button>
       </div>
 
       {/* Stage pips */}

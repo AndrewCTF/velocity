@@ -23,6 +23,7 @@ import { useAgent } from '../state/agent.js';
 import { useAppView } from '../state/appView.js';
 import { LocalAiSection } from '../settings/localAi/LocalAiSection.js';
 import { WatchOfficerPanel } from './WatchOfficerPanel.js';
+import { AnswersCard } from '../answers/AnswersCard.js';
 
 interface LocalStatus {
   engine?: string;
@@ -88,6 +89,14 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
           </p>
           <StatusStrip status={status} />
         </header>
+
+        {/* Answers — the standing questions the console can answer without being
+            asked. `panels.ts` records the old `answers` rail item as "redundant
+            with the AI app", but nothing here rendered it, so `byHome` dropped
+            it and the only surface that states a CONCLUSION rather than showing
+            data became unreachable. Making the recorded redundancy true is the
+            fix; deleting the record would just lose the capability quietly. */}
+        <AnswersCard />
 
         {/* Watch Officer — the autonomous standing agent, front and centre */}
         <WatchOfficerPanel viewer={viewer} />

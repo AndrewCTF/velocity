@@ -11,5 +11,16 @@ export function Skeleton({ className = '' }: { className?: string }): JSX.Elemen
 }
 
 export function ErrorLine({ children }: { children: ReactNode }): JSX.Element {
-  return <div className="mono text-[10px] text-alert-fg">{children}</div>;
+  return <div className="mono text-[12px] text-alert-fg">{children}</div>;
+}
+
+/** `2026-08-02T02:51:03.416804+00:00` is a wire value, not a time an operator
+ *  reads. The card headers printed it verbatim, microseconds and all. */
+export function asOf(iso: string | null | undefined): string | undefined {
+  if (!iso) return undefined;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return undefined;
+  const d = new Date(ms);
+  const p2 = (n: number): string => String(n).padStart(2, '0');
+  return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())} Z`;
 }

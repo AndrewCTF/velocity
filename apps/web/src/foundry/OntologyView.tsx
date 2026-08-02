@@ -5,6 +5,7 @@ import { Badge, Btn, Toggle } from '../shell/instruments.js';
 import { Modal, useConfirm } from '../shell/Modal.js';
 import { useFoundryPoll } from './useFoundryPoll.js';
 import { EmptyState, Field, Select, ViewHeader, controlCls } from './ui.js';
+import { Icon } from '../normal/Icon.js';
 
 // Ontology — bindings map a dataset into the local ontology (dataset → object
 // kind, key column, column→property map). Now: object-kind picker from the
@@ -36,7 +37,7 @@ function PropMapEditor({
           <datalist id="propmap-cols">{columns.map((c) => <option key={c} value={c} />)}</datalist>
           <span aria-hidden className="text-txt-3">→</span>
           <input value={prop} onChange={(e) => setRow(i, col, e.target.value)} placeholder="property" className={controlCls} />
-          <button type="button" onClick={() => removeRow(i)} className="text-txt-3 hover:text-alert text-[12px] px-1" aria-label="Remove row">✕</button>
+          <button type="button" onClick={() => removeRow(i)} className="text-txt-3 hover:text-alert text-[12px] px-1" aria-label="Remove row"><Icon name="x" className="w-3 h-3" /></button>
         </div>
       ))}
       <button type="button" onClick={() => onChange({ ...map, '': '' })} className="mono text-[10px] text-accent hover:underline">+ property</button>
@@ -146,9 +147,7 @@ function BindingCard({ binding, confirm }: { binding: Binding; confirm: (o: { ti
             onClick={() => void confirm({ title: 'Delete this binding?', tone: 'danger', confirmLabel: 'Delete' }).then((ok) => ok && deleteBinding(binding.id))}
             className="text-txt-3 hover:text-alert text-[12px]"
             aria-label="Delete binding"
-          >
-            ✕
-          </button>
+          ><Icon name="x" className="w-3 h-3" /></button>
         </div>
       </div>
       <div className="mono text-[10px] text-txt-3">
@@ -224,7 +223,7 @@ export function OntologyView(): JSX.Element {
           <Badge tone="accent">updated {syncAll.agg.updated}</Badge>
           {syncAll.agg.skipped > 0 && <span className="text-txt-3">skipped {syncAll.agg.skipped}</span>}
           {syncAll.agg.errors.length > 0 && <Badge tone="alert">{syncAll.agg.errors.length} error(s)</Badge>}
-          <button type="button" onClick={() => setSyncAll(null)} className="ml-auto text-txt-3 hover:text-txt-0" aria-label="Dismiss" title="Dismiss">✕</button>
+          <button type="button" onClick={() => setSyncAll(null)} className="ml-auto text-txt-3 hover:text-txt-0" aria-label="Dismiss" title="Dismiss"><Icon name="x" className="w-3 h-3" /></button>
         </div>
       )}
 

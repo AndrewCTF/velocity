@@ -14,13 +14,14 @@ import { useFoundryNav, type FoundryView } from './nav.js';
 // whole thing flips with the light/dark theme.
 
 export type { FoundryView } from './nav.js';
+import { Icon, type IconName } from '../normal/Icon.js';
 
-const NAV: Array<{ id: FoundryView; label: string; glyph: string; hint: string }> = [
-  { id: 'home', label: 'Overview', glyph: '◱', hint: 'health + recent builds' },
-  { id: 'datasets', label: 'Datasets', glyph: '▤', hint: 'upload, schema, checks' },
-  { id: 'pipeline', label: 'Pipeline', glyph: '⋔', hint: 'transforms + lineage' },
-  { id: 'builds', label: 'Builds', glyph: '⧉', hint: 'history + schedules' },
-  { id: 'ontology', label: 'Ontology', glyph: '◈', hint: 'bindings + sync' },
+const NAV: Array<{ id: FoundryView; label: string; icon: IconName; hint: string }> = [
+  { id: 'home', label: 'Overview', icon: 'gauge', hint: 'health + recent builds' },
+  { id: 'datasets', label: 'Datasets', icon: 'table', hint: 'upload, schema, checks' },
+  { id: 'pipeline', label: 'Pipeline', icon: 'transform', hint: 'transforms + lineage' },
+  { id: 'builds', label: 'Builds', icon: 'copy', hint: 'history + schedules' },
+  { id: 'ontology', label: 'Ontology', icon: 'box', hint: 'bindings + sync' },
 ];
 
 export function FoundryApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
@@ -53,7 +54,7 @@ export function FoundryApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
                 ].join(' ')}
               >
                 <span aria-hidden className={`mono text-[13px] leading-none mt-px ${on ? 'text-accent' : 'text-txt-3 group-hover:text-txt-1'}`}>
-                  {n.glyph}
+                  <Icon name={n.icon} className="w-4 h-4" />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-[11px] font-medium tracking-[0.06em] uppercase">{n.label}</span>

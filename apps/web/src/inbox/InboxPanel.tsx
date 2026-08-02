@@ -9,6 +9,7 @@ import { flyToPosition } from '../globe/camera.js';
 import { useReducedMotion } from '../shell/useReducedMotion.js';
 import { Badge, Btn, type BadgeTone } from '../shell/instruments.js';
 import type { Alert, AlertSeverity } from '@osint/shared';
+import { Icon } from '../normal/Icon.js';
 
 const SEV_BADGE: Record<string, BadgeTone> = {
   critical: 'alert',
@@ -270,9 +271,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
                 onClick={() => removeSaved(s.id)}
                 aria-label="Remove subscription"
                 className="mono text-[10px] text-txt-3 hover:text-alert"
-              >
-                ✕
-              </button>
+              ><Icon name="x" className="w-3 h-3" /></button>
             </div>
           ))}
         </div>

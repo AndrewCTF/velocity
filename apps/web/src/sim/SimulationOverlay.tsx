@@ -17,6 +17,7 @@ import type { Jammer, JammerKind } from './ew.js';
 import { apiFetch } from '../transport/http.js';
 import { CoordEntry } from '../globe/CoordEntry.js';
 import type { LatLon, Scenario, ScenarioKind } from './types.js';
+import { Icon } from '../normal/Icon.js';
 
 // Control-link archetypes a swarm can use (attack derives link from the system).
 const LINK_OPTIONS = [
@@ -393,9 +394,7 @@ export function SimulationOverlay({
             onClick={() => setActive(false)}
             className="mono text-[10px] text-txt-3 hover:text-alert px-1"
             title="Exit simulation mode"
-          >
-            ✕
-          </button>
+          ><Icon name="x" className="w-3 h-3" /></button>
         }
       >
         <div className="flex gap-1.5 mb-2">

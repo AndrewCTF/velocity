@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { deviceTier } from '../shell/device.js';
+import { Icon } from '../normal/Icon.js';
 
 // One-shot low-end suggestion. When the graded device probe (shell/device.ts:
 // deviceTier) reports a software / very-weak GPU, offer — but never force — the
@@ -37,7 +38,7 @@ export function LowEndBanner(): JSX.Element | null {
   return (
     <div
       role="status"
-      className="absolute bottom-[172px] left-1/2 -translate-x-1/2 z-[var(--z-dock)] flex items-center gap-2.5 mono text-[10px] px-3 py-1.5 rounded-sm border border-accent-line bg-bg-1/95 text-txt-1 shadow-lg"
+      className="map-banner flex items-center gap-2.5 mono text-[10px] px-3 py-1.5 rounded-sm border border-accent-line bg-bg-1/95 text-txt-1 shadow-lg"
     >
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
       <span>
@@ -56,9 +57,7 @@ export function LowEndBanner(): JSX.Element | null {
         onClick={dismiss}
         aria-label="Dismiss"
         className="px-1.5 py-0.5 rounded-sm border border-line text-txt-3 hover:text-txt-1 hover:border-accent-line shrink-0"
-      >
-        ✕
-      </button>
+      ><Icon name="x" className="w-3 h-3" /></button>
     </div>
   );
 }

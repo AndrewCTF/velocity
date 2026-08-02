@@ -5,6 +5,7 @@ import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { useFeeds } from '../state/stores.js';
 import { tracks } from '../intel/tracks.js';
 import { SectionLabel, Toggle, MeterBar } from '../shell/instruments.js';
+import { Icon } from '../normal/Icon.js';
 
 interface Props {
   registry: LayerRegistry;
@@ -259,7 +260,8 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                 title={`Disable ${l.title}`}
                 className="mono text-[10px] px-1.5 py-[2px] rounded-sm border border-accent-line/40 text-txt-2 hover:text-alert hover:border-alert/50 truncate max-w-[120px]"
               >
-                {l.title} ✕
+                {l.title}
+                <Icon name="x" className="w-3 h-3" />
               </button>
             ))}
           </div>
@@ -302,7 +304,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
               </span>
               {/* Collapse chevron */}
               <span className="mono text-[10px] text-txt-4 group-hover:text-accent shrink-0 ml-0.5">
-                {isCollapsed ? '▸' : '▾'}
+                <Icon name={isCollapsed ? 'chevron-right' : 'chevron-down'} className="w-3.5 h-3.5" />
               </span>
             </button>
             {!isCollapsed && (

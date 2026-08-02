@@ -2,6 +2,7 @@ import { useEffect, useReducer, useState } from 'react';
 import type * as Cesium from 'cesium';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
 import { Icon } from '../normal/Icon.js';
+import { useLayerCounts, rowCount } from './useLayerCounts.js';
 import {
   MAP_LAYER_FOLDERS,
   rowEnabled,
@@ -35,22 +36,42 @@ const FOLDER_TONE: Record<string, { bg: string; edge: string }> = {
 const FALLBACK_TONE = { bg: '#232a33', edge: 'var(--accent)' };
 
 // ponytail: registry.subscribe → forceUpdate on toggle; no local mirror of state.
-export function LayerCatalog({ registry }: { registry: LayerRegistry; viewer?: Cesium.Viewer | null }): JSX.Element {
+export function LayerCatalog({
+  registry,
+  viewer,
+}: {
+  registry: LayerRegistry;
+  viewer?: Cesium.Viewer | null;
+}): JSX.Element {
   const [, force] = useReducer((n: number) => n + 1, 0);
   useEffect(() => registry.subscribe(force), [registry]);
+  const counts = useLayerCounts(viewer);
 
   return (
     <div className="p-2 flex flex-col gap-2">
       {MAP_LAYER_FOLDERS.map((folder) => (
-        <Folder key={folder.id} folder={folder} registry={registry} />
+        <Folder key={folder.id} folder={folder} registry={registry} counts={counts} />
       ))}
     </div>
   );
 }
 
-function Folder({ folder, registry }: { folder: CatalogFolder; registry: LayerRegistry }): JSX.Element {
+function Folder({
+  folder,
+  registry,
+  counts,
+}: {
+  folder: CatalogFolder;
+  registry: LayerRegistry;
+  counts: Record<string, number>;
+}): JSX.Element {
   const [open, setOpen] = useState(folder.defaultOpen ?? false);
   const { on, total } = folderCounts(registry, folder);
+  // Bars are scaled against the biggest row IN THIS FOLDER. Comparing a
+  // 12,000-aircraft layer against a 3-area SAR layer on one global scale would
+  // render every hazard row as an empty track; within a domain the comparison
+  // is the one an operator actually makes.
+  const peak = Math.max(1, ...folder.rows.map((r) => rowCount(counts, r.layerIds)));
   const tone = FOLDER_TONE[folder.id] ?? FALLBACK_TONE;
   return (
     <div className="rounded-sm border border-line/60 overflow-hidden">
@@ -89,6 +110,8 @@ function Folder({ folder, registry }: { folder: CatalogFolder; registry: LayerRe
         <div className="bg-bg-0/40">
           {folder.rows.map((row) => {
             const en = rowEnabled(registry, row);
+            const n = rowCount(counts, row.layerIds);
+            const frac = peak > 0 ? n / peak : 0;
             // Small titles: monochrome. A single accent marks "on"; off is grey.
             return (
               <button
@@ -105,13 +128,25 @@ function Folder({ folder, registry }: { folder: CatalogFolder; registry: LayerRe
                 <span className={`text-[12px] flex-1 truncate ${en ? 'text-txt-0 font-medium' : 'text-txt-1'}`}>
                   {row.label}
                 </span>
-                {en ? (
-                  <span className="mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-[1px] rounded-sm border border-accent-line bg-accent-dim text-accent shrink-0">
-                    on
-                  </span>
-                ) : (
-                  <span className="mono text-[10px] uppercase tracking-[0.4px] text-txt-4 shrink-0">off</span>
-                )}
+                {/* A count and its bar, never a bare "on". The bar carries the
+                    magnitude the number alone cannot: a 12,000-aircraft layer
+                    and a 3-contact layer both said "on" before this. */}
+                <span
+                  className={`mono text-[12px] tabular-nums shrink-0 text-right w-[52px] ${
+                    en ? 'text-txt-1' : 'text-txt-3'
+                  }`}
+                >
+                  {en ? (n > 0 ? n.toLocaleString() : '—') : ''}
+                </span>
+                <span
+                  className="relative h-[10px] w-[46px] shrink-0 rounded-[1px] bg-bg-0 overflow-hidden"
+                  aria-hidden="true"
+                >
+                  <i
+                    className={`absolute inset-y-0 left-0 block ${en ? 'bg-accent' : 'bg-bg-4'}`}
+                    style={{ width: `${Math.max(en && n > 0 ? 3 : 0, Math.min(100, frac * 100))}%` }}
+                  />
+                </span>
               </button>
             );
           })}

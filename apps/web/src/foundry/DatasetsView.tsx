@@ -35,6 +35,7 @@ import {
   stamp,
   tableHeadCls,
 } from './ui.js';
+import { Icon } from '../normal/Icon.js';
 
 // Datasets — a master/detail workspace: a filterable list (left) and a tabbed
 // detail (right) with Schema, Preview, Stats, Versions, Lineage, Dead-letter,
@@ -174,7 +175,7 @@ function ChecksSection({ datasetId }: { datasetId: string }): JSX.Element {
                   <td className="px-2.5 py-1.5"><Badge tone={c.severity === 'fail' ? 'alert' : 'warn'}>{c.severity}</Badge></td>
                   <td className="px-2.5 py-1.5 text-center"><Toggle on={c.enabled} onChange={(next) => void updateCheck(c.id, { enabled: next }).then(() => void getCheckResults(datasetId).then(setResults))} label="enabled" /></td>
                   <td className="px-2.5 py-1.5">{res ? <Badge tone={res.passed ? 'ok' : c.severity === 'fail' ? 'alert' : 'warn'}>{res.passed ? 'pass' : 'fail'}</Badge> : <span className="text-[10px] text-txt-3">—</span>}</td>
-                  <td className="px-2.5 py-1.5 text-right"><button type="button" onClick={() => void deleteCheck(c.id)} className="text-txt-3 hover:text-alert text-[12px]" aria-label="Delete check">✕</button></td>
+                  <td className="px-2.5 py-1.5 text-right"><button type="button" onClick={() => void deleteCheck(c.id)} className="text-txt-3 hover:text-alert text-[12px]" aria-label="Delete check"><Icon name="x" className="w-3 h-3" /></button></td>
                 </tr>
               );
             })}

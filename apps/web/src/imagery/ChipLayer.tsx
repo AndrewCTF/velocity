@@ -27,6 +27,7 @@ import * as Cesium from 'cesium';
 
 import { useChip, type ChipFocus } from './chipStore.js';
 import { Widget, Caveat, MicroLabel } from '../shell/instruments.js';
+import { Icon } from '../normal/Icon.js';
 
 // How long (ms) to wait between re-frames once the entity has drifted out of
 // the current chip rectangle. Imagery is static per pass; re-fetching faster
@@ -438,9 +439,7 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
             onClick={clear}
             className="mono text-[10px] text-txt-3 hover:text-alert px-1"
             title="Clear chip"
-          >
-            ✕
-          </button>
+          ><Icon name="x" className="w-3 h-3" /></button>
         }
       >
         {status === 'loading' && !meta && <MicroLabel>fetching chip…</MicroLabel>}

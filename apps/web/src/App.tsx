@@ -3,14 +3,11 @@ import { X } from 'lucide-react';
 import * as Cesium from 'cesium';
 import { useUiMode, type UiMode } from './state/uiMode.js';
 import type { RuntimeConfig } from '@osint/shared';
-import { ConsoleShell } from './shell/ConsoleShell.js';
-import { type TabDef } from './shell/TabbedPanel.js';
-import { LeftIconRail, type RailItem } from './shell/LeftIconRail.js';
+import type { RailItem } from './shell/LeftIconRail.js';
 import { AppSurface } from './shell/AppSurface.js';
 import { useAppView, APP_META } from './state/appView.js';
 import { useGeoScope } from './state/geoScope.js';
 import { useDashboardMode } from './state/dashboardMode.js';
-import { CommandBar } from './command-bar/CommandBar.js';
 import {
   useImagery,
   useFeeds,
@@ -21,30 +18,19 @@ import {
 } from './state/stores.js';
 import { useInbox } from './state/inbox.js';
 import { InboxPanel } from './inbox/InboxPanel.js';
+import { Modal } from './shell/Modal.js';
+import { SettingsModal } from './settings/SettingsModal.js';
 import { startSavedSearchPoller } from './state/savedSearches.js';
-import { LayerRail } from './layer-rail/LayerRail.js';
-import { LayerCatalog } from './layer-rail/LayerCatalog.js';
-import { OpsPanel } from './layer-rail/OpsPanel.js';
-import { AnswersCard } from './answers/AnswersCard.js';
-import { ImageryControl } from './imagery/ImageryControl.js';
 import { ChokepointsList } from './layer-rail/ChokepointsList.js';
-import { FeedsPanel } from './layer-rail/FeedsPanel.js';
 import { AcarsPanel } from './acars/AcarsPanel.js';
-import { EntityPanel } from './entity-panel/EntityPanel.js';
-import { ObjectInspector } from './entity-panel/ObjectInspector.js';
 import { IntelPanel } from './entity-panel/IntelPanel.js';
 import { InvestigationCanvas } from './graph/InvestigationCanvas.js';
 import { useInvestigation } from './graph/investigationStore.js';
-import { ExtractPanel } from './extract/ExtractPanel.js';
-import { CountriesPanel } from './osint/CountriesPanel.js';
 import { CollabPanel } from './collab/CollabPanel.js';
-import { HistogramPanel } from './explorer/HistogramPanel.js';
-import { SearchObjectsSidebar } from './explorer/SearchObjectsSidebar.js';
 import { NewsPanel } from './news-panel/NewsPanel.js';
 import { TaskingPanel } from './tasking/TaskingPanel.js';
 import { TargetKanbanPanel } from './target-kanban/TargetKanbanPanel.js';
 import { FmvPanel } from './fmv/FmvPanel.js';
-import { Timeline } from './timeline/Timeline.js';
 import { GlobeCanvas } from './globe/GlobeCanvas.js';
 import { GlobeOverlays } from './globe/GlobeOverlays.js';
 import { GlobeToolbar } from './globe/GlobeToolbar.js';
@@ -54,13 +40,9 @@ import { LayerRegistry } from './registry/LayerRegistry.js';
 import { registerDefaults } from './registry/defaults.js';
 import { CopEditor } from './cop/CopEditor.js';
 import { Omnibar } from './command-bar/Omnibar.js';
-import { AnnotationPanel } from './annotations/AnnotationPanel.js';
-import { WatchboxPanel } from './watchbox/WatchboxPanel.js';
-import { SituationsPanel } from './situations/SituationsPanel.js';
 import { ContextMenu } from './globe/ContextMenu.js';
 import { ImageryDiffPopup } from './imagery/ImageryDiff.js';
 import { GroundReconPanel } from './ground/GroundReconPanel.js';
-import { FieldPanel } from './field/FieldPanel.js';
 import { useGround } from './ground/groundStore.js';
 import { fetchRuntimeConfig } from './transport/config.js';
 import { AlertSubscriber } from './alerts/AlertSubscriber.js';
@@ -72,6 +54,18 @@ import { Link } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext.js';
 import { isSupabaseConfigured } from './transport/supabase.js';
 import { apiFetch, backendWsUrl, withWsKey } from './transport/http.js';
+import { Console } from './shell/Console.js';
+import { REHOMED, type LeftPanelId, type RightPanelId } from './shell/panels.js';
+import { LayersPanel } from './shell/panels/LayersPanel.js';
+import { TimeDock } from './shell/TimeDock.js';
+import { TitleBar } from './shell/TitleBar.js';
+import { Icon } from './normal/Icon.js';
+import { HistogramPanel as FacetsPanel } from './shell/panels/HistogramPanel.js';
+import { InfoPanel } from './shell/panels/InfoPanel.js';
+import { FindPanel } from './shell/panels/FindPanel.js';
+import { SelectionPanel } from './shell/panels/SelectionPanel.js';
+import { SeriesPanel } from './shell/panels/SeriesPanel.js';
+import { MapToolPanels } from './shell/panels/MapToolPanels.js';
 
 export function App(): JSX.Element {
   const registry = useMemo(() => {
@@ -83,6 +77,11 @@ export function App(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [viewer, setViewer] = useState<Cesium.Viewer | null>(null);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  // The settings modal lived only in AppRouter's TopBar, which returns null on
+  // `/`. So on the console — the one route with a Settings button — nothing
+  // hosted the modal and the button did nothing.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const imageryMode = useImagery((s) => s.mode);
   // "Search around" (EntityPanel → investigationStore) bumps openSeq to bring
   // the Investigation tab forward. TabbedPanel is uncontrolled, so we re-anchor
@@ -153,112 +152,141 @@ export function App(): JSX.Element {
     if (import.meta.env?.DEV) (window as unknown as { __registry: LayerRegistry }).__registry = registry;
   }, [registry]);
 
-  const leftTabs: TabDef[] = useMemo(
-    () => [
-      {
-        id: 'ops',
-        label: 'Ops',
-        content: <OpsPanel viewer={viewer} onOpenAlerts={() => setAlertsOpen(true)} />,
-      },
-      { id: 'layers', label: 'Layers', content: <LayerRail registry={registry} viewer={viewer} /> },
-      { id: 'imagery', label: 'Imagery', content: <ImageryControl /> },
-      { id: 'chokepoints', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} /> },
-      { id: 'feeds', label: 'Feeds', content: <FeedsPanel /> },
-      { id: 'acars', label: 'ACARS', content: <AcarsPanel /> },
-      { id: 'annotate', label: 'Annotate', content: <AnnotationPanel /> },
-      { id: 'extract', label: 'Extract', content: <ExtractPanel /> },
-      { id: 'watch', label: 'Watch', content: <WatchboxPanel /> },
-      { id: 'situations', label: 'Situations', content: <SituationsPanel viewer={viewer} /> },
-    ],
-    [registry, viewer],
-  );
 
-  // Left icon rail (design §6.1) — every left-rail surface is a visible icon with
-  // a floating flyout, replacing the old hidden "Panel ▾" chooser. Primary group
-  // = the day-to-day tools; the "more" group holds the deeper instruments.
+  // The surfaces that live INSIDE one of the four named left panels. `byHome`
+  // sorts them by the destination `panels.ts` records.
+  //
+  // This list used to carry all 18 old rail items. Eleven of them had a home of
+  // kind tool / app / redundant / titlebar, which `byHome` drops, so they were
+  // constructed here every render and thrown away — the console rendered none of
+  // them. Each is now mounted at its recorded address instead (map tools in
+  // `MapToolPanels`, `allsources` in the Layers panel's All-sources switch,
+  // `answers` in the AI app, `imagery` in Video, `extract` and `countries` in
+  // their apps, `inbox` behind the title bar, `tasking`/`cop` in `ModeSurface`),
+  // and `shell/rehoming.test.ts` fails if any of those addresses goes empty
+  // again.
   const railItems: RailItem[] = useMemo(
     () => [
-      { id: 'layers', icon: 'layers', label: 'Layers', content: <LayerCatalog registry={registry} viewer={viewer} /> },
-      { id: 'search-objects', icon: 'search', label: 'Search Objects', content: <SearchObjectsSidebar viewer={viewer} /> },
-      { id: 'feeds', icon: 'feed', label: 'Feeds', content: <FeedsPanel /> },
-      { id: 'ops', icon: 'gauge', label: 'Ops', content: <OpsPanel viewer={viewer} onOpenAlerts={() => setAlertsOpen(true)} /> },
-      { id: 'watch', icon: 'crosshair', label: 'Watchboxes', content: <WatchboxPanel /> },
-      { id: 'annotate', icon: 'pin', label: 'Annotate', content: <AnnotationPanel /> },
-      { id: 'inbox', icon: 'bell', label: 'Inbox', content: <InboxPanel viewer={viewer} />, badge: inboxUnread },
-      // Answers is a PRIMARY surface, not a 'more' one: it is the only place the
-      // console states a conclusion rather than showing data, which is the whole
-      // point of docs/research-last30days-2026-07-29.md §3.
-      { id: 'answers', icon: 'gauge', label: 'Answers', content: <AnswersCard /> },
-      { id: 'imagery', icon: 'image', label: 'Imagery', content: <ImageryControl />, group: 'more' },
+      { id: 'layers', icon: 'layers', label: 'Layers', content: <LayersPanel registry={registry} viewer={viewer} /> },
+      { id: 'search-objects', icon: 'search', label: 'Search Objects', content: <FindPanel viewer={viewer} /> },
+      { id: 'feeds', icon: 'feed', label: 'Feeds', content: <InfoPanel viewer={viewer} /> },
       { id: 'chokepoints', icon: 'route', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} />, group: 'more' },
       { id: 'acars', icon: 'signal', label: 'ACARS', content: <AcarsPanel />, group: 'more' },
-      { id: 'extract', icon: 'file', label: 'Extract', content: <ExtractPanel />, group: 'more' },
-      { id: 'countries', icon: 'globe', label: 'Country Sources', content: <CountriesPanel />, group: 'more' },
-      { id: 'allsources', icon: 'sliders', label: 'All sources', content: <LayerRail registry={registry} viewer={viewer} />, group: 'more' },
-      { id: 'filters', icon: 'filter', label: 'Filters', content: <HistogramPanel viewer={viewer} />, group: 'more' },
-      { id: 'field', icon: 'crosshair', label: 'Field', content: <FieldPanel viewer={viewer} />, group: 'more' },
-      { id: 'tasking', icon: 'satellite', label: 'Sat tasking', content: <TaskingPanel viewer={viewer} />, group: 'more' },
-      { id: 'cop', icon: 'target', label: 'COP editor', content: <CopEditor registry={registry} />, group: 'more' },
+      { id: 'filters', icon: 'filter', label: 'Filters', content: <FacetsPanel viewer={viewer} />, group: 'more' },
     ],
-    [registry, viewer, inboxUnread],
+    [registry, viewer],
   );
 
   // Right rail = CONTEXT only (what's selected / happening). Tasking, Targeting
   // and FMV are full WORKSPACES opened from the command bar (see ModeSurface),
   // not crammed peer tabs — fixes the 7-tab overflow + the cramped board.
-  const rightTabs: TabDef[] = useMemo(
-    () => [
-      { id: 'selection', label: 'Selection', content: <EntityPanel viewer={viewer} /> },
-      { id: 'investigation', label: 'Investigation', content: <InvestigationCanvas /> },
-      { id: 'collab', label: 'Collab', content: <CollabPanel /> },
-      { id: 'filters', label: 'Filters', content: <HistogramPanel viewer={viewer} /> },
-      { id: 'alerts', label: 'Alerts', content: <AlertsRailList viewer={viewer} /> },
-      { id: 'intel', label: 'Intel', content: <IntelPanel viewer={viewer} /> },
-      { id: 'news', label: 'News', content: <NewsPanel /> },
-      { id: 'ground', label: 'Ground', content: <GroundReconPanel viewer={viewer} /> },
-      { id: 'field', label: 'Field', content: <FieldPanel viewer={viewer} /> },
-    ],
-    [viewer],
-  );
+
+  const byHome = <T extends { id: string; content: React.ReactNode; label: string }>(
+    items: readonly T[],
+    kind: 'panel',
+  ): { homed: Map<string, React.ReactNode[]>; rest: T[] } => {
+    const homed = new Map<string, React.ReactNode[]>();
+    const rest: T[] = [];
+    for (const it of items) {
+      const h = REHOMED[it.id];
+      if (h && h.kind === kind) {
+        const key = h.panel as string;
+        const list = homed.get(key) ?? [];
+        list.push(
+          <section key={it.id} aria-label={it.label}>
+            {it.content}
+          </section>,
+        );
+        homed.set(key, list);
+      } else if (!h) {
+        rest.push(it);
+      }
+    }
+    return { homed, rest };
+  };
+  const leftHomed = byHome(railItems, 'panel');
+  // fieldPreset used to decide whether a flyout auto-opened. The four panels
+  // are permanently visible now, so it picks WHICH one starts active.
+  const initialPanel: LeftPanelId = fieldPreset ? 'info' : 'layers';
+  const leftPanels: Partial<Record<LeftPanelId, React.ReactNode>> = {
+    layers: leftHomed.homed.get('layers'),
+    find: leftHomed.homed.get('find'),
+    histogram: leftHomed.homed.get('histogram'),
+    info: leftHomed.homed.get('info'),
+  };
+  // Not yet re-homed. Listed in docs/mockups/console-2026-08/WIRING.md; parked
+  // under "More" so no surface is unreachable while the wiring proceeds.
+  const pending: Array<{ id: string; label: string; content: React.ReactNode }> = [
+    { id: 'intel', label: 'Intel', content: <IntelPanel viewer={viewer} /> },
+    { id: 'investigation', label: 'Investigation', content: <InvestigationCanvas /> },
+    { id: 'collab', label: 'Collab', content: <CollabPanel /> },
+    { id: 'alerts', label: 'Alerts', content: <AlertsRailList viewer={viewer} /> },
+    { id: 'news', label: 'News', content: <NewsPanel /> },
+    { id: 'ground', label: 'Ground recon', content: <GroundReconPanel viewer={viewer} /> },
+  ];
+  const leftBadges: Partial<Record<LeftPanelId, string>> = {
+    info: String(leftHomed.homed.get('info')?.length ?? 0),
+  };
+  // `time` stays unwired on purpose: the TimeDock below already owns playback
+  // and the scrub range, and a third tab repeating it would be the duplicate
+  // surface the rebuild exists to remove.
+  const rightPanels: Partial<Record<RightPanelId, React.ReactNode>> = {
+    selection: <SelectionPanel viewer={viewer} />,
+    series: <SeriesPanel viewer={viewer} />,
+  };
 
   return (
     <>
       <AlertSubscriber />
-      <ConsoleShell
-        top={
-          <CommandBar
+      <Console
+        systemState={
+          <TitleBar
             viewer={viewer}
             classification={config?.classification ?? 'UNCLAS'}
-            ionToken={config?.cesiumIonToken ?? ''}
             onOpenAlerts={() => setAlertsOpen(true)}
+            inbox={inboxUnread}
+            onOpenInbox={() => setInboxOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         }
-        iconRail
-        fullBleed={APP_META[activeApp].chrome === 'full'}
-        mainOverlay={<AppSurface viewer={viewer} />}
-        left={<LeftIconRail items={railItems} defaultOpen={fieldPreset ? null : 'layers'} ariaLabel="Map tools" />}
-        leftTabs={leftTabs}
-        globe={
+        bleed={APP_META[activeApp].chrome === 'full'}
+        overlay={<AppSurface viewer={viewer} />}
+        initialPanel={initialPanel}
+        leftPanels={leftPanels}
+        leftBadges={leftBadges}
+        extra={[...leftHomed.rest, ...pending].map((it) => (
+          <section key={it.id} aria-label={it.label}>
+            {it.content}
+          </section>
+        ))}
+        extraCount={leftHomed.rest.length + pending.length}
+        rightPanels={rightPanels}
+        map={
           error ? (
-            <BootError message={error} />
+            <div className="csl2-globe">
+              <BootError message={error} />
+            </div>
           ) : config ? (
             <>
-              <ErrorBoundary label="globe">
-                <GlobeCanvas
-                  ionToken={config.cesiumIonToken}
-                  registry={registry}
-                  onViewerReady={onViewerReady}
-                  imageryMode={imageryMode}
-                  enableGoogle3D={config.features.enableGoogle3D}
-                  googleApiKey={config.googleApiKey}
-                />
-              </ErrorBoundary>
+              <div className="csl2-globe">
+                <ErrorBoundary label="globe">
+                  <GlobeCanvas
+                    ionToken={config.cesiumIonToken}
+                    registry={registry}
+                    onViewerReady={onViewerReady}
+                    imageryMode={imageryMode}
+                    enableGoogle3D={config.features.enableGoogle3D}
+                    googleApiKey={config.googleApiKey}
+                  />
+                </ErrorBoundary>
+              </div>
               {/* Instrument overlays + resting command dock float over the globe.
                   Both are null/viewer-safe and pointer-scoped so they never
                   block globe interaction. */}
               <GlobeTheater viewer={viewer} />
               <GlobeOverlays viewer={viewer} />
               <GlobeToolbar viewer={viewer} />
+              <MapToolPanels viewer={viewer} />
               <CopControl viewer={viewer} registry={registry} />
               <AuthNotice />
               <OpenModeBanner open={Boolean(config.openMode)} />
@@ -276,11 +304,41 @@ export function App(): JSX.Element {
         // the old 9-tab pile is redistributed: Investigation→Graph app, Intel/
         // News/Collab→Reports app, Ground→Video app, Filters/Field→rail flyouts,
         // Alerts→Inbox flyout. Selection context is shared across every app.
-        right={<ObjectInspector viewer={viewer} />}
-        rightTabs={rightTabs}
-        bottom={<ErrorBoundary label="Timeline"><Timeline viewer={viewer} /></ErrorBoundary>}
+        action={
+          <>
+            <button className="flex h-6 items-center gap-[6px] rounded-sm border border-line-2 px-[9px] text-[12px] text-txt-1 hover:bg-[var(--hover)]">
+              <Icon name="filter" className="h-3 w-3" />
+              Filter contact type
+              <Icon name="chevron-down" className="h-3 w-3" />
+            </button>
+            <span className="csl2-sentence">
+              Showing <b>all contact types</b> across <u>the current view</u>
+            </span>
+            <span className="flex-1" />
+            <button className="h-6 rounded-sm border border-line-2 px-[9px] text-[12px] text-txt-1 hover:bg-[var(--hover)]">
+              Clear selection
+            </button>
+            <button className="flex h-6 items-center gap-[6px] rounded-sm bg-accent px-[11px] text-[12px] text-white hover:brightness-110">
+              <Icon name="plus" className="h-3 w-3" />
+              Add to filter path
+            </button>
+          </>
+        }
+        dock={
+          <ErrorBoundary label="TimeDock">
+            <TimeDock viewer={viewer} />
+          </ErrorBoundary>
+        }
       />
       <AlertsPanel open={alertsOpen} onClose={() => setAlertsOpen(false)} viewer={viewer} />
+      {/* The inbox's recorded home is the title bar (REHOMED `inbox`), and this
+          is the surface behind that slot. Without it the panel was constructed
+          in `railItems` and thrown away by `byHome`, so triage had no home at
+          all in the rebuilt console. */}
+      <Modal open={inboxOpen} onClose={() => setInboxOpen(false)} title="Inbox" width={560}>
+        <InboxPanel viewer={viewer} />
+      </Modal>
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <SimulationOverlay viewer={viewer} registry={registry} />
     </>
   );
@@ -536,7 +594,7 @@ export function CopControl({
   if (!viewer) return null;
 
   return (
-    <div className="absolute bottom-3 right-[112px] z-[var(--z-dock)] flex flex-col items-end gap-1.5">
+    <div className="absolute bottom-3 right-3 map-foot-item-2 z-[var(--z-dock)] flex flex-col items-end gap-1.5">
       {open && (
         <div className="mono text-[10px] w-[212px] max-w-[92vw] border border-line rounded-sm bg-bg-1/95 text-txt-1 shadow-xl p-2 flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
@@ -633,7 +691,7 @@ export function OpenModeBanner({ open }: { open: boolean }): JSX.Element | null 
     }
   };
   return (
-    <div className="absolute inset-x-0 bottom-2 z-[var(--z-dock)] flex justify-center px-3 pointer-events-none">
+    <div className="map-banner flex justify-center px-3 pointer-events-none">
       <div className="pointer-events-auto flex items-center gap-2 bg-bg-1/95 border border-warn rounded-sm px-3 py-1.5 shadow-lg max-w-xl">
         <span className="mono text-[10px] uppercase tracking-[0.6px] text-warn">Open mode</span>
         <span className="text-[11px] text-txt-2 leading-snug">
@@ -665,20 +723,12 @@ export function AuthNotice(): JSX.Element | null {
     (f) => f.status === 'green' && f.lastSeen !== undefined && now - f.lastSeen < FEED_FRESH_MS,
   );
 
-  // Data is flowing — don't claim the globe is blank. Keep a subtle sign-in
-  // chip so the affordance is still there without the misleading copy.
-  if (hasLiveData) {
-    return (
-      <div className="absolute top-10 right-3 z-[var(--z-dock)] flex justify-end pointer-events-none">
-        <Link
-          to="/login"
-          className="pointer-events-auto bg-bg-1/90 border border-accent-line rounded-sm px-2.5 py-1 text-[11px] font-medium text-accent shadow-lg hover:text-txt-0 hover:border-accent"
-        >
-          Sign in →
-        </Link>
-      </div>
-    );
-  }
+  // Data is flowing — don't claim the globe is blank, and don't put an account
+  // control on the map either: it was pinned at top-10 right-3, which is where
+  // the compass rose is, and the two drew on top of each other. Account state
+  // is window chrome and the reference keeps it in the title bar, so the chip
+  // moved to TitleBar (`SignInChip`).
+  if (hasLiveData) return null;
 
   // No data reached the globe yet — the auth-gated hosted case. Make the real
   // reason explicit with a one-click path to sign in.

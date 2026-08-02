@@ -9,6 +9,7 @@ import * as Cesium from 'cesium';
 import { search, LOCATION_KINDS } from '../transport/search.js';
 import { flyToPosition } from './camera.js';
 import { viewerCenter } from './center.js';
+import { Icon } from '../normal/Icon.js';
 
 /** Parse "lat,lon" / "lat lon" → {lat,lon}, or null if it isn't a coordinate.
  *  (SimulationOverlay keeps its own two-field variant; this is the single-field
@@ -105,9 +106,7 @@ export function CoordEntry({ viewer, onPlace, placeholder, fly = true }: Props) 
           title="Use current map centre"
           aria-label="use map centre"
           className="mono text-[11px] px-1.5 py-1 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-txt-1"
-        >
-          ⌖
-        </button>
+        ><Icon name="crosshair" className="w-3.5 h-3.5" /></button>
       </div>
       {err && <div className="mono text-[10px] text-alert">{err}</div>}
     </div>

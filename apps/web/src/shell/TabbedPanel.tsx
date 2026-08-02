@@ -1,6 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useReducedMotion } from './useReducedMotion.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
+import { Icon } from '../normal/Icon.js';
 
 // Generic tabbed-panel container — used by both rails (frontend.md §4).
 // Tab strip (.tabs/.tab) follows the Cobalt/Ink mockup: a flex row on bg-1 with
@@ -200,7 +201,7 @@ function MenuChooser({
           {active?.label ?? '—'}
         </span>
         <span className="mono text-[10px] text-txt-2" aria-hidden="true">
-          {open ? '▴' : '▾'}
+          <Icon name={open ? 'chevron-up' : 'chevron-down'} className="w-3.5 h-3.5" />
         </span>
       </button>
       {open && (

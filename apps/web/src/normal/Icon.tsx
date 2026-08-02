@@ -54,6 +54,89 @@ import {
   Waypoints,
   X,
   ShieldCheck,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpRight,
+  Binoculars,
+  Box,
+  Building2,
+  Calendar,
+  Camera,
+  ChartColumn,
+  ChartLine,
+  ChevronFirst,
+  ChevronLast,
+  ChevronLeft,
+  ChevronUp,
+  Circle,
+  CircleAlert,
+  CircleCheck,
+  CircleDot,
+  Cloud,
+  Compass,
+  Copy,
+  CornerDownLeft,
+  Cpu,
+  Database,
+  Download,
+  Droplet,
+  Ellipsis,
+  EllipsisVertical,
+  Eye,
+  EyeOff,
+  Factory,
+  FastForward,
+  FileChartColumn,
+  Film,
+  Flag,
+  Folder,
+  GitBranch,
+  GitFork,
+  Hand,
+  Helicopter,
+  Inbox,
+  Link2,
+  List,
+  Lock,
+  Maximize,
+  Menu,
+  MessageSquare,
+  Mountain,
+  MousePointer2,
+  Move,
+  PanelLeft,
+  PanelRight,
+  PenTool,
+  Pencil,
+  Radar,
+  Radio,
+  RefreshCw,
+  Rewind,
+  Rocket,
+  RotateCcw,
+  RotateCw,
+  Ruler,
+  Save,
+  Scan,
+  Share2,
+  Square,
+  SquareCheckBig,
+  SquarePen,
+  Star,
+  Table,
+  Trash2,
+  TrendingUp,
+  Truck,
+  Unlink,
+  Upload,
+  Users,
+  Video,
+  Waves,
+  Wind,
+  Workflow,
+  Zap,
   type LucideProps,
 } from 'lucide-react';
 
@@ -105,7 +188,90 @@ export type IconName =
   | 'minus'
   | 'grid'
   | 'sun'
-  | 'moon';
+  | 'moon'
+  | 'annotate'
+  | 'around'
+  | 'arrow-down'
+  | 'arrow-left'
+  | 'arrow-right'
+  | 'arrow-up'
+  | 'back-15'
+  | 'binoculars'
+  | 'box'
+  | 'building'
+  | 'calendar'
+  | 'capture'
+  | 'chart'
+  | 'chart-line'
+  | 'chevron-left'
+  | 'chevron-up'
+  | 'circle'
+  | 'circle-alert'
+  | 'circle-check'
+  | 'circle-dot'
+  | 'cloud'
+  | 'compass'
+  | 'copy'
+  | 'cpu'
+  | 'database'
+  | 'download'
+  | 'draw'
+  | 'droplet'
+  | 'enter'
+  | 'external'
+  | 'eye'
+  | 'eye-off'
+  | 'factory'
+  | 'fast-forward'
+  | 'file-chart'
+  | 'film'
+  | 'flag'
+  | 'folder'
+  | 'frame-b'
+  | 'frame-f'
+  | 'fwd-15'
+  | 'hand'
+  | 'helicopter'
+  | 'inbox'
+  | 'link'
+  | 'list'
+  | 'lock'
+  | 'maximize'
+  | 'measure'
+  | 'menu'
+  | 'message'
+  | 'more'
+  | 'more-v'
+  | 'mountain'
+  | 'move'
+  | 'panel-left'
+  | 'panel-right'
+  | 'pencil'
+  | 'radar'
+  | 'radio'
+  | 'refresh'
+  | 'rewind'
+  | 'rocket'
+  | 'save'
+  | 'scan'
+  | 'select'
+  | 'share'
+  | 'square'
+  | 'square-check'
+  | 'star'
+  | 'table'
+  | 'transform'
+  | 'trash'
+  | 'trend'
+  | 'truck'
+  | 'unlink'
+  | 'upload'
+  | 'users'
+  | 'video'
+  | 'waves'
+  | 'wind'
+  | 'workflow'
+  | 'zap';
 
 // Original hand-drawn glyphs kept for the two aircraft silhouettes lucide
 // doesn't carry. Same props contract as a lucide icon.
@@ -188,6 +354,89 @@ const ICONS: Record<IconName, ComponentType<LucideProps>> = {
   grid: LayoutGrid,
   sun: Sun,
   moon: Moon,
+  annotate: SquarePen,
+  around: GitFork,
+  'arrow-down': ArrowDown,
+  'arrow-left': ArrowLeft,
+  'arrow-right': ArrowRight,
+  'arrow-up': ArrowUp,
+  'back-15': RotateCcw,
+  binoculars: Binoculars,
+  box: Box,
+  building: Building2,
+  calendar: Calendar,
+  capture: Camera,
+  chart: ChartColumn,
+  'chart-line': ChartLine,
+  'chevron-left': ChevronLeft,
+  'chevron-up': ChevronUp,
+  circle: Circle,
+  'circle-alert': CircleAlert,
+  'circle-check': CircleCheck,
+  'circle-dot': CircleDot,
+  cloud: Cloud,
+  compass: Compass,
+  copy: Copy,
+  cpu: Cpu,
+  database: Database,
+  download: Download,
+  draw: PenTool,
+  droplet: Droplet,
+  enter: CornerDownLeft,
+  external: ArrowUpRight,
+  eye: Eye,
+  'eye-off': EyeOff,
+  factory: Factory,
+  'fast-forward': FastForward,
+  'file-chart': FileChartColumn,
+  film: Film,
+  flag: Flag,
+  folder: Folder,
+  'frame-b': ChevronFirst,
+  'frame-f': ChevronLast,
+  'fwd-15': RotateCw,
+  hand: Hand,
+  helicopter: Helicopter,
+  inbox: Inbox,
+  link: Link2,
+  list: List,
+  lock: Lock,
+  maximize: Maximize,
+  measure: Ruler,
+  menu: Menu,
+  message: MessageSquare,
+  more: Ellipsis,
+  'more-v': EllipsisVertical,
+  mountain: Mountain,
+  move: Move,
+  'panel-left': PanelLeft,
+  'panel-right': PanelRight,
+  pencil: Pencil,
+  radar: Radar,
+  radio: Radio,
+  refresh: RefreshCw,
+  rewind: Rewind,
+  rocket: Rocket,
+  save: Save,
+  scan: Scan,
+  select: MousePointer2,
+  share: Share2,
+  square: Square,
+  'square-check': SquareCheckBig,
+  star: Star,
+  table: Table,
+  transform: GitBranch,
+  trash: Trash2,
+  trend: TrendingUp,
+  truck: Truck,
+  unlink: Unlink,
+  upload: Upload,
+  users: Users,
+  video: Video,
+  waves: Waves,
+  wind: Wind,
+  workflow: Workflow,
+  zap: Zap,
 };
 
 export function Icon({

@@ -27,6 +27,7 @@ import {
   stamp,
   tableHeadCls,
 } from './ui.js';
+import { Icon } from '../normal/Icon.js';
 
 // Three "workbench" dataset-detail tabs added alongside the original
 // Schema/Preview/Stats/…: a dependency-free geo plot, a read-only SQL
@@ -466,7 +467,7 @@ export function MonitorsTab({ datasetId }: { datasetId: string }): JSX.Element {
                 </td>
                 <td className="px-2.5 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => startEdit(m)} className="text-txt-3 hover:text-accent text-[10px] mono mr-2">edit</button>
-                  <button type="button" onClick={() => void onDelete(m)} className="text-txt-3 hover:text-alert text-[12px]" aria-label={`Delete monitor ${m.name}`}>✕</button>
+                  <button type="button" onClick={() => void onDelete(m)} className="text-txt-3 hover:text-alert text-[12px]" aria-label={`Delete monitor ${m.name}`}><Icon name="x" className="w-3 h-3" /></button>
                 </td>
               </tr>
             ))}

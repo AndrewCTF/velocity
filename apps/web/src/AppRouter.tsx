@@ -83,6 +83,8 @@ function TopBar(): JSX.Element | null {
   // The auth pages are full-screen cards — no overlay chrome on them.
   if (['/login', '/signup', '/forgot', '/reset'].includes(loc.pathname)) return null;
   if (loc.pathname.startsWith('/news')) return null;
+  // The console has a title bar; these controls live in it, not over it.
+  if (loc.pathname === '/') return null;
   const is2D = loc.pathname.startsWith('/2d');
   const isStudio = loc.pathname.startsWith('/studio');
   return (

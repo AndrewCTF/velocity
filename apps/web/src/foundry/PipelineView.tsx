@@ -15,6 +15,7 @@ import { InlineAlert } from '../shell/InlineAlert.js';
 import { useFoundryNav } from './nav.js';
 import { useFoundryPoll } from './useFoundryPoll.js';
 import { EmptyState, Field, ViewHeader, controlCls } from './ui.js';
+import { Icon } from '../normal/Icon.js';
 
 // Pipeline — the lineage DAG (datasets as rounded nodes, transforms as
 // diamonds, bezier edges in topological layers) now with zoom/pan + keyboard-
@@ -211,9 +212,7 @@ function StepRow({
           </>
         )}
       </div>
-      <button type="button" onClick={onRemove} className="text-txt-3 hover:text-alert text-[12px] px-1" aria-label="Remove step">
-        ✕
-      </button>
+      <button type="button" onClick={onRemove} className="text-txt-3 hover:text-alert text-[12px] px-1" aria-label="Remove step"><Icon name="x" className="w-3 h-3" /></button>
     </div>
   );
 }

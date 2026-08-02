@@ -1,4 +1,5 @@
 @import './theme/tokens.css';
+@import './shell/console.css';
 @import './theme/reflow.css';
 
 @tailwind base;

@@ -23,6 +23,7 @@ import {
   statusTone,
   tableHeadCls,
 } from './ui.js';
+import { Icon } from '../normal/Icon.js';
 
 // Builds — filterable history (status chips, transform, free-text) with
 // transform NAMES, expandable logs, and schedules expressed in human units
@@ -94,7 +95,7 @@ function SchedulesSection(): JSX.Element {
                   <Toggle on={s.enabled} onChange={(next) => void updateSchedule(s.id, { enabled: next })} label="enabled" />
                 </td>
                 <td className="px-2.5 py-1.5 text-right">
-                  <button type="button" onClick={() => void onDelete(s.id, nameOf(s.transform_id))} className="text-txt-3 hover:text-alert text-[12px]" aria-label="Delete schedule">✕</button>
+                  <button type="button" onClick={() => void onDelete(s.id, nameOf(s.transform_id))} className="text-txt-3 hover:text-alert text-[12px]" aria-label="Delete schedule"><Icon name="x" className="w-3 h-3" /></button>
                 </td>
               </tr>
             ))}

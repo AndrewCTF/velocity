@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { Btn } from './instruments.js';
 import { useReducedMotion } from './useReducedMotion.js';
+import { Icon } from '../normal/Icon.js';
 
 // Shared portal chrome: backdrop (click closes), Escape closes, dialog a11y
 // contract, focus moves into the panel on open and back to the opener on close.
@@ -75,9 +76,7 @@ function DialogHeader({ title, onClose }: { title: ReactNode; onClose: () => voi
         onClick={onClose}
         aria-label="Close"
         className="mono text-[13px] text-txt-2 hover:text-txt-0 px-1.5 py-0.5"
-      >
-        ✕
-      </button>
+      ><Icon name="x" className="w-3 h-3" /></button>
     </div>
   );
 }
