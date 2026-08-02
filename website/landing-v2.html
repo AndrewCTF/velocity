@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Velocity · The self-hosted OSINT console you own</title>
+<style>
+@font-face{font-family:"Alliance No.1";src:url("assets/fonts/Archivo-var.woff2") format("woff2");font-display:swap}
+@font-face{font-family:"Alliance No.2";src:url("assets/fonts/GeistMono-var.woff2") format("woff2");font-display:swap}
+
+:root{
+  --bg:#efefef;--ink:#1e2124;--ink-soft:#454a50;--muted:#767b81;--earmark:#b9b9b9;
+  --line:#d7d7d7;--white:#fff;
+  --f1:"Alliance No.1",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f2:"Alliance No.2","Alliance No.1",system-ui,sans-serif;
+  --ease:cubic-bezier(.25,.46,.45,.94);
+  --pop:cubic-bezier(.2,.9,.3,1.15);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--f1);font-size:16px;line-height:1.5;overflow-x:hidden}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;background:none;border:none;color:inherit}
+::selection{background:var(--ink);color:var(--bg)}
+.wrap{max-width:1440px;margin:0 auto;padding:0 20px}
+
+/* reveal */
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .6s var(--ease),transform .6s var(--ease)}
+.reveal.in{opacity:1;transform:none}
+
+/* nav */
+.nav{position:fixed;z-index:100;top:16px;left:60px;right:60px;height:70px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;border-radius:10px;background:rgba(171,171,171,.1);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 2px 10px rgba(0,0,0,.1);transition:background .35s,box-shadow .35s,transform .45s var(--ease),top .45s var(--ease)}
+.nav.scrolled{background:rgba(24,26,30,.5);box-shadow:0 8px 28px rgba(0,0,0,.25)}
+.nav.hide{transform:translateY(-110%)}
+.logo{font-family:var(--f2);font-size:18px;font-weight:500;letter-spacing:2px;color:#fff;transition:opacity .25s}
+.logo:hover{opacity:.7}
+.nav-actions{display:flex;align-items:center;gap:10px}
+.btn{height:40px;padding:0 24px;background:#fff;color:var(--ink);border:1px solid var(--ink);font-size:16px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:background .22s,color .22s,transform .12s}
+.nav .btn{width:232px}
+.btn:hover{background:var(--ink);color:#fff}
+.btn:active{transform:scale(.97)}
+.icon-btn{width:40px;height:40px;background:#fff;border:1px solid var(--ink);display:inline-flex;align-items:center;justify-content:center;transition:background .22s,transform .12s}
+.icon-btn:hover{background:var(--ink)}
+.icon-btn:hover svg{stroke:#fff}
+.icon-btn svg{stroke:var(--ink);transition:stroke .22s}
+.icon-btn:active{transform:scale(.94)}
+
+/* hero */
+.hero{position:relative;height:100vh;min-height:640px;overflow:hidden;background:#0d0e10}
+.hero-media{position:absolute;inset:0;animation:kenburns 10s var(--ease) forwards}
+.hero-media img,.hero-media video{width:100%;height:120%;object-fit:cover;object-position:center top;display:block;filter:contrast(1.07) saturate(1.1)}
+@keyframes kenburns{from{transform:scale(1.07)}to{transform:scale(1)}}
+.hero-scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(30,33,36,.55) 0%,rgba(30,33,36,.18) 45%,rgba(30,33,36,.12) 100%)}
+.hero-content{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:110px 24px 100px;text-align:center}
+.hero-line{font-family:var(--f2);font-weight:500;font-size:clamp(46px,6vw,86px);letter-spacing:-.033em;line-height:1.06;color:#fff;
+  opacity:0;transform:translateY(28px);animation:rise .9s var(--ease) forwards}
+.hero-line:nth-child(2){animation-delay:.15s}
+@keyframes rise{to{opacity:1;transform:none}}
+.scroll-cue{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:2;display:flex;flex-direction:column;align-items:center;gap:9px;
+  color:#efefef;font-size:12px;letter-spacing:2px;font-family:var(--f2);text-transform:uppercase;opacity:0;animation:fadein .8s .8s forwards;transition:opacity .25s}
+.scroll-cue:hover{opacity:.6}
+.scroll-cue svg{animation:bob 2.4s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+@keyframes fadein{to{opacity:1}}
+
+/* updates */
+.updates{padding:100px 0 70px}
+.updates-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:26px;gap:20px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px 22px}
+.tab{padding:6px 2px;font-size:15px;color:var(--ink);border-bottom:2px solid transparent;transition:color .2s,border-color .2s}
+.tab:hover{color:var(--muted)}
+.tab.active{border-color:var(--ink);font-weight:500}
+.see-all{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;text-decoration:underline;text-underline-offset:4px;white-space:nowrap;transition:opacity .25s}
+.see-all:hover{opacity:.55}
+.stage{position:relative}
+.slide{position:relative;height:min(86vh,940px);min-height:560px;margin:0 auto;overflow:hidden;background:#141518;border-radius:6px;padding:40px 24px 0;display:flex;flex-direction:column}
+.slide-media{position:relative;flex:1;overflow:hidden}
+.slide-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.03);transition:opacity .55s var(--ease),transform 1s var(--ease)}
+.slide-media img.show{opacity:1;transform:scale(1)}
+.slide-veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(30,33,36,.2),rgba(30,33,36,.45))}
+.slide-card{position:absolute;left:24px;top:24px;z-index:2;width:min(600px,80%);background:rgba(20,22,25,.5);backdrop-filter:blur(8px);padding:24px;color:#fff;border-radius:4px}
+.slide-tag{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:.75;margin-bottom:12px}
+.slide-title{font-size:clamp(18px,2vw,26px);line-height:1.25;display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.slide-title .arr{font-size:26px;transition:transform .25s var(--ease)}
+.slide:hover .slide-title .arr{transform:translate(5px,-5px)}
+.slide-bar{height:90px;flex:none;display:flex;align-items:center;justify-content:space-between}
+.stage-nav{display:flex;gap:10px}
+.stage-btn{width:48px;height:48px;background:rgba(255,255,255,.14);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;transition:background .25s,transform .12s}
+.stage-btn:hover{background:rgba(255,255,255,.32)}
+.stage-btn:active{transform:scale(.93)}
+.stage-dots{display:flex;gap:7px}
+.dot{width:22px;height:2px;background:rgba(255,255,255,.35);cursor:pointer;transition:background .25s}
+.dot.active{background:#fff}
+
+/* statement */
+.statement{padding:130px 0 110px;text-align:left}
+.statement p{max-width:1180px;font-size:clamp(28px,3.4vw,48px);line-height:1.32;letter-spacing:-.015em}
+.scrub span{display:inline-block;color:var(--ink);opacity:.1;transform:translateY(.32em);filter:blur(3px);transition:opacity .45s var(--ease),transform .45s var(--ease),filter .45s var(--ease)}
+.scrub span.lit{opacity:1;transform:none;filter:blur(0)}
+.scrub span.lit.strong{text-shadow:0 0 1px currentColor}
+
+/* software */
+.soft{padding:20px 0 100px}
+.soft .wrap{position:relative}
+.earmark{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--earmark);margin-bottom:26px}
+.row{display:grid;grid-template-columns:1fr 460px;align-items:center;gap:24px;padding:26px 4px;border-top:1px solid var(--line);transition:background .25s}
+.row:last-child{border-bottom:1px solid var(--line)}
+.row-text{display:flex;flex-direction:column;gap:8px;align-items:flex-start;text-align:left}
+.row-name{font-size:clamp(46px,5.6vw,88px);line-height:1;letter-spacing:-.02em;transition:transform .3s var(--ease)}
+.row-desc{font-size:16px;line-height:1.5;color:var(--muted);max-width:480px}
+.row:hover{background:#fafafa}
+.row:hover .row-name{transform:translateX(12px)}
+.preview{position:absolute;right:0;top:0;width:300px;height:150px;z-index:5;pointer-events:none;overflow:hidden;
+  opacity:0;transform:translateX(18px) scale(.92);transition:opacity .3s var(--ease),transform .4s var(--pop);box-shadow:0 24px 50px rgba(0,0,0,.22)}
+.preview.on{opacity:1;transform:translateX(0) scale(1)}
+.preview img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
+
+/* careers */
+.careers{padding:70px 0 90px}
+.careers-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
+.careers-img{overflow:hidden;aspect-ratio:570/500}
+.careers-img img{width:100%;height:100%;object-fit:cover;transition:transform 1.2s var(--ease)}
+.careers-grid:hover .careers-img img{transform:scale(1.04)}
+.careers-txt{text-align:center;padding:0 5%}
+.careers-txt h2{font-size:clamp(28px,3vw,40px);line-height:1.15;letter-spacing:-.01em;margin-bottom:22px}
+.careers-txt p{color:var(--muted);font-size:16px;line-height:1.6;max-width:480px;margin:0 auto 32px}
+
+/* partners */
+.partners{padding:60px 0 100px;overflow:hidden}
+.partners h2{font-size:clamp(30px,3.6vw,52px);letter-spacing:-.01em;max-width:760px;line-height:1.12;margin-bottom:44px}
+.marquee{display:flex;gap:20px;width:max-content;animation:scroll 60s linear infinite;padding:0 10px}
+.marquee:hover{animation-play-state:paused}
+@keyframes scroll{to{transform:translateX(-50%)}}
+.quote{width:300px;flex:none;background:#fff;padding:22px;display:flex;flex-direction:column;gap:16px;border:1px solid var(--line);transition:transform .3s var(--ease),box-shadow .3s}
+.quote:hover{transform:translateY(-5px);box-shadow:0 16px 36px rgba(0,0,0,.08)}
+.quote h3{font-family:var(--f2);font-size:14px;letter-spacing:1.5px}
+.quote p{font-size:14px;line-height:1.55;color:var(--ink-soft)}
+
+/* ctas */
+.ctas{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:10px 0 60px}
+.cta{display:flex;justify-content:space-between;align-items:flex-start;background:var(--ink);color:#fff;padding:24px 24px 84px;font-size:clamp(26px,2.8vw,38px);letter-spacing:-.01em;transition:background .3s}
+.cta .arr{font-size:38px;transition:transform .3s var(--ease)}
+.cta:hover{background:#000}
+.cta:hover .arr{transform:translateX(8px)}
+.cta.alt{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.cta.alt:hover{background:#f6f6f4}
+
+/* footer */
+footer{background:var(--ink);color:#fff;padding:90px 0 60px}
+.foot-grid{display:flex;justify-content:space-between;gap:60px;flex-wrap:wrap}
+.foot-brand p{opacity:.65;font-size:15px;margin-bottom:6px}
+.foot-brand button{margin-top:22px}
+.foot-cols{display:flex;flex:1;justify-content:space-between;max-width:1050px;flex-wrap:wrap;gap:30px}
+.foot-col h4{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:.5;margin-bottom:16px}
+.foot-col a{display:block;font-size:15px;padding:5px 0;opacity:.85;transition:opacity .2s,transform .2s var(--ease)}
+.foot-col a:hover{opacity:1;transform:translateX(3px)}
+
+/* overlays */
+.overlay{position:fixed;inset:0;z-index:200;background:rgba(20,22,25,.92);backdrop-filter:blur(10px);display:flex;flex-direction:column;
+  opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
+.overlay.open{opacity:1;pointer-events:auto}
+.overlay-top{display:flex;justify-content:flex-end;padding:26px 30px}
+.close-x{color:#fff;font-size:32px;line-height:1;transition:transform .3s}
+.close-x:hover{transform:rotate(90deg)}
+.search-wrap{margin:auto;width:min(720px,88vw);transform:translateY(18px);transition:transform .4s var(--ease)}
+.overlay.open .search-wrap{transform:none}
+.search-wrap input{width:100%;background:none;border:none;border-bottom:2px solid rgba(255,255,255,.35);color:#fff;
+  font-family:var(--f2);font-size:clamp(28px,4vw,48px);padding:12px 4px;outline:none;letter-spacing:-.02em}
+.search-wrap input::placeholder{color:rgba(255,255,255,.35)}
+.search-hint{color:rgba(255,255,255,.5);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:var(--f2);margin-top:14px}
+.menu-links{margin:auto;display:flex;flex-direction:column;gap:4px;width:min(720px,88vw)}
+.menu-links a{color:#fff;font-family:var(--f2);font-size:clamp(30px,4.4vw,52px);letter-spacing:-.02em;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.12);
+  display:flex;justify-content:space-between;align-items:center;opacity:.85;transition:opacity .25s,padding-left .25s var(--ease)}
+.menu-links a small{font-family:var(--f1);font-size:13px;opacity:.5;letter-spacing:1px}
+.menu-links a:hover{opacity:1;padding-left:12px}
+
+@media(max-width:1200px){.preview{display:none}.row{grid-template-columns:1fr}}
+@media(max-width:960px){
+  .row{grid-template-columns:1fr}
+  .careers-grid{grid-template-columns:1fr}
+  .ctas{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <a class="logo" href="#top">VELOCITY</a>
+  <div class="nav-actions">
+    <a class="btn" href="https://github.com/AndrewCTF/velocity" rel="noopener"><span>↖ Get Started</span></a>
+    <button class="icon-btn" id="searchBtn" aria-label="Search">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M11 11l4 4"/></svg>
+    </button>
+    <button class="icon-btn" id="menuBtn" aria-label="Menu">
+      <svg width="18" height="12" viewBox="0 0 18 12" fill="none" stroke-width="1.6"><path d="M0 1h18M0 6h18M0 11h18"/></svg>
+    </button>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="hero-media"><img src="assets/hero-orbit.jpg" alt="Velocity's globe seen from orbit with live aircraft traffic" /></div>
+  <div class="hero-scrim"></div>
+  <div class="hero-content">
+    <div class="hero-line">Every Movement on Earth</div>
+    <div class="hero-line">One Picture You Own</div>
+  </div>
+  <button class="scroll-cue" data-scroll="#updates">
+    <svg width="14" height="16" viewBox="0 0 16 18" fill="none" stroke="#efefef" stroke-width="1.5"><path d="M8 1v14M2 9l6 7 6-7"/></svg>
+    Scroll to Explore
+  </button>
+</header>
+
+<section class="updates" id="updates">
+  <div class="wrap">
+    <div class="updates-head reveal">
+      <div class="tabs" id="tabs"></div>
+      <a class="see-all" href="#updates">See All ↗</a>
+    </div>
+    <div class="stage reveal">
+      <div class="slide" id="slide">
+        <div class="slide-media">
+          <img id="slideImg" class="show" src="" alt="" />
+          <div class="slide-veil"></div>
+          <div class="slide-card">
+            <div class="slide-tag" id="slideTag"></div>
+            <a class="slide-title" href="#updates"><span id="slideTitle"></span><span class="arr">↗</span></a>
+          </div>
+        </div>
+        <div class="slide-bar">
+          <div class="stage-dots" id="dots"></div>
+          <div class="stage-nav">
+            <button class="stage-btn" id="prev" aria-label="Previous">←</button>
+            <button class="stage-btn" id="next" aria-label="Next">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="statement">
+  <div class="wrap">
+    <p class="scrub" id="scrub">Flightradar24 keeps 7 days. MarineTraffic keeps 24 hours. <strong>You keep everything</strong> — every transponder ping, every radar sweep, every satellite pass, every vessel, every aircraft, every signal on Earth — fused into <strong>one living picture</strong> that never expires, never blinks, and <strong>never looks away</strong>.</p>
+  </div>
+</section>
+
+<section class="soft" id="software">
+  <div class="wrap">
+    <div class="earmark reveal">The Workspace · Twelve Apps, One Substrate</div>
+    <div id="rows"></div>
+  </div>
+</section>
+
+<section class="careers" id="archive">
+  <div class="wrap careers-grid">
+    <div class="careers-img reveal"><img src="assets/replay-live.jpg" alt="Velocity replaying recorded traffic from your own disk" /></div>
+    <div class="careers-txt reveal">
+      <h2>History nobody can take back</h2>
+      <p>Turn on the archive profile and Velocity records position history to your disk, with a scrubber to rewind any layer to any past moment. No account to close, no tier to cut, no API to sunset.</p>
+      <a class="btn" href="https://github.com/AndrewCTF/velocity" rel="noopener">GET STARTED ON GITHUB</a>
+    </div>
+  </div>
+</section>
+
+<section class="partners" id="partners">
+  <div class="wrap">
+    <div class="earmark reveal">Stated Limits</div>
+    <h2 class="reveal">What it will not pretend</h2>
+  </div>
+  <div class="marquee" id="marquee"></div>
+</section>
+
+<section class="ctas-wrap">
+  <div class="wrap ctas" id="ctas">
+    <a class="cta reveal" href="https://github.com/AndrewCTF/velocity" rel="noopener"><span>Get Started on GitHub</span><span class="arr">→</span></a>
+    <a class="cta alt reveal" href="https://github.com/AndrewCTF/velocity#take-the-tour" rel="noopener"><span>Take the Tour</span><span class="arr">→</span></a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-grid">
+    <div class="foot-brand">
+      <p>Built in the open. Owned by whoever runs it.</p>
+      <p>Velocity · AGPL-3.0-or-later · v1.0.1</p>
+      <p style="opacity:.45;font-size:13px;margin-top:18px;max-width:300px;line-height:1.5">Thanks to the volunteer feeder communities that make public tracking possible.</p>
+    </div>
+    <div class="foot-cols" id="footCols"></div>
+  </div>
+</footer>
+
+<div class="overlay" id="searchOverlay">
+  <div class="overlay-top"><button class="close-x" data-close>×</button></div>
+  <div class="search-wrap">
+    <input id="searchInput" type="text" placeholder="Search Velocity" autofocus />
+    <div class="search-hint">Press ESC to close</div>
+  </div>
+</div>
+
+<div class="overlay" id="menuOverlay">
+  <div class="overlay-top"><button class="close-x" data-close>×</button></div>
+  <div class="menu-links">
+    <a href="#updates" data-close>Live Domains <small>01</small></a>
+    <a href="#software" data-close>Workspace <small>02</small></a>
+    <a href="#archive" data-close>The Archive <small>03</small></a>
+    <a href="#partners" data-close>Stated Limits <small>04</small></a>
+    <a href="https://github.com/AndrewCTF/velocity" rel="noopener">Get Started <small>↗</small></a>
+  </div>
+</div>
+
+<script>
+const SLIDES=[
+ {tab:"Air",tag:"AIR",title:"13,000 aircraft on a typical day — ADS-B from OpenSky and airplanes.live, including ~140 military",img:"assets/band-air.jpg"},
+ {tab:"Maritime",tag:"MARITIME",title:"33,000 vessels a day — keyless AIS, MMSI-deduplicated across public feeds",img:"assets/plate-europe-dense.jpg"},
+ {tab:"Space",tag:"SPACE",title:"16,000 orbital objects propagated in-browser with real SGP4 physics",img:"assets/hero-satellites.jpg"},
+ {tab:"Hazards",tag:"HAZARDS",title:"Quakes, wildfires, storms and outages — 250 events a day on the same timeline",img:"assets/plate-orbit-wide.jpg"},
+ {tab:"Signals",tag:"SIGNALS",title:"GPS jamming inferred from ADS-B degradation — 200 cells flagged at a time",img:"assets/hero-selected-track.jpg"},
+ {tab:"Infrastructure",tag:"INFRASTRUCTURE",title:"7,183 military bases, 3,804 ports, submarine cables — 53 country toolkits",img:"assets/rail-layers.jpg"},
+ {tab:"Archive",tag:"THE ARCHIVE",title:"History nobody can take back — replay bounded only by your disk",img:"assets/replay-live.jpg"},
+ {tab:"Agent",tag:"MCP AGENT",title:"Give your agent real eyes — 46 MCP tools over the live feeds",img:"assets/launch.jpg"},
+ {tab:"Workspace",tag:"WORKSPACE",title:"Twelve apps, one workspace — the globe is the front door",img:"assets/ui-explorer.jpg"}
+];
+const ROWS=[
+ ["Explorer","Query every live entity like a database.","assets/ui-explorer.jpg"],
+ ["Workflows","Automation blocks over live feeds, with real control outputs.","assets/workflows-dag.jpg"],
+ ["Briefs","Watch-officer summaries with cited sources.","assets/ui-briefs.jpg"],
+ ["Foundry","Bring your own datasets, transform, bind to the map.","assets/foundry-pipeline-new.jpg"],
+ ["Satellites","Sixteen thousand objects on real orbital physics.","assets/hero-satellites.jpg"],
+ ["Layers","Air, sea, space, hazards, signals and 14 infrastructure layers.","assets/rail-layers.jpg"]
+];
+const QUOTES=[
+ ["MOTION IS REAL","Aircraft jump to real received fixes by default. Predicted motion is opt-in, analytic and clearly a model."],
+ ["COVERAGE IS COMMUNITY FEEDERS","Dense over Europe and North America, thin over oceans and conflict zones. The map shows what receivers hear."],
+ ["BUILT FOR ONE ANALYST","Derived state clears on restart. What you deliberately keep persists: the archive, case files and custody log."],
+ ["NO HOSTED DEMO","Feeder terms do not allow public redistribution, so there is no demo to click. You run it, it is yours."],
+ ["NO PAYWALL","No account. No API key. No paywall between you and your own archive."]
+];
+const FOOT={
+ "Domains":[["Air","#updates"],["Maritime","#updates"],["Space","#updates"],["Hazards","#updates"],["Signals","#updates"],["Infrastructure","#updates"]],
+ "Workspace":[["Explorer","#software"],["Briefs","#software"],["Foundry","#software"],["Workflows","#software"],["Satellites","#software"],["Layers","#software"]],
+ "Upstream Feeds":[["OpenSky Network","https://opensky-network.org"],["airplanes.live","https://airplanes.live"],["ShipXplorer","https://www.shipxplorer.com"],["CelesTrak","https://celestrak.org"],["USGS","https://earthquake.usgs.gov"],["GDELT","https://www.gdeltproject.org"]],
+ "Project":[["GitHub","https://github.com/AndrewCTF/velocity"],["Releases","https://github.com/AndrewCTF/velocity/releases"],["README","https://github.com/AndrewCTF/velocity#readme"],["Issues","https://github.com/AndrewCTF/velocity/issues"],["Data Notices","https://github.com/AndrewCTF/velocity/blob/master/NOTICE"],["Disclaimer","https://github.com/AndrewCTF/velocity/blob/master/DISCLAIMER.md"]]
+};
+
+/* carousel */
+let cur=0,timer;
+const tabsEl=document.getElementById('tabs'),dotsEl=document.getElementById('dots'),
+ img=document.getElementById('slideImg'),tag=document.getElementById('slideTag'),ttl=document.getElementById('slideTitle');
+SLIDES.forEach((s,i)=>{
+ const b=document.createElement('button');b.className='tab';b.textContent=s.tab;b.onclick=()=>go(i);tabsEl.appendChild(b);
+ const d=document.createElement('div');d.className='dot';d.onclick=()=>go(i);dotsEl.appendChild(d);
+});
+function render(){
+ const s=SLIDES[cur];
+ img.classList.remove('show');
+ const nxt=new Image();nxt.src=s.img;nxt.onload=()=>{img.src=s.img;img.alt=s.title;img.classList.add('show')};
+ tag.textContent=s.tag;ttl.textContent=s.title;
+ document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===cur));
+ document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===cur));
+}
+function go(i){cur=(i+SLIDES.length)%SLIDES.length;render();restart()}
+function restart(){clearInterval(timer);timer=setInterval(()=>go(cur+1),6500)}
+document.getElementById('prev').onclick=()=>go(cur-1);
+document.getElementById('next').onclick=()=>go(cur+1);
+document.getElementById('slide').addEventListener('mouseenter',()=>clearInterval(timer));
+document.getElementById('slide').addEventListener('mouseleave',restart);
+document.addEventListener('keydown',e=>{
+ if(e.key==='ArrowLeft')go(cur-1);
+ if(e.key==='ArrowRight')go(cur+1);
+ if(e.key==='Escape')closeOverlays();
+});
+render();restart();
+
+/* software rows + hover preview */
+const rowsEl=document.getElementById('rows');
+const soft=document.getElementById('software');
+const preview=document.createElement('div');preview.className='preview';
+preview.innerHTML='<img alt="" />';soft.querySelector('.wrap').appendChild(preview);
+const previewImg=preview.querySelector('img');
+ROWS.forEach(([name,desc,imgSrc])=>{
+ const a=document.createElement('a');a.href='#software';a.className='row reveal';
+ a.innerHTML=`<span class="row-text"><span class="row-name">${name}</span><span class="row-desc">${desc}</span></span>`;
+ a.addEventListener('mouseenter',()=>{
+  previewImg.src=imgSrc;
+  const r=a.getBoundingClientRect(),s=soft.querySelector('.wrap').getBoundingClientRect();
+  preview.style.top=(r.top-s.top+(r.height-preview.offsetHeight)/2)+'px';
+  preview.classList.add('on');
+ });
+ a.addEventListener('mouseleave',()=>preview.classList.remove('on'));
+ rowsEl.appendChild(a);
+});
+
+/* partners marquee */
+const mq=document.getElementById('marquee');
+[...QUOTES,...QUOTES].forEach(([who,txt])=>{
+ const q=document.createElement('div');q.className='quote';
+ q.innerHTML=`<h3>${who}</h3><p>${txt}</p>`;mq.appendChild(q);
+});
+
+/* footer */
+const fc=document.getElementById('footCols');
+Object.entries(FOOT).forEach(([h,links])=>{
+ const c=document.createElement('div');c.className='foot-col';
+ c.innerHTML=`<h4>${h}</h4>`+links.map(([l,h])=>`<a href="${h}" rel="noopener">${l}</a>`).join('');
+ fc.appendChild(c);
+});
+
+/* nav behaviour */
+const nav=document.getElementById('nav');let lastY=0;
+addEventListener('scroll',()=>{
+ const y=scrollY;
+ nav.classList.toggle('scrolled',y>40);
+ nav.classList.toggle('hide',y>500&&y>lastY);
+ lastY=y;
+},{passive:true});
+
+/* overlays */
+const overlays=[document.getElementById('searchOverlay'),document.getElementById('menuOverlay')];
+function closeOverlays(){overlays.forEach(o=>o.classList.remove('open'));document.body.style.overflow=''}
+function openOverlay(o){closeOverlays();o.classList.add('open');document.body.style.overflow='hidden';
+ if(o.id==='searchOverlay')setTimeout(()=>document.getElementById('searchInput').focus(),150)}
+document.getElementById('searchBtn').onclick=()=>openOverlay(overlays[0]);
+document.getElementById('menuBtn').onclick=()=>openOverlay(overlays[1]);
+document.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',closeOverlays));
+overlays.forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeOverlays()}));
+
+/* buttons & smooth scroll */
+document.querySelectorAll('[data-scroll]').forEach(b=>b.addEventListener('click',e=>{
+ e.preventDefault();document.querySelector(b.dataset.scroll)?.scrollIntoView({behavior:'smooth'});
+}));
+document.querySelector('.see-all').onclick=e=>{e.preventDefault();go(cur+1)};
+document.getElementById('searchInput').addEventListener('keydown',e=>{
+ if(e.key==='Enter'&&e.target.value.trim()){closeOverlays();
+  document.getElementById('updates').scrollIntoView({behavior:'smooth'});}
+});
+
+/* statement word scrub */
+const scrub=document.getElementById('scrub');
+function splitWords(el){
+ [...el.childNodes].forEach(n=>{
+  if(n.nodeType===3){
+   const frag=document.createDocumentFragment();
+   n.textContent.split(/(\s+)/).forEach(w=>{
+    if(w===''||/^\s+$/.test(w))frag.appendChild(document.createTextNode(w));
+    else{const s=document.createElement('span');s.textContent=w;frag.appendChild(s)}
+   });
+   el.replaceChild(frag,n);
+  } else if(n.nodeType===1)splitWords(n);
+ });
+}
+splitWords(scrub);
+const scrubWords=[...scrub.querySelectorAll('span')];
+scrub.querySelectorAll('strong span').forEach(s=>s.classList.add('strong'));
+function scrubStep(){
+ const r=scrub.getBoundingClientRect(),vh=innerHeight;
+ const p=Math.min(1,Math.max(0,(vh*0.82-r.top)/(vh*0.55+r.height*0.4)));
+ const lit=Math.floor(p*scrubWords.length*1.15);
+ scrubWords.forEach((w,i)=>w.classList.toggle('lit',i<lit));
+}
+addEventListener('scroll',scrubStep,{passive:true});scrubStep();
+
+/* reveal on scroll */
+const io=new IntersectionObserver(es=>es.forEach(en=>{
+ if(en.isIntersecting){en.target.classList.add('in');io.unobserve(en.target)}
+}),{threshold:.08});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+if(!('IntersectionObserver' in window)||location.search.includes('all'))document.querySelectorAll('.reveal').forEach(el=>el.classList.add('in'));
+</script>
+</body>
+</html>
