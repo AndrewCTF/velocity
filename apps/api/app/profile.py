@@ -79,6 +79,32 @@ def resolve() -> str:
     return raw
 
 
+def _dotenv_keys() -> set[str]:
+    """Keys the operator has already set in a ``.env`` this process will read.
+
+    WHY THIS EXISTS: pydantic-settings ranks REAL ENVIRONMENT VARIABLES ABOVE
+    ``.env`` (see ``Settings.model_config``). So seeding a profile default into
+    ``os.environ`` does not lose to an ``.env`` entry — it silently OUTRANKS it,
+    which is the exact opposite of this module's contract. Measured 2026-08-02:
+    a box with ``ADSB_SIDECAR_ENABLED=1`` in ``.env`` still booted with the tier
+    off, because `lite` had already put ``0`` in the environment. Treat a key
+    present in either ``.env`` as set by the operator, and keep quiet about it.
+    """
+    keys: set[str] = set()
+    # Same files, same order, as Settings.model_config.env_file.
+    for name in (".env", "../../.env"):
+        try:
+            with open(name, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    keys.add(line.split("=", 1)[0].strip().upper())
+        except OSError:  # absent / unreadable — nothing to honour
+            continue
+    return keys
+
+
 def apply() -> str:
     """Seed this profile's defaults into ``os.environ`` and return its name.
 
@@ -88,12 +114,14 @@ def apply() -> str:
     allocator setup lives there.
 
     ``setdefault`` is the whole contract: a profile expresses an opinion about
-    an unconfigured box and has no opinion at all about a configured one.
+    an unconfigured box and has no opinion at all about a configured one — and
+    ``.env`` counts as configured, which needs :func:`_dotenv_keys` to enforce.
     """
     name = resolve()
+    configured = set(os.environ) | _dotenv_keys()
     seeded = []
     for key, value in _DEFAULTS[name].items():
-        if key not in os.environ:
+        if key not in configured:
             os.environ[key] = value
             seeded.append(key)
     log.info(
