@@ -22,6 +22,7 @@ import { AirportCard } from '../../entity-panel/AirportCard.js';
 import { AisGapCard } from '../../entity-panel/AisGapCard.js';
 import { SanctionsCard } from '../../entity-panel/SanctionsCard.js';
 import { OrgCard } from '../../entity-panel/OrgCard.js';
+import { CorroborationCard } from '../../entity-panel/CorroborationCard.js';
 import { ArchiveSeriesCard } from '../../entity-panel/ArchiveSeriesCard.js';
 import { BaseCard } from '../../entity-panel/BaseCard.js';
 import { CameraCard } from '../../entity-panel/CameraCard.js';
@@ -779,6 +780,16 @@ export function SelectionPanel({
         {(isVessel || isAircraft) && (
           <OrgCard name={str(p['vessel_owner']) ?? str(p['operator']) ?? null} />
         )}
+
+        {/* The one sanctioned use of a claim-tier source, and the reason the
+            tier model demotes rather than deletes them: given something an
+            instrument observed, did anybody say anything near it, and when.
+            Opt-in, and worded so the thing it cannot say is unmissable. */}
+        <CorroborationCard
+          lon={snap?.position?.lon ?? null}
+          lat={snap?.position?.lat ?? null}
+          at={lastSeenMs(p) ? lastSeenMs(p)! / 1000 : null}
+        />
 
         <ProfileCard enrichment={enrichment} snap={cardSnap} />
 
