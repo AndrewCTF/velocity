@@ -21,6 +21,7 @@ import { AiAssessmentCard } from '../../entity-panel/AiAssessmentCard.js';
 import { AirportCard } from '../../entity-panel/AirportCard.js';
 import { AisGapCard } from '../../entity-panel/AisGapCard.js';
 import { SanctionsCard } from '../../entity-panel/SanctionsCard.js';
+import { OrgCard } from '../../entity-panel/OrgCard.js';
 import { ArchiveSeriesCard } from '../../entity-panel/ArchiveSeriesCard.js';
 import { BaseCard } from '../../entity-panel/BaseCard.js';
 import { CameraCard } from '../../entity-panel/CameraCard.js';
@@ -723,6 +724,14 @@ export function SelectionPanel({
             name={isAircraft ? null : (snap?.name ?? str(p['name']))}
             registration={isAircraft ? str(p['registration']) : null}
           />
+        )}
+
+        {/* "Who owns it" is the question straight after "is it designated", and
+            no single free source answers it. Opt-in because it costs four
+            upstream requests, and the operator asks it about one contact, not
+            about every contact they click. */}
+        {(isVessel || isAircraft) && (
+          <OrgCard name={str(p['vessel_owner']) ?? str(p['operator']) ?? null} />
         )}
 
         <ProfileCard enrichment={enrichment} snap={cardSnap} />
