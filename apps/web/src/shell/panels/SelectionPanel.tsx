@@ -47,6 +47,8 @@ import { useProjection } from '../../globe/ProjectionLayer.js';
 import { useInvestigation } from '../../graph/investigationStore.js';
 import { usePolReplay } from '../../state/polReplayStore.js';
 import { useSettings } from '../../state/settings.js';
+import type { LayerRegistry } from '../../registry/LayerRegistry.js';
+import { WorldPanel } from './WorldPanel.js';
 
 // Selection, built from docs/mockups/console-2026-08 (`11-map-selected.html`)
 // and reading the same live Cesium entity the old inspector read.
@@ -229,7 +231,13 @@ export function freshFrac(s: number): number {
   return Math.max(0, Math.min(1, 1 - Math.log10(s) / span));
 }
 
-export function SelectionPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Element {
+export function SelectionPanel({
+  registry,
+  viewer,
+}: {
+  registry: LayerRegistry;
+  viewer?: Cesium.Viewer | null;
+}): JSX.Element {
   const id = useSelection((s) => s.selectedEntityId);
   const [snap, setSnap] = useState<Snap | null>(null);
   const [enrichment, setEnrichment] = useState<Enrichment | null>(null);
@@ -311,17 +319,10 @@ export function SelectionPanel({ viewer }: { viewer?: Cesium.Viewer | null }): J
     };
   }, [id, isSim, callsignHint]);
 
-  if (!id) {
-    return (
-      <div className="flex flex-col items-center gap-2 p-8 text-center">
-        <Icon name="crosshair" className="h-6 w-6 text-txt-3" />
-        <div className="text-[13px] text-txt-1">Nothing selected</div>
-        <p className="max-w-[220px] text-[12px] leading-relaxed text-txt-3">
-          Click a contact on the map to see its identity, kinematics and how fresh its last fix is.
-        </p>
-      </div>
-    );
-  }
+  // With no selection this column used to be an apology in an otherwise empty
+  // 384px track. WorldPanel answers the question the operator opens with
+  // instead, from the same live sources. docs/plan-99-2026-08.md §2 W1.
+  if (!id) return <WorldPanel registry={registry} viewer={viewer ?? null} />;
 
   // Two selections have no Cesium entity behind them and own their whole
   // surface, exactly as the old panel routed them: a saved situation, and the

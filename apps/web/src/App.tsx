@@ -251,7 +251,7 @@ export function App(): JSX.Element {
     info: String(leftHomed.homed.get('info')?.length ?? 0),
   };
   const rightPanels: Partial<Record<RightPanelId, React.ReactNode>> = {
-    selection: <SelectionPanel viewer={viewer} />,
+    selection: <SelectionPanel registry={registry} viewer={viewer} />,
     series: <SeriesPanel viewer={viewer} />,
   };
 

@@ -30,6 +30,7 @@ import { setCameraMoving } from './cameraMotion.js';
 import { hasRenderNeed } from './renderNeeds.js';
 import { ChipLayer } from '../imagery/ChipLayer.js';
 import { backendUrl } from '../transport/http.js';
+import { globalAltitude } from './camera.js';
 
 interface Props {
   ionToken: string;
@@ -706,10 +707,11 @@ export function GlobeCanvas({
       (window as unknown as { __Cesium: typeof Cesium }).__Cesium = Cesium;
     }
 
-    // Default camera: high orbital view looking nearly straight down so the
-    // whole disk is in frame on first paint.
+    // Default camera: the disk fills the frame on first paint. Solved from the
+    // frustum (globalAltitude), not hardcoded — a fixed 20 Mm left 44% of the
+    // map black on a 16:9 window.
     viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(15, 30, 20_000_000),
+      destination: Cesium.Cartesian3.fromDegrees(15, 30, globalAltitude(viewer)),
       orientation: {
         heading: 0,
         pitch: Cesium.Math.toRadians(-85),
