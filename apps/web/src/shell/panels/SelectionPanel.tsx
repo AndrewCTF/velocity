@@ -20,6 +20,7 @@ import { AcarsCard } from '../../entity-panel/AcarsCard.js';
 import { AiAssessmentCard } from '../../entity-panel/AiAssessmentCard.js';
 import { AirportCard } from '../../entity-panel/AirportCard.js';
 import { AisGapCard } from '../../entity-panel/AisGapCard.js';
+import { SanctionsCard } from '../../entity-panel/SanctionsCard.js';
 import { ArchiveSeriesCard } from '../../entity-panel/ArchiveSeriesCard.js';
 import { BaseCard } from '../../entity-panel/BaseCard.js';
 import { CameraCard } from '../../entity-panel/CameraCard.js';
@@ -707,6 +708,23 @@ export function SelectionPanel({
           already tested; the rebuild's job was the grammar above, not a second
           implementation of these. */}
       <div className="ep-stack space-y-3 border-t border-line px-[14px] pt-3">
+        {/* First card in the stack, deliberately. A designation is the single
+            fact that changes what an analyst does with a contact, and the first
+            build put it below the profile, the actions and the pattern of life
+            where it was the most important thing on the panel and the last
+            thing anyone would see. Screening runs for EVERY hull and airframe,
+            not only the ones that arrived on the sanctions layer, because the
+            question is asked of the contact under the cursor. */}
+        {(isVessel || isAircraft) && (
+          <SanctionsCard
+            imo={num(p['imo'])}
+            mmsi={num(p['mmsi'])}
+            callSign={str(p['callSign'])}
+            name={isAircraft ? null : (snap?.name ?? str(p['name']))}
+            registration={isAircraft ? str(p['registration']) : null}
+          />
+        )}
+
         <ProfileCard enrichment={enrichment} snap={cardSnap} />
 
         {cardSnap && <FlightCard enrichment={enrichment} snap={cardSnap} />}
@@ -759,6 +777,7 @@ export function SelectionPanel({
         )}
 
         {isVessel && <AisGapCard mmsi={str(p['mmsi'])} />}
+
 
         {enrichment?.kind === 'airport' && <AirportCard enrichment={enrichment as AirportEnrichment} />}
 
