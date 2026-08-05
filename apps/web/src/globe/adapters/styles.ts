@@ -643,6 +643,10 @@ const HAZARD_COLORS: Record<string, string> = {
   buoy: '#60a5fa', // blue
   airquality: '#22c55e', // green (overridden by AQI band)
   aurora: '#34d399', // emerald
+  // OFAC-designated hull or airframe. Rose, not the alert red already spent on
+  // a GDACS red-alert tile, because a designation is a legal status and not an
+  // emergency and the two must not read as the same thing.
+  sanctioned: '#e11d48',
 };
 
 function aqiColor(aqi: number | null): string {
@@ -657,6 +661,8 @@ function aqiColor(aqi: number | null): string {
 
 function hazardGlyph(kind: string): string {
   switch (kind) {
+    case 'sanctioned': // barred circle
+      return '<circle cx="12" cy="12" r="6.4" fill="none" stroke="#2b0410" stroke-width="2"/><path d="M7.5 16.5 16.5 7.5" stroke="#2b0410" stroke-width="2" stroke-linecap="round"/>';
     case 'radiation': // trefoil
       return '<circle cx="12" cy="12" r="1.8" fill="#1a1400"/><path d="M12 12 5.8 8.4A7 7 0 0 1 12 5v7z" fill="#1a1400"/><path d="M12 12 18.2 8.4A7 7 0 0 0 12 5v7z" fill="#1a1400"/><path d="M12 12 12 19a7 7 0 0 0 6.2-3.6L12 12z" fill="#1a1400"/>';
     case 'volcano': // mountain with plume
@@ -686,7 +692,10 @@ function hazardSvg(kind: string, tile: string): string {
 }
 
 export function hazardStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
-  const kind = String(props['kind'] ?? '').toLowerCase();
+  // `style_kind` wins over `kind` so a feature can be drawn as one thing and
+  // RESOLVED as another. A designated tanker has to draw as a sanction and open
+  // as a vessel; folding both into `kind` would cost it its dossier.
+  const kind = String(props['style_kind'] ?? props['kind'] ?? '').toLowerCase();
   let tile = HAZARD_COLORS[kind] ?? '#f97316';
   let cacheKey = `hazard:${kind}`;
   if (kind === 'airquality') {
