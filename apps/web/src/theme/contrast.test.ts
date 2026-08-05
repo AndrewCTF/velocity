@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SCHEMES } from './schemes.js';
+import { BLUEPRINT_HEXES, BLUEPRINT_VERSION, blueprintName } from './blueprint.js';
 
 // WCAG-AA contrast guard (added 2026-07-13). The text ramp previously shipped
 // muted tiers that failed AA (dark txt-3 2.81:1, txt-4 1.71:1) while carrying
@@ -188,6 +189,62 @@ describe('scheme registry', () => {
         ratio(fg as string, tint(t['--bg-2'] as string)),
       );
       expect(worst, `${id}: ${tier} on the panel substrate and its own tint`).toBeGreaterThanOrEqual(AA);
+    }
+  });
+
+  // Rows hover, and a hovered row is where the muted tier lives. The live
+  // browser sweep cannot see this — a hover state is not in the DOM until
+  // something is hovered — and it hid a real failure: Daylight's `--hover`
+  // put gray1 at 4.39:1 on every hoverable row in the console.
+  it.each(SCHEMES.map((s) => [s.id] as const))('%s: text on a hovered row clears AA', (id) => {
+    const t = parseBlockResolved(selectorFor(id));
+    const hover = t['--hover'];
+    expect(hover, `${id}: --hover missing`).toBeTruthy();
+    for (const tier of ['--txt-1', '--txt-2', '--txt-3', '--txt-4']) {
+      expect(
+        ratio(t[tier] as string, hover as string),
+        `${id}: ${tier} on --hover`,
+      ).toBeGreaterThanOrEqual(AA);
+    }
+  });
+
+  // `blueprint: true` is a claim about where every colour came from. Without a
+  // check it is a name; with one it is a property. Two tokens are exempt and
+  // both are exempt for a reason stated in tokens.css: --hover, because on
+  // several of these substrates every in-ramp step failed the contrast floor
+  // (the call gotham.css already documents for the default), and the selection
+  // magenta, which is welded to the globe's selection polyline and is data.
+  const OFF_RAMP = /^--(hover|mag|mag-dim|mag-line|mag-fg|ink-dark|on-|sev-low|scroll-)/;
+  it.each(SCHEMES.filter((s) => s.blueprint).map((s) => [s.id] as const))(
+    `%s: every token is a published Blueprint ${BLUEPRINT_VERSION} swatch`,
+    (id) => {
+      const own = parseBlockRaw(selectorFor(id));
+      const strays: string[] = [];
+      for (const [name, value] of Object.entries(own)) {
+        if (OFF_RAMP.test(name)) continue;
+        if (!BLUEPRINT_HEXES.has(value.toLowerCase())) strays.push(`${name}: ${value}`);
+      }
+      expect(strays, `${id}: not in the Blueprint ramp -> ${strays.join(', ')}`).toEqual([]);
+    },
+  );
+
+  it('at least one scheme per family carries the Blueprint claim', () => {
+    for (const family of ['dark', 'light']) {
+      expect(
+        SCHEMES.some((s) => s.blueprint && s.family === family),
+        `no ${family} Blueprint scheme`,
+      ).toBe(true);
+    }
+  });
+
+  it('names the Blueprint swatch each substrate token uses, so a drift is readable', () => {
+    // Not an assertion so much as a record: if this ever prints something
+    // unexpected the palette moved. Kept as a check that the names resolve.
+    for (const s of SCHEMES.filter((x) => x.blueprint)) {
+      const t = parseBlockRaw(selectorFor(s.id));
+      for (const k of ['--bg-0', '--bg-1', '--bg-2', '--txt-0', '--accent']) {
+        expect(blueprintName(t[k] as string), `${s.id} ${k} = ${t[k]}`).toBeTruthy();
+      }
     }
   });
 

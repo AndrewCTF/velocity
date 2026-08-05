@@ -214,7 +214,10 @@
      every hoverable row in the light theme flashed near-black under the
      cursor. A scheme that overrides the substrate must override the hover that
      sits on it. */
-  --hover: #e3e8ee;
+  /* #e3e8ee put the muted tier at 4.39:1 — under the floor, on a surface every
+     hoverable row uses. A half step lighter clears it at 4.52:1. Hover states
+     are not in the DOM until hovered, so the live sweep could not see this. */
+  --hover: #e7ebf0;
   --sh-1: 0 1px 2px rgba(17, 20, 24, 0.10);
   --sh-2: 0 6px 22px rgba(17, 20, 24, 0.14);
   --sh-pop: 0 18px 50px rgba(17, 20, 24, 0.18);
@@ -494,6 +497,232 @@
   --on-warn: #ffffff;
 }
 
+/* Blueprint dark — blue3, the accent Blueprint and the reference both use.
+   Blueprint 5.1.16, published ramp only. The substrate is the arrangement measured
+   off the reference capture rather than the one this app defaults to: panels sit
+   on dark-gray2, "Gotham's real 64% surface" (docs/mockups/gotham/gotham.css),
+   one step LIGHTER than the default scheme's dark-gray1, with cards on
+   dark-gray3 above them. That lighter substrate costs the muted tier its
+   headroom, so the text ramp walks light-gray1 / gray5 / gray4 instead of
+   gray5 / gray4 / gray3: gray3 measures 4.35:1 on dark-gray3 and the floor wins.
+   Two tokens are deliberately off-ramp and the guard exempts both by name:
+   `--hover`, because every in-ramp step failed the floor (the same call
+   gotham.css already documents), and the selection magenta, which is welded to
+   the globe's selection polyline (apps/web/CLAUDE.md) and is data, not chrome. */
+:root[data-theme='bp-dark'] {
+  color-scheme: dark;
+  --bg-0: #111418;
+  --bg-1: #252a31;
+  --bg-2: #2f343c;
+  --bg-3: #383e47;
+  --bg-4: #404854;
+  --panel-bg: #252a31;
+  --line: rgba(255, 255, 255, 0.10);
+  --line-2: rgba(255, 255, 255, 0.18);
+  --txt-0: #ffffff;
+  --txt-1: #d3d8de;
+  --txt-2: #c5cbd3;
+  --txt-3: #abb3bf;
+  --txt-4: #abb3bf;
+  --accent: #2d72d2;
+  --accent-dim: rgba(45, 114, 210, 0.20);
+  --accent-line: rgba(45, 114, 210, 0.55);
+  --accent-fg: #8abbff;
+  --warn: #ec9a3c;
+  --warn-bg: rgba(236, 154, 60, 0.16);
+  --warn-line: rgba(236, 154, 60, 0.40);
+  --warn-fg: #fbb360;
+  --alert: #cd4246;
+  --alert-bg: rgba(205, 66, 70, 0.16);
+  --alert-line: rgba(205, 66, 70, 0.40);
+  --alert-fg: #fa999c;
+  --ok: #32a467;
+  --ok-bg: rgba(50, 164, 103, 0.16);
+  --ok-line: rgba(50, 164, 103, 0.38);
+  --ok-fg: #72ca9b;
+  --mag: #d946ef;
+  --mag-dim: rgba(217, 70, 239, 0.16);
+  --mag-line: rgba(217, 70, 239, 0.5);
+  --mag-fg: #f0a8f8;
+  --sev-low: #c5cbd3;
+  --on-accent: #ffffff;
+  --on-mag: var(--ink-dark);
+  --on-alert: #ffffff;
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
+  /* dark-gray4. One in-ramp step above the card, and the muted tier still
+     measures 5.10:1 on it, so no half-step is needed here. */
+  --hover: #383e47;
+  --cls-unclas-bg: #165a36;
+  --cls-unclas-fg: #72ca9b;
+  --cls-exercise-bg: #5c4405;
+  --cls-exercise-fg: #fbd065;
+}
+
+/* Blueprint turquoise — turquoise3 from the extended ramp, for operators who need blue to stay a data colour.
+   Same Blueprint 5.1.16 substrate as Blueprint dark; only the accent moves. */
+:root[data-theme='bp-turquoise'] {
+  color-scheme: dark;
+  --bg-0: #111418;
+  --bg-1: #252a31;
+  --bg-2: #2f343c;
+  --bg-3: #383e47;
+  --bg-4: #404854;
+  --panel-bg: #252a31;
+  --line: rgba(255, 255, 255, 0.10);
+  --line-2: rgba(255, 255, 255, 0.18);
+  --txt-0: #ffffff;
+  --txt-1: #d3d8de;
+  --txt-2: #c5cbd3;
+  --txt-3: #abb3bf;
+  --txt-4: #abb3bf;
+  --accent: #00a396;
+  --accent-dim: rgba(0, 163, 150, 0.20);
+  --accent-line: rgba(0, 163, 150, 0.55);
+  --accent-fg: #7ae1d8;
+  --warn: #ec9a3c;
+  --warn-bg: rgba(236, 154, 60, 0.16);
+  --warn-line: rgba(236, 154, 60, 0.40);
+  --warn-fg: #fbb360;
+  --alert: #cd4246;
+  --alert-bg: rgba(205, 66, 70, 0.16);
+  --alert-line: rgba(205, 66, 70, 0.40);
+  --alert-fg: #fa999c;
+  --ok: #32a467;
+  --ok-bg: rgba(50, 164, 103, 0.16);
+  --ok-line: rgba(50, 164, 103, 0.38);
+  --ok-fg: #72ca9b;
+  --mag: #d946ef;
+  --mag-dim: rgba(217, 70, 239, 0.16);
+  --mag-line: rgba(217, 70, 239, 0.5);
+  --mag-fg: #f0a8f8;
+  --sev-low: #c5cbd3;
+  --on-accent: var(--ink-dark);
+  --on-mag: var(--ink-dark);
+  --on-alert: #ffffff;
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
+  /* dark-gray4. One in-ramp step above the card, and the muted tier still
+     measures 5.10:1 on it, so no half-step is needed here. */
+  --hover: #383e47;
+  --cls-unclas-bg: #165a36;
+  --cls-unclas-fg: #72ca9b;
+  --cls-exercise-bg: #5c4405;
+  --cls-exercise-fg: #fbd065;
+}
+
+/* Blueprint indigo — indigo3, the hue this console already reserves for model output.
+   Same Blueprint 5.1.16 substrate as Blueprint dark; only the accent moves. */
+:root[data-theme='bp-indigo'] {
+  color-scheme: dark;
+  --bg-0: #111418;
+  --bg-1: #252a31;
+  --bg-2: #2f343c;
+  --bg-3: #383e47;
+  --bg-4: #404854;
+  --panel-bg: #252a31;
+  --line: rgba(255, 255, 255, 0.10);
+  --line-2: rgba(255, 255, 255, 0.18);
+  --txt-0: #ffffff;
+  --txt-1: #d3d8de;
+  --txt-2: #c5cbd3;
+  --txt-3: #abb3bf;
+  --txt-4: #abb3bf;
+  --accent: #7961db;
+  --accent-dim: rgba(121, 97, 219, 0.20);
+  --accent-line: rgba(121, 97, 219, 0.55);
+  --accent-fg: #bdadff;
+  --warn: #ec9a3c;
+  --warn-bg: rgba(236, 154, 60, 0.16);
+  --warn-line: rgba(236, 154, 60, 0.40);
+  --warn-fg: #fbb360;
+  --alert: #cd4246;
+  --alert-bg: rgba(205, 66, 70, 0.16);
+  --alert-line: rgba(205, 66, 70, 0.40);
+  --alert-fg: #fa999c;
+  --ok: #32a467;
+  --ok-bg: rgba(50, 164, 103, 0.16);
+  --ok-line: rgba(50, 164, 103, 0.38);
+  --ok-fg: #72ca9b;
+  --mag: #d946ef;
+  --mag-dim: rgba(217, 70, 239, 0.16);
+  --mag-line: rgba(217, 70, 239, 0.5);
+  --mag-fg: #f0a8f8;
+  --sev-low: #c5cbd3;
+  --on-accent: #ffffff;
+  --on-mag: var(--ink-dark);
+  --on-alert: #ffffff;
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
+  /* dark-gray4. One in-ramp step above the card, and the muted tier still
+     measures 5.10:1 on it, so no half-step is needed here. */
+  --hover: #383e47;
+  --cls-unclas-bg: #165a36;
+  --cls-unclas-fg: #72ca9b;
+  --cls-exercise-bg: #5c4405;
+  --cls-exercise-fg: #fbd065;
+}
+
+/* Blueprint light — Blueprint 5.1.16's light surface, published ramp only.
+   White panels on a light-gray4 app surface with light-gray5 cards, which is
+   Blueprint's own arrangement and a step darker at the app level than Daylight.
+   `--hover` is the one off-ramp token: light-gray2, the natural step, puts gray1
+   at 4.08:1 and light-gray3 at 4.40:1, both under the floor, so it takes a half
+   step to #e7ebf0 at 4.52:1 — the same solved-against-the-constraint move the
+   dark ramp's hover documents. The selection magenta is violet3 here rather
+   than the globe's polyline hue, because on a white panel that hue is chrome
+   the operator reads, not a line drawn over the map. */
+:root[data-theme='bp-light'] {
+  color-scheme: light;
+  --bg-0: #edeff2;
+  --bg-1: #ffffff;
+  --bg-2: #f6f7f9;
+  --bg-3: #e5e8eb;
+  --bg-4: #d3d8de;
+  --panel-bg: #ffffff;
+  --line: rgba(17, 20, 24, 0.10);
+  --line-2: rgba(17, 20, 24, 0.18);
+  --txt-0: #111418;
+  --txt-1: #1c2127;
+  --txt-2: #5f6b7c;
+  --txt-3: #5f6b7c;
+  --txt-4: #5f6b7c;
+  --accent: #215db0;
+  --accent-dim: rgba(33, 93, 176, 0.10);
+  --accent-line: rgba(33, 93, 176, 0.34);
+  --accent-fg: #184a90;
+  --warn: #935610;
+  --warn-bg: rgba(147, 86, 16, 0.12);
+  --warn-line: rgba(147, 86, 16, 0.40);
+  --warn-fg: #77450d;
+  --alert: #ac2f33;
+  --alert-bg: rgba(172, 47, 51, 0.12);
+  --alert-line: rgba(172, 47, 51, 0.40);
+  --alert-fg: #8e292c;
+  --ok: #1c6e42;
+  --ok-bg: rgba(28, 110, 66, 0.12);
+  --ok-line: rgba(28, 110, 66, 0.35);
+  --ok-fg: #165a36;
+  --mag: #9d3f9d;
+  --mag-dim: rgba(157, 63, 157, 0.12);
+  --mag-line: rgba(157, 63, 157, 0.45);
+  --mag-fg: #7c327c;
+  --sev-low: #1c2127;
+  --on-accent: #ffffff;
+  --on-mag: #ffffff;
+  --on-alert: #ffffff;
+  --on-ok: #ffffff;
+  --on-warn: #ffffff;
+  --hover: #e7ebf0;
+  --cls-unclas-bg: #d3d8de;
+  --cls-unclas-fg: #165a36;
+  --cls-exercise-bg: #edeff2;
+  --cls-exercise-fg: #77450d;
+  --sh-1: 0 1px 2px rgba(17, 20, 24, 0.10);
+  --sh-2: 0 6px 22px rgba(17, 20, 24, 0.14);
+  --sh-pop: 0 18px 50px rgba(17, 20, 24, 0.18);
+}
+
 /* ── Surfaces that are dark in every scheme ────────────────────────────────
    Two kinds of chrome do not follow the scheme, because what is behind them
    does not either: the map furniture (scale bar, cursor and centre readouts)
@@ -506,6 +735,9 @@
    light-family schemes; a dark scheme's own ramp is already correct and must
    not be overwritten with the default's greys. Map furniture is matched by the
    classes it already carries, so nothing in the globe layer had to change. */
+:root[data-theme='bp-light'] .on-dark,
+:root[data-theme='bp-light'] .map-foot-item,
+:root[data-theme='bp-light'] .map-foot-item-2,
 :root[data-theme='light'] .on-dark,
 :root[data-theme='light'] .map-foot-item,
 :root[data-theme='light'] .map-foot-item-2,
@@ -540,7 +772,8 @@
   --scroll-thumb-hover: rgba(255, 255, 255, 0.22);
 }
 :root[data-theme='light'],
-:root[data-theme='paper'] {
+:root[data-theme='paper'],
+:root[data-theme='bp-light'] {
   --scroll-thumb: rgba(17, 20, 24, 0.22);
   --scroll-thumb-hover: rgba(17, 20, 24, 0.36);
 }

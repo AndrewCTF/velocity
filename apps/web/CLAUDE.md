@@ -68,6 +68,19 @@ the decision deliberately by changing BOTH the guard and this file.
   necessary and not sufficient — it cannot see a tint, a pinned surface or a
   glyph used as a swatch. Baseline 2026-08-05: 7 schemes x 17 surfaces = 119
   sweeps, 42,478 text nodes, 0 failures.
+- The browser sweep is not sufficient EITHER: a hover state is not in the DOM
+  until something is hovered, and Daylight shipped a `--hover` putting the muted
+  tier at 4.39:1 that the sweep could not see. Hover is a token pairing, so the
+  token guard owns it. Composite ALPHA when you measure — reading a tint's hue
+  and dropping its alpha compares text against a colour never painted at
+  strength, and will report every scheme as broken.
+- The four `bp-*` schemes are Palantir's published Blueprint ramp
+  (`theme/blueprint.ts`, extracted from `@blueprintjs/colors@5.1.16` — the same
+  version the console's metrics are calibrated against). `blueprint: true` in
+  `schemes.ts` is a CHECKED claim: the guard rejects any token outside the
+  published set except `--hover` (no in-ramp step cleared the floor, the call
+  gotham.css already documents) and the selection magenta (welded to the globe
+  polyline, so it is data). Regenerate with the `npm pack` recipe in that file.
 
 ## Auth
 
