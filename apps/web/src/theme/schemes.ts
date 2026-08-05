@@ -12,7 +12,18 @@
 // value requires the scheme to already be applied, and a picker has to draw all
 // of them at once.
 
-export type SchemeId = 'dark' | 'midnight' | 'slate' | 'amber' | 'contrast' | 'light' | 'paper';
+export type SchemeId =
+  | 'dark'
+  | 'midnight'
+  | 'slate'
+  | 'amber'
+  | 'contrast'
+  | 'light'
+  | 'paper'
+  | 'bp-dark'
+  | 'bp-turquoise'
+  | 'bp-indigo'
+  | 'bp-light';
 
 export interface Scheme {
   id: SchemeId;
@@ -20,6 +31,10 @@ export interface Scheme {
   /** One line, stating when an operator would pick this one. */
   hint: string;
   family: 'dark' | 'light';
+  /** True when every token comes from Palantir's published Blueprint ramp.
+   *  `theme/contrast.test.ts` holds these to that claim swatch by swatch, so it
+   *  is a checked property rather than a name. */
+  blueprint?: true;
   swatch: { bg: string; panel: string; accent: string };
 }
 
@@ -72,6 +87,54 @@ export const SCHEMES: readonly Scheme[] = [
     hint: 'Warm light, print-adjacent, where Daylight reads clinical.',
     family: 'light',
     swatch: { bg: '#f7f3e9', panel: '#f2ede1', accent: '#1c5e8c' },
+  },
+
+  // ── Blueprint ─────────────────────────────────────────────────────────────
+  // Palantir's design system is published as Blueprint, and this console's
+  // grammar is already calibrated against it: `$pt-button-height: 30px` is what
+  // pins the whole metric scale, and the README records the ramp as "Blueprint
+  // 5.1.16 dark, with zero tokens outside it".
+  //
+  // The default scheme is close to that but not held to it — it has drifted a
+  // hover, a magenta and a couple of threat hues off-ramp. These four ARE held
+  // to it: `theme/blueprint.ts` carries the published swatches extracted from
+  // the package, and the guard fails on any token that is not one of them,
+  // apart from two exemptions it names.
+  //
+  // They are named for the design system, not for the products built on it.
+  // Blueprint is what these palettes actually are, and a picker full of product
+  // names would imply an affiliation this project does not have.
+  {
+    id: 'bp-dark',
+    label: 'Blueprint dark',
+    hint: "Palantir's published dark ramp, on the reference's own panel surface.",
+    family: 'dark',
+    blueprint: true,
+    swatch: { bg: '#111418', panel: '#2f343c', accent: '#2d72d2' },
+  },
+  {
+    id: 'bp-turquoise',
+    label: 'Blueprint turquoise',
+    hint: 'The same substrate, accented turquoise so blue stays a data colour.',
+    family: 'dark',
+    blueprint: true,
+    swatch: { bg: '#111418', panel: '#2f343c', accent: '#00a396' },
+  },
+  {
+    id: 'bp-indigo',
+    label: 'Blueprint indigo',
+    hint: 'The same substrate, accented with the hue reserved for model output.',
+    family: 'dark',
+    blueprint: true,
+    swatch: { bg: '#111418', panel: '#2f343c', accent: '#7961db' },
+  },
+  {
+    id: 'bp-light',
+    label: 'Blueprint light',
+    hint: "Palantir's published light surface: white panels on light grey.",
+    family: 'light',
+    blueprint: true,
+    swatch: { bg: '#edeff2', panel: '#f6f7f9', accent: '#215db0' },
   },
 ];
 
