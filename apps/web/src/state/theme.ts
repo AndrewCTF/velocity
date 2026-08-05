@@ -1,22 +1,31 @@
-// Light / dark theme for the chrome. Applied as `data-theme` on <html>; the
-// light palette is a token override scoped to the Normal dashboard's `.nrm`
-// root (see theme/tokens.css), so the globe canvas and the Professional COP are
-// unaffected. Persisted so the operator's choice survives reloads.
+// The console's colour scheme. Applied as `data-theme` on <html>; every scheme
+// is a complete token override in theme/tokens.css, so the whole chrome flips
+// while the Cesium globe canvas (not token-coloured) is unaffected. Persisted so
+// the operator's choice survives reloads.
+//
+// This used to be a two-value light/dark flag. It is now the scheme id from
+// theme/schemes.ts — `dark` and `light` keep their names, so a persisted value
+// written by the old store still resolves.
 import { create } from 'zustand';
 
-export type ThemeMode = 'dark' | 'light';
+import { isSchemeId, SCHEMES, type SchemeId } from '../theme/schemes.js';
+
+/** @deprecated The old two-value name. Kept as an alias so callers that only
+ *  care that this is "the theme" do not have to churn. */
+export type ThemeMode = SchemeId;
 
 const LS_KEY = 'velocity.theme';
 
-function read(): ThemeMode {
+function read(): SchemeId {
   try {
-    return localStorage.getItem(LS_KEY) === 'light' ? 'light' : 'dark';
+    const v = localStorage.getItem(LS_KEY);
+    return isSchemeId(v) ? v : 'dark';
   } catch {
     return 'dark';
   }
 }
 
-function apply(mode: ThemeMode): void {
+function apply(mode: SchemeId): void {
   try {
     document.documentElement.dataset.theme = mode;
   } catch {
@@ -24,7 +33,7 @@ function apply(mode: ThemeMode): void {
   }
 }
 
-function persist(mode: ThemeMode): void {
+function persist(mode: SchemeId): void {
   try {
     localStorage.setItem(LS_KEY, mode);
   } catch {
@@ -38,8 +47,10 @@ export function applyStoredTheme(): void {
 }
 
 interface ThemeState {
-  mode: ThemeMode;
-  setMode: (m: ThemeMode) => void;
+  mode: SchemeId;
+  setMode: (m: SchemeId) => void;
+  /** Steps to the next scheme in the list. Bound to the View menu's cycle item
+   *  so a scheme can be sampled without opening a picker. */
   toggle: () => void;
 }
 
@@ -52,7 +63,10 @@ export const useTheme = create<ThemeState>((set) => ({
   },
   toggle: () =>
     set((s) => {
-      const mode: ThemeMode = s.mode === 'dark' ? 'light' : 'dark';
+      const i = SCHEMES.findIndex((x) => x.id === s.mode);
+      const next = SCHEMES[(i + 1) % SCHEMES.length];
+      // Non-null by construction: SCHEMES is never empty.
+      const mode = (next as (typeof SCHEMES)[number]).id;
       persist(mode);
       apply(mode);
       return { mode };

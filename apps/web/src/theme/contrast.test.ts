@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { SCHEMES } from './schemes.js';
 
 // WCAG-AA contrast guard (added 2026-07-13). The text ramp previously shipped
 // muted tiers that failed AA (dark txt-3 2.81:1, txt-4 1.71:1) while carrying
@@ -53,10 +54,13 @@ const AA = 4.5;
 // not only disabled controls, so it is NOT WCAG-exempt).
 const TEXT_TIERS = ['--txt-0', '--txt-1', '--txt-2', '--txt-3', '--txt-4'] as const;
 
-describe.each([
-  [':root {', 'dark'],
-  [":root[data-theme='light'] {", 'light'],
-])('WCAG-AA text contrast — %s theme', (selector, _label) => {
+/** `dark` is the bare `:root` default; every other scheme is an attribute block. */
+const selectorFor = (id: string): string =>
+  id === 'dark' ? ':root {' : `:root[data-theme='${id}'] {`;
+
+describe.each(SCHEMES.map((s) => [selectorFor(s.id), s.id] as const))(
+  'WCAG-AA text contrast — %s theme',
+  (selector, _label) => {
   const tokens = parseBlock(selector);
   const tok = (name: string): string => {
     const v = tokens[name];
@@ -78,5 +82,43 @@ describe.each([
     const c = (t: string): number => ratio(tok(t), tok('--bg-1'));
     expect(c('--txt-2')).toBeGreaterThanOrEqual(c('--txt-3'));
     expect(c('--txt-3')).toBeGreaterThanOrEqual(c('--txt-4'));
+  });
+
+  // A scheme is a COMPLETE palette, not a delta. Two whole-substrate tokens
+  // were missed by the light theme when it shipped as one: `--hover` stayed at
+  // the dark value, so every hoverable row flashed near-black on white. Each
+  // scheme block must carry its own.
+  it('overrides the substrate-dependent tokens it sits on', () => {
+    // `dark` IS the default, so it defines them rather than overriding.
+    const body = CSS.slice(CSS.indexOf('{', CSS.indexOf(selector)), CSS.indexOf('}', CSS.indexOf('{', CSS.indexOf(selector))));
+    expect(body).toContain('--hover:');
+    expect(body).toContain('--panel-bg:');
+  });
+  },
+);
+
+// The picker and the palettes must not drift apart: a scheme listed in
+// schemes.ts with no CSS behind it renders as the previous scheme with a new
+// name, and a CSS block no entry points at is unreachable.
+describe('scheme registry', () => {
+  it('every listed scheme has a palette in tokens.css', () => {
+    for (const s of SCHEMES) expect(CSS).toContain(selectorFor(s.id));
+  });
+
+  it('every palette in tokens.css is listed', () => {
+    const inCss = [...CSS.matchAll(/:root\[data-theme='([\w-]+)'\]\s*\{/g)].map((m) => m[1]);
+    const listed = new Set<string>(SCHEMES.map((s) => s.id));
+    // The scrollbar rules group several ids in one selector; those repeat ids
+    // already listed, so a Set comparison is the right shape.
+    for (const id of new Set(inCss)) expect(listed.has(id as string)).toBe(true);
+  });
+
+  it('a swatch matches the palette it advertises', () => {
+    for (const s of SCHEMES) {
+      const tokens = parseBlock(selectorFor(s.id));
+      expect(tokens['--bg-0']?.toLowerCase()).toBe(s.swatch.bg.toLowerCase());
+      expect(tokens['--bg-2']?.toLowerCase()).toBe(s.swatch.panel.toLowerCase());
+      expect(tokens['--accent']?.toLowerCase()).toBe(s.swatch.accent.toLowerCase());
+    }
   });
 });

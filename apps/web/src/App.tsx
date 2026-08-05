@@ -8,6 +8,7 @@ import { AppSurface } from './shell/AppSurface.js';
 import { useAppView, APP_META } from './state/appView.js';
 import { useGeoScope } from './state/geoScope.js';
 import { useDashboardMode } from './state/dashboardMode.js';
+import { useTheme } from './state/theme.js';
 import {
   useImagery,
   useFeeds,
@@ -55,11 +56,11 @@ import { useAuth } from './auth/AuthContext.js';
 import { isSupabaseConfigured } from './transport/supabase.js';
 import { apiFetch, backendWsUrl, withWsKey } from './transport/http.js';
 import { Console } from './shell/Console.js';
+import { ActionBar } from './shell/ActionBar.js';
 import { REHOMED, type LeftPanelId, type RightPanelId } from './shell/panels.js';
 import { LayersPanel } from './shell/panels/LayersPanel.js';
 import { TimeDock } from './shell/TimeDock.js';
 import { TitleBar } from './shell/TitleBar.js';
-import { Icon } from './normal/Icon.js';
 import { HistogramPanel as FacetsPanel } from './shell/panels/HistogramPanel.js';
 import { InfoPanel } from './shell/panels/InfoPanel.js';
 import { FindPanel } from './shell/panels/FindPanel.js';
@@ -104,10 +105,26 @@ export function App(): JSX.Element {
   // the Inbox when new objects match. Idempotent; no-ops when no searches exist.
   useEffect(() => startSavedSearchPoller(), []);
 
-  // Global keyboard shortcut: `a` toggles the Alerts panel.
+  // Global keyboard shortcuts: `a` toggles the Alerts panel, `⇧T` steps to the
+  // next colour scheme. The View menu prints ⇧T beside that item, so it has to
+  // be bound here or the menu is naming a key that does nothing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        t instanceof HTMLSelectElement ||
+        (t instanceof HTMLElement && t.isContentEditable)
+      )
+        return;
+      if (e.shiftKey && (e.key === 'T' || e.key === 't')) {
+        e.preventDefault();
+        useTheme.getState().toggle();
+        return;
+      }
+      if (e.shiftKey) return;
       if (e.key === 'a' || e.key === 'A') setAlertsOpen((v) => !v);
     };
     window.addEventListener('keydown', onKey);
@@ -135,6 +152,11 @@ export function App(): JSX.Element {
   // here" (right-click) brings the Video app forward — instead of re-keying a tab.
   const setApp = useAppView((s) => s.setApp);
   const activeApp = useAppView((s) => s.app);
+  // The four named panels live beside the map, so a request for one from a
+  // full-bleed app has to bring the map back with it (see Console's
+  // `onPanelWhileBleed`). Stable identity so Console's key binding is not
+  // rebound on every render.
+  const goToMap = useCallback(() => setApp('map'), [setApp]);
   useEffect(() => {
     if (investigationOpenSeq > 0) setApp('graph');
   }, [investigationOpenSeq, setApp]);
@@ -250,6 +272,9 @@ export function App(): JSX.Element {
           />
         }
         bleed={APP_META[activeApp].chrome === 'full'}
+        // A full-bleed app owns the whole body, so the panel column it would
+        // open into is not mounted. Asking for a panel returns to the map.
+        onPanelWhileBleed={goToMap}
         overlay={<AppSurface viewer={viewer} />}
         initialPanel={initialPanel}
         leftPanels={leftPanels}
@@ -304,26 +329,7 @@ export function App(): JSX.Element {
         // the old 9-tab pile is redistributed: Investigation→Graph app, Intel/
         // News/Collab→Reports app, Ground→Video app, Filters/Field→rail flyouts,
         // Alerts→Inbox flyout. Selection context is shared across every app.
-        action={
-          <>
-            <button className="flex h-6 items-center gap-[6px] rounded-sm border border-line-2 px-[9px] text-[12px] text-txt-1 hover:bg-[var(--hover)]">
-              <Icon name="filter" className="h-3 w-3" />
-              Filter contact type
-              <Icon name="chevron-down" className="h-3 w-3" />
-            </button>
-            <span className="csl2-sentence">
-              Showing <b>all contact types</b> across <u>the current view</u>
-            </span>
-            <span className="flex-1" />
-            <button className="h-6 rounded-sm border border-line-2 px-[9px] text-[12px] text-txt-1 hover:bg-[var(--hover)]">
-              Clear selection
-            </button>
-            <button className="flex h-6 items-center gap-[6px] rounded-sm bg-accent px-[11px] text-[12px] text-white hover:brightness-110">
-              <Icon name="plus" className="h-3 w-3" />
-              Add to filter path
-            </button>
-          </>
-        }
+        action={<ActionBar />}
         dock={
           <ErrorBoundary label="TimeDock">
             <TimeDock viewer={viewer} />
@@ -797,7 +803,7 @@ export function ModeSurface({ viewer, registry }: { viewer: Cesium.Viewer | null
   const c = cfg[mode];
   return (
     <div
-      className={`absolute z-[var(--z-overlay)] flex flex-col border border-line-2 rounded-md shadow-2xl overflow-hidden ${c.box}`}
+      className={`on-dark absolute z-[var(--z-overlay)] flex flex-col border border-line-2 rounded-md shadow-2xl overflow-hidden ${c.box}`}
       style={{ background: 'rgba(9,12,18,0.97)', ...(c.railDocked && { left: railLeft }) }}
     >
       <div className="flex items-center justify-between px-3 h-9 flex-none border-b border-line-2 bg-bg-1">

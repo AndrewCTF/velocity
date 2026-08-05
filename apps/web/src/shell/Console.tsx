@@ -1,6 +1,7 @@
 import {
   Children,
   isValidElement,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -60,6 +61,16 @@ export interface ConsoleProps {
   overlay?: ReactNode;
   /** Full-bleed apps take the whole body and hide both rails. */
   bleed?: boolean;
+  /** Called when a panel is asked for while a full-bleed app has the body.
+   *
+   *  Without this the tab strip stayed rendered and clickable over Foundry, AI,
+   *  Workflows, City, Country and Markets — six of the fourteen apps — while
+   *  `bleed` had already removed the panel column, so all five tabs took the
+   *  selected state and showed nothing. Five dead controls in the most
+   *  prominent strip in the shell is the "chrome that lies" failure the menu
+   *  bar was fixed for; the strip is where an operator goes to get back to the
+   *  map, so asking for a panel now returns them to it. */
+  onPanelWhileBleed?: () => void;
 }
 
 const PANEL_ICON: Record<LeftPanelId, 'layers' | 'search' | 'chart' | 'info'> = {
@@ -86,9 +97,47 @@ export function Console({
   action,
   overlay,
   bleed = false,
+  onPanelWhileBleed,
 }: ConsoleProps): JSX.Element {
   const [left, setLeft] = useState<LeftPanelId | 'more'>(initialPanel);
   const [right, setRight] = useState<RightPanelId>('selection');
+
+  // Selecting a panel. In full-bleed the panel column does not exist, so the
+  // request also has to get the operator back to a surface that has one.
+  const openPanel = useCallback(
+    (id: LeftPanelId | 'more'): void => {
+      setLeft(id);
+      if (bleed) onPanelWhileBleed?.();
+    },
+    [bleed, onPanelWhileBleed],
+  );
+
+  // 1-4 select the four named panels, 5 the More parking lot. The Help menu has
+  // advertised "1-4 left panels" since the rebuild and nothing was ever
+  // listening, so the tooltip on every tab named a key that did nothing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        t instanceof HTMLSelectElement ||
+        (t instanceof HTMLElement && t.isContentEditable)
+      )
+        return;
+      const i = Number(e.key);
+      if (!Number.isInteger(i) || i < 1 || i > LEFT_PANELS.length + 1) return;
+      const target = LEFT_PANELS[i - 1]?.id ?? 'more';
+      if (target === 'more' && !extraCount) return;
+      e.preventDefault();
+      openPanel(target);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // openPanel closes over `bleed` and `onPanelWhileBleed`; rebind when either
+    // changes so the key never routes to a column that is no longer there.
+  }, [openPanel, extraCount]);
 
   const leftBody = left === 'more' ? extra : leftPanels[left];
   const rightBody = rightPanels[right];
@@ -166,9 +215,13 @@ export function Console({
             type="button"
             role="tab"
             className="csl2-tab"
-            aria-selected={left === p.id}
-            title={`${p.label} (${p.key})`}
-            onClick={() => setLeft(p.id)}
+            aria-selected={left === p.id && !bleed}
+            title={
+              bleed
+                ? `${p.label} (${p.key}) · returns to the map, which is where this panel lives`
+                : `${p.label} (${p.key})`
+            }
+            onClick={() => openPanel(p.id)}
           >
             <Icon name={PANEL_ICON[p.id]} className="h-3 w-3" />
             {p.label}
@@ -180,9 +233,9 @@ export function Console({
             type="button"
             role="tab"
             className="csl2-tab"
-            aria-selected={left === 'more'}
+            aria-selected={left === 'more' && !bleed}
             title="Surfaces not yet re-homed"
-            onClick={() => setLeft('more')}
+            onClick={() => openPanel('more')}
           >
             More<span className="csl2-badge">{extraCount}</span>
           </button>

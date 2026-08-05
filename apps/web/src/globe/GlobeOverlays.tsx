@@ -192,7 +192,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
 
       {/* compass — top-right, rotates with camera heading; hugs the live right rail */}
       <div
-        className="hidden md:flex absolute w-[34px] h-[34px] border border-line rounded-full items-center justify-center text-[10px] text-txt-2"
+        className="on-dark hidden md:flex absolute w-[34px] h-[34px] border border-line rounded-full items-center justify-center text-[10px] text-txt-2"
         style={{ background: 'rgba(8,10,15,0.5)', right: 'calc(var(--rail-right-w, 360px) + 12px)', top: 14 }}
         title={`heading ${headingDeg.toFixed(0)}°`}
       >
