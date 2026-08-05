@@ -115,3 +115,17 @@ export function blueprintName(hex: string): string | null {
   const want = hex.toLowerCase();
   return Object.entries(BLUEPRINT).find(([, v]) => v === want)?.[0] ?? null;
 }
+
+// Blueprint's `$pt-font-family`, verbatim from the same package version
+// (package/src/common/_variables.scss). Blueprint names no webfont: it asks for
+// the platform UI font and takes what it gets, which is why a Blueprint app
+// looks native on every OS. The one entry dropped is `$icons16-family`
+// ("blueprint-icons-16"), which is in the published list only to let inline
+// Blueprint icons resolve — this console does not ship that icon font, so
+// asking for it would be a request that can never be satisfied.
+export const BLUEPRINT_FONT_SANS =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", ' +
+  '"Ubuntu", "Cantarell", "Open Sans", "Helvetica Neue", sans-serif';
+
+/** `$pt-font-family-monospace` is the bare keyword; Blueprint names none. */
+export const BLUEPRINT_FONT_MONO = 'monospace';

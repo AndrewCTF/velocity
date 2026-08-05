@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SCHEMES } from './schemes.js';
-import { BLUEPRINT_HEXES, BLUEPRINT_VERSION, blueprintName } from './blueprint.js';
+import {
+  BLUEPRINT_FONT_MONO,
+  BLUEPRINT_FONT_SANS,
+  BLUEPRINT_HEXES,
+  BLUEPRINT_VERSION,
+  blueprintName,
+} from './blueprint.js';
 
 // WCAG-AA contrast guard (added 2026-07-13). The text ramp previously shipped
 // muted tiers that failed AA (dark txt-3 2.81:1, txt-4 1.71:1) while carrying
@@ -227,6 +233,39 @@ describe('scheme registry', () => {
       expect(strays, `${id}: not in the Blueprint ramp -> ${strays.join(', ')}`).toEqual([]);
     },
   );
+
+  // Colour is half a design system. Blueprint names no webfont — it asks for
+  // the platform UI font, which is why a Blueprint app looks native on every OS
+  // — and a Palantir theme that keeps the console's own Inter is wearing the
+  // palette over someone else's typeface. Compare token-for-token against the
+  // stack vendored from the same package version.
+  it.each(SCHEMES.filter((s) => s.blueprint).map((s) => [s.id] as const))(
+    '%s: carries Blueprint\'s published font stack',
+    (id) => {
+      const sel = selectorFor(id);
+      const open = CSS.indexOf('{', CSS.indexOf(sel));
+      const body = CSS.slice(open + 1, CSS.indexOf('\n}', open));
+      const decl = (name: string): string => {
+        const m = new RegExp(`--${name}:\\s*([^;]+);`).exec(body);
+        expect(m, `${id}: --${name} not set`).toBeTruthy();
+        return (m as RegExpExecArray)[1]!.replace(/\s+/g, ' ').replace(/'/g, '"').trim();
+      };
+      const want = BLUEPRINT_FONT_SANS.replace(/\s+/g, ' ').replace(/'/g, '"').trim();
+      expect(decl('font-sans'), `${id}: --font-sans is not $pt-font-family`).toBe(want);
+      // The label voice is the same grotesque, per the README: Palantir uses one
+      // refined face throughout rather than a condensed second one.
+      expect(decl('font-label'), `${id}: --font-label diverges from the body face`).toBe(want);
+      expect(decl('font-mono')).toBe(BLUEPRINT_FONT_MONO);
+    },
+  );
+
+  it('the vendored stack asks for no font the console does not ship', () => {
+    // `$icons16-family` is in the published list so inline Blueprint icons
+    // resolve. This console does not ship that icon font, so carrying the entry
+    // would be a request nothing can satisfy.
+    expect(BLUEPRINT_FONT_SANS).not.toContain('blueprint-icons');
+    expect(BLUEPRINT_FONT_SANS.endsWith('sans-serif')).toBe(true);
+  });
 
   it('at least one scheme per family carries the Blueprint claim', () => {
     for (const family of ['dark', 'light']) {
