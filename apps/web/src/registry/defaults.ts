@@ -746,6 +746,41 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     emits: ['outage'],
   },
 
+  // Orbital launches at their pads, last 7 days and upcoming. Registry tier:
+  // a launch manifest is an operator's declared schedule, not an observation.
+  {
+    id: 'space.launches',
+    group: 'space',
+    title: 'Launches · pads (Launch Library)',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/space/launches',
+    refresh: { mode: 'pull', ttlSec: 3600 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'The Space Devs (CC BY 4.0)',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['event'],
+  },
+  // Storm surge: observed water level minus the tide prediction for the same
+  // minute. The tide is known years ahead, so the residual is the weather.
+  {
+    id: 'oceans.surge',
+    group: 'env',
+    title: 'Storm surge · NOAA CO-OPS residual',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/oceans/surge',
+    refresh: { mode: 'pull', ttlSec: 900 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'NOAA CO-OPS (public domain)',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['event'],
+  },
+
   // ── SANCTIONS (2026-08-05) ──────────────────────────────────────────────
   // OFAC SDN joined onto the live AIS and ADS-B snapshots server-side: not a
   // list of designated ships, a list of designated ships that are MOVING right

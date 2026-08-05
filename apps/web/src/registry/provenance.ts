@@ -80,6 +80,7 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   'env.airquality': 'sensor',
   'maritime.buoys': 'sensor',
   'weather.spacewx.aurora': 'sensor',
+  'oceans.surge': 'sensor',
   // Fused warnings: GPS jamming, dark vessels, AIS gaps, emergency squawks.
   // Every input is a transponder or a radar image, so the fusion inherits the
   // tier of what it fuses. Derivation does not demote.
@@ -112,6 +113,9 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   'infra.ground_stations': 'registry',
   'infra.telescopes': 'registry',
   'infra.launch': 'registry',
+  // A launch manifest is an operator's declared schedule, not an observation of
+  // a rocket. It becomes sensor data the moment CelesTrak catalogues the object.
+  'space.launches': 'registry',
 
   // ── filing ───────────────────────────────────────────────────────────────
   'hazards.nws.alerts': 'filing',

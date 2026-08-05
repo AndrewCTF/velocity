@@ -291,6 +291,91 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           ))
         )}
       </section>
+
+      <SpaceWeather />
     </div>
+  );
+}
+
+/** NOAA SWPC, in the panel that answers "what is the system doing".
+ *
+ *  It belongs here rather than on the map because it has no position: Kp and the
+ *  GOES X-ray class are planet-wide scalars. They are in the console at all
+ *  because both sit UPSTREAM of feeds already on it — Kp degrades GNSS accuracy,
+ *  which is what the jamming layer infers from, and the X-ray class drives HF
+ *  blackouts. A quiet reading is the context that stops a degraded feed from
+ *  being read as an event. */
+function SpaceWeather(): JSX.Element {
+  const [wx, setWx] = useState<{
+    kp?: { kp: number; band: string; at: string };
+    xray?: { current_class?: string; max_class?: string };
+    reached?: string[];
+  } | null>(null);
+  const [err, setErr] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async (): Promise<void> => {
+      try {
+        const r = await apiFetch('/api/env/spaceweather');
+        if (cancelled) return;
+        if (!r.ok) {
+          setErr(r.status);
+          return;
+        }
+        setErr(null);
+        setWx(await r.json());
+      } catch {
+        if (!cancelled) setErr(0);
+      }
+    };
+    void poll();
+    const t = window.setInterval(() => void poll(), 300_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, []);
+
+  const stormy = (wx?.kp?.kp ?? 0) >= 5;
+  return (
+    <section aria-label="Space weather">
+      <div className="mt-3 flex h-[26px] items-center gap-[6px] border-t border-line px-[14px] pt-[6px]">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.6px] text-txt-2">
+          Space weather
+        </span>
+        <span className="flex-1" />
+        <span className="mono text-[12px] tabular-nums text-txt-3">
+          {err !== null ? '—' : (wx?.kp?.band ?? '…')}
+        </span>
+      </div>
+      {err !== null ? (
+        <p className="px-[14px] py-[6px] text-[12px] text-txt-2">
+          Space weather unavailable {err ? `(HTTP ${err})` : ''}
+        </p>
+      ) : (
+        <>
+          <div className="flex h-[var(--g-row-2)] items-center gap-2 px-[14px]">
+            <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">Planetary Kp</span>
+            <span
+              className={`mono shrink-0 text-[12px] tabular-nums ${stormy ? 'text-warn-fg' : 'text-txt-0'}`}
+            >
+              {wx?.kp ? wx.kp.kp.toFixed(1) : '—'}
+            </span>
+          </div>
+          <div className="flex h-[var(--g-row-2)] items-center gap-2 px-[14px]">
+            <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">GOES X-ray</span>
+            <span className="mono shrink-0 text-[12px] tabular-nums text-txt-0">
+              {wx?.xray?.current_class ?? '—'}
+            </span>
+          </div>
+          <p className="px-[14px] pb-[6px] pt-[2px] text-[12px] leading-relaxed text-txt-3">
+            {stormy
+              ? 'GNSS accuracy and HF propagation are degraded. A jamming reading in this window has a second explanation.'
+              : 'Quiet. A GNSS or HF degradation right now is not space weather.'}
+          </p>
+        </>
+      )}
+    </section>
   );
 }

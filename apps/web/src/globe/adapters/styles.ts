@@ -651,6 +651,12 @@ const HAZARD_COLORS: Record<string, string> = {
   // announced prefixes are below its own normal", which is a measurement, and
   // the severity is in the property rather than in the colour.
   routing: '#64748b',
+  // An orbital launch at its pad. Indigo, distinct from every hazard hue: a
+  // launch is a scheduled event, not a warning.
+  launch: '#818cf8',
+  // Storm surge: observed water level minus the tide prediction. Cyan, and the
+  // magnitude lives in residual_m rather than in the colour.
+  surge: '#22d3ee',
 };
 
 function aqiColor(aqi: number | null): string {
@@ -665,6 +671,10 @@ function aqiColor(aqi: number | null): string {
 
 function hazardGlyph(kind: string): string {
   switch (kind) {
+    case 'launch': // rocket on a pad
+      return '<path d="M12 4c2.2 2 3.2 4.6 3.2 7.2L12 15l-3.2-3.8C8.8 8.6 9.8 6 12 4z" fill="#141a3a"/><path d="M9.2 13 7 17l3-1M14.8 13 17 17l-3-1" stroke="#141a3a" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="12" cy="9.5" r="1.2" fill="#818cf8"/>';
+    case 'surge': // wave over a datum line
+      return '<path d="M4 15q3-3 6 0t6 0 4-1" stroke="#04262c" stroke-width="1.9" fill="none" stroke-linecap="round"/><path d="M4 19h16" stroke="#04262c" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2 2"/>';
     case 'routing': // broken link
       return '<path d="M9.5 9.5 7 12a3.5 3.5 0 0 0 5 5l1.2-1.2" stroke="#0b1220" stroke-width="1.9" fill="none" stroke-linecap="round"/><path d="M14.5 14.5 17 12a3.5 3.5 0 0 0-5-5l-1.2 1.2" stroke="#0b1220" stroke-width="1.9" fill="none" stroke-linecap="round"/><path d="M4 20 20 4" stroke="#0b1220" stroke-width="1.5" stroke-linecap="round"/>';
     case 'sanctioned': // barred circle
