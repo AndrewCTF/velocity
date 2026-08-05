@@ -134,6 +134,11 @@ function flagFromMmsi(mmsi: string | number): string | null {
 // labelled "military" filters exactly the icons drawn as military.
 export interface EntityFacets {
   kind: 'aircraft' | 'vessel' | 'other';
+  /** Provenance tier, derived from the feed's own `tier` stamp. Null when the
+   *  contact does not carry one: an unknown tier is not a tier, and bucketing
+   *  it as `sensor` would be the exact laundering the tier model exists to
+   *  prevent. */
+  tier: string | null;
   altBucket: string | null;
   aircraftCategory: string | null;
   vesselType: string | null;
@@ -161,8 +166,15 @@ export function deriveFacets(props: Record<string, unknown>): EntityFacets {
     if (typeof mmsi === 'number' || typeof mmsi === 'string') flag = flagFromMmsi(mmsi);
   }
 
+  const rawTier = props['tier'];
+  const tier =
+    typeof rawTier === 'string' && ['sensor', 'registry', 'filing', 'claim'].includes(rawTier)
+      ? rawTier
+      : null;
+
   return {
     kind,
+    tier,
     altBucket: kind === 'aircraft' ? altBucketId(props) : null,
     aircraftCategory,
     vesselType,
@@ -186,6 +198,8 @@ export function facetResolver(f: EntityFacets): FacetResolver {
         return f.flag ? [f.flag] : [];
       case 'squawk':
         return f.squawks;
+      case 'tier':
+        return f.tier ? [f.tier] : [];
       default:
         return [];
     }
@@ -244,6 +258,7 @@ export const VES_TYPE_LABELS: Record<string, string> = {
 };
 
 export function bucketLabel(facet: FilterFacet, value: string): string {
+  if (facet === 'tier') return TIER_LABELS[value] ?? value;
   if (facet === 'altBucket') return ALT_LABELS[value] ?? value;
   if (facet === 'aircraftCategory') return AC_CAT_LABELS[value] ?? value;
   if (facet === 'vesselType') return VES_TYPE_LABELS[value] ?? value;
@@ -259,8 +274,17 @@ export interface FacetTally {
   vesType: Map<string, number>;
   flag: Map<string, number>;
   squawk: Map<string, number>;
+  tier: Map<string, number>;
   counted: number;
 }
+
+const TIER_LABELS: Record<string, string> = {
+  sensor: 'T0 · Sensor',
+  registry: 'T1 · Registry',
+  filing: 'T2 · Filing',
+  claim: 'T3 · Claim',
+};
+const TIER_ORDER_IDS = ['sensor', 'registry', 'filing', 'claim'];
 
 export function newFacetTally(): FacetTally {
   return {
@@ -269,6 +293,7 @@ export function newFacetTally(): FacetTally {
     vesType: new Map(),
     flag: new Map(),
     squawk: new Map(),
+    tier: new Map(),
     counted: 0,
   };
 }
@@ -281,6 +306,19 @@ function bump(m: Map<string, number>, k: string | null): void {
 // Classify one property bag and fold it into the tally. Mirrors the old
 // HistogramPanel.aggregate inner body exactly — 'other' kinds are scenery and
 // don't count.
+/** Count one contact's provenance tier.
+ *
+ *  Separate from `tallyFacets` because it has to run for entities that never
+ *  reach it. The walk skips any entity whose property bag is empty, which is
+ *  every billboard-only feature, and the GDELT conflict layer is exactly that:
+ *  452 entities on screen, zero of them counted, so the histogram that exists to
+ *  expose claim-tier sources could not see the only claim-tier source that was
+ *  on. The tier comes from the DataSource name, not from the bag, so it does not
+ *  need the bag at all. */
+export function tallyTier(t: FacetTally, tier: string | null | undefined): void {
+  bump(t.tier, tier ?? null);
+}
+
 export function tallyFacets(t: FacetTally, props: Record<string, unknown>): void {
   const f = deriveFacets(props);
   if (f.kind === 'other') return;
@@ -326,5 +364,10 @@ export function buildHistograms(t: FacetTally): Histogram[] {
     { facet: 'vesselType', title: 'Vessel type', buckets: sortedBuckets(t.vesType, VES_TYPE_LABELS), total: sum(t.vesType) },
     { facet: 'flag', title: 'Flag (derived)', buckets: sortedBuckets(t.flag).slice(0, 12), total: sum(t.flag) },
     { facet: 'squawk', title: 'Squawk', buckets: sortedBuckets(t.squawk).slice(0, 12), total: sum(t.squawk) },
+    // Provenance last in the list and first in importance. It is the one facet
+    // that is about the SOURCE rather than the object, and putting it in the
+    // cross-filter is what turns the tier from a label into a question the
+    // operator can ask of the map: show me only what an instrument saw.
+    { facet: 'tier', title: 'Provenance', buckets: sortedBuckets(t.tier, TIER_LABELS, TIER_ORDER_IDS), total: sum(t.tier) },
   ];
 }

@@ -295,7 +295,8 @@ export type FilterFacet =
   | 'aircraftCategory' // airliner | private | helicopter | glider | military | emergency
   | 'vesselType' // cargo | tanker | fishing | passenger | military | sailing | pleasure | tug | sar | generic
   | 'flag' // ISO-ish country/flag code derived client-side (ICAO24 block / MMSI MID)
-  | 'squawk'; // 4-digit Mode-A code (or an 'emergency' bucket)
+  | 'squawk' // 4-digit Mode-A code (or an 'emergency' bucket)
+  | 'tier'; // provenance: sensor | registry | filing | claim
 
 // One filter clause. `mode:'only'` = an entity must match this value to pass;
 // `mode:'not'` = an entity matching this value fails. Multiple clauses combine

@@ -48,6 +48,7 @@ import { useSelection, useFilters } from '../../state/stores.js';
 import { useSettings } from '../../state/settings.js';
 import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
 import { apiFetch, withWsKey } from '../../transport/http.js';
+import { tierOf } from '../../registry/provenance.js';
 
 // Alpha applied to a billboard the active map-side filter (useFilters /
 // HistogramPanel) excludes. The icon stays DRAWN (same SVG image, same
@@ -1764,7 +1765,15 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel')
     ) {
       const clauses = activeFilterClauses();
-      if (clauses.length > 0 && !entityPassesFilter(props, clauses)) {
+      // The provenance tier belongs to the LAYER, not to any feature, so it is
+      // not in the property bag and never will be. Injecting it here is what
+      // lets a `tier` clause dim contacts the same way a category clause does;
+      // without it the Provenance facet would be a histogram nobody could act on.
+      const withTier =
+        clauses.some((c) => c.facet === 'tier')
+          ? { ...props, tier: tierOf(this.props.ctx.descriptor.id) }
+          : props;
+      if (clauses.length > 0 && !entityPassesFilter(withTier, clauses)) {
         const base =
           opts.billboard.color instanceof Cesium.Color
             ? opts.billboard.color

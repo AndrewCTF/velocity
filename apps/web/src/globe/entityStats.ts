@@ -25,9 +25,11 @@ import { isCameraMoving } from './cameraMotion.js';
 import {
   newFacetTally,
   tallyFacets,
+  tallyTier,
   buildHistograms,
   type Histogram,
 } from '../explorer/facets.js';
+import { tierOf } from '../registry/provenance.js';
 
 export interface EntityStats {
   histograms: Histogram[];
@@ -103,6 +105,10 @@ function sampleOnce(): void {
 
     for (let d = 0; d < viewer.dataSources.length; d++) {
       const ds = viewer.dataSources.get(d);
+      // The tier belongs to the SOURCE, not to the contact, so it is not in any
+      // feature's property bag and cannot be. The DataSource name IS the layer
+      // id, which is the only place in this walk where the two meet.
+      const dsTier = tierOf(ds.name);
       for (const e of ds.entities.values) {
         // AOI bbox test — every entity that resolves a position counts, exactly
         // like the old countInAoi (kind-agnostic).
@@ -118,6 +124,10 @@ function sampleOnce(): void {
             }
           }
         }
+
+        // Provenance first, and unconditionally. Everything below this line can
+        // skip an entity for a reason that has nothing to do with its source.
+        tallyTier(tally, dsTier);
 
         // Facet tally — read the property bag once and classify (aircraft/vessel
         // only; scenery is skipped inside tallyFacets).
