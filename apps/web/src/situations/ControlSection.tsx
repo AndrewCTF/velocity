@@ -145,7 +145,16 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
               facId === f.id ? 'border-accent-line bg-accent-dim text-txt-0' : 'border-line text-txt-2 hover:text-txt-0'
             }`}
           >
-            <span style={{ color: f.color }} aria-hidden>■</span>
+            {/* A swatch, not a glyph. As a `■` in the faction's own colour it
+                was text, so it inherited the text contrast bar and failed it:
+                measured 1.70:1 on the Paper scheme's card, i.e. invisible. The
+                colour is DATA and must not change, so the shape carries its own
+                hairline ring instead and stays legible at any luminance. */}
+            <span
+              aria-hidden
+              className="inline-block h-[9px] w-[9px] shrink-0 rounded-[1px] ring-1 ring-inset ring-line-2"
+              style={{ background: f.color }}
+            />
             {f.name}
           </button>
         ))}

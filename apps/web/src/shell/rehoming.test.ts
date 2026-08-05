@@ -51,6 +51,9 @@ const ADDRESS: Record<string, { component: string; file: string }> = {
   countries: { component: 'CountriesPanel', file: 'shell/AppSurface.tsx' },
   answers: { component: 'AnswersCard', file: 'ai/AiHubApp.tsx' },
   cop: { component: 'CopEditor', file: 'App.tsx' },
+  // These five used to be listed here AND mounted a second time in App.tsx's
+  // `pending` parking lot. The parking lot is gone, so the address below is now
+  // the only place each renders — which is what this test was always claiming.
   investigation: { component: 'InvestigationCanvas', file: 'shell/AppSurface.tsx' },
   news: { component: 'NewsPanel', file: 'reports/ReportsApp.tsx' },
   ground: { component: 'GroundReconPanel', file: 'fmv/VideoApp.tsx' },
@@ -59,6 +62,10 @@ const ADDRESS: Record<string, { component: string; file: string }> = {
   inbox: { component: 'InboxPanel', file: 'App.tsx' },
   alerts: { component: 'AlertsPanel', file: 'App.tsx' },
   collab: { component: 'CollabPanel', file: 'reports/ReportsApp.tsx' },
+  // Info, not the dossier. IntelPanel takes no selection, so the recorded
+  // "section of the dossier" home could never be filled and it fell through to
+  // More. It is a railItem now, so byHome puts it in Info with the other
+  // what-is-happening surfaces. See panels.ts.
   intel: { component: 'IntelPanel', file: 'App.tsx' },
 };
 
@@ -81,6 +88,25 @@ describe('re-homed surfaces are actually rendered', () => {
   // rollup. The first rebuild carried over only the first, and the address check
   // above cannot see that, because <InfoPanel> was rendered either way. A
   // merged home has to be checked section by section.
+  // The parking lot let a surface be "reachable" without being at its address,
+  // which is the failure this whole file exists to catch, one level along: five
+  // of its six entries were a second copy of something already homed, and the
+  // sixth (Intel) was the only thing keeping its own address honest.
+  it('mounts each re-homed surface once, not also in a parking lot', () => {
+    const app = src('App.tsx');
+    for (const dup of ['InvestigationCanvas', 'CollabPanel', 'NewsPanel', 'GroundReconPanel', 'AlertsRailList']) {
+      expect(
+        new RegExp(`<${dup}[\\s/>]`).test(app),
+        `${dup} is rendered by App.tsx as well as at its recorded address`,
+      ).toBe(false);
+    }
+  });
+
+  it('Intel lands in Info, the panel that answers what is happening', () => {
+    const app = src('App.tsx');
+    expect(app).toMatch(/id: 'intel'[^\n]*<IntelPanel/);
+  });
+
   it('keeps both halves of the old Ops panel in Info', () => {
     const info = src('shell/panels/InfoPanel.tsx');
     expect(info).toContain('AOI watch');

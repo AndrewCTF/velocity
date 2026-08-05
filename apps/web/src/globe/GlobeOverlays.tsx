@@ -179,7 +179,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       {/* category legend — top-left, hugs the live left rail (icon rail = 44px,
           resizable rail otherwise) via --rail-left-w so it never leaves a gap. */}
       <div
-        className="hidden md:flex absolute flex-col gap-1 text-[10px] text-txt-3"
+        className="on-dark hidden md:flex absolute flex-col gap-1 text-[10px] text-txt-3"
         style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)', top: 14 }}
       >
         {LEGEND.map((l) => (

@@ -25,10 +25,7 @@ import { startSavedSearchPoller } from './state/savedSearches.js';
 import { ChokepointsList } from './layer-rail/ChokepointsList.js';
 import { AcarsPanel } from './acars/AcarsPanel.js';
 import { IntelPanel } from './entity-panel/IntelPanel.js';
-import { InvestigationCanvas } from './graph/InvestigationCanvas.js';
 import { useInvestigation } from './graph/investigationStore.js';
-import { CollabPanel } from './collab/CollabPanel.js';
-import { NewsPanel } from './news-panel/NewsPanel.js';
 import { TaskingPanel } from './tasking/TaskingPanel.js';
 import { TargetKanbanPanel } from './target-kanban/TargetKanbanPanel.js';
 import { FmvPanel } from './fmv/FmvPanel.js';
@@ -43,12 +40,10 @@ import { CopEditor } from './cop/CopEditor.js';
 import { Omnibar } from './command-bar/Omnibar.js';
 import { ContextMenu } from './globe/ContextMenu.js';
 import { ImageryDiffPopup } from './imagery/ImageryDiff.js';
-import { GroundReconPanel } from './ground/GroundReconPanel.js';
 import { useGround } from './ground/groundStore.js';
 import { fetchRuntimeConfig } from './transport/config.js';
 import { AlertSubscriber } from './alerts/AlertSubscriber.js';
 import { AlertsPanel } from './alerts/AlertsPanel.js';
-import { AlertsRailList } from './alerts/AlertsRailList.js';
 import { SimulationOverlay } from './sim/SimulationOverlay.js';
 import { ErrorBoundary } from './shell/ErrorBoundary.js';
 import { Link } from 'react-router-dom';
@@ -195,6 +190,11 @@ export function App(): JSX.Element {
       { id: 'chokepoints', icon: 'route', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} />, group: 'more' },
       { id: 'acars', icon: 'signal', label: 'ACARS', content: <AcarsPanel />, group: 'more' },
       { id: 'filters', icon: 'filter', label: 'Filters', content: <FacetsPanel viewer={viewer} />, group: 'more' },
+      // Intel sits in Info with the other "what is happening" surfaces. It was
+      // recorded as a dossier section, which it cannot be — it takes no
+      // selection — so it fell through byHome into the More parking lot and
+      // stayed there. See panels.ts.
+      { id: 'intel', icon: 'crosshair', label: 'Intel', content: <IntelPanel viewer={viewer} />, group: 'more' },
     ],
     [registry, viewer],
   );
@@ -236,22 +236,20 @@ export function App(): JSX.Element {
     histogram: leftHomed.homed.get('histogram'),
     info: leftHomed.homed.get('info'),
   };
-  // Not yet re-homed. Listed in docs/mockups/console-2026-08/WIRING.md; parked
-  // under "More" so no surface is unreachable while the wiring proceeds.
-  const pending: Array<{ id: string; label: string; content: React.ReactNode }> = [
-    { id: 'intel', label: 'Intel', content: <IntelPanel viewer={viewer} /> },
-    { id: 'investigation', label: 'Investigation', content: <InvestigationCanvas /> },
-    { id: 'collab', label: 'Collab', content: <CollabPanel /> },
-    { id: 'alerts', label: 'Alerts', content: <AlertsRailList viewer={viewer} /> },
-    { id: 'news', label: 'News', content: <NewsPanel /> },
-    { id: 'ground', label: 'Ground recon', content: <GroundReconPanel viewer={viewer} /> },
-  ];
+  // The More parking lot is gone. It held six surfaces, five of which were a
+  // SECOND copy of something already at its recorded address — Investigation in
+  // the Graph app, Collab and News in Reports, Ground recon in Video, and the
+  // alert rail list beside the alerts drawer that is the recorded home. A
+  // parking lot that duplicates five homed surfaces is not insurance against
+  // losing them; it is a second place to find a stale one. Intel was the only
+  // genuinely unhomed surface and now sits in Info.
+  //
+  // `shell/rehoming.test.ts` names the file that must render each of the six
+  // and fails if any address goes empty, which is the check the parking lot was
+  // standing in for.
   const leftBadges: Partial<Record<LeftPanelId, string>> = {
     info: String(leftHomed.homed.get('info')?.length ?? 0),
   };
-  // `time` stays unwired on purpose: the TimeDock below already owns playback
-  // and the scrub range, and a third tab repeating it would be the duplicate
-  // surface the rebuild exists to remove.
   const rightPanels: Partial<Record<RightPanelId, React.ReactNode>> = {
     selection: <SelectionPanel viewer={viewer} />,
     series: <SeriesPanel viewer={viewer} />,
@@ -279,12 +277,15 @@ export function App(): JSX.Element {
         initialPanel={initialPanel}
         leftPanels={leftPanels}
         leftBadges={leftBadges}
-        extra={[...leftHomed.rest, ...pending].map((it) => (
+        // `leftHomed.rest` is anything panels.ts has no record for at all. It
+        // is empty today and the More tab does not render; the escape hatch
+        // stays so a new rail item cannot be added and silently lost.
+        extra={leftHomed.rest.map((it) => (
           <section key={it.id} aria-label={it.label}>
             {it.content}
           </section>
         ))}
-        extraCount={leftHomed.rest.length + pending.length}
+        extraCount={leftHomed.rest.length}
         rightPanels={rightPanels}
         map={
           error ? (

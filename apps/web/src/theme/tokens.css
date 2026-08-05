@@ -51,6 +51,10 @@
   --ok: #32a467;
   --ok-bg: rgba(50, 164, 103, 0.16);
   --ok-line: rgba(50, 164, 103, 0.38);
+  /* ok "foreground" — the lightened tier --ok never had, while warn, alert
+     and accent all did. `text-ok` therefore rendered the raw FILL as text and
+     measured 3.85:1 on its own --ok-bg tint (the "installed" model badge). */
+  --ok-fg: #7ddba4;
   /* accent "foreground" — lightened accent text on an --accent-dim tint. */
   --accent-fg: #8abbff;
   /* magenta — selection / correlation lineage (matches the globe selection
@@ -62,6 +66,22 @@
   /* Low severity — kept distinct from the selection accent so a "low" alert
      badge doesn't read as "selected". Mirrors --txt-1. */
   --sev-low: #c5cbd3;
+
+  /* ── Ink on a SOLID fill ─────────────────────────────────────────────────
+     Text sitting on --accent / --mag / --alert / --ok / --warn was a literal
+     `text-white` everywhere. That is only legible when the fill is dark, and
+     half the fills are not: measured in the browser, white on Night watch's
+     amber accent is 2.14:1 and on High contrast's magenta 2.34:1, both far
+     under AA on live controls (the Pause button, the speed multiplier, the
+     timeline cursor label). The readable ink is a property of the FILL, so it
+     is a token per fill and each scheme states its own.
+     → theme/contrast.test.ts holds every pair to AA. */
+  --ink-dark: #0d0f12;
+  --on-accent: #ffffff;
+  --on-mag: var(--ink-dark);
+  --on-alert: #ffffff;
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
 
   /* ── Structural metrics, measured against the reference (2026-08-02).
      Derivation and the calibration that produced them:
@@ -178,6 +198,7 @@
   --ok: #1c6e42;
   --ok-bg: rgba(31, 157, 107, 0.12);
   --ok-line: rgba(31, 157, 107, 0.35);
+  --ok-fg: #125c34;
   --mag: #b13fc4;
   --mag-dim: rgba(177, 63, 196, 0.12);
   --mag-line: rgba(177, 63, 196, 0.45);
@@ -197,6 +218,11 @@
   --sh-1: 0 1px 2px rgba(17, 20, 24, 0.10);
   --sh-2: 0 6px 22px rgba(17, 20, 24, 0.14);
   --sh-pop: 0 18px 50px rgba(17, 20, 24, 0.18);
+  --on-accent: #ffffff;
+  --on-mag: #ffffff;
+  --on-alert: #ffffff;
+  --on-ok: #ffffff;
+  --on-warn: #ffffff;
 }
 
 /* ── Additional colour schemes ─────────────────────────────────────────────
@@ -242,6 +268,7 @@
   --ok: #2ea36a;
   --ok-bg: rgba(46, 163, 106, 0.16);
   --ok-line: rgba(46, 163, 106, 0.38);
+  --ok-fg: #79d9a5;
   --mag: #d472f5;
   --mag-dim: rgba(212, 114, 245, 0.16);
   --mag-line: rgba(212, 114, 245, 0.50);
@@ -252,6 +279,11 @@
   --cls-unclas-fg: #7fe3b3;
   --cls-exercise-bg: #33280a;
   --cls-exercise-fg: #f5c451;
+  --on-accent: var(--ink-dark);
+  --on-mag: var(--ink-dark);
+  --on-alert: var(--ink-dark);
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
 }
 
 /* Slate — neutral graphite with a teal accent. For operators who read blue as
@@ -279,13 +311,16 @@
   --warn-bg: rgba(224, 160, 47, 0.16);
   --warn-line: rgba(224, 160, 47, 0.40);
   --warn-fg: #f2bc63;
-  --alert: #d4494d;
-  --alert-bg: rgba(212, 73, 77, 0.16);
-  --alert-line: rgba(212, 73, 77, 0.40);
+  /* Lifted from #d4494d: dark ink measured 4.40:1 on it, under AA. */
+  --alert: #e05a5e;
+  --alert-bg: rgba(224, 90, 94, 0.16);
+  --alert-line: rgba(224, 90, 94, 0.40);
   --alert-fg: #f79a9d;
-  --ok: #4a9c5c;
-  --ok-bg: rgba(74, 156, 92, 0.16);
-  --ok-line: rgba(74, 156, 92, 0.38);
+  /* Lifted from #4a9c5c: 4.43:1 as TEXT on this scheme's card bg, under AA. */
+  --ok: #52a865;
+  --ok-bg: rgba(82, 168, 101, 0.16);
+  --ok-line: rgba(82, 168, 101, 0.38);
+  --ok-fg: #8ad79b;
   --mag: #c765dd;
   --mag-dim: rgba(199, 101, 221, 0.16);
   --mag-line: rgba(199, 101, 221, 0.50);
@@ -296,6 +331,11 @@
   --cls-unclas-fg: #83dcae;
   --cls-exercise-bg: #33280a;
   --cls-exercise-fg: #f2c463;
+  --on-accent: var(--ink-dark);
+  --on-mag: var(--ink-dark);
+  --on-alert: var(--ink-dark);
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
 }
 
 /* Night watch — a warm amber substrate for a darkened room. Deliberately not
@@ -317,7 +357,9 @@
   --txt-3: #a4977f;
   --txt-4: #a4977f;
   --accent: #e0a838;
-  --accent-dim: rgba(224, 168, 56, 0.20);
+  /* 0.14, not 0.20: this accent is bright, so a 20% tint lifted the card
+     substrate until txt-3 measured 4.37:1 on it. Measured, not guessed. */
+  --accent-dim: rgba(224, 168, 56, 0.14);
   --accent-line: rgba(224, 168, 56, 0.55);
   --accent-fg: #f5c76a;
   --warn: #e08a2c;
@@ -331,6 +373,7 @@
   --ok: #63a04a;
   --ok-bg: rgba(99, 160, 74, 0.16);
   --ok-line: rgba(99, 160, 74, 0.38);
+  --ok-fg: #a3d189;
   --mag: #c96ad2;
   --mag-dim: rgba(201, 106, 210, 0.16);
   --mag-line: rgba(201, 106, 210, 0.50);
@@ -341,6 +384,11 @@
   --cls-unclas-fg: #a8d68e;
   --cls-exercise-bg: #3a2a05;
   --cls-exercise-fg: #f5c451;
+  --on-accent: var(--ink-dark);
+  --on-mag: var(--ink-dark);
+  --on-alert: var(--ink-dark);
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
 }
 
 /* High contrast — near-black substrate, a bright text ramp and hairlines that
@@ -375,6 +423,7 @@
   --ok: #3fd67f;
   --ok-bg: rgba(63, 214, 127, 0.20);
   --ok-line: rgba(63, 214, 127, 0.65);
+  --ok-fg: #7cf0ab;
   --mag: #f07bff;
   --mag-dim: rgba(240, 123, 255, 0.22);
   --mag-line: rgba(240, 123, 255, 0.7);
@@ -385,6 +434,11 @@
   --cls-unclas-fg: #8dffc0;
   --cls-exercise-bg: #3a2a05;
   --cls-exercise-fg: #ffd76a;
+  --on-accent: var(--ink-dark);
+  --on-mag: var(--ink-dark);
+  --on-alert: var(--ink-dark);
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
 }
 
 /* Paper — a warm light scheme for print-adjacent work and bright rooms, where
@@ -419,6 +473,7 @@
   --ok: #1c6238;
   --ok-bg: rgba(30, 130, 82, 0.14);
   --ok-line: rgba(30, 130, 82, 0.38);
+  --ok-fg: #12522c;
   --mag: #93318f;
   --mag-dim: rgba(147, 49, 143, 0.12);
   --mag-line: rgba(147, 49, 143, 0.45);
@@ -432,6 +487,11 @@
   --sh-1: 0 1px 2px rgba(26, 23, 18, 0.10);
   --sh-2: 0 6px 22px rgba(26, 23, 18, 0.14);
   --sh-pop: 0 18px 50px rgba(26, 23, 18, 0.18);
+  --on-accent: #ffffff;
+  --on-mag: #ffffff;
+  --on-alert: #ffffff;
+  --on-ok: #ffffff;
+  --on-warn: #ffffff;
 }
 
 /* ── Surfaces that are dark in every scheme ────────────────────────────────

@@ -131,7 +131,11 @@
   justify-content: center;
   border-radius: 8px;
   background: var(--bg-3);
-  color: var(--txt-2);
+  /* txt-1, not txt-2. The token ramp is guaranteed AA against bg-1 and bg-2;
+     this badge sits on bg-3, one step lighter, and txt-2 measured 4.40:1 on it
+     under the light scheme — under the bar on a live count. Measured in the
+     browser across all seven schemes, not derived from the tokens. */
+  color: var(--txt-1);
   font-family: var(--font-mono);
   font-size: var(--fs-caption);
 }

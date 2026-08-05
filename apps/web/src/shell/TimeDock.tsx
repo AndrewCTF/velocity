@@ -176,7 +176,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           type="button"
           onClick={togglePlay}
           title="Play or pause (space)"
-          className="mx-[2px] flex h-5 items-center gap-1 rounded-sm bg-accent px-3 text-[12px] text-white hover:brightness-110"
+          className="mx-[2px] flex h-5 items-center gap-1 rounded-sm bg-accent px-3 text-[12px] text-[var(--on-accent)] hover:brightness-110"
         >
           <Icon name={playing ? 'pause' : 'play'} className="h-3 w-3" />
           {playing ? 'Pause' : 'Play'}
@@ -200,7 +200,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           aria-pressed={live}
           title="Return to live"
           className={`ml-[2px] h-5 rounded-sm px-[10px] text-[12px] ${
-            live ? 'bg-bg-3 text-txt-2' : 'bg-alert text-white'
+            live ? 'bg-bg-3 text-txt-1' : 'bg-alert text-[var(--on-alert)]'
           }`}
         >
           Live
@@ -214,7 +214,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
               onClick={() => setMultiplier(s)}
               aria-pressed={multiplier === s}
               className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 ${
-                multiplier === s ? 'bg-accent text-white' : 'text-txt-2 hover:bg-[var(--hover)]'
+                multiplier === s ? 'bg-accent text-[var(--on-accent)]' : 'text-txt-2 hover:bg-[var(--hover)]'
               }`}
             >
               {s}x
@@ -229,7 +229,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
               onClick={() => setWindowSec(w.sec)}
               aria-pressed={windowSec === w.sec}
               className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 ${
-                windowSec === w.sec ? 'bg-accent text-white' : 'text-txt-2 hover:bg-[var(--hover)]'
+                windowSec === w.sec ? 'bg-accent text-[var(--on-accent)]' : 'text-txt-2 hover:bg-[var(--hover)]'
               }`}
             >
               {w.label}
@@ -329,7 +329,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           style={{ left: `${playPct}%` }}
         >
           <span
-            className={`mono absolute top-[2px] whitespace-nowrap rounded-[1px] bg-mag px-[5px] text-[10px] text-white ${
+            className={`mono absolute top-[2px] whitespace-nowrap rounded-[1px] bg-mag px-[5px] text-[10px] text-[var(--on-mag)] ${
               playPct > 88 ? 'right-[3px]' : playPct < 6 ? 'left-[3px]' : '-translate-x-1/2'
             }`}
           >
