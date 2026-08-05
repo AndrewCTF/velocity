@@ -152,3 +152,11 @@ export const useAppView = create<AppViewState>((set) => ({
     useSim.getState().setActive(app === 'sim');
   },
 }));
+
+// DEV handle for live verification (mirrors __useSelection / __useMapTools).
+// tools/perf/app_reachability_check.mjs drives every app through this rather
+// than through the launcher, so a launcher regression cannot hide an app
+// regression behind it.
+if (typeof window !== 'undefined' && import.meta.env?.DEV) {
+  (window as unknown as { __useAppView: typeof useAppView }).__useAppView = useAppView;
+}
