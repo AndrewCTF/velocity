@@ -50,6 +50,7 @@ import { useInvestigation } from '../../graph/investigationStore.js';
 import { usePolReplay } from '../../state/polReplayStore.js';
 import { useSettings } from '../../state/settings.js';
 import type { LayerRegistry } from '../../registry/LayerRegistry.js';
+import { TIER_META, tierOf, type Tier } from '../../registry/provenance.js';
 import { WorldPanel } from './WorldPanel.js';
 
 // Selection, built from docs/mockups/console-2026-08 (`11-map-selected.html`)
@@ -71,6 +72,34 @@ import { WorldPanel } from './WorldPanel.js';
 //
 // The lone em dash is the never-guess rule: a property the feed did not send
 // shows `—`, never a zero and never a blank.
+
+/** Map a contact's reported `source` strings back to a provenance tier.
+ *
+ *  Contacts carry the SOURCE that saw them (`digitraffic`, `adsb`, `kystdatahuset`),
+ *  not the layer id, so the tier cannot be looked up directly. Matching the
+ *  source against the registry endpoints is the join; where a contact names
+ *  several sources the weakest tier wins, and an unrecognised source yields no
+ *  tier rather than an assumed one. */
+export function tierOfSources(
+  registry: LayerRegistry,
+  props: Record<string, unknown>,
+): Tier | undefined {
+  const raw = props['sources'] ?? props['source'];
+  const names = (Array.isArray(raw) ? raw : [raw])
+    .filter((x): x is string => typeof x === 'string' && x.length > 0)
+    .map((x) => x.toLowerCase());
+  if (names.length === 0) return undefined;
+  const rank: Record<Tier, number> = { sensor: 0, registry: 1, filing: 2, claim: 3 };
+  let worst: Tier | undefined;
+  for (const layer of registry.list()) {
+    const t = tierOf(layer.id);
+    if (!t) continue;
+    const hay = `${layer.id} ${layer.endpoint}`.toLowerCase();
+    if (!names.some((n) => hay.includes(n))) continue;
+    if (worst === undefined || rank[t] > rank[worst]) worst = t;
+  }
+  return worst;
+}
 
 interface Snap {
   id: string;
@@ -336,6 +365,10 @@ export function SelectionPanel({
 
   const p = snap?.properties ?? {};
   const kind = snap?.kind ?? '';
+  // The weakest tier among the layers this contact's sources belong to. A fused
+  // contact is only as believable as its softest input, which is the same rule
+  // the Layers rows use.
+  const contactTier = tierOfSources(registry, p);
   const isAircraft = kind === 'aircraft';
   const isVessel = kind === 'vessel';
   const cat = str(p['category']) ?? str(p['kind']) ?? '';
@@ -687,6 +720,19 @@ export function SelectionPanel({
       {/* Provenance. A fix corroborated by two independent feeds is a different
           claim from one seen by a single source, and the panel said neither. */}
       <Sect label="Provenance" />
+      {/* Who is vouching for this contact, not just how many sources saw it.
+          The tier is stated on every layer row and in the right dock; a dossier
+          that omitted it would be the one place in the console where an
+          observation and an assertion look the same. */}
+      <Row
+        k="Tier"
+        v={
+          contactTier
+            ? `${TIER_META[contactTier].short} · ${TIER_META[contactTier].label}`
+            : null
+        }
+        title={contactTier ? TIER_META[contactTier].blurb : undefined}
+      />
       <Row k="Confidence" v={conf} />
       <Row k="Corroborating" v={srcs.length ? String(srcs.length) : str(p['source_count'])}
            frac={srcs.length ? Math.min(1, srcs.length / 3) : undefined}
