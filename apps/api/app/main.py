@@ -62,8 +62,8 @@ from app.routes import actions as actions_routes
 from app.routes import adsb as adsb_routes
 from app.routes import advisories as advisories_routes
 from app.routes import ai as ai_routes
-from app.routes import ai_models as ai_models_routes
 from app.routes import ai_batch as ai_batch_routes
+from app.routes import ai_models as ai_models_routes
 from app.routes import ai_selection as ai_selection_routes
 from app.routes import airhazards as airhazards_routes
 from app.routes import airspace as airspace_routes
@@ -113,11 +113,11 @@ from app.routes import news as news_routes_mod
 from app.routes import oceans as oceans_routes
 from app.routes import ontology as ontology_routes
 from app.routes import osint as osint_routes
-from app.routes import routing as routing_routes
-from app.routes import sanctions as sanctions_routes
 from app.routes import places as places_routes
 from app.routes import recon as recon_routes
 from app.routes import route as route_routes
+from app.routes import routing as routing_routes
+from app.routes import sanctions as sanctions_routes
 from app.routes import sar as sar_routes
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
