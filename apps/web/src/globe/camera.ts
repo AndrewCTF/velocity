@@ -50,9 +50,36 @@ export function flyToPosition(
   });
 }
 
+// Eye altitude at which the Earth's disk spans `fill` of the frame's SHORTER
+// axis. The old global view was a hardcoded 20-22 Mm, which at this window's
+// frustum put the disk across 56% of the map height and left the rest black —
+// the single largest reason the console read as empty. Solve it from the
+// frustum instead of guessing: half-angle = asin(R / (R + alt)), so
+// alt = R / sin(fovy * fill / 2) - R.
+export const EARTH_RADIUS_M = 6_378_137;
+
+export function globalAltitude(viewer: Cesium.Viewer, fill = 0.9): number {
+  const frustum = viewer.camera.frustum as Cesium.PerspectiveFrustum;
+  const fov = typeof frustum?.fov === 'number' && Number.isFinite(frustum.fov) ? frustum.fov : 0;
+  // Columbus/2D use an orthographic frustum with no fov. 11 Mm is the answer
+  // this formula gives for a 16:9 window, so it is the right fallback.
+  if (fov <= 0) return 11_000_000;
+  // Read the aspect off the canvas rather than frustum.aspectRatio: on the
+  // first paint Cesium has not necessarily sized the frustum to the laid-out
+  // canvas yet, and framing the whole session off a one-frame-stale aspect is
+  // exactly the bug this function exists to remove.
+  const canvas = viewer.canvas;
+  const w = canvas?.clientWidth || canvas?.width || 0;
+  const h = canvas?.clientHeight || canvas?.height || 0;
+  const aspect = w > 0 && h > 0 ? w / h : (frustum.aspectRatio ?? 1);
+  const fovy = aspect <= 1 ? fov : 2 * Math.atan(Math.tan(fov / 2) / aspect);
+  const half = Math.sin((fovy * fill) / 2);
+  return EARTH_RADIUS_M / half - EARTH_RADIUS_M;
+}
+
 export function flyToGlobal(viewer: Cesium.Viewer, durationSec = 1.0): void {
   viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(20, 35, 22_000_000),
+    destination: Cesium.Cartesian3.fromDegrees(20, 35, globalAltitude(viewer)),
     duration: durationSec,
     orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
   });

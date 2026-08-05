@@ -73,3 +73,29 @@ export function rowCount(counts: Record<string, number>, layerIds: readonly stri
   for (const id of layerIds) n += counts[id] ?? 0;
   return n;
 }
+
+/** What a row can honestly say about itself.
+ *
+ *  `rowCount` alone cannot tell "this source answered and there is nothing
+ *  there" from "this source has not answered yet", because it folds a missing
+ *  key to 0. Those are different facts and an operator acts differently on
+ *  them: a quiet layer is information, a layer that never loaded is a fault.
+ *  A DataSource exists only once the compositor has spawned and fetched the
+ *  layer, so a missing key IS the pending case. */
+export type RowState =
+  | { state: 'off' }
+  | { state: 'pending' }
+  | { state: 'empty' }
+  | { state: 'live'; n: number };
+
+export function rowState(
+  counts: Record<string, number>,
+  layerIds: readonly string[],
+  enabled: boolean,
+): RowState {
+  if (!enabled) return { state: 'off' };
+  const known = layerIds.filter((id) => counts[id] !== undefined);
+  if (known.length === 0) return { state: 'pending' };
+  const n = known.reduce((a, id) => a + (counts[id] ?? 0), 0);
+  return n > 0 ? { state: 'live', n } : { state: 'empty' };
+}

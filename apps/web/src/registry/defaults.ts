@@ -431,7 +431,11 @@ export const defaultLayers: readonly LayerDescriptor[] = [
   // …), refreshed every 15 min, rendered as category glyph billboards with
   // "ACTOR → ACTOR · event (Nx)" labels on the prominent ones, plus a
   // translucent uncertainty ellipse when the feature carries radius_m.
-  // This is the headline conflict layer; default ON.
+  // GDELT codes wire copy, so this is a claim tier source however good the
+  // coding is (registry/provenance.ts). It was the headline conflict layer and
+  // default ON, which put an assertion feed on the map beside the transponders
+  // with nothing distinguishing them. Off by default now; the Layers panel
+  // groups it under Claim, where turning it on is a deliberate act.
   {
     id: 'conflict.gdelt.live',
     group: 'conflict',
@@ -444,7 +448,7 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     crs: 'EPSG:4326',
     license: 'GDELT 2.0 (keyless)',
     opacity: 1,
-    visibleByDefault: true,
+    visibleByDefault: false,
     emits: ['event'],
   },
   // Cross-domain SIGNAL fusion (GPS jamming, dark vessels, AIS gaps, emergency
