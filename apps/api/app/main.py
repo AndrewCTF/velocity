@@ -80,6 +80,7 @@ from app.routes import collab as collab_routes
 from app.routes import config as config_routes
 from app.routes import conflict as conflict_routes
 from app.routes import correlations as correlations_routes
+from app.routes import corroborate as corroborate_routes
 from app.routes import countries as countries_routes
 from app.routes import country_stats as country_stats_routes
 from app.routes import cyber as cyber_routes
@@ -646,6 +647,10 @@ def create_app() -> FastAPI:
     # One organisation across GLEIF, SEC EDGAR, USAspending and the designation
     # lists, in one call, with every source reporting whether it answered.
     app.include_router(orgs_routes.router)
+    # The ONE sanctioned use of a claim-tier source: does a claim exist near an
+    # observation, and how long after. A measurement about the claim, never a
+    # use of it.
+    app.include_router(corroborate_routes.router)
     # Three more primary emitters: orbital launches at their pads, NOAA space
     # weather, and storm surge as observed water level minus tide prediction.
     app.include_router(primary_routes.router)
