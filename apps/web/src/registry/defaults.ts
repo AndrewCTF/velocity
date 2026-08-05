@@ -726,6 +726,43 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     emits: ['event'],
   },
 
+  // ── SANCTIONS (2026-08-05) ──────────────────────────────────────────────
+  // OFAC SDN joined onto the live AIS and ADS-B snapshots server-side: not a
+  // list of designated ships, a list of designated ships that are MOVING right
+  // now, with the identifier the match rested on. Registry tier: a designation
+  // is an authority asserting a legal status. Off by default because it is a
+  // lens over feeds already on the map, not a feed of its own.
+  {
+    id: 'intel.sanctions.vessels',
+    group: 'maritime',
+    title: 'Sanctioned vessels · OFAC SDN (live AIS)',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/sanctions/vessels',
+    refresh: { mode: 'pull', ttlSec: 300 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'US Treasury OFAC (public domain)',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['vessel'],
+  },
+  {
+    id: 'intel.sanctions.aircraft',
+    group: 'aviation',
+    title: 'Sanctioned aircraft · OFAC SDN (live ADS-B)',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/sanctions/aircraft',
+    refresh: { mode: 'pull', ttlSec: 300 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'US Treasury OFAC (public domain)',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['aircraft'],
+  },
+
   // ── CRITICAL INFRASTRUCTURE (2026-07-11 wave) ───────────────────────────
   // Unified facility dataset (WRI power plants, SatNOGS ground stations,
   // Wikidata telescopes/launch sites, OSM water/datacenter/telecom snapshot),

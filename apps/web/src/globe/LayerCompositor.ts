@@ -205,6 +205,11 @@ export const FACILITY_LAYER_IDS: ReadonlySet<string> = new Set([
 // 2026-07-14 keyless data-layers wave. Point hazards/sensors → the category-tile
 // 'hazard' style; fire perimeters + SIGMET areas → the filled 'hazardpoly' style.
 export const HAZARD_POINT_LAYER_IDS: ReadonlySet<string> = new Set([
+  // Designated hulls and airframes. They are AIS and ADS-B contacts carrying a
+  // registry fact, so they draw as a sanction (`style_kind`) and still resolve
+  // as a vessel or an aircraft (`kind`).
+  'intel.sanctions.vessels',
+  'intel.sanctions.aircraft',
   'hazards.gdacs',
   'hazards.cyclones',
   'hazards.volcanoes',

@@ -39,6 +39,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
     rows: [
       { label: 'Aircraft', icon: 'plane', layerIds: ['aviation.adsb.global'] },
       { label: 'Military', icon: 'jet', layerIds: ['aviation.adsb.live.mil'] },
+      { label: 'Sanctioned aircraft', icon: 'shield', layerIds: ['intel.sanctions.aircraft'] },
       { label: 'Emergency', icon: 'warning', layerIds: ['aviation.adsb.live.emergencies'] },
       { label: 'TFR / Airspace', icon: 'warning', layerIds: ['airspace.tfr'] },
       { label: 'SIGMET / AIRMET', icon: 'warning', layerIds: ['aviation.sigmet'] },
@@ -53,6 +54,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
     rows: [
       { label: 'Vessels', icon: 'ship', layerIds: ['maritime.keyless'] },
       { label: 'Baltic AIS', icon: 'ship', layerIds: ['maritime.digitraffic'] },
+      { label: 'Sanctioned vessels', icon: 'shield', layerIds: ['intel.sanctions.vessels'] },
       {
         label: 'Dark-vessel SAR',
         icon: 'crosshair',

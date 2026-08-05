@@ -97,6 +97,8 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   'military.installations': 'registry',
   'maritime.chokepoints': 'registry',
   'infra.powerplants': 'registry',
+  'intel.sanctions.vessels': 'registry',
+  'intel.sanctions.aircraft': 'registry',
   'infra.power': 'registry',
   'infra.nuclear': 'registry',
   'infra.water': 'registry',
