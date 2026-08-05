@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type * as Cesium from 'cesium';
 import type { LayerRegistry } from '../../registry/LayerRegistry.js';
 import { Icon } from '../../normal/Icon.js';
 import { useLayerCounts } from '../../layer-rail/useLayerCounts.js';
 import { useFeeds } from '../../state/stores.js';
+import { apiFetch } from '../../transport/http.js';
 import { tierOf, TIER_ORDER, TIER_META, type Tier } from '../../registry/provenance.js';
 
 // What the right column says when nothing is selected.
@@ -158,6 +159,8 @@ export function WorldPanel({
         )}
       </Section>
 
+      <Findings registry={registry} />
+
       <Section label="Sources">
         <div className="flex h-[var(--g-row-2)] items-center gap-2 px-[14px]">
           <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">Reporting</span>
@@ -183,6 +186,103 @@ export function WorldPanel({
         </p>
       </div>
     </div>
+  );
+}
+
+/** A layer whose value is a COUNT the operator should see without having found
+ *  the toggle first. Both of these are off by default and both answer a question
+ *  worth asking at first paint. */
+const FINDING_LAYERS: ReadonlyArray<{
+  id: string;
+  label: string;
+  endpoint: string;
+  zero: string;
+}> = [
+  {
+    id: 'intel.sanctions.vessels',
+    label: 'Designated hulls under way',
+    endpoint: '/api/sanctions/vessels',
+    zero: 'None of the vessels reporting right now is on OFAC, UK or UN by IMO or MMSI.',
+  },
+  {
+    id: 'cyber.routing.national',
+    label: 'Countries below normal routing',
+    endpoint: '/api/cyber/routing?min_drop=5',
+    zero: 'Every watched country is announcing its usual prefixes.',
+  },
+];
+
+/** Counts from the analytic layers, fetched whether or not the layer is on.
+ *
+ *  This is the "built-but-unreachable capability keeps not converting" finding
+ *  from the persona studies, applied to the two newest capabilities. A sanctions
+ *  join that only reports once the operator has found and enabled a layer they
+ *  did not know existed converts nobody. The count comes to them; enabling the
+ *  layer is one click from the number. */
+function Findings({ registry }: { registry: LayerRegistry }): JSX.Element {
+  const [counts, setCounts] = useState<Record<string, number | 'error' | null>>({});
+
+  useEffect(() => {
+    const ab = new AbortController();
+    for (const f of FINDING_LAYERS) {
+      apiFetch(f.endpoint, { signal: ab.signal })
+        .then(async (r) => {
+          if (ab.signal.aborted) return;
+          if (!r.ok) {
+            setCounts((c) => ({ ...c, [f.id]: 'error' }));
+            return;
+          }
+          const j = (await r.json()) as { features?: unknown[] };
+          setCounts((c) => ({ ...c, [f.id]: Array.isArray(j.features) ? j.features.length : 0 }));
+        })
+        .catch(() => {
+          if (!ab.signal.aborted) setCounts((c) => ({ ...c, [f.id]: 'error' }));
+        });
+    }
+    return () => ab.abort();
+  }, []);
+
+  return (
+    <Section label="Findings">
+      {FINDING_LAYERS.map((f) => {
+        const n = counts[f.id];
+        const on = registry.isEnabled(f.id);
+        return (
+          <div key={f.id} className="px-[14px]">
+            <div className="flex h-[var(--g-row-2)] items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">{f.label}</span>
+              <span
+                className={`mono shrink-0 text-[12px] tabular-nums ${
+                  typeof n === 'number' && n > 0 ? 'text-alert-fg' : 'text-txt-1'
+                }`}
+              >
+                {n === undefined ? '…' : n === 'error' ? '—' : n === null ? '—' : n}
+              </span>
+              <button
+                type="button"
+                onClick={() => (on ? registry.disable(f.id) : registry.enable(f.id))}
+                aria-pressed={on}
+                className={`mono h-[20px] shrink-0 rounded-sm px-[6px] text-[12px] ${
+                  on
+                    ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
+                    : 'text-txt-3 hover:bg-[var(--hover)]'
+                }`}
+              >
+                {on ? 'shown' : 'show'}
+              </button>
+            </div>
+            {n === 0 && (
+              <p className="pb-[6px] text-[12px] leading-relaxed text-txt-3">{f.zero}</p>
+            )}
+            {n === 'error' && (
+              <p className="pb-[6px] text-[12px] leading-relaxed text-txt-3">
+                Source unavailable, so this is not a zero.
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </Section>
   );
 }
 
