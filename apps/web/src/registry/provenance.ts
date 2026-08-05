@@ -69,6 +69,10 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   'maritime.sar.kerch-strait': 'sensor',
   'maritime.sar.taiwan-strait': 'sensor',
   'cyber.ioda.outages': 'sensor',
+  // A country coming off the internet is route collectors observing what other
+  // machines stopped announcing. It is normally reported as news, and the news
+  // is a claim ABOUT this.
+  'cyber.routing.national': 'sensor',
   'infra.cams.public': 'sensor',
   'hazards.fireperimeters': 'sensor',
   'hazards.radiation': 'sensor',

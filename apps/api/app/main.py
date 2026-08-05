@@ -113,6 +113,7 @@ from app.routes import news as news_routes_mod
 from app.routes import oceans as oceans_routes
 from app.routes import ontology as ontology_routes
 from app.routes import osint as osint_routes
+from app.routes import routing as routing_routes
 from app.routes import sanctions as sanctions_routes
 from app.routes import places as places_routes
 from app.routes import recon as recon_routes
@@ -640,6 +641,9 @@ def create_app() -> FastAPI:
     # snapshots: which contacts on the map right now are designated. The list is
     # free and the feeds are free; what is normally sold is the join.
     app.include_router(sanctions_routes.router)
+    # National routing health from RIPE RIS: a country coming off the internet
+    # is a machine reporting on itself, not a news story about it.
+    app.include_router(routing_routes.router)
     # Country-OSINT catalog: 53 keyless per-country toolkits (national
     # registries, land/court/sanctions portals) linked into the same
     # digital-OSINT graph investigate() enriches (docs/country-osint-spec.md).
