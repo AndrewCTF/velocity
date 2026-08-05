@@ -9,6 +9,7 @@ import { flyToPosition } from '../../globe/camera.js';
 import { useSelection } from '../../state/stores.js';
 import { useSavedSearches } from '../../state/savedSearches.js';
 import { toast } from '../toast.js';
+import { OrgCard } from '../../entity-panel/OrgCard.js';
 
 // Find, built from docs/mockups/console-2026-08 (`14-map-find.html`) and fed by
 // the same `searchObjects` call the old Search Objects sidebar made.
@@ -326,6 +327,18 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
         <p className="mx-[14px] mt-[8px] rounded-sm border border-alert-line bg-alert-bg px-[8px] py-[6px] text-[12px] text-alert-fg">
           {err}
         </p>
+      )}
+
+      {/* Find searches contacts near a point. An organisation is not near a
+          point, and the question "who is this company, and is it designated"
+          has no other address in the console. OFAC carries an owner on almost
+          no vessel row, so hanging the resolver off a selected contact would
+          have made it unreachable in practice: it is reachable from the search
+          box instead, which is where somebody types a company name anyway. */}
+      {q.trim().length >= 3 && !parseLatLon(q) && (
+        <div className="mt-[8px] border-t border-line pt-[8px]">
+          <OrgCard name={q.trim()} />
+        </div>
       )}
 
       {hits === null && !busy && !err && (

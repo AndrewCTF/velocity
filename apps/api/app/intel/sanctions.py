@@ -452,6 +452,29 @@ def match_vessel(
     return None
 
 
+def search_names(idx: SanctionsIndex, q: str, limit: int = 10) -> list[Designation]:
+    """Designations whose folded name CONTAINS the folded query.
+
+    Separate from `match_vessel` on purpose. A hull match has to be tight, and a
+    substring join on a ship called EBANO would light up half the list. An
+    ORGANISATION lookup is the opposite problem: OFAC lists "SOVCOMFLOT PJSC" and
+    the operator types "Sovcomflot", so an exact fold finds nothing. Linear over
+    the folded keys, which is ~15k strings, and only ever called per query.
+    """
+    needle = normalize_name(q)
+    if len(needle) < 3:
+        return []
+    out: list[Designation] = []
+    for key, ds in idx.by_name.items():
+        if needle in key:
+            out.extend(ds)
+            if len(out) >= limit * 4:
+                break
+    # Exact folds first: they are the ones the operator most likely meant.
+    out.sort(key=lambda d: (normalize_name(d.name) != needle, len(d.name)))
+    return out[:limit]
+
+
 def match_aircraft(
     idx: SanctionsIndex, *, registration: str | None = None, name: str | None = None
 ) -> Match | None:

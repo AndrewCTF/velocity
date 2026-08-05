@@ -112,6 +112,7 @@ from app.routes import nas_status as nas_status_routes
 from app.routes import news as news_routes_mod
 from app.routes import oceans as oceans_routes
 from app.routes import ontology as ontology_routes
+from app.routes import orgs as orgs_routes
 from app.routes import osint as osint_routes
 from app.routes import places as places_routes
 from app.routes import recon as recon_routes
@@ -641,6 +642,9 @@ def create_app() -> FastAPI:
     # snapshots: which contacts on the map right now are designated. The list is
     # free and the feeds are free; what is normally sold is the join.
     app.include_router(sanctions_routes.router)
+    # One organisation across GLEIF, SEC EDGAR, USAspending and the designation
+    # lists, in one call, with every source reporting whether it answered.
+    app.include_router(orgs_routes.router)
     # National routing health from RIPE RIS: a country coming off the internet
     # is a machine reporting on itself, not a news story about it.
     app.include_router(routing_routes.router)
