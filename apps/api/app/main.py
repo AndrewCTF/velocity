@@ -63,6 +63,7 @@ from app.routes import adsb as adsb_routes
 from app.routes import advisories as advisories_routes
 from app.routes import ai as ai_routes
 from app.routes import ai_models as ai_models_routes
+from app.routes import ai_batch as ai_batch_routes
 from app.routes import ai_selection as ai_selection_routes
 from app.routes import airhazards as airhazards_routes
 from app.routes import airspace as airspace_routes
@@ -560,6 +561,9 @@ def create_app() -> FastAPI:
     app.include_router(ai_routes.router)
     app.include_router(ai_models_routes.router)
     app.include_router(ai_selection_routes.router)
+    # Batch local inference: many documents through the local model at the width
+    # the engine can actually serve, with the measured stats in the response.
+    app.include_router(ai_batch_routes.router)
     app.include_router(firms_routes.router)
     app.include_router(ais_routes.router)
     app.include_router(seismic_routes.router)
