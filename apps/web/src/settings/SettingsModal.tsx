@@ -16,6 +16,8 @@ import {
 import { resetOnboarding } from '../onboarding/Onboarding.js';
 import { LocalAiSection } from './localAi/LocalAiSection.js';
 import { AlertRulesSection } from './AlertRulesSection.js';
+import { useTheme } from '../state/theme.js';
+import { SCHEMES } from '../theme/schemes.js';
 
 interface Me {
   email?: string;
@@ -93,6 +95,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
           )}
 
           <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2">
+            Colour scheme
+          </div>
+          <SchemePicker />
+
+          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
             Dashboard
           </div>
           <DashboardToggle />
@@ -151,6 +158,48 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
           </a>
         </div>
       </div>
+    </div>
+  );
+}
+
+// The colour schemes, as swatches. A named list of words would make the
+// operator apply each one to find out what it is; three squares of the actual
+// substrate, panel and accent answer that without changing anything. Applying
+// is instant and reversible, so there is no confirm step.
+function SchemePicker(): JSX.Element {
+  const mode = useTheme((s) => s.mode);
+  const setMode = useTheme((s) => s.setMode);
+  return (
+    <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Colour scheme">
+      {SCHEMES.map((s) => {
+        const on = mode === s.id;
+        return (
+          <button
+            key={s.id}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            title={s.hint}
+            onClick={() => setMode(s.id)}
+            className={`flex items-center gap-2 rounded-sm border px-2 py-1.5 text-left transition-colors ${
+              on
+                ? 'border-accent-line bg-accent-dim text-txt-0'
+                : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+            }`}
+          >
+            <span
+              aria-hidden
+              className="flex h-5 w-5 shrink-0 overflow-hidden rounded-sm border border-line-2"
+              style={{ background: s.swatch.bg }}
+            >
+              <span className="mt-auto h-2.5 w-full" style={{ background: s.swatch.panel }}>
+                <span className="block h-full w-1/3" style={{ background: s.swatch.accent }} />
+              </span>
+            </span>
+            <span className="mono min-w-0 flex-1 truncate text-[11px]">{s.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

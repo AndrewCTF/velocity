@@ -189,6 +189,304 @@
   --cls-unclas-fg: #1f7a44;
   --cls-exercise-bg: #f6e6c0;
   --cls-exercise-fg: #8a6410;
+  /* Row hover. The light block used to inherit the DARK `--hover: #2a2f37`, so
+     every hoverable row in the light theme flashed near-black under the
+     cursor. A scheme that overrides the substrate must override the hover that
+     sits on it. */
+  --hover: #e3e8ee;
+  --sh-1: 0 1px 2px rgba(17, 20, 24, 0.10);
+  --sh-2: 0 6px 22px rgba(17, 20, 24, 0.14);
+  --sh-pop: 0 18px 50px rgba(17, 20, 24, 0.18);
+}
+
+/* ── Additional colour schemes ─────────────────────────────────────────────
+   Every scheme is a COMPLETE palette, not a delta: `theme/schemes.ts` lists
+   them, `state/theme.ts` writes the id to `data-theme` on <html>, and
+   `contrast.test.ts` holds each one to WCAG-AA on both bg-1 and bg-2. A scheme
+   that only overrode what it felt like inherited the default's hover and
+   shadows, which is exactly how the light theme shipped a near-black row
+   hover on white for three weeks.
+
+   The globe canvas is not token-coloured, so the map itself is unchanged by
+   any of these; the basemap is picked separately in Layers. */
+
+/* Midnight — cool blue-black. The classic operations-room look: a colder
+   substrate than the warm default, hairlines tinted toward the accent. */
+:root[data-theme='midnight'] {
+  color-scheme: dark;
+  --bg-0: #0b0f1a;
+  --bg-1: #121826;
+  --bg-2: #1a2233;
+  --bg-3: #232d42;
+  --bg-4: #2e3a52;
+  --panel-bg: #121826;
+  --line: rgba(148, 178, 255, 0.10);
+  --line-2: rgba(148, 178, 255, 0.20);
+  --txt-0: #f2f6ff;
+  --txt-1: #c3ccdf;
+  --txt-2: #a8b3ca;
+  --txt-3: #8e9bb5;
+  --txt-4: #8e9bb5;
+  --accent: #4c8dff;
+  --accent-dim: rgba(76, 141, 255, 0.20);
+  --accent-line: rgba(76, 141, 255, 0.55);
+  --accent-fg: #8fc0ff;
+  --warn: #e9a13b;
+  --warn-bg: rgba(233, 161, 59, 0.16);
+  --warn-line: rgba(233, 161, 59, 0.40);
+  --warn-fg: #f7bd6b;
+  --alert: #e2545a;
+  --alert-bg: rgba(226, 84, 90, 0.16);
+  --alert-line: rgba(226, 84, 90, 0.40);
+  --alert-fg: #ffa0a4;
+  --ok: #2ea36a;
+  --ok-bg: rgba(46, 163, 106, 0.16);
+  --ok-line: rgba(46, 163, 106, 0.38);
+  --mag: #d472f5;
+  --mag-dim: rgba(212, 114, 245, 0.16);
+  --mag-line: rgba(212, 114, 245, 0.50);
+  --mag-fg: #eeaefb;
+  --sev-low: #c3ccdf;
+  --hover: #1f2839;
+  --cls-unclas-bg: #0a3324;
+  --cls-unclas-fg: #7fe3b3;
+  --cls-exercise-bg: #33280a;
+  --cls-exercise-fg: #f5c451;
+}
+
+/* Slate — neutral graphite with a teal accent. For operators who read blue as
+   a data colour and want the chrome to stay out of the way of it. */
+:root[data-theme='slate'] {
+  color-scheme: dark;
+  --bg-0: #14161a;
+  --bg-1: #1b1e23;
+  --bg-2: #23272e;
+  --bg-3: #2c313a;
+  --bg-4: #373d47;
+  --panel-bg: #1b1e23;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-2: rgba(255, 255, 255, 0.18);
+  --txt-0: #f4f5f7;
+  --txt-1: #c8cdd4;
+  --txt-2: #adb4bd;
+  --txt-3: #949ca7;
+  --txt-4: #949ca7;
+  --accent: #16a394;
+  --accent-dim: rgba(22, 163, 148, 0.20);
+  --accent-line: rgba(22, 163, 148, 0.55);
+  --accent-fg: #5fd3c4;
+  --warn: #e0a02f;
+  --warn-bg: rgba(224, 160, 47, 0.16);
+  --warn-line: rgba(224, 160, 47, 0.40);
+  --warn-fg: #f2bc63;
+  --alert: #d4494d;
+  --alert-bg: rgba(212, 73, 77, 0.16);
+  --alert-line: rgba(212, 73, 77, 0.40);
+  --alert-fg: #f79a9d;
+  --ok: #4a9c5c;
+  --ok-bg: rgba(74, 156, 92, 0.16);
+  --ok-line: rgba(74, 156, 92, 0.38);
+  --mag: #c765dd;
+  --mag-dim: rgba(199, 101, 221, 0.16);
+  --mag-line: rgba(199, 101, 221, 0.50);
+  --mag-fg: #e5a6f0;
+  --sev-low: #c8cdd4;
+  --hover: #282d35;
+  --cls-unclas-bg: #0d3524;
+  --cls-unclas-fg: #83dcae;
+  --cls-exercise-bg: #33280a;
+  --cls-exercise-fg: #f2c463;
+}
+
+/* Night watch — a warm amber substrate for a darkened room. Deliberately not
+   monochrome: the threat hues stay distinguishable, because a scheme that
+   collapses alert and warn into one amber cannot carry a threat state. */
+:root[data-theme='amber'] {
+  color-scheme: dark;
+  --bg-0: #0f0d0a;
+  --bg-1: #17140f;
+  --bg-2: #201c15;
+  --bg-3: #2b251b;
+  --bg-4: #383024;
+  --panel-bg: #17140f;
+  --line: rgba(255, 214, 148, 0.10);
+  --line-2: rgba(255, 214, 148, 0.20);
+  --txt-0: #fdf6e8;
+  --txt-1: #d8cdb6;
+  --txt-2: #bdb098;
+  --txt-3: #a4977f;
+  --txt-4: #a4977f;
+  --accent: #e0a838;
+  --accent-dim: rgba(224, 168, 56, 0.20);
+  --accent-line: rgba(224, 168, 56, 0.55);
+  --accent-fg: #f5c76a;
+  --warn: #e08a2c;
+  --warn-bg: rgba(224, 138, 44, 0.18);
+  --warn-line: rgba(224, 138, 44, 0.42);
+  --warn-fg: #f2ac5e;
+  --alert: #d9534a;
+  --alert-bg: rgba(217, 83, 74, 0.18);
+  --alert-line: rgba(217, 83, 74, 0.42);
+  --alert-fg: #f79f97;
+  --ok: #63a04a;
+  --ok-bg: rgba(99, 160, 74, 0.16);
+  --ok-line: rgba(99, 160, 74, 0.38);
+  --mag: #c96ad2;
+  --mag-dim: rgba(201, 106, 210, 0.16);
+  --mag-line: rgba(201, 106, 210, 0.50);
+  --mag-fg: #e6a9ec;
+  --sev-low: #d8cdb6;
+  --hover: #26211a;
+  --cls-unclas-bg: #1f3318;
+  --cls-unclas-fg: #a8d68e;
+  --cls-exercise-bg: #3a2a05;
+  --cls-exercise-fg: #f5c451;
+}
+
+/* High contrast — near-black substrate, a bright text ramp and hairlines that
+   are actually visible. Every tier clears AAA (7:1) here, not just AA. */
+:root[data-theme='contrast'] {
+  color-scheme: dark;
+  --bg-0: #000000;
+  --bg-1: #0a0a0a;
+  --bg-2: #141414;
+  --bg-3: #1f1f1f;
+  --bg-4: #2e2e2e;
+  --panel-bg: #0a0a0a;
+  --line: rgba(255, 255, 255, 0.28);
+  --line-2: rgba(255, 255, 255, 0.45);
+  --txt-0: #ffffff;
+  --txt-1: #f0f0f0;
+  --txt-2: #e0e0e0;
+  --txt-3: #cfcfcf;
+  --txt-4: #cfcfcf;
+  --accent: #3d8bfd;
+  --accent-dim: rgba(61, 139, 253, 0.28);
+  --accent-line: rgba(61, 139, 253, 0.85);
+  --accent-fg: #9ec5ff;
+  --warn: #ffb648;
+  --warn-bg: rgba(255, 182, 72, 0.22);
+  --warn-line: rgba(255, 182, 72, 0.7);
+  --warn-fg: #ffd28c;
+  --alert: #ff6b6f;
+  --alert-bg: rgba(255, 107, 111, 0.22);
+  --alert-line: rgba(255, 107, 111, 0.7);
+  --alert-fg: #ffb3b5;
+  --ok: #3fd67f;
+  --ok-bg: rgba(63, 214, 127, 0.20);
+  --ok-line: rgba(63, 214, 127, 0.65);
+  --mag: #f07bff;
+  --mag-dim: rgba(240, 123, 255, 0.22);
+  --mag-line: rgba(240, 123, 255, 0.7);
+  --mag-fg: #f7bcff;
+  --sev-low: #f0f0f0;
+  --hover: #262626;
+  --cls-unclas-bg: #00351f;
+  --cls-unclas-fg: #8dffc0;
+  --cls-exercise-bg: #3a2a05;
+  --cls-exercise-fg: #ffd76a;
+}
+
+/* Paper — a warm light scheme for print-adjacent work and bright rooms, where
+   the cool white of Daylight reads clinical. */
+:root[data-theme='paper'] {
+  color-scheme: light;
+  --bg-0: #f7f3e9;
+  --bg-1: #fffdf7;
+  --bg-2: #f2ede1;
+  --bg-3: #e8e1d1;
+  --bg-4: #d8cfba;
+  --panel-bg: #fffdf7;
+  --line: rgba(26, 23, 18, 0.12);
+  --line-2: rgba(26, 23, 18, 0.22);
+  --txt-0: #1a1712;
+  --txt-1: #2a251c;
+  --txt-2: #5c5346;
+  --txt-3: #5c5346;
+  --txt-4: #5c5346;
+  --accent: #1c5e8c;
+  --accent-dim: rgba(28, 94, 140, 0.12);
+  --accent-line: rgba(28, 94, 140, 0.38);
+  --accent-fg: #14486c;
+  --warn: #8a5410;
+  --warn-bg: rgba(160, 105, 25, 0.14);
+  --warn-line: rgba(160, 105, 25, 0.42);
+  --warn-fg: #70430c;
+  --alert: #9c2b28;
+  --alert-bg: rgba(190, 55, 50, 0.14);
+  --alert-line: rgba(190, 55, 50, 0.42);
+  --alert-fg: #85262a;
+  --ok: #1c6238;
+  --ok-bg: rgba(30, 130, 82, 0.14);
+  --ok-line: rgba(30, 130, 82, 0.38);
+  --mag: #93318f;
+  --mag-dim: rgba(147, 49, 143, 0.12);
+  --mag-line: rgba(147, 49, 143, 0.45);
+  --mag-fg: #7a2576;
+  --sev-low: #2a251c;
+  --hover: #ece5d5;
+  --cls-unclas-bg: #d8ecdd;
+  --cls-unclas-fg: #1c6238;
+  --cls-exercise-bg: #f3e4bd;
+  --cls-exercise-fg: #7a5810;
+  --sh-1: 0 1px 2px rgba(26, 23, 18, 0.10);
+  --sh-2: 0 6px 22px rgba(26, 23, 18, 0.14);
+  --sh-pop: 0 18px 50px rgba(26, 23, 18, 0.18);
+}
+
+/* ── Surfaces that are dark in every scheme ────────────────────────────────
+   Two kinds of chrome do not follow the scheme, because what is behind them
+   does not either: the map furniture (scale bar, cursor and centre readouts)
+   is drawn straight onto the Cesium canvas, and the analyst console pins its
+   own near-black panel. Both take their text from the token ramp, so on a
+   light scheme they rendered near-black on black — the readouts vanished and
+   the console became a dark box of dark text.
+
+   `.on-dark` re-declares the dark ramp for exactly those, and only under the
+   light-family schemes; a dark scheme's own ramp is already correct and must
+   not be overwritten with the default's greys. Map furniture is matched by the
+   classes it already carries, so nothing in the globe layer had to change. */
+:root[data-theme='light'] .on-dark,
+:root[data-theme='light'] .map-foot-item,
+:root[data-theme='light'] .map-foot-item-2,
+:root[data-theme='paper'] .on-dark,
+:root[data-theme='paper'] .map-foot-item,
+:root[data-theme='paper'] .map-foot-item-2 {
+  --txt-0: #f6f7f9;
+  --txt-1: #c5cbd3;
+  --txt-2: #abb3bf;
+  --txt-3: #8f99a8;
+  --txt-4: #8f99a8;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --bg-1: #1c2127;
+  --bg-2: #252a31;
+  --bg-3: #2f343c;
+  --hover: #2a2f37;
+  --accent-fg: #8abbff;
+  --accent-dim: rgba(45, 114, 210, 0.20);
+  --accent-line: rgba(45, 114, 210, 0.55);
+  --warn-fg: #fbb360;
+  --alert-fg: #fa999c;
+  --scroll-thumb: rgba(255, 255, 255, 0.13);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.22);
+}
+
+/* Scrollbars follow the scheme. These were hardcoded white alphas, so on a
+   light scheme the thumb was invisible against the track it needed to sit on.
+   `--scroll-thumb` is set per family and consumed by the rules below. */
+:root {
+  --scroll-thumb: rgba(255, 255, 255, 0.13);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.22);
+}
+:root[data-theme='light'],
+:root[data-theme='paper'] {
+  --scroll-thumb: rgba(17, 20, 24, 0.22);
+  --scroll-thumb-hover: rgba(17, 20, 24, 0.36);
+}
+:root[data-theme='contrast'] {
+  --scroll-thumb: rgba(255, 255, 255, 0.45);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.7);
 }
 
 html,
@@ -209,7 +507,7 @@ body,
    un-finished. Subtle dark thumb, transparent track; never a visual focal point. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  scrollbar-color: var(--scroll-thumb) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
@@ -219,13 +517,13 @@ body,
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.13);
+  background: var(--scroll-thumb);
   border-radius: 6px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--scroll-thumb-hover);
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-corner {

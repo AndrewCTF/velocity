@@ -41,11 +41,33 @@ the decision deliberately by changing BOTH the guard and this file.
 - Satellite SGP4 via `SampledPositionProperty` is real physics, exempt from the
   no-synthesis rule; propagation stays chunked.
 
+## Colour schemes
+
+- `theme/schemes.ts` is the registry; each entry has a COMPLETE palette block in
+  `theme/tokens.css` (`dark` is the bare `:root`). A scheme that only overrides
+  what it feels like inherits the default's `--hover`, shadows and scrollbar
+  thumb, which is how the light theme shipped a near-black row hover on white.
+  → `theme/contrast.test.ts` (AA on bg-1 AND bg-2 per scheme, registry ↔ CSS
+  agreement, swatch ↔ palette agreement)
+- Chrome drawn on the Cesium canvas or on its own pinned near-black surface
+  carries `.on-dark` (or the `map-foot-item` classes), which keeps the dark text
+  ramp under the light-family schemes. The globe is dark in every scheme.
+
 ## Auth
 
 - `apiFetch` / `withWsKey` wrap every browser→backend call; raw `fetch` only
   for third-party hosts via scoped eslint ignore. → eslint +
   `invariants.test.ts`
+
+## Controls state what they do
+
+- A control that renders must run. The File/Edit/View bar, the four panel tabs
+  and the action bar each shipped as chrome that highlighted and did nothing;
+  the tabs stayed clickable under a full-bleed app that had removed the column
+  they open into. If a key or a shortcut is PRINTED (a menu hint, a tab
+  tooltip), something must be listening for it.
+  → `shell/Console.test.tsx`, `shell/ActionBar.test.tsx`, `shell/TitleBar.menus.test.ts`
+- The action bar reports `useFilters` / `useSelection`. Never a literal sentence.
 
 ## Copy / voice (2026-07-15, docs/decisions.md#dashboard-copy-one-voice-no-em-dashes-2026-07-15)
 

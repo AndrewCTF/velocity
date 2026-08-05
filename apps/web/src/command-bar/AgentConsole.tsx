@@ -419,7 +419,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
           requestAnimationFrame(() => inputRef.current?.focus());
         }}
         aria-label="Open analyst agent"
-        className="fixed bottom-3 right-3 z-[var(--z-dock)] flex items-center gap-2 mono text-[13px] px-4 py-2.5 rounded-md border border-accent-line text-accent"
+        className="on-dark fixed bottom-3 right-3 z-[var(--z-dock)] flex items-center gap-2 mono text-[13px] px-4 py-2.5 rounded-md border border-accent-line text-accent"
         style={{ background: 'rgba(9,12,18,0.95)' }}
       >
         <span className="w-2 h-2 bg-accent rotate-45" /> Agent
@@ -427,9 +427,11 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
     );
   }
 
+  // `on-dark`: this panel pins its own near-black background regardless of the
+  // colour scheme, so its text ramp has to stay the dark one (see tokens.css).
   const containerCls = isMobile
-    ? 'fixed inset-0 z-[var(--z-overlay)] flex flex-col'
-    : 'map-banner flex flex-col';
+    ? 'on-dark fixed inset-0 z-[var(--z-overlay)] flex flex-col'
+    : 'on-dark map-banner flex flex-col';
   const containerStyle = isMobile
     ? { background: 'rgba(9,12,18,0.98)' }
     : {

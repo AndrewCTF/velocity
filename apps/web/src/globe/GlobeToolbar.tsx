@@ -351,7 +351,7 @@ export function GlobeToolbar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
       )}
 
       <div
-        className="pointer-events-auto flex flex-col rounded-md border border-line-2 overflow-hidden shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]"
+        className="on-dark pointer-events-auto flex flex-col rounded-md border border-line-2 overflow-hidden shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]"
         role="toolbar"
         aria-label="Map tools"
         style={{ background: 'rgba(9,12,18,0.94)' }}

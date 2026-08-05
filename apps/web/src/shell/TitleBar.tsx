@@ -16,6 +16,7 @@ import { useFloatingPanels } from '../state/floatingPanels.js';
 import { usePalette } from '../state/palette.js';
 import { useSettings } from '../state/settings.js';
 import { useTheme } from '../state/theme.js';
+import { SCHEMES } from '../theme/schemes.js';
 import { useUiMode } from '../state/uiMode.js';
 import { openMapToolPanel } from './panels/MapToolPanels.js';
 import { toast } from './toast.js';
@@ -165,15 +166,22 @@ const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
     },
   ],
   View: [
+    // One item per scheme, checked when active, rather than the old two-item
+    // Light/Dark pair. The list is generated from theme/schemes.ts so a scheme
+    // can never be added to the CSS and left unreachable from the menu.
+    ...SCHEMES.map((s, i) => ({
+      label: s.label,
+      // A hairline before the first light-family entry, so the two families
+      // read as two groups without a heading the menu has no room for.
+      sep: i > 0 && s.family === 'light' && SCHEMES[i - 1]?.family === 'dark',
+      on: () => useTheme.getState().mode === s.id,
+      run: () => useTheme.getState().setMode(s.id),
+    })),
     {
-      label: 'Light theme',
-      on: () => useTheme.getState().mode === 'light',
-      run: () => useTheme.getState().setMode('light'),
-    },
-    {
-      label: 'Dark theme',
-      on: () => useTheme.getState().mode === 'dark',
-      run: () => useTheme.getState().setMode('dark'),
+      label: 'Next colour scheme',
+      hint: '⇧T',
+      sep: true,
+      run: () => useTheme.getState().toggle(),
     },
     {
       label: 'Command layout',
