@@ -557,6 +557,21 @@
   --cls-unclas-fg: #72ca9b;
   --cls-exercise-bg: #5c4405;
   --cls-exercise-fg: #fbd065;
+  /* Blueprint's $pt-font-family, verbatim (theme/blueprint.ts). A Palantir
+     theme that takes the colour and leaves the typeface is half a theme, and
+     the type is the half that carries "native application" — Blueprint names no
+     webfont at all, it asks for the platform UI font and takes what it gets.
+     The console's own stack asks for Inter first and gets it (measured in the
+     browser, not inferred from fc-list, which reports zero faces for it), so
+     this is a real switch rather than a fallback chain that changes nothing. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+  /* $pt-font-family-monospace is the bare keyword; Blueprint names none. */
+  --font-mono: monospace;
+  --font-label:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 /* Blueprint turquoise — turquoise3 from the extended ramp, for operators who need blue to stay a data colour.
@@ -609,6 +624,21 @@
   --cls-unclas-fg: #72ca9b;
   --cls-exercise-bg: #5c4405;
   --cls-exercise-fg: #fbd065;
+  /* Blueprint's $pt-font-family, verbatim (theme/blueprint.ts). A Palantir
+     theme that takes the colour and leaves the typeface is half a theme, and
+     the type is the half that carries "native application" — Blueprint names no
+     webfont at all, it asks for the platform UI font and takes what it gets.
+     The console's own stack asks for Inter first and gets it (measured in the
+     browser, not inferred from fc-list, which reports zero faces for it), so
+     this is a real switch rather than a fallback chain that changes nothing. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+  /* $pt-font-family-monospace is the bare keyword; Blueprint names none. */
+  --font-mono: monospace;
+  --font-label:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 /* Blueprint indigo — indigo3, the hue this console already reserves for model output.
@@ -661,6 +691,21 @@
   --cls-unclas-fg: #72ca9b;
   --cls-exercise-bg: #5c4405;
   --cls-exercise-fg: #fbd065;
+  /* Blueprint's $pt-font-family, verbatim (theme/blueprint.ts). A Palantir
+     theme that takes the colour and leaves the typeface is half a theme, and
+     the type is the half that carries "native application" — Blueprint names no
+     webfont at all, it asks for the platform UI font and takes what it gets.
+     The console's own stack asks for Inter first and gets it (measured in the
+     browser, not inferred from fc-list, which reports zero faces for it), so
+     this is a real switch rather than a fallback chain that changes nothing. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+  /* $pt-font-family-monospace is the bare keyword; Blueprint names none. */
+  --font-mono: monospace;
+  --font-label:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 /* Blueprint light — Blueprint 5.1.16's light surface, published ramp only.
@@ -721,6 +766,21 @@
   --sh-1: 0 1px 2px rgba(17, 20, 24, 0.10);
   --sh-2: 0 6px 22px rgba(17, 20, 24, 0.14);
   --sh-pop: 0 18px 50px rgba(17, 20, 24, 0.18);
+  /* Blueprint's $pt-font-family, verbatim (theme/blueprint.ts). A Palantir
+     theme that takes the colour and leaves the typeface is half a theme, and
+     the type is the half that carries "native application" — Blueprint names no
+     webfont at all, it asks for the platform UI font and takes what it gets.
+     The console's own stack asks for Inter first and gets it (measured in the
+     browser, not inferred from fc-list, which reports zero faces for it), so
+     this is a real switch rather than a fallback chain that changes nothing. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+  /* $pt-font-family-monospace is the bare keyword; Blueprint names none. */
+  --font-mono: monospace;
+  --font-label:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 /* ── Surfaces that are dark in every scheme ────────────────────────────────

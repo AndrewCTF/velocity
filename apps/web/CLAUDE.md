@@ -74,6 +74,17 @@ the decision deliberately by changing BOTH the guard and this file.
   token guard owns it. Composite ALPHA when you measure — reading a tint's hue
   and dropping its alpha compares text against a colour never painted at
   strength, and will report every scheme as broken.
+- Typography is half a design system, so the `bp-*` schemes also carry
+  Blueprint's `$pt-font-family` verbatim. Blueprint names no webfont — it asks
+  for the platform UI font, which is why a Blueprint app looks native on every
+  OS. Measured on this box: the default schemes paint with Inter, the Blueprint
+  schemes with Ubuntu (the first entry of the published stack that resolves).
+- Probe font availability by MEASURING GLYPHS, never `document.fonts.check()`,
+  which answered `true` for every family asked including invented ones. Render
+  the sample in `"<family>", <sentinel>` and compare against the sentinel alone,
+  with a nonsense family as the control. `docs/mockups/*/README` claims Inter is
+  not installed here; the browser says otherwise and the browser is the one
+  doing the painting.
 - The four `bp-*` schemes are Palantir's published Blueprint ramp
   (`theme/blueprint.ts`, extracted from `@blueprintjs/colors@5.1.16` — the same
   version the console's metrics are calibrated against). `blueprint: true` in
