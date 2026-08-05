@@ -115,6 +115,7 @@ from app.routes import ontology as ontology_routes
 from app.routes import orgs as orgs_routes
 from app.routes import osint as osint_routes
 from app.routes import places as places_routes
+from app.routes import primary as primary_routes
 from app.routes import recon as recon_routes
 from app.routes import route as route_routes
 from app.routes import routing as routing_routes
@@ -645,6 +646,9 @@ def create_app() -> FastAPI:
     # One organisation across GLEIF, SEC EDGAR, USAspending and the designation
     # lists, in one call, with every source reporting whether it answered.
     app.include_router(orgs_routes.router)
+    # Three more primary emitters: orbital launches at their pads, NOAA space
+    # weather, and storm surge as observed water level minus tide prediction.
+    app.include_router(primary_routes.router)
     # National routing health from RIPE RIS: a country coming off the internet
     # is a machine reporting on itself, not a news story about it.
     app.include_router(routing_routes.router)

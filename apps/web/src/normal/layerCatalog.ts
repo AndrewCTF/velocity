@@ -83,6 +83,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'GPS', icon: 'satellite', layerIds: ['space.celestrak.gps'] },
       { label: 'Visual', icon: 'satellite', layerIds: ['space.celestrak.visual'] },
       { label: 'Space weather / aurora', icon: 'satellite', layerIds: ['weather.spacewx.aurora'] },
+      { label: 'Launches', icon: 'satellite', layerIds: ['space.launches'] },
     ],
   },
   {
@@ -118,6 +119,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Fused warnings', icon: 'shield', layerIds: ['intel.incidents.live'] },
       { label: 'Internet outages', icon: 'signal', layerIds: ['cyber.ioda.outages'] },
       { label: 'National routing drop', icon: 'signal', layerIds: ['cyber.routing.national'] },
+      { label: 'Storm surge', icon: 'anchor', layerIds: ['oceans.surge'] },
       { label: 'GDELT events', icon: 'bell', layerIds: ['news.gdelt.events'] },
       { label: 'ACLED conflict', icon: 'bell', layerIds: ['news.acled.events'] },
       { label: 'UCDP actor-coded', icon: 'crosshair', layerIds: ['conflict.ucdp'] },

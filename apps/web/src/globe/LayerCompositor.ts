@@ -209,6 +209,8 @@ export const HAZARD_POINT_LAYER_IDS: ReadonlySet<string> = new Set([
   // registry fact, so they draw as a sanction (`style_kind`) and still resolve
   // as a vessel or an aircraft (`kind`).
   'cyber.routing.national',
+  'space.launches',
+  'oceans.surge',
   'intel.sanctions.vessels',
   'intel.sanctions.aircraft',
   'hazards.gdacs',
