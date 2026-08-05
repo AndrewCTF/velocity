@@ -11,10 +11,13 @@ from __future__ import annotations
 import pytest
 
 from app.intel.sanctions import (
+    SanctionsIndex,
     match_aircraft,
     match_vessel,
     normalize_name,
     parse_sdn_csv,
+    parse_uk_csv,
+    parse_un_xml,
 )
 
 SDN = (
@@ -85,3 +88,69 @@ def test_a_clean_contact_matches_nothing(idx) -> None:
 def test_name_folding_survives_ais_spelling(idx) -> None:
     assert normalize_name("  M/V  Ebano-1 ") == "MVEBANO1"
     assert match_vessel(idx, name="ebano") is not None
+
+
+# ── UK OFSI ────────────────────────────────────────────────────────────────
+# Two header rows, and the ship identifiers are labelled spans inside the free
+# text rather than columns. Both are why this needs its own parser.
+UK = (
+    "Last Updated,03/06/2026\n"
+    "Name 6,Name 1,Group Type,Other Information,Regime,Group ID\n"
+    "SAM JONG 2,,Ship,"
+    '"Listed as asset of Korea Samjong Shipping (IMO number):7408873 '
+    '(Current owners):Korea Samjong Shipping (Flag of ship):North Korea '
+    '(Type of ship):Oil tanker",'
+    "Democratic People's Republic of Korea,13651\n"
+    "SOME BANK,,Entity,A bank,Russia,99001\n"
+)
+
+UN = (
+    '<?xml version="1.0" encoding="UTF-8"?><CONSOLIDATED_LIST>'
+    "<INDIVIDUALS><INDIVIDUAL><DATAID>6908347</DATAID>"
+    "<FIRST_NAME>Some</FIRST_NAME><SECOND_NAME>Person</SECOND_NAME>"
+    "<UN_LIST_TYPE>Al-Qaida</UN_LIST_TYPE><COMMENTS1>A note.</COMMENTS1>"
+    "</INDIVIDUAL></INDIVIDUALS>"
+    "<ENTITIES><ENTITY><DATAID>6908348</DATAID><FIRST_NAME>SOME ORG</FIRST_NAME>"
+    "<UN_LIST_TYPE>DPRK</UN_LIST_TYPE></ENTITY></ENTITIES>"
+    "</CONSOLIDATED_LIST>"
+)
+
+
+def test_uk_pulls_the_imo_out_of_a_labelled_span() -> None:
+    idx = parse_uk_csv(UK)
+    assert idx.counts() == {"vessel": 1, "entity": 1}
+    m = match_vessel(idx, imo=7408873)
+    assert m is not None
+    assert m.designation.name == "SAM JONG 2"
+    assert m.designation.vessel_flag == "North Korea"
+    assert m.designation.vessel_type == "Oil tanker"
+    assert m.designation.list_name == "UK OFSI"
+
+
+def test_un_parses_individuals_and_entities() -> None:
+    idx = parse_un_xml(UN)
+    assert idx.counts() == {"individual": 1, "entity": 1}
+    assert idx.lists == ["UN Security Council"]
+
+
+def test_a_hull_on_two_lists_reports_both() -> None:
+    # The reason the index maps a key to a LIST of designations. Reporting only
+    # the first list that loaded would answer a materially weaker question.
+    merged = SanctionsIndex(fetched_at=0.0, rows=0)
+    ofac = parse_sdn_csv(
+        '4243,"SAM JONG 2","vessel","DPRK4",-0- ,-0- ,"Oil tanker",-0- ,-0- ,-0- ,-0- ,'
+        '"Vessel Registration Identification IMO 7408873."\n'
+    )
+    merged.merge(ofac)
+    merged.merge(parse_uk_csv(UK))
+    m = match_vessel(merged, imo=7408873)
+    assert m is not None
+    assert m.lists == ("OFAC SDN", "UK OFSI")
+    assert m.as_dict()["lists"] == ["OFAC SDN", "UK OFSI"]
+
+
+def test_a_broken_list_yields_nothing_rather_than_raising() -> None:
+    # A parse failure must not take the other lists down with it, and must not
+    # look like a clean list either.
+    assert parse_un_xml("<not xml").counts() == {}
+    assert parse_uk_csv("no header here\n").counts() == {}

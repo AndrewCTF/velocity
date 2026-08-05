@@ -1,4 +1,4 @@
-"""``/api/sanctions/*`` — OFAC SDN, and the join onto the live feeds.
+"""``/api/sanctions/*`` — the designation lists, and the join onto the live feeds.
 
 ``/lookup`` answers "is this hull or this tail designated" for one object.
 ``/vessels`` and ``/aircraft`` answer the question the other way round: of
@@ -32,9 +32,20 @@ async def summary() -> dict[str, Any]:
     """What list is loaded, how big it is, and what it can be joined on."""
     idx = await sx.get_index()
     programs = sorted(idx.programs().items(), key=lambda kv: -kv[1])
+    note = (
+        "The EU FSD export is deliberately not loaded: measured 25.7 MB for 6225 entries "
+        "with no vessel element, so it broadens the name screen and adds nothing joinable "
+        "by hull."
+    )
+    if idx.failed:
+        note = (
+            f"{', '.join(sorted(idx.failed))} did not load, so a miss is not a clearance "
+            f"against {'it' if len(idx.failed) == 1 else 'them'}. " + note
+        )
     return {
-        "list": "OFAC SDN",
-        "source_url": sx.SDN_CSV_URL,
+        "lists": idx.lists,
+        "failed": idx.failed,
+        "by_list": idx.by_list(),
         "tier": "registry",
         "fetched_at": idx.fetched_at,
         "rows": idx.rows,
@@ -46,10 +57,7 @@ async def summary() -> dict[str, Any]:
             "aircraft_tail": len(idx.by_tail),
         },
         "top_programs": [{"program": p, "count": n} for p, n in programs[:12]],
-        "note": (
-            "OFAC only. The EU consolidated list, UK OFSI and the UN Security Council list "
-            "are not loaded, so an object absent here may still be designated elsewhere."
-        ),
+        "note": note,
     }
 
 
@@ -88,7 +96,11 @@ async def lookup(
         "matched": m is not None,
         "match": m.as_dict() if m else None,
         "tried": tried,
-        "list": "OFAC SDN",
+        # What was actually consulted. A miss against two lists is a weaker
+        # statement than a miss against three, and the card renders the
+        # difference.
+        "lists": idx.lists,
+        "failed": idx.failed,
         "fetched_at": idx.fetched_at,
     }
 
@@ -97,7 +109,7 @@ def _match_props(m: sx.Match) -> dict[str, Any]:
     d = m.designation
     return {
         "sanctioned": True,
-        "sanction_list": "OFAC SDN",
+        "sanction_list": " · ".join(m.lists) if m.lists else d.list_name,
         "sanction_programs": list(d.programs),
         "sanction_matched_on": m.matched_on,
         "sanction_confidence": m.confidence,
@@ -111,18 +123,29 @@ def _match_props(m: sx.Match) -> dict[str, Any]:
 @router.get("/vessels")
 async def sanctioned_vessels(
     limit: int = Query(2000, ge=1, le=20000),
-    exact_only: int = Query(0, description="1 = drop name and call-sign candidates"),
+    exact_only: int = Query(1, description="0 = include name and call-sign candidates"),
 ) -> dict[str, Any]:
-    """Designated hulls currently in the AIS snapshot, as GeoJSON."""
+    """Designated hulls currently in the AIS snapshot, as GeoJSON.
+
+    Exact only by DEFAULT, and that default was set by a measurement. With name
+    candidates included the first live run returned 335 hulls, of which 294 were
+    name matches: hull names are short, common and reused, so a name join
+    produces mostly noise. A pin on a map carries no confidence label at a
+    glance — it just reads as "this ship is sanctioned" — so the layer shows
+    only what an identifier vouches for. `exact_only=0` returns the candidates
+    for an analyst who asked for them, and the note always says how many were
+    held back.
+    """
     idx = await sx.get_index()
     snap = vessel_snapshot()
 
     # ~60k hulls, each costing up to three folded-name lookups. Off the loop:
     # the map polls this on a timer and it must never be what makes the aircraft
     # snapshot late.
-    def scan() -> tuple[list[dict[str, Any]], int]:
+    def scan() -> tuple[list[dict[str, Any]], int, int]:
         out: list[dict[str, Any]] = []
         considered = 0
+        held_back = 0
         for f in snap.get("features", []):
             p = f.get("properties") or {}
             considered += 1
@@ -137,6 +160,7 @@ async def sanctioned_vessels(
             if m is None:
                 continue
             if exact_only and m.confidence != "exact":
+                held_back += 1
                 continue
             geom = f.get("geometry") or {}
             coords = geom.get("coordinates") or []
@@ -152,14 +176,22 @@ async def sanctioned_vessels(
             )
             if len(out) >= limit:
                 break
-        return out, considered
+        return out, considered, held_back
 
-    out, considered = await asyncio.to_thread(scan)
+    out, considered, held_back = await asyncio.to_thread(scan)
     env = fg.fc(out)
-    env["note"] = (
+    joined_on = "IMO or MMSI" if exact_only else "IMO, MMSI, call sign or name"
+    note = (
         f"{len(out)} designated hulls in a snapshot of {considered} vessels, "
-        "joined on IMO, MMSI, call sign or name. OFAC SDN only."
+        f"joined on {joined_on} against {', '.join(idx.lists) or 'no list'}."
     )
+    if held_back:
+        note += (
+            f" {held_back} further hulls match only by name or call sign and are held back; "
+            "add exact_only=0 to see them."
+        )
+    env["note"] = note
+    env["held_back"] = held_back
     return env
 
 
@@ -200,6 +232,6 @@ async def sanctioned_aircraft(limit: int = Query(2000, ge=1, le=20000)) -> dict[
     env = fg.fc(out)
     env["note"] = (
         f"{len(out)} designated airframes in a snapshot of {considered} aircraft, "
-        "joined on tail number. OFAC SDN only."
+        f"joined on tail number against {', '.join(idx.lists) or 'no list'}."
     )
     return env

@@ -29,6 +29,7 @@ interface Match {
   matched_on: string;
   confidence: string;
   list: string;
+  lists: string[];
   source_url: string;
 }
 
@@ -36,7 +37,11 @@ interface LookupResponse {
   matched: boolean;
   match: Match | null;
   tried: Record<string, string | number>;
-  list: string;
+  /** Lists that actually loaded for this check. */
+  lists: string[];
+  /** Lists that did not, keyed by name. A source that dropped out must never
+   *  read as a source that found nothing. */
+  failed: Record<string, string>;
 }
 
 type State = { status: 'loading' } | { status: 'error'; code: number } | { status: 'done'; data: LookupResponse };
@@ -107,8 +112,10 @@ export function SanctionsCard({
     );
   }
 
-  const { matched, match, tried } = state.data;
+  const { matched, match, tried, lists = [], failed = {} } = state.data;
   const triedLabel = Object.keys(tried).join(' · ') || 'nothing';
+  const listsLabel = lists.join(' · ') || 'no list';
+  const missing = Object.keys(failed);
 
   if (!matched || !match) {
     return (
@@ -118,7 +125,12 @@ export function SanctionsCard({
           <span className="text-txt-1">No OFAC designation</span>
         </div>
         <Caveat
-          note={`Checked on ${triedLabel}. OFAC SDN only, so this is not a clearance against the EU, UK or UN lists.`}
+          tone={missing.length ? 'warn' : 'neutral'}
+          note={
+            missing.length
+              ? `Checked on ${triedLabel} against ${listsLabel}. ${missing.join(' · ')} did not load, so this is not a clearance against ${missing.length === 1 ? 'it' : 'them'}.`
+              : `Checked on ${triedLabel} against ${listsLabel}. The EU list is not among them, and it publishes no machine-readable vessel export.`
+          }
         />
       </Widget>
     );
@@ -139,6 +151,7 @@ export function SanctionsCard({
           matched on {match.matched_on}
         </span>
       </div>
+      <Row k="Listed by" v={(match.lists ?? [match.list]).join(' · ')} />
       <Row k="Listed as" v={match.name} />
       <Row k="Programs" v={match.programs.join(' · ') || null} />
       <Row k="Flag" v={match.vessel_flag} />
@@ -155,8 +168,8 @@ export function SanctionsCard({
         tone={exact ? 'alert' : 'warn'}
         note={
           exact
-            ? `${match.list}, matched on ${match.matched_on}.`
-            : `${match.list}, matched on ${match.matched_on}. A name or a call sign is not an identifier, so treat this as a candidate until the hull number agrees.`
+            ? `Matched on ${match.matched_on} against ${listsLabel}.`
+            : `Matched on ${match.matched_on} against ${listsLabel}. A name or a call sign is not an identifier, so treat this as a candidate until the hull number agrees.`
         }
       />
     </Widget>
