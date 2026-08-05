@@ -157,7 +157,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
         <span className="font-label uppercase tracking-[0.8px] text-[11px] text-txt-1">
           Inbox{' '}
           {unread > 0 && (
-            <span className="ml-1 mono text-[10px] px-1.5 py-0.5 rounded-sm bg-alert text-white font-semibold">
+            <span className="ml-1 mono text-[10px] px-1.5 py-0.5 rounded-sm bg-alert text-[var(--on-alert)] font-semibold">
               {unread}
             </span>
           )}

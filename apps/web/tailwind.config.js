@@ -25,6 +25,21 @@ export default {
       // Per frontend.md §2/§3: the only saturated color in the UI belongs to data.
       // We expose tokens as CSS variables (see tokens.css) and reference them
       // here so Tailwind utilities like bg-bg-1 resolve to var(--bg-1).
+      // `textColor` is split out from `colors` for the semantic hues. A hue like
+      // --accent is a FILL: bg-accent must be it, and text-accent must NOT,
+      // because the fill is chosen to hold ink rather than to be ink. Measured
+      // in the browser: text-accent on the panel substrate is 3.46:1 under the
+      // default scheme and 2.63:1 under Paper, both under AA, on live text (the
+      // analyst-console caret, the "details" link in the coverage banner).
+      // Mapping the TEXT utility onto the matching --*-fg tier fixes every one
+      // of the ~30 call sites at once and cannot drift back.
+      textColor: ({ theme }) => ({
+        ...theme('colors'),
+        accent: token('--accent-fg'),
+        warn: token('--warn-fg'),
+        alert: token('--alert-fg'),
+        ok: token('--ok-fg'),
+      }),
       colors: {
         'bg-0': token('--bg-0'),
         'bg-1': token('--bg-1'),
@@ -53,6 +68,7 @@ export default {
         ok: token('--ok'),
         'ok-bg': token('--ok-bg'),
         'ok-line': token('--ok-line'),
+        'ok-fg': token('--ok-fg'),
         mag: token('--mag'),
         'mag-dim': token('--mag-dim'),
         'mag-line': token('--mag-line'),

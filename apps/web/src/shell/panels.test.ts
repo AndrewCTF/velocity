@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   REHOMED, KEPT, LEFT_PANELS, RIGHT_PANELS, describeHome,
   LEGACY_LEFT, LEGACY_RIGHT,
 } from './panels.js';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 // "Nothing must be missing" as an executable contract.
 //
@@ -50,9 +55,38 @@ describe('panel re-homing', () => {
     }
   });
 
-  it('keeps the four left and three right panels distinct', () => {
+  it('keeps the named left and right panels distinct', () => {
     const ids = [...LEFT_PANELS.map((p) => p.id), ...RIGHT_PANELS.map((p) => p.id)];
     expect(new Set(ids).size).toBe(ids.length);
     expect(LEFT_PANELS.map((p) => p.key)).toEqual(['1', '2', '3', '4']);
+  });
+
+  // A declared panel the shell cannot fill is a tab that does nothing, one
+  // level up. `time` sat in this list unwired because the TimeDock already owns
+  // playback and useTime holds no window a second surface could own; it was
+  // removed rather than left as an intention. Every id here must be handed
+  // content by App.tsx.
+  it('declares no panel App.tsx does not fill', () => {
+    const app = readFileSync(resolve(HERE, '..', 'App.tsx'), 'utf8');
+    const block = app.slice(app.indexOf('rightPanels: Partial<'));
+    for (const p of RIGHT_PANELS) {
+      expect(block, `RIGHT_PANELS declares ${p.id} and App.tsx never fills it`).toMatch(
+        new RegExp(`\\b${p.id}:\\s*<`),
+      );
+    }
+    for (const p of LEFT_PANELS) {
+      expect(app, `LEFT_PANELS declares ${p.id} and App.tsx never fills it`).toMatch(
+        new RegExp(`\\b${p.id}:\\s*leftHomed`),
+      );
+    }
+  });
+
+  // Every legacy surface must reach a NAMED address. `More` exists so a rail
+  // item added tomorrow cannot vanish, not as somewhere to leave work: it held
+  // six surfaces, five of them a second copy of something already homed.
+  it('parks nothing recorded under More', () => {
+    const app = readFileSync(resolve(HERE, '..', 'App.tsx'), 'utf8');
+    expect(app, 'App.tsx still builds a `pending` parking list').not.toMatch(/const pending\b/);
+    expect(app).toContain('extraCount={leftHomed.rest.length}');
   });
 });

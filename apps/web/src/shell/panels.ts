@@ -37,7 +37,13 @@ export type Home =
   | { kind: 'redundant'; with: string }; // another surface already did this
 
 export type LeftPanelId = 'layers' | 'find' | 'histogram' | 'info';
-export type RightPanelId = 'selection' | 'series' | 'time';
+// `time` was declared here and never wired. The TimeDock owns playback, the
+// multiplier and the scrub range, and `useTime` holds no window a second
+// surface could own without inventing one — so a Time-selection tab would
+// either repeat the dock or fabricate state. Declaring a panel the shell can
+// never fill is the same defect as a tab that does nothing, one level up, so
+// the declaration is gone rather than left as an intention. (2026-08-05)
+export type RightPanelId = 'selection' | 'series';
 
 export const LEFT_PANELS: ReadonlyArray<{ id: LeftPanelId; label: string; key: string }> = [
   { id: 'layers', label: 'Layers', key: '1' },
@@ -49,7 +55,6 @@ export const LEFT_PANELS: ReadonlyArray<{ id: LeftPanelId; label: string; key: s
 export const RIGHT_PANELS: ReadonlyArray<{ id: RightPanelId; label: string }> = [
   { id: 'selection', label: 'Selection' },
   { id: 'series', label: 'Series' },
-  { id: 'time', label: 'Time selection' },
 ];
 
 /** Every old rail id, and where it lives now. Exhaustive by construction: the
@@ -83,7 +88,15 @@ export const REHOMED: Readonly<Record<string, Home>> = {
 
   // ── right rail, 9 ────────────────────────────────────────────────────────
   selection: { kind: 'panel', panel: 'selection' },
-  intel: { kind: 'panel', panel: 'selection' }, // a section of the dossier
+  // Recorded as "a section of the dossier" in the first pass, which was wrong:
+  // IntelPanel takes no selection. It is the theatre rollup — the incident
+  // brief, dark-vessel candidates, GPS-jamming clusters and the AOI watch — and
+  // a dossier section that ignores the selected object is not a dossier
+  // section. Info already answers "what is happening", carrying the AOI watch
+  // and the standing-detection rollup from the old Ops panel, so this is the
+  // fourth section of that panel rather than a fifth tab. (2026-08-05; the
+  // wrong record is why it sat in the More parking lot instead of anywhere.)
+  intel: { kind: 'panel', panel: 'info' },
   investigation: { kind: 'redundant', with: 'the Graph app' },
   news: { kind: 'redundant', with: 'Reports, which already has a News tab' },
   ground: { kind: 'redundant', with: 'Video, which already has a Ground recon tab' },

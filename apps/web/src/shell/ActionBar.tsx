@@ -202,7 +202,7 @@ export function ActionBar(): JSX.Element {
         title={clauses.length > 0 ? 'Drop every contact-type filter' : 'No filters are set.'}
         className={`flex h-6 items-center gap-[6px] rounded-sm px-[11px] text-[12px] ${
           clauses.length > 0
-            ? 'bg-accent text-white hover:brightness-110'
+            ? 'bg-accent text-[var(--on-accent)] hover:brightness-110'
             : 'cursor-not-allowed border border-line-2 text-txt-3'
         }`}
       >

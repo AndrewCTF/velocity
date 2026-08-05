@@ -51,7 +51,23 @@ the decision deliberately by changing BOTH the guard and this file.
   agreement, swatch ↔ palette agreement)
 - Chrome drawn on the Cesium canvas or on its own pinned near-black surface
   carries `.on-dark` (or the `map-foot-item` classes), which keeps the dark text
-  ramp under the light-family schemes. The globe is dark in every scheme.
+  ramp under the light-family schemes. The globe is dark in every scheme. A
+  surface that means to be dark must be OPAQUE: `bg-black/40` over a white panel
+  is a mid grey, which is how the City viewport reached 2.42:1.
+- A hue is a FILL or it is INK, never both. `bg-accent` is `--accent`;
+  `text-accent` resolves to `--accent-fg` (tailwind.config.js splits
+  `textColor`), and text ON a solid fill uses `--on-accent` / `--on-mag` /
+  `--on-alert` / `--on-ok` / `--on-warn`, which each scheme states for itself.
+  A literal `text-white` on a fill measured 2.14:1 on Night watch's amber.
+  → `theme/contrast.test.ts` holds every fill/ink and `-fg`/substrate pair to AA
+- The ramp is guaranteed on `bg-1` and `bg-2` ONLY. Text on `bg-3`, on a
+  `*-dim` tint or on a `*-bg` tint is a step lighter and has to be checked;
+  three of those measured 4.37-4.47:1. When in doubt take one tier brighter.
+- Verify a scheme in the BROWSER, not from the tokens: walk every rendered text
+  node, composite its real background, and check the ratio. The token guard is
+  necessary and not sufficient — it cannot see a tint, a pinned surface or a
+  glyph used as a swatch. Baseline 2026-08-05: 7 schemes x 17 surfaces = 119
+  sweeps, 42,478 text nodes, 0 failures.
 
 ## Auth
 
@@ -66,8 +82,17 @@ the decision deliberately by changing BOTH the guard and this file.
   the tabs stayed clickable under a full-bleed app that had removed the column
   they open into. If a key or a shortcut is PRINTED (a menu hint, a tab
   tooltip), something must be listening for it.
-  → `shell/Console.test.tsx`, `shell/ActionBar.test.tsx`, `shell/TitleBar.menus.test.ts`
+  → `shell/liveControls.test.ts` (every `<button>` under `shell/` has a handler
+  or is `disabled`), `shell/Console.test.tsx`, `shell/ActionBar.test.tsx`,
+  `shell/TitleBar.menus.test.ts`
 - The action bar reports `useFilters` / `useSelection`. Never a literal sentence.
+- A surface is reachable at ONE named address. `More` exists so a rail item
+  added tomorrow cannot vanish, not as somewhere to leave work: it held six
+  surfaces, five of them a second copy of something already homed elsewhere, and
+  a duplicate is a second place to find a stale one.
+  → `shell/panels.test.ts` (no `pending` list, no panel declared that App.tsx
+  does not fill), `shell/rehoming.test.ts` (each address renders, and renders
+  once)
 
 ## Copy / voice (2026-07-15, docs/decisions.md#dashboard-copy-one-voice-no-em-dashes-2026-07-15)
 

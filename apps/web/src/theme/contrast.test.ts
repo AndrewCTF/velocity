@@ -15,16 +15,34 @@ import { SCHEMES } from './schemes.js';
 const CSS = readFileSync(join(process.cwd(), 'src/theme/tokens.css'), 'utf8');
 
 // Pull `--name: #hex;` decls out of a single `:root {…}` / `:root[…] {…}` block.
-function parseBlock(selector: string): Record<string, string> {
+function parseBlockRaw(selector: string): Record<string, string> {
   const start = CSS.indexOf(selector);
   if (start < 0) throw new Error(`selector not found: ${selector}`);
   const open = CSS.indexOf('{', start);
   const close = CSS.indexOf('}', open);
   const body = CSS.slice(open + 1, close);
   const out: Record<string, string> = {};
-  for (const m of body.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{3,8})\s*;/g)) {
+  for (const m of body.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{3,8}|var\(--[\w-]+\))\s*;/g)) {
     const [, name, hex] = m;
     if (name && hex) out[name] = hex;
+  }
+  return out;
+}
+
+/** Same as parseBlock but also captures `--x: var(--y);` aliases, resolving
+ *  them against the block itself and then the `:root` default. The ink tokens
+ *  are written as `var(--ink-dark)` so the dark value has one home. */
+function parseBlockResolved(selector: string): Record<string, string> {
+  const root = parseBlockRaw(':root {');
+  const own = parseBlockRaw(selector);
+  const merged: Record<string, string> = { ...root, ...own };
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(merged)) {
+    let cur: string | undefined = v;
+    for (let i = 0; i < 4 && cur && cur.startsWith('var('); i++) {
+      cur = merged[cur.slice(4, -1).trim()];
+    }
+    if (cur && cur.startsWith('#')) out[k] = cur;
   }
   return out;
 }
@@ -61,7 +79,7 @@ const selectorFor = (id: string): string =>
 describe.each(SCHEMES.map((s) => [selectorFor(s.id), s.id] as const))(
   'WCAG-AA text contrast — %s theme',
   (selector, _label) => {
-  const tokens = parseBlock(selector);
+  const tokens = parseBlockRaw(selector);
   const tok = (name: string): string => {
     const v = tokens[name];
     if (!v) throw new Error(`token ${name} not found in ${selector}`);
@@ -113,9 +131,69 @@ describe('scheme registry', () => {
     for (const id of new Set(inCss)) expect(listed.has(id as string)).toBe(true);
   });
 
+  // A hue like --accent is a FILL. It is chosen to HOLD ink, so the ink on it
+  // is a separate token per scheme — `text-white` everywhere measured 2.14:1 on
+  // Night watch's amber accent and 2.34:1 on High contrast's magenta, on live
+  // controls. Every fill/ink pair here clears AA.
+  it.each(SCHEMES.map((s) => [s.id] as const))('%s: ink on every solid fill clears AA', (id) => {
+    const t = parseBlockResolved(selectorFor(id));
+    for (const fill of ['accent', 'mag', 'alert', 'ok', 'warn']) {
+      const bg = t[`--${fill}`];
+      const fg = t[`--on-${fill}`];
+      expect(bg, `${id}: --${fill} missing`).toBeTruthy();
+      expect(fg, `${id}: --on-${fill} missing`).toBeTruthy();
+      expect(
+        ratio(fg as string, bg as string),
+        `${id}: --on-${fill} on --${fill}`,
+      ).toBeGreaterThanOrEqual(AA);
+    }
+  });
+
+  // tailwind.config.js maps the TEXT utilities onto these lightened tiers, so
+  // they carry body text on the panel substrate and must clear AA there.
+  it.each(SCHEMES.map((s) => [s.id] as const))('%s: the -fg text tiers clear AA', (id) => {
+    const t = parseBlockResolved(selectorFor(id));
+    for (const tier of ['--accent-fg', '--warn-fg', '--alert-fg', '--ok-fg']) {
+      const fg = t[tier];
+      expect(fg, `${id}: ${tier} missing`).toBeTruthy();
+      // These tiers are used ON their own tint (`bg-ok-bg text-ok`), which is
+      // the harder surface than the plain substrate and is where the badge
+      // failed. Composite the 16% tint and check that too.
+      const tint = (base: string): string => {
+        const fill = t[tier.replace('-fg', '')] as string;
+        const mix = (a: string, b: string): string => {
+          const [ra, ga, ba] = toRgb(a);
+          const [rb, gb, bb] = toRgb(b);
+          return (
+            '#' +
+            [
+              [ra, rb],
+              [ga, gb],
+              [ba, bb],
+            ]
+              .map(([x, y]) =>
+                Math.round((x as number) * 0.16 + (y as number) * 0.84)
+                  .toString(16)
+                  .padStart(2, '0'),
+              )
+              .join('')
+          );
+        };
+        return mix(fill, base);
+      };
+      const worst = Math.min(
+        ratio(fg as string, t['--bg-1'] as string),
+        ratio(fg as string, t['--bg-2'] as string),
+        ratio(fg as string, tint(t['--bg-1'] as string)),
+        ratio(fg as string, tint(t['--bg-2'] as string)),
+      );
+      expect(worst, `${id}: ${tier} on the panel substrate and its own tint`).toBeGreaterThanOrEqual(AA);
+    }
+  });
+
   it('a swatch matches the palette it advertises', () => {
     for (const s of SCHEMES) {
-      const tokens = parseBlock(selectorFor(s.id));
+      const tokens = parseBlockRaw(selectorFor(s.id));
       expect(tokens['--bg-0']?.toLowerCase()).toBe(s.swatch.bg.toLowerCase());
       expect(tokens['--bg-2']?.toLowerCase()).toBe(s.swatch.panel.toLowerCase());
       expect(tokens['--accent']?.toLowerCase()).toBe(s.swatch.accent.toLowerCase());

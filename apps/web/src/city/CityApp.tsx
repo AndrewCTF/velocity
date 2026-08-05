@@ -346,7 +346,12 @@ export function CityApp(): JSX.Element {
         </div>
       </nav>
 
-      <div className="flex-1 min-w-0 relative bg-black/40">
+      {/* A 3D viewport is a stage, and a stage is dark in every scheme so the
+          scene is what you look at. It was `bg-black/40`, which is only dark
+          when what is BEHIND it is: over the light schemes' white panel it
+          composited to a mid grey and the empty-state copy measured 2.42:1 on
+          it. Opaque, and `on-dark` so the copy keeps the ramp that reads on it. */}
+      <div className="on-dark flex-1 min-w-0 relative bg-[#0b0d10]">
         {scene ? (
           <>
             <SplatView url={scene.url} cam={scene.cam} onStats={(s) => setMeshCount(s.numSplats)} />
