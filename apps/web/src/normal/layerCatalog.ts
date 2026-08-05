@@ -117,6 +117,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Armed conflict', icon: 'crosshair', layerIds: ['conflict.gdelt.live'] },
       { label: 'Fused warnings', icon: 'shield', layerIds: ['intel.incidents.live'] },
       { label: 'Internet outages', icon: 'signal', layerIds: ['cyber.ioda.outages'] },
+      { label: 'National routing drop', icon: 'signal', layerIds: ['cyber.routing.national'] },
       { label: 'GDELT events', icon: 'bell', layerIds: ['news.gdelt.events'] },
       { label: 'ACLED conflict', icon: 'bell', layerIds: ['news.acled.events'] },
       { label: 'UCDP actor-coded', icon: 'crosshair', layerIds: ['conflict.ucdp'] },

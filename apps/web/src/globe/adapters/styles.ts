@@ -647,6 +647,10 @@ const HAZARD_COLORS: Record<string, string> = {
   // a GDACS red-alert tile, because a designation is a legal status and not an
   // emergency and the two must not read as the same thing.
   sanctioned: '#e11d48',
+  // National routing drop. Slate, not red: the tile means "this country's
+  // announced prefixes are below its own normal", which is a measurement, and
+  // the severity is in the property rather than in the colour.
+  routing: '#64748b',
 };
 
 function aqiColor(aqi: number | null): string {
@@ -661,6 +665,8 @@ function aqiColor(aqi: number | null): string {
 
 function hazardGlyph(kind: string): string {
   switch (kind) {
+    case 'routing': // broken link
+      return '<path d="M9.5 9.5 7 12a3.5 3.5 0 0 0 5 5l1.2-1.2" stroke="#0b1220" stroke-width="1.9" fill="none" stroke-linecap="round"/><path d="M14.5 14.5 17 12a3.5 3.5 0 0 0-5-5l-1.2 1.2" stroke="#0b1220" stroke-width="1.9" fill="none" stroke-linecap="round"/><path d="M4 20 20 4" stroke="#0b1220" stroke-width="1.5" stroke-linecap="round"/>';
     case 'sanctioned': // barred circle
       return '<circle cx="12" cy="12" r="6.4" fill="none" stroke="#2b0410" stroke-width="2"/><path d="M7.5 16.5 16.5 7.5" stroke="#2b0410" stroke-width="2" stroke-linecap="round"/>';
     case 'radiation': // trefoil

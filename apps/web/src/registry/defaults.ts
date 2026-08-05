@@ -726,6 +726,26 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     emits: ['event'],
   },
 
+  // National routing health from RIPE RIS. Only countries at or over a 5%
+  // drop against their OWN recent median are returned, so the layer carries
+  // findings rather than 51 green dots. Daily resolution: this is a record of
+  // what the route collectors saw, not a live wire.
+  {
+    id: 'cyber.routing.national',
+    group: 'cyber',
+    title: 'National routing drop · RIPE RIS',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/cyber/routing?min_drop=5',
+    refresh: { mode: 'pull', ttlSec: 3600 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'RIPE NCC (open data)',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['outage'],
+  },
+
   // ── SANCTIONS (2026-08-05) ──────────────────────────────────────────────
   // OFAC SDN joined onto the live AIS and ADS-B snapshots server-side: not a
   // list of designated ships, a list of designated ships that are MOVING right
