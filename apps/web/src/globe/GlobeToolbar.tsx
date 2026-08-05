@@ -16,6 +16,19 @@ import { MAP_TOOL_PANELS, openMapToolPanel } from '../shell/panels/MapToolPanels
 // on the canvas and the existing annotation / AOI plumbing is reused, not
 // rebuilt. Floats just inside the right rail; pointer-scoped so it never blocks
 // globe drag.
+//
+// The three clusters carry NAMES. They were three icon runs separated by a
+// hairline, and docs/dashboard-redesign-2026-08.md §2 is explicit that Gotham
+// labels its toolbar groups and that "an icon with a tooltip is exactly the
+// reachable-but-invisible pattern the persona studies kept finding". A hairline
+// says these three are different; it does not say what any of them is for.
+//
+// STILL OPEN, deliberately: that spec's structural correction #2 says Gaia's map
+// toolbar is a short HORIZONTAL cluster at the top-left of the map, not a
+// vertical rail down one side. Relocating it collides with the category legend
+// that already owns the top-left and moves the measure/area popover anchor, so
+// it is a separate change with its own verification rather than a side effect of
+// adding labels.
 
 interface ToolDef {
   id: MapTool;
@@ -43,6 +56,20 @@ function fmtKm(km: number): string {
   if (km < 1) return `${Math.round(km * 1000)} m`;
   if (km < 100) return `${km.toFixed(1)} km`;
   return `${Math.round(km).toLocaleString()} km`;
+}
+
+/** A named cluster header. Gotham's own toolbar grammar: a muted label above
+ *  each group, not a bare hairline between them. Kept to the same 40px column
+ *  the buttons use, so naming the groups costs the map no width. */
+function GroupLabel({ children }: { children: string }): JSX.Element {
+  return (
+    <span
+      aria-hidden="true"
+      className="mono select-none px-[3px] pb-[2px] pt-[5px] text-center text-[12px] leading-none tracking-[0.2px] text-txt-3"
+    >
+      {children}
+    </span>
+  );
 }
 
 export function GlobeToolbar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | null {
@@ -356,6 +383,7 @@ export function GlobeToolbar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
         aria-label="Map tools"
         style={{ background: 'rgba(9,12,18,0.94)' }}
       >
+        <GroupLabel>Tools</GroupLabel>
         {TOOLS.map((t) => {
           const on = t.id === tool;
           const I = t.icon;
@@ -377,7 +405,7 @@ export function GlobeToolbar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
           );
         })}
 
-        <div className="mx-2 my-1 h-px bg-line-2" />
+        <GroupLabel>Draw</GroupLabel>
 
         {/* The settings behind the draw tools. `annotate` places whatever kind,
             colour and label the Annotate panel holds, and until these buttons
@@ -396,7 +424,7 @@ export function GlobeToolbar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
           </button>
         ))}
 
-        <div className="mx-2 my-1 h-px bg-line-2" />
+        <GroupLabel>View</GroupLabel>
 
         <button type="button" title="Reset to top-down (nadir) view" aria-label="Reset view" onClick={() => resetToTopDown(viewer)} className="w-10 h-10 flex items-center justify-center text-txt-2 hover:text-accent hover:bg-bg-2">
           <LocateFixed size={17} strokeWidth={1.75} aria-hidden />
