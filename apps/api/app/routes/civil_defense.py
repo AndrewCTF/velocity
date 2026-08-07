@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from app.routes import _feedgeo as fg
 
@@ -117,53 +117,54 @@ async def ukraine_alerts_alt() -> dict[str, Any]:
 
 
 # ── meteoalarm — EU civil warnings ─────────────────────────────────────────
-# The meteoalarm.org CAP feed is an Atom/RSS feed of weather warnings.
-# We fetch the JSON widget feed which is lighter.
-METEOALARM_URL = "https://feeds.meteoalarm.org/api/v1/warnings/feeds-fullcap"
+# Meteoalarm publishes a per-country Atom feed of CAP warnings. There is no
+# JSON widget feed (`/api/v1/warnings/feeds-fullcap` is a 404), and a warning
+# here carries a NUTS3 geocode and an area NAME and no coordinates — so this is
+# a list, not a map layer, and it is read in the Sources panel rather than
+# plotted at a centroid the warning never claimed.
+METEOALARM_FEED = "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-{country}"
+_CAP_NS = "{urn:oasis:names:tc:emergency:cap:1.2}"
+_ATOM_NS = "{http://www.w3.org/2005/Atom}"
 
 
 @router.get("/api/alerts/meteoalarm")
-async def meteoalarm(country: str = Query("", max_length=2)) -> dict[str, Any]:
-    async def load() -> dict[str, Any]:
-        url = METEOALARM_URL
-        params: dict[str, str] = {}
-        if country:
-            params["country"] = country.upper()
-        try:
-            raw = await fg.fetch_json(url, params=params or None)
-        except Exception:
-            return fg.fc([])
-        entries = raw if isinstance(raw, list) else (raw or {}).get("warnings", [])
-        out: list[fg.Feature] = []
-        for w in (entries or [])[:500]:
-            if not isinstance(w, dict):
-                continue
-            lat = fg.num(w.get("lat") or (w.get("geocode", {}) or {}).get("lat"))
-            lon = fg.num(w.get("lon") or (w.get("geocode", {}) or {}).get("lon"))
-            wid = str(w.get("id") or w.get("identifier") or "")
-            if lat is None or lon is None or not wid:
-                continue
-            out.append(
-                fg.point(
-                    f"meteoalarm:{wid}",
-                    lon,
-                    lat,
-                    {
-                        "kind": "meteoalarm",
-                        "event": w.get("event") or w.get("awareness_type"),
-                        "severity": w.get("severity"),
-                        "urgency": w.get("urgency"),
-                        "certainty": w.get("certainty"),
-                        "country": w.get("country"),
-                        "area": w.get("areaDesc") or w.get("area"),
-                        "onset": w.get("onset"),
-                        "expires": w.get("expires"),
-                    },
-                )
-            )
-        return fg.fc(out)
+async def meteoalarm(country: str = Query("france", max_length=40)) -> dict[str, Any]:
+    slug = country.strip().lower().replace(" ", "-")
+    if not slug.replace("-", "").isalpha():
+        raise HTTPException(400, "country must be a country name, e.g. 'france'")
 
-    return await fg.cached(f"alerts:meteoalarm:{country}", 600.0, load)
+    async def load() -> dict[str, Any]:
+        import xml.etree.ElementTree as ET
+
+        try:
+            text = await fg.fetch_text(METEOALARM_FEED.format(country=slug))
+            root = ET.fromstring(text)
+        except Exception:
+            return {"country": slug, "count": 0, "warnings": [], "note": "feed unavailable"}
+        warnings: list[dict[str, Any]] = []
+        for entry in root.iter(f"{_ATOM_NS}entry"):
+
+            def cap(name: str, el: ET.Element = entry) -> str | None:
+                node = el.find(f"{_CAP_NS}{name}")
+                return node.text.strip() if node is not None and node.text else None
+
+            title = entry.find(f"{_ATOM_NS}title")
+            warnings.append(
+                {
+                    "id": cap("identifier"),
+                    "title": title.text if title is not None else None,
+                    "event": cap("event"),
+                    "area": cap("areaDesc"),
+                    "severity": cap("severity"),
+                    "urgency": cap("urgency"),
+                    "certainty": cap("certainty"),
+                    "onset": cap("onset"),
+                    "expires": cap("expires"),
+                }
+            )
+        return {"country": slug, "count": len(warnings), "warnings": warnings[:500]}
+
+    return await fg.cached(f"alerts:meteoalarm:{slug}", 600.0, load)
 
 
 # ── FEMA disaster declarations ─────────────────────────────────────────────

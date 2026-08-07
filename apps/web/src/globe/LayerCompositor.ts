@@ -228,7 +228,6 @@ export const HAZARD_POINT_LAYER_IDS: ReadonlySet<string> = new Set([
   // feature properties, which is what hazardStyle dispatches the glyph on.
   'alerts.ukraine',
   'alerts.ukraine.alt',
-  'alerts.meteoalarm',
   'alerts.fema',
   'hazards.spc.storms',
   'conflict.deepstate.radiation',

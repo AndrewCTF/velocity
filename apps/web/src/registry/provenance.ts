@@ -149,7 +149,6 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   // shelter. Both relays report the same official state.
   'alerts.ukraine': 'filing',
   'alerts.ukraine.alt': 'filing',
-  'alerts.meteoalarm': 'filing',
   'alerts.fema': 'filing',
   // A storm report is a spotter's account that NOAA logs and stands behind.
   'hazards.spc.storms': 'filing',

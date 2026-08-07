@@ -593,8 +593,13 @@ async def source_catalog(
     }
 
 
-# ── SDR station search (live fetch from KiwiSDR public list) ─────────────
-KIWISDR_URL = "http://kiwisdr.com/public/"
+# ── SDR station search ───────────────────────────────────────────────────
+# kiwisdr.com/public/ now answers a CAPTCHA page to every non-browser client, so
+# the receiver list comes from the dyatlov-map mirror, which regenerates it from
+# that page every few minutes and serves it as a plain JS array. Every failure
+# path returns an EMPTY FeatureCollection, never a bare dict: this route backs a
+# map layer, and a layer handed `{"stations": []}` has no `features` to read.
+KIWISDR_URL = "http://rx.linkfanel.net/kiwisdr_com.js"
 
 
 @router.get("/api/sdr/kiwisdr")
@@ -604,21 +609,27 @@ async def kiwisdr_stations() -> dict[str, Any]:
         import re
 
         try:
-            html = await fg.fetch_text(KIWISDR_URL)
+            text = await fg.fetch_text(KIWISDR_URL)
         except Exception:
-            return {"stations": [], "count": 0}
-        match = re.search(r"var\s+kiwi_public\s*=\s*(\[.*?\]);", html, re.DOTALL)
+            return fg.fc([])
+        match = re.search(r"var\s+kiwisdr_com\s*=\s*(\[.*\])", text, re.DOTALL)
         if not match:
-            return {"stations": [], "count": 0, "note": "Could not parse station list"}
+            return fg.fc([])
+        # It is a JS literal, not JSON: the array ends `},\n]`, which json
+        # rejects. Drop the trailing comma rather than reaching for a JS parser.
+        body = re.sub(r",\s*\]$", "]", match.group(1).strip())
         try:
-            stations = json.loads(match.group(1))
+            stations = json.loads(body)
         except Exception:
-            return {"stations": [], "count": 0}
+            return fg.fc([])
         out: list[fg.Feature] = []
         for s in stations:
             if not isinstance(s, dict):
                 continue
+            # "(37.669714, 140.492137)" — a string, not a pair.
             gps = s.get("gps")
+            if isinstance(gps, str):
+                gps = [p.strip() for p in gps.strip("()").split(",")]
             if not isinstance(gps, list) or len(gps) < 2:
                 continue
             lat = fg.num(gps[0])

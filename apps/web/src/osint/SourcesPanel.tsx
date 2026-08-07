@@ -129,6 +129,13 @@ const LOOKUPS: readonly { readonly group: string; readonly items: readonly Looku
         ],
       },
       {
+        id: 'meteoalarm',
+        label: 'Civil warnings · Meteoalarm (EU)',
+        hint: 'CAP warnings by country. They carry a NUTS3 region, not a position.',
+        path: '/api/alerts/meteoalarm',
+        args: [{ name: 'country', label: 'Country', placeholder: 'france', initial: 'france' }],
+      },
+      {
         id: 'gdelt-doc',
         label: 'Article search · GDELT DOC',
         hint: 'Worldwide coverage of a query across monitored media.',
