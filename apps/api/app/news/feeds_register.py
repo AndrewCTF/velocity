@@ -173,4 +173,12 @@ REGISTER: list[Source] = [
     Source("Barron's", google_news_search("source:Barron's"), "center", "US", category="finance", tier=2),
     Source("Financial Times", google_news_search('source:"Financial Times"'), "center-right", "UK", category="finance", tier=1),
     Source("Bloomberg", google_news_search("source:Bloomberg"), "center", "US", category="finance", tier=1),
+
+    # ── 2026-08-06 mega-ledger additions ───────────────────────────────
+    Source("NYT World", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "center-left", "US", category="general", tier=1),
+    Source("WashPost World", "https://feeds.washingtonpost.com/rss/world", "center-left", "US", category="general", tier=1),
+    Source("NDTV World", "https://feeds.feedburner.com/ndtvnews-world-news", "center", "IN", category="regional", tier=2),
+    Source("Kyodo News", google_news_search('source:"Kyodo News"'), "center", "JP", category="regional", tier=2),
+    Source("IRNA English", google_news_search('source:IRNA OR source:"Islamic Republic News Agency"'), "ir-state", "IR", category="regional", tier=2),
+    Source("NHC Atlantic", "https://www.nhc.noaa.gov/index-at.xml", "wire", "US", category="wire", tier=2),
 ]

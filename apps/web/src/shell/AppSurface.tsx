@@ -15,6 +15,7 @@ import { MarketsApp } from '../markets/MarketsApp.js';
 import { TabbedPanel } from './TabbedPanel.js';
 import { ExtractPanel } from '../extract/ExtractPanel.js';
 import { CountriesPanel } from '../osint/CountriesPanel.js';
+import { SourcesPanel } from '../osint/SourcesPanel.js';
 
 // CityApp is the one surface that drags three + the splat renderer with it —
 // code-split so the console bundle doesn't carry a 3D engine nobody opened.
@@ -63,6 +64,9 @@ export function AppSurface({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
           tabs={[
             { id: 'lookup', label: 'Lookup', content: <InvestigatePanel /> },
             { id: 'extract', label: 'Extract', content: <ExtractPanel /> },
+            // Every backend feed with no position on it. It sits beside Lookup
+            // because it IS lookup — the same act against a different registry.
+            { id: 'sources', label: 'Sources', content: <SourcesPanel /> },
           ]}
         />
       );

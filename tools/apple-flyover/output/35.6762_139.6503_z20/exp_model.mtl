@@ -1,0 +1,588 @@
+
+newmtl mtl_0_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_0_0.heic
+
+newmtl mtl_0_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_0_1.heic
+
+newmtl mtl_1_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_1_0.heic
+
+newmtl mtl_1_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_1_1.heic
+
+newmtl mtl_2_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_2_0.heic
+
+newmtl mtl_2_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_2_1.heic
+
+newmtl mtl_3_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_3_0.heic
+
+newmtl mtl_3_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_3_1.heic
+
+newmtl mtl_4_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_4_0.heic
+
+newmtl mtl_4_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_4_1.heic
+
+newmtl mtl_5_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_5_0.heic
+
+newmtl mtl_5_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_5_1.heic
+
+newmtl mtl_6_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_6_0.heic
+
+newmtl mtl_6_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_6_1.heic
+
+newmtl mtl_7_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_7_0.heic
+
+newmtl mtl_7_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_7_1.heic
+
+newmtl mtl_8_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_8_0.heic
+
+newmtl mtl_8_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_8_1.heic
+
+newmtl mtl_9_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_9_0.heic
+
+newmtl mtl_9_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_9_1.heic
+
+newmtl mtl_10_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_10_0.heic
+
+newmtl mtl_10_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_10_1.heic
+
+newmtl mtl_11_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_11_0.heic
+
+newmtl mtl_11_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_11_1.heic
+
+newmtl mtl_12_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_12_0.heic
+
+newmtl mtl_12_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_12_1.heic
+
+newmtl mtl_13_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_13_0.heic
+
+newmtl mtl_13_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_13_1.heic
+
+newmtl mtl_14_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_14_0.heic
+
+newmtl mtl_14_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_14_1.heic
+
+newmtl mtl_15_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_15_0.heic
+
+newmtl mtl_15_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_15_1.heic
+
+newmtl mtl_16_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_16_0.heic
+
+newmtl mtl_16_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_16_1.heic
+
+newmtl mtl_17_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_17_0.heic
+
+newmtl mtl_17_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_17_1.heic
+
+newmtl mtl_18_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_18_0.heic
+
+newmtl mtl_18_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_18_1.heic
+
+newmtl mtl_19_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_19_0.heic
+
+newmtl mtl_19_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_19_1.heic
+
+newmtl mtl_20_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_20_0.heic
+
+newmtl mtl_20_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_20_1.heic
+
+newmtl mtl_21_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_21_0.heic
+
+newmtl mtl_21_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_21_1.heic
+
+newmtl mtl_22_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_22_0.heic
+
+newmtl mtl_22_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_22_1.heic
+
+newmtl mtl_23_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_23_0.heic
+
+newmtl mtl_23_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_23_1.heic
+
+newmtl mtl_24_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_24_0.heic
+
+newmtl mtl_24_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_24_1.heic
+
+newmtl mtl_25_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_25_0.heic
+
+newmtl mtl_25_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_25_1.heic
+
+newmtl mtl_26_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_26_0.heic
+
+newmtl mtl_26_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_26_1.heic
+
+newmtl mtl_27_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_27_0.heic
+
+newmtl mtl_27_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_27_1.heic
+
+newmtl mtl_28_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_28_0.heic
+
+newmtl mtl_28_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_28_1.heic
+
+newmtl mtl_29_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_29_0.heic
+
+newmtl mtl_29_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_29_1.heic
+
+newmtl mtl_30_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_30_0.heic
+
+newmtl mtl_30_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_30_1.heic
+
+newmtl mtl_31_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_31_0.heic
+
+newmtl mtl_31_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_31_1.heic
+
+newmtl mtl_32_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_32_0.heic
+
+newmtl mtl_32_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_32_1.heic
+
+newmtl mtl_33_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_33_0.heic
+
+newmtl mtl_33_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_33_1.heic
+
+newmtl mtl_34_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_34_0.heic
+
+newmtl mtl_34_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_34_1.heic
+
+newmtl mtl_35_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_35_0.heic
+
+newmtl mtl_35_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_35_1.heic
+
+newmtl mtl_36_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_36_0.heic
+
+newmtl mtl_36_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_36_1.heic
+
+newmtl mtl_37_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_37_0.heic
+
+newmtl mtl_37_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_37_1.heic
+
+newmtl mtl_38_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_38_0.heic
+
+newmtl mtl_38_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_38_1.heic
+
+newmtl mtl_39_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_39_0.heic
+
+newmtl mtl_39_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_39_1.heic
+
+newmtl mtl_40_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_40_0.heic
+
+newmtl mtl_40_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_40_1.heic
+
+newmtl mtl_41_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_41_0.heic
+
+newmtl mtl_41_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_41_1.heic
+
+newmtl mtl_42_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_42_0.heic
+
+newmtl mtl_42_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_42_1.heic
+
+newmtl mtl_43_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_43_0.heic
+
+newmtl mtl_43_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_43_1.heic
+
+newmtl mtl_44_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_44_0.heic
+
+newmtl mtl_44_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_44_1.heic
+
+newmtl mtl_45_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_45_0.heic
+
+newmtl mtl_45_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_45_1.heic
+
+newmtl mtl_46_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_46_0.heic
+
+newmtl mtl_46_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_46_1.heic
+
+newmtl mtl_47_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_47_0.heic
+
+newmtl mtl_47_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_47_1.heic
+
+newmtl mtl_48_0
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_48_0.heic
+
+newmtl mtl_48_1
+Kd 1.000 1.000 1.000
+d 1.0
+illum 0
+map_Kd exp_48_1.heic

@@ -657,6 +657,23 @@ const HAZARD_COLORS: Record<string, string> = {
   // Storm surge: observed water level minus the tide prediction. Cyan, and the
   // magnitude lives in residual_m rather than in the colour.
   surge: '#22d3ee',
+  // 2026-08-06 mega-ledger wave.
+  // An air-raid alert is the one tile allowed the plain alert red: it means a
+  // population has been told to take cover right now. An oblast that is CLEAR
+  // is drawn slate by hazardStyle, so red on the map always means active.
+  ua_alert: '#ef4444',
+  meteoalarm: '#fb923c', // amber-orange, tinted by CAP severity
+  fema: '#0ea5e9', // sky: a declaration is money and process, not an emergency
+  spc_storm: '#eab308', // storm-report yellow, tinted by event type
+  ds_radiation: '#facc15', // same yellow as the radiation tile it mirrors
+  ds_event: '#f472b6', // pink: DeepState's written reports are a claim
+  satnogs_obs: '#8b5cf6', // violet: a received pass
+  satnogs_stn: '#a78bfa', // lighter violet: the receiver itself
+  sonde: '#38bdf8', // sky: an instrument under a balloon
+  mine: '#a16207', // ore brown
+  osm_military: '#94a3b8', // slate: land use, not an activity
+  wikimapia: '#78716c', // stone: crowd-labelled, deliberately quiet
+  sdr_station: '#2dd4bf', // teal: a listening post
 };
 
 function aqiColor(aqi: number | null): string {
@@ -671,6 +688,32 @@ function aqiColor(aqi: number | null): string {
 
 function hazardGlyph(kind: string): string {
   switch (kind) {
+    case 'ua_alert': // siren horn
+      return '<path d="M6 14V10a6 6 0 0 1 12 0v4z" fill="#2b0000"/><path d="M4.5 14h15v2.5h-15z" fill="#2b0000"/><path d="M12 4V2M18.5 6.5 20 5M5.5 6.5 4 5" stroke="#2b0000" stroke-width="1.4" stroke-linecap="round"/>';
+    case 'meteoalarm': // cloud with a bolt
+      return '<path d="M7.5 15a3.5 3.5 0 0 1 .4-7 5 5 0 0 1 9.3 1.4A3 3 0 0 1 16.5 15z" fill="#2a1400"/><path d="M12 15.5 10 19h2l-.8 3 3.3-4.2h-2z" fill="#2a1400"/>';
+    case 'fema': // shield with a seal dot
+      return '<path d="M12 4.5 18 7v5c0 3.3-2.5 5.8-6 7-3.5-1.2-6-3.7-6-7V7z" fill="#03202e"/><circle cx="12" cy="11.5" r="2" fill="#0ea5e9"/>';
+    case 'spc_storm': // funnel cloud
+      return '<path d="M5 6h14l-4.5 5.5v3L9.5 18v-6.5z" fill="#241f00"/><path d="M5 6h14" stroke="#241f00" stroke-width="1.6" stroke-linecap="round"/>';
+    case 'ds_radiation': // same trefoil as the radiation tile
+      return '<circle cx="12" cy="12" r="1.8" fill="#1a1400"/><path d="M12 12 5.8 8.4A7 7 0 0 1 12 5v7z" fill="#1a1400"/><path d="M12 12 18.2 8.4A7 7 0 0 0 12 5v7z" fill="#1a1400"/><path d="M12 12 12 19a7 7 0 0 0 6.2-3.6L12 12z" fill="#1a1400"/>';
+    case 'ds_event': // speech mark: somebody said this
+      return '<path d="M5 6h14v9H13l-4 4v-4H5z" fill="#2b0417"/><path d="M8.5 10.5h7M8.5 13h4.5" stroke="#f472b6" stroke-width="1.3" stroke-linecap="round"/>';
+    case 'satnogs_obs': // signal arcs into a dish
+      return '<path d="M6 18 13 8" stroke="#1a0838" stroke-width="1.8" stroke-linecap="round"/><path d="M5 19a7 7 0 0 1 9-9z" fill="#1a0838"/><path d="M16 5a6 6 0 0 1 3 3M15.5 8.5a3 3 0 0 1 1.6 1.6" stroke="#1a0838" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
+    case 'satnogs_stn': // dish on a mast
+      return '<path d="M6 15a6 6 0 0 1 8-8z" fill="#1a0838"/><path d="M11 12 17 6" stroke="#1a0838" stroke-width="1.6" stroke-linecap="round"/><path d="M9 17h8" stroke="#1a0838" stroke-width="1.5" stroke-linecap="round"/>';
+    case 'sonde': // balloon on a string with a payload
+      return '<path d="M12 4a4 4 0 0 1 4 4c0 2.6-2.4 4.4-4 5.6C10.4 12.4 8 10.6 8 8a4 4 0 0 1 4-4z" fill="#042435"/><path d="M12 13.6V16" stroke="#042435" stroke-width="1.3"/><rect x="10.4" y="16" width="3.2" height="3.2" rx="0.7" fill="#042435"/>';
+    case 'mine': // crossed pick and hammer
+      return '<path d="M5 19 15 9M9 5c3 0 6 2.4 7 5.5" stroke="#2a1a02" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M13.5 5.5 19 11l-2 2-5.5-5.5z" fill="#2a1a02"/>';
+    case 'osm_military': // fenced parcel
+      return '<rect x="5" y="7" width="14" height="10" rx="1.2" fill="none" stroke="#0f172a" stroke-width="1.8"/><path d="M8 7v10M12 7v10M16 7v10" stroke="#0f172a" stroke-width="1.2"/>';
+    case 'wikimapia': // map pin outline
+      return '<path d="M12 4.5c3 0 5.2 2.2 5.2 5 0 3.6-5.2 9-5.2 9s-5.2-5.4-5.2-9c0-2.8 2.2-5 5.2-5z" fill="none" stroke="#1c1917" stroke-width="1.8"/><circle cx="12" cy="9.5" r="1.8" fill="#1c1917"/>';
+    case 'sdr_station': // antenna radiating
+      return '<path d="M12 8v11" stroke="#032b26" stroke-width="1.8" stroke-linecap="round"/><path d="M9 19h6" stroke="#032b26" stroke-width="1.5" stroke-linecap="round"/><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0" stroke="#032b26" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
     case 'launch': // rocket on a pad
       return '<path d="M12 4c2.2 2 3.2 4.6 3.2 7.2L12 15l-3.2-3.8C8.8 8.6 9.8 6 12 4z" fill="#141a3a"/><path d="M9.2 13 7 17l3-1M14.8 13 17 17l-3-1" stroke="#141a3a" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="12" cy="9.5" r="1.2" fill="#818cf8"/>';
     case 'surge': // wave over a datum line
@@ -724,6 +767,18 @@ export function hazardStyle(props: Record<string, unknown>): { imageUri: string;
     if (alert === 'red') tile = '#ef4444';
     else if (alert === 'orange') tile = '#f97316';
     cacheKey = `hazard:${kind}:${alert || 'x'}`;
+  } else if (kind === 'ua_alert') {
+    // Every oblast is in the feed whether or not it is under alert, so the
+    // colour has to carry the state: red is an active alert and nothing else.
+    const active = props['alert'] === true;
+    tile = active ? '#ef4444' : '#475569';
+    cacheKey = `hazard:ua:${active ? 'on' : 'off'}`;
+  } else if (kind === 'meteoalarm') {
+    const sev = String(props['severity'] ?? '').toLowerCase();
+    if (sev === 'extreme') tile = '#ef4444';
+    else if (sev === 'severe') tile = '#f97316';
+    else if (sev === 'moderate') tile = '#eab308';
+    cacheKey = `hazard:meteo:${sev || 'x'}`;
   } else if (kind === 'chokepoint') {
     const c = String(props['congestion'] ?? '').toLowerCase();
     if (c === 'high') tile = '#ef4444';

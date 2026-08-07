@@ -224,7 +224,42 @@ export const HAZARD_POINT_LAYER_IDS: ReadonlySet<string> = new Set([
   'weather.spacewx.aurora',
   'airspace.nasstatus',
   'climate.anomalies',
+  // 2026-08-06 mega-ledger wave. Each of these carries its own `kind` in the
+  // feature properties, which is what hazardStyle dispatches the glyph on.
+  'alerts.ukraine',
+  'alerts.ukraine.alt',
+  'alerts.meteoalarm',
+  'alerts.fema',
+  'hazards.spc.storms',
+  'conflict.deepstate.radiation',
+  'conflict.deepstate.news',
+  'space.satnogs.observations',
+  'space.satnogs.stations',
+  'env.sondes',
+  'rf.kiwisdr',
+  'infra.mines',
+  'osm.military',
+  'osm.wikimapia',
 ]);
+
+// Layers whose upstream answers a VIEWPORT and nothing at all without one, so
+// they share the zoom-gated bbox the reference markers use: no bbox above the
+// LOD altitude, and the route answers an empty collection rather than a 422.
+export const BBOX_GATED_LAYER_IDS: ReadonlySet<string> = new Set([
+  'infra.mines',
+  'osm.military',
+  'osm.wikimapia',
+]);
+// The three airport catalogues draw as the same marker. `places.airports` is the
+// curated set the rest of the product resolves against; the ourAirports and
+// OpenFlights sets are the full public gazetteers, off by default, for when the
+// curated one does not carry the strip somebody is looking at.
+export const AIRPORT_LAYER_IDS: ReadonlySet<string> = new Set([
+  'places.airports',
+  'aviation.airports.full',
+  'aviation.airports.openflights',
+]);
+
 export const HAZARD_POLY_LAYER_IDS: ReadonlySet<string> = new Set([
   'hazards.fireperimeters',
   'aviation.sigmet',
@@ -450,7 +485,7 @@ export class LayerCompositor {
       const style: StyleKind =
         d.id === 'env.jamming.nacp'
           ? 'jamming'
-          : d.id === 'places.airports'
+          : AIRPORT_LAYER_IDS.has(d.id)
             ? 'airport'
             : d.id === 'places.ports'
               ? 'port'
@@ -516,6 +551,7 @@ export class LayerCompositor {
         d.id === 'places.airports' ||
         d.id === 'places.ports' ||
         d.id === 'places.bases' ||
+        BBOX_GATED_LAYER_IDS.has(d.id) ||
         FACILITY_LAYER_IDS.has(d.id)
       ) {
         // Zoom-gated reference markers: the bbox (and therefore any data) is sent

@@ -2654,6 +2654,238 @@ async def adsb_live_emergencies() -> dict[str, Any]:
     return await cache.get_or_fetch("airplaneslive:emerg", 15.0, load)
 
 
+# ── adsb.lol v2 lookup endpoints ─────────────────────────────────────────────
+
+async def _lol_lookup(verb: str, cache_key: str, ttl: float = 15.0) -> dict[str, Any]:
+    """Multi-host fan-out for an adsb.lol /v2/{verb} lookup."""
+    async def load() -> dict[str, Any]:
+        for host in _HEAD_HOSTS:
+            url = f"{host}/v2/{verb}"
+            try:
+                r = await get_client().get(url)
+            except (httpx.TimeoutException, httpx.TransportError):
+                continue
+            if r.status_code != 200:
+                continue
+            try:
+                ac = r.json().get("ac") or []
+            except ValueError:
+                continue
+            return _aircraft_geojson(ac)
+        return {"type": "FeatureCollection", "features": []}
+
+    return await cache.get_or_fetch(cache_key, ttl, load)
+
+
+@router.get("/api/adsb/hex/{icao}")
+async def adsb_hex(icao: str) -> dict[str, Any]:
+    h = icao.lower().strip()
+    if len(h) != 6 or any(c not in "0123456789abcdef" for c in h):
+        raise HTTPException(400, "icao must be 6 hex chars")
+    return await _lol_lookup(f"hex/{h}", f"adsb:hex:{h}")
+
+
+@router.get("/api/adsb/registration/{reg}")
+async def adsb_registration(reg: str) -> dict[str, Any]:
+    r = reg.strip().upper()
+    if not r or len(r) > 12 or not all(c.isalnum() or c == "-" for c in r):
+        raise HTTPException(400, "registration must be 1-12 alphanumeric chars")
+    return await _lol_lookup(f"registration/{r}", f"adsb:reg:{r}")
+
+
+@router.get("/api/adsb/callsign/{cs}")
+async def adsb_callsign(cs: str) -> dict[str, Any]:
+    c = cs.strip().upper()
+    if not c or len(c) > 12 or not all(ch.isalnum() for ch in c):
+        raise HTTPException(400, "callsign must be 1-12 alphanumeric chars")
+    return await _lol_lookup(f"callsign/{c}", f"adsb:cs:{c}")
+
+
+@router.get("/api/adsb/type/{type_code}")
+async def adsb_type(type_code: str) -> dict[str, Any]:
+    t = type_code.strip().upper()
+    if not t or len(t) > 12 or not all(c.isalnum() for c in t):
+        raise HTTPException(400, "type_code must be 1-12 alphanumeric chars")
+    return await _lol_lookup(f"type/{t}", f"adsb:type:{t}", ttl=30.0)
+
+
+@router.get("/api/adsb/ladd")
+async def adsb_ladd() -> dict[str, Any]:
+    return await _lol_lookup("ladd", "adsb:ladd", ttl=30.0)
+
+
+@router.get("/api/adsb/pia")
+async def adsb_pia() -> dict[str, Any]:
+    return await _lol_lookup("pia", "adsb:pia", ttl=30.0)
+
+
+# ── adsb.lol globe history index ─────────────────────────────────────────────
+
+@router.get("/api/adsb/history/dates")
+async def adsb_history_dates() -> dict[str, Any]:
+    """List available daily ADS-B history snapshots from adsb.lol globe_history."""
+    import re as _re
+
+    async def load() -> dict[str, Any]:
+        url = "https://api.github.com/repos/adsblol/globe_history_2024/releases"
+        try:
+            r = await get_client().get(url, params={"per_page": "100"})
+        except (httpx.TimeoutException, httpx.TransportError):
+            return {"dates": [], "repo": "adsblol/globe_history_2024"}
+        if r.status_code != 200:
+            return {"dates": [], "repo": "adsblol/globe_history_2024"}
+        try:
+            releases = r.json()
+        except ValueError:
+            return {"dates": [], "repo": "adsblol/globe_history_2024"}
+        dates: list[str] = []
+        for rel in releases:
+            tag = rel.get("tag_name") or ""
+            m = _re.search(r"(\d{4}\.\d{2}\.\d{2})", tag)
+            if m:
+                dates.append(m.group(1).replace(".", "-"))
+        return {"dates": sorted(set(dates), reverse=True), "repo": "adsblol/globe_history_2024"}
+
+    return await cache.get_or_fetch("adsb:history:dates", 3600.0, load)
+
+
+# ── ourAirports full CSV (85k airports) ──────────────────────────────────────
+
+@router.get("/api/aviation/airports/full")
+async def aviation_airports_full(
+    limit: int = Query(5000, ge=1, le=90000),
+) -> dict[str, Any]:
+    """Full ourAirports CSV — ~85k airports worldwide, cached 24h."""
+    import csv as _csv
+    import io as _io
+
+    async def load() -> dict[str, Any]:
+        url = "https://davidmegginson.github.io/ourairports-data/airports.csv"
+        try:
+            r = await get_client().get(url, timeout=httpx.Timeout(30.0))
+        except (httpx.HTTPError, OSError) as err:
+            raise HTTPException(502, "ourairports upstream unreachable") from err
+        if r.status_code != 200:
+            raise HTTPException(502, f"ourairports upstream {r.status_code}")
+        reader = _csv.DictReader(_io.StringIO(r.text))
+        features: list[dict[str, Any]] = []
+        for row in reader:
+            try:
+                lat = float(row.get("latitude_deg") or "")
+                lon = float(row.get("longitude_deg") or "")
+            except (TypeError, ValueError):
+                continue
+            ident = row.get("ident") or ""
+            iata = row.get("iata_code") or ""
+            fid = f"airport:{iata or ident}" if (iata or ident) else None
+            if not fid:
+                continue
+            features.append({
+                "type": "Feature",
+                "id": fid,
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": {
+                    "ident": ident,
+                    "iata": iata,
+                    "name": row.get("name"),
+                    "type": row.get("type"),
+                    "iso_country": row.get("iso_country"),
+                    "iso_region": row.get("iso_region"),
+                    "municipality": row.get("municipality"),
+                    "elevation_ft": row.get("elevation_ft"),
+                    "scheduled_service": row.get("scheduled_service"),
+                    "kind": "airport",
+                    "source": "ourairports",
+                },
+            })
+        return {"type": "FeatureCollection", "features": features[:limit]}
+
+    return await cache.get_or_fetch("ourairports:full", 86400.0, load)
+
+
+# ── openflights airports + routes ────────────────────────────────────────────
+
+@router.get("/api/aviation/airports/openflights")
+async def aviation_airports_openflights() -> dict[str, Any]:
+    """OpenFlights airport DB (~7k airports)."""
+    async def load() -> dict[str, Any]:
+        url = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat"
+        try:
+            r = await get_client().get(url, timeout=httpx.Timeout(15.0))
+        except (httpx.HTTPError, OSError) as err:
+            raise HTTPException(502, "openflights upstream unreachable") from err
+        if r.status_code != 200:
+            raise HTTPException(502, f"openflights upstream {r.status_code}")
+        features: list[dict[str, Any]] = []
+        for line in r.text.strip().splitlines():
+            parts = line.split(",")
+            if len(parts) < 8:
+                continue
+            def _unquote(s: str) -> str:
+                return s.strip().strip('"')
+            try:
+                lat = float(_unquote(parts[6]))
+                lon = float(_unquote(parts[7]))
+            except (TypeError, ValueError):
+                continue
+            name = _unquote(parts[1])
+            city = _unquote(parts[2])
+            country = _unquote(parts[3])
+            iata = _unquote(parts[4])
+            icao = _unquote(parts[5])
+            if iata == r"\N":
+                iata = ""
+            if icao == r"\N":
+                icao = ""
+            fid = f"airport:{iata or icao}" if (iata or icao) else None
+            if not fid:
+                continue
+            features.append({
+                "type": "Feature",
+                "id": fid,
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": {
+                    "name": name,
+                    "city": city,
+                    "country": country,
+                    "iata": iata,
+                    "icao": icao,
+                    "kind": "airport",
+                    "source": "openflights",
+                },
+            })
+        return {"type": "FeatureCollection", "features": features}
+
+    return await cache.get_or_fetch("openflights:airports", 86400.0, load)
+
+
+@router.get("/api/aviation/routes")
+async def aviation_routes() -> dict[str, Any]:
+    """OpenFlights airline routes (source→destination airport pairs)."""
+    async def load() -> dict[str, Any]:
+        url = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat"
+        try:
+            r = await get_client().get(url, timeout=httpx.Timeout(15.0))
+        except (httpx.HTTPError, OSError) as err:
+            raise HTTPException(502, "openflights routes upstream unreachable") from err
+        if r.status_code != 200:
+            raise HTTPException(502, f"openflights routes upstream {r.status_code}")
+        routes: list[dict[str, str]] = []
+        for line in r.text.strip().splitlines():
+            parts = line.split(",")
+            if len(parts) < 6:
+                continue
+            airline = parts[0].strip()
+            src = parts[2].strip()
+            dst = parts[4].strip()
+            if src == r"\N" or dst == r"\N":
+                continue
+            routes.append({"airline": airline, "src": src, "dst": dst})
+        return {"count": len(routes), "routes": routes}
+
+    return await cache.get_or_fetch("openflights:routes", 86400.0, load)
+
+
 # ── per-aircraft full flight trail (tar1090 trace_full) ──────────────────────
 # The selection polyline was built only from positions accumulated client-side
 # since the page opened — short, slow to fill. adsb.lol serves the FULL recent
