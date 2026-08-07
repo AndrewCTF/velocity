@@ -53,7 +53,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 
-from app import adsb_fr24
+from app import adsb_fr24, adsb_opensky_gaps
 from app.auth import require_ws_key
 from app.config import get_settings
 from app.ingest.opensky import OpenSkyTokenManager, fetch_states, states_to_geojson
@@ -982,6 +982,10 @@ _FEED_UA = (
 # same slice store, cadence bookkeeping and freshest-wins union as the readsb
 # mirrors, so nothing downstream needs to know it is shaped differently.
 FR24_FEED_KEY = "fr24:world"
+# Same idea, different upstream: OpenSky's UNAUTHENTICATED bbox form, aimed at
+# whichever cells our own snapshot is oldest in. See app/adsb_opensky_gaps.py
+# for the measured credit costs that make the bbox form worth having.
+OPENSKY_GAP_KEY = "opensky:gaps"
 
 
 def _feed_urls() -> list[str]:
@@ -1001,6 +1005,8 @@ def _feed_urls() -> list[str]:
     # run once. Its own flag is what turns it off.
     if get_settings().adsb_fr24_enabled:
         urls.append(FR24_FEED_KEY)
+    if get_settings().adsb_opensky_gaps_enabled:
+        urls.append(OPENSKY_GAP_KEY)
     return urls
 
 
@@ -1008,6 +1014,8 @@ def _feed_interval(url: str) -> float:
     s = get_settings()
     if url == FR24_FEED_KEY:
         return s.adsb_fr24_interval_s
+    if url == OPENSKY_GAP_KEY:
+        return s.adsb_opensky_gaps_interval_s
     if "127.0.0.1" in url or "localhost" in url:
         return s.adsb_feed_fast_interval_s  # sidecar — no rate limit, keep fresh
     if "/v2/" in url or "/re-api" in url:
@@ -1184,6 +1192,9 @@ _FEED_TASKS: dict[str, asyncio.Task[None]] = {}
 # many came back at the 1500-row cap (a saturated box means that patch of sky is
 # truncated and the grid wants splitting there).
 _FR24_STATS: dict[str, Any] = {}
+# Last gap-filler pull: which cells were bought and what the API said was left of
+# the day's anonymous budget.
+_OPENSKY_GAP_STATS: dict[str, Any] = {}
 
 
 def _ac_seen_pos(a: dict[str, Any]) -> float:
@@ -1211,6 +1222,23 @@ async def _pull_one_feed(url: str) -> None:
         if ac:
             _FEED_SLICES[url] = (ts, ac)
             _FR24_STATS.update(stats, aircraft=len(ac), at=time.time())
+        return
+    if url == OPENSKY_GAP_KEY:
+        # Reads the snapshot WE are currently serving to decide where to spend a
+        # credit, so the budget lands on the sky the other tiers are worst at
+        # rather than on a fixed grid they already cover at 1 s.
+        try:
+            ac, stats = await adsb_opensky_gaps.fill_gaps(
+                _LATEST_SNAPSHOT.get("features") or [],
+                max_cells=get_settings().adsb_opensky_gaps_cells,
+            )
+        except Exception:
+            ac, stats = [], {}
+        finally:
+            _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
+        if ac:
+            _FEED_SLICES[url] = (ts, ac)
+        _OPENSKY_GAP_STATS.update(stats, at=time.time())
         return
     try:
         # EVERY feed pulls OFF the event loop in a worker thread — not just the
