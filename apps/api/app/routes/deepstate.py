@@ -28,10 +28,30 @@ async def deepstate_firms() -> dict[str, Any]:
     async def load() -> dict[str, Any]:
         raw = await fg.fetch_json(DS_FIRMS_URL)
         items = raw if isinstance(raw, list) else (raw or {}).get("data", [])
+        updated = (raw or {}).get("updated_at") if isinstance(raw, dict) else None
         out: list[fg.Feature] = []
         for f in items or []:
-            lat = fg.num(f.get("lat") or f.get("latitude"))
-            lon = fg.num(f.get("lng") or f.get("lon") or f.get("longitude"))
+            # The wire format is a positional triple, [lat, lon, weight], not the
+            # object this reader was first written against. Dicts are still
+            # accepted in case the upstream ever goes back to them.
+            if isinstance(f, list | tuple):
+                if len(f) < 2:
+                    continue
+                lat, lon = fg.num(f[0]), fg.num(f[1])
+                weight = fg.num(f[2]) if len(f) > 2 else None
+                extra: dict[str, Any] = {"weight": weight}
+            elif isinstance(f, dict):
+                lat = fg.num(f.get("lat") or f.get("latitude"))
+                lon = fg.num(f.get("lng") or f.get("lon") or f.get("longitude"))
+                extra = {
+                    "brightness": fg.num(f.get("brightness")),
+                    "confidence": f.get("confidence"),
+                    "satellite": f.get("satellite"),
+                    "acq_date": f.get("acq_date"),
+                    "acq_time": f.get("acq_time"),
+                }
+            else:
+                continue
             if lat is None or lon is None:
                 continue
             fid = f"{lat:.4f}_{lon:.4f}"
@@ -40,14 +60,7 @@ async def deepstate_firms() -> dict[str, Any]:
                     f"ds_fire:{fid}",
                     lon,
                     lat,
-                    {
-                        "kind": "ds_fire",
-                        "brightness": fg.num(f.get("brightness")),
-                        "confidence": f.get("confidence"),
-                        "satellite": f.get("satellite"),
-                        "acq_date": f.get("acq_date"),
-                        "acq_time": f.get("acq_time"),
-                    },
+                    {"kind": "ds_fire", "updated_at": updated, **extra},
                 )
             )
         return fg.fc(out)
@@ -97,15 +110,33 @@ DS_NEWS_URL = "https://deepstatemap.live/api/history/public"
 @router.get("/api/conflict/deepstate-news")
 async def deepstate_news(limit: int = Query(200, ge=1, le=2000)) -> dict[str, Any]:
     async def load() -> dict[str, Any]:
+        import html as _html
+        import re
+
         raw = await fg.fetch_json(DS_NEWS_URL)
         items = raw if isinstance(raw, list) else (raw or {}).get("data", [])
         out: list[fg.Feature] = []
-        for e in (items or [])[:limit]:
-            lat = fg.num(e.get("lat") or e.get("latitude"))
-            lon = fg.num(e.get("lng") or e.get("lon") or e.get("longitude"))
-            eid = str(e.get("id") or "")
-            if lat is None or lon is None or not eid:
+        # A record carries no lat/lon field. The position is inside the
+        # description, as a link back into DeepState's own map:
+        # `…/en#14/48.4562458/37.2700882`. That IS the report's location — it is
+        # where the editor pinned the map when writing it — so the entry is
+        # geolocated, just not in a field.
+        pin = re.compile(r"#\d+/(-?\d+\.\d+)/(-?\d+\.\d+)")
+        # Newest first: the upstream list is oldest-first and an operator wants
+        # this week's advances, not April 2022's.
+        for e in list(reversed(items or []))[:limit]:
+            if not isinstance(e, dict):
                 continue
+            text = str(e.get("descriptionEn") or e.get("description") or "")
+            m = pin.search(text)
+            eid = str(e.get("id") or "")
+            if not m or not eid:
+                continue
+            lat, lon = fg.num(m.group(1)), fg.num(m.group(2))
+            if lat is None or lon is None:
+                continue
+            # Strip the markup the description is written in, keeping the words.
+            plain = _html.unescape(re.sub(r"<[^>]+>", "", text)).strip()
             out.append(
                 fg.point(
                     f"ds_event:{eid}",
@@ -113,10 +144,10 @@ async def deepstate_news(limit: int = Query(200, ge=1, le=2000)) -> dict[str, An
                     lat,
                     {
                         "kind": "ds_event",
-                        "title": e.get("title") or e.get("text"),
-                        "date": e.get("date") or e.get("created_at"),
-                        "type": e.get("type"),
-                        "source": e.get("source"),
+                        "title": plain[:300],
+                        "date": e.get("createdAt") or e.get("updatedAt"),
+                        "when": e.get("datetime"),
+                        "source": "DeepStateMap",
                     },
                 )
             )

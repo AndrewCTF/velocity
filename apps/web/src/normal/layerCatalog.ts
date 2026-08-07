@@ -110,7 +110,6 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Climate anomalies', icon: 'warning', layerIds: ['climate.anomalies'] },
       { label: 'Air quality', icon: 'signal', layerIds: ['env.airquality'] },
       { label: 'Weather alerts', icon: 'warning', layerIds: ['hazards.nws.alerts'] },
-      { label: 'Civil warnings (EU)', icon: 'warning', layerIds: ['alerts.meteoalarm'] },
       { label: 'Disaster declarations (FEMA)', icon: 'warning', layerIds: ['alerts.fema'] },
       { label: 'Storm reports (SPC)', icon: 'warning', layerIds: ['hazards.spc.storms'] },
       { label: 'Radiosondes', icon: 'signal', layerIds: ['env.sondes'] },

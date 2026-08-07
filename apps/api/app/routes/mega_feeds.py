@@ -73,9 +73,14 @@ async def cisa_kev() -> dict[str, Any]:
 
 
 # ── USGS MRDS mineral sites ───────────────────────────────────────────────
-MRDS_URL = (
-    "https://mrdata.usgs.gov/mrds/search"
-)
+# The MRDS web app has no JSON export (mrds-json.php is a 404). The WFS does,
+# except MapServer refuses `application/json` for this layer, so GML is the only
+# format on offer and we parse it. It is a flat MapServer document — one
+# <gml:featureMember> per site, one <gml:Point> inside it — so ElementTree reads
+# it in a dozen lines and no dependency is added for it.
+MRDS_URL = "https://mrdata.usgs.gov/services/wfs/mrds"
+_GML_NS = "{http://www.opengis.net/gml}"
+_MS_NS = "{http://mapserver.gis.umn.edu/mapserver}"
 
 
 @router.get("/api/infra/mines")
@@ -84,44 +89,68 @@ async def mineral_sites(
     commodity: str = Query("", max_length=32),
     limit: int = Query(500, ge=1, le=2000),
 ) -> dict[str, Any]:
+    # The WFS answers a bbox or the whole world; the whole world is 300k sites,
+    # so without a viewport we answer nothing rather than pull it.
+    if not bbox:
+        return fg.fc([])
+
     async def load() -> dict[str, Any]:
+        import xml.etree.ElementTree as ET
+
         params: dict[str, str] = {
-            "output": "json",
-            "max": str(limit),
+            "service": "WFS",
+            "version": "1.0.0",
+            "request": "GetFeature",
+            "typeName": "mrds",
+            "maxFeatures": str(limit),
+            "bbox": bbox,
         }
-        if bbox:
-            params["bbox"] = bbox
-        if commodity:
-            params["com"] = commodity
         try:
-            raw = await fg.fetch_json(MRDS_URL, params=params)
+            text = await fg.fetch_text(MRDS_URL, params=params)
+            root = ET.fromstring(text)
         except Exception:
             return fg.fc([])
-        features = (raw or {}).get("features", raw if isinstance(raw, list) else [])
         out: list[fg.Feature] = []
-        for f in features or []:
-            if isinstance(f, dict) and f.get("geometry"):
-                geom = f["geometry"]
-                coords = geom.get("coordinates", [])
-                if len(coords) >= 2:
-                    props = f.get("properties") or {}
-                    mid = str(props.get("dep_id") or props.get("site_id") or f.get("id") or "")
-                    if mid:
-                        out.append(
-                            fg.point(
-                                f"mine:{mid}",
-                                float(coords[0]),
-                                float(coords[1]),
-                                {
-                                    "kind": "mine",
-                                    "name": props.get("site_name") or props.get("name"),
-                                    "commodity": props.get("commod1") or props.get("commodity"),
-                                    "dev_status": props.get("dev_stat"),
-                                    "country": props.get("country"),
-                                    "state": props.get("state"),
-                                },
-                            )
-                        )
+        for member in root.iter(f"{_GML_NS}featureMember"):
+            site = member.find(f"{_MS_NS}mrds")
+            if site is None:
+                continue
+            point = site.find(f".//{_GML_NS}Point/{_GML_NS}coordinates")
+            if point is None or not point.text:
+                continue
+            parts = point.text.strip().split(",")
+            if len(parts) < 2:
+                continue
+            lon, lat = fg.num(parts[0]), fg.num(parts[1])
+            if lat is None or lon is None:
+                continue
+
+            def field(name: str, el: ET.Element = site) -> str | None:
+                node = el.find(f"{_MS_NS}{name}")
+                return node.text.strip() if node is not None and node.text else None
+
+            mid = field("dep_id") or site.get("fid") or ""
+            if not mid:
+                continue
+            code_list = field("code_list")
+            if commodity and (not code_list or commodity.upper() not in code_list.upper()):
+                continue
+            out.append(
+                fg.point(
+                    f"mine:{mid}",
+                    lon,
+                    lat,
+                    {
+                        "kind": "mine",
+                        "name": field("site_name"),
+                        # MRDS commodity CODES, not names ("CU" is copper). The
+                        # code is what the record carries, so it is what we show.
+                        "commodity": code_list,
+                        "dev_status": field("dev_stat"),
+                        "url": field("url"),
+                    },
+                )
+            )
         return fg.fc(out)
 
     key = f"infra:mines:{bbox}:{commodity}:{limit}"
@@ -403,7 +432,20 @@ HDX_URL = "https://data.humdata.org/api/3/action/package_search"
 @router.get("/api/humanitarian/hdx")
 async def hdx_search(q: str = Query("ukraine", max_length=100)) -> dict[str, Any]:
     async def load() -> dict[str, Any]:
-        raw = await fg.fetch_json(HDX_URL, params={"q": q, "rows": "50"})
+        # HDX's WAF 406s our default `osint-console/0.1` UA and nothing else:
+        # the same request with curl's or httpx's own UA is a 200. Measured
+        # 2026-08-07, three UAs, one variable.
+        raw = await fg.fetch_json(
+            HDX_URL,
+            params={"q": q, "rows": "50"},
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/127.0 Safari/537.36"
+                ),
+                "Accept": "application/json",
+            },
+        )
         result = (raw or {}).get("result", {})
         datasets = result.get("results", [])
         return {
@@ -560,7 +602,15 @@ async def gdelt_doc(q: str = Query("conflict", max_length=200)) -> dict[str, Any
                 },
             )
         except Exception:
-            return {"articles": []}
+            # GDELT throttles at one request per 5 s and says so in PLAIN TEXT
+            # with a 200, which fetch_json turns into a 502. An empty list would
+            # read as "no coverage of this query", which is a different and
+            # wrong answer, so the throttle is stated.
+            return {
+                "count": 0,
+                "articles": [],
+                "note": "GDELT is throttling (one request per 5 seconds). Try again shortly.",
+            }
         articles = (raw or {}).get("articles", [])
         return {
             "count": len(articles),
@@ -673,7 +723,15 @@ async def tinygs_packets() -> dict[str, Any]:
         try:
             raw = await fg.fetch_json(TINYGS_URL)
         except Exception:
-            return {"packets": [], "count": 0}
+            # Measured 2026-08-07: the host resolves and accepts the connection
+            # and then never answers, so this path is the 15 s client timeout,
+            # not a fast failure. Say which it was rather than showing a caller
+            # an empty list that looks like "no packets tonight".
+            return {
+                "count": 0,
+                "packets": [],
+                "note": "tinyGS did not respond (api.tinygs.com accepts the connection and hangs).",
+            }
         packets = raw if isinstance(raw, list) else (raw or {}).get("packets", [])
         return {
             "count": len(packets) if isinstance(packets, list) else 0,

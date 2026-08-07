@@ -17,6 +17,7 @@ const PANEL_SRC = readFileSync(
 
 /** Every non-geo route the wave added. Keep in step with the route files. */
 const LOOKUP_ROUTES = [
+  '/api/alerts/meteoalarm',
   '/api/cyber/kev',
   '/api/cyber/shodan/{ip}',
   '/api/legal/gleif',
@@ -50,7 +51,6 @@ const LOOKUP_ROUTES = [
 const LAYER_ROUTES: ReadonlyArray<[string, string]> = [
   ['/api/alerts/ukraine', 'alerts.ukraine'],
   ['/api/alerts/ukraine-alt', 'alerts.ukraine.alt'],
-  ['/api/alerts/meteoalarm', 'alerts.meteoalarm'],
   ['/api/alerts/fema', 'alerts.fema'],
   ['/api/alerts/spc-storms', 'hazards.spc.storms'],
   ['/api/conflict/deepstate-firms', 'conflict.deepstate.fires'],
