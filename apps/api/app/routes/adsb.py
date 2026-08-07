@@ -53,6 +53,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 
+from app import adsb_fr24
 from app.auth import require_ws_key
 from app.config import get_settings
 from app.ingest.opensky import OpenSkyTokenManager, fetch_states, states_to_geojson
@@ -976,8 +977,17 @@ _FEED_UA = (
 )
 
 
+# Not a URL: the sentinel key for the Flightradar24 tier, whose puller walks a
+# bbox GRID rather than fetching one document (app/adsb_fr24.py). It rides the
+# same slice store, cadence bookkeeping and freshest-wins union as the readsb
+# mirrors, so nothing downstream needs to know it is shaped differently.
+FR24_FEED_KEY = "fr24:world"
+
+
 def _feed_urls() -> list[str]:
     urls = [u.strip() for u in get_settings().adsb_feed_urls.split(",") if u.strip()]
+    if get_settings().adsb_fr24_enabled and not get_settings().adsb_sidecar_only:
+        urls.append(FR24_FEED_KEY)
     if get_settings().adsb_sidecar_only:
         # Pull ONLY the local sidecar — drop the remote readsb mirrors so they
         # don't add event-loop load (which is what starved the sidecar pull). If
@@ -989,6 +999,8 @@ def _feed_urls() -> list[str]:
 
 def _feed_interval(url: str) -> float:
     s = get_settings()
+    if url == FR24_FEED_KEY:
+        return s.adsb_fr24_interval_s
     if "127.0.0.1" in url or "localhost" in url:
         return s.adsb_feed_fast_interval_s  # sidecar — no rate limit, keep fresh
     if "/v2/" in url or "/re-api" in url:
@@ -1161,6 +1173,10 @@ def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]] | Any]:
 # positions were ~14 s old even though theairtraffic's raw data is ~1.6 s. Per
 # feed each runs on its own cadence; a slow feed only delays itself.
 _FEED_TASKS: dict[str, asyncio.Task[None]] = {}
+# Last FR24 pull's shape, for /api/status: how many boxes were walked and how
+# many came back at the 1500-row cap (a saturated box means that patch of sky is
+# truncated and the grid wants splitting there).
+_FR24_STATS: dict[str, Any] = {}
 
 
 def _ac_seen_pos(a: dict[str, Any]) -> float:
@@ -1175,6 +1191,20 @@ async def _pull_one_feed(url: str) -> None:
     out (success or failure) so a dead feed retries on cadence, not every tick."""
     ac: list[dict[str, Any]] = []
     ts = time.monotonic()
+    if url == FR24_FEED_KEY:
+        # The FR24 tier is ~102 small concurrent GETs, not one multi-MB body, so
+        # it stays on the loop (nothing to parse off it) and sets its own
+        # next-pull the same way the mirrors do.
+        try:
+            ac, stats = await adsb_fr24.fetch_world()
+        except Exception:
+            ac, stats = [], {}
+        finally:
+            _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
+        if ac:
+            _FEED_SLICES[url] = (ts, ac)
+            _FR24_STATS.update(stats, aircraft=len(ac), at=time.time())
+        return
     try:
         # EVERY feed pulls OFF the event loop in a worker thread — not just the
         # localhost sidecar. The async path parses each multi-MB body with a

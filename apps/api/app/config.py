@@ -101,6 +101,13 @@ class Settings(BaseSettings):
     # host is hit only once per ~60 s. Recent per-feed slices are kept + unioned
     # between pulls; OpenSky (15 s) still carries breadth, so the slow feed
     # cadence only affects the EXTRA aircraft these feeds add.
+    # Flightradar24's own map feed (app/adsb_fr24.py) as an extra keyless tier.
+    # It is fused ADS-B + MLAT + satellite, so it sees aircraft no ground-only
+    # readsb mirror can, and its positions measured p50 4 s / p90 9 s against the
+    # union's p90 of 96 s. ~102 bbox requests per pull, so the cadence is slower
+    # than the mirrors': this is somebody's map backend, not an API sold to us.
+    adsb_fr24_enabled: bool = True
+    adsb_fr24_interval_s: float = 20.0
     adsb_feed_urls: str = (
         "https://globe.theairtraffic.com/data/aircraft.json,"
         "https://skylink.hpradar.com/data/aircraft.json,"

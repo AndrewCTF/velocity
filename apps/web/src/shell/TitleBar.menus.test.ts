@@ -45,6 +45,25 @@ describe('title-bar menus', () => {
     expect(bar).toMatch(/e\.key !== 'Escape'/);
   });
 
+  // The second way to ship an inert menu: render it INSIDE the header, which
+  // clips its overflow (that is what stops the control row growing a
+  // scrollbar). The dropdown was 792px tall in a 40px box, so every menu
+  // opened, highlighted, set aria-expanded, and painted three pixels of itself.
+  // A menu that is in the DOM and invisible fails the operator exactly as hard
+  // as one that never rendered, and no DOM-level test can tell them apart —
+  // which is why this pins the mechanism instead.
+  it('paints its dropdowns outside the clipping header', () => {
+    expect(bar, 'dropdowns must be portalled to the body').toContain('createPortal');
+    // Both of them: the menu bar AND the app launcher live in the same header.
+    expect((bar.match(/createPortal\(/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(bar, 'a portalled dropdown is positioned against its trigger').toMatch(
+      /position: 'fixed', left: anchor\.left, top: anchor\.top/,
+    );
+    // And the outside-click test has to know the popup is no longer inside the
+    // bar's subtree, or the first click anywhere closes nothing.
+    expect(bar).toContain('popRef.current?.contains');
+  });
+
   it('opens the palette through a store, not a synthetic keystroke', () => {
     const omnibar = readFileSync(resolve(HERE, '..', 'command-bar', 'Omnibar.tsx'), 'utf8');
     expect(omnibar, 'Omnibar must read the shared palette store').toContain('usePalette');
