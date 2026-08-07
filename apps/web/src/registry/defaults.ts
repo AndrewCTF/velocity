@@ -1186,7 +1186,7 @@ export const defaultLayers: readonly LayerDescriptor[] = [
   // DeepState's Ukraine overlays. The fire and radiation sets are instrument
   // readings republished with a war-relevant filter; the news set is a claim.
   {
-    id: 'conflict.deepstate.fires',
+    id: 'deepstate.fires',
     group: 'conflict',
     title: 'Fires · DeepState (Ukraine)',
     kind: 'geojson',
@@ -1201,7 +1201,7 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     emits: ['fire'],
   },
   {
-    id: 'conflict.deepstate.radiation',
+    id: 'deepstate.radiation',
     group: 'conflict',
     title: 'Radiation · DeepState (Ukraine)',
     kind: 'geojson',
@@ -1216,7 +1216,7 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     emits: ['event'],
   },
   {
-    id: 'conflict.deepstate.news',
+    id: 'deepstate.news',
     group: 'conflict',
     title: 'Reports · DeepState (Ukraine)',
     kind: 'geojson',

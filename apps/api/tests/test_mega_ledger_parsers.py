@@ -130,6 +130,37 @@ def test_ukraine_alt_lists_only_alerting_regions(monkeypatch: pytest.MonkeyPatch
     assert asyncio.run(civil_defense.ukraine_alerts_alt())["features"] == []
 
 
+def test_every_wave_id_prefix_resolves_a_dossier() -> None:
+    """Clicking a contact asks `/api/entity/<prefix>:<id>`, and the prefix a feed
+    MINTS is what arrives — not its ontology kind. A prefix missing from the feed
+    table 404s the dossier for every contact on that layer."""
+    from app.routes import entity as entity_routes
+
+    minted = {
+        "ua_alert", "ua_siren", "fema", "spc", "ds_fire", "ds_rad", "ds_event",
+        "satnogs_obs", "satnogs_stn", "sonde", "kiwisdr", "mine", "osm_mil",
+        "wikimapia",
+    }
+    missing = sorted(minted - set(entity_routes._FEED_SOURCES))
+    assert missing == [], f"id prefixes with no enrichment: {missing}"
+
+
+def test_ukraine_ids_are_ascii(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An oblast id has to survive a URL and the ASCII-only feed id regex, so it
+    is a slug and never the Cyrillic name."""
+    _json(monkeypatch, [{"name": "Львівська область", "alert": True}])
+    fc = asyncio.run(civil_defense.ukraine_alerts())
+    fid = fc["features"][0]["id"]
+    assert fid == "ua_alert:lvivska"
+    assert entity_id_ok(fid)
+
+
+def entity_id_ok(fid: str) -> bool:
+    from app.routes.entity import FEED_ID_RE
+
+    return bool(FEED_ID_RE.match(fid.split(":", 1)[1]))
+
+
 MRDS_GML = """<?xml version='1.0' encoding="UTF-8" ?>
 <wfs:FeatureCollection xmlns:wfs="http://www.opengis.net/wfs"
    xmlns:ms="http://mapserver.gis.umn.edu/mapserver"
