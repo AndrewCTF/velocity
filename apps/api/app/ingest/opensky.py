@@ -86,6 +86,14 @@ async def fetch_states(
         headers["Authorization"] = f"Bearer {token}"
 
     r = await get_client().get(STATES_URL, params=params, headers=headers)
+    # Anonymous credits are counted per source IP, so every caller in this
+    # process is spending the same pool. Report what the API says is left into
+    # the one budget object the gap filler also reads (app/adsb_opensky_gaps.py)
+    # — otherwise each side discovers the other's spend by being refused.
+    if not token:
+        from app.adsb_opensky_gaps import BUDGET  # noqa: PLC0415 — cycle at module scope
+
+        BUDGET.observe(r.headers)
     if r.status_code == 429:
         # rate-limit — surface upstream signal to caller
         raise httpx.HTTPStatusError("rate limited", request=r.request, response=r)

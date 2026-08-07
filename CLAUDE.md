@@ -52,7 +52,7 @@ undo and why it was made.
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **2252 passed + 2 skipped in ~145 s** (skip = opt-in live probes;
+  Baseline: **2254 passed + 2 skipped in ~139 s** (skip = opt-in live probes;
   measured 2026-08-07, branch gotham-console-mockup, mega-ledger wave).
   Runs SERIAL by default: `-n auto --dist
   loadfile` groups different files per worker on different core counts, so a

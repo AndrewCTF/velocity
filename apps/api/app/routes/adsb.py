@@ -760,6 +760,16 @@ async def _try_opensky_global() -> dict[str, Any] | None:
     credits (and vice versa)."""
     settings = get_settings()
     tm = _token_manager(settings)  # token only attached if creds present
+    # ANONYMOUS callers share one per-IP pool, and this call is the expensive
+    # shape of it: 4 credits against a bbox's 1 (measured, see
+    # app/adsb_opensky_gaps.py). Landing it on the day's last credits would
+    # leave the gap filler dead until midnight for four boxes' worth of sky, so
+    # it defers when the shared budget is near its reserve. With OAuth creds the
+    # pool is separate and larger, so the check does not apply.
+    if not tm.enabled and not adsb_opensky_gaps.BUDGET.may_spend(
+        adsb_opensky_gaps.GLOBAL_COST
+    ):
+        return None
     try:
         raw = await fetch_states(tm, None)
     except Exception:  # noqa: BLE001

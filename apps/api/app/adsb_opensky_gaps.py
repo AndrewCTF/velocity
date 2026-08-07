@@ -64,13 +64,13 @@ class Budget:
     blocked_until: float = 0.0
     spent: int = 0
 
-    def may_spend(self, now: float | None = None) -> bool:
+    def may_spend(self, cost: int = 1, now: float | None = None) -> bool:
         now = time.monotonic() if now is None else now
         if now < self.blocked_until:
             return False
         if self.remaining is None:
             return True  # never asked — one call is how we learn the number
-        return self.remaining > RESERVE_CREDITS
+        return self.remaining - cost > RESERVE_CREDITS
 
     def observe(self, headers: Any, now: float | None = None) -> None:
         now = time.monotonic() if now is None else now
@@ -92,7 +92,14 @@ class Budget:
         self.blocked_until = max(self.blocked_until, now + seconds)
 
 
+# ONE budget object for every anonymous OpenSky caller in the process, because
+# the credits are counted per SOURCE IP, not per call site. The daily global
+# pull (4 credits) and this filler (1 a cell) were otherwise each discovering
+# the other's spend by running out.
 BUDGET = Budget()
+
+# What `states/all` with no bbox costs, measured 2026-08-07.
+GLOBAL_COST = 4
 
 
 @dataclass
