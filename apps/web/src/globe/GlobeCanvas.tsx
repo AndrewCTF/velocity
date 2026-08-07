@@ -123,6 +123,18 @@ function buildSatImagery(): Cesium.ImageryLayer {
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
 
+// Apple Maps satellite, proxied + disk-cached by the backend, which holds the
+// signed-session protocol (app/apple_maps.py). Same shape as buildSatImagery —
+// the browser never talks to Apple and never carries a token.
+function buildAppleImagery(): Cesium.ImageryLayer {
+  const provider = new Cesium.UrlTemplateImageryProvider({
+    url: backendUrl('/tiles/apple/{z}/{x}/{y}.jpg'),
+    maximumLevel: 19,
+    credit: 'Imagery (c) Apple Maps',
+  });
+  return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
+}
+
 // Direct-from-browser third-party basemaps (2026-07, docs/places-airspace-plan.md
 // §6). These stream straight from each host's tile server — NOT through the
 // /tiles/ proxy that buildDarkBasemap/buildSatImagery use for caching, because
@@ -130,7 +142,7 @@ function buildSatImagery(): Cesium.ImageryLayer {
 // this picker's. A future pass can move them behind /tiles/ once that's done.
 // Axis order differs by host: Esri/USGS serve {z}/{y}/{x}; OpenTopoMap/EOX
 // serve {z}/{x}/{y} — verified live 2026-07-11 (curl -4 -sI each z3 tile, 200).
-export type ThirdPartyImageryMode = Exclude<ImageryMode, '2d-dark' | '3d-sat'>;
+export type ThirdPartyImageryMode = Exclude<ImageryMode, '2d-dark' | '3d-sat' | 'apple-sat'>;
 
 interface ThirdPartyBasemapDef {
   url: string;
@@ -873,8 +885,9 @@ export function GlobeCanvas({
     // 3d-sat no longer requires ion: imagery + terrain come from our own
     // keyless proxies. ion remains an optional bonus (OSM Buildings).
     const wantSat = imageryMode === '3d-sat';
+    const wantApple = imageryMode === 'apple-sat';
     const thirdPartyDef =
-      imageryMode === '2d-dark' || imageryMode === '3d-sat'
+      imageryMode === '2d-dark' || imageryMode === '3d-sat' || imageryMode === 'apple-sat'
         ? undefined
         : THIRD_PARTY_BASEMAPS[imageryMode];
 
@@ -996,6 +1009,12 @@ export function GlobeCanvas({
       } else {
         scene.globe.show = true;
       }
+    } else if (wantApple) {
+      // Apple Maps satellite. Flat, like the other 2D basemaps: the terrain and
+      // 3D-tiles stack belongs to '3d-sat' and this is an imagery swap, so the
+      // ion primitives come down the same way they do for a third-party base.
+      swapInLayer(buildAppleImagery());
+      teardownIonStack();
     } else if (thirdPartyDef) {
       // One of the six direct-from-browser third-party basemaps (Esri/
       // OpenTopoMap/USGS/EOX) — see THIRD_PARTY_BASEMAPS above.

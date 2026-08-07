@@ -18,7 +18,7 @@ describe('CommandBar basemap picker', () => {
     expect(useImagery.getState().mode).toBe('2d-dark');
   });
 
-  it('lists the six third-party basemap modes alongside the two keyless stacks', () => {
+  it('lists the six third-party basemap modes alongside the three keyless stacks', () => {
     render(<CommandBar viewer={null} ionToken="" />);
     const picker = screen.getByTestId('basemap-picker');
     const values = Array.from(picker.querySelectorAll('option')).map(
@@ -27,6 +27,7 @@ describe('CommandBar basemap picker', () => {
     expect(values).toEqual([
       '2d-dark',
       '3d-sat',
+      'apple-sat',
       'esri-imagery',
       'esri-topo',
       'esri-dark',
