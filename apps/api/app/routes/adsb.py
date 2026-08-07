@@ -986,14 +986,21 @@ FR24_FEED_KEY = "fr24:world"
 
 def _feed_urls() -> list[str]:
     urls = [u.strip() for u in get_settings().adsb_feed_urls.split(",") if u.strip()]
-    if get_settings().adsb_fr24_enabled and not get_settings().adsb_sidecar_only:
-        urls.append(FR24_FEED_KEY)
     if get_settings().adsb_sidecar_only:
         # Pull ONLY the local sidecar — drop the remote readsb mirrors so they
         # don't add event-loop load (which is what starved the sidecar pull). If
         # no localhost feed is configured, keep the list (don't zero the feed).
         local = [u for u in urls if "127.0.0.1" in u or "localhost" in u]
-        return local or urls
+        urls = local or urls
+    # Appended AFTER that filter, and deliberately not subject to it. The flag
+    # exists to shed the multi-MB aircraft.json MIRRORS on a CPU-starved box — a
+    # 3.6 MB body parsed per pull is what starved the sidecar. The FR24 tier is
+    # ~100 small requests with a trivial parse, which is not that load, and
+    # filtering it out meant the deployment that most needs the extra coverage
+    # was the one that never got it: measured on this box, the tier had never
+    # run once. Its own flag is what turns it off.
+    if get_settings().adsb_fr24_enabled:
+        urls.append(FR24_FEED_KEY)
     return urls
 
 

@@ -29,6 +29,11 @@ os.environ.setdefault("OSINT_PROFILE", "full")
 # test_security_hardening.py re-checks the closed behavior with the flag forced
 # off, so this default does not hide the guard.
 os.environ.setdefault("ALLOW_UNAUTHENTICATED", "1")
+# The FR24 tier (app/adsb_fr24.py) is a REAL bbox-grid pull. The feed tests stub
+# the readsb HTTP fetch, but this tier does not go through that stub, so leaving
+# it on put ~2000 live aircraft into the slice store mid-assertion. Off for the
+# suite; tests that mean to exercise it flip the setting themselves.
+os.environ.setdefault("ADSB_FR24_ENABLED", "0")
 
 from app.config import Settings, get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402
