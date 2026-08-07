@@ -102,6 +102,34 @@ def test_kiwisdr_reads_a_js_literal_and_always_answers_a_collection(
     assert dead == {"type": "FeatureCollection", "features": []}
 
 
+def test_ukraine_alt_lists_only_alerting_regions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The v3 relay reports only regions WITH an active alert, keyed on
+    `regionName`, and it goes quiet rather than erroring when it is down."""
+    _json(
+        monkeypatch,
+        [
+            {
+                "regionId": "16",
+                "regionName": "Луганська область",
+                "regionEngName": "Luhanska region",
+                "lastUpdate": "2026-08-07T09:00:00Z",
+                "activeAlerts": [{"type": "AIR"}],
+            },
+            {"regionName": "Nowhere oblast", "activeAlerts": [{"type": "AIR"}]},
+        ],
+    )
+    fc = asyncio.run(civil_defense.ukraine_alerts_alt())
+    assert len(fc["features"]) == 1
+    p = fc["features"][0]["properties"]
+    assert p["alert"] is True and p["alert_type"] == "AIR"
+
+    def boom(url: str, **kw: Any) -> Any:
+        raise RuntimeError("relay down")
+
+    monkeypatch.setattr(fg, "fetch_json", boom)
+    assert asyncio.run(civil_defense.ukraine_alerts_alt())["features"] == []
+
+
 MRDS_GML = """<?xml version='1.0' encoding="UTF-8" ?>
 <wfs:FeatureCollection xmlns:wfs="http://www.opengis.net/wfs"
    xmlns:ms="http://mapserver.gis.umn.edu/mapserver"

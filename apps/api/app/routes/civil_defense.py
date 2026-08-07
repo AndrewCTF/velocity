@@ -83,20 +83,33 @@ async def ukraine_alerts() -> dict[str, Any]:
 
 
 # ── Ukraine alt — siren.pp.ua ──────────────────────────────────────────────
-UA_SIREN_URL = "https://siren.pp.ua/api/v1/states"
+# `/api/v1/states` is a 404 and `/api/states` sits behind Cloudflare; v3 answers
+# a bare httpx GET. It reports only the regions with an ACTIVE alert, so a region
+# absent from the response is a region that is clear — the opposite of the
+# primary relay, which lists all 25 with a boolean.
+UA_SIREN_URL = "https://siren.pp.ua/api/v3/alerts"
 
 
 @router.get("/api/alerts/ukraine-alt")
 async def ukraine_alerts_alt() -> dict[str, Any]:
     async def load() -> dict[str, Any]:
-        raw = await fg.fetch_json(UA_SIREN_URL)
+        try:
+            raw = await fg.fetch_json(UA_SIREN_URL)
+        except Exception:
+            # A second relay of the same alerts. If it is down the primary layer
+            # still carries the picture, so this one goes quiet rather than
+            # putting an error on a map that is not missing anything.
+            return fg.fc([])
         states = raw if isinstance(raw, list) else (raw or {}).get("states", [])
         out: list[fg.Feature] = []
         for s in states if isinstance(states, list) else []:
-            name = s.get("name") or ""
+            if not isinstance(s, dict):
+                continue
+            name = s.get("regionName") or s.get("name") or ""
             coords = _UA_OBLASTS.get(name)
             if not coords:
                 continue
+            active = s.get("activeAlerts")
             sid = name.replace(" ", "_")[:20]
             out.append(
                 fg.point(
@@ -105,9 +118,11 @@ async def ukraine_alerts_alt() -> dict[str, Any]:
                     coords[0],
                     {
                         "kind": "ua_alert",
-                        "name": name,
-                        "alert": bool(s.get("alert") or s.get("enabled")),
-                        "changed": s.get("changed_at") or s.get("changed"),
+                        "name": s.get("regionEngName") or name,
+                        # Present in this response at all means alerting.
+                        "alert": bool(active) if active is not None else True,
+                        "alert_type": (active or [{}])[0].get("type") if active else None,
+                        "changed": s.get("lastUpdate"),
                     },
                 )
             )
