@@ -34,6 +34,10 @@ os.environ.setdefault("ALLOW_UNAUTHENTICATED", "1")
 # it on put ~2000 live aircraft into the slice store mid-assertion. Off for the
 # suite; tests that mean to exercise it flip the setting themselves.
 os.environ.setdefault("ADSB_FR24_ENABLED", "0")
+# Same reason for the OpenSky gap filler: it spends real credits against the
+# real API, and a suite that burns the day's anonymous budget is a suite that
+# breaks the running deployment.
+os.environ.setdefault("ADSB_OPENSKY_GAPS_ENABLED", "0")
 
 from app.config import Settings, get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402

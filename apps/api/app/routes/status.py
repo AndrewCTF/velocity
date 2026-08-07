@@ -303,6 +303,12 @@ async def status_perf() -> dict[str, Any]:
             "ws_subscribers": len(adsb_routes._WS_SUBSCRIBERS),
             "feed_slices": len(adsb_routes._FEED_SLICES),
             "cycle_ms": adsb_routes.cycle_timings(),
+            # The two tiers that are not a plain document fetch, so their shape
+            # is worth stating: how much of the world FR24 saw, and what the
+            # anonymous OpenSky budget has left after the gap filler spent on
+            # our worst-covered cells.
+            "fr24": dict(adsb_routes._FR24_STATS),
+            "opensky_gaps": dict(adsb_routes._OPENSKY_GAP_STATS),
         }
     except Exception:  # noqa: BLE001 — diagnostics must never 500
         out["adsb"] = {"error": "unavailable"}

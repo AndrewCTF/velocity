@@ -106,6 +106,15 @@ class Settings(BaseSettings):
     # readsb mirror can, and its positions measured p50 4 s / p90 9 s against the
     # union's p90 of 96 s. ~102 bbox requests per pull, so the cadence is slower
     # than the mirrors': this is somebody's map backend, not an API sold to us.
+    # OpenSky spent as BBOXES on our worst-covered cells (app/adsb_opensky_gaps.py).
+    # Anonymous budget is 400 credits/day and a 2x2 degree box costs 1 while the
+    # world costs 4 (measured 2026-08-07), so this is the cheap form of the same
+    # unauthenticated API. One cell every 300 s is 288 credits/day, which stays
+    # inside the budget with the module's own reserve on top; the module reads
+    # `x-rate-limit-remaining` and stops on its own regardless.
+    adsb_opensky_gaps_enabled: bool = True
+    adsb_opensky_gaps_interval_s: float = 300.0
+    adsb_opensky_gaps_cells: int = 1
     adsb_fr24_enabled: bool = True
     adsb_fr24_interval_s: float = 20.0
     adsb_feed_urls: str = (
