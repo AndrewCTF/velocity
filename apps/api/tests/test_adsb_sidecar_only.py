@@ -24,6 +24,10 @@ def _fake_ac(n: int) -> list[dict]:
 
 
 def test_feed_urls_filters_to_localhost_when_sidecar_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    # This is about the MIRROR filtering. The FR24 tier is appended after that
+    # filter and deliberately survives it (tests/test_adsb_fr24.py), so it is
+    # pinned off here rather than threaded through every assertion.
+    monkeypatch.setenv("ADSB_FR24_ENABLED", "0")
     monkeypatch.setenv(
         "ADSB_FEED_URLS",
         "https://globe.theairtraffic.com/data/aircraft.json,http://127.0.0.1:8090/aircraft.json",
@@ -41,12 +45,12 @@ def test_feed_urls_filters_to_localhost_when_sidecar_only(monkeypatch: pytest.Mo
     # regression; assert what the flag is actually about.
     assert "https://globe.theairtraffic.com/data/aircraft.json" in urls
     assert "http://127.0.0.1:8090/aircraft.json" in urls
-    assert adsb.FR24_FEED_KEY in urls
 
 
 def test_feed_urls_keeps_list_when_sidecar_only_but_no_localhost(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("ADSB_FR24_ENABLED", "0")
     # Safety: a deploy with the flag on but no sidecar configured must NOT zero
     # the feed — it keeps the remote mirrors rather than serving nothing.
     monkeypatch.setenv("ADSB_FEED_URLS", "https://globe.theairtraffic.com/data/aircraft.json")

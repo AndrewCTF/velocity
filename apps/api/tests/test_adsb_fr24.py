@@ -84,23 +84,27 @@ def test_world_grid_covers_the_world_and_splits_the_busy_parts() -> None:
     assert any(b[2] <= 0 <= b[0] and b[1] <= -160 <= b[3] for b in boxes)
 
 
-def test_the_tier_is_registered_with_its_own_cadence(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """Registered as a feed like any other — except under `adsb_sidecar_only`,
-    which exists to keep every REMOTE pull off a CPU-starved box."""
-    from app.config import Settings, get_settings
+def test_the_tier_survives_sidecar_only_mode(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """`adsb_sidecar_only` sheds the multi-MB mirror pulls on a starved box. The
+    FR24 tier is ~100 small requests with a trivial parse, so it is NOT that
+    load — and gating it on that flag meant the deployment that most needs the
+    extra coverage was the one that never got it. Only its own flag stops it."""
+    from app.config import get_settings
 
     base = get_settings()
+    for sidecar_only in (False, True):
+        monkeypatch.setattr(
+            "app.routes.adsb.get_settings",
+            lambda so=sidecar_only: base.model_copy(
+                update={"adsb_sidecar_only": so, "adsb_fr24_enabled": True}
+            ),
+        )
+        assert adsb_routes.FR24_FEED_KEY in adsb_routes._feed_urls(), sidecar_only
     monkeypatch.setattr(
         "app.routes.adsb.get_settings",
-        lambda: base.model_copy(update={"adsb_sidecar_only": False, "adsb_fr24_enabled": True}),
-    )
-    assert adsb_routes.FR24_FEED_KEY in adsb_routes._feed_urls()
-    monkeypatch.setattr(
-        "app.routes.adsb.get_settings",
-        lambda: base.model_copy(update={"adsb_sidecar_only": True}),
+        lambda: base.model_copy(update={"adsb_fr24_enabled": False}),
     )
     assert adsb_routes.FR24_FEED_KEY not in adsb_routes._feed_urls()
-    assert isinstance(Settings, type)
     # Slower than the readsb mirrors: one pull is ~100 requests to somebody's
     # map backend, not one document fetch.
     assert adsb_routes._feed_interval(adsb_routes.FR24_FEED_KEY) >= 10.0
