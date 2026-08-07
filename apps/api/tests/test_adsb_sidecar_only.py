@@ -34,7 +34,14 @@ def test_feed_urls_filters_to_localhost_when_sidecar_only(monkeypatch: pytest.Mo
 
     monkeypatch.setenv("ADSB_SIDECAR_ONLY", "0")
     get_settings.cache_clear()
-    assert len(adsb._feed_urls()) == 2  # both mirrors when off
+    urls = adsb._feed_urls()
+    # Both configured mirrors, plus the FR24 grid tier which is remote and so is
+    # itself excluded under sidecar-only (asserted above by the localhost-only
+    # equality). Asserting a COUNT here made adding a tier look like a
+    # regression; assert what the flag is actually about.
+    assert "https://globe.theairtraffic.com/data/aircraft.json" in urls
+    assert "http://127.0.0.1:8090/aircraft.json" in urls
+    assert adsb.FR24_FEED_KEY in urls
 
 
 def test_feed_urls_keeps_list_when_sidecar_only_but_no_localhost(

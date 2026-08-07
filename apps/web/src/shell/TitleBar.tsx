@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Icon, type IconName } from '../normal/Icon.js';
 import { useAuth } from '../auth/AuthContext.js';
@@ -334,6 +335,17 @@ export function TitleBar({
   onOpenSettings?: () => void;
 }): JSX.Element {
   const [menu, setMenu] = useState<string | null>(null);
+  // Where the open dropdown should be painted. The header clips its overflow
+  // (that is what keeps the control row from growing a scrollbar), so a dropdown
+  // rendered inside it is 40px tall and looks like nothing happened — the menus
+  // highlighted and opened and the operator saw an empty bar. They are portalled
+  // to the body and positioned against the trigger's rect instead.
+  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const anchorFrom = (el: HTMLElement): { left: number; top: number } => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.bottom + 2 };
+  };
   // Live state behind the document line. Subscribed, not read once, so "live /
   // held" and the socket dot change when the thing they describe changes.
   const playing = useTime((s) => s.playing);
@@ -378,6 +390,8 @@ export function TitleBar({
     if (!menu && !launcher) return;
     const onDown = (e: PointerEvent): void => {
       if (barRef.current?.contains(e.target as Node)) return;
+      // The dropdown is portalled to the body, so it is NOT inside barRef.
+      if (popRef.current?.contains(e.target as Node)) return;
       setMenu(null);
       setLauncher(false);
     };
@@ -413,10 +427,20 @@ export function TitleBar({
           <div key={m} className="relative">
             <button
               type="button"
-              onClick={() => setMenu(menu === m ? null : m)}
+              onClick={(e) => {
+                setAnchor(anchorFrom(e.currentTarget));
+                setMenu(menu === m ? null : m);
+              }}
               // Once one menu is open, hovering the next opens it, the way every
               // real menu bar behaves.
-              onPointerEnter={() => setMenu((cur) => (cur === null ? cur : m))}
+              onPointerEnter={(e) => {
+                const el = e.currentTarget;
+                setMenu((cur) => {
+                  if (cur === null) return cur;
+                  setAnchor(anchorFrom(el));
+                  return m;
+                });
+              }}
               aria-expanded={menu === m}
               aria-haspopup="menu"
               className={`h-[30px] rounded-sm px-[9px] text-[12px] ${
@@ -425,11 +449,13 @@ export function TitleBar({
             >
               {m}
             </button>
-            {menu === m && (
+            {menu === m && anchor && createPortal(
               <div
+                ref={popRef}
                 role="menu"
                 aria-label={m}
-                className="absolute left-0 top-[32px] z-[var(--z-dropdown)] max-h-[70vh] w-[264px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-[var(--sh-pop)]"
+                style={{ position: 'fixed', left: anchor.left, top: anchor.top }}
+                className="z-[var(--z-dropdown)] max-h-[70vh] w-[264px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-[var(--sh-pop)]"
               >
                 {MENU_ITEMS[m].map((it) => {
                   const why = it.disabled?.(ctx) ?? null;
@@ -462,7 +488,8 @@ export function TitleBar({
                     </button>
                   );
                 })}
-              </div>
+              </div>,
+              document.body,
             )}
           </div>
         ))}
@@ -471,7 +498,10 @@ export function TitleBar({
       {/* The apps, behind one launcher rather than fifteen tabs in the bar. */}
       <button
         type="button"
-        onClick={() => setLauncher((v) => !v)}
+        onClick={(e) => {
+          setAnchor(anchorFrom(e.currentTarget));
+          setLauncher((v) => !v);
+        }}
         aria-expanded={launcher}
         className="ml-2 flex h-6 items-center gap-[6px] rounded-sm px-2 text-[12px] text-txt-1 hover:bg-[var(--hover)]"
       >
@@ -513,9 +543,11 @@ export function TitleBar({
         />
       </span>
 
-      {launcher && (
+      {launcher && anchor && createPortal(
         <div
-          className="absolute left-[220px] top-[40px] z-[var(--z-dropdown)] max-h-[70vh] w-[260px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-[var(--sh-pop)]"
+          ref={popRef}
+          style={{ position: 'fixed', left: anchor.left, top: anchor.top }}
+          className="z-[var(--z-dropdown)] max-h-[70vh] w-[260px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-[var(--sh-pop)]"
           role="menu"
         >
           <Group label="Pinned">
@@ -551,7 +583,8 @@ export function TitleBar({
                 ))}
             </Group>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
 
       <span
