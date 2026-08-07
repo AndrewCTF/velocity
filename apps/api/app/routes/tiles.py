@@ -13,6 +13,8 @@ Sources (all keyless):
   Sentinel data)". Rendered in the frontend attribution footer.
 - sat z>=14: Esri World Imagery legacy tile endpoint — attribution
   "(c) Esri"; high-zoom complement to the 10 m Sentinel mosaic.
+- apple: Apple Maps satellite, keyless via the signed-session protocol in
+  `app/apple_maps.py`. NON-COMMERCIAL: the route refuses a commercial tier.
 - terrain: AWS Open Data Mapzen terrarium elevation tiles (z 0-15),
   transcoded per-tile to Mapbox terrain-RGB encoding because the frontend's
   cesium-martini worker decoder only understands that formula. The
@@ -28,7 +30,7 @@ from io import BytesIO
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
-from app import memtier
+from app import apple_maps, memtier
 from app.config import Settings, get_settings
 from app.imagery import cdse
 from app.tier import commercial_request
@@ -252,6 +254,41 @@ async def sat_tile(
         content=data,
         media_type=media,
         headers={"Cache-Control": "public, max-age=604800", "X-Sat-Source": source},
+    )
+
+
+@router.get("/tiles/apple/{z}/{x}/{y}.jpg")
+async def apple_tile(
+    z: int,
+    x: int,
+    y: int,
+    settings: Settings = Depends(get_settings),
+    commercial: bool = Depends(commercial_request),
+) -> Response:
+    """Apple Maps satellite, keyless (`app/apple_maps.py` holds the protocol).
+
+    Sharper than the Esri/Sentinel stack over most cities and it is the only
+    basemap here whose high zoom comes from Apple's own capture. Non-commercial
+    only: Apple's ToS is not a redistribution licence, so a commercial-tier
+    request is refused rather than quietly served.
+    """
+    if not (0 <= z <= 19):
+        raise HTTPException(400, "z out of range")
+    if commercial:
+        raise HTTPException(451, "Apple Maps tiles are not licensed for commercial reuse")
+
+    async def load() -> bytes | None:
+        return await apple_maps.fetch_tile(z, x, y)
+
+    data = await _cache_for(settings.tile_cache_dir, _tile_budget(settings)).get(
+        "apple-sat", z, x, y, "jpg", _TTL_SAT, load
+    )
+    if data is None:
+        raise HTTPException(502, "Apple tile upstream failed")
+    return Response(
+        content=data,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=604800", "X-Sat-Source": "apple"},
     )
 
 

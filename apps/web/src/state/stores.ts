@@ -113,6 +113,9 @@ export const useTime = create<TimeState>((set) => ({
 export type ImageryMode =
   | '2d-dark'
   | '3d-sat'
+  // Apple Maps satellite, proxied + cached by the backend like '3d-sat'
+  // (app/apple_maps.py holds the signed-session protocol). Non-commercial.
+  | 'apple-sat'
   | 'esri-imagery'
   | 'esri-topo'
   | 'esri-dark'

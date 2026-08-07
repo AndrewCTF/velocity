@@ -10,7 +10,8 @@ import { flyToGlobal, resetToTopDown } from '../globe/camera.js';
 import { viewerCenter } from '../globe/center.js';
 import { useMapTools } from '../globe/mapTools.js';
 import { useAgent } from '../state/agent.js';
-import { useAlerts, useConnection, useFilters, useSelection, useTime } from '../state/stores.js';
+import { useAlerts, useConnection, useFilters, useImagery, useSelection, useTime } from '../state/stores.js';
+import { BASEMAP_OPTIONS } from '../globe/basemaps.js';
 import { useDashboardMode } from '../state/dashboardMode.js';
 import { useFloatingPanels } from '../state/floatingPanels.js';
 import { usePalette } from '../state/palette.js';
@@ -183,6 +184,17 @@ const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
       sep: true,
       run: () => useTheme.getState().toggle(),
     },
+    // The basemap. The picker lived only in CommandBar, which this bar
+    // replaced, so every basemap but the default was unreachable in this shell
+    // — including the two proxied stacks. Generated from BASEMAP_OPTIONS for
+    // the same reason the schemes are: a basemap cannot be added to the globe
+    // and left with no way to choose it.
+    ...BASEMAP_OPTIONS.map((b, i) => ({
+      label: `Basemap · ${b.label}`,
+      sep: i === 0,
+      on: () => useImagery.getState().mode === b.value,
+      run: () => useImagery.getState().setMode(b.value),
+    })),
     {
       label: 'Command layout',
       sep: true,
