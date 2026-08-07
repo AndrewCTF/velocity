@@ -76,6 +76,22 @@ _FEED_SOURCES: dict[str, str] = {
     # 2026-07-21 context+markets wave.
     "groundstop": "/api/airspace/nas-status",
     "climate_anomaly": "/api/climate/anomalies",
+    # 2026-08-06 mega-ledger wave. Keyed by the ID PREFIX the feed mints, not by
+    # the ontology kind, because that prefix is what a clicked entity carries.
+    "ua_alert": "/api/alerts/ukraine",
+    "ua_siren": "/api/alerts/ukraine-alt",
+    "fema": "/api/alerts/fema",
+    "spc": "/api/alerts/spc-storms",
+    "ds_fire": "/api/conflict/deepstate-firms",
+    "ds_rad": "/api/conflict/deepstate-radiation",
+    "ds_event": "/api/conflict/deepstate-news",
+    "satnogs_obs": "/api/space/satnogs/observations",
+    "satnogs_stn": "/api/space/satnogs/stations",
+    "sonde": "/api/space/sondes",
+    "kiwisdr": "/api/sdr/kiwisdr",
+    "mine": "/api/infra/mines",
+    "osm_mil": "/api/osm/military",
+    "wikimapia": "/api/osm/wikimapia",
 }
 
 # ── ITU-R M.585 MMSI MID → flag country (top maritime flag states + key MIDs).

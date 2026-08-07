@@ -1408,7 +1408,12 @@ async def osm_military_objects(bbox: str, detail: str = "short") -> dict[str, An
 async def mineral_sites(
     bbox: str = "", commodity: str = "", detail: str = "short",
 ) -> dict[str, Any]:
-    """USGS MRDS mineral deposit sites. Filter by bbox or commodity."""
+    """USGS MRDS mineral deposit sites inside a bbox.
+
+    bbox is REQUIRED for data (lon_min,lat_min,lon_max,lat_max): the whole
+    catalogue is ~300k sites, so with no viewport this answers an empty
+    collection. `commodity` matches the MRDS CODE ("CU", "AU"), not a name.
+    """
     params: dict[str, Any] = {}
     if bbox:
         params["bbox"] = bbox

@@ -19,33 +19,36 @@ router = APIRouter(tags=["civil_defense"])
 
 # ── Ukraine — alerts.com.ua ────────────────────────────────────────────────
 UA_ALERTS_URL = "https://alerts.com.ua/api/states"
-# Oblast centroids (approximate) for mapping alert state to a point.
-_UA_OBLASTS: dict[str, tuple[float, float]] = {
-    "Вінницька область": (49.23, 28.47),
-    "Волинська область": (50.75, 25.33),
-    "Дніпропетровська область": (48.46, 35.04),
-    "Донецька область": (48.01, 37.80),
-    "Житомирська область": (50.25, 28.66),
-    "Закарпатська область": (48.62, 22.29),
-    "Запорізька область": (47.84, 35.14),
-    "Івано-Франківська область": (48.92, 24.71),
-    "Київська область": (50.45, 30.52),
-    "Кіровоградська область": (48.51, 32.26),
-    "Луганська область": (48.57, 39.31),
-    "Львівська область": (49.84, 24.03),
-    "Миколаївська область": (46.97, 32.00),
-    "Одеська область": (46.48, 30.73),
-    "Полтавська область": (49.59, 34.55),
-    "Рівненська область": (50.62, 26.25),
-    "Сумська область": (50.91, 34.80),
-    "Тернопільська область": (49.55, 25.59),
-    "Харківська область": (49.99, 36.23),
-    "Херсонська область": (46.63, 32.62),
-    "Хмельницька область": (49.42, 27.00),
-    "Черкаська область": (49.44, 32.06),
-    "Чернівецька область": (48.29, 25.94),
-    "Чернігівська область": (51.49, 31.29),
-    "м. Київ": (50.45, 30.52),
+# Oblast centroids (approximate), with an ASCII slug per oblast. The slug is
+# the FEATURE ID: an id has to survive a URL and `/api/entity/<kind>:<id>`,
+# which accepts ASCII only, so keying on the Cyrillic name gave every oblast a
+# contact the dossier could not resolve.
+_UA_OBLASTS: dict[str, tuple[float, float, str]] = {
+    "Вінницька область": (49.23, 28.47, "vinnytska"),
+    "Волинська область": (50.75, 25.33, "volynska"),
+    "Дніпропетровська область": (48.46, 35.04, "dnipropetrovska"),
+    "Донецька область": (48.01, 37.80, "donetska"),
+    "Житомирська область": (50.25, 28.66, "zhytomyrska"),
+    "Закарпатська область": (48.62, 22.29, "zakarpatska"),
+    "Запорізька область": (47.84, 35.14, "zaporizka"),
+    "Івано-Франківська область": (48.92, 24.71, "ivano-frankivska"),
+    "Київська область": (50.45, 30.52, "kyivska"),
+    "Кіровоградська область": (48.51, 32.26, "kirovohradska"),
+    "Луганська область": (48.57, 39.31, "luhanska"),
+    "Львівська область": (49.84, 24.03, "lvivska"),
+    "Миколаївська область": (46.97, 32.00, "mykolaivska"),
+    "Одеська область": (46.48, 30.73, "odeska"),
+    "Полтавська область": (49.59, 34.55, "poltavska"),
+    "Рівненська область": (50.62, 26.25, "rivnenska"),
+    "Сумська область": (50.91, 34.80, "sumska"),
+    "Тернопільська область": (49.55, 25.59, "ternopilska"),
+    "Харківська область": (49.99, 36.23, "kharkivska"),
+    "Херсонська область": (46.63, 32.62, "khersonska"),
+    "Хмельницька область": (49.42, 27.00, "khmelnytska"),
+    "Черкаська область": (49.44, 32.06, "cherkaska"),
+    "Чернівецька область": (48.29, 25.94, "chernivetska"),
+    "Чернігівська область": (51.49, 31.29, "chernihivska"),
+    "м. Київ": (50.45, 30.52, "kyiv-city"),
 }
 
 
@@ -63,10 +66,9 @@ async def ukraine_alerts() -> dict[str, Any]:
             coords = _UA_OBLASTS.get(name)
             if not coords:
                 continue
-            sid = name.replace(" ", "_")[:20]
             out.append(
                 fg.point(
-                    f"ua_alert:{sid}",
+                    f"ua_alert:{coords[2]}",
                     coords[1],
                     coords[0],
                     {
@@ -110,10 +112,9 @@ async def ukraine_alerts_alt() -> dict[str, Any]:
             if not coords:
                 continue
             active = s.get("activeAlerts")
-            sid = name.replace(" ", "_")[:20]
             out.append(
                 fg.point(
-                    f"ua_siren:{sid}",
+                    f"ua_siren:{coords[2]}",
                     coords[1],
                     coords[0],
                     {

@@ -91,8 +91,8 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   'aviation.adsb.pia': 'sensor',
   // DeepState's fire and radiation overlays are VIIRS and dosimeters carrying a
   // war-relevant filter. The filter chooses what to show, not what happened.
-  'conflict.deepstate.fires': 'sensor',
-  'conflict.deepstate.radiation': 'sensor',
+  'deepstate.fires': 'sensor',
+  'deepstate.radiation': 'sensor',
   // Amateur ground segment: a received pass and a sonde's own beacon.
   'space.satnogs.observations': 'sensor',
   'env.sondes': 'sensor',
@@ -166,7 +166,7 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   // Notional COP tracks: nothing reported this, we drew it.
   'mil.cop.notional': 'claim',
   // DeepState's written reports, and a crowd-edited gazetteer anyone can label.
-  'conflict.deepstate.news': 'claim',
+  'deepstate.news': 'claim',
   'osm.wikimapia': 'claim',
 };
 
