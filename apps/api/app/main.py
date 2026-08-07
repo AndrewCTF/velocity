@@ -75,6 +75,7 @@ from app.routes import audit as audit_routes
 from app.routes import aviation as aviation_routes
 from app.routes import cables as cables_routes
 from app.routes import cams as cams_routes
+from app.routes import civil_defense as civil_defense_routes
 from app.routes import climate as climate_routes
 from app.routes import collab as collab_routes
 from app.routes import config as config_routes
@@ -84,6 +85,7 @@ from app.routes import corroborate as corroborate_routes
 from app.routes import countries as countries_routes
 from app.routes import country_stats as country_stats_routes
 from app.routes import cyber as cyber_routes
+from app.routes import deepstate as deepstate_routes
 from app.routes import displacement as displacement_routes
 from app.routes import entity as entity_routes
 from app.routes import env as env_routes
@@ -109,6 +111,7 @@ from app.routes import keys as keys_routes
 from app.routes import maps as maps_routes
 from app.routes import maritime as maritime_routes
 from app.routes import markets as markets_routes
+from app.routes import mega_feeds as mega_feeds_routes
 from app.routes import nas_status as nas_status_routes
 from app.routes import news as news_routes_mod
 from app.routes import oceans as oceans_routes
@@ -122,10 +125,12 @@ from app.routes import route as route_routes
 from app.routes import routing as routing_routes
 from app.routes import sanctions as sanctions_routes
 from app.routes import sar as sar_routes
+from app.routes import satnogs as satnogs_routes
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
 from app.routes import simulation as simulation_routes
 from app.routes import situations as situations_routes
+from app.routes import source_catalog as source_catalog_routes
 from app.routes import space as space_routes
 from app.routes import spacewx as spacewx_routes
 from app.routes import status as status_routes
@@ -683,6 +688,15 @@ def create_app() -> FastAPI:
     # Workflows: user-authored DAG pipelines over live platform data
     # (docs/dashboard-workflows-plan.md). Local SQLite, keyless.
     app.include_router(workflows_routes.router)
+    # 2026-08-06 mega-ledger wave: civil defense alerts, DeepState UA extras,
+    # SatNOGS/SondeHub, extended feeds (CISA KEV, FEMA, SPC, GLEIF, UNHCR,
+    # FR24, Overpass, Wikimapia, Telegram, GDELT DOC, splats, buildings, etc.),
+    # and a master source catalog of all tile/SAR/SDR/archive providers.
+    app.include_router(civil_defense_routes.router)
+    app.include_router(deepstate_routes.router)
+    app.include_router(satnogs_routes.router)
+    app.include_router(mega_feeds_routes.router)
+    app.include_router(source_catalog_routes.router)
 
     # TiTiler COG sub-app (Track B2): XYZ tiles for any Cloud-Optimized GeoTIFF
     # (Maxar Open Data S3, future SAR delivery), so B3/B4/B5 have a universal

@@ -1315,6 +1315,238 @@ async def system_doctor() -> dict[str, Any]:
     return await _get("/api/status/doctor")
 
 
+# ── 2026-08-06 mega-ledger wave ────────────────────────────────────────────
+
+
+@mcp.tool()
+async def ukraine_alerts(detail: str = "short") -> dict[str, Any]:
+    """Live air-raid alert status across Ukraine's 25 oblasts (alerts.com.ua)."""
+    return shape(await _get("/api/alerts/ukraine"), detail)
+
+
+@mcp.tool()
+async def deepstate_firms(detail: str = "short") -> dict[str, Any]:
+    """FIRMS fire hotspots within the Ukrainian theater (DeepState)."""
+    return shape(await _get("/api/conflict/deepstate-firms"), detail)
+
+
+@mcp.tool()
+async def deepstate_radiation_stations(detail: str = "short") -> dict[str, Any]:
+    """Live radiation monitoring stations in Ukraine (DeepState, ~565 stations)."""
+    return shape(await _get("/api/conflict/deepstate-radiation"), detail)
+
+
+@mcp.tool()
+async def deepstate_war_news(detail: str = "short") -> dict[str, Any]:
+    """Geolocated war-news events from the DeepState map."""
+    return shape(await _get("/api/conflict/deepstate-news"), detail)
+
+
+@mcp.tool()
+async def satnogs_observations(detail: str = "short") -> dict[str, Any]:
+    """Recent satellite downlink observations from the SatNOGS ground station
+    network — real decoded telemetry from space."""
+    return shape(await _get("/api/space/satnogs/observations"), detail)
+
+
+@mcp.tool()
+async def satnogs_ground_stations(detail: str = "short") -> dict[str, Any]:
+    """Map of active SatNOGS ground stations worldwide."""
+    return shape(await _get("/api/space/satnogs/stations"), detail)
+
+
+@mcp.tool()
+async def satnogs_transmitters(satellite: int = 0, detail: str = "short") -> dict[str, Any]:
+    """Known satellite transmitter frequencies from the SatNOGS database.
+    Pass a NORAD catalog ID to filter to one satellite."""
+    params: dict[str, Any] = {}
+    if satellite:
+        params["satellite"] = satellite
+    return shape(await _get("/api/space/satnogs/transmitters", params), detail)
+
+
+@mcp.tool()
+async def weather_sondes(detail: str = "short") -> dict[str, Any]:
+    """Live weather balloon (radiosonde) positions worldwide from SondeHub."""
+    return shape(await _get("/api/space/sondes"), detail)
+
+
+@mcp.tool()
+async def cisa_kev(detail: str = "short") -> dict[str, Any]:
+    """CISA Known Exploited Vulnerabilities catalog — what's actively being
+    exploited in the wild right now."""
+    return shape(await _get("/api/cyber/kev"), detail)
+
+
+@mcp.tool()
+async def shodan_ip(ip: str) -> dict[str, Any]:
+    """Shodan InternetDB lookup for one IPv4 address — ports, vulns, hostnames.
+    NO API key needed."""
+    return await _get(f"/api/cyber/shodan/{ip}")
+
+
+@mcp.tool()
+async def fema_disasters(detail: str = "short") -> dict[str, Any]:
+    """Recent FEMA disaster declarations across US states and territories."""
+    return shape(await _get("/api/alerts/fema"), detail)
+
+
+@mcp.tool()
+async def spc_storm_reports(detail: str = "short") -> dict[str, Any]:
+    """Today's SPC severe weather reports — tornado, wind, and hail events."""
+    return shape(await _get("/api/alerts/spc-storms"), detail)
+
+
+@mcp.tool()
+async def osm_military_objects(bbox: str, detail: str = "short") -> dict[str, Any]:
+    """Military objects from OpenStreetMap via Overpass API. bbox =
+    south,west,north,east."""
+    return shape(await _get("/api/osm/military", {"bbox": bbox}), detail)
+
+
+@mcp.tool()
+async def mineral_sites(
+    bbox: str = "", commodity: str = "", detail: str = "short",
+) -> dict[str, Any]:
+    """USGS MRDS mineral deposit sites. Filter by bbox or commodity."""
+    params: dict[str, Any] = {}
+    if bbox:
+        params["bbox"] = bbox
+    if commodity:
+        params["commodity"] = commodity
+    return shape(await _get("/api/infra/mines", params), detail)
+
+
+@mcp.tool()
+async def gleif_lookup(q: str) -> dict[str, Any]:
+    """Look up a company's Legal Entity Identifier (LEI) via the GLEIF API."""
+    return await _get("/api/legal/gleif", {"q": q})
+
+
+@mcp.tool()
+async def courtlistener_search(q: str) -> dict[str, Any]:
+    """Search US court opinions on CourtListener."""
+    return await _get("/api/legal/courtlistener", {"q": q})
+
+
+@mcp.tool()
+async def unhcr_refugees(year: int = 2024) -> dict[str, Any]:
+    """UNHCR refugee/IDP population figures by country."""
+    return await _get("/api/displacement/unhcr", {"year": year})
+
+
+@mcp.tool()
+async def worldpop(iso3: str = "") -> dict[str, Any]:
+    """WorldPop population grid datasets metadata. Filter by ISO3 country."""
+    params: dict[str, Any] = {}
+    if iso3:
+        params["iso3"] = iso3
+    return await _get("/api/population/worldpop", params)
+
+
+@mcp.tool()
+async def hdx_datasets(q: str = "ukraine") -> dict[str, Any]:
+    """Search humanitarian datasets on HDX (data.humdata.org)."""
+    return await _get("/api/humanitarian/hdx", {"q": q})
+
+
+@mcp.tool()
+async def adsb_by_hex(icao: str) -> dict[str, Any]:
+    """Live aircraft by ICAO24 hex code (e.g. 'a1b2c3')."""
+    return await _get(f"/api/adsb/hex/{quote(icao, safe='')}")
+
+
+@mcp.tool()
+async def adsb_by_registration(reg: str) -> dict[str, Any]:
+    """Live aircraft by tail/registration number (e.g. 'N12345')."""
+    return await _get(f"/api/adsb/registration/{quote(reg, safe='')}")
+
+
+@mcp.tool()
+async def adsb_by_callsign(cs: str) -> dict[str, Any]:
+    """Live aircraft by callsign (e.g. 'UAL123')."""
+    return await _get(f"/api/adsb/callsign/{quote(cs, safe='')}")
+
+
+@mcp.tool()
+async def adsb_by_type(type_code: str) -> dict[str, Any]:
+    """Live aircraft by ICAO type designator (e.g. 'B738', 'A320')."""
+    return await _get(f"/api/adsb/type/{quote(type_code, safe='')}")
+
+
+@mcp.tool()
+async def adsb_ladd() -> dict[str, Any]:
+    """Aircraft on FAA's Limiting Aircraft Data Displayed (LADD) list."""
+    return await _get("/api/adsb/ladd")
+
+
+@mcp.tool()
+async def adsb_pia() -> dict[str, Any]:
+    """Aircraft using Privacy ICAO Address (PIA) — randomized hex codes."""
+    return await _get("/api/adsb/pia")
+
+
+@mcp.tool()
+async def fr24_search(q: str) -> dict[str, Any]:
+    """FlightRadar24 unauthed search — aircraft, airports, flights."""
+    return await _get("/api/adsb/fr24/search", {"q": q})
+
+
+@mcp.tool()
+async def gdelt_articles(q: str = "conflict") -> dict[str, Any]:
+    """GDELT DOC 2 API — article-level search across global news."""
+    return await _get("/api/events/gdelt-doc", {"q": q})
+
+
+@mcp.tool()
+async def telegram_channel(channel: str = "intelslava") -> dict[str, Any]:
+    """Scrape recent messages from a Telegram OSINT channel."""
+    return await _get("/api/news/telegram", {"channel": channel})
+
+
+@mcp.tool()
+async def source_catalog(category: str = "") -> dict[str, Any]:
+    """Master catalog of all data sources the platform knows about — tile
+    providers, SAR archives, SDR directories, splat sources, streaming
+    endpoints, and more. Filter by category."""
+    params: dict[str, Any] = {}
+    if category:
+        params["category"] = category
+    return await _get("/api/sources/catalog", params)
+
+
+@mcp.tool()
+async def splat_search(q: str = "gaussian splat") -> dict[str, Any]:
+    """Search Sketchfab for downloadable 3D Gaussian Splat models."""
+    return await _get("/api/splats/search", {"q": q})
+
+
+@mcp.tool()
+async def esri_wayback() -> dict[str, Any]:
+    """ESRI Wayback time-travel manifest — every historical imagery version
+    since 2014."""
+    return await _get("/api/imagery/wayback")
+
+
+@mcp.tool()
+async def ms_global_buildings() -> dict[str, Any]:
+    """Microsoft Global Buildings manifest — 1.3 billion footprint polygons,
+    download links per quadkey region."""
+    return await _get("/api/buildings/microsoft")
+
+
+@mcp.tool()
+async def kiwisdr_stations(detail: str = "short") -> dict[str, Any]:
+    """Map of public KiwiSDR software-defined radio receivers worldwide."""
+    return shape(await _get("/api/sdr/kiwisdr"), detail)
+
+
+@mcp.tool()
+async def tinygs_packets(detail: str = "short") -> dict[str, Any]:
+    """Recent LoRa satellite packets from the tinyGS community network."""
+    return shape(await _get("/api/space/tinygs"), detail)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="OSINT GEOINT MCP server")
     parser.add_argument("--http", action="store_true", help="serve over streamable-HTTP")

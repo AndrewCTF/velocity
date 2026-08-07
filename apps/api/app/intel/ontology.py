@@ -70,6 +70,11 @@ ObjectKind = Literal[
     "buoy", "chokepoint", "relief", "powerplant", "sigmet", "aurora",
     # 2026-07-21 context+markets wave.
     "groundstop", "climate_anomaly",
+    # 2026-08-06 mega-ledger wave — civil defense, DeepState, SatNOGS, misc.
+    "ua_alert", "meteoalarm", "fema", "spc_storm",
+    "ds_fire", "ds_radiation", "ds_event",
+    "satnogs_obs", "satnogs_stn", "sonde",
+    "mine", "osm_military", "wikimapia", "sdr_station",
     "object",
 ]
 
@@ -86,6 +91,11 @@ _KNOWN_KINDS: frozenset[str] = frozenset(
         "buoy", "chokepoint", "relief", "powerplant", "sigmet", "aurora",
         # 2026-07-21 context+markets wave.
         "groundstop", "climate_anomaly",
+        # 2026-08-06 mega-ledger wave — civil defense, DeepState, SatNOGS, misc.
+        "ua_alert", "meteoalarm", "fema", "spc_storm",
+        "ds_fire", "ds_radiation", "ds_event",
+        "satnogs_obs", "satnogs_stn", "sonde",
+        "mine", "osm_military", "wikimapia", "sdr_station",
         "object",
     )
 )

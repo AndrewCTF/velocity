@@ -85,6 +85,17 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   // Every input is a transponder or a radar image, so the fusion inherits the
   // tier of what it fuses. Derivation does not demote.
   'intel.incidents.live': 'sensor',
+  // Privacy-filtered airframes are still transponder returns. The filtering is
+  // an operator request applied downstream; the emission is the same machine.
+  'aviation.adsb.ladd': 'sensor',
+  'aviation.adsb.pia': 'sensor',
+  // DeepState's fire and radiation overlays are VIIRS and dosimeters carrying a
+  // war-relevant filter. The filter chooses what to show, not what happened.
+  'conflict.deepstate.fires': 'sensor',
+  'conflict.deepstate.radiation': 'sensor',
+  // Amateur ground segment: a received pass and a sonde's own beacon.
+  'space.satnogs.observations': 'sensor',
+  'env.sondes': 'sensor',
 
   // ── registry ─────────────────────────────────────────────────────────────
   // TLE sets are derived from radar tracking but are PUBLISHED as a catalogue
@@ -116,6 +127,14 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   // A launch manifest is an operator's declared schedule, not an observation of
   // a rocket. It becomes sensor data the moment CelesTrak catalogues the object.
   'space.launches': 'registry',
+  // Volunteers register a receiver's location and hardware; the list is a
+  // roster of stations, not a reading from any of them.
+  'space.satnogs.stations': 'registry',
+  'rf.kiwisdr': 'registry',
+  'infra.mines': 'registry',
+  'aviation.airports.full': 'registry',
+  'aviation.airports.openflights': 'registry',
+  'osm.military': 'registry',
 
   // ── filing ───────────────────────────────────────────────────────────────
   'hazards.nws.alerts': 'filing',
@@ -126,6 +145,14 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   'hazards.gdacs': 'filing',
   'hazards.cyclones': 'filing',
   'hazards.volcanoes': 'filing',
+  // An air-raid alert is a civil-defense authority ordering a population to
+  // shelter. Both relays report the same official state.
+  'alerts.ukraine': 'filing',
+  'alerts.ukraine.alt': 'filing',
+  'alerts.meteoalarm': 'filing',
+  'alerts.fema': 'filing',
+  // A storm report is a spotter's account that NOAA logs and stands behind.
+  'hazards.spc.storms': 'filing',
 
   // ── claim ────────────────────────────────────────────────────────────────
   // ACLED and UCDP are research-grade and academically coded, and their input
@@ -139,6 +166,9 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   'hazards.reliefweb': 'claim',
   // Notional COP tracks: nothing reported this, we drew it.
   'mil.cop.notional': 'claim',
+  // DeepState's written reports, and a crowd-edited gazetteer anyone can label.
+  'conflict.deepstate.news': 'claim',
+  'osm.wikimapia': 'claim',
 };
 
 export function tierOf(layerId: string): Tier | undefined {

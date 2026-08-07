@@ -104,7 +104,12 @@ def test_mcp_http_handshake_lists_all_tools(keyed: str) -> None:
         # + answer/contact_provenance/history_diff/system_doctor (2026-07-29
         #   provenance+answers wave) — the agent surface for the four
         #   capabilities no competitor exposes at all.
-        assert len(names) == 50, sorted(names)
+        # + 28 tools from 2026-08-06 mega-ledger wave (civil defense, DeepState,
+        #   SatNOGS, KEV, Shodan, FEMA, SPC, OSM, mines, GLEIF, CourtListener,
+        #   UNHCR, WorldPop, HDX, FR24, GDELT doc, Telegram, source catalog,
+        #   splats, wayback, buildings, KiwiSDR, tinyGS).
+        # + 6 adsb.lol v2 lookup tools (hex, registration, callsign, type, ladd, pia).
+        assert len(names) == 84, sorted(names)
         assert {"get_situation", "intel_brief", "query_aircraft", "deep_analyze"} <= names
         assert {"disaster_alerts", "maritime_chokepoints", "space_weather"} <= names
         assert {
