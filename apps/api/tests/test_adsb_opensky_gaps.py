@@ -127,3 +127,30 @@ def test_the_tier_is_registered_on_a_cadence_the_budget_can_afford(monkeypatch) 
     per_day = s.adsb_opensky_gaps_cells * 86400.0 / s.adsb_opensky_gaps_interval_s
     # 400 anonymous credits a day, and the module reserves 40 of them.
     assert per_day <= 400 - gaps.RESERVE_CREDITS, f"{per_day} credits/day is over budget"
+
+
+def test_one_budget_is_shared_by_both_openskys() -> None:
+    """The credits are counted per SOURCE IP, so the daily global pull and this
+    filler are spending the same pool. Each discovering the other's spend by
+    being refused is how the cheap tier dies for a day to pay for one world
+    pull."""
+    from app.ingest import opensky as ingest
+
+    src = (ingest.__file__, gaps.__file__)
+    assert all(src)
+    # The global shape costs four boxes' worth of sky.
+    assert gaps.GLOBAL_COST == 4
+    gaps.BUDGET.observe(httpx.Headers({"x-rate-limit-remaining": "43"}))
+    # One more box is affordable over the 40-credit reserve; a world pull is not.
+    assert gaps.BUDGET.may_spend(1) is True
+    assert gaps.BUDGET.may_spend(gaps.GLOBAL_COST) is False
+
+
+def test_the_global_pull_defers_when_the_shared_budget_is_low() -> None:
+    """Anonymous only — with OAuth creds the pool is separate and larger."""
+    import asyncio as _asyncio
+
+    from app.routes import adsb as routes
+
+    gaps.BUDGET.observe(httpx.Headers({"x-rate-limit-remaining": "41"}))
+    assert _asyncio.run(routes._try_opensky_global()) is None
