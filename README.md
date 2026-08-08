@@ -542,22 +542,25 @@ GPU (`chrome://gpu`, look for adapter "ACTIVE").
 
 | Tier | GPU | RAM | Display | What you get |
 |---|---|---|---|---|
-| Minimum | WebGL2 integrated (Iris Xe / Vega / M1) | 8 GB | 1080p | 2D-dark, regional zoom, ~30 fps. 3D-sat will be rough. |
-| Recommended | Discrete ≥8 GB VRAM (RTX 3060 / RX 6700 / M-Pro) | 16 GB | 1080p–1440p | 2D-dark smooth; 3D-sat usable at city scale. |
-| 3D-sat / 4K | RTX 4070+/16 GB VRAM or better | 32 GB | up to 4K | Full 3D-sat terrain + buildings; high fps. |
+| Edge / lite | WebGL2 integrated (Iris Xe / Vega / M1) | 8 GB | 1080p | `OSINT_PROFILE=lite` (default). 9k aircraft, 32k vessels, 2D-dark. Backend fits in ~1.5 GB; the adaptive governor sheds low-priority layers to keep frames under budget. |
+| Recommended | Discrete ≥8 GB VRAM (RTX 3060 / RX 6700 / M-Pro) | 16 GB | 1080p–1440p | Full profile with all feeds. 2D-dark smooth; 3D-sat usable at city scale. |
+| Full / 3D-sat | RTX 4070+/16 GB VRAM or better | 32 GB | up to 4K | All feeds + browser sidecars + 3D-sat terrain + buildings; best frame rate. |
 
-These tiers come from watching it actually run. 3D-sat genuinely wants a lot of
-VRAM, and the low-VRAM minimum only holds for the 2D-dark map; switch on 3D-sat
-and you'll want a discrete card with headroom.
+These tiers come from a cgroup-isolated benchmark (`tools/perf/bench_ram.sh`)
+that constrains backend + Vite + Chrome inside a single MemoryMax and measures
+real fps, renderMs, entity counts, and OOM kills at each RAM level. 3D-sat
+genuinely wants a lot of VRAM, and the low-VRAM minimum only holds for the
+2D-dark map; switch on 3D-sat and you'll want a discrete card with headroom.
 
-**Backend (server):** Python 3.12, outbound HTTPS, measured steady-state
-~3.2 GB backend RSS with the full feed set warm. Runs on a small VPS or the
-same box, and it isn't the frontend's bottleneck. The optional headless-Chrome
-coverage sidecars are the real memory line item: the ADS-B scraping tier
-measured ~11 GB RSS across its ~50-process Chrome tree and the AIS tier
-~3-6 GB across its ~20-36 (both measured 2026-07-24 at full coverage), so
-budget roughly 15 GB on top of the backend when both are enabled — or skip
-them and keep the lighter direct feeds.
+**Backend (server):** Python 3.12, outbound HTTPS. The `lite` profile
+(default) disables browser sidecars, history, and the FR24/OpenSky-gaps tiers,
+measuring ~530 MB steady-state RSS — comfortably fits an 8 GB box alongside
+the browser. The `full` profile with all direct feeds warm measures ~3.2 GB.
+The optional headless-Chrome coverage sidecars are the real memory line item:
+the ADS-B scraping tier measured ~11 GB RSS across its ~50-process Chrome tree
+and the AIS tier ~3-6 GB across its ~20-36 (both measured 2026-07-24 at full
+coverage), so budget roughly 15 GB on top of the backend when both are
+enabled — or keep `lite` and use the direct feeds.
 
 ## Stack
 
