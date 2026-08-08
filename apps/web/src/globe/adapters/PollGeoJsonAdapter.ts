@@ -680,7 +680,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           heightReference: Cesium.HeightReference.NONE,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 40_000_000),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 80_000_000),
           scaleByDistance: new Cesium.NearFarScalar(10_000, 1.7, 5_000_000, 0.5),
         }),
         labelBase: (text) => labelFor(text) as unknown as Cesium.Label.ConstructorOptions,

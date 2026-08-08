@@ -136,6 +136,37 @@ def _noop_sync(_url: str) -> tuple[float, list[dict]]:
 
 
 @pytest.mark.asyncio
+async def test_next_pull_armed_from_start_not_end(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The next-pull timer must be START-to-START, not END-to-END. A download
+    that takes 2 s with a 5 s interval should fire again at t0+5, not t0+7."""
+    interval = 5.0
+    download_dur = 2.0
+    monkeypatch.setenv("ADSB_FEED_INTERVAL_S", str(interval))
+    from app.config import get_settings
+    get_settings.cache_clear()
+
+    def slow_sync(_url: str) -> tuple[float, list[dict]]:
+        import time as _t
+        _t.sleep(download_dur)
+        return _t.monotonic(), [{"hex": "a1", "lat": 1, "lon": 1}]
+
+    monkeypatch.setattr(adsb, "_fetch_one_feed_sync", slow_sync)
+
+    before = time.monotonic()
+    await adsb._readsb_feeds()
+    await _drain()
+
+    url = "https://feed-a/aircraft.json"
+    next_pull = adsb._FEED_NEXT_PULL[url]
+    # start-to-start: next_pull ≈ before + interval (not before + download + interval)
+    expected = before + interval
+    assert next_pull < expected + 1.0, (
+        f"next_pull {next_pull - before:.1f}s after start, "
+        f"expected ~{interval}s (start-to-start), not ~{interval + download_dur}s (end-to-end)"
+    )
+
+
+@pytest.mark.asyncio
 async def test_no_feeds_configured_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADSB_FEED_URLS", "")
     from app.config import get_settings

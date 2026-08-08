@@ -402,9 +402,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # a legible world map at once instead of a cold ~70-tile CDN burst
             # (the "map takes a while to become clear" report). Same fire-and-
             # forget spirit as the cams + adsb warms above.
+            from app import apple_maps  # noqa: PLC0415
             from app.routes import tiles as tiles_routes  # noqa: PLC0415
 
             asyncio.create_task(tiles_routes.warm_basemap())
+            # Bootstrap the Apple Maps signing session, then pre-warm z0-4
+            # (341 tiles) so switching to Apple Maps shows the world instantly.
+            async def _warm_apple() -> None:
+                await apple_maps.session()
+                await tiles_routes.warm_apple()
+
+            asyncio.create_task(_warm_apple())
             # News debias / fact-check refresher.
             if settings.news_enabled:
                 from app.routes import news as news_routes  # noqa: PLC0415

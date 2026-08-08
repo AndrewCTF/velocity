@@ -20,10 +20,11 @@ Design notes (post-breaker rewrite):
   airplanes.live's burst limit, which is often the ONLY reachable host. Empty
   cells keep a 5s TTL so a transiently-throttled cell refills fast. The
   sticky snapshot dict IS the merge cache — the hot route returns it in
-  microseconds. The background refresher loop targets a 5s cycle (sleep =
-  max(0, 5.0 - elapsed)) so a fast fan-out doesn't burn CPU and a slow
-  fan-out doesn't add extra idle latency.
-- Frontend polls every 5s + snapshot ≤5s old = end-to-end ≤10s.
+  microseconds. The background refresher loop targets a 1s cycle (when
+  clients are connected; 5s idle) and the per-feed mirrors pull on their
+  own 3s cadence (start-to-start), so a fast fan-out doesn't burn CPU
+  and a slow fan-out doesn't add extra idle latency.
+- Frontend polls every 1s (WS push primary) + mirrors ≤3s old = end-to-end ≤4s.
 - ~120 hand-picked dense cells over land (was 250+). Smaller grid × tighter
   TTL beats larger grid × longer TTL when egress is throttled.
 - OpenSky (authed, env creds) sits between the anonymous firehoses and the
@@ -1038,14 +1039,14 @@ def _feed_interval(url: str) -> float:
         # no reason to throttle it to 30 s. Pull it fast so the bulk of aircraft
         # carry genuinely fresh REAL positions (operator wants real data refreshed
         # consistently, NOT synthesized motion between stale fixes).
-        # 8 -> 5 s: a measured 74% of the snapshot (9.7k of 13k) is theairtraffic-
-        # sourced, so its cadence IS how often most aircraft get a distinct fix —
-        # an 8 s pull left them still for up to 8 s after load and glide-then-hold
-        # in 8 s chunks (the "takes much longer to start moving" report). 5 s is
-        # the aggressive end of CLAUDE.md's 5-8 s freshness/bandwidth balance and
-        # matches hpradar's cadence; the 9 s total cap + one-task-per-feed guard
-        # keep a slow pull from piling up. Floor stays >=5 s (never the forbidden ~1 s).
-        return max(5.0, s.adsb_feed_interval_s)
+        # 5 -> 3 s: a measured 74% of the snapshot (9.7k of 13k) is theairtraffic-
+        # sourced, so its cadence IS how often most aircraft get a distinct fix.
+        # Its CDN rebuilds ~1 s and ETag/304 absorbs unchanged polls, so 3 s is
+        # ~1.9 MB/s sustained bandwidth (vs ~0.8 at 5 s) — the trade for halving
+        # the worst-case position age from ~5 s to ~3 s (the start-to-start
+        # re-arming fix in _pull_one_feed). Floor >=3 s (never the ~1 s that
+        # matches the CDN rebuild and wastes half the pulls on 304).
+        return max(3.0, s.adsb_feed_interval_s)
     return s.adsb_feed_interval_s  # full aircraft.json mirror
 
 
@@ -1218,7 +1219,8 @@ async def _pull_one_feed(url: str) -> None:
     dead feed never delays the fresh ones. Re-arms its own next-pull on the way
     out (success or failure) so a dead feed retries on cadence, not every tick."""
     ac: list[dict[str, Any]] = []
-    ts = time.monotonic()
+    t0 = time.monotonic()
+    ts = t0
     if url == FR24_FEED_KEY:
         # The FR24 tier is ~102 small concurrent GETs, not one multi-MB body, so
         # it stays on the loop (nothing to parse off it) and sets its own
@@ -1228,7 +1230,7 @@ async def _pull_one_feed(url: str) -> None:
         except Exception:
             ac, stats = [], {}
         finally:
-            _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
+            _FEED_NEXT_PULL[url] = max(t0 + _feed_interval(url), time.monotonic())
         if ac:
             _FEED_SLICES[url] = (ts, ac)
             _FR24_STATS.update(stats, aircraft=len(ac), at=time.time())
@@ -1245,7 +1247,7 @@ async def _pull_one_feed(url: str) -> None:
         except Exception:
             ac, stats = [], {}
         finally:
-            _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
+            _FEED_NEXT_PULL[url] = max(t0 + _feed_interval(url), time.monotonic())
         if ac:
             _FEED_SLICES[url] = (ts, ac)
         _OPENSKY_GAP_STATS.update(stats, at=time.time())
@@ -1265,7 +1267,12 @@ async def _pull_one_feed(url: str) -> None:
         # age is independent of when the loop resumes to store it.
         ts, ac = await asyncio.to_thread(_fetch_one_feed_sync, url)
     finally:
-        _FEED_NEXT_PULL[url] = time.monotonic() + _feed_interval(url)
+        # Arm from pull START so cadence is start-to-start, not end-to-end. A
+        # 2.4 s download with a 5 s interval used to delay the next pull to
+        # ~7.4 s; now it fires at t0+5 regardless of download time. max(…, now)
+        # prevents scheduling in the past when the pull overruns the interval
+        # (the one-task-per-feed guard serialises them).
+        _FEED_NEXT_PULL[url] = max(t0 + _feed_interval(url), time.monotonic())
     if ac is _UNCHANGED:
         # 304 — the source has not rebuilt since our last pull, so we saved the
         # body and the parse. Leave the slice ENTIRELY alone: its `ts` is when
@@ -2004,7 +2011,7 @@ def cycle_timings() -> dict[str, float]:
 
 
 async def _refresh_snapshot_forever() -> None:
-    """Background task: refresh the sticky snapshot on a 5s target cycle.
+    """Background task: refresh the sticky snapshot on a 1s target cycle.
 
     Each iteration measures fan-out time and sleeps for the remainder of the
     cycle (sleep = max(0, _SNAPSHOT_TARGET_CYCLE_S - elapsed)). A fast
@@ -2633,97 +2640,72 @@ async def adsb_fi_global() -> dict[str, Any]:
 
 
 # ── airplanes.live ────────────────────────────────────────────────────────
+async def _union_verb(verb: str, source: str | None = None) -> dict[str, Any]:
+    """Poll ALL _HEAD_HOSTS for /v2/{verb} concurrently and union by hex.
+
+    Each host sees different feeders, so their /v2/mil sets overlap but don't
+    match — measured ~179-191 per host, union ~220+. The old first-success
+    fallback threw away the 20% that only one host saw."""
+
+    async def _one(host: str) -> list[dict[str, Any]]:
+        try:
+            r = await get_client().get(f"{host}/v2/{verb}")
+        except (httpx.TimeoutException, httpx.TransportError):
+            return []
+        if r.status_code != 200:
+            return []
+        try:
+            return r.json().get("ac") or []
+        except ValueError:
+            return []
+
+    results = await asyncio.gather(*(_one(h) for h in _HEAD_HOSTS))
+    seen: set[str] = set()
+    merged: list[dict[str, Any]] = []
+    for ac_list in results:
+        for a in ac_list:
+            h = (a.get("hex") or "").lower()
+            if h and h not in seen:
+                seen.add(h)
+                merged.append(a)
+    return _aircraft_geojson(merged, source=source)
+
+
 @router.get("/api/adsb/live/mil")
 async def adsb_live_mil() -> dict[str, Any]:
-    # Walk _HEAD_HOSTS, first 200-with-JSON wins. A single host's /v2/mil is
-    # flaky (rate-limit answered with 200+text/plain, or 403/404 from some
-    # egress IPs) — a hardcoded single host turned every blip into a 502. Match
-    # the /api/adsb/live/emergencies fan-out: try each host, guard the JSON
-    # parse against text/plain limiter bodies, and degrade to an empty
-    # collection rather than failing the layer.
-    async def load() -> dict[str, Any]:
-        for host in _HEAD_HOSTS:
-            url = f"{host}/v2/mil"
-            try:
-                r = await get_client().get(url)
-            except (httpx.TimeoutException, httpx.TransportError):
-                continue
-            if r.status_code != 200:
-                continue
-            try:
-                ac = r.json().get("ac") or []
-            except ValueError:
-                continue
-            return _aircraft_geojson(ac, source="adsb_mil")
-        return {"type": "FeatureCollection", "features": []}
-
-    return await cache.get_or_fetch("airplaneslive:mil", 30.0, load)
+    return await cache.get_or_fetch(
+        "airplaneslive:mil", 30.0, lambda: _union_verb("mil", source="adsb_mil")
+    )
 
 
 @router.get("/api/adsb/live/squawk/{code}")
 async def adsb_live_squawk(code: str) -> dict[str, Any]:
     if not code.isdigit() or len(code) != 4:
         raise HTTPException(400, "squawk must be 4 digits")
-
-    # Same fan-out as /mil and /emergencies: a single host's /v2/squawk is
-    # flaky (200+text/plain limiter body, or 403/404 per egress IP). Walk hosts,
-    # guard the JSON parse, degrade to an empty collection rather than 502.
-    async def load() -> dict[str, Any]:
-        for host in _HEAD_HOSTS:
-            url = f"{host}/v2/squawk/{code}"
-            try:
-                r = await get_client().get(url)
-            except (httpx.TimeoutException, httpx.TransportError):
-                continue
-            if r.status_code != 200:
-                continue
-            try:
-                ac = r.json().get("ac") or []
-            except ValueError:
-                continue
-            return _aircraft_geojson(ac)
-        return {"type": "FeatureCollection", "features": []}
-
-    return await cache.get_or_fetch(f"airplaneslive:sq:{code}", 15.0, load)
+    return await cache.get_or_fetch(
+        f"airplaneslive:sq:{code}", 15.0, lambda: _union_verb(f"squawk/{code}")
+    )
 
 
-# Convenience: union of emergency squawks. Uses the same multi-host fan-out
-# pattern as /api/adsb/global so a single rate-limited host can't blank the
-# emergency layer — hijack/radio-failure/general-mayday is the layer we MOST
-# need to stay live when one upstream is throttling us.
 @router.get("/api/adsb/live/emergencies")
 async def adsb_live_emergencies() -> dict[str, Any]:
     async def load() -> dict[str, Any]:
+        # Union all three squawk codes across all hosts concurrently, dedup by hex.
+        results = await asyncio.gather(
+            _union_verb("squawk/7500"),
+            _union_verb("squawk/7600"),
+            _union_verb("squawk/7700"),
+        )
+        seen: set[str] = set()
         feats: list[dict[str, Any]] = []
-        seen_hex: set[str] = set()
-        for code in ("7500", "7600", "7700"):
-            # Walk hosts in order; first 200 OK wins for THIS squawk code. The
-            # subsequent codes start the walk from the top again — a host that
-            # blocked 7500 may still serve 7600/7700.
-            for host in _HEAD_HOSTS:
-                url = f"{host}/v2/squawk/{code}"
-                try:
-                    r = await get_client().get(url)
-                except (httpx.TimeoutException, httpx.TransportError):
+        for fc in results:
+            for f in fc.get("features") or []:
+                hexid = str((f.get("properties") or {}).get("icao24") or "").lower()
+                if hexid and hexid in seen:
                     continue
-                if r.status_code != 200:
-                    continue
-                try:
-                    ac = r.json().get("ac") or []
-                except ValueError:
-                    continue
-                # Dedupe across squawk codes — an aircraft squawking 7700 is
-                # also surfaced by some hosts when it transitions, so the same
-                # hex can appear under two codes simultaneously.
-                fc = _aircraft_geojson(ac)
-                for f in fc["features"]:
-                    hexid = str((f.get("properties") or {}).get("icao24") or "").lower()
-                    if hexid and hexid in seen_hex:
-                        continue
-                    if hexid:
-                        seen_hex.add(hexid)
-                    feats.append(f)
-                break  # this code is satisfied — don't poll more hosts for it
+                if hexid:
+                    seen.add(hexid)
+                feats.append(f)
         return {"type": "FeatureCollection", "features": feats}
 
     return await cache.get_or_fetch("airplaneslive:emerg", 15.0, load)
@@ -2731,8 +2713,18 @@ async def adsb_live_emergencies() -> dict[str, Any]:
 
 # ── adsb.lol v2 lookup endpoints ─────────────────────────────────────────────
 
-async def _lol_lookup(verb: str, cache_key: str, ttl: float = 15.0) -> dict[str, Any]:
-    """Multi-host fan-out for an adsb.lol /v2/{verb} lookup."""
+async def _lol_lookup(
+    verb: str, cache_key: str, ttl: float = 15.0, union: bool = False
+) -> dict[str, Any]:
+    """Multi-host fan-out for an adsb.lol /v2/{verb} lookup.
+
+    union=False (default): first 200 wins — for single-aircraft lookups where
+    every host returns the same one contact.
+    union=True: poll ALL hosts concurrently and dedup by hex — for set queries
+    (ladd/pia) where each host sees different feeders."""
+    if union:
+        return await cache.get_or_fetch(cache_key, ttl, lambda: _union_verb(verb))
+
     async def load() -> dict[str, Any]:
         for host in _HEAD_HOSTS:
             url = f"{host}/v2/{verb}"
@@ -2786,12 +2778,12 @@ async def adsb_type(type_code: str) -> dict[str, Any]:
 
 @router.get("/api/adsb/ladd")
 async def adsb_ladd() -> dict[str, Any]:
-    return await _lol_lookup("ladd", "adsb:ladd", ttl=30.0)
+    return await _lol_lookup("ladd", "adsb:ladd", ttl=30.0, union=True)
 
 
 @router.get("/api/adsb/pia")
 async def adsb_pia() -> dict[str, Any]:
-    return await _lol_lookup("pia", "adsb:pia", ttl=30.0)
+    return await _lol_lookup("pia", "adsb:pia", ttl=30.0, union=True)
 
 
 # ── adsb.lol globe history index ─────────────────────────────────────────────
