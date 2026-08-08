@@ -117,6 +117,12 @@ their own infrastructure. Two rules:
   stops the app booting. The guard simulates absence with a `__import__` shim,
   because once the extra is installed a test that merely imports proves nothing.
   → `tests/test_connections.py`
+- Both wire paths are proven against something real, not mocked: MQTT against a
+  forty-line asyncio broker in the test (`tests/test_mqtt_client.py`), SQL
+  against SQLite through SQLAlchemy (`tests/test_connections_sql.py`, which is
+  why `sqlalchemy` is also a DEV dependency). **Kafka has no equivalent** — it
+  needs a broker this box cannot run — so its runner is configured and
+  supervised but unproven on the wire.
 
 Supervised, not started once (same rule as the sidecars): the reconcile loop
 restarts a connection that dies later and applies an edit made in the UI.

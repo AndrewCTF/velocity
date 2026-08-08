@@ -63,6 +63,13 @@ dev = [
   "pytest-xdist>=3.8.0",
   "httpx[socks]>=0.27.2",
   "ruff>=0.6.8",
+  # Not a runtime dependency — see the `sql` extra below, which is what a
+  # deployment installs. It is here so the SQL connection can be PROVEN in CI
+  # rather than only configured: SQLAlchemy drives SQLite, so the whole path
+  # (env var → engine → query → dataset → ontology) runs with no server.
+  # Without this line tests/test_connections_sql.py skips and the documented
+  # backend baseline shifts by four between machines.
+  "sqlalchemy>=2.0",
 ]
 # MAVLink bridge sidecar (app.mavlink_bridge). Optional: without it the bridge
 # runs log-only (echoes planned commands, no vehicle uplink). Install with
