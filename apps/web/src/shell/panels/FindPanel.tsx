@@ -10,6 +10,7 @@ import { useSelection } from '../../state/stores.js';
 import { useSavedSearches } from '../../state/savedSearches.js';
 import { toast } from '../toast.js';
 import { OrgCard } from '../../entity-panel/OrgCard.js';
+import { OntologyHits } from './OntologyHits.js';
 
 // Find, built from docs/mockups/console-2026-08 (`14-map-find.html`) and fed by
 // the same `searchObjects` call the old Search Objects sidebar made.
@@ -340,6 +341,12 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           <OrgCard name={q.trim()} />
         </div>
       )}
+
+      {/* The radius results above are the LIVE store: what is being emitted
+          right now. This is what was promoted into the graph and kept, which
+          outlives the feed that produced it and would otherwise be reachable
+          only by typing an exact canonical id. */}
+      {!parseLatLon(q) && <OntologyHits q={q} />}
 
       {hits === null && !busy && !err && (
         <div className="flex flex-col items-center gap-2 p-8 text-center">
