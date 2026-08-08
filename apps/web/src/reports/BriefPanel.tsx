@@ -1,19 +1,22 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useFeeds, useAlerts } from '../state/stores.js';
 import { useEntityStats, acquireStats } from '../globe/entityStats.js';
 import { apiFetch } from '../transport/http.js';
 import type { AlertSeverity } from '@osint/shared';
+import { SlidesDeck, type Slide } from '../slides/SlidesDeck.js';
 
 // Live-data brief (design §8 "Slides/Stencil live-data briefs") — a print-ready
 // situation brief generated from the SAME live stores the map reads (no fabricated
-// history; this is the current picture). Renders inline + exports a self-contained
-// HTML document. Not collaborative/PPTX (single-operator; honest non-goal) — a real
-// client-side live brief instead.
+// history; this is the current picture). Four ways out of one derivation: rendered
+// inline, presented full screen (SlidesDeck), exported as a self-contained HTML
+// document, and exported as PPTX via /api/report/pptx. Collaborative broadcast
+// stays out of scope for a single-operator build.
 
 const SEVERITIES: readonly AlertSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
 export function BriefPanel(): JSX.Element {
   useEffect(() => acquireStats(), []);
+  const [presenting, setPresenting] = useState(false);
   const stats = useEntityStats();
   const feeds = useFeeds((s) => s.feeds);
   const alerts = useAlerts((s) => s.alerts);
@@ -96,11 +99,86 @@ ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
+  // The deck is the same content, one slide at a time, for briefing a room.
+  // Built here rather than in the deck so there is one derivation of the
+  // picture, not two that can disagree.
+  const deckSlides: Slide[] = [
+    {
+      title: 'Situation brief',
+      body: (
+        <div className="space-y-4">
+          <p className="mono text-[12px] text-txt-3">{new Date().toISOString()}</p>
+          <div className="flex gap-8">
+            {[
+              ['Contacts', stats.counted.toLocaleString()],
+              ['Feeds live', `${feedLive}/${feedList.length}`],
+              ['Alerts', alerts.length.toLocaleString()],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <div className="mono text-[32px] text-txt-0 tabular-nums leading-none">{value}</div>
+                <div className="mono text-[11px] uppercase tracking-[0.5px] text-txt-3 mt-1">{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Alerts by severity',
+      body: (
+        <ul className="space-y-1.5">
+          {SEVERITIES.map((s) => (
+            <li key={s} className="flex items-baseline gap-4">
+              <span className="mono text-[12px] uppercase tracking-[0.4px] text-txt-3 w-24">{s}</span>
+              <span className="mono text-[20px] text-txt-0 tabular-nums">{sevCount[s] ?? 0}</span>
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+    ...(topAlerts.length > 0
+      ? [
+          {
+            title: 'Recent alerts',
+            body: (
+              <ul className="divide-y divide-line border-y border-line">
+                {topAlerts.map((a) => (
+                  <li key={a.id} className="py-2 flex items-start gap-3">
+                    <span className="mono text-[11px] uppercase text-txt-3 w-20 shrink-0">{a.severity}</span>
+                    <span className="text-[13px] text-txt-1 flex-1 leading-snug">{a.message}</span>
+                    <span className="mono text-[11px] text-txt-4 shrink-0">
+                      {new Date(a.t).toISOString().slice(11, 19)}Z
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ),
+          },
+        ]
+      : []),
+    {
+      title: 'Sources',
+      body: (
+        <ul className="grid grid-cols-2 gap-x-8 gap-y-1">
+          {feedList.map((f) => (
+            <li key={f.label} className="flex items-baseline justify-between gap-3 border-b border-line py-1">
+              <span className="text-[12px] text-txt-1 truncate">{f.label}</span>
+              <span className="mono text-[11px] text-txt-3">{f.status}</span>
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+  ];
+
   return (
     <div className="p-3 flex flex-col gap-3 text-txt-1">
       <div className="flex items-center justify-between">
         <span className="font-label uppercase tracking-[0.8px] text-[11px] text-txt-1">Situation brief</span>
         <div className="flex gap-1.5">
+          <button type="button" onClick={() => setPresenting(true)} className="mono text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line">
+            Present
+          </button>
           <button type="button" onClick={printBrief} className="mono text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line">
             Open / print
           </button>
@@ -148,9 +226,18 @@ ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</
       )}
 
       <p className="mono text-[10px] text-txt-4 leading-snug">
-        Live picture from keyless sources. Export produces a self-contained HTML brief; Print opens the
-        print dialog. (Collaborative broadcast / PPTX are out of scope for a single-operator build.)
+        Live picture from keyless sources. Present opens a full-screen deck of this same brief; Export
+        produces a self-contained HTML brief; Print opens the print dialog. (Collaborative broadcast is out
+        of scope for a single-operator build.)
       </p>
+
+      {presenting && (
+        <SlidesDeck
+          slides={deckSlides}
+          classification="Unclassified // Open-source intelligence"
+          onClose={() => setPresenting(false)}
+        />
+      )}
     </div>
   );
 }

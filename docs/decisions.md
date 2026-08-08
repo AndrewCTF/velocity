@@ -937,6 +937,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2371 + 2 skipped — 2026-08-08, gotham-parity-2026-08, inbound ingest wave
 - 2308 + 2 skipped — 2026-08-08, gotham-parity-2026-08, ontology schema + search
 - 2255 + 2 skipped — 2026-08-08, gotham-console-mockup, feed-cadence fix
 - 2207 + 2 skipped — 2026-08-05, gotham-console-mockup, corroboration wave

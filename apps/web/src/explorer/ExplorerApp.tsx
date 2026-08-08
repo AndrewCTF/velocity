@@ -7,11 +7,27 @@ import { haversineKm } from '../globe/draw.js';
 import { useSavedSearches } from '../state/savedSearches.js';
 import { toast } from '../shell/toast.js';
 import { Icon } from '../normal/Icon.js';
+import { apiFetch } from '../transport/http.js';
+import { useOntologySchema, type OntologySchema } from '../state/ontologySchema.js';
 
 // Explorer app (design §6.1 / §8 "Object Explorer") — top-down analysis over the
 // live object store: type facets + keyword + rolling window, live counts, and a
 // tabular result set. Clicking a row selects the object (shared selection context)
 // and flies the camera to it. Backed by the real GET /api/search/objects.
+//
+// Two sources, and they are genuinely different questions:
+//
+//   Live      what is being emitted RIGHT NOW. A contact that stopped
+//             transponding is gone from it, because it is gone from the world.
+//   Ontology  what was PROMOTED into the graph and kept. An object is here
+//             because somebody decided it mattered, and it stays after the
+//             feed forgets it.
+//
+// The ontology side is new: until GET /api/ontology/search existed the stored
+// graph could only be reached by knowing an object's exact canonical id, so
+// there was no way to browse what the platform had actually accumulated. Its
+// facets and columns come from the declared schema (state/ontologySchema.ts),
+// so the properties shown are the ones the kind is known to carry.
 
 const WINDOWS: Array<{ label: string; s: number | undefined }> = [
   { label: 'All time', s: undefined },
@@ -27,7 +43,45 @@ function ageLabel(t: number): string {
   return `${Math.round(sec / 3600)}h`;
 }
 
+/** One row of the stored graph, as the ontology routes return it. */
+interface OntObject {
+  id: string;
+  kind: string;
+  props: Record<string, unknown>;
+}
+
+type Source = 'live' | 'ontology';
+
+/** The properties worth showing for a kind: the ones the schema declares, in
+ *  declared order, falling back to whatever the object actually carries so an
+ *  undeclared kind is still readable rather than blank. */
+function columnsFor(
+  schema: OntologySchema | null,
+  kind: string,
+  rows: OntObject[],
+): string[] {
+  const declared = Object.keys(schema?.kinds?.[kind] ?? {});
+  if (declared.length > 0) return declared.slice(0, 4);
+  const seen: string[] = [];
+  for (const r of rows) {
+    for (const k of Object.keys(r.props)) if (!seen.includes(k)) seen.push(k);
+    if (seen.length >= 4) break;
+  }
+  return seen.slice(0, 4);
+}
+
+function cell(value: unknown): string {
+  // A lone em dash is the repo's "no value reported" (apps/web/CLAUDE.md §copy).
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'object') return JSON.stringify(value).slice(0, 40);
+  return String(value);
+}
+
 export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
+  const [source, setSource] = useState<Source>('live');
+  const [ont, setOnt] = useState<OntObject[]>([]);
+  const [ontStatus, setOntStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const ontSchema = useOntologySchema();
   const [type, setType] = useState<string>('all');
   const [q, setQ] = useState('');
   const [winIdx, setWinIdx] = useState(0);
@@ -41,7 +95,40 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
   const saveSearch = useSavedSearches((s) => s.add);
   const abort = useRef<AbortController | null>(null);
 
+  // Ontology source: the stored graph. Debounced because every keystroke is an
+  // FTS query, and skipped entirely on an empty box — /api/ontology/search takes
+  // a query, and "everything ever promoted" is not a question this answers.
   useEffect(() => {
+    if (source !== 'ontology') return;
+    if (q.trim() === '') {
+      setOnt([]);
+      setOntStatus('idle');
+      return;
+    }
+    const ac = new AbortController();
+    setOntStatus('loading');
+    const id = window.setTimeout(() => {
+      const params = new URLSearchParams({ q, limit: '200' });
+      if (type !== 'all') params.append('kind', type);
+      apiFetch(`/api/ontology/search?${params.toString()}`, { signal: ac.signal })
+        .then((r) => (r.ok ? (r.json() as Promise<OntObject[]>) : Promise.reject(new Error('http'))))
+        .then((rows) => {
+          setOnt(rows);
+          setOntStatus('idle');
+        })
+        .catch((e: unknown) => {
+          if ((e as { name?: string })?.name === 'AbortError') return;
+          setOntStatus('error');
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(id);
+      ac.abort();
+    };
+  }, [source, q, type]);
+
+  useEffect(() => {
+    if (source !== 'live') return;
     abort.current?.abort();
     const ac = new AbortController();
     abort.current = ac;
@@ -82,18 +169,38 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
       })
       .finally(() => setLoading(false));
     return () => ac.abort();
-  }, [type, q, winIdx, tick, geoScope]);
+  }, [source, type, q, winIdx, tick, geoScope]);
 
-  // Refresh on a slow tick so counts stay live without hammering.
+  // Refresh on a slow tick so counts stay live without hammering. The ontology
+  // is a durable store, not a feed, so it is not on this clock.
   useEffect(() => {
+    if (source !== 'live') return;
     const id = window.setInterval(() => setTick((n) => n + 1), 5000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [source]);
+
+  const ontByKind = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const o of ont) counts[o.kind] = (counts[o.kind] ?? 0) + 1;
+    return counts;
+  }, [ont]);
 
   const typeChips = useMemo(() => {
+    if (source === 'ontology') {
+      const entries = Object.entries(ontByKind).sort((a, b) => b[1] - a[1]);
+      return [['all', ont.length] as [string, number], ...entries];
+    }
     const entries = Object.entries(data.by_type).sort((a, b) => b[1] - a[1]);
     return [['all', data.count] as [string, number], ...entries];
-  }, [data]);
+  }, [source, data, ont, ontByKind]);
+
+  // In ontology mode the table's property columns follow the selected kind's
+  // declared schema, which is what makes this a typed explorer rather than a
+  // JSON dump.
+  const ontCols = useMemo(
+    () => columnsFor(ontSchema, type, ont),
+    [ontSchema, type, ont],
+  );
 
   const exportCsv = (): void => {
     const rows = data.results;
@@ -134,13 +241,41 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
           </div>
         )}
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 shrink-0">
+            {(['live', 'ontology'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setSource(s);
+                  setType('all');
+                }}
+                title={
+                  s === 'live'
+                    ? 'What is being emitted right now'
+                    : 'What was promoted into the graph and kept'
+                }
+                className={`mono text-[10px] uppercase tracking-[0.4px] px-2 py-1 rounded-sm border ${
+                  source === s
+                    ? 'border-accent-line text-accent bg-accent-dim'
+                    : 'border-line text-txt-3 hover:text-txt-1'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Filter by callsign / name / id…"
+            placeholder={
+              source === 'ontology'
+                ? 'Search the stored graph by any property…'
+                : 'Filter by callsign / name / id…'
+            }
             className="flex-1 min-w-0 bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 placeholder:text-txt-4 focus:border-accent-line outline-none"
           />
-          <div className="flex items-center gap-1">
+          <div className={`flex items-center gap-1 ${source === 'ontology' ? 'hidden' : ''}`}>
             {WINDOWS.map((w, i) => (
               <button
                 key={w.label}
@@ -174,7 +309,53 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
 
       {/* result table */}
       <div className="flex-1 min-h-0 overflow-auto">
+        {source === 'ontology' ? (
+          <table className="w-full border-collapse">
+            <thead className="sticky top-0 bg-bg-1 z-[1]">
+              <tr className="text-txt-3 mono text-[10px] uppercase tracking-[0.4px]">
+                <th className="text-left font-medium px-3 py-1.5">Object</th>
+                <th className="text-left font-medium px-2 py-1.5">Kind</th>
+                {ontCols.map((c) => (
+                  <th key={c} className="text-left font-medium px-2 py-1.5">
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ont.map((o) => (
+                <tr
+                  key={o.id}
+                  onClick={() => useSelection.getState().select(o.id)}
+                  className="cursor-pointer border-t border-line hover:bg-bg-2"
+                >
+                  <td className="px-3 py-1 mono text-[11px] text-txt-0 truncate max-w-[220px]">{o.id}</td>
+                  <td className="px-2 py-1 mono text-[11px] text-txt-2">{o.kind}</td>
+                  {ontCols.map((c) => (
+                    <td key={c} className="px-2 py-1 mono text-[11px] text-txt-2 truncate max-w-[160px]">
+                      {cell(o.props[c])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {ont.length === 0 && (
+                <tr>
+                  <td colSpan={2 + ontCols.length} className="px-3 py-6 text-center mono text-[11px] text-txt-3">
+                    {ontStatus === 'error'
+                      ? 'Ontology search unavailable. The backend did not answer.'
+                      : ontStatus === 'loading'
+                        ? 'searching…'
+                        : q.trim() === ''
+                          ? 'Type to search the stored graph. Any property value, property name or id matches.'
+                          : 'Nothing in the graph matches. Objects arrive here when something promotes them.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        ) : (
         <table className="w-full border-collapse">
+
           <thead className="sticky top-0 bg-bg-1 z-[1]">
             <tr className="text-txt-3 mono text-[10px] uppercase tracking-[0.4px]">
               <th className="text-left font-medium px-3 py-1.5">Label</th>
@@ -209,11 +390,14 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
             )}
           </tbody>
         </table>
+        )}
       </div>
 
       <div className="shrink-0 border-t border-line-2 bg-bg-1 px-3 py-1.5 mono text-[10px] text-txt-3 flex items-center justify-between">
         <span>
-          {data.results.length.toLocaleString()} shown · {data.count.toLocaleString()} match
+          {source === 'ontology'
+            ? `${ont.length.toLocaleString()} in the graph`
+            : `${data.results.length.toLocaleString()} shown · ${data.count.toLocaleString()} match`}
         </span>
         <div className="flex items-center gap-3">
           {loading && <span className="text-accent">updating…</span>}
