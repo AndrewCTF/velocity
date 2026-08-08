@@ -4,7 +4,6 @@ import { App } from './App.js';
 import { AuthProvider, useAuth } from './auth/AuthContext.js';
 import { SettingsModal } from './settings/SettingsModal.js';
 import { useSettings } from './state/settings.js';
-import { useAppView, APP_META } from './state/appView.js';
 import { Onboarding, hasOnboarded } from './onboarding/Onboarding.js';
 import { isSupabaseConfigured } from './transport/supabase.js';
 import { AiSetupWizard } from './settings/localAi/AiSetupWizard.js';
@@ -129,24 +128,19 @@ function TopBar(): JSX.Element | null {
 function PredictedMotionBadge(): JSX.Element | null {
   const loc = useLocation();
   const on = useSettings((s) => s.aircraftDeadReckon);
-  const activeApp = useAppView((s) => s.app);
   if (!on) return null;
-  if (loc.pathname !== '/' && !loc.pathname.startsWith('/2d')) return null;
-  // The badge annotates aircraft on the globe. A full-surface app (AI, Foundry,
-  // Workflows, City, Country) covers the globe, so the badge is meaningless
-  // there — and worse, the app surface clips its 427px width down to a stray
-  // "● Pr" at the left edge. Hide it whenever the globe isn't the active view.
-  if (loc.pathname === '/' && APP_META[activeApp].chrome === 'full') return null;
-  // The console home ("/") stacks a ~158px timeline footer AND the AgentConsole's
-  // resting slash-hints row above it; sit clear of BOTH so the badge never lands
-  // in the console's text band. The 2D route has a clear bottom.
-  const bottomClass = loc.pathname === '/' ? 'bottom-[280px]' : 'bottom-2';
-  // Centered so it never sits under the left tool flyout (Layers/Feeds/etc.),
-  // which overlays the map's bottom-left corner where this used to pin.
+  // On the console globe ("/") this marker lives in the GlobeOverlays
+  // bottom-right status cluster with the other map readouts. Only the 2D
+  // route, which has no status footer, gets a floating chip — bottom-right,
+  // clear of the top-right Settings/3D/2D cluster.
+  if (!loc.pathname.startsWith('/2d')) return null;
   return (
-    <div className={`absolute ${bottomClass} left-1/2 -translate-x-1/2 z-[var(--z-dock)] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5`}>
+    <div
+      className="absolute bottom-2 right-2 z-[var(--z-dock)] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5"
+      title="aircraft positions estimated between ADS-B fixes"
+    >
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-      Predicted motion: aircraft positions estimated between ADS-B fixes
+      motion predicted · estimated between ADS-B fixes
     </div>
   );
 }

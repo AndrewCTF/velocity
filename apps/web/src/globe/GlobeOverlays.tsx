@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Cesium from 'cesium';
 import { useSelection } from '../state/stores.js';
+import { useSettings } from '../state/settings.js';
 
 // Instrument overlays drawn over the globe (.gov in the mockup): a category
 // legend, a north compass, a scale bar, live cursor + selection coordinates,
@@ -55,6 +56,7 @@ function fmtKm(m: number): string {
 
 export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
   const selId = useSelection((s) => s.selectedEntityId);
+  const deadReckon = useSettings((s) => s.aircraftDeadReckon);
   const [center, setCenter] = useState<{ lon: number; lat: number; alt: number } | null>(null);
   const [cursor, setCursor] = useState<{ lon: number; lat: number } | null>(null);
   const [headingDeg, setHeadingDeg] = useState(0);
@@ -244,6 +246,13 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
           </span>
         </div>
         <div>alt {center ? fmtAlt(center.alt) : '—'}</div>
+        {/* honest marker for the dead-reckoning opt-in: aircraft positions are
+            being ESTIMATED between ADS-B fixes while this reads "predicted" */}
+        {deadReckon && (
+          <div title="aircraft positions estimated between ADS-B fixes">
+            motion <span className="text-accent">predicted</span>
+          </div>
+        )}
       </div>
     </div>
   );
