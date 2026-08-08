@@ -399,7 +399,11 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
             ? `${ont.length.toLocaleString()} in the graph`
             : `${data.results.length.toLocaleString()} shown · ${data.count.toLocaleString()} match`}
         </span>
-        <div className="flex items-center gap-3">
+        {/* Both of these read the LIVE result set, which in ontology mode still
+            holds the last live fetch — Export CSV would download rows that are
+            not on screen and Save search would save a live-store subscription
+            from an ontology view. They belong to the live source only. */}
+        <div className={`flex items-center gap-3 ${source === 'ontology' ? 'hidden' : ''}`}>
           {loading && <span className="text-accent">updating…</span>}
           <button
             type="button"
