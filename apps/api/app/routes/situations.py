@@ -36,7 +36,8 @@ from pydantic import BaseModel, Field
 from app import llm
 from app.config import get_settings
 from app.intel import case_export
-from app.intel.ontology import Link, Object, get_registry
+from app.intel.ontology import Link, Object, get_registry, kind_of
+from app.intel.ontology_schema import validate_link
 from app.keys import UserCtx, current_user_or_local
 
 router = APIRouter(tags=["situations"])
@@ -233,10 +234,21 @@ async def delete_situation(sit_id: str, ctx: UserCtx = Depends(current_user_or_l
     await reg.delete(sit_id)
 
 
-@router.post("/api/situations/{sit_id:path}/link", response_model=Link)
+class LinkSaved(Link):
+    """The stored link plus any way it departs from what its relation declares.
+
+    Same shape rule as ``routes/ontology.py::ObjectSaved``: a subclass, so every
+    ``Link`` field stays at the top level and an older caller reads the body it
+    always did. Advisory only, never stored, never a reason to refuse the write.
+    """
+
+    warnings: list[str] = Field(default_factory=list)
+
+
+@router.post("/api/situations/{sit_id:path}/link", response_model=LinkSaved)
 async def link_child(
     sit_id: str, body: LinkIn, ctx: UserCtx = Depends(current_user_or_local)
-) -> Link:
+) -> LinkSaved:
     """Attach a child to a situation: ``situation --rel--> dst``.
 
     The one relationship-write the Situation/COA feature needs (``routes/ontology.py``
@@ -250,7 +262,10 @@ async def link_child(
     # can't see it. assert_props with empty props still mints the row (existence),
     # while the link above carries the provenance of *why* it was pulled in.
     await reg.assert_props(body.dst, {}, source="analyst:situation")
-    return link
+    return LinkSaved(
+        **link.model_dump(),
+        warnings=validate_link(link.rel, kind_of(link.src), kind_of(link.dst)),
+    )
 
 
 # ── case → report export (P2) ─────────────────────────────────────────────────

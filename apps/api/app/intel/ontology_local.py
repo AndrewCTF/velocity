@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -53,6 +54,10 @@ def override_db_path(path: str | None) -> None:
     """Set a custom DB path (tests). Pass None to clear."""
     global _db_path_override
     _db_path_override = path
+    # Pointing at a different file invalidates the per-path "FTS is already
+    # backfilled" memo — a tmp path can be reused across tests with different
+    # contents, and a stale memo would leave the second one unsearchable.
+    _fts_backfilled.clear()
 
 
 def _resolved_db_path(settings: Settings | None = None) -> str:
@@ -110,7 +115,20 @@ CREATE TABLE IF NOT EXISTS links (
 );
 CREATE INDEX IF NOT EXISTS ix_links_src ON links(user_id, src);
 CREATE INDEX IF NOT EXISTS ix_links_dst ON links(user_id, dst);
+CREATE VIRTUAL TABLE IF NOT EXISTS objects_fts USING fts5(
+  id, kind, text, user_id UNINDEXED, tokenize='porter unicode61'
+);
 """
+
+# The FTS index is maintained from Python (``_fts_write_sync`` below) rather
+# than by SQLite triggers, because what belongs in it is the FLATTENED prop
+# VALUES — a trigger only ever sees the raw JSON blob in the ``props`` column
+# and would index its braces and quoting along with the words.
+#
+# One value per prop, truncated, so a single object carrying a large blob (a
+# situation's node list, an evidence manifest) cannot dominate the index.
+_FTS_VALUE_CHARS = 200
+_FTS_MAX_PROPS = 60
 
 
 def _connect(settings: Settings | None = None) -> sqlite3.Connection:
@@ -131,6 +149,78 @@ def _now_iso() -> str:
 def _canon(value: Any) -> str:
     """Canonical JSON encoding for change-detection / dedup comparisons."""
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+# ── full-text index ───────────────────────────────────────────────────────────
+
+
+def _fts_text(object_id: str, kind: str, props: dict[str, Any]) -> str:
+    """The searchable body of an object: its id, its kind, and every property
+    name paired with a flattened rendering of its value.
+
+    Property NAMES are indexed too, so "callsign" finds every object that
+    reports one — the Explorer facet case — not just objects whose value happens
+    to contain the word.
+    """
+    parts = [object_id, object_id.replace(":", " "), kind]
+    for i, (name, value) in enumerate(props.items()):
+        if i >= _FTS_MAX_PROPS:
+            break
+        parts.append(str(name))
+        if value is None or isinstance(value, bool):
+            continue
+        if isinstance(value, (str, int, float)):
+            parts.append(str(value)[:_FTS_VALUE_CHARS])
+        else:
+            # Lists and dicts: index the JSON with its punctuation stripped, so
+            # a nested name is a word rather than `["name"` .
+            parts.append(
+                re.sub(r"[^0-9A-Za-z_]+", " ", _canon(value))[:_FTS_VALUE_CHARS]
+            )
+    return " ".join(parts)
+
+
+def _fts_write_sync(
+    con: sqlite3.Connection,
+    user_id: str,
+    object_id: str,
+    kind: str,
+    props: dict[str, Any],
+) -> None:
+    """Re-index one object. Delete-then-insert: FTS5 has no upsert, and an
+    external-content table would have to be kept in step with the same manual
+    writes anyway."""
+    _fts_delete_sync(con, user_id, object_id)
+    con.execute(
+        "INSERT INTO objects_fts (id, kind, text, user_id) VALUES (?,?,?,?)",
+        (object_id, kind, _fts_text(object_id, kind, props), user_id),
+    )
+
+
+def _fts_delete_sync(con: sqlite3.Connection, user_id: str, object_id: str) -> None:
+    con.execute(
+        "DELETE FROM objects_fts WHERE user_id=? AND id=?", (user_id, object_id)
+    )
+
+
+def _fts_match(q: str) -> str:
+    """A user's words as an FTS5 prefix query, or "" when there is nothing to
+    search for.
+
+    Never interpolate raw input into MATCH: FTS5 treats ``"``, ``*``, ``:``,
+    ``^``, ``-`` and ``NEAR`` as syntax, so a callsign like ``AAL-123`` or a
+    stray quote raises OperationalError instead of returning no rows. Reducing
+    the input to word tokens and quoting each one makes any input legal, and the
+    trailing ``*`` is what makes a Find panel feel like a Find panel.
+    """
+    tokens = re.findall(r"[0-9A-Za-z_]+", q)
+    return " ".join(f'"{t}"*' for t in tokens)
+
+
+# Backfill is per database path and per process: an existing deployment has
+# objects that predate this index, and rebuilding them on every _connect (which
+# happens once per operation) would put two COUNT(*)s in front of every write.
+_fts_backfilled: set[str] = set()
 
 
 # Soft byte-cap bookkeeping (module-level, same philosophy as history.py's
@@ -227,6 +317,9 @@ class SqliteRegistry(_GraphWalk):
                             None,
                             {"op": "remove"},
                         )
+                _fts_write_sync(
+                    con, self.ctx.user_id, obj.id, obj.kind, obj.props
+                )
                 self._enforce_object_cap_sync(con, obj.id)
                 con.commit()
                 self._maybe_enforce_size_cap(con)
@@ -276,6 +369,79 @@ class SqliteRegistry(_GraphWalk):
 
         return await self._run(_sync)
 
+    async def search(
+        self, q: str, kinds: list[str] | None = None, limit: int = 50
+    ) -> list[Object]:
+        """Objects matching ``q`` anywhere in their id, kind or property values,
+        best match first.
+
+        Until this existed the only way to reach an object was to already know
+        its exact canonical id: ``get`` is id-exact and ``list_by_kind`` filters
+        on one props field. ``/api/search/objects`` is a different thing — it
+        searches the LIVE observation store, which holds only what is currently
+        being emitted, not what was promoted into the graph.
+        """
+        match = _fts_match(q)
+        if not match:
+            return []
+
+        def _sync() -> list[Object]:
+            con = _connect(self.s)
+            try:
+                self._backfill_fts_sync(con)
+                sql = (
+                    "SELECT o.id, o.kind, o.props, o.classification,"
+                    " o.compartments, o.shared, o.created_at"
+                    " FROM objects_fts JOIN objects o"
+                    "   ON o.user_id = objects_fts.user_id AND o.id = objects_fts.id"
+                    " WHERE objects_fts MATCH ? AND objects_fts.user_id = ?"
+                )
+                params: list[Any] = [match, self.ctx.user_id]
+                if kinds:
+                    placeholders = ",".join("?" * len(kinds))
+                    sql += f" AND o.kind IN ({placeholders})"
+                    params.extend(kinds)
+                sql += " ORDER BY bm25(objects_fts) LIMIT ?"
+                params.append(int(limit))
+                try:
+                    rows = con.execute(sql, params).fetchall()
+                except sqlite3.OperationalError:
+                    # _fts_match is meant to make any input legal; if a query
+                    # still reaches FTS5 as syntax, answering "no matches" beats
+                    # a 500 on a search box.
+                    log.warning("ontology search rejected by FTS5: %r", q)
+                    return []
+            finally:
+                con.close()
+            return [_object_from_row(r) for r in rows]
+
+        return await self._run(_sync)
+
+    def _backfill_fts_sync(self, con: sqlite3.Connection) -> None:
+        """Index objects written before this table existed. Once per DB path per
+        process, and only when the index is genuinely behind."""
+        path = _resolved_db_path(self.s)
+        if path in _fts_backfilled:
+            return
+        _fts_backfilled.add(path)
+        (indexed,) = con.execute("SELECT COUNT(*) FROM objects_fts").fetchone()
+        (total,) = con.execute("SELECT COUNT(*) FROM objects").fetchone()
+        if indexed >= total:
+            return
+        log.info("ontology FTS backfill: %d objects", total)
+        rows = con.execute("SELECT user_id, id, kind, props FROM objects").fetchall()
+        con.execute("DELETE FROM objects_fts")
+        for user_id, obj_id, kind, props_json in rows:
+            try:
+                props = json.loads(props_json)
+            except (TypeError, ValueError):
+                props = {}
+            con.execute(
+                "INSERT INTO objects_fts (id, kind, text, user_id) VALUES (?,?,?,?)",
+                (obj_id, kind, _fts_text(obj_id, kind, props), user_id),
+            )
+        con.commit()
+
     async def delete(self, object_id: str) -> None:
         """Delete an object plus its assertions and touching links.
 
@@ -299,6 +465,7 @@ class SqliteRegistry(_GraphWalk):
                     "DELETE FROM links WHERE user_id=? AND (src=? OR dst=?)",
                     (self.ctx.user_id, object_id, object_id),
                 )
+                _fts_delete_sync(con, self.ctx.user_id, object_id)
                 con.commit()
             finally:
                 con.close()
@@ -454,6 +621,9 @@ class SqliteRegistry(_GraphWalk):
                         created_at,
                         now,
                     ),
+                )
+                _fts_write_sync(
+                    con, self.ctx.user_id, object_id, kind_of(object_id), merged
                 )
                 self._enforce_object_cap_sync(con, object_id)
                 con.commit()
