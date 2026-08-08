@@ -194,6 +194,20 @@ def _isolate_action_log_db(tmp_path: Path) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_action_proposals_db(tmp_path: Path) -> Iterator[None]:
+    """Per-test temp file for the HITL proposal queue (mirrors action_log).
+
+    It became a real file when the queue stopped being a module dict; without
+    this, a test that queues a proposal would leave it in the repo's data dir
+    and the next test would see it as pending."""
+    from app.intel import action_proposals_local
+
+    action_proposals_local.override_db_path(str(tmp_path / "action_proposals.db"))
+    yield
+    action_proposals_local.override_db_path(None)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_evidence_dir(tmp_path: Path) -> Iterator[None]:
     """Point the evidence-locker blob dir at a per-test temp dir (mirrors the
     ontology/foundry isolation) — route handlers resolve ``evidence_dir`` via

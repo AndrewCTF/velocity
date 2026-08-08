@@ -14,12 +14,11 @@ action handlers degrade to 503 when Supabase is unconfigured.
 
 from __future__ import annotations
 
-import time
-import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.intel import action_proposals_local
 from app.intel.actions import ActionResult, dispatch, list_actions
 from app.keys import UserCtx, current_user
 
@@ -52,35 +51,25 @@ async def run_action(
 # When approval mode is ON (config.action_approval), the intel agent stores its
 # write-back actions here as PROPOSALS instead of dispatching them directly; the
 # operator approves/rejects in AgentConsole and approval executes through the
-# SAME audited ``dispatch`` path above. In-memory + single-process: a restart
-# drops pending proposals, which is acceptable — the agent re-proposes on its
-# next run.
-_PROPOSALS: dict[str, dict] = {}
+# SAME audited ``dispatch`` path above.
+#
+# Persisted (``intel/action_proposals_local.py``), not a module dict. It WAS a
+# dict, on the reasoning that "the agent re-proposes on its next run" — which
+# only holds if the agent runs again. An operator who left proposals open
+# overnight and restarted the backend came back to an empty queue with no
+# record that anything had been waiting.
 PROPOSAL_TTL_S = 900
 
 
-def _prune_proposals() -> None:
-    cutoff = time.time() - PROPOSAL_TTL_S
-    for pid in [p for p, row in _PROPOSALS.items() if row["created"] < cutoff]:
-        _PROPOSALS.pop(pid, None)
-
-
-def propose(name: str, params: dict, ctx, confidence: float = 0.0) -> str:
+async def propose(name: str, params: dict, ctx, confidence: float = 0.0) -> str:
     """Queue action ``name`` with ``params`` for operator approval; returns its id."""
-    _prune_proposals()
-    pid = uuid.uuid4().hex[:12]
-    _PROPOSALS[pid] = {
-        "id": pid, "name": name, "params": params,
-        "created": time.time(), "confidence": confidence,
-    }
-    return pid
+    return await action_proposals_local.add(name, params, confidence, PROPOSAL_TTL_S)
 
 
 @router.get("/api/actions/proposals")
 async def list_proposals(ctx: UserCtx = Depends(current_user)) -> list[dict]:
     """Pending proposals awaiting operator approval, oldest first."""
-    _prune_proposals()
-    return sorted(_PROPOSALS.values(), key=lambda r: r["created"])
+    return await action_proposals_local.list_pending(PROPOSAL_TTL_S)
 
 
 @router.post("/api/actions/proposals/{pid}/approve")
@@ -90,9 +79,10 @@ async def approve_proposal(pid: str, ctx: UserCtx = Depends(current_user)):
     The audit row's actor is the approving ``ctx`` (``ctx.user_id``) — that is the
     fact that matters — so the approval is attributed without threading extras
     through dispatch. 404 for an unknown or expired proposal.
+
+    ``take`` removes the row before dispatching, so a double-click approves once.
     """
-    _prune_proposals()
-    row = _PROPOSALS.pop(pid, None)
+    row = await action_proposals_local.take(pid, PROPOSAL_TTL_S)
     if row is None:
         raise HTTPException(status_code=404, detail="unknown or expired proposal")
     return await dispatch(row["name"], row["params"], ctx)
@@ -101,7 +91,6 @@ async def approve_proposal(pid: str, ctx: UserCtx = Depends(current_user)):
 @router.post("/api/actions/proposals/{pid}/reject")
 async def reject_proposal(pid: str, ctx: UserCtx = Depends(current_user)) -> dict:
     """Drop a queued proposal without executing it. 404 if unknown/expired."""
-    row = _PROPOSALS.pop(pid, None)
-    if row is None:
+    if await action_proposals_local.take(pid, PROPOSAL_TTL_S) is None:
         raise HTTPException(status_code=404, detail="unknown or expired proposal")
     return {"ok": True, "id": pid}

@@ -900,7 +900,7 @@ async def run_agent(
                 _s = get_settings()
                 confidence = float(args.pop("confidence", 0.0) or 0.0)
                 if _s.action_approval and confidence < _s.action_auto_threshold:
-                    pid = propose(name, args, ctx, confidence=confidence)
+                    pid = await propose(name, args, ctx, confidence=confidence)
                     yield {
                         "type": "action_proposal", "step": step,
                         "proposal_id": pid, "action": name,
