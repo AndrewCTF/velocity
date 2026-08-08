@@ -190,7 +190,7 @@ count badges you can drill into.
 
 **2. Zoom anywhere, toggle everything.** Drag into a region and traffic, labels
 and coastlines fill in. The left rail is the whole intel stack in one tree — air,
-maritime, space, ground hazards, signals and 14 infrastructure layers — each
+maritime, space, ground hazards, signals and 18 infrastructure layers — each
 with its live count. A right-side map toolbar adds the analyst verbs on top of
 the globe: **measure** a running great-circle distance, **area-select** a box
 and search every object inside it, **annotate** with dropped markers, or **move**
@@ -230,9 +230,10 @@ warnings with mine areas flagged, 3,804 ports from the NGA World Port Index
 (harbour size and type, shelter, repairs, dry dock, pier and channel depths),
 and airports enriched with runways (length, surface, lighting, per-end ILS
 category from FAA NASR), tower/ground/ATIS frequencies, live METAR with flight
-category, and a LiveATC linkout. A basemap picker swaps between eight keyless
-map styles (Esri imagery/topo/dark, OpenTopoMap, USGS, Sentinel-2 cloudless…),
-each probed live before it's offered.
+category, and a LiveATC linkout. A basemap picker swaps between nine keyless
+map styles (Carto dark, 3D satellite + terrain, Apple satellite, Esri
+imagery/topo/dark, OpenTopoMap, USGS, Sentinel-2 cloudless), each probed live
+before it's offered and each carrying its required attribution.
 
 ![Live FAA temporary flight restrictions drawn as polygons over the US, with SIGMET hazards and the airport and port layers on](docs/media/places-airspace.jpeg)
 
@@ -341,8 +342,8 @@ be annoyed later:
   start). `/api/history/coverage` reports the ACTUAL current depth
   (`oldest_ts`), not the configured ceiling, and the 2D console's day-picker
   and ownership chip render it, so you can see what you're really getting.
-- AIS runs keyless and global (~33k vessels, MMSI-deduped across ShipXplorer,
-  MyShipTracking, Digitraffic and Kystverket), but coverage is densest over
+- AIS runs keyless and global (~50k vessels tracked, MMSI-deduped across
+  ShipXplorer, MyShipTracking, Digitraffic and Kystverket), but coverage is densest over
   Northern Europe and the Baltic and thins out elsewhere; an AISStream key fills
   in the gaps. Sparse regions still lean on the radar (SAR) layer.
 - **The two headless-Chrome sidecars are degraded under Docker, not crashed.**
