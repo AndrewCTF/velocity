@@ -70,6 +70,11 @@ dev = [
   # Without this line tests/test_connections_sql.py skips and the documented
   # backend baseline shifts by four between machines.
   "sqlalchemy>=2.0",
+  # Same reason, smaller claim: aiokafka proves the import guard's POSITIVE
+  # branch and that an unreachable broker is recorded rather than fatal. The
+  # Kafka WIRE path stays unproven — see apps/api/CLAUDE.md — because faking a
+  # consumer-group handshake would test our misunderstanding of it.
+  "aiokafka>=0.11",
 ]
 # MAVLink bridge sidecar (app.mavlink_bridge). Optional: without it the bridge
 # runs log-only (echoes planned commands, no vehicle uplink). Install with
