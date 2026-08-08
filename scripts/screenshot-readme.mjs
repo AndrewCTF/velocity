@@ -31,12 +31,6 @@ const US = [-98, 39, 6_000_000];
 
 /** Each shot names its file, the app it opens, the camera, and what it does
  *  before the shutter. `wait` is settle time after the actions. */
-// NOT here: `ui-detach-toolbar.jpeg` (README §11, "tear the workspace apart").
-// The detach control lives in ConsoleShell, which only the /2d route renders.
-// The 3D console renders Console.tsx, which has no detach affordance at all, so
-// there is nothing current to photograph — the figure in the README is the old
-// shell. Restore detach to the 3D console, or rewrite §11; do not re-shoot this
-// against /2d, which is a different console and reads as a different product.
 const SHOTS = [
   {
     name: 'hero-world',
@@ -111,6 +105,20 @@ const SHOTS = [
     subTab: 'Intel',
     // The incident brief fuses on request and renders "(loading…)" for a while.
     wait: 30_000,
+  },
+  {
+    // README §11. The INSPECTOR does not detach in this console (that control
+    // is ConsoleShell's, which only /2d renders); the three map-tool panels do,
+    // through the same floating-window substrate, opened from the toolbar or
+    // the Window menu. That is what the figure and the paragraph now describe.
+    name: 'ui-detach-toolbar',
+    out: 'ui-detach-toolbar.jpeg',
+    view: EUROPE,
+    floatPanels: [
+      { id: 'annotate', rect: { x: 760, y: 250, w: 520, h: 560 } },
+      { id: 'watch', rect: { x: 1340, y: 430, w: 540, h: 620 } },
+    ],
+    wait: 10_000,
   },
   {
     name: 'foundry-pipeline',
@@ -262,6 +270,14 @@ for (const shot of todo) {
     } else {
       console.error(`WARN ${shot.name}: no aircraft near the view to select`);
     }
+  }
+
+  if (shot.floatPanels) {
+    await page.evaluate((wanted) => {
+      const st = window.__useFloatingPanels.getState();
+      for (const p of wanted) st.detach(p.id, p.rect);
+    }, shot.floatPanels);
+    await page.waitForTimeout(3_000);
   }
 
   if (shot.detach) {

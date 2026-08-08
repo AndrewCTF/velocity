@@ -126,11 +126,14 @@ archive instead of the default rolling window; see
 [Scope and limits](#scope-and-limits)). The first time in, a short tour points
 out where things live; you can pull it back up whenever from **⚙ Settings**.
 
-![Replay scrubber: the coverage chip reading "recording since 2026-07-14 · 14.9 GB · 83,093,167 fixes" and the archived-history strip over the live globe](docs/media/replay-scrubber.jpeg)
+![The time dock in replay: the window set to one hour, the incident and signals density strips populated across it, and the header reading "Replay · 03:00 to 04:00 Z" with a return-to-live button](docs/media/replay-scrubber.jpeg)
 
-That strip along the bottom is the archive — here it reads *recording since
-yesterday · 2.3 GB · 12.7 million fixes*. Drag it back an hour, a day, as far as
-your history goes, and the globe rewinds to that exact moment.
+That dock along the bottom is the archive. Pick a window (1h, 6h, 24h, 3d, 7d),
+click anywhere on the density strip, and the globe rewinds to that moment; the
+header swaps from *Live* to *Replay*, and one button puts you back. Playback
+runs at 1x through 3600x. The dated day-picker and the *recording since … · GB
+· fixes* ownership chip live in the 2D console at `/2d`, which reads the same
+`/api/history/coverage` archive.
 
 > **Local (open) mode.** The compute-heavy endpoints — the LLM-backed Reports
 > tabs, recon, and OSINT enrichment — *fail closed* on a keyless box so a
@@ -158,20 +161,23 @@ rides along as `X-API-Key` on every call.
 
 ## The apps
 
-Velocity isn't one mega-dashboard; it's a workspace of twelve apps that all
+Velocity isn't one mega-dashboard; it's a workspace of fourteen apps that all
 share the same selection and time context, so switching never loses the object
-you had selected. The top bar groups them:
+you had selected. The launcher in the top bar groups them:
 
 | Group | Apps | What they're for |
 | --- | --- | --- |
 | **Live** | Map · Sim | The Cesium globe (always mounted behind everything else) and a browser war-game overlay. |
-| **Analyze** | Explorer · Graph · Investigate · Targeting · Video · Country | Filter the live object store, grow a link-analysis graph, run digital OSINT (domains/people/wallets), a notional kill-chain board, FMV/ground recon, and per-country World-Bank/UN stat dossiers. |
+| **AI** | AI | The analyst agent, automated watch and alerts, and the local model manager in one place. |
+| **Analyze** | Explorer · Graph · Investigate · Targeting · Video · Country · Markets | Filter the live object store, grow a link-analysis graph, run digital OSINT (domains/people/wallets), a notional kill-chain board, FMV/ground recon, per-country World-Bank/UN stat dossiers, and indices/commodities/FX with a stress index. |
 | **Data** | Foundry · Workflows | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor. |
 | **Product** | Reports | Case files, watch-officer briefs, dossiers, and case→report export. |
 | **3D** | City 3D | Gaussian-splat city scenes built from a keyless satellite AOI. |
 
 The rest of this README tours the ones you'll live in. Everything below is a
-real screenshot of the current build (v1.0.1), not a mockup.
+real screenshot of the current build (v1.0.1), taken against live feeds on
+2026-08-08, not a mockup. `node scripts/screenshot-readme.mjs` re-shoots the
+whole set.
 
 ## Take the tour
 
@@ -199,7 +205,7 @@ line traces its recent track on the globe. An **AI assessment** block (labelled,
 and grounded in the observed track) summarises what the dossier fields imply.
 Click empty space and it all clears.
 
-![A selected Boeing 787-9 on the JFK to Rome run, its full dossier panel open and its magenta track drawn across the Bay of Biscay](docs/media/panels/inspector-selection.jpeg)
+![A selected aircraft over the North Atlantic with its full dossier panel open — identity, kinematics, integrity, freshness, provenance, sanctions screening — and its magenta track drawn back across the ocean](docs/media/panels/inspector-selection.jpeg)
 
 **4. Or query the whole store at once.** The Explorer app is every live object
 in one filterable, sortable table — tens of thousands of tracks across vessels,
@@ -263,12 +269,14 @@ keyless. From there, **Reports** exports the case (see [Export](#export)) as a
 JSON bundle, a self-contained HTML report with per-claim provenance footnotes,
 or a PPTX brief — with any AI narrative confined to a clearly labelled block.
 
-**11. Tear the workspace apart.** Any right-rail panel detaches into a
-free-floating, draggable, resizable window over the globe — put the dossier on
-one screen, the layer tree on another, keep the map clear. Positions persist for
-the session.
+**11. A tool that draws on the map gets its own window.** The annotation
+editor, the watchbox rules and the field kit open as free-floating, draggable,
+resizable windows over the globe rather than stealing the rail from the layer
+tree — arm a tool from the map toolbar, set up what it draws beside the thing
+you are drawing on, and *Window → Re-dock every floating panel* clears them all.
+Positions persist for the session.
 
-![A detached, dragged panel floating over the globe alongside the map toolbar](docs/media/ui-detach-toolbar.jpeg)
+![Two floating windows over the live globe: the annotation editor with its shape, colour and style controls, and the watchbox panel with its enter/exit/loiter trigger rules](docs/media/ui-detach-toolbar.jpeg)
 
 **12. Bring your own data — the Foundry tab.** Upload a CSV/JSON/NDJSON, shape it
 through a governed pipeline (13 transform steps: filter, derive, join, aggregate,
@@ -330,9 +338,9 @@ be annoyed later:
   needs on the order of 150 GB (`~3 GB/h * 48h`). Raise `HISTORY_MAX_BYTES`,
   or set `ARCHIVE_MODE=1` with `HISTORY_DISK_BUDGET_GB` sized to what you're
   willing to spend on disk (the production compose profile does this, 5 GB to
-  start). The replay scrubber's day-picker and ownership chip show the
-  ACTUAL current depth (`oldest_ts` off `/api/history/coverage`), not the
-  configured ceiling, so you can see what you're really getting.
+  start). `/api/history/coverage` reports the ACTUAL current depth
+  (`oldest_ts`), not the configured ceiling, and the 2D console's day-picker
+  and ownership chip render it, so you can see what you're really getting.
 - AIS runs keyless and global (~33k vessels, MMSI-deduped across ShipXplorer,
   MyShipTracking, Digitraffic and Kystverket), but coverage is densest over
   Northern Europe and the Baltic and thins out elsewhere; an AISStream key fills
@@ -357,24 +365,25 @@ None of it needs an API key to start. Keys only add reach.
 
 ## What it pulls in
 
-Rough live numbers off a running backend; they move around through the day:
+Live numbers measured off a running keyless backend on 2026-08-08; they move
+around through the day:
 
 | Feed | Typical live count | Where it comes from |
 | --- | --- | --- |
-| Aircraft (ADS-B) | 9–13k (~11k typical) | OpenSky + airplanes.live |
-| Military aircraft | ~140 | adsb.lol |
-| Vessels (AIS) | ~33k, global | ShipXplorer + MyShipTracking + Digitraffic + Kystverket |
-| GPS jamming | ~200 flagged 1° cells | ADS-B NACp/NIC, the GPSJam method |
+| Aircraft (ADS-B) | 12–15k (14,436 measured) | OpenSky + airplanes.live + adsb.lol + FR24 |
+| Military aircraft | ~30–60 | adsb.lol + airplanes.live |
+| Vessels (AIS) | ~50k tracked, global | ShipXplorer + MyShipTracking + Digitraffic + Kystverket |
+| GPS jamming | ~220 flagged 1° cells | ADS-B NACp/NIC, the GPSJam method |
 | Dark vessels | radar change-detection | Sentinel-1 SAR |
 | Fused incidents | correlation-driven | the correlation engine |
-| Satellites | ~16k, SATCAT-enriched | CelesTrak |
+| Satellites | 16,095, SATCAT-enriched | CelesTrak |
 | Airspace (TFRs) | live restriction polygons | FAA |
 | Military bases | 7,183 (+1,330 MIRTA/Wikidata) | Wikidata + DIA MIRTA |
 | Naval broadcast warnings | ~800 plotted points | NGA NAVAREA |
 | Ports | 3,804, with harbour detail | NGA World Port Index |
 | Airports | runways + ILS + frequencies + live METAR | FAA NASR, NOAA, LiveATC |
-| Earthquakes | ~250/day | USGS + EMSC |
-| News + fact-check | ~370 articles | publisher RSS |
+| Earthquakes | ~290/day | USGS + EMSC |
+| News + fact-check | ~370 articles (off by default) | publisher RSS |
 | Internet outages | country level | IODA, Cloudflare |
 | Submarine cables | ~700 | TeleGeography |
 | Conflict events | ~1.5k live | GDELT, EONET, ACLED |
@@ -394,7 +403,7 @@ Protocol** server, so an AI agent can interrogate the same warm feeds the globe
 renders without scraping a dozen sites or flooding its own context. Ask "where
 is GPS being jammed right now?" and it answers from the live feed. Full
 architecture + `/api/intel/*` HTTP reference: [`docs/mcp-server.md`](./docs/mcp-server.md).
-It exposes 50 tools over `app.mcp_server` (a representative slice below; run
+It exposes 84 tools over `app.mcp_server` (a representative slice below; run
 `--list-tools` for the full set):
 
 | Tool | What it returns |
@@ -566,7 +575,7 @@ them and keep the lighter direct feeds.
 
 ```
 osint/
-├── apps/web/                 # React + Cesium console (12-app workspace)
+├── apps/web/                 # React + Cesium console (14-app workspace)
 │   └── src/
 │       ├── globe/            # Cesium globe, layers, map toolbar (measure/area/annotate)
 │       ├── entity-panel/     # right-rail dossier / inspector
