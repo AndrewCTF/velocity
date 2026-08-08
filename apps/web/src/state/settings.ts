@@ -66,6 +66,12 @@ export interface Settings {
   // the rail 44px→176px). OFF by default = icon-only. ConsoleShell reads this to
   // size the rail column and --rail-left-w so map overlays dock past it.
   leftRailExpanded: boolean;
+  // Adaptive layer governor (globe/adaptiveGovernor.ts). When ON, disables
+  // low-priority layers (infra, places, reference…) when frame cost exceeds
+  // ~14ms and restores them when it drops below ~10ms. Aircraft and maritime
+  // are never shed. Default ON — the operator can disable if they prefer
+  // seeing everything regardless of frame rate.
+  adaptiveLayerGovernor: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -78,6 +84,7 @@ const DEFAULTS: Settings = {
   selectionAiModel: null,
   selectionAiPosition: 'top',
   leftRailExpanded: false,
+  adaptiveLayerGovernor: true,
 };
 
 const LS_KEY = 'velocity.settings';

@@ -28,6 +28,7 @@ import { perfOnPreRender, perfOnRender } from './perf.js';
 import { presetKnobs } from './qualityPresets.js';
 import { setCameraMoving } from './cameraMotion.js';
 import { hasRenderNeed } from './renderNeeds.js';
+import { startAdaptiveGovernor, stopAdaptiveGovernor } from './adaptiveGovernor.js';
 import { ChipLayer } from '../imagery/ChipLayer.js';
 import { apiFetch, backendUrl } from '../transport/http.js';
 import { globalAltitude } from './camera.js';
@@ -853,6 +854,9 @@ export function GlobeCanvas({
     const compositor = new LayerCompositor(registry, viewer);
     compositor.start();
     compositorRef.current = compositor;
+    if (useSettings.getState().adaptiveLayerGovernor) {
+      startAdaptiveGovernor(registry);
+    }
     onViewerReady?.(viewer);
     setViewerState(viewer);
 
@@ -879,6 +883,7 @@ export function GlobeCanvas({
       detachWatchbox();
       detachCaptures();
       detachDetections();
+      stopAdaptiveGovernor();
       compositorRef.current?.stop();
       compositorRef.current = null;
       onViewerReady?.(null);

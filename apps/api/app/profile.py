@@ -56,6 +56,19 @@ _DEFAULTS: dict[str, dict[str, str]] = {
         "NEWS_ENABLED": "0",
         # Release the card the moment an explicitly requested call finishes.
         "OLLAMA_KEEP_ALIVE": "0",
+        # History DB is a significant RSS consumer (SQLite mmap + WAL). On an
+        # 8 GB box the replay store competes with the live feeds for memory.
+        # Disabling it keeps the backend stateless — replay refills when the
+        # operator opts back in with HISTORY_ENABLED=1.
+        "HISTORY_ENABLED": "0",
+        # FR24 fetches 102 bbox tiles per pull at 20 s cadence — heavy on CPU
+        # and memory for what is a densify-only tier. OpenSky + the grid mirrors
+        # already carry ≥8000 aircraft without it.
+        "ADSB_FR24_ENABLED": "0",
+        # OpenSky gap-fill polls one cell every 300 s. On a tight box the extra
+        # httpx connections and response parsing aren't worth the marginal
+        # coverage gain — the base OpenSky pull already covers the world.
+        "ADSB_OPENSKY_GAPS_ENABLED": "0",
     },
     WORKSTATION: {
         "AIS_MYSHIPTRACKING_SIDECAR_ENABLED": "0",
