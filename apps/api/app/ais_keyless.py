@@ -33,6 +33,17 @@ import websockets
 from app import ais_firehose
 from app.config import get_settings
 from app.correlate.types import Observation
+
+# The MQTT 3.1.1 wire codec now lives in ``app/mqtt_client.py`` so a
+# user-configured broker connection can reuse it instead of growing a second
+# implementation. Re-exported under the old private names: the guard test in
+# tests/test_ais_keyless.py reaches them through this module, and keeping it
+# pointed here is what proves the extraction changed no bytes.
+from app.mqtt_client import connect_packet as _connect_packet
+from app.mqtt_client import decode_publish as _decode_publish
+from app.mqtt_client import enc_remaining_length as _enc_remaining_length  # noqa: F401
+from app.mqtt_client import parse_packets as _parse_packets
+from app.mqtt_client import subscribe_packet as _subscribe_packet
 from app.routes import ais as ais_routes
 from app.upstream import get_client
 
@@ -155,76 +166,6 @@ async def _run_kystdatahuset() -> None:
 
 
 # ── Digitraffic (Finland/Baltic) — minimal MQTT 3.1.1 over WSS ─────────────────
-
-
-def _enc_remaining_length(n: int) -> bytes:
-    out = bytearray()
-    while True:
-        b = n % 128
-        n //= 128
-        if n > 0:
-            b |= 0x80
-        out.append(b)
-        if n == 0:
-            break
-    return bytes(out)
-
-
-def _connect_packet(client_id: str = "osint-geoint") -> bytes:
-    # variable header: proto name "MQTT", level 4, clean-session flag, keepalive 60
-    vh = b"\x00\x04MQTT\x04\x02\x00\x3c"
-    payload = len(client_id).to_bytes(2, "big") + client_id.encode()
-    body = vh + payload
-    return b"\x10" + _enc_remaining_length(len(body)) + body
-
-
-def _subscribe_packet(topic: str, packet_id: int = 1) -> bytes:
-    body = packet_id.to_bytes(2, "big") + len(topic).to_bytes(2, "big") + topic.encode() + b"\x00"
-    return b"\x82" + _enc_remaining_length(len(body)) + body
-
-
-def _parse_packets(buf: bytes) -> tuple[list[tuple[int, int, bytes]], bytes]:
-    """Parse complete MQTT packets from ``buf``.
-
-    Returns ``([(packet_type, byte0, body), …], remainder)``. A WS frame may
-    carry partial / multiple MQTT packets, so the caller accumulates the
-    remainder across reads.
-    """
-    out: list[tuple[int, int, bytes]] = []
-    i, n = 0, len(buf)
-    while i < n:
-        b0 = buf[i]
-        ptype = b0 >> 4
-        mult, rl, j = 1, 0, i + 1
-        while True:
-            if j >= n:
-                return out, buf[i:]  # length incomplete
-            d = buf[j]
-            rl += (d & 0x7F) * mult
-            mult *= 128
-            j += 1
-            if not (d & 0x80):
-                break
-            if mult > 128**4:
-                return out, b""  # malformed; drop
-        if j + rl > n:
-            return out, buf[i:]  # body incomplete
-        out.append((ptype, b0, buf[j : j + rl]))
-        i = j + rl
-    return out, b""
-
-
-def _decode_publish(byte0: int, body: bytes) -> tuple[str, bytes] | None:
-    """Extract ``(topic, payload)`` from a PUBLISH packet body."""
-    if len(body) < 2:
-        return None
-    qos = (byte0 >> 1) & 3
-    tlen = int.from_bytes(body[0:2], "big")
-    if len(body) < 2 + tlen:
-        return None
-    topic = body[2 : 2 + tlen].decode("utf-8", "replace")
-    off = 2 + tlen + (2 if qos > 0 else 0)
-    return topic, body[off:]
 
 
 async def _handle_publish(topic: str, payload: bytes) -> None:

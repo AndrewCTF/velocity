@@ -4,11 +4,12 @@ import { DatasetsView } from './DatasetsView.js';
 import { PipelineView } from './PipelineView.js';
 import { BuildsView } from './BuildsView.js';
 import { OntologyView } from './OntologyView.js';
+import { ConnectionsView } from './ConnectionsView.js';
 import { useFoundryNav, type FoundryView } from './nav.js';
 
 // FOUNDRY surface (docs/foundry-plan.md) — BYO-data layer: upload → transform
 // (with lineage) → build → bind into the ontology, operated from a Workshop-
-// style dashboard. A left rail switches between the five stages of the loop;
+// style dashboard. A left rail switches between the stages of the loop;
 // the surface is wired into the app switcher like Explorer/Graph (see
 // state/appView.ts + shell/AppSurface.tsx). All chrome is token-driven so the
 // whole thing flips with the light/dark theme.
@@ -22,6 +23,7 @@ const NAV: Array<{ id: FoundryView; label: string; icon: IconName; hint: string 
   { id: 'pipeline', label: 'Pipeline', icon: 'transform', hint: 'transforms + lineage' },
   { id: 'builds', label: 'Builds', icon: 'copy', hint: 'history + schedules' },
   { id: 'ontology', label: 'Ontology', icon: 'box', hint: 'bindings + sync' },
+  { id: 'connections', label: 'Connections', icon: 'radio', hint: 'your brokers + databases' },
 ];
 
 export function FoundryApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
@@ -74,6 +76,7 @@ export function FoundryApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
         {view === 'pipeline' && <PipelineView />}
         {view === 'builds' && <BuildsView />}
         {view === 'ontology' && <OntologyView />}
+        {view === 'connections' && <ConnectionsView />}
       </div>
     </div>
   );

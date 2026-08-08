@@ -104,6 +104,7 @@ from app.routes import health as health_routes
 from app.routes import history as history_routes
 from app.routes import imagery as imagery_routes
 from app.routes import infra as infra_routes
+from app.routes import ingest as ingest_routes
 from app.routes import instability as instability_routes
 from app.routes import intel as intel_routes
 from app.routes import jamming as jamming_routes
@@ -385,6 +386,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.foundry import scheduler as foundry_scheduler  # noqa: PLC0415
 
             await foundry_scheduler.start()
+            # Operator-configured sources (MQTT / Kafka / SQL). SUPERVISED, not
+            # started once: the reconcile loop restarts a connection that dies
+            # later and picks up an edit made in the UI. Idles cheaply with no
+            # connections configured.
+            from app.foundry import connections as foundry_connections  # noqa: PLC0415
+
+            await foundry_connections.start()
             # Workflows interval schedules: re-run a workflow on its
             # configured cadence. Idles cheaply with no schedules registered.
             from app.workflows import scheduler as workflows_scheduler  # noqa: PLC0415
@@ -481,6 +489,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.foundry import scheduler as foundry_scheduler  # noqa: PLC0415
 
             await foundry_scheduler.stop()
+            from app.foundry import connections as foundry_connections  # noqa: PLC0415
+
+            await foundry_connections.stop()
             from app.workflows import scheduler as workflows_scheduler  # noqa: PLC0415
 
             await workflows_scheduler.stop()
@@ -693,6 +704,9 @@ def create_app() -> FastAPI:
     # Foundry substrate: BYO-data datasets/transforms/builds/ontology bindings
     # (docs/foundry-plan.md). Local SQLite, keyless.
     app.include_router(foundry_routes.router)
+    # Inbound push: the ONE route an unauthenticated sender can write through,
+    # gated by a per-dataset token rather than a session (app/routes/ingest.py).
+    app.include_router(ingest_routes.router)
     # Workflows: user-authored DAG pipelines over live platform data
     # (docs/dashboard-workflows-plan.md). Local SQLite, keyless.
     app.include_router(workflows_routes.router)

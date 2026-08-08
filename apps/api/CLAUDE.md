@@ -95,6 +95,32 @@ Browser-tier pacing and the headful lever are in `tools/CLAUDE.md`.
 
 WS handlers call `require_ws_key` BEFORE `accept`.
 
+`POST /api/ingest/{dataset_id}` is the ONE route with no session dependency — an
+external sender has no session, so a per-dataset token is the whole gate. Only
+the token's sha256 is stored, comparison is `compare_digest`, the token is never
+logged or echoed after the response that mints it, the body is capped BEFORE it
+is parsed (Content-Length AND a running total, since chunked declares neither),
+and an unknown dataset and an unarmed one answer with the identical 404 so the
+route cannot enumerate dataset ids. → `tests/test_ingest_webhook.py`
+
+## Connections (operator-configured sources)
+
+`foundry/connections.py` runs MQTT / Kafka / SQL sources the operator points at
+their own infrastructure. Two rules:
+
+- A `sql` connection stores the **NAME of an environment variable** holding the
+  DSN, never the DSN. The row is returned by the list route and sits in
+  `foundry.db`; a password in it is a leak with several copies. Driver
+  exceptions are scrubbed of the DSN before they reach `last_error`.
+- `aiokafka` and `sqlalchemy` are OPTIONAL extras, import-guarded like
+  `titiler-core`. An absent client makes its kind report unavailable; it never
+  stops the app booting. The guard simulates absence with a `__import__` shim,
+  because once the extra is installed a test that merely imports proves nothing.
+  → `tests/test_connections.py`
+
+Supervised, not started once (same rule as the sidecars): the reconcile loop
+restarts a connection that dies later and applies an edit made in the UI.
+
 ## Ontology (2026-07-07, docs/decisions.md#ontology-local-first-store-2026-07-07)
 
 - The ONLY backend = local SQLite (`intel/ontology_local.py`, via

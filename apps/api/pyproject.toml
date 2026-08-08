@@ -70,6 +70,21 @@ dev = [
 mavlink = [
   "pymavlink>=2.4.40",
 ]
+# Foundry connections (app.foundry.connections). Each kind is optional and
+# reports itself unavailable when its client is absent, so a keyless boot with
+# neither installed still works — that is a product requirement, not a dev
+# convenience, and a deployment that does not consume Kafka must not be made to
+# install a Kafka client. MQTT needs nothing: app/mqtt_client.py speaks the
+# wire protocol over the websockets dependency that is already here.
+#   pip install -e '.[kafka]'   Kafka topic  → dataset
+#   pip install -e '.[sql]'     SQL query    → dataset (plus a DBAPI driver for
+#                               the database in question, e.g. psycopg[binary])
+kafka = [
+  "aiokafka>=0.11",
+]
+sql = [
+  "sqlalchemy>=2.0",
+]
 
 [build-system]
 requires = ["hatchling"]
