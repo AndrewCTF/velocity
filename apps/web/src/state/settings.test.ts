@@ -41,6 +41,7 @@ describe('settings store', () => {
       selectionAiPosition: 'top',
       leftRailExpanded: false,
       corroboratedOnly: false,
+      adaptiveLayerGovernor: true,
     });
   });
 
