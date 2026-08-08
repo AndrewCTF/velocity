@@ -7,6 +7,8 @@ action layer (``/api/actions/*``); the one write exposed here is the plain
 named investigation as an ontology node — a graph-shaping write, not a kinetic
 action, so it needs no ``action_log`` audit row.
 
+  GET  /api/ontology/schema                   → declared relations + kind props
+  GET  /api/ontology/search?q=&kind=          → full-text over the stored graph
   GET  /api/ontology/object/{id}              → one Object (404 if absent)
   POST /api/ontology/object                   → upsert one Object (save a node)
   GET  /api/ontology/assertions/{id}?prop=    → the id's assertion history
@@ -35,9 +37,24 @@ from app.intel.ontology import (
     SearchAround,
     get_registry,
 )
+from app.intel.ontology_schema import schema_payload, validate_object
 from app.keys import UserCtx, current_user_or_local
 
 router = APIRouter(tags=["ontology"])
+
+
+class ObjectSaved(Object):
+    """What ``POST /api/ontology/object`` answers: the stored object, plus any
+    way it departs from what its kind declares.
+
+    A subclass rather than a wrapper so the round-trip contract the Investigation
+    canvas depends on is untouched — every ``Object`` field is still at the top
+    level, and a caller that does not know about ``warnings`` reads the same
+    body it always did. The warnings are advisory and are NOT stored: the
+    registry accepts the write either way (see ``intel/ontology_schema.py``).
+    """
+
+    warnings: list[str] = Field(default_factory=list)
 
 # Trigger → provenance source for POST /api/ontology/promote. The SERVER owns
 # the source string (the client passes only a trigger enum, never a raw source)
@@ -90,10 +107,41 @@ async def object_assertions(
     return await reg.get_assertions(object_id, prop=prop, limit=limit)
 
 
-@router.post("/api/ontology/object", response_model=Object)
+@router.get("/api/ontology/schema")
+async def ontology_schema() -> dict[str, Any]:
+    """What the ontology declares: every relation with BOTH of its names, and
+    the properties each known kind carries.
+
+    Static, per-deployment, and identical for every caller, so it needs no auth
+    dependency and no store round-trip. The Graph canvas reads it once to label
+    an edge correctly when it is traversed from the target's end; the Explorer
+    reads it to build typed facets.
+    """
+    return schema_payload()
+
+
+@router.get("/api/ontology/search", response_model=list[Object])
+async def search_objects(
+    q: str = Query(..., min_length=1, max_length=200),
+    kind: list[str] | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    ctx: UserCtx = Depends(current_user_or_local),
+) -> list[Object]:
+    """Find ontology objects by words in their id, kind or property values.
+
+    Distinct from ``/api/search/objects``, which searches the LIVE observation
+    store — what is being emitted right now. This searches what was promoted
+    into the graph and kept, which until now had no search at all: ``get`` needs
+    the exact canonical id and ``list_by_kind`` filters one props field.
+    """
+    reg = get_registry(ctx, get_settings())
+    return await reg.search(q, kinds=kind, limit=limit)
+
+
+@router.post("/api/ontology/object", response_model=ObjectSaved)
 async def upsert_object(
     obj: Object, ctx: UserCtx = Depends(current_user_or_local)
-) -> Object:
+) -> ObjectSaved:
     """Insert or merge one ontology object (RLS-scoped to the caller).
 
     The graph-shaping write the Investigation canvas (C4) uses to persist a saved
@@ -102,9 +150,16 @@ async def upsert_object(
     (``upsert`` calls ``normalised()``), so a caller may omit it. This is NOT a
     kinetic action — no ``action_log`` audit row — so it stays here rather than in
     ``/api/actions``.
+
+    The write happens first and unconditionally: ``warnings`` describes the
+    object that was stored, it does not gate storing it.
     """
     reg = get_registry(ctx, get_settings())
-    return await reg.upsert(obj)
+    saved = await reg.upsert(obj)
+    return ObjectSaved(
+        **saved.model_dump(),
+        warnings=validate_object(saved.kind, saved.props),
+    )
 
 
 class PromoteIn(BaseModel):
