@@ -175,12 +175,16 @@ export function UploadModal({
             tabIndex={0}
             className="rounded-md border border-dashed border-line-2 bg-bg-1 hover:border-accent-line px-4 py-5 text-center cursor-pointer transition-colors focus:outline-none focus:border-accent-line"
           >
-            <div className="text-[11px] text-txt-1">{file ? file.name : 'Drop CSV / JSON / NDJSON, or click to browse'}</div>
-            <div className="text-[10px] text-txt-3 mt-1">25 MB cap · header row for CSV</div>
+            <div className="text-[11px] text-txt-1">
+              {file ? file.name : 'Drop CSV / JSON / NDJSON / GeoJSON / KML, or click to browse'}
+            </div>
+            <div className="text-[10px] text-txt-3 mt-1">
+              25 MB cap · header row for CSV · one row per feature for GeoJSON and KML
+            </div>
             <input
               ref={inputRef}
               type="file"
-              accept=".csv,.json,.ndjson,.txt"
+              accept=".csv,.json,.ndjson,.txt,.geojson,.kml,.kmz"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
