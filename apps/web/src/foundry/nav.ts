@@ -5,7 +5,7 @@
 // so switching apps and returning restores the exact Foundry context.
 import { create } from 'zustand';
 
-export type FoundryView = 'home' | 'datasets' | 'pipeline' | 'builds' | 'ontology';
+export type FoundryView = 'home' | 'datasets' | 'pipeline' | 'builds' | 'ontology' | 'connections';
 export type DetailTab =
   | 'schema'
   | 'preview'
@@ -19,7 +19,7 @@ export type DetailTab =
   | 'sql'
   | 'monitors';
 
-const VIEWS: readonly FoundryView[] = ['home', 'datasets', 'pipeline', 'builds', 'ontology'];
+const VIEWS: readonly FoundryView[] = ['home', 'datasets', 'pipeline', 'builds', 'ontology', 'connections'];
 const TABS: readonly DetailTab[] = [
   'schema',
   'preview',

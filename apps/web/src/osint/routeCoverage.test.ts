@@ -41,6 +41,11 @@ const EXEMPT: Record<string, string> = {
     'ObjectInspector builds /api/intel/dossier/${kind}/${ident} from the selection',
   // Aliases of a route that IS wired.
   '/api/adsb/lol/global': 'backwards-compatible alias of /api/adsb/global',
+  // The one route whose caller is deliberately NOT the browser.
+  '/api/ingest':
+    'inbound push: an external sender calls it with a per-dataset token. ' +
+    'The operator arms and revokes it from Foundry → Connections, which does ' +
+    'have a UI address (POST/DELETE /api/foundry/datasets/{id}/ingest-token).',
 };
 
 interface Route {

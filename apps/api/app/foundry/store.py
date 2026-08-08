@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import calendar
+import hashlib
 import json
+import secrets
 import sqlite3
 import time
 import uuid
@@ -58,7 +60,8 @@ CREATE TABLE IF NOT EXISTS datasets (
   id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, description TEXT DEFAULT '',
   kind TEXT NOT NULL DEFAULT 'raw',
   schema_json TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  ingest_token_sha256 TEXT
 );
 CREATE TABLE IF NOT EXISTS versions (
   id INTEGER PRIMARY KEY, dataset_id TEXT NOT NULL REFERENCES datasets(id),
@@ -124,6 +127,13 @@ CREATE TABLE IF NOT EXISTS monitors (
   severity TEXT NOT NULL DEFAULT 'medium', enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS connections (
+  id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, kind TEXT NOT NULL,
+  dataset_id TEXT NOT NULL, config_json TEXT NOT NULL DEFAULT '{}',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  last_ok TEXT, last_error TEXT, rows_total INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS monitor_events (
   id INTEGER PRIMARY KEY, monitor_id TEXT NOT NULL, at TEXT NOT NULL,
   kind TEXT NOT NULL, summary TEXT NOT NULL, detail_json TEXT NOT NULL DEFAULT '{}'
@@ -152,6 +162,12 @@ def _ensure_migrations(con: sqlite3.Connection) -> None:
     binding_cols = {r[1] for r in con.execute("PRAGMA table_info(bindings)").fetchall()}
     if "resolve" not in binding_cols:
         con.execute("ALTER TABLE bindings ADD COLUMN resolve INTEGER NOT NULL DEFAULT 0")
+    ds_cols = {r[1] for r in con.execute("PRAGMA table_info(datasets)").fetchall()}
+    if "ingest_token_sha256" not in ds_cols:
+        # The HASH, never the token: this column arms an endpoint an
+        # unauthenticated stranger can reach, so a copy of foundry.db must not
+        # be a copy of the credential.
+        con.execute("ALTER TABLE datasets ADD COLUMN ingest_token_sha256 TEXT")
 
 
 def _connect(settings: Settings | None = None) -> sqlite3.Connection:
@@ -174,6 +190,10 @@ def _now_iso() -> str:
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class FoundryError(Exception):
@@ -295,6 +315,68 @@ class FoundryStore:
                 return self._dataset_row(con, dataset_id)
             finally:
                 con.close()
+
+        return await self._run(_sync)
+
+    # ---- ingest tokens ----------------------------------------------------
+    # A dataset with a token has an inbound push endpoint; one without does not
+    # exist as far as POST /api/ingest is concerned. Only the sha256 is stored,
+    # so the plaintext exists exactly once, in the response that mints it.
+
+    async def mint_ingest_token(self, dataset_id: str) -> str | None:
+        """Arm (or re-arm) the dataset's push endpoint. Returns the plaintext
+        token, or None if the dataset does not exist. Re-minting invalidates the
+        previous token, which is the revoke-and-rotate path."""
+        token = secrets.token_urlsafe(32)
+
+        def _sync() -> str | None:
+            con = _connect(self.s)
+            try:
+                cur = con.execute(
+                    "UPDATE datasets SET ingest_token_sha256=?, updated_at=?"
+                    " WHERE id=?",
+                    (_token_hash(token), _now_iso(), dataset_id),
+                )
+                con.commit()
+                return token if cur.rowcount else None
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def clear_ingest_token(self, dataset_id: str) -> bool:
+        def _sync() -> bool:
+            con = _connect(self.s)
+            try:
+                cur = con.execute(
+                    "UPDATE datasets SET ingest_token_sha256=NULL, updated_at=?"
+                    " WHERE id=?",
+                    (_now_iso(), dataset_id),
+                )
+                con.commit()
+                return bool(cur.rowcount)
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def ingest_token_matches(self, dataset_id: str, token: str) -> bool | None:
+        """True/False when the dataset has a token, None when it has none (or
+        does not exist) — the caller turns None into the same 404 for both, so
+        the endpoint cannot be used to enumerate dataset ids."""
+
+        def _sync() -> bool | None:
+            con = _connect(self.s)
+            try:
+                row = con.execute(
+                    "SELECT ingest_token_sha256 FROM datasets WHERE id=?",
+                    (dataset_id,),
+                ).fetchone()
+            finally:
+                con.close()
+            if row is None or not row[0]:
+                return None
+            return secrets.compare_digest(row[0], _token_hash(token))
 
         return await self._run(_sync)
 
@@ -1350,6 +1432,169 @@ class FoundryStore:
         "id, dataset_id, object_kind, key_column, prop_map_json, enabled,"
         " last_sync, last_result_json, created_at, resolve"
     )
+
+    # ---- connections ------------------------------------------------------
+    # A connection is a source the OPERATOR configured: an MQTT topic, a Kafka
+    # topic, a query against their own SQL database. The runner in
+    # ``foundry/connections.py`` batches whatever arrives into ``dataset_id``,
+    # after which the ordinary version + binding machinery takes over.
+
+    _CONNECTION_COLS = (
+        "id, name, kind, dataset_id, config_json, enabled, last_ok,"
+        " last_error, rows_total, created_at, updated_at"
+    )
+
+    @staticmethod
+    def _connection_row(row: tuple[Any, ...]) -> dict[str, Any]:
+        return {
+            "id": row[0],
+            "name": row[1],
+            "kind": row[2],
+            "dataset_id": row[3],
+            "config": json.loads(row[4]),
+            "enabled": bool(row[5]),
+            "last_ok": row[6],
+            "last_error": row[7],
+            "rows_total": row[8],
+            "created_at": row[9],
+            "updated_at": row[10],
+        }
+
+    async def list_connections(self) -> list[dict[str, Any]]:
+        def _sync() -> list[dict[str, Any]]:
+            con = _connect(self.s)
+            try:
+                rows = con.execute(
+                    f"SELECT {self._CONNECTION_COLS} FROM connections"
+                    " ORDER BY created_at DESC"
+                ).fetchall()
+            finally:
+                con.close()
+            return [self._connection_row(r) for r in rows]
+
+        return await self._run(_sync)
+
+    async def get_connection(self, connection_id: str) -> dict[str, Any] | None:
+        def _sync() -> dict[str, Any] | None:
+            con = _connect(self.s)
+            try:
+                row = con.execute(
+                    f"SELECT {self._CONNECTION_COLS} FROM connections WHERE id=?",
+                    (connection_id,),
+                ).fetchone()
+            finally:
+                con.close()
+            return self._connection_row(row) if row else None
+
+        return await self._run(_sync)
+
+    async def create_connection(
+        self,
+        name: str,
+        kind: str,
+        dataset_id: str,
+        config: dict[str, Any],
+        enabled: bool = True,
+    ) -> dict[str, Any]:
+        def _sync() -> dict[str, Any]:
+            con = _connect(self.s)
+            try:
+                if con.execute(
+                    "SELECT id FROM connections WHERE name=?", (name,)
+                ).fetchone():
+                    raise FoundryError(409, f"connection {name!r} already exists")
+                cid = new_id("conn")
+                now = _now_iso()
+                con.execute(
+                    "INSERT INTO connections (id, name, kind, dataset_id,"
+                    " config_json, enabled, created_at, updated_at)"
+                    " VALUES (?,?,?,?,?,?,?,?)",
+                    (cid, name, kind, dataset_id, json.dumps(config), int(enabled), now, now),
+                )
+                con.commit()
+                row = con.execute(
+                    f"SELECT {self._CONNECTION_COLS} FROM connections WHERE id=?",
+                    (cid,),
+                ).fetchone()
+                return self._connection_row(row)
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def update_connection(
+        self,
+        connection_id: str,
+        *,
+        dataset_id: str,
+        config: dict[str, Any],
+        enabled: bool,
+    ) -> dict[str, Any] | None:
+        def _sync() -> dict[str, Any] | None:
+            con = _connect(self.s)
+            try:
+                cur = con.execute(
+                    "UPDATE connections SET dataset_id=?, config_json=?, enabled=?,"
+                    " updated_at=? WHERE id=?",
+                    (dataset_id, json.dumps(config), int(enabled), _now_iso(), connection_id),
+                )
+                con.commit()
+                if not cur.rowcount:
+                    return None
+                row = con.execute(
+                    f"SELECT {self._CONNECTION_COLS} FROM connections WHERE id=?",
+                    (connection_id,),
+                ).fetchone()
+                return self._connection_row(row)
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def delete_connection(self, connection_id: str) -> bool:
+        def _sync() -> bool:
+            con = _connect(self.s)
+            try:
+                cur = con.execute(
+                    "DELETE FROM connections WHERE id=?", (connection_id,)
+                )
+                con.commit()
+                return bool(cur.rowcount)
+            finally:
+                con.close()
+
+        return await self._run(_sync)
+
+    async def mark_connection(
+        self,
+        connection_id: str,
+        *,
+        ok: bool,
+        error: str | None = None,
+        rows_added: int = 0,
+    ) -> None:
+        """Record the outcome of one runner cycle. ``last_error`` is cleared on a
+        good cycle so the row shows the CURRENT state, not the worst one ever."""
+
+        def _sync() -> None:
+            con = _connect(self.s)
+            try:
+                if ok:
+                    con.execute(
+                        "UPDATE connections SET last_ok=?, last_error=NULL,"
+                        " rows_total=rows_total+? WHERE id=?",
+                        (_now_iso(), int(rows_added), connection_id),
+                    )
+                else:
+                    con.execute(
+                        "UPDATE connections SET last_error=? WHERE id=?",
+                        ((error or "")[:500], connection_id),
+                    )
+                con.commit()
+            finally:
+                con.close()
+
+        await self._run(_sync)
 
     async def create_binding(
         self,

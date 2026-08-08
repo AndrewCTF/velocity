@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.foundry import binding as binding_mod
 from app.foundry import builds as builds_mod
+from app.foundry import connections as connections_mod
 from app.foundry import geo as geo_mod
 from app.foundry import ingest, sqlrun
 from app.foundry import seed as seed_mod
@@ -353,6 +354,149 @@ async def upload_dataset_version(
     # silently dropped or defaulted.
     ds["mode"] = mode
     return ds
+
+
+class ConnectionIn(BaseModel):
+    """A source the operator configured. ``config`` is per-kind:
+
+      mqtt   {url: "mqtt://host:1883" | "wss://host/mqtt", topic, client_id?}
+      kafka  {bootstrap_servers, topic, group_id?, auto_offset_reset?}
+      sql    {dsn_env, query, interval_s?}
+
+    For ``sql``, ``dsn_env`` is the NAME of an environment variable holding the
+    connection string. Never the connection string: this row is returned by the
+    list route and lives in foundry.db, and a password belongs in neither.
+    """
+
+    name: str = Field(..., min_length=1, max_length=80)
+    kind: Literal["mqtt", "kafka", "sql"]
+    dataset_id: str = Field(..., min_length=1, max_length=80)
+    config: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+
+
+class ConnectionUpdate(BaseModel):
+    dataset_id: str = Field(..., min_length=1, max_length=80)
+    config: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+
+
+def _reject_inline_dsn(kind: str, config: dict[str, Any]) -> None:
+    """A SQL connection must not be handed a connection string.
+
+    Caught at the boundary rather than at run time, because by the time the
+    runner reads it the value is already stored, already in the list response
+    and already in whatever backed the file up.
+    """
+    if kind != "sql":
+        return
+    if not connections_mod.valid_dsn_env(str(config.get("dsn_env") or "")):
+        raise HTTPException(
+            status_code=422,
+            detail="dsn_env must be the NAME of an environment variable holding "
+                   "the connection string (e.g. OSINT_SQL_DSN_WAREHOUSE), not the "
+                   "connection string itself",
+        )
+
+
+@router.get("/api/foundry/connections")
+async def list_connections(
+    ctx: UserCtx = Depends(current_user_or_local),
+) -> dict[str, Any]:
+    """Configured sources, plus which kinds this deployment can run.
+
+    ``availability`` is reported so the UI can grey out a kind rather than let
+    an operator configure one whose client is not installed.
+    """
+    live = set(connections_mod.running_ids())
+    rows = await _store().list_connections()
+    for row in rows:
+        row["running"] = row["id"] in live
+    return {"connections": rows, "availability": connections_mod.availability()}
+
+
+@router.post("/api/foundry/connections")
+async def create_connection(
+    body: ConnectionIn, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    _reject_inline_dsn(body.kind, body.config)
+    store = _store()
+    if await store.get_dataset(body.dataset_id) is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    try:
+        created = await store.create_connection(
+            body.name, body.kind, body.dataset_id, body.config, body.enabled
+        )
+    except FoundryError as exc:
+        _raise(exc)
+        raise AssertionError("unreachable") from exc  # pragma: no cover
+    await connections_mod.reconcile()
+    return created
+
+
+@router.put("/api/foundry/connections/{connection_id}")
+async def update_connection(
+    connection_id: str,
+    body: ConnectionUpdate,
+    ctx: UserCtx = Depends(current_user_or_local),
+) -> dict[str, Any]:
+    store = _store()
+    existing = await store.get_connection(connection_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="connection not found")
+    _reject_inline_dsn(existing["kind"], body.config)
+    updated = await store.update_connection(
+        connection_id,
+        dataset_id=body.dataset_id,
+        config=body.config,
+        enabled=body.enabled,
+    )
+    if updated is None:  # pragma: no cover - raced with a delete
+        raise HTTPException(status_code=404, detail="connection not found")
+    await connections_mod.reconcile()
+    return updated
+
+
+@router.delete("/api/foundry/connections/{connection_id}")
+async def delete_connection(
+    connection_id: str, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    if not await _store().delete_connection(connection_id):
+        raise HTTPException(status_code=404, detail="connection not found")
+    await connections_mod.reconcile()
+    return {"deleted": connection_id}
+
+
+@router.post("/api/foundry/datasets/{dataset_id}/ingest-token")
+async def mint_ingest_token(
+    dataset_id: str, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    """Arm this dataset's inbound push endpoint and return the token.
+
+    The token is shown HERE AND NOWHERE ELSE: only its sha256 is stored, so no
+    later response can hand it back. Calling this again rotates it and
+    invalidates the previous one. See ``routes/ingest.py`` for what it opens.
+    """
+    token = await _store().mint_ingest_token(dataset_id)
+    if token is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return {
+        "dataset_id": dataset_id,
+        "token": token,
+        "url": f"/api/ingest/{dataset_id}",
+        "header": "X-Ingest-Token",
+        "note": "shown once; re-mint to rotate, DELETE to close the endpoint",
+    }
+
+
+@router.delete("/api/foundry/datasets/{dataset_id}/ingest-token")
+async def revoke_ingest_token(
+    dataset_id: str, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    """Close the dataset's push endpoint. Idempotent on an unarmed dataset."""
+    if not await _store().clear_ingest_token(dataset_id):
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return {"dataset_id": dataset_id, "ingest": "closed"}
 
 
 @router.post("/api/foundry/datasets/{dataset_id}/rollback")
