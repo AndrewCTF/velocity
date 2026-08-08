@@ -29,7 +29,7 @@ import { presetKnobs } from './qualityPresets.js';
 import { setCameraMoving } from './cameraMotion.js';
 import { hasRenderNeed } from './renderNeeds.js';
 import { ChipLayer } from '../imagery/ChipLayer.js';
-import { backendUrl } from '../transport/http.js';
+import { apiFetch, backendUrl } from '../transport/http.js';
 import { globalAltitude } from './camera.js';
 
 interface Props {
@@ -631,6 +631,28 @@ export function GlobeCanvas({
         toIdle();
         setMotionQuality(false);
         evalGovernor(); // re-decide continuous vs idle after a zoom settles
+        // Predictive prefetch: when on Apple Maps, pre-warm the NEXT zoom
+        // level's tiles so zooming in hits cached tiles instead of cold fetches.
+        if (useImagery.getState().mode === 'apple-sat') {
+          const rect = viewer.camera.computeViewRectangle();
+          if (rect) {
+            const z = Math.min(19, Math.round(Math.log2(Math.PI * 2 / rect.width)));
+            const nz = Math.min(19, z + 1);
+            const n = 1 << nz;
+            const xMin = Math.max(0, Math.floor(((Cesium.Math.toDegrees(rect.west) + 180) / 360) * n));
+            const xMax = Math.min(n - 1, Math.floor(((Cesium.Math.toDegrees(rect.east) + 180) / 360) * n));
+            const yMin = Math.max(0, Math.floor((1 - Math.log(Math.tan(rect.north) + 1 / Math.cos(rect.north)) / Math.PI) / 2 * n));
+            const yMax = Math.min(n - 1, Math.floor((1 - Math.log(Math.tan(rect.south) + 1 / Math.cos(rect.south)) / Math.PI) / 2 * n));
+            if ((xMax - xMin + 1) * (yMax - yMin + 1) <= 64) {
+              // apiFetch, not raw fetch: the prefetch is a same-origin backend
+              // POST and has to carry the auth header like every other one.
+              void apiFetch(
+                `/tiles/apple/prefetch?z=${nz}&x_min=${xMin}&y_min=${yMin}&x_max=${xMax}&y_max=${yMax}`,
+                { method: 'POST' },
+              ).catch(() => {});
+            }
+          }
+        }
       }, 180);
     };
     viewer.camera.moveStart.addEventListener(onMoveStart);
@@ -647,7 +669,7 @@ export function GlobeCanvas({
     const unsubRenderScale = useSettings.subscribe(applyQualitySettings);
     window.addEventListener('resize', toIdle);
     scene.globe.maximumScreenSpaceError = presetKnobs(useSettings.getState().mapQuality).idleSSE;
-    scene.globe.preloadSiblings = false;
+    scene.globe.preloadSiblings = true;
     // Terrain+imagery tile cache. Kept at the Cesium default (100): an earlier
     // bump to 1000 pushed VRAM the wrong way (these tiles are GPU textures, not
     // system RAM), which on a high-VRAM card let the cache balloon. 100 is a

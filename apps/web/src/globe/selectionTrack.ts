@@ -145,6 +145,12 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
     // primitive is updated, not recreated. No flash.
     removeSeed();
     if (!outlineEntity) {
+      // ponytail: GEODESIC for ground-clamped vessels (follows the surface);
+      // NONE for aircraft at altitude (straight Cartesian lines — segments are
+      // short enough that curvature is invisible, and NONE avoids the
+      // subdivision-density shift that makes the trail visually jump between
+      // zoom levels).
+      const arc = liveClamp ? Cesium.ArcType.GEODESIC : Cesium.ArcType.NONE;
       outlineEntity = ds.entities.add({
         id: '__selectionTrack__outline',
         polyline: {
@@ -152,12 +158,13 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
           width: 6,
           material: new Cesium.ColorMaterialProperty(OUTLINE),
           clampToGround: liveClamp,
-          arcType: Cesium.ArcType.GEODESIC,
+          arcType: arc,
           distanceDisplayCondition: SHOW_RANGE,
         },
       });
     }
     if (!glowEntity) {
+      const arc = liveClamp ? Cesium.ArcType.GEODESIC : Cesium.ArcType.NONE;
       glowEntity = ds.entities.add({
         id: '__selectionTrack__',
         polyline: {
@@ -169,7 +176,7 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
             taperPower: 1.0,
           }),
           clampToGround: liveClamp,
-          arcType: Cesium.ArcType.GEODESIC,
+          arcType: arc,
           distanceDisplayCondition: SHOW_RANGE,
         },
       });

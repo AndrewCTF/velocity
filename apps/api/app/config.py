@@ -127,7 +127,7 @@ class Settings(BaseSettings):
     # adsb_feed_interval_s is gentle AND keeps positions fresh — stale fixes are
     # what make tracked aircraft jump. Rate-limit-sensitive /v2 APIs (adsb.lol)
     # use the slow interval; a localhost sidecar uses the fast one.
-    adsb_feed_interval_s: float = 5.0  # full aircraft.json mirrors
+    adsb_feed_interval_s: float = 3.0  # full aircraft.json mirrors
     adsb_feed_slow_interval_s: float = 20.0  # /v2 + /re-api APIs (rate-limited)
     adsb_feed_fast_interval_s: float = 1.0  # localhost sidecar (no limit)
     # Sidecar-only mode. The headless-browser tar1090 sidecar (:8090, started by

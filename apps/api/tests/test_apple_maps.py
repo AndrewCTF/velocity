@@ -105,6 +105,6 @@ def test_route_serves_the_tile_and_refuses_commercial(
             # sources — is refused rather than quietly served.
             r2 = c.get("/tiles/apple/12/3638/1612.jpg", headers={"X-Velocity-Tier": "paid"})
             assert r2.status_code == 451
-            assert c.get("/tiles/apple/22/1/1.jpg").status_code == 400
+            assert c.get("/tiles/apple/20/1/1.jpg").status_code == 400
     finally:
         app.dependency_overrides.clear()

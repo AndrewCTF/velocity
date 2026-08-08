@@ -54,6 +54,9 @@ _NONCE_CHARS = string.ascii_letters + string.digits
 _IV = b"\x00" * 16
 # A signed URL is minted with a +4200 s expiry; re-bootstrap well inside that.
 _SESSION_TTL_S = 3000.0
+# Apple's CDN tolerates ~20 concurrent requests fine; gate higher bursts (a
+# cold pan fires 50-70 unique tiles) so we never trigger throttling.
+_FETCH_SEMAPHORE = asyncio.Semaphore(24)
 
 
 # ── protobuf wire reader ────────────────────────────────────────────────────
@@ -129,9 +132,10 @@ class Session:
         access_key = f"{expiry}_{nonce}_{base64.b64encode(ct).decode()}"
         return f"{url}{sep}sid={self.sid}&accessKey={quote(access_key)}"
 
-    def tile_url(self, z: int, x: int, y: int, scale: int = 1) -> str:
+    def tile_url(self, z: int, x: int, y: int) -> str:
+        # size=2 → 512×512 tiles (retina); scale is ignored for satellite.
         return self.sign(
-            f"{self.host}?style={SAT_STYLE}&size=1&scale={scale}"
+            f"{self.host}?style={SAT_STYLE}&size=2&scale=1"
             f"&x={x}&y={y}&z={z}&v={self.version}"
         )
 
@@ -192,18 +196,23 @@ async def session(force: bool = False) -> Session:
 async def fetch_tile(z: int, x: int, y: int) -> bytes | None:
     """One satellite tile, or None if Apple would not serve it.
 
+    size=2 → 512×512 tiles (retina); the Cesium provider keeps its default 256
+    tile grid so the extra pixels become sharper textures, same as the Carto @2x
+    basemap already does.
+
     A 401/403/410 means the session or the style version has moved on, so the
     manifest is re-read once and the tile retried — the alternative is a basemap
     that goes blank until the process restarts.
     """
-    for attempt in (0, 1):
-        s = await session(force=attempt == 1)
-        try:
-            r = await get_client().get(s.tile_url(z, x, y))
-        except Exception:
-            return None
-        if r.status_code == 200 and r.content:
-            return r.content
-        if r.status_code not in (401, 403, 410):
-            return None
-    return None
+    async with _FETCH_SEMAPHORE:
+        for attempt in (0, 1):
+            s = await session(force=attempt == 1)
+            try:
+                r = await get_client().get(s.tile_url(z, x, y))
+            except Exception:
+                return None
+            if r.status_code == 200 and r.content:
+                return r.content
+            if r.status_code not in (401, 403, 410):
+                return None
+        return None

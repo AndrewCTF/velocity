@@ -895,6 +895,46 @@ removes the direct fallback, pool outranks WARP, SSRF check before the sidecar,
 jemalloc scrubbed from the Chrome env, supervise cancel-safe, an operator's own
 tunnel survives our shutdown). Baseline 2141 → 2162.
 
+## Every backend route needs a UI address or a stated exception (2026-08-08)
+
+The operator's report was that the backend had grown a lot of capability the
+product could not reach. Measured: 373 routes under `apps/api/app/routes`, 87
+with no caller anywhere in `apps/web/src`. The report was right about the shape
+and wrong about the example — Gaussian splatting was already wired
+(`city/satToSplat.ts` → `CityApp` → the City 3D tab), and the 36 `/api/osint/*`
+connectors were reachable through the `POST /api/osint/investigate` fan-out
+that composes them server-side.
+
+The real dark set was the analysis layer: the whole `intel.py` analytics
+cluster (density, jamming, anomalies, deception, emitter, baseline,
+incident-history, area bundle, aircraft/vessel queries, loaded AOIs, feed
+health), all four routing modes, the SAR sweep, imagery availability and
+tasking providers, `status/perf` + `status/provenance`, the movement diff, and
+a dozen reference feeds.
+
+Decision: they go to the EXISTING address for a backend route with no map
+position — the Sources panel under Investigate — not into a new app. That panel
+already states the rule ("a source that earns a real reading graduates out of
+this list to the surface that reads it"), so a directory row is the honest
+first home, and a bespoke panel per analytic is the thing to build when one
+earns it. The 36 connectors got one row with a connector picker rather than 36
+near-identical rows.
+
+The guard is the durable part. `SourcesPanel.test.ts` held a hand-written list
+of one wave's routes, which cannot catch the next wave. `routeCoverage.test.ts`
+walks every `@router` decorator in `apps/api/app/routes` and fails on any route
+that is neither called from `apps/web/src` nor listed in its `EXEMPT` map with
+a reason. Twelve exceptions are recorded (liveness probes, POST/agent-driven
+side effects, an image proxy consumed as a URL, one alias, one route built from
+a template literal the search cannot see). A stale `EXEMPT` key also fails, so
+the list cannot outlive its routes.
+
+Verified live: 38 of the 39 newly-addressed routes answered 200 against :8000
+(`/api/audit` 401s to bare curl by design — it is auth-gated and `apiFetch`
+carries the key), and a browser walkthrough of the panel ran the situation,
+anomalies, perf, provenance, SAR sweep, route-candidates and DNS-connector rows
+with real bodies rendered.
+
 ## Backend test baseline history
 
 - 2207 + 2 skipped — 2026-08-05, gotham-console-mockup, corroboration wave

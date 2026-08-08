@@ -25,6 +25,20 @@ def _terrarium_png(elev_m: float) -> bytes:
     return buf.getvalue()
 
 
+def _mini_jpeg(color: tuple[int, int, int] = (128, 64, 32)) -> bytes:
+    """A valid 2x2 JPEG for PIL to decode in the stitcher."""
+    from PIL import Image
+
+    img = Image.new("RGB", (256, 256), color)
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=50)
+    return buf.getvalue()
+
+
+_EOX_JPEG = _mini_jpeg((40, 80, 40))
+_ESRI_JPEG = _mini_jpeg((80, 40, 40))
+
+
 @pytest.fixture
 def mock_upstream(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
     """Install an httpx MockTransport; yields the list of upstream URLs hit."""
@@ -36,9 +50,9 @@ def mock_upstream(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
         if "cartocdn" in host:
             return httpx.Response(200, content=b"\x89PNG-carto")
         if "eox.at" in host:
-            return httpx.Response(200, content=b"\xff\xd8-eox")
+            return httpx.Response(200, content=_EOX_JPEG)
         if "arcgisonline" in host:
-            return httpx.Response(200, content=b"\xff\xd8-esri")
+            return httpx.Response(200, content=_ESRI_JPEG)
         if "s3.amazonaws.com" in host:
             return httpx.Response(200, content=_terrarium_png(1234.0))
         return httpx.Response(404)
@@ -61,14 +75,30 @@ def test_basemap_second_call_is_disk_hit(client, mock_upstream: list[str]) -> No
 
 
 def test_sat_z_split_eox_low_esri_high(client, mock_upstream: list[str]) -> None:
+    # z=5 is below the stitch max (18), so the stitcher fetches four z=6 children.
+    # z=6 is still ≤ _SAT_SPLIT_Z (10) → all children come from EOX.
     r_low = client.get("/tiles/sat/5/10/12.jpg")
     assert r_low.status_code == 200
     assert r_low.headers["x-sat-source"] == "eox"
-    assert r_low.content == b"\xff\xd8-eox"
-    r_high = client.get("/tiles/sat/15/100/200.jpg")
+    # Stitched → 512×512 JPEG, not raw upstream bytes.
+    from PIL import Image
+
+    img = Image.open(BytesIO(r_low.content))
+    assert img.size == (512, 512)
+
+    # z=19 is above _SAT_STITCH_MAX_Z → serves the native 256px tile.
+    r_high = client.get("/tiles/sat/19/100/200.jpg")
     assert r_high.status_code == 200
     assert r_high.headers["x-sat-source"] == "esri"
-    assert r_high.content == b"\xff\xd8-esri"
+    img_high = Image.open(BytesIO(r_high.content))
+    assert img_high.size == (256, 256)
+
+    # z=15 (stitched, z+1=16 > split → Esri children)
+    r_mid = client.get("/tiles/sat/15/100/200.jpg")
+    assert r_mid.status_code == 200
+    assert r_mid.headers["x-sat-source"] == "esri"
+    img_mid = Image.open(BytesIO(r_mid.content))
+    assert img_mid.size == (512, 512)
 
 
 def test_terrain_transcodes_terrarium_to_mapbox_rgb(
