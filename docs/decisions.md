@@ -937,6 +937,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2255 + 2 skipped — 2026-08-08, gotham-console-mockup, feed-cadence fix
 - 2207 + 2 skipped — 2026-08-05, gotham-console-mockup, corroboration wave
 - 2141 + 2 skipped — 2026-07-31, repo-setup-ui-access, upstream proxy pool wave
 - 2108 + 2 skipped — 2026-07-30, overnight-provenance-answers-2026-07-29

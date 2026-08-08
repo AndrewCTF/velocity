@@ -52,8 +52,8 @@ undo and why it was made.
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **2255 passed + 2 skipped in ~134 s** (skip = opt-in live probes;
-  measured 2026-08-08, branch gotham-console-mockup, feed-cadence fix).
+  Baseline: **2308 passed + 2 skipped in ~136 s** (skip = opt-in live probes;
+  measured 2026-08-08, branch gotham-parity-2026-08, ontology schema + search).
   Runs SERIAL by default: `-n auto --dist
   loadfile` groups different files per worker on different core counts, so a
   suite with module-state leaks answers differently per machine and CI (4 cores)

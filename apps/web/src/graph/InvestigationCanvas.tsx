@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInvestigation } from './investigationStore.js';
 import { GraphHistory } from './GraphHistory.js';
 import { useSelection } from '../state/stores.js';
+import { relLabel, useOntologySchema } from '../state/ontologySchema.js';
 import { apiFetch } from '../transport/http.js';
 import { search, LOCATION_KINDS } from '../transport/search.js';
 import { SectionLabel, Btn, MicroLabel, Badge } from '../shell/instruments.js';
@@ -676,6 +677,7 @@ function GraphView({
   // Layout state lives in a ref (mutated by the rAF loop) with a render tick to
   // flush positions to React. Nodes persist across re-renders so expansion
   // doesn't reset the layout — new nodes are seeded near the centre.
+  const ontSchema = useOntologySchema();
   const nodesRef = useRef<Map<string, LNode>>(new Map());
   const warmRef = useRef(0);
   const rafRef = useRef<number | null>(null);
@@ -824,7 +826,12 @@ function GraphView({
                   fontSize={6.5}
                   fill="var(--txt-3)"
                 >
-                  {e.rel}
+                  {/* Read the edge from the node the analyst expanded out of.
+                      An edge whose ROOT is the target is being traversed
+                      backwards, so it gets the relation's other name — a
+                      `person --officer_of--> org` edge expanded from the org
+                      reads "has officer", not "officer of". */}
+                  {relLabel(ontSchema, e.rel, e.dst === rootId)}
                 </text>
               </g>
             );

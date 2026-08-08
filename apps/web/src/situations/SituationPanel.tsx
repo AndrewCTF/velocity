@@ -16,6 +16,7 @@ import {
 } from '../shell/instruments.js';
 import { useSituations, type Severity, type Status, type Situation } from './situationStore.js';
 import { useSelection } from '../state/stores.js';
+import { relLabel, useOntologySchema } from '../state/ontologySchema.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { apiFetch } from '../transport/http.js';
 import { toast } from '../shell/toast.js';
@@ -438,6 +439,8 @@ function PropertiesTab({
 }
 
 function LinkTab({ id, links }: { id: string; links: OntLink[] }): JSX.Element {
+  // A situation owns its outgoing edges, so every row here reads forwards.
+  const ontSchema = useOntologySchema();
   return (
     <div className="p-4">
       <Widget
@@ -456,7 +459,7 @@ function LinkTab({ id, links }: { id: string; links: OntLink[] }): JSX.Element {
             {links.map((lk, i) => (
               <li key={`${lk.src}-${lk.dst}-${i}`} className="mono text-[10px] text-txt-2 truncate">
                 <span className="text-txt-3">{lk.src.replace(/^situation:/, '◈')}</span>
-                <span className="text-accent"> —{lk.rel}→ </span>
+                <span className="text-accent"> —{relLabel(ontSchema, lk.rel)}→ </span>
                 <span className="text-txt-1">{lk.dst}</span>
               </li>
             ))}
