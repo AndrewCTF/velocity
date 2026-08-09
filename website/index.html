@@ -17,7 +17,8 @@
   --pop:cubic-bezier(.2,.9,.3,1.15);
 }
 *{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth;background:var(--ink)}
+html{background:var(--ink)}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 body{background:var(--bg);color:var(--ink);font-family:var(--f1);font-size:16px;line-height:1.5;overflow-x:hidden}
 img{display:block;max-width:100%}
 a{color:inherit;text-decoration:none}
@@ -30,16 +31,13 @@ button{font-family:inherit;cursor:pointer;background:none;border:none;color:inhe
 .reveal.in{opacity:1;transform:none}
 
 /* nav */
-.nav{position:fixed;z-index:100;top:18px;left:28px;right:28px;height:64px;display:flex;align-items:center;justify-content:space-between;
-  transition:transform .45s var(--ease)}
-.nav.hide{transform:translateY(-170%)}
+.nav{position:absolute;z-index:100;top:18px;left:28px;right:28px;height:64px;display:flex;align-items:center;justify-content:space-between}
 .nav-pill{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:5px;border-radius:999px;
   background:rgba(255,255,255,.07);
   backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);
   border:1px solid rgba(255,255,255,.16);
   box-shadow:0 8px 32px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.2)}
 .brand{display:flex;align-items:center;gap:11px;color:#fff;font-family:var(--f2);font-size:21px;font-weight:700;letter-spacing:2.5px;transition:opacity .3s,visibility .3s}
-.on-light .brand{opacity:0;visibility:hidden;pointer-events:none}
 .brand:hover{opacity:.75}
 .brand svg{display:block;flex:none}
 .btn{height:40px;padding:0 24px;background:#fff;color:var(--ink);border:1px solid var(--ink);font-size:16px;
@@ -70,21 +68,6 @@ button{font-family:inherit;cursor:pointer;background:none;border:none;color:inhe
 .icon-btn:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.32)}
 .icon-btn:active{transform:scale(.95)}
 .icon-btn svg{stroke:#fff;display:block}
-.on-light .nav-pill,.on-light .icon-btn{
-  background:rgba(30,33,36,.1);
-  border-color:rgba(30,33,36,.16);
-  box-shadow:0 8px 28px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.4)}
-.on-light .gh-btn{
-  background:rgba(30,33,36,.78);
-  border-color:rgba(30,33,36,.85);
-  box-shadow:0 10px 30px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.18)}
-.on-light .gh-btn:hover{background:rgba(30,33,36,.9)}
-.on-light .icon-btn:hover{background:rgba(30,33,36,.18);border-color:rgba(30,33,36,.3)}
-.on-light .nav-links a{color:var(--ink)}
-.on-light .nav-links a:hover{background:rgba(30,33,36,.1)}
-.on-light .nav-search svg{stroke:var(--ink)}
-.on-light .nav-div{background:rgba(30,33,36,.18)}
-
 /* hero */
 .hero{position:relative;height:calc(100vh + 48px);min-height:640px;overflow:hidden;background:#0d0e10}
 .hero-media{position:absolute;inset:0;animation:kenburns 10s var(--ease) forwards}
@@ -120,6 +103,8 @@ button{font-family:inherit;cursor:pointer;background:none;border:none;color:inhe
 .slide-media{position:relative;flex:1;overflow:hidden}
 .slide-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:translateX(var(--pan,70px)) scale(1.05);transition:opacity .5s var(--ease),transform 1.2s var(--ease)}
 .slide-media img.show{opacity:1;transform:none}
+.slide-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s var(--ease)}
+.slide-media video.show{opacity:1}
 .slide-veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(30,33,36,.2),rgba(30,33,36,.45))}
 .slide-card{position:absolute;left:24px;top:24px;z-index:2;width:min(600px,80%);background:rgba(20,22,25,.5);backdrop-filter:blur(8px);padding:24px;color:#fff;border-radius:4px}
 .slide-tag{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:.75;margin-bottom:12px}
@@ -171,8 +156,8 @@ button{font-family:inherit;cursor:pointer;background:none;border:none;color:inhe
 .careers{padding:110px 0 120px}
 .careers-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:80px;align-items:center}
 .careers-img{overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.22)}
-.careers-img img{width:100%;display:block;object-fit:cover;transition:transform 1.2s var(--ease)}
-.careers-grid:hover .careers-img img{transform:scale(1.04)}
+.careers-img img,.careers-img video{width:100%;display:block;object-fit:cover;transition:transform 1.2s var(--ease)}
+.careers-grid:hover .careers-img img,.careers-grid:hover .careers-img video{transform:scale(1.04)}
 .careers-txt{text-align:left}
 .careers-eyebrow{font-family:var(--f2);font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:24px}
 .careers-txt h2{font-family:var(--f1);font-size:clamp(36px,3.8vw,58px);line-height:1.08;letter-spacing:-.025em;margin-bottom:26px}
@@ -188,7 +173,7 @@ button{font-family:inherit;cursor:pointer;background:none;border:none;color:inhe
 .partners h2{font-size:clamp(30px,3.6vw,52px);letter-spacing:-.01em;max-width:760px;line-height:1.12;margin-bottom:44px}
 .marquee{display:flex;gap:20px;width:max-content;animation:scroll 60s linear infinite;padding:0 10px}
 .marquee:hover{animation-play-state:paused}
-@keyframes scroll{to{transform:translateX(-50%)}}
+@keyframes scroll{to{transform:translateX(-33.3333%)}}
 .quote{width:300px;flex:none;background:#fff;padding:22px;display:flex;flex-direction:column;gap:16px;border:1px solid var(--line);transition:transform .3s var(--ease),box-shadow .3s}
 .quote:hover{transform:translateY(-5px);box-shadow:0 16px 36px rgba(0,0,0,.08)}
 .quote h3{font-family:var(--f2);font-size:14px;letter-spacing:1.5px}
@@ -257,6 +242,13 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
   .careers-grid{grid-template-columns:1fr}
   .ctas{grid-template-columns:1fr}
 }
+@media(max-width:640px){
+  .updates .wrap{padding:0 16px}
+  .slide{padding:20px 14px 0}
+  .dot{width:13px}
+  .stage-dots{gap:5px}
+  .stage-btn{width:40px;height:40px}
+}
 </style>
 </head>
 <body>
@@ -311,6 +303,7 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
       <div class="slide" id="slide">
         <div class="slide-media">
           <img id="slideImg" class="show" src="" alt="" />
+          <video id="slideVid" muted loop playsinline preload="none" aria-hidden="true"></video>
           <div class="slide-veil"></div>
           <div class="slide-card">
             <div class="slide-tag" id="slideTag"></div>
@@ -341,7 +334,7 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
 
 <section class="careers" id="archive">
   <div class="wrap careers-grid">
-    <div class="careers-img reveal"><img src="assets/replay-live.jpg" alt="Velocity replaying recorded traffic from your own disk" /></div>
+    <div class="careers-img reveal"><video autoplay muted loop playsinline preload="metadata" poster="assets/replay-live.jpg" aria-label="Velocity replaying recorded traffic from your own disk"><source src="assets/replay-live.webm" type="video/webm" /><source src="assets/replay-live.mp4" type="video/mp4" /></video></div>
     <div class="careers-txt reveal">
       <div class="careers-eyebrow">The Archive</div>
       <h2>History nobody can take back</h2>
@@ -404,15 +397,15 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
 
 <script>
 const SLIDES=[
- {tab:"Air",tag:"AIR",title:"13,000 aircraft on a typical day — ADS-B from OpenSky and airplanes.live, including ~140 military",img:"assets/band-air.jpg",chip:"Live · the North Sea and Baltic, one second of the feed"},
- {tab:"Maritime",tag:"MARITIME",title:"33,000 vessels a day — keyless AIS, MMSI-deduplicated across public feeds",img:"assets/plate-europe-dense.jpg",chip:"Live · keyless AIS over northern Europe"},
- {tab:"Space",tag:"SPACE",title:"16,000 orbital objects propagated in-browser with real SGP4 physics",img:"assets/hero-satellites.jpg",chip:"Live · real SGP4 propagation in your browser"},
- {tab:"Hazards",tag:"HAZARDS",title:"Quakes, wildfires, storms and outages — 250 events a day on the same timeline",img:"assets/plate-orbit-wide.jpg",chip:"Live · USGS + GDELT on one timeline"},
- {tab:"Signals",tag:"SIGNALS",title:"GPS jamming inferred from ADS-B degradation — 200 cells flagged at a time",img:"assets/hero-selected-track.jpg",chip:"Live · jamming cells from ADS-B degradation"},
- {tab:"Infrastructure",tag:"INFRASTRUCTURE",title:"7,183 military bases, 3,804 ports, submarine cables — 53 country toolkits",img:"assets/rail-layers.jpg",chip:"Reference · 7,183 bases, 3,804 ports, submarine cables"},
- {tab:"Archive",tag:"THE ARCHIVE",title:"History nobody can take back — replay bounded only by your disk",img:"assets/replay-live.jpg",chip:"Replay · the last hour, from your own disk"},
- {tab:"Agent",tag:"MCP AGENT",title:"Give your agent real eyes — 46 MCP tools over the live feeds",img:"assets/launch.jpg",chip:"MCP · 46 tools over the live feeds"},
- {tab:"Workspace",tag:"WORKSPACE",title:"Twelve apps, one workspace — the globe is the front door",img:"assets/ui-explorer.jpg",chip:"Apps · twelve, one live substrate"}
+ {tab:"Air",tag:"AIR · CINEMATIC",title:"13,000 aircraft on a typical day — ADS-B from OpenSky and airplanes.live, including ~140 military",img:"assets/band-air.jpg",vid:"assets/clip-jet.mp4",chip:"Live · the North Sea and Baltic, one second of the feed"},
+ {tab:"Maritime",tag:"MARITIME · CINEMATIC",title:"33,000 vessels a day — keyless AIS, MMSI-deduplicated across public feeds",img:"assets/plate-europe-dense.jpg",vid:"assets/clip-ship.mp4",chip:"Live · keyless AIS over northern Europe"},
+ {tab:"Space",tag:"SPACE",title:"16,000 orbital objects propagated in-browser with real SGP4 physics",img:"assets/hero-satellites.jpg",vid:"assets/hero-orbit.mp4",chip:"Live · real SGP4 propagation in your browser"},
+ {tab:"Hazards",tag:"HAZARDS · CINEMATIC",title:"Quakes, wildfires, storms and outages — 250 events a day on the same timeline",img:"assets/plate-orbit-wide.jpg",vid:"assets/clip-wildfire.mp4",chip:"Live · USGS + GDELT on one timeline"},
+ {tab:"Signals",tag:"SIGNALS · CINEMATIC",title:"GPS jamming inferred from ADS-B degradation — 200 cells flagged at a time",img:"assets/hero-selected-track.jpg",vid:"assets/clip-drone.mp4",chip:"Live · jamming cells from ADS-B degradation"},
+ {tab:"Infrastructure",tag:"INFRASTRUCTURE · CINEMATIC",title:"7,183 military bases, 3,804 ports, submarine cables — 53 country toolkits",img:"assets/rail-layers.jpg",vid:"assets/clip-city.mp4",chip:"Reference · 7,183 bases, 3,804 ports, submarine cables"},
+ {tab:"Archive",tag:"THE ARCHIVE",title:"History nobody can take back — replay bounded only by your disk",img:"assets/replay-live.jpg",vid:"assets/replay-live.mp4",chip:"Replay · the last hour, from your own disk"},
+ {tab:"Agent",tag:"MCP AGENT",title:"Give your agent real eyes — 46 MCP tools over the live feeds",img:"assets/launch.jpg",vid:"assets/launch.mp4",chip:"MCP · 46 tools over the live feeds"},
+ {tab:"Workspace",tag:"WORKSPACE",title:"Twelve apps, one workspace — the globe is the front door",img:"assets/ui-explorer.jpg",vid:"assets/console-live.mp4",chip:"Apps · twelve, one live substrate"}
 ];
 const ROWS=[
  ["Explorer","Query every live entity like a database.","assets/ui-explorer.jpg"],
@@ -445,11 +438,18 @@ SLIDES.forEach((s,i)=>{
  const b=document.createElement('button');b.className='tab';b.textContent=s.tab;b.onclick=()=>go(i);tabsEl.appendChild(b);
  const d=document.createElement('div');d.className='dot';d.onclick=()=>go(i);dotsEl.appendChild(d);
 });
+const vid=document.getElementById('slideVid');
+const noMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 function render(dir){
  const s=SLIDES[cur];
  img.style.setProperty('--pan',((dir<0)?-70:70)+'px');
  img.classList.remove('show');
  const nxt=new Image();nxt.src=s.img;nxt.onload=()=>{img.src=s.img;img.alt=s.title;img.classList.add('show')};
+ vid.classList.remove('show');vid.pause();vid.removeAttribute('src');vid.load();
+ if(s.vid&&!noMotion){
+  vid.src=s.vid;
+  vid.play().then(()=>vid.classList.add('show')).catch(()=>{});
+ }
  tag.textContent=s.tag;ttl.textContent=s.title;
  card.classList.remove('anim');void card.offsetWidth;card.classList.add('anim');
  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===cur));
@@ -479,7 +479,7 @@ ROWS.forEach(([name,desc,imgSrc],i)=>{
 
 /* partners marquee */
 const mq=document.getElementById('marquee');
-[...QUOTES,...QUOTES].forEach(([who,txt])=>{
+[...QUOTES,...QUOTES,...QUOTES].forEach(([who,txt])=>{
  const q=document.createElement('div');q.className='quote';
  q.innerHTML=`<h3>${who}</h3><p>${txt}</p>`;mq.appendChild(q);
 });
@@ -492,34 +492,21 @@ Object.entries(FOOT).forEach(([h,links],i)=>{
  fc.appendChild(c);
 });
 
-/* smooth lerp scroll */
-let st=scrollY,sraf=null;
-function sstep(){const y=scrollY,d=st-y;if(Math.abs(d)<.6){sraf=null;return}scrollTo(0,y+d*.085);sraf=requestAnimationFrame(sstep)}
-function lerpTo(top){st=Math.max(0,Math.min(document.documentElement.scrollHeight-innerHeight,top));if(!sraf)sraf=requestAnimationFrame(sstep)}
-function cancelLerp(){if(sraf){cancelAnimationFrame(sraf);sraf=null}}
-addEventListener('wheel',e=>{
- if(e.ctrlKey||document.body.style.overflow==='hidden')return;
- e.preventDefault();
- if(!sraf)st=scrollY;
- lerpTo(st+e.deltaY);
-},{passive:false});
-document.querySelectorAll('a[href^="#"]').forEach(a=>a.addEventListener('click',()=>cancelLerp()));
+/* native scrolling; anchors use CSS scroll-behavior:smooth */
+function lerpTo(top){scrollTo({top:Math.max(0,top),behavior:noMotion?'auto':'smooth'})}
 
 /* hero video fade-in when playing */
 const heroVid=document.getElementById('heroVideo');
-if(heroVid)heroVid.addEventListener('playing',()=>heroVid.classList.add('on'),{once:true});
-
-/* nav behaviour */
-const nav=document.getElementById('nav');let lastY=0;
-const darkZones=[...document.querySelectorAll('.hero,footer')];
-function navTick(){
- const y=scrollY;
- nav.classList.toggle('hide',y>160&&y>lastY);
- lastY=y;
- const probe=y+45;
- nav.classList.toggle('on-light',!darkZones.some(s=>probe>=s.offsetTop&&probe<s.offsetTop+s.offsetHeight));
+if(heroVid&&!noMotion)heroVid.addEventListener('playing',()=>heroVid.classList.add('on'),{once:true});
+if(noMotion)document.querySelectorAll('video[autoplay]').forEach(v=>{v.pause();v.removeAttribute('autoplay')});
+else{
+ const vio=new IntersectionObserver(es=>es.forEach(en=>{
+  if(en.isIntersecting)en.target.play().catch(()=>{});else en.target.pause();
+ }),{threshold:.15});
+ document.querySelectorAll('.careers-img video').forEach(v=>vio.observe(v));
 }
-addEventListener('scroll',navTick,{passive:true});navTick();
+
+/* nav is absolute over the hero; no scroll behaviour */
 
 /* overlays */
 const overlays=[document.getElementById('searchOverlay')];
