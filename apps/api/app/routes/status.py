@@ -25,8 +25,40 @@ router = APIRouter(tags=["status"])
 _AIRCRAFT_FLOOR = 8000
 
 
-def _feed(name: str, ok: bool, detail: str, **extra: Any) -> dict[str, Any]:
-    return {"name": name, "status": "green" if ok else "degraded", "detail": detail, **extra}
+def _feed(name: str, ok: bool | None, detail: str, **extra: Any) -> dict[str, Any]:
+    """One feed row. ``ok=None`` is the THIRD state and is not a synonym for green.
+
+    "Never attempted" used to render as green here, because two feeds were
+    hardcoded ``True`` and four more read a key being CONFIGURED as proof it
+    worked. A feed nobody has called yet is unknown, and saying so is the same
+    honesty rule the note at the bottom of this route already states about
+    coverage.
+    """
+    state = "unknown" if ok is None else ("green" if ok else "degraded")
+    return {"name": name, "status": state, "detail": detail, **extra}
+
+
+def _measured(host: str) -> tuple[bool | None, str]:
+    """(state, detail) for `host` from the upstream health registry.
+
+    Returns ``(None, ...)`` when the host has not been called this process —
+    which is a real answer, not a failure and not a pass.
+    """
+    try:
+        from app import upstream  # noqa: PLC0415
+
+        for row in upstream.source_health():
+            if row["host"] != host:
+                continue
+            if row["state"] == "ok":
+                age = row.get("success_age_s")
+                return True, f"last fetch OK{f' {age:.0f}s ago' if age is not None else ''}"
+            if row["state"] == "failing":
+                return False, f"last attempt failed: {row.get('last_error') or 'unknown'}"
+            return None, "no fetch attempted yet"
+    except Exception:  # noqa: BLE001 — status must never 500
+        return None, "health registry unavailable"
+    return None, "no fetch attempted yet"
 
 
 def _extra(payload: dict[str, Any]) -> dict[str, Any]:
@@ -97,6 +129,9 @@ async def status() -> dict[str, Any]:
         ais_stats.get("myshiptracking_vessels") or 0
     )
 
+    sar_state, sar_detail = _measured("catalogue.dataspace.copernicus.eu")
+    firms_state, firms_detail = _measured("firms.modaps.eosdis.nasa.gov")
+
     feeds = [
         _feed(
             "ADS-B aircraft (OpenSky + airplanes.live grid)",
@@ -149,16 +184,30 @@ async def status() -> dict[str, Any]:
             aircraft > 0,
             "Inference from ADS-B NACp/NIC degradation — not a direct RF/SIGINT cut.",
         ),
-        _feed("USGS earthquakes", True, "Keyless, always on."),
+        # Was hardcoded `True` with the detail "Keyless, always on." The 2026-08-20
+        # sweep is what made that indefensible: keyless does not mean reachable,
+        # and nothing here had ever checked. Now measured.
+        _feed(
+            "USGS earthquakes",
+            *_measured("earthquake.usgs.gov"),
+        ),
+        # Also previously hardcoded `True`. The coverage caveat is still true and
+        # still worth stating; whether the provider answered is now measured
+        # rather than asserted.
         _feed(
             "Sentinel-1 SAR dark-vessel",
-            True,
-            "Curated chokepoint AOIs only (e.g. Strait of Hormuz); ~6 h revisit.",
+            sar_state,
+            "Curated chokepoint AOIs only (e.g. Strait of Hormuz); ~6 h revisit · "
+            + sar_detail,
         ),
+        # `bool(firms_map_key)` answered "is a key set", never "does it work".
+        # A revoked or rate-limited key read green here indefinitely.
         _feed(
             "NASA FIRMS fires",
-            bool(s.firms_map_key),
-            "Key configured." if s.firms_map_key else "Needs MAP_KEY (degrades off).",
+            firms_state if s.firms_map_key else False,
+            ("Key configured · " + firms_detail)
+            if s.firms_map_key
+            else "Needs MAP_KEY (degrades off).",
         ),
         _feed(
             "AISStream global AIS",
@@ -396,6 +445,89 @@ async def status_provenance() -> dict[str, Any]:
         }
     except Exception:  # noqa: BLE001 — diagnostics must never 500
         out["aircraft"] = {"error": "unavailable"}
+    return out
+
+
+# ── /api/status/sources ──────────────────────────────────────────────────────
+
+# Upstream calls that do NOT go through the shared client, and so cannot appear
+# in the registry below. Naming them is the point: a health page that lists only
+# what it can see, without saying what it cannot, is the same overclaim in a new
+# place. The localhost sidecar probes (adsb_sidecar, ais_sidecar, browser_fetch,
+# llamacpp/vllm/mavlink, ai_models) are deliberately omitted — they are covered
+# by the sidecar entries in /api/status and are not external sources.
+#
+# routes/adsb.py:1140 is first because it matters most: it is the SYNC client
+# behind the ADS-B feed path, the highest-value feed on the platform, and
+# _fetch_one_feed_sync swallows every failure into an empty aircraft list.
+# → guarded by tests/test_feed_honesty.py
+_UNMEASURED: list[tuple[str, str]] = [
+    ("routes/adsb.py:1140",
+     "sync ADS-B feed client (thread-bound; the async client cannot be used there)"),
+    ("adsb_fr24.py:199", "FR24 tier"),
+    ("adsb_opensky_gaps.py:243", "OpenSky gap filler"),
+    ("correlate/runner.py:215", "correlation runner"),
+    ("imagery/vhr.py:42", "VHR imagery provider"),
+    ("llm.py:402", "hosted LLM"),
+    ("llm.py:536", "hosted LLM (streaming)"),
+    ("localllm/binary.py:149", "local model binary download"),
+    ("mcp_server.py:221", "MCP self-call"),
+    ("mcp_server.py:248", "MCP self-call"),
+    ("mcp_server.py:303", "MCP self-call"),
+    ("mcp_server.py:331", "MCP self-call"),
+    ("mcp_server.py:350", "MCP self-call"),
+    ("keys.py:187", "API-key validation probe"),
+    ("auth.py:131", "Supabase JWKS fetch"),
+    ("warp.py:127", "WARP tunnel health"),
+    ("workflows/control.py:70", "operator-configured outbound actuation"),
+]
+
+
+@router.get("/api/status/sources")
+async def status_sources() -> dict[str, Any]:
+    """Measured per-upstream health: who answered, who failed, and how long ago.
+
+    Every other health surface on this platform is an ASSERTION. /api/status
+    hardcoded two feeds green and inferred four more from a key being present in
+    the config rather than from a fetch that worked; /api/health is the constant
+    ``{"status": "ok"}``. Before this endpoint the process recorded last_success
+    for zero of its ~100 upstreams.
+
+    This is the measurement instead. Rows come from app.upstream's registry,
+    written on every request through the shared client, so a host appears here
+    because it was actually called - not because someone listed it.
+
+    Read `unmeasured` as part of the answer, not a footnote: those upstreams
+    build their own httpx client and are invisible here.
+
+    Diagnostics contract, same as its siblings: never 500, never triggers a
+    fan-out of its own.
+    """
+    out: dict[str, Any] = {"as_of": time.time()}
+    try:
+        from app import upstream  # noqa: PLC0415
+
+        rows = upstream.source_health()
+        out["sources"] = rows
+        out["counts"] = {
+            "total": len(rows),
+            "ok": sum(1 for r in rows if r["state"] == "ok"),
+            "failing": sum(1 for r in rows if r["state"] == "failing"),
+            "unknown": sum(1 for r in rows if r["state"] == "unknown"),
+        }
+    except Exception:  # noqa: BLE001 — diagnostics must never 500
+        out["sources"] = []
+        out["counts"] = {"error": "unavailable"}
+    out["unmeasured"] = [{"where": w, "what": d} for w, d in _UNMEASURED]
+    out["note"] = (
+        "One row per upstream HOST, recorded at the shared client. A row is one "
+        "logical request: redirect hops, the transport's single retry and the "
+        "WARP tunnel-to-direct fallback collapse into one, so a WARP fallback "
+        "reads here as a clean success. Latency for streamed responses is "
+        "headers-only. State is measured, never inferred from configuration: "
+        "'unknown' means never attempted this process and is not a synonym for "
+        "healthy."
+    )
     return out
 
 

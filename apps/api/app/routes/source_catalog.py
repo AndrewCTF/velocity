@@ -611,7 +611,7 @@ async def kiwisdr_stations() -> dict[str, Any]:
         try:
             text = await fg.fetch_text(KIWISDR_URL)
         except Exception:
-            return fg.fc([])
+            return fg.degraded_fc("The KiwiSDR receiver list did not answer.")
         match = re.search(r"var\s+kiwisdr_com\s*=\s*(\[.*\])", text, re.DOTALL)
         if not match:
             return fg.fc([])
@@ -681,7 +681,7 @@ async def splat_search(
                 },
             )
         except Exception:
-            return {"results": [], "count": 0}
+            return fg.degraded({"results": [], "count": 0}, "The upstream did not answer.")
         results = (raw or {}).get("results", [])
         return {
             "count": len(results),
@@ -720,7 +720,8 @@ async def hf_splat_datasets(
         try:
             raw = await fg.fetch_json(HF_URL, params={"search": q, "limit": "30"})
         except Exception:
-            return {"datasets": [], "count": 0}
+            return fg.degraded({"datasets": [], "count": 0},
+                               "The Hugging Face dataset search did not answer.")
         items = raw if isinstance(raw, list) else []
         return {
             "count": len(items),

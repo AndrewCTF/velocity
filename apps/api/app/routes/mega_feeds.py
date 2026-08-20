@@ -109,7 +109,7 @@ async def mineral_sites(
             text = await fg.fetch_text(MRDS_URL, params=params)
             root = ET.fromstring(text)
         except Exception:
-            return fg.fc([])
+            return fg.degraded_fc("The USGS MRDS feed did not answer.")
         out: list[fg.Feature] = []
         for member in root.iter(f"{_GML_NS}featureMember"):
             site = member.find(f"{_MS_NS}mrds")
@@ -254,7 +254,7 @@ async def wikimapia(
         try:
             raw = await fg.fetch_json(WIKIMAPIA_URL, params=params)
         except Exception:
-            return fg.fc([])
+            return fg.degraded_fc("Wikimapia did not answer.")
         folders = (raw or {}).get("folder", [])
         out: list[fg.Feature] = []
         for f in folders or []:
@@ -337,7 +337,7 @@ async def courtlistener(q: str = Query(..., max_length=200)) -> dict[str, Any]:
                 params={"q": q, "type": "o", "format": "json"},
             )
         except Exception:
-            return {"count": 0, "results": []}
+            return fg.degraded({"count": 0, "results": []}, "CourtListener did not answer.")
         results = (raw or {}).get("results", [])
         return {
             "count": (raw or {}).get("count", len(results)),
@@ -476,7 +476,7 @@ async def fr24_search(q: str = Query(..., max_length=32)) -> dict[str, Any]:
         try:
             raw = await fg.fetch_json(FR24_URL, params={"query": q, "limit": "20"})
         except Exception:
-            return {"results": []}
+            return fg.degraded({"results": []}, "The FR24 search endpoint did not answer.")
         results = (raw or {}).get("results", [])
         return {
             "count": len(results),
@@ -644,7 +644,10 @@ async def gdelt_summary(q: str = Query("conflict", max_length=200)) -> dict[str,
                 params={"d": q, "output": "json"},
             )
         except Exception:
-            return {"summary": {}}
+            # Was a bare `{"summary": {}}` cached for the full 600 s TTL below,
+            # so one failed fetch silently emptied this route for ten minutes.
+            # fg.cached now caps an empty answer's TTL; this states the reason.
+            return fg.degraded({"summary": {}}, "GDELT did not answer.")
 
     return await fg.cached(f"gdelt_summary:{q}", 600.0, load)
 
@@ -768,7 +771,8 @@ async def gpsjam_manifest() -> dict[str, Any]:
                 headers={"Accept-Encoding": "gzip, deflate"},
             )
         except Exception:
-            return {"dates": [], "count": 0}
+            return fg.degraded({"dates": [], "count": 0},
+                               "The ESRI Wayback manifest did not answer.")
         reader = csv.reader(io.StringIO(text))
         dates: list[str] = []
         for row in reader:

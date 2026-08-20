@@ -895,6 +895,99 @@ removes the direct fallback, pool outranks WARP, SSRF check before the sidecar,
 jemalloc scrubbed from the Chrome env, supervise cancel-safe, an operator's own
 tunnel survives our shutdown). Baseline 2141 → 2162.
 
+## A feed may be empty. It may not be empty and silent about why (2026-08-20)
+
+The 2026-08-08 entry below asked whether every route had a UI address. This one
+asks the next question: when a route DOES answer, is the answer true?
+
+**What was measured.** A new sweep (`tools/perf/sweep_api.py`) enumerates every
+GET route from `/openapi.json` and classifies what comes back. 319 GET routes in
+the schema, 208 swept, 111 skipped and named. 21 defects, of which **16 answered
+HTTP 200 with an empty body**. Nothing in the process could say which of those
+had a dead upstream behind them and which were simply empty stores on a fresh
+boot, because the API recorded `last_success` for **zero** of its ~100 upstreams
+and `last_error` for two (`marinetraffic.py`, `warp.py`).
+
+Meanwhile `/api/status` asserted health for nine feeds. Two were hardcoded
+`True` ("USGS earthquakes — Keyless, always on."), four more read a key being
+CONFIGURED as proof it worked, and `/api/health` — which the Docker healthcheck
+depends on — is the constant `{"status": "ok"}`.
+
+**What the measurement found the moment it existed.** 99 upstream hosts called
+in one sweep, **19 failing**: `api.airplanes.live` 0 ok / 115 failed (HTTP 403),
+`opendata.adsb.fi` 3/84, `celestrak.org` 0/6 (403), `overpass-api.de` 0/6
+(ReadTimeout), `www.gdacs.org` 0/7, `api.reliefweb.int` 0/6 (406),
+`api.gdeltproject.org` 0/13 (ConnectTimeout). Two ADS-B tiers were 100% blocked
+and the console called the ADS-B feed green, because the snapshot count was
+healthy on the tiers that still worked. Caveat kept deliberately: a sweep is a
+burst, and CelesTrak and Wikidata are documented to punish bursts, so some of
+those counts are partly self-inflicted — which is why the sweep caps concurrency
+and treats the SECOND pass as canonical.
+
+**The decision.** Health is measured at the one shared choke point, or it is not
+claimed.
+
+- `upstream.py` gains a bounded per-host registry written by
+  `_InstrumentedClient`, an `httpx.AsyncClient` subclass overriding `send()`.
+  Every one of the 113 `get_client()` call sites is covered by that one override.
+- **Not an httpx event hook.** A response hook fires only after
+  `_send_single_request` returns, so `ConnectError` / `ReadTimeout` never reach
+  it: a hook-based registry reads green precisely when an upstream is
+  unreachable. `response.elapsed` also raises inside a hook, and an exception
+  thrown in one aborts the request for all 113 callers. This was the first
+  design and it was wrong; `tests/test_feed_honesty.py::test_connect_error_is_recorded`
+  is the guard that would have caught it.
+- **Not a transport wrapper.** `proxy_stats()` isinstance-checks
+  `_CLIENT._transport`, and a wrapper would have to cover every mount or miss
+  the proxied and per-host-WARP hosts — the ones most likely to fail.
+- `record_failure()` is public because the wire is not the whole truth:
+  airplanes.live throttles with HTTP 200 + `text/plain`, which every
+  client-level capture point records as a success. `_feedgeo` is the layer that
+  knows a 200 was not an answer, so it reports that case itself.
+- `GET /api/status/sources` publishes the registry, **including an `unmeasured`
+  list** naming the 17 upstreams that build their own httpx client — first among
+  them `routes/adsb.py:1140`, the sync client behind the platform's most
+  important feed. A health page that lists only what it can see, without saying
+  what it cannot, is the same overclaim in a new place.
+- `/api/status` stops asserting. `_feed()` takes `ok: bool | None`, and
+  **`None` renders as `unknown`, not green** — "never attempted" is a third
+  state, and conflating it with healthy is the original defect.
+- An empty answer is no longer pinned. The swallow sits INSIDE the loader passed
+  to `fg.cached`, so the empty was a normal successful value stored for the full
+  TTL: GDELT's summary pinned `{"summary": {}}` for 10 minutes after one failed
+  fetch. `cached()` now caps an empty result at 45 s using the existing
+  `cache.shorten`, once, instead of asking 127 loaders to remember.
+- Ten swallow sites now answer with `fg.degraded_fc(...)` / `fg.degraded(...)`
+  — the shape `routes/events.py` already used — instead of a bare `fc([])`.
+  `spacewx.py` is exempted in the guard WITH its reason: three NOAA sub-feeds
+  merge into one collection and it has no per-sub-feed slot to report into.
+- `scripts/verify.sh --live` sidecar probe now sets FAIL. It printed
+  ":8090 NOT answering" and exited ALL GREEN, which is how a silently empty feed
+  tier survives the probe written to catch it.
+
+**Rejected:** migrating the 17 ad-hoc clients (each carries its own
+timeout/proxy policy — a separate change), persisting health across restarts,
+and a metrics backend. The registry is process-lifetime memory, bounded at 512
+hosts because host keys are attacker-influenceable through any route that
+fetches a user-supplied URL.
+
+**Guards:** `apps/api/tests/test_feed_honesty.py` — the ConnectError case, the
+success/HTTP-error split, `unknown` is not healthy, the bound holds, 200+non-JSON
+is recorded, the `_UNMEASURED` list matches the tree (anti-rot, both directions),
+and no `_feedgeo` caller swallows into a bare empty without a stated exception.
+Also removed a stale exemption in `routeCoverage.test.ts`: it excused
+`/api/status/doctor` as "called by scripts/verify.sh --live", which verify.sh
+never did — the real caller is `DegradedBanner.tsx` and is inside the scanned
+blob, so the entry was both wrong and redundant.
+
+Ledger: `docs/audits/2026-08-20-api-sweep.md`, regenerated by
+`apps/api/.venv/bin/python tools/perf/sweep_api.py --twice`. Note the sweep's own
+safety rule: **GET-only is NOT the safety boundary on this app.**
+`GET /api/intel/baseline` writes a sample into the anomaly baseline store and
+`GET /api/maritime/keyless` writes into the last-write-wins vessel store, so the
+skip list is `ratelimit.is_compute_path` plus four named mutating GETs, and every
+skip is reported with its reason rather than dropped.
+
 ## Every backend route needs a UI address or a stated exception (2026-08-08)
 
 The operator's report was that the backend had grown a lot of capability the
@@ -937,6 +1030,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2393 + 2 skipped — 2026-08-08, gotham-parity-2026-08, connection wire coverage
 - 2390 + 2 skipped — 2026-08-08, gotham-parity-2026-08, SQL connection coverage
 - 2386 + 2 skipped — 2026-08-08, gotham-parity-2026-08, MQTT socket coverage
 - 2377 + 2 skipped — 2026-08-08, gotham-parity-2026-08, analyst-surface wave

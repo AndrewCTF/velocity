@@ -99,7 +99,13 @@ def test_kiwisdr_reads_a_js_literal_and_always_answers_a_collection(
 
     monkeypatch.setattr(fg, "fetch_text", boom)
     dead = asyncio.run(sc.kiwisdr_stations())
-    assert dead == {"type": "FeatureCollection", "features": []}
+    # Still a well-formed collection, so the adapter never breaks -- but it now
+    # says WHY it is empty. "No receivers here" and "we could not ask" used to be
+    # the same response; see tests/test_feed_honesty.py.
+    assert dead["type"] == "FeatureCollection"
+    assert dead["features"] == []
+    assert dead["degraded"] is True
+    assert "KiwiSDR" in dead["note"]
 
 
 def test_ukraine_alt_lists_only_alerting_regions(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -99,9 +99,11 @@ async def ukraine_alerts_alt() -> dict[str, Any]:
             raw = await fg.fetch_json(UA_SIREN_URL)
         except Exception:
             # A second relay of the same alerts. If it is down the primary layer
-            # still carries the picture, so this one goes quiet rather than
-            # putting an error on a map that is not missing anything.
-            return fg.fc([])
+            # still carries the picture, so this one does not put an error on a
+            # map that is not missing anything -- but it says so in the BODY,
+            # because "no sirens" and "we could not ask" are different answers
+            # and the caller is entitled to know which one it got.
+            return fg.degraded_fc("The Ukraine siren relay did not answer.")
         states = raw if isinstance(raw, list) else (raw or {}).get("states", [])
         out: list[fg.Feature] = []
         for s in states if isinstance(states, list) else []:

@@ -19,7 +19,7 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
-from app.upstream import cache, get_client
+from app.upstream import cache, get_client, record_failure
 
 Feature = dict[str, Any]
 
@@ -41,10 +41,20 @@ async def fetch_json(
     except (httpx.HTTPError, OSError) as exc:  # pragma: no cover - network shape
         raise HTTPException(502, f"upstream error: {exc}") from exc
     if r.status_code != 200:
+        # 4xx/5xx are already in the health registry (the shared client records
+        # them). A non-error non-200 is not, so say so here.
+        if r.status_code < 400:
+            record_failure(str(r.request.url.host), f"HTTP {r.status_code}", r.status_code)
         raise HTTPException(502, f"upstream {r.status_code}")
     try:
         return r.json()
     except ValueError as exc:
+        # The ONE failure no client-level capture point can see: the upstream
+        # answered 200, so the wire says success, and the body is a throttle
+        # notice in text/plain. This is airplanes.live's documented behaviour and
+        # the registry would otherwise go green at the exact moment the feed dies
+        # its most common death.
+        record_failure(str(r.request.url.host), "HTTP 200 with a non-JSON body", 200)
         raise HTTPException(502, "upstream returned a non-JSON body") from exc
 
 
@@ -60,6 +70,8 @@ async def fetch_text(
     except (httpx.HTTPError, OSError) as exc:  # pragma: no cover - network shape
         raise HTTPException(502, f"upstream error: {exc}") from exc
     if r.status_code != 200:
+        if r.status_code < 400:
+            record_failure(str(r.request.url.host), f"HTTP {r.status_code}", r.status_code)
         raise HTTPException(502, f"upstream {r.status_code}")
     return r.text
 
@@ -90,11 +102,66 @@ def polygon(fid: str, ring: list[list[float]], props: dict[str, Any]) -> Feature
     }
 
 
+# An empty answer expires fast. A real one keeps its full TTL.
+#
+# The 2026-08-20 sweep made this concrete: 17 routes answered 200 with an empty
+# body, and because every one of those loaders catches its own upstream failure
+# and RETURNS the empty rather than raising, the empty is a normal successful
+# value — so get_or_fetch stores it for the loader's full TTL. GDELT's summary
+# pinned `{"summary": {}}` for 10 minutes and the vessel-name index pinned `{}`
+# for 12 hours, after ONE failed fetch. The upstream could recover five seconds
+# later and the route would keep serving nothing.
+#
+# `cache.shorten` is the existing fix for exactly this (8 call sites, e.g. the
+# ADS-B empty-cell TTL). Applying it once here covers every feed route instead
+# of asking each of ~127 loaders to remember.
+_EMPTY_TTL_S = 45.0
+
+
+def _carries_nothing(payload: Any) -> bool:
+    """True for a well-formed envelope with no data in it. Conservative: any
+    non-empty collection anywhere makes it real."""
+    if payload is None:
+        return True
+    if isinstance(payload, list):
+        return not payload
+    if not isinstance(payload, dict):
+        return False
+    if not payload:
+        return True
+    for v in payload.values():
+        if isinstance(v, (list, dict)):
+            if v:
+                return False
+        elif v not in (None, "", 0):
+            return False
+    return True
+
+
 async def cached(
     key: str, ttl: float, loader: Callable[[], Awaitable[dict[str, Any]]]
 ) -> dict[str, Any]:
-    """Thin alias over ``cache.get_or_fetch`` so feed routes import one module."""
-    return await cache.get_or_fetch(key, ttl, loader)
+    """``cache.get_or_fetch``, but an empty result is not pinned for the full TTL."""
+    out = await cache.get_or_fetch(key, ttl, loader)
+    if ttl > _EMPTY_TTL_S and _carries_nothing(out):
+        cache.shorten(key, _EMPTY_TTL_S)
+    return out
+
+
+def degraded_fc(note: str) -> dict[str, Any]:
+    """An empty FeatureCollection that says WHY it is empty.
+
+    A layer with no features and no explanation is indistinguishable from a
+    working layer over a quiet area. This is the shape routes/events.py already
+    uses; feed routes that swallow an upstream failure should answer with it
+    rather than a bare `fc([])`.
+    """
+    return {"type": "FeatureCollection", "features": [], "degraded": True, "note": note}
+
+
+def degraded(payload: dict[str, Any], note: str) -> dict[str, Any]:
+    """Same idea for the non-GeoJSON envelopes."""
+    return {**payload, "degraded": True, "note": note}
 
 
 def num(v: Any) -> float | None:

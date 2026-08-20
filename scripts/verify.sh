@@ -96,8 +96,17 @@ EOF
       out=$(curl -sf -m 5 "http://127.0.0.1:$port/health" 2>/dev/null) \
         || out=$(curl -sf -m 5 "http://127.0.0.1:$port/aircraft.json" 2>/dev/null | head -c 200) \
         || out=$(curl -sf -m 5 "http://127.0.0.1:$port/vessels.json" 2>/dev/null | head -c 200)
-      if [ -n "$out" ]; then echo ":$port alive"; else echo ":$port NOT answering (sidecar down?)"; fi
-    done'
+      if [ -n "$out" ]; then
+        echo ":$port alive"
+      else
+        # Was an echo. A dead sidecar printed this line and the run still exited
+        # ALL GREEN, which is how a silently empty feed tier survives a probe
+        # that was written to catch exactly that. Non-zero now.
+        echo ":$port NOT answering (sidecar down?)"
+        rc=1
+      fi
+    done
+    exit "${rc:-0}"'
 fi
 
 echo
