@@ -1,0 +1,2251 @@
+{
+  "posture": {
+    "open_mode": true,
+    "probe_status": 200,
+    "note": "ALLOW_UNAUTHENTICATED is in effect: auth-gated routes are reachable and a 401 below is a real finding"
+  },
+  "seeds": {
+    "icao24": "a204c9",
+    "hex": "a204c9",
+    "ident": "a204c9"
+  },
+  "counts": {
+    "200-real": 162,
+    "200-empty": 15,
+    "auth-gated": 6,
+    "5xx": 4,
+    "http-400": 1,
+    "200-degraded": 11,
+    "200-binary": 5,
+    "timeout": 1,
+    "404": 3
+  },
+  "results": {
+    "/api/acars": {
+      "bucket": "200-real",
+      "detail": "25,346 bytes",
+      "ms": 5456.815026998811,
+      "status": 200,
+      "bytes": 25346,
+      "url": "http://127.0.0.1:8000/api/acars"
+    },
+    "/api/acars/geojson": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 5461.776620999444,
+      "status": 200,
+      "bytes": 42,
+      "url": "http://127.0.0.1:8000/api/acars/geojson"
+    },
+    "/api/acars/stats": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 989.8581350007589,
+      "status": 200,
+      "bytes": 2,
+      "url": "http://127.0.0.1:8000/api/acars/stats"
+    },
+    "/api/actions": {
+      "bucket": "auth-gated",
+      "detail": "HTTP 401",
+      "ms": 5.27014399995096,
+      "status": 401,
+      "bytes": 29,
+      "url": "http://127.0.0.1:8000/api/actions"
+    },
+    "/api/actions/proposals": {
+      "bucket": "auth-gated",
+      "detail": "HTTP 401",
+      "ms": 5.13829400006216,
+      "status": 401,
+      "bytes": 29,
+      "url": "http://127.0.0.1:8000/api/actions/proposals"
+    },
+    "/api/adsb/fi/global": {
+      "bucket": "5xx",
+      "detail": "HTTP 502",
+      "ms": 812.1819579992007,
+      "status": 502,
+      "bytes": 34,
+      "url": "http://127.0.0.1:8000/api/adsb/fi/global"
+    },
+    "/api/adsb/fr24/search": {
+      "bucket": "200-real",
+      "detail": "323 bytes",
+      "ms": 739.4934340009058,
+      "status": 200,
+      "bytes": 323,
+      "url": "http://127.0.0.1:8000/api/adsb/fr24/search?q=berlin"
+    },
+    "/api/adsb/global": {
+      "bucket": "200-real",
+      "detail": "10,022,430 bytes",
+      "ms": 743.043504000525,
+      "status": 200,
+      "bytes": 10022430,
+      "url": "http://127.0.0.1:8000/api/adsb/global"
+    },
+    "/api/adsb/history/dates": {
+      "bucket": "200-real",
+      "detail": "489 bytes",
+      "ms": 67.44769100077974,
+      "status": 200,
+      "bytes": 489,
+      "url": "http://127.0.0.1:8000/api/adsb/history/dates"
+    },
+    "/api/adsb/ladd": {
+      "bucket": "200-real",
+      "detail": "287,633 bytes",
+      "ms": 6757.951706998938,
+      "status": 200,
+      "bytes": 287633,
+      "url": "http://127.0.0.1:8000/api/adsb/ladd"
+    },
+    "/api/adsb/live/emergencies": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 8208.04435699938,
+      "status": 200,
+      "bytes": 42,
+      "url": "http://127.0.0.1:8000/api/adsb/live/emergencies"
+    },
+    "/api/adsb/live/mil": {
+      "bucket": "200-real",
+      "detail": "168,188 bytes",
+      "ms": 1195.0656049993995,
+      "status": 200,
+      "bytes": 168188,
+      "url": "http://127.0.0.1:8000/api/adsb/live/mil"
+    },
+    "/api/adsb/live/squawk/{code}": {
+      "bucket": "http-400",
+      "detail": "",
+      "ms": 0.9830330000113463,
+      "status": 400,
+      "bytes": 36,
+      "url": "http://127.0.0.1:8000/api/adsb/live/squawk/DEU"
+    },
+    "/api/adsb/lol/global": {
+      "bucket": "200-real",
+      "detail": "10,022,430 bytes",
+      "ms": 147.62361599969154,
+      "status": 200,
+      "bytes": 10022430,
+      "url": "http://127.0.0.1:8000/api/adsb/lol/global"
+    },
+    "/api/adsb/lol/point": {
+      "bucket": "200-real",
+      "detail": "361,214 bytes",
+      "ms": 2479.2632600001525,
+      "status": 200,
+      "bytes": 361214,
+      "url": "http://127.0.0.1:8000/api/adsb/lol/point?lat=50&lon=10"
+    },
+    "/api/adsb/pia": {
+      "bucket": "200-real",
+      "detail": "3,214 bytes",
+      "ms": 3473.517898000864,
+      "status": 200,
+      "bytes": 3214,
+      "url": "http://127.0.0.1:8000/api/adsb/pia"
+    },
+    "/api/adsb/snapshot_age": {
+      "bucket": "200-real",
+      "detail": "92 bytes",
+      "ms": 101.85575300056371,
+      "status": 200,
+      "bytes": 92,
+      "url": "http://127.0.0.1:8000/api/adsb/snapshot_age"
+    },
+    "/api/advisories": {
+      "bucket": "200-real",
+      "detail": "96,587 bytes",
+      "ms": 1.6246450013568392,
+      "status": 200,
+      "bytes": 96587,
+      "url": "http://127.0.0.1:8000/api/advisories"
+    },
+    "/api/ai/batch": {
+      "bucket": "200-real",
+      "detail": "82 bytes",
+      "ms": 1.8936550004582386,
+      "status": 200,
+      "bytes": 82,
+      "url": "http://127.0.0.1:8000/api/ai/batch"
+    },
+    "/api/ai/hardware": {
+      "bucket": "200-real",
+      "detail": "837 bytes",
+      "ms": 38.635233000604785,
+      "status": 200,
+      "bytes": 837,
+      "url": "http://127.0.0.1:8000/api/ai/hardware"
+    },
+    "/api/ai/local": {
+      "bucket": "200-real",
+      "detail": "280 bytes",
+      "ms": 5.57564500013541,
+      "status": 200,
+      "bytes": 280,
+      "url": "http://127.0.0.1:8000/api/ai/local"
+    },
+    "/api/airspace/nas-status": {
+      "bucket": "200-real",
+      "detail": "1,291 bytes",
+      "ms": 0.856452001244179,
+      "status": 200,
+      "bytes": 1291,
+      "url": "http://127.0.0.1:8000/api/airspace/nas-status"
+    },
+    "/api/airspace/tfr": {
+      "bucket": "200-real",
+      "detail": "158,740 bytes",
+      "ms": 1.5933350005070679,
+      "status": 200,
+      "bytes": 158740,
+      "url": "http://127.0.0.1:8000/api/airspace/tfr"
+    },
+    "/api/alerts": {
+      "bucket": "200-real",
+      "detail": "15,203 bytes",
+      "ms": 0.7482720011466881,
+      "status": 200,
+      "bytes": 15203,
+      "url": "http://127.0.0.1:8000/api/alerts"
+    },
+    "/api/alerts/deliveries": {
+      "bucket": "200-real",
+      "detail": "7,909 bytes",
+      "ms": 2.111155999955372,
+      "status": 200,
+      "bytes": 7909,
+      "url": "http://127.0.0.1:8000/api/alerts/deliveries"
+    },
+    "/api/alerts/fema": {
+      "bucket": "200-real",
+      "detail": "26,832 bytes",
+      "ms": 1.2209429987706244,
+      "status": 200,
+      "bytes": 26832,
+      "url": "http://127.0.0.1:8000/api/alerts/fema"
+    },
+    "/api/alerts/meteoalarm": {
+      "bucket": "200-real",
+      "detail": "56,723 bytes",
+      "ms": 1.2940640008309856,
+      "status": 200,
+      "bytes": 56723,
+      "url": "http://127.0.0.1:8000/api/alerts/meteoalarm"
+    },
+    "/api/alerts/rules": {
+      "bucket": "200-real",
+      "detail": "257 bytes",
+      "ms": 1.3484539995261002,
+      "status": 200,
+      "bytes": 257,
+      "url": "http://127.0.0.1:8000/api/alerts/rules"
+    },
+    "/api/alerts/spc-storms": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 0.7179220010584686,
+      "status": 200,
+      "bytes": 42,
+      "url": "http://127.0.0.1:8000/api/alerts/spc-storms"
+    },
+    "/api/alerts/standing": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 1.3861539991921745,
+      "status": 200,
+      "bytes": 48,
+      "url": "http://127.0.0.1:8000/api/alerts/standing"
+    },
+    "/api/alerts/ukraine": {
+      "bucket": "200-real",
+      "detail": "5,811 bytes",
+      "ms": 1604.968674999327,
+      "status": 200,
+      "bytes": 5811,
+      "url": "http://127.0.0.1:8000/api/alerts/ukraine"
+    },
+    "/api/alerts/ukraine-alt": {
+      "bucket": "200-real",
+      "detail": "484 bytes",
+      "ms": 853.9123599985032,
+      "status": 200,
+      "bytes": 484,
+      "url": "http://127.0.0.1:8000/api/alerts/ukraine-alt"
+    },
+    "/api/answers": {
+      "bucket": "200-real",
+      "detail": "6,737 bytes",
+      "ms": 1585.2500119999604,
+      "status": 200,
+      "bytes": 6737,
+      "url": "http://127.0.0.1:8000/api/answers"
+    },
+    "/api/audit": {
+      "bucket": "auth-gated",
+      "detail": "HTTP 401",
+      "ms": 83.67375399939192,
+      "status": 401,
+      "bytes": 29,
+      "url": "http://127.0.0.1:8000/api/audit"
+    },
+    "/api/aviation/airports/full": {
+      "bucket": "200-real",
+      "detail": "1,790,821 bytes",
+      "ms": 15.268000001015025,
+      "status": 200,
+      "bytes": 1790821,
+      "url": "http://127.0.0.1:8000/api/aviation/airports/full"
+    },
+    "/api/aviation/airports/openflights": {
+      "bucket": "200-real",
+      "detail": "2,045,408 bytes",
+      "ms": 32.86302800006524,
+      "status": 200,
+      "bytes": 2045408,
+      "url": "http://127.0.0.1:8000/api/aviation/airports/openflights"
+    },
+    "/api/aviation/routes": {
+      "bucket": "200-real",
+      "detail": "2,774,582 bytes",
+      "ms": 49.99943399889162,
+      "status": 200,
+      "bytes": 2774582,
+      "url": "http://127.0.0.1:8000/api/aviation/routes"
+    },
+    "/api/aviation/sigmet": {
+      "bucket": "200-real",
+      "detail": "3,410 bytes",
+      "ms": 1.0419919999549165,
+      "status": 200,
+      "bytes": 3410,
+      "url": "http://127.0.0.1:8000/api/aviation/sigmet"
+    },
+    "/api/aviation/states": {
+      "bucket": "200-real",
+      "detail": "4,930,514 bytes",
+      "ms": 3570.43088699902,
+      "status": 200,
+      "bytes": 4930514,
+      "url": "http://127.0.0.1:8000/api/aviation/states"
+    },
+    "/api/buildings/microsoft": {
+      "bucket": "200-real",
+      "detail": "54,972 bytes",
+      "ms": 1.573233999806689,
+      "status": 200,
+      "bytes": 54972,
+      "url": "http://127.0.0.1:8000/api/buildings/microsoft"
+    },
+    "/api/buildings/overture": {
+      "bucket": "200-real",
+      "detail": "382 bytes",
+      "ms": 0.8080719999270514,
+      "status": 200,
+      "bytes": 382,
+      "url": "http://127.0.0.1:8000/api/buildings/overture"
+    },
+    "/api/cables": {
+      "bucket": "200-real",
+      "detail": "738,945 bytes",
+      "ms": 3.220189000785467,
+      "status": 200,
+      "bytes": 738945,
+      "url": "http://127.0.0.1:8000/api/cables"
+    },
+    "/api/cables/landings": {
+      "bucket": "200-real",
+      "detail": "360,188 bytes",
+      "ms": 2.5513170003250707,
+      "status": 200,
+      "bytes": 360188,
+      "url": "http://127.0.0.1:8000/api/cables/landings"
+    },
+    "/api/cams": {
+      "bucket": "200-real",
+      "detail": "560,568 bytes",
+      "ms": 3.431760000239592,
+      "status": 200,
+      "bytes": 560568,
+      "url": "http://127.0.0.1:8000/api/cams"
+    },
+    "/api/cams/insecam": {
+      "bucket": "200-real",
+      "detail": "452 bytes",
+      "ms": 1.500483998825075,
+      "status": 200,
+      "bytes": 452,
+      "url": "http://127.0.0.1:8000/api/cams/insecam"
+    },
+    "/api/climate/anomalies": {
+      "bucket": "200-real",
+      "detail": "8,263 bytes",
+      "ms": 0.6453920013882453,
+      "status": 200,
+      "bytes": 8263,
+      "url": "http://127.0.0.1:8000/api/climate/anomalies"
+    },
+    "/api/config": {
+      "bucket": "200-real",
+      "detail": "400 bytes",
+      "ms": 0.535151000804035,
+      "status": 200,
+      "bytes": 400,
+      "url": "http://127.0.0.1:8000/api/config"
+    },
+    "/api/conflict/deepstate-firms": {
+      "bucket": "200-real",
+      "detail": "390,528 bytes",
+      "ms": 2.704737999010831,
+      "status": 200,
+      "bytes": 390528,
+      "url": "http://127.0.0.1:8000/api/conflict/deepstate-firms"
+    },
+    "/api/conflict/deepstate-news": {
+      "bucket": "200-real",
+      "detail": "56,561 bytes",
+      "ms": 1.0367630002292572,
+      "status": 200,
+      "bytes": 56561,
+      "url": "http://127.0.0.1:8000/api/conflict/deepstate-news"
+    },
+    "/api/conflict/deepstate-radiation": {
+      "bucket": "200-real",
+      "detail": "115,653 bytes",
+      "ms": 0.9482429995841812,
+      "status": 200,
+      "bytes": 115653,
+      "url": "http://127.0.0.1:8000/api/conflict/deepstate-radiation"
+    },
+    "/api/conflict/live": {
+      "bucket": "200-real",
+      "detail": "748,094 bytes",
+      "ms": 3.603970000767731,
+      "status": 200,
+      "bytes": 748094,
+      "url": "http://127.0.0.1:8000/api/conflict/live"
+    },
+    "/api/conflict/ucdp": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 0.9085719993890962,
+      "status": 200,
+      "bytes": 143,
+      "url": "http://127.0.0.1:8000/api/conflict/ucdp"
+    },
+    "/api/country/indicators": {
+      "bucket": "200-real",
+      "detail": "1,972 bytes",
+      "ms": 0.944022998737637,
+      "status": 200,
+      "bytes": 1972,
+      "url": "http://127.0.0.1:8000/api/country/indicators"
+    },
+    "/api/country/instability": {
+      "bucket": "200-real",
+      "detail": "5,757 bytes",
+      "ms": 7.9759609998291126,
+      "status": 200,
+      "bytes": 5757,
+      "url": "http://127.0.0.1:8000/api/country/instability"
+    },
+    "/api/country/instability/{iso3}": {
+      "bucket": "200-real",
+      "detail": "31,628 bytes",
+      "ms": 14.051196998480009,
+      "status": 200,
+      "bytes": 31628,
+      "url": "http://127.0.0.1:8000/api/country/instability/DEU"
+    },
+    "/api/country/list": {
+      "bucket": "200-real",
+      "detail": "28,081 bytes",
+      "ms": 1.6530350003449712,
+      "status": 200,
+      "bytes": 28081,
+      "url": "http://127.0.0.1:8000/api/country/list"
+    },
+    "/api/country/{iso3}/brief": {
+      "bucket": "200-real",
+      "detail": "2,617 bytes",
+      "ms": 148.10633700108156,
+      "status": 200,
+      "bytes": 2617,
+      "url": "http://127.0.0.1:8000/api/country/DEU/brief"
+    },
+    "/api/country/{iso3}/profile": {
+      "bucket": "200-real",
+      "detail": "1,119 bytes",
+      "ms": 1.32124299852876,
+      "status": 200,
+      "bytes": 1119,
+      "url": "http://127.0.0.1:8000/api/country/DEU/profile"
+    },
+    "/api/country/{iso3}/security": {
+      "bucket": "200-real",
+      "detail": "1,225 bytes",
+      "ms": 0.9201720004057279,
+      "status": 200,
+      "bytes": 1225,
+      "url": "http://127.0.0.1:8000/api/country/DEU/security"
+    },
+    "/api/country/{iso3}/un": {
+      "bucket": "200-real",
+      "detail": "6,684 bytes",
+      "ms": 0.8959229999163654,
+      "status": 200,
+      "bytes": 6684,
+      "url": "http://127.0.0.1:8000/api/country/DEU/un"
+    },
+    "/api/country/{iso3}/worldbank": {
+      "bucket": "200-real",
+      "detail": "12,641 bytes",
+      "ms": 0.9942430006049108,
+      "status": 200,
+      "bytes": 12641,
+      "url": "http://127.0.0.1:8000/api/country/DEU/worldbank"
+    },
+    "/api/cyber/cloudflare/outages": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 0.6185319998621708,
+      "status": 200,
+      "bytes": 53,
+      "url": "http://127.0.0.1:8000/api/cyber/cloudflare/outages"
+    },
+    "/api/cyber/ioda/outages": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 0.41018099909706507,
+      "status": 200,
+      "bytes": 55,
+      "url": "http://127.0.0.1:8000/api/cyber/ioda/outages"
+    },
+    "/api/cyber/kev": {
+      "bucket": "200-real",
+      "detail": "213,653 bytes",
+      "ms": 1.02594300005876,
+      "status": 200,
+      "bytes": 213653,
+      "url": "http://127.0.0.1:8000/api/cyber/kev"
+    },
+    "/api/cyber/routing": {
+      "bucket": "200-real",
+      "detail": "16,325 bytes",
+      "ms": 0.7489620002161246,
+      "status": 200,
+      "bytes": 16325,
+      "url": "http://127.0.0.1:8000/api/cyber/routing"
+    },
+    "/api/displacement": {
+      "bucket": "200-real",
+      "detail": "22,377 bytes",
+      "ms": 0.5791509993287036,
+      "status": 200,
+      "bytes": 22377,
+      "url": "http://127.0.0.1:8000/api/displacement"
+    },
+    "/api/displacement/unhcr": {
+      "bucket": "200-real",
+      "detail": "231 bytes",
+      "ms": 0.7841120004741242,
+      "status": 200,
+      "bytes": 231,
+      "url": "http://127.0.0.1:8000/api/displacement/unhcr"
+    },
+    "/api/env/air-quality": {
+      "bucket": "200-real",
+      "detail": "10,505 bytes",
+      "ms": 0.45658099952561315,
+      "status": 200,
+      "bytes": 10505,
+      "url": "http://127.0.0.1:8000/api/env/air-quality"
+    },
+    "/api/env/spaceweather": {
+      "bucket": "200-real",
+      "detail": "375 bytes",
+      "ms": 0.503561999721569,
+      "status": 200,
+      "bytes": 375,
+      "url": "http://127.0.0.1:8000/api/env/spaceweather"
+    },
+    "/api/eq": {
+      "bucket": "200-real",
+      "detail": "214,412 bytes",
+      "ms": 1.4917340013198555,
+      "status": 200,
+      "bytes": 214412,
+      "url": "http://127.0.0.1:8000/api/eq"
+    },
+    "/api/events/acled": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 0.545561000762973,
+      "status": 200,
+      "bytes": 90,
+      "url": "http://127.0.0.1:8000/api/events/acled"
+    },
+    "/api/events/all": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 0.941692000196781,
+      "status": 200,
+      "bytes": 321,
+      "url": "http://127.0.0.1:8000/api/events/all?lat=50&lon=10"
+    },
+    "/api/events/eonet": {
+      "bucket": "200-real",
+      "detail": "48,589 bytes",
+      "ms": 0.8169120010279585,
+      "status": 200,
+      "bytes": 48589,
+      "url": "http://127.0.0.1:8000/api/events/eonet"
+    },
+    "/api/events/gdelt": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 0.40316199920198414,
+      "status": 200,
+      "bytes": 85,
+      "url": "http://127.0.0.1:8000/api/events/gdelt"
+    },
+    "/api/events/gdelt-doc": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 0.9012819991767174,
+      "status": 200,
+      "bytes": 102,
+      "url": "http://127.0.0.1:8000/api/events/gdelt-doc"
+    },
+    "/api/events/gdelt-summary": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 0.7906119990366278,
+      "status": 200,
+      "bytes": 61,
+      "url": "http://127.0.0.1:8000/api/events/gdelt-summary"
+    },
+    "/api/evidence": {
+      "bucket": "200-real",
+      "detail": "990 bytes",
+      "ms": 3.1683590004831785,
+      "status": 200,
+      "bytes": 990,
+      "url": "http://127.0.0.1:8000/api/evidence"
+    },
+    "/api/export": {
+      "bucket": "200-real",
+      "detail": "11,096,085 bytes",
+      "ms": 156.5882100003364,
+      "status": 200,
+      "bytes": 11096085,
+      "url": "http://127.0.0.1:8000/api/export"
+    },
+    "/api/firms": {
+      "bucket": "200-real",
+      "detail": "15,010,387 bytes",
+      "ms": 92.36132800106134,
+      "status": 200,
+      "bytes": 15010387,
+      "url": "http://127.0.0.1:8000/api/firms"
+    },
+    "/api/foundry/bindings": {
+      "bucket": "200-real",
+      "detail": "315 bytes",
+      "ms": 192.7761470014957,
+      "status": 200,
+      "bytes": 315,
+      "url": "http://127.0.0.1:8000/api/foundry/bindings"
+    },
+    "/api/foundry/builds": {
+      "bucket": "200-real",
+      "detail": "6,035 bytes",
+      "ms": 96.95465000004333,
+      "status": 200,
+      "bytes": 6035,
+      "url": "http://127.0.0.1:8000/api/foundry/builds"
+    },
+    "/api/foundry/checks": {
+      "bucket": "200-real",
+      "detail": "202 bytes",
+      "ms": 1.996005999899353,
+      "status": 200,
+      "bytes": 202,
+      "url": "http://127.0.0.1:8000/api/foundry/checks"
+    },
+    "/api/foundry/connections": {
+      "bucket": "200-real",
+      "detail": "175 bytes",
+      "ms": 2.6158169985137647,
+      "status": 200,
+      "bytes": 175,
+      "url": "http://127.0.0.1:8000/api/foundry/connections"
+    },
+    "/api/foundry/datasets": {
+      "bucket": "200-real",
+      "detail": "7,402 bytes",
+      "ms": 2.0804760006285505,
+      "status": 200,
+      "bytes": 7402,
+      "url": "http://127.0.0.1:8000/api/foundry/datasets"
+    },
+    "/api/foundry/kinds": {
+      "bucket": "200-real",
+      "detail": "534 bytes",
+      "ms": 2.069875001325272,
+      "status": 200,
+      "bytes": 534,
+      "url": "http://127.0.0.1:8000/api/foundry/kinds"
+    },
+    "/api/foundry/lineage": {
+      "bucket": "200-real",
+      "detail": "3,007 bytes",
+      "ms": 17.776607999621774,
+      "status": 200,
+      "bytes": 3007,
+      "url": "http://127.0.0.1:8000/api/foundry/lineage"
+    },
+    "/api/foundry/monitors": {
+      "bucket": "200-real",
+      "detail": "391 bytes",
+      "ms": 1.2416240006132284,
+      "status": 200,
+      "bytes": 391,
+      "url": "http://127.0.0.1:8000/api/foundry/monitors"
+    },
+    "/api/foundry/schedules": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 1.2757429994962877,
+      "status": 200,
+      "bytes": 2,
+      "url": "http://127.0.0.1:8000/api/foundry/schedules"
+    },
+    "/api/foundry/summary": {
+      "bucket": "200-real",
+      "detail": "4,532 bytes",
+      "ms": 10.896589999902062,
+      "status": 200,
+      "bytes": 4532,
+      "url": "http://127.0.0.1:8000/api/foundry/summary"
+    },
+    "/api/foundry/transforms": {
+      "bucket": "200-real",
+      "detail": "1,454 bytes",
+      "ms": 1.7062539991457015,
+      "status": 200,
+      "bytes": 1454,
+      "url": "http://127.0.0.1:8000/api/foundry/transforms"
+    },
+    "/api/geocode": {
+      "bucket": "200-real",
+      "detail": "102 bytes",
+      "ms": 0.8957019999797922,
+      "status": 200,
+      "bytes": 102,
+      "url": "http://127.0.0.1:8000/api/geocode?q=berlin"
+    },
+    "/api/ground/nearby": {
+      "bucket": "200-real",
+      "detail": "9,613 bytes",
+      "ms": 0.9264820000680629,
+      "status": 200,
+      "bytes": 9613,
+      "url": "http://127.0.0.1:8000/api/ground/nearby?lat=50&lon=10"
+    },
+    "/api/hazards/cyclones": {
+      "bucket": "200-real",
+      "detail": "317 bytes",
+      "ms": 0.9442829996260116,
+      "status": 200,
+      "bytes": 317,
+      "url": "http://127.0.0.1:8000/api/hazards/cyclones"
+    },
+    "/api/hazards/fire-perimeters": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 1.380933999826084,
+      "status": 200,
+      "bytes": 42,
+      "url": "http://127.0.0.1:8000/api/hazards/fire-perimeters"
+    },
+    "/api/hazards/gdacs": {
+      "bucket": "5xx",
+      "detail": "HTTP 502",
+      "ms": 1043.1744979996438,
+      "status": 502,
+      "bytes": 25,
+      "url": "http://127.0.0.1:8000/api/hazards/gdacs"
+    },
+    "/api/hazards/radiation": {
+      "bucket": "200-real",
+      "detail": "235,682 bytes",
+      "ms": 1.500903999840375,
+      "status": 200,
+      "bytes": 235682,
+      "url": "http://127.0.0.1:8000/api/hazards/radiation"
+    },
+    "/api/hazards/reliefweb": {
+      "bucket": "5xx",
+      "detail": "HTTP 502",
+      "ms": 993.2685950006999,
+      "status": 502,
+      "bytes": 25,
+      "url": "http://127.0.0.1:8000/api/hazards/reliefweb"
+    },
+    "/api/hazards/volcanoes": {
+      "bucket": "200-real",
+      "detail": "290,807 bytes",
+      "ms": 2.812977998473798,
+      "status": 200,
+      "bytes": 290807,
+      "url": "http://127.0.0.1:8000/api/hazards/volcanoes"
+    },
+    "/api/health": {
+      "bucket": "200-real",
+      "detail": "15 bytes",
+      "ms": 0.6737820003763773,
+      "status": 200,
+      "bytes": 15,
+      "url": "http://127.0.0.1:8000/api/health"
+    },
+    "/api/health/memory": {
+      "bucket": "200-real",
+      "detail": "138 bytes",
+      "ms": 0.5323010009306017,
+      "status": 200,
+      "bytes": 138,
+      "url": "http://127.0.0.1:8000/api/health/memory"
+    },
+    "/api/history/coverage": {
+      "bucket": "200-real",
+      "detail": "259 bytes",
+      "ms": 0.7399419991998002,
+      "status": 200,
+      "bytes": 259,
+      "url": "http://127.0.0.1:8000/api/history/coverage"
+    },
+    "/api/history/stats": {
+      "bucket": "200-real",
+      "detail": "347 bytes",
+      "ms": 0.6358619993989123,
+      "status": 200,
+      "bytes": 347,
+      "url": "http://127.0.0.1:8000/api/history/stats"
+    },
+    "/api/history/timeseries": {
+      "bucket": "200-real",
+      "detail": "278 bytes",
+      "ms": 1968.2486000001518,
+      "status": 200,
+      "bytes": 278,
+      "url": "http://127.0.0.1:8000/api/history/timeseries"
+    },
+    "/api/history/tracks": {
+      "bucket": "200-real",
+      "detail": "1,770,503 bytes",
+      "ms": 7380.600856999081,
+      "status": 200,
+      "bytes": 1770503,
+      "url": "http://127.0.0.1:8000/api/history/tracks"
+    },
+    "/api/humanitarian/hdx": {
+      "bucket": "200-real",
+      "detail": "11,392 bytes",
+      "ms": 2.6737170010164846,
+      "status": 200,
+      "bytes": 11392,
+      "url": "http://127.0.0.1:8000/api/humanitarian/hdx"
+    },
+    "/api/imagery/catalog": {
+      "bucket": "200-real",
+      "detail": "4,714 bytes",
+      "ms": 1.374753001073259,
+      "status": 200,
+      "bytes": 4714,
+      "url": "http://127.0.0.1:8000/api/imagery/catalog"
+    },
+    "/api/imagery/chip": {
+      "bucket": "200-binary",
+      "detail": "image/jpeg - tile/chip route, correct",
+      "ms": 2.1564859998761676,
+      "status": 200,
+      "bytes": 662119,
+      "url": "http://127.0.0.1:8000/api/imagery/chip?lat=50&lon=10"
+    },
+    "/api/imagery/tasking/providers": {
+      "bucket": "200-real",
+      "detail": "627 bytes",
+      "ms": 1.1007020002580248,
+      "status": 200,
+      "bytes": 627,
+      "url": "http://127.0.0.1:8000/api/imagery/tasking/providers"
+    },
+    "/api/imagery/wayback": {
+      "bucket": "200-real",
+      "detail": "15,283 bytes",
+      "ms": 1.6855350004334468,
+      "status": 200,
+      "bytes": 15283,
+      "url": "http://127.0.0.1:8000/api/imagery/wayback"
+    },
+    "/api/infra/mines": {
+      "bucket": "200-real",
+      "detail": "13,184 bytes (needed params; empty when asked unbounded)",
+      "ms": 7.387879999441793,
+      "status": 200,
+      "bytes": 13184,
+      "url": "http://127.0.0.1:8000/api/infra/mines"
+    },
+    "/api/infra/powerplants": {
+      "bucket": "200-real",
+      "detail": "1,347,517 bytes",
+      "ms": 8.070041998507804,
+      "status": 200,
+      "bytes": 1347517,
+      "url": "http://127.0.0.1:8000/api/infra/powerplants"
+    },
+    "/api/intel/aircraft": {
+      "bucket": "200-real",
+      "detail": "46,777 bytes",
+      "ms": 810.7783939994988,
+      "status": 200,
+      "bytes": 46777,
+      "url": "http://127.0.0.1:8000/api/intel/aircraft"
+    },
+    "/api/intel/aircraft/{ident}": {
+      "bucket": "200-real",
+      "detail": "546 bytes",
+      "ms": 847.4997430002986,
+      "status": 200,
+      "bytes": 546,
+      "url": "http://127.0.0.1:8000/api/intel/aircraft/a204c9"
+    },
+    "/api/intel/anomalies": {
+      "bucket": "200-real",
+      "detail": "14,383 bytes",
+      "ms": 625.4154580001341,
+      "status": 200,
+      "bytes": 14383,
+      "url": "http://127.0.0.1:8000/api/intel/anomalies"
+    },
+    "/api/intel/aois": {
+      "bucket": "200-real",
+      "detail": "292 bytes",
+      "ms": 634.860641999694,
+      "status": 200,
+      "bytes": 292,
+      "url": "http://127.0.0.1:8000/api/intel/aois"
+    },
+    "/api/intel/area": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 255.84454599993478,
+      "status": 200,
+      "bytes": 41218,
+      "url": "http://127.0.0.1:8000/api/intel/area?lat=50&lon=10"
+    },
+    "/api/intel/corroborate": {
+      "bucket": "200-real",
+      "detail": "484 bytes",
+      "ms": 254.41376300113916,
+      "status": 200,
+      "bytes": 484,
+      "url": "http://127.0.0.1:8000/api/intel/corroborate?lon=10&lat=50"
+    },
+    "/api/intel/dark-vessels/sar": {
+      "bucket": "200-real",
+      "detail": "203,390 bytes",
+      "ms": 5453.224787999716,
+      "status": 200,
+      "bytes": 203390,
+      "url": "http://127.0.0.1:8000/api/intel/dark-vessels/sar"
+    },
+    "/api/intel/density": {
+      "bucket": "200-real",
+      "detail": "22,283 bytes",
+      "ms": 229.7642560006352,
+      "status": 200,
+      "bytes": 22283,
+      "url": "http://127.0.0.1:8000/api/intel/density"
+    },
+    "/api/intel/dossier/aircraft/{ident}": {
+      "bucket": "200-real",
+      "detail": "817 bytes",
+      "ms": 505.25101499988523,
+      "status": 200,
+      "bytes": 817,
+      "url": "http://127.0.0.1:8000/api/intel/dossier/aircraft/a204c9"
+    },
+    "/api/intel/incident-history": {
+      "bucket": "200-real",
+      "detail": "21,709 bytes",
+      "ms": 433.7043329996959,
+      "status": 200,
+      "bytes": 21709,
+      "url": "http://127.0.0.1:8000/api/intel/incident-history"
+    },
+    "/api/intel/jamming": {
+      "bucket": "200-real",
+      "detail": "22,644 bytes",
+      "ms": 757.1785309992265,
+      "status": 200,
+      "bytes": 22644,
+      "url": "http://127.0.0.1:8000/api/intel/jamming"
+    },
+    "/api/intel/lod1": {
+      "bucket": "timeout",
+      "detail": "timed out",
+      "ms": 25025.370506999025,
+      "status": 0,
+      "bytes": 0,
+      "url": "http://127.0.0.1:8000/api/intel/lod1"
+    },
+    "/api/intel/sar/sweep": {
+      "bucket": "200-real",
+      "detail": "3,520 bytes",
+      "ms": 401.90960800100584,
+      "status": 200,
+      "bytes": 3520,
+      "url": "http://127.0.0.1:8000/api/intel/sar/sweep"
+    },
+    "/api/intel/situation": {
+      "bucket": "200-real",
+      "detail": "1,313 bytes",
+      "ms": 332.30033199833997,
+      "status": 200,
+      "bytes": 1313,
+      "url": "http://127.0.0.1:8000/api/intel/situation"
+    },
+    "/api/intel/sources": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 70.14163799976814,
+      "status": 200,
+      "bytes": 2745,
+      "url": "http://127.0.0.1:8000/api/intel/sources"
+    },
+    "/api/intel/vessels": {
+      "bucket": "200-real",
+      "detail": "7,951 bytes",
+      "ms": 24.554696001359844,
+      "status": 200,
+      "bytes": 7951,
+      "url": "http://127.0.0.1:8000/api/intel/vessels"
+    },
+    "/api/jamming/alerts": {
+      "bucket": "200-real",
+      "detail": "15,298 bytes",
+      "ms": 24.4087449991639,
+      "status": 200,
+      "bytes": 15298,
+      "url": "http://127.0.0.1:8000/api/jamming/alerts"
+    },
+    "/api/jamming/gpsjam-manifest": {
+      "bucket": "200-real",
+      "detail": "563 bytes",
+      "ms": 3.629640001236112,
+      "status": 200,
+      "bytes": 563,
+      "url": "http://127.0.0.1:8000/api/jamming/gpsjam-manifest"
+    },
+    "/api/jamming/nacp": {
+      "bucket": "200-real",
+      "detail": "156,222 bytes",
+      "ms": 3.156638000291423,
+      "status": 200,
+      "bytes": 156222,
+      "url": "http://127.0.0.1:8000/api/jamming/nacp"
+    },
+    "/api/keys": {
+      "bucket": "auth-gated",
+      "detail": "HTTP 401",
+      "ms": 8.543013000235078,
+      "status": 401,
+      "bytes": 29,
+      "url": "http://127.0.0.1:8000/api/keys"
+    },
+    "/api/legal/courtlistener": {
+      "bucket": "200-real",
+      "detail": "3,917 bytes",
+      "ms": 7.110709000698989,
+      "status": 200,
+      "bytes": 3917,
+      "url": "http://127.0.0.1:8000/api/legal/courtlistener?q=berlin"
+    },
+    "/api/legal/gleif": {
+      "bucket": "200-real",
+      "detail": "9,652 bytes",
+      "ms": 5.064913000751403,
+      "status": 200,
+      "bytes": 9652,
+      "url": "http://127.0.0.1:8000/api/legal/gleif?q=berlin"
+    },
+    "/api/maps": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 655.3588079987094,
+      "status": 200,
+      "bytes": 2,
+      "url": "http://127.0.0.1:8000/api/maps"
+    },
+    "/api/maritime/buoys": {
+      "bucket": "200-real",
+      "detail": "235,048 bytes",
+      "ms": 3.7042299991298933,
+      "status": 200,
+      "bytes": 235048,
+      "url": "http://127.0.0.1:8000/api/maritime/buoys"
+    },
+    "/api/maritime/chokepoints": {
+      "bucket": "200-real",
+      "detail": "2,213 bytes",
+      "ms": 3.2087380004668375,
+      "status": 200,
+      "bytes": 2213,
+      "url": "http://127.0.0.1:8000/api/maritime/chokepoints"
+    },
+    "/api/maritime/digitraffic": {
+      "bucket": "200-real",
+      "detail": "342,049 bytes",
+      "ms": 3.183588998581399,
+      "status": 200,
+      "bytes": 342049,
+      "url": "http://127.0.0.1:8000/api/maritime/digitraffic"
+    },
+    "/api/maritime/snapshot": {
+      "bucket": "200-real",
+      "detail": "10,043,140 bytes",
+      "ms": 576.4092970002821,
+      "status": 200,
+      "bytes": 10043140,
+      "url": "http://127.0.0.1:8000/api/maritime/snapshot"
+    },
+    "/api/maritime/warnings": {
+      "bucket": "200-real",
+      "detail": "520,675 bytes",
+      "ms": 645.7862120005302,
+      "status": 200,
+      "bytes": 520675,
+      "url": "http://127.0.0.1:8000/api/maritime/warnings"
+    },
+    "/api/markets/predictions": {
+      "bucket": "200-real",
+      "detail": "1,909 bytes",
+      "ms": 135.29038299930107,
+      "status": 200,
+      "bytes": 1909,
+      "url": "http://127.0.0.1:8000/api/markets/predictions"
+    },
+    "/api/markets/snapshot": {
+      "bucket": "200-real",
+      "detail": "1,126 bytes",
+      "ms": 134.79073099915695,
+      "status": 200,
+      "bytes": 1126,
+      "url": "http://127.0.0.1:8000/api/markets/snapshot"
+    },
+    "/api/markets/stress": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 133.12294699971972,
+      "status": 200,
+      "bytes": 742,
+      "url": "http://127.0.0.1:8000/api/markets/stress"
+    },
+    "/api/me": {
+      "bucket": "auth-gated",
+      "detail": "HTTP 401",
+      "ms": 2.1653150015481515,
+      "status": 401,
+      "bytes": 29,
+      "url": "http://127.0.0.1:8000/api/me"
+    },
+    "/api/news/analysis": {
+      "bucket": "200-real",
+      "detail": "17 bytes",
+      "ms": 1.875125000879052,
+      "status": 200,
+      "bytes": 17,
+      "url": "http://127.0.0.1:8000/api/news/analysis"
+    },
+    "/api/news/brief": {
+      "bucket": "200-real",
+      "detail": "17 bytes",
+      "ms": 1.831014998970204,
+      "status": 200,
+      "bytes": 17,
+      "url": "http://127.0.0.1:8000/api/news/brief"
+    },
+    "/api/news/edition": {
+      "bucket": "200-real",
+      "detail": "206 bytes",
+      "ms": 1.7884150001918897,
+      "status": 200,
+      "bytes": 206,
+      "url": "http://127.0.0.1:8000/api/news/edition"
+    },
+    "/api/news/history": {
+      "bucket": "200-real",
+      "detail": "17 bytes",
+      "ms": 1.7168049998872448,
+      "status": 200,
+      "bytes": 17,
+      "url": "http://127.0.0.1:8000/api/news/history"
+    },
+    "/api/news/telegram": {
+      "bucket": "200-real",
+      "detail": "4,899 bytes",
+      "ms": 1.7468740006734151,
+      "status": 200,
+      "bytes": 4899,
+      "url": "http://127.0.0.1:8000/api/news/telegram"
+    },
+    "/api/oceans/surge": {
+      "bucket": "200-real",
+      "detail": "4,350 bytes",
+      "ms": 1.6062440008681733,
+      "status": 200,
+      "bytes": 4350,
+      "url": "http://127.0.0.1:8000/api/oceans/surge"
+    },
+    "/api/ontology/schema": {
+      "bucket": "200-real",
+      "detail": "4,569 bytes",
+      "ms": 1.776774999598274,
+      "status": 200,
+      "bytes": 4569,
+      "url": "http://127.0.0.1:8000/api/ontology/schema"
+    },
+    "/api/ontology/search": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 5.603355999483028,
+      "status": 200,
+      "bytes": 2,
+      "url": "http://127.0.0.1:8000/api/ontology/search?q=berlin"
+    },
+    "/api/org/resolve": {
+      "bucket": "200-real",
+      "detail": "6,405 bytes",
+      "ms": 1.268164000066463,
+      "status": 200,
+      "bytes": 6405,
+      "url": "http://127.0.0.1:8000/api/org/resolve?name=berlin"
+    },
+    "/api/osint/aleph": {
+      "bucket": "200-real",
+      "detail": "69 bytes",
+      "ms": 1.0867130004044157,
+      "status": 200,
+      "bytes": 69,
+      "url": "http://127.0.0.1:8000/api/osint/aleph?name=berlin"
+    },
+    "/api/osint/countries": {
+      "bucket": "200-real",
+      "detail": "19,511 bytes",
+      "ms": 1.38026399872615,
+      "status": 200,
+      "bytes": 19511,
+      "url": "http://127.0.0.1:8000/api/osint/countries"
+    },
+    "/api/osint/countries/categories": {
+      "bucket": "200-real",
+      "detail": "576 bytes",
+      "ms": 1.4304939995781751,
+      "status": 200,
+      "bytes": 576,
+      "url": "http://127.0.0.1:8000/api/osint/countries/categories"
+    },
+    "/api/osint/countries/{code}": {
+      "bucket": "404",
+      "detail": "",
+      "ms": 1.0766430004878202,
+      "status": 404,
+      "bytes": 38,
+      "url": "http://127.0.0.1:8000/api/osint/countries/DEU"
+    },
+    "/api/osint/countries/{code}/graph": {
+      "bucket": "404",
+      "detail": "",
+      "ms": 1.0836330002348404,
+      "status": 404,
+      "bytes": 38,
+      "url": "http://127.0.0.1:8000/api/osint/countries/DEU/graph"
+    },
+    "/api/osint/opencorporates": {
+      "bucket": "200-real",
+      "detail": "107 bytes",
+      "ms": 1.5532439992966829,
+      "status": 200,
+      "bytes": 107,
+      "url": "http://127.0.0.1:8000/api/osint/opencorporates?name=berlin"
+    },
+    "/api/osint/openownership": {
+      "bucket": "200-real",
+      "detail": "61 bytes",
+      "ms": 1.5329540001403075,
+      "status": 200,
+      "bytes": 61,
+      "url": "http://127.0.0.1:8000/api/osint/openownership?name=berlin"
+    },
+    "/api/osint/opensanctions": {
+      "bucket": "200-real",
+      "detail": "76 bytes",
+      "ms": 1.158463001047494,
+      "status": 200,
+      "bytes": 76,
+      "url": "http://127.0.0.1:8000/api/osint/opensanctions?name=berlin"
+    },
+    "/api/osint/sec-edgar": {
+      "bucket": "200-real",
+      "detail": "1,821 bytes",
+      "ms": 1.1356630002410384,
+      "status": 200,
+      "bytes": 1821,
+      "url": "http://127.0.0.1:8000/api/osint/sec-edgar?name=berlin"
+    },
+    "/api/osint/wikidata": {
+      "bucket": "200-real",
+      "detail": "72 bytes",
+      "ms": 1.3131639989296673,
+      "status": 200,
+      "bytes": 72,
+      "url": "http://127.0.0.1:8000/api/osint/wikidata?name=berlin"
+    },
+    "/api/osm/military": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 1.1586130003706785,
+      "status": 200,
+      "bytes": 42,
+      "url": "http://127.0.0.1:8000/api/osm/military"
+    },
+    "/api/osm/wikimapia": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 2.2614159988734173,
+      "status": 200,
+      "bytes": 42,
+      "url": "http://127.0.0.1:8000/api/osm/wikimapia"
+    },
+    "/api/places/airport/{ident}": {
+      "bucket": "404",
+      "detail": "",
+      "ms": 1.1467530002846615,
+      "status": 404,
+      "bytes": 42,
+      "url": "http://127.0.0.1:8000/api/places/airport/a204c9"
+    },
+    "/api/places/airports": {
+      "bucket": "200-real",
+      "detail": "10,852 bytes (needed params; empty when asked unbounded)",
+      "ms": 3.299848000096972,
+      "status": 200,
+      "bytes": 10852,
+      "url": "http://127.0.0.1:8000/api/places/airports"
+    },
+    "/api/places/bases": {
+      "bucket": "200-real",
+      "detail": "9,676 bytes (needed params; empty when asked unbounded)",
+      "ms": 3.4342889994150028,
+      "status": 200,
+      "bytes": 9676,
+      "url": "http://127.0.0.1:8000/api/places/bases"
+    },
+    "/api/places/infrastructure": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 0.814622000689269,
+      "status": 200,
+      "bytes": 42,
+      "url": "http://127.0.0.1:8000/api/places/infrastructure"
+    },
+    "/api/places/military": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 0.7522319992858684,
+      "status": 200,
+      "bytes": 42,
+      "url": "http://127.0.0.1:8000/api/places/military"
+    },
+    "/api/places/ports": {
+      "bucket": "200-real",
+      "detail": "8,044 bytes (needed params; empty when asked unbounded)",
+      "ms": 1.4781739992031362,
+      "status": 200,
+      "bytes": 8044,
+      "url": "http://127.0.0.1:8000/api/places/ports"
+    },
+    "/api/population/worldpop": {
+      "bucket": "200-real",
+      "detail": "14,255 bytes",
+      "ms": 1.344132999292924,
+      "status": 200,
+      "bytes": 14255,
+      "url": "http://127.0.0.1:8000/api/population/worldpop"
+    },
+    "/api/sanctions/aircraft": {
+      "bucket": "200-real",
+      "detail": "1,698 bytes",
+      "ms": 22.953931998927146,
+      "status": 200,
+      "bytes": 1698,
+      "url": "http://127.0.0.1:8000/api/sanctions/aircraft"
+    },
+    "/api/sanctions/lookup": {
+      "bucket": "200-real",
+      "detail": "138 bytes",
+      "ms": 21.662597999238642,
+      "status": 200,
+      "bytes": 138,
+      "url": "http://127.0.0.1:8000/api/sanctions/lookup"
+    },
+    "/api/sanctions/summary": {
+      "bucket": "200-real",
+      "detail": "1,007 bytes",
+      "ms": 252.69803800074442,
+      "status": 200,
+      "bytes": 1007,
+      "url": "http://127.0.0.1:8000/api/sanctions/summary"
+    },
+    "/api/sanctions/vessels": {
+      "bucket": "200-real",
+      "detail": "11,113 bytes",
+      "ms": 252.8461290003179,
+      "status": 200,
+      "bytes": 11113,
+      "url": "http://127.0.0.1:8000/api/sanctions/vessels"
+    },
+    "/api/sdr/kiwisdr": {
+      "bucket": "200-real",
+      "detail": "285,609 bytes",
+      "ms": 46.828505999656045,
+      "status": 200,
+      "bytes": 285609,
+      "url": "http://127.0.0.1:8000/api/sdr/kiwisdr"
+    },
+    "/api/search": {
+      "bucket": "200-real",
+      "detail": "158 bytes",
+      "ms": 46.30524400090508,
+      "status": 200,
+      "bytes": 158,
+      "url": "http://127.0.0.1:8000/api/search?q=berlin"
+    },
+    "/api/search/objects": {
+      "bucket": "200-real",
+      "detail": "28,243 bytes",
+      "ms": 17.11634499952197,
+      "status": 200,
+      "bytes": 28243,
+      "url": "http://127.0.0.1:8000/api/search/objects"
+    },
+    "/api/seismic/emsc": {
+      "bucket": "200-real",
+      "detail": "183,127 bytes",
+      "ms": 15.736952000224846,
+      "status": 200,
+      "bytes": 183127,
+      "url": "http://127.0.0.1:8000/api/seismic/emsc"
+    },
+    "/api/situations": {
+      "bucket": "200-real",
+      "detail": "875 bytes",
+      "ms": 4.985653999028727,
+      "status": 200,
+      "bytes": 875,
+      "url": "http://127.0.0.1:8000/api/situations"
+    },
+    "/api/sources/catalog": {
+      "bucket": "200-real",
+      "detail": "13,028 bytes",
+      "ms": 1.0122029998456128,
+      "status": 200,
+      "bytes": 13028,
+      "url": "http://127.0.0.1:8000/api/sources/catalog"
+    },
+    "/api/space/gp": {
+      "bucket": "5xx",
+      "detail": "HTTP 502",
+      "ms": 952.9464560000633,
+      "status": 502,
+      "bytes": 35,
+      "url": "http://127.0.0.1:8000/api/space/gp"
+    },
+    "/api/space/launches": {
+      "bucket": "200-real",
+      "detail": "15,353 bytes",
+      "ms": 0.7660320006834809,
+      "status": 200,
+      "bytes": 15353,
+      "url": "http://127.0.0.1:8000/api/space/launches"
+    },
+    "/api/space/satnogs/observations": {
+      "bucket": "200-real",
+      "detail": "8,232 bytes",
+      "ms": 0.8599820012022974,
+      "status": 200,
+      "bytes": 8232,
+      "url": "http://127.0.0.1:8000/api/space/satnogs/observations"
+    },
+    "/api/space/satnogs/stations": {
+      "bucket": "200-real",
+      "detail": "74,975 bytes",
+      "ms": 1.129752999986522,
+      "status": 200,
+      "bytes": 74975,
+      "url": "http://127.0.0.1:8000/api/space/satnogs/stations"
+    },
+    "/api/space/satnogs/transmitters": {
+      "bucket": "200-real",
+      "detail": "108,862 bytes",
+      "ms": 1.116192999688792,
+      "status": 200,
+      "bytes": 108862,
+      "url": "http://127.0.0.1:8000/api/space/satnogs/transmitters"
+    },
+    "/api/space/sondes": {
+      "bucket": "200-real",
+      "detail": "192,785 bytes",
+      "ms": 2.2590560001845006,
+      "status": 200,
+      "bytes": 192785,
+      "url": "http://127.0.0.1:8000/api/space/sondes"
+    },
+    "/api/space/tinygs": {
+      "bucket": "200-degraded",
+      "detail": "declares its own degradation - honest",
+      "ms": 0.7853919996705372,
+      "status": 200,
+      "bytes": 107,
+      "url": "http://127.0.0.1:8000/api/space/tinygs"
+    },
+    "/api/splats/huggingface": {
+      "bucket": "200-real",
+      "detail": "3,787 bytes",
+      "ms": 1.1764930004574126,
+      "status": 200,
+      "bytes": 3787,
+      "url": "http://127.0.0.1:8000/api/splats/huggingface"
+    },
+    "/api/splats/search": {
+      "bucket": "200-real",
+      "detail": "12,785 bytes",
+      "ms": 0.8645229991088854,
+      "status": 200,
+      "bytes": 12785,
+      "url": "http://127.0.0.1:8000/api/splats/search"
+    },
+    "/api/status": {
+      "bucket": "200-real",
+      "detail": "1,632 bytes",
+      "ms": 6.153836000521551,
+      "status": 200,
+      "bytes": 1632,
+      "url": "http://127.0.0.1:8000/api/status"
+    },
+    "/api/status/doctor": {
+      "bucket": "200-real",
+      "detail": "602 bytes",
+      "ms": 0.5786909987364197,
+      "status": 200,
+      "bytes": 602,
+      "url": "http://127.0.0.1:8000/api/status/doctor"
+    },
+    "/api/status/perf": {
+      "bucket": "200-real",
+      "detail": "920 bytes",
+      "ms": 0.5302810004650382,
+      "status": 200,
+      "bytes": 920,
+      "url": "http://127.0.0.1:8000/api/status/perf"
+    },
+    "/api/status/provenance": {
+      "bucket": "200-real",
+      "detail": "361 bytes",
+      "ms": 412.562445999356,
+      "status": 200,
+      "bytes": 361,
+      "url": "http://127.0.0.1:8000/api/status/provenance"
+    },
+    "/api/status/sources": {
+      "bucket": "200-real",
+      "detail": "22,799 bytes",
+      "ms": 319.19710699912685,
+      "status": 200,
+      "bytes": 22799,
+      "url": "http://127.0.0.1:8000/api/status/sources"
+    },
+    "/api/targets/board": {
+      "bucket": "auth-gated",
+      "detail": "HTTP 401",
+      "ms": 1.350634000118589,
+      "status": 401,
+      "bytes": 29,
+      "url": "http://127.0.0.1:8000/api/targets/board"
+    },
+    "/api/timeline/density": {
+      "bucket": "200-real",
+      "detail": "1,556 bytes",
+      "ms": 29.742950000581914,
+      "status": 200,
+      "bytes": 1556,
+      "url": "http://127.0.0.1:8000/api/timeline/density"
+    },
+    "/api/timeline/events": {
+      "bucket": "200-real",
+      "detail": "25,443 bytes",
+      "ms": 1.3766739994025556,
+      "status": 200,
+      "bytes": 25443,
+      "url": "http://127.0.0.1:8000/api/timeline/events"
+    },
+    "/api/watch-officer/briefs": {
+      "bucket": "200-empty",
+      "detail": "well-formed and carries nothing",
+      "ms": 1.0160229994653491,
+      "status": 200,
+      "bytes": 13,
+      "url": "http://127.0.0.1:8000/api/watch-officer/briefs"
+    },
+    "/api/watch-officer/status": {
+      "bucket": "200-real",
+      "detail": "537 bytes",
+      "ms": 0.7602020014019217,
+      "status": 200,
+      "bytes": 537,
+      "url": "http://127.0.0.1:8000/api/watch-officer/status"
+    },
+    "/api/weather/alerts": {
+      "bucket": "200-real",
+      "detail": "37,684 bytes",
+      "ms": 0.9212129989464302,
+      "status": 200,
+      "bytes": 37684,
+      "url": "http://127.0.0.1:8000/api/weather/alerts"
+    },
+    "/api/weather/openmeteo": {
+      "bucket": "200-real",
+      "detail": "3,054 bytes",
+      "ms": 0.6065919988031965,
+      "status": 200,
+      "bytes": 3054,
+      "url": "http://127.0.0.1:8000/api/weather/openmeteo?lat=50&lon=10"
+    },
+    "/api/weather/swpc/kp": {
+      "bucket": "200-real",
+      "detail": "27,823 bytes",
+      "ms": 0.7320019994949689,
+      "status": 200,
+      "bytes": 27823,
+      "url": "http://127.0.0.1:8000/api/weather/swpc/kp"
+    },
+    "/api/weather/swpc/space": {
+      "bucket": "200-real",
+      "detail": "223,006 bytes",
+      "ms": 1.1720630009222077,
+      "status": 200,
+      "bytes": 223006,
+      "url": "http://127.0.0.1:8000/api/weather/swpc/space"
+    },
+    "/tiles/apple/{z}/{x}/{y}.jpg": {
+      "bucket": "200-binary",
+      "detail": "image/jpeg - tile/chip route, correct",
+      "ms": 0.9335220001958078,
+      "status": 200,
+      "bytes": 38907,
+      "url": "http://127.0.0.1:8000/tiles/apple/3/4/2.jpg"
+    },
+    "/tiles/basemap/{z}/{x}/{y}.png": {
+      "bucket": "200-binary",
+      "detail": "image/png - tile/chip route, correct",
+      "ms": 0.7803129992680624,
+      "status": 200,
+      "bytes": 25307,
+      "url": "http://127.0.0.1:8000/tiles/basemap/3/4/2.png"
+    },
+    "/tiles/sat/{z}/{x}/{y}.jpg": {
+      "bucket": "200-binary",
+      "detail": "image/jpeg - tile/chip route, correct",
+      "ms": 0.7741419994999887,
+      "status": 200,
+      "bytes": 98248,
+      "url": "http://127.0.0.1:8000/tiles/sat/3/4/2.jpg"
+    },
+    "/tiles/terrain/{z}/{x}/{y}.png": {
+      "bucket": "200-binary",
+      "detail": "image/png - tile/chip route, correct",
+      "ms": 0.705421998645761,
+      "status": 200,
+      "bytes": 104364,
+      "url": "http://127.0.0.1:8000/tiles/terrain/3/4/2.png"
+    }
+  },
+  "skipped": [
+    {
+      "path": "/api/adsb/callsign/{cs}",
+      "why": "no fixture for cs",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/adsb/hex/{icao}",
+      "why": "no fixture for icao",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/adsb/registration/{reg}",
+      "why": "no fixture for reg",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/adsb/trace/{icao}",
+      "why": "no fixture for icao",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/adsb/type/{type_code}",
+      "why": "no fixture for type_code",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/ai/models",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/ai/models/download/{job_id}",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/answers/{answer_id}",
+      "why": "no fixture for answer_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/cams/{cam_id}/snapshot",
+      "why": "no fixture for cam_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/collab/{doc_id}",
+      "why": "no fixture for doc_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/correlations/{eid}",
+      "why": "no fixture for eid",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/cyber/shodan/{ip}",
+      "why": "no fixture for ip",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/entity/{eid}",
+      "why": "no fixture for eid",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/entity/{eid}/imagery",
+      "why": "no fixture for eid",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/evidence/{sha}",
+      "why": "no fixture for sha",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/evidence/{sha}/blob",
+      "why": "no fixture for sha",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/evidence/{sha}/verify",
+      "why": "no fixture for sha",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/builds/{build_id}",
+      "why": "no fixture for build_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/datasets/{dataset_id}",
+      "why": "no fixture for dataset_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/datasets/{dataset_id}/checks/results",
+      "why": "no fixture for dataset_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/datasets/{dataset_id}/column-lineage",
+      "why": "no fixture for dataset_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/datasets/{dataset_id}/dead-letter",
+      "why": "no fixture for dataset_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/datasets/{dataset_id}/docs",
+      "why": "no fixture for dataset_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/datasets/{dataset_id}/geo",
+      "why": "no fixture for dataset_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/datasets/{dataset_id}/rows",
+      "why": "no fixture for dataset_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/datasets/{dataset_id}/stats",
+      "why": "no fixture for dataset_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/datasets/{dataset_id}/versions",
+      "why": "no fixture for dataset_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/monitors/{monitor_id}/events",
+      "why": "no fixture for monitor_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/foundry/transforms/{transform_id}",
+      "why": "no fixture for transform_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/ground/photo/{source}/{photo_id}",
+      "why": "no fixture for source, photo_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/history/diff",
+      "why": "no fixture for at_a",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/history/track",
+      "why": "no fixture for id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/imagery/aoi",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/imagery/change",
+      "why": "no fixture for before, after",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/imagery/detect",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/imagery/{provider}/{layer}/{z}/{x}/{y}",
+      "why": "no fixture for provider, layer, date",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/intel/agent",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/intel/baseline",
+      "why": "baseline_store.sample() writes an AOI sample on read",
+      "class": "mutating-get"
+    },
+    {
+      "path": "/api/intel/brief",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/intel/deception",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/intel/dossier/vessel/{mmsi}",
+      "why": "no fixture for mmsi",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/intel/emitter",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/intel/investigate",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/intel/pol/{entity_id}",
+      "why": "no fixture for entity_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/intel/sar/sweep/{aoi}",
+      "why": "no fixture for aoi",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/intel/watch",
+      "why": "record() persists a watch entry",
+      "class": "mutating-get"
+    },
+    {
+      "path": "/api/maps/{map_id}",
+      "why": "no fixture for map_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/maritime/keyless",
+      "why": "store.add_many() into the LAST-WRITE-WINS vessel store",
+      "class": "mutating-get"
+    },
+    {
+      "path": "/api/news/factcheck",
+      "why": "no fixture for claim",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/news/feed",
+      "why": "_ensure_articles() triggers a refresh/write when stale",
+      "class": "mutating-get"
+    },
+    {
+      "path": "/api/ontology/analytics/{object_id}",
+      "why": "no fixture for object_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/ontology/assertions/{object_id}",
+      "why": "no fixture for object_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/ontology/object/{object_id}",
+      "why": "no fixture for object_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/ontology/path",
+      "why": "no fixture for a, b",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/ontology/search-around/{object_id}",
+      "why": "no fixture for object_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/anubis",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/bgpview-asn",
+      "why": "no fixture for asn",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/bgpview-ip",
+      "why": "no fixture for ip",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/blockchair",
+      "why": "no fixture for chain, address",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/blockscout",
+      "why": "no fixture for address",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/blockstream",
+      "why": "no fixture for address",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/certs",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/certspotter",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/columbus",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/dns",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/emailrep",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/feodo",
+      "why": "no fixture for ip",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/github",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/gitlab",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/gravatar",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/greynoise",
+      "why": "no fixture for ip",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/hackertarget",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/hibp",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/ip",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/libravatar",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/malwarebazaar",
+      "why": "no fixture for hash",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/mempool",
+      "why": "no fixture for address",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/onionoo",
+      "why": "no fixture for ip",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/phishstats",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/pullpush",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/ripestat",
+      "why": "no fixture for ip",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/shodan",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/threat",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/urlhaus-host",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/urlhaus-url",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/urlscan",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/username",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/wayback",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/whois",
+      "why": "no fixture for target",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/osint/yaraify",
+      "why": "no fixture for hash",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/places/facility/{fid}",
+      "why": "no fixture for fid",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/places/port/{wpi}",
+      "why": "no fixture for wpi",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/recon/jobs",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/recon/jobs/{job_id}",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/recon/jobs/{job_id}/camera.json",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/recon/jobs/{job_id}/events",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/recon/jobs/{job_id}/result.ply",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/recon/jobs/{job_id}/result.spz",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/route/candidates",
+      "why": "no fixture for from_lat, from_lon, to_lat, to_lon",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/route/fastest",
+      "why": "no fixture for from_lat, from_lon, to_lat, to_lon",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/route/offroad",
+      "why": "no fixture for from_lat, from_lon, to_lat, to_lon",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/route/road",
+      "why": "no fixture for from_lat, from_lon, to_lat, to_lon",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/situations/{sit_id}",
+      "why": "no fixture for sit_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/targets/board/{target_id}/audit",
+      "why": "no fixture for target_id",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/weather/metar",
+      "why": "no fixture for ids",
+      "class": "needs-fixture"
+    },
+    {
+      "path": "/api/workflows",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/workflows/blocks",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/workflows/runs/{run_id}",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/workflows/schedules",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/workflows/{workflow_id}",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/workflows/{workflow_id}/memory",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    },
+    {
+      "path": "/api/workflows/{workflow_id}/runs",
+      "why": "ratelimit.is_compute_path: spends LLM credits, GPU or actuates",
+      "class": "compute"
+    }
+  ]
+}
