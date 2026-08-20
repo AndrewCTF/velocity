@@ -16,6 +16,10 @@ from typing import Any, TypeVar
 import httpx
 
 _CLIENT: httpx.AsyncClient | None = None
+# host -> health row. Written only from the single uvicorn loop (get_client()
+# is never called from a thread; the sync ADS-B path at routes/adsb.py has its
+# own client and its own threading.Lock), so no lock is needed here.
+_SOURCES: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
 
 def _transport(proxy: str | None = None) -> httpx.AsyncHTTPTransport:
@@ -133,6 +137,137 @@ class _WarpTransport(httpx.AsyncBaseTransport):
             await self._direct.aclose()
 
 
+# ── per-source health registry ───────────────────────────────────────────────
+#
+# Before this existed the API recorded `last_success` for exactly zero of its
+# ~100 upstreams and `last_error` for two, while /api/status asserted health for
+# nine feeds — two of them hardcoded `True` and four inferred from a key being
+# CONFIGURED rather than from a fetch that worked. A sweep of 207 GET routes
+# (docs/audits/2026-08-20-api-sweep.md) found 17 answering HTTP 200 with an
+# empty body, and nothing in the process could say which of those had a dead
+# upstream behind them and which were simply empty stores on a fresh boot.
+#
+# This records the difference, in the ONE place every upstream call already
+# passes through.
+#
+# Capture point is AsyncClient.send(), not an httpx event hook. A response hook
+# fires only after _send_single_request returns, so ConnectError / ReadTimeout /
+# ConnectTimeout never reach it — a registry built on hooks would read green
+# precisely when an upstream is unreachable, which is the overclaim this exists
+# to kill. (response.elapsed also raises inside a hook, and an exception thrown
+# in one aborts the request for all 113 call sites.)
+#
+# Grain, stated because it is not obvious: send() records one row per LOGICAL
+# request. Redirect hops, the transport's retries=1 and _WarpTransport's
+# tunnel→direct fallback all collapse into a single row, so a WARP fallback
+# reads here as a clean success. For stream=True the latency is headers-only,
+# because the caller reads the body after send() returns.
+
+_MAX_SOURCE_HOSTS = 512
+
+
+def _source_row(host: str) -> dict[str, Any]:
+    row = _SOURCES.get(host)
+    if row is None:
+        row = {
+            "host": host,
+            "ok": 0,
+            "fail": 0,
+            "last_success": None,
+            "last_error": None,
+            "last_error_at": None,
+            "last_status": None,
+            "latency_ms": None,
+        }
+        _SOURCES[host] = row
+        # Host keys are attacker-influenceable through any route that fetches a
+        # user-supplied URL, so the dict is bounded like the TTL cache below.
+        while len(_SOURCES) > _MAX_SOURCE_HOSTS:
+            _SOURCES.popitem(last=False)
+    _SOURCES.move_to_end(host)
+    return row
+
+
+def record_success(host: str, latency_ms: float, status: int) -> None:
+    row = _source_row(host)
+    row["ok"] += 1
+    row["last_success"] = time.time()
+    row["last_status"] = status
+    row["latency_ms"] = round(latency_ms, 1)
+
+
+def record_failure(host: str, reason: str, status: int | None = None) -> None:
+    """Record an upstream failure. Public because the wire is not the whole truth.
+
+    airplanes.live throttles with HTTP 200 + text/plain, which every
+    client-level capture point on earth records as a success. routes/_feedgeo.py
+    is the layer that knows a 200 was not an answer, so it calls this directly.
+    """
+    row = _source_row(host)
+    row["fail"] += 1
+    row["last_error"] = reason[:200]
+    row["last_error_at"] = time.time()
+    if status is not None:
+        row["last_status"] = status
+
+
+def source_health() -> list[dict[str, Any]]:
+    """Every upstream host seen this process, newest activity first."""
+    now = time.time()
+    out: list[dict[str, Any]] = []
+    for row in _SOURCES.values():
+        r = dict(row)
+        r["success_age_s"] = (
+            round(now - row["last_success"], 1) if row["last_success"] else None
+        )
+        r["error_age_s"] = (
+            round(now - row["last_error_at"], 1) if row["last_error_at"] else None
+        )
+        # Green needs a success MORE RECENT than the last failure. "Never
+        # attempted" is a third state and must never render as green — that
+        # conflation is the whole defect /api/status carried.
+        if row["last_success"] is None and row["last_error"] is None:
+            r["state"] = "unknown"
+        elif row["last_error_at"] and (
+            row["last_success"] is None or row["last_error_at"] > row["last_success"]
+        ):
+            r["state"] = "failing"
+        else:
+            r["state"] = "ok"
+        out.append(r)
+    return sorted(out, reverse=True, key=lambda r: max(
+        r["last_success"] or 0.0, r["last_error_at"] or 0.0))
+
+
+class _InstrumentedClient(httpx.AsyncClient):
+    """The shared client, plus one row per request in the health registry.
+
+    All bookkeeping is inside try/except: a bug in this file must never be able
+    to abort an upstream call, and this client carries the 1 Hz ADS-B path.
+    """
+
+    async def send(self, request: httpx.Request, **kwargs: Any) -> httpx.Response:
+        host = request.url.host
+        t0 = time.perf_counter()
+        try:
+            response = await super().send(request, **kwargs)
+        except Exception as exc:
+            try:
+                record_failure(host, f"{type(exc).__name__}: {exc}")
+            except Exception:  # noqa: BLE001 — diagnostics never break a fetch
+                pass
+            raise
+        try:
+            ms = (time.perf_counter() - t0) * 1000.0
+            if response.status_code >= 400:
+                record_failure(host, f"HTTP {response.status_code}", response.status_code)
+            else:
+                record_success(host, ms, response.status_code)
+        except Exception:  # noqa: BLE001 — diagnostics never break a fetch
+            pass
+        return response
+
+
 def get_client() -> httpx.AsyncClient:
     global _CLIENT
     if _CLIENT is None:
@@ -174,7 +309,12 @@ def get_client() -> httpx.AsyncClient:
             # explicitly for the case where only UPSTREAM_PROXIES / WARP is set.
             for pattern in upstream_proxy.LOOPBACK_PATTERNS:
                 mounts.setdefault(pattern, _transport())
-        _CLIENT = httpx.AsyncClient(
+        # _InstrumentedClient, not httpx.AsyncClient: the subclass records
+        # per-host health. transport/mounts are passed through UNCHANGED —
+        # proxy_stats() below reaches into _CLIENT._transport and isinstance-
+        # checks RotatingProxyTransport, so wrapping the transport instead of
+        # the client would silently blank /api/status's proxy panel.
+        _CLIENT = _InstrumentedClient(
             timeout=httpx.Timeout(15.0, connect=5.0),
             headers={"User-Agent": "osint-console/0.1"},
             transport=default,

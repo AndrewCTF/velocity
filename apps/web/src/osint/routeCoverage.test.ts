@@ -25,7 +25,6 @@ const API_ROUTES = join(HERE, '../../../api/app/routes');
 const EXEMPT: Record<string, string> = {
   // Infrastructure the browser reaches without naming the path.
   '/api/health': 'liveness probe for the process supervisor, not the UI',
-  '/api/status/doctor': 'called by scripts/verify.sh --live',
   // Write/side-effect routes driven by an agent or a server-side caller.
   '/api/evidence/manifest': 'POST: written by the case exporter server-side',
   '/api/imagery/task': 'POST: commercial tasking, gated off in the keyless build',

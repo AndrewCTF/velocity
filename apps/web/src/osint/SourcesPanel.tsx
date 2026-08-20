@@ -27,6 +27,34 @@ interface CatalogSource {
   format?: string;
 }
 
+/** One row of the backend's measured upstream health (GET /api/status/sources).
+ *  `state` is measured, never inferred from configuration: 'unknown' means the
+ *  host has not been called this process and is NOT a synonym for healthy. */
+interface SourceHealth {
+  host: string;
+  state: 'ok' | 'failing' | 'unknown';
+  ok: number;
+  fail: number;
+  latency_ms: number | null;
+  last_error: string | null;
+  success_age_s: number | null;
+}
+
+interface SourcesHealthResponse {
+  sources: SourceHealth[];
+  counts: { total?: number; ok?: number; failing?: number; unknown?: number };
+  unmeasured: { where: string; what: string }[];
+}
+
+/** The host a catalog row talks to, or null when the row names no URL.
+ *  Matching on host is what lets a catalog written by hand line up with a
+ *  registry keyed by what was actually called. */
+export function hostOf(source: { url_pattern?: string; route?: string }): string | null {
+  const raw = source.url_pattern ?? '';
+  const m = /^https?:\/\/([^/?#]+)/i.exec(raw);
+  return m?.[1]?.toLowerCase() ?? null;
+}
+
 interface CatalogResponse {
   total: number;
   categories: string[];
@@ -932,9 +960,35 @@ function LookupRow({
   );
 }
 
+/** Measured state for one catalog row.
+ *
+ *  A source with no row has not been called this session. That is reported as
+ *  "not called", never as healthy: treating never-attempted as green is the
+ *  exact defect /api/status carried for two hardcoded feeds. */
+function SourceState({ row }: { row: SourceHealth | null }): JSX.Element {
+  if (row === null) {
+    return <span className="text-[10px] text-txt-3">not called</span>;
+  }
+  const tone =
+    row.state === 'ok' ? 'text-ok' : row.state === 'failing' ? 'text-alert' : 'text-txt-3';
+  const detail =
+    row.state === 'failing'
+      ? (row.last_error ?? 'failing')
+      : row.state === 'ok'
+        ? `${row.success_age_s === null ? '—' : `${Math.round(row.success_age_s)}s ago`}` +
+          `${row.latency_ms === null ? '' : ` · ${Math.round(row.latency_ms)}ms`}`
+        : 'not called';
+  return (
+    <span className={`text-[10px] ${tone}`} title={`${row.ok} ok · ${row.fail} failed`}>
+      {row.state} · {detail}
+    </span>
+  );
+}
+
 export function SourcesPanel(): JSX.Element {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [health, setHealth] = useState<SourcesHealthResponse | null>(null);
   const [category, setCategory] = useState<string>('');
   const [values, setValues] = useState<Record<string, string>>({});
 
@@ -957,6 +1011,31 @@ export function SourcesPanel(): JSX.Element {
       live = false;
     };
   }, []);
+
+  // Measured health, alongside the catalog. The catalog says what EXISTS; this
+  // says what answered. Best effort: the panel is still useful without it.
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const res = await apiFetch('/api/status/sources');
+        if (!res.ok) return;
+        const json = (await res.json()) as SourcesHealthResponse;
+        if (live) setHealth(json);
+      } catch {
+        /* the status column simply reads "—" */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const byHost = useMemo(() => {
+    const m = new Map<string, SourceHealth>();
+    for (const r of health?.sources ?? []) m.set(r.host.toLowerCase(), r);
+    return m;
+  }, [health]);
 
   const shown = useMemo(
     () =>
@@ -1020,6 +1099,13 @@ export function SourcesPanel(): JSX.Element {
           {catalogError !== null && (
             <div className="mt-1 text-[11px] text-alert">{catalogError}</div>
           )}
+          <div className="mt-1 text-[11px] text-txt-3">
+            {health
+              ? `Measured this session · ${health.counts.ok ?? 0} answering · ` +
+                `${health.counts.failing ?? 0} failing · ${health.unmeasured.length} ` +
+                'upstreams build their own client and are not measured here'
+              : 'Measured health unavailable'}
+          </div>
         </div>
         {shown.map((s) => (
           <div key={s.id} className="border-b border-line-2 px-3 py-1.5">
@@ -1027,6 +1113,7 @@ export function SourcesPanel(): JSX.Element {
               <span className="text-[12px] text-txt-0">{s.name}</span>
               <span className="mono text-[10px] text-txt-3">{s.category}</span>
               <span className="text-[10px] text-txt-3">{s.auth ? `auth: ${s.auth}` : 'auth: —'}</span>
+              <SourceState row={byHost.get(hostOf(s) ?? '') ?? null} />
             </div>
             <div className="mono truncate text-[10px] text-txt-3">
               {s.route ?? s.url_pattern ?? '—'}
