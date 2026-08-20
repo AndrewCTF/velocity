@@ -1030,6 +1030,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2400 + 2 skipped — 2026-08-20, feed-honesty-2026-08, measured source health
 - 2393 + 2 skipped — 2026-08-08, gotham-parity-2026-08, connection wire coverage
 - 2390 + 2 skipped — 2026-08-08, gotham-parity-2026-08, SQL connection coverage
 - 2386 + 2 skipped — 2026-08-08, gotham-parity-2026-08, MQTT socket coverage

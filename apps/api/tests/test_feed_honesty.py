@@ -219,3 +219,37 @@ def test_a_swallowed_feed_failure_states_a_reason() -> None:
         "Use fg.degraded_fc(...) / fg.degraded(...), re-raise, or record an "
         f"exception in _SILENT_OK with the reason: {offenders}"
     )
+
+
+# ── the falsification test for /api/status ───────────────────────────────────
+#
+# The unknown -> green transition was proven live (USGS flipped after a real
+# fetch). The failing -> degraded branch was NOT: every host failing in the live
+# registry that day was one none of the three measured feeds map to, so a typo
+# in `_measured`'s failing branch would have survived the whole verification.
+# This is that half, and it needs neither root nor network.
+
+
+def test_a_failing_upstream_turns_its_status_feed_degraded(client, monkeypatch) -> None:
+    from app.routes import adsb as adsb_routes
+    from app.routes import status as status_mod
+
+    monkeypatch.setattr(adsb_routes, "snapshot_count", lambda: 9000)
+    monkeypatch.setattr(adsb_routes, "snapshot_age_s", lambda: 3.0)
+
+    def usgs(body: dict) -> dict:
+        return next(f for f in body["feeds"] if f["name"].startswith("USGS"))
+
+    # Never called: not green, and not red either.
+    assert usgs(client.get("/api/status").json())["status"] == "unknown"
+
+    upstream.record_success("earthquake.usgs.gov", 120.0, 200)
+    assert usgs(client.get("/api/status").json())["status"] == "green"
+
+    # A failure AFTER the success must win: this feed shipped hardcoded `True`
+    # with the detail "Keyless, always on."
+    upstream.record_failure("earthquake.usgs.gov", "HTTP 503", 503)
+    feed = usgs(client.get("/api/status").json())
+    assert feed["status"] == "degraded"
+    assert "503" in feed["detail"]
+    assert status_mod._measured("earthquake.usgs.gov")[0] is False
