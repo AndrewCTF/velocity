@@ -19,7 +19,12 @@ changing BOTH the guard and this file.
 - Internal consumers call `global_snapshot()`, never the `adsb_global()` route
   handler in-process. → `tests/test_invariants.py`
 - Global snapshot carries **≥8 000 aircraft** (~13 k normal): OpenSky breadth
-  (1 pull/UTC-day, cached) + airplanes.live grid overlay (densify only).
+  (1 pull/UTC-day, cached) + the adsb.lol planet-radius firehose
+  (`/v2/point/0/0/20000`, measured 11 441 on 2026-08-21) + grid overlay
+  (densify only). airplanes.live is BANNED at the application level from this
+  egress — its 403 body carries a contact address, not a challenge — so it is
+  last in `_HEAD_HOSTS` and gone from `_FIREHOSE_URLS`. Do not put it back
+  without an email to contact@airplanes.live.
   → `OSINT_LIVE_PROBE=1` in `tests/test_invariants.py`
 - The snapshot union is FRESHEST-OBSERVATION-wins (`seen_at - seen_pos_s`), not
   merge-order — a cached tier must never clobber a fresher fix — and a fix that
@@ -153,8 +158,22 @@ The style rules it enforces are in `apps/web/CLAUDE.md`.
   `.env` auth resolves and you get a wall of 401s. Command and baseline are in
   `/CLAUDE.md`.
 - Upstreams: adsb.lol 451s non-browser UAs; airplanes.live throttles with
-  HTTP 200+text; firehose URLs dead from datacenter egress; OpenSky is the
-  breadth source; CelesTrak 403-rate-limits bursts (2 h cache).
+  HTTP 200+text AND is now app-level banned (see above); firehose URLs dead
+  from datacenter egress; OpenSky is the breadth source.
+- **CelesTrak does not rate-limit bursts** (this line said so until 2026-08-21
+  and it was wrong). It answers a repeat pull inside its 2 h publish window with
+  **403 plus the body `GP data has not updated since your last successful
+  download of GROUP=<g> at <ts>`** — a conditional GET wearing a 403, keyed by
+  (source IP, GROUP), identical for our UA and a browser UA. `routes/space.py`
+  reads that body and serves its on-disk last-good copy; treating it as an
+  outage is what emptied the satellite layer on every restart.
+  → `tests/test_space_gp_not_modified.py`
+- **The shared client follows redirects** (`upstream.py`, httpx ships this OFF).
+  Do not turn it off to "fix" something: with it off, plain-`http://` GDELT died
+  on its 301 and took the whole conflict layer to zero silently, and a 3xx with
+  an empty body scored as a healthy upstream. The four callers that legitimately
+  opt out re-check SSRF on every hop and pass `follow_redirects=False`
+  per-request. → `tests/test_feed_honesty.py`
 - Wikidata SPARQL (country leadership): query-shape traps are documented in
   `intel/country_profile.py` — a global rdfs:label join or `P279*` with a
   non-constant class 504s; label service needs a language fallback chain;

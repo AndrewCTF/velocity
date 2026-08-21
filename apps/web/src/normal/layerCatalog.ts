@@ -86,6 +86,7 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
       { label: 'Space weather / aurora', icon: 'satellite', layerIds: ['weather.spacewx.aurora'] },
       { label: 'Launches', icon: 'satellite', layerIds: ['space.launches'] },
       { label: 'Observed passes (SatNOGS)', icon: 'satellite', layerIds: ['space.satnogs.observations'] },
+      { label: 'Radio emitters (PSKReporter)', icon: 'satellite', layerIds: ['sigint.pskreporter'] },
       { label: 'Amateur ground stations', icon: 'satellite', layerIds: ['space.satnogs.stations'] },
     ],
   },

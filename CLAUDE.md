@@ -52,8 +52,8 @@ undo and why it was made.
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **2401 passed + 2 skipped in ~156 s** (skip = opt-in live probes;
-  measured 2026-08-20, branch feed-honesty-2026-08, measured source health).
+  Baseline: **2450 passed + 2 skipped in ~134 s** (skip = opt-in live probes;
+  measured 2026-08-21, branch egress-reachability-2026-08, five non-blocks).
   Runs SERIAL by default: `-n auto --dist
   loadfile` groups different files per worker on different core counts, so a
   suite with module-state leaks answers differently per machine and CI (4 cores)
@@ -64,9 +64,12 @@ undo and why it was made.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
   = typecheck + lint + web unit + api tests in one command.
 - Boot: `bash scripts/run-api.sh` from repo ROOT (:8000), Vite :5173. Restart
-  the backend ONCE and wait — repeated restarts get the egress rate-limited.
-  Kill servers by port: `scripts/kill-port.sh <port>`. Details and the jemalloc
-  trap: `scripts/CLAUDE.md`.
+  the backend ONCE and wait. Some upstreams (Wikidata SPARQL, GDELT DOC) really
+  do punish bursts; CelesTrak does NOT — it was answering "you already have
+  this" with a 403 and the in-process cache was throwing our copy away on every
+  restart. That half is fixed (`apps/api/CLAUDE.md`, CelesTrak), the rest still
+  applies. Kill servers by port: `scripts/kill-port.sh <port>`. Details and the
+  jemalloc trap: `scripts/CLAUDE.md`.
 - Keyless is a product requirement, not a dev convenience: ADS-B grid, Baltic
   AIS, MyShipTracking, ShipXplorer, USGS quakes, Carto basemap, and CelesTrak
   all keep working with no API key. FIRMS degrades gracefully without MAP_KEY.

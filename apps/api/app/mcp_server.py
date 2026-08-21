@@ -1337,6 +1337,20 @@ async def deepstate_radiation_stations(detail: str = "short") -> dict[str, Any]:
 
 
 @mcp.tool()
+async def radio_reports(minutes: int = 10, detail: str = "short") -> dict[str, Any]:
+    """Amateur-radio reception reports from PSKReporter, plotted at the transmitter.
+
+    Each feature is an emitter that an independent receiving station decoded in
+    the last `minutes`, carrying callsign, Maidenhead grid, band, mode and SNR.
+    Positions are grid-square CENTRES, so read properties.precision_km before
+    treating one as a location.
+    """
+    return shape(
+        await _get("/api/sigint/pskreporter", {"minutes": minutes}), detail
+    )
+
+
+@mcp.tool()
 async def deepstate_war_news(detail: str = "short") -> dict[str, Any]:
     """Geolocated war-news events from the DeepState map."""
     return shape(await _get("/api/conflict/deepstate-news"), detail)

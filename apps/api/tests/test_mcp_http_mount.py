@@ -109,9 +109,13 @@ def test_mcp_http_handshake_lists_all_tools(keyed: str) -> None:
         #   UNHCR, WorldPop, HDX, FR24, GDELT doc, Telegram, source catalog,
         #   splats, wayback, buildings, KiwiSDR, tinyGS).
         # + 6 adsb.lol v2 lookup tools (hex, registration, callsign, type, ladd, pia).
-        assert len(names) == 84, sorted(names)
+        # + 1 radio_reports (PSKReporter, 2026-08-21) — the first tool in the
+        #   sdr/sigint half of the source catalog, which carried twelve entries
+        #   and one route before it.
+        assert len(names) == 85, sorted(names)
         assert {"get_situation", "intel_brief", "query_aircraft", "deep_analyze"} <= names
         assert {"disaster_alerts", "maritime_chokepoints", "space_weather"} <= names
+        assert "radio_reports" in names
         assert {
             "quakes_near", "track_history",
             "create_watch_rule", "list_watch_rules", "delete_watch_rule",

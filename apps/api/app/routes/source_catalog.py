@@ -368,8 +368,16 @@ CATALOG: list[dict[str, Any]] = [
         "id": "pskreporter",
         "category": "sdr",
         "name": "PSK Reporter",
-        "url_pattern": "https://pskreporter.info/",
-        "note": "Live HF propagation/signals map",
+        "url_pattern": "https://retrieve.pskreporter.info/query?rronly=1&flowStartSeconds=-600",
+        "api_route": "/api/sigint/pskreporter",
+        "auth": "none",
+        "format": "XML (receptionReport elements)",
+        "note": (
+            "Global amateur reception reports: who heard whom, from which "
+            "Maidenhead grid, on what frequency, at what SNR. Wired 2026-08-21 "
+            "— it had sat in this catalog with no route. Positions are grid "
+            "CENTRES, ~111 km for a 4-char locator; read precision_km."
+        ),
     },
     {
         "id": "wsprnet",

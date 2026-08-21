@@ -988,6 +988,183 @@ safety rule: **GET-only is NOT the safety boundary on this app.**
 skip list is `ratelimit.is_compute_path` plus four named mutating GETs, and every
 skip is reported with its reason rather than dropped.
 
+## Five things that looked like blocks and were not (2026-08-21)
+
+The 2026-08-20 wave made upstream health measurable and the first measurement
+said 19 of 99 hosts were failing. This entry is what happened when each failure
+was actually opened up. **One of the five was a block. The other four were our
+own bugs wearing a 4xx.** The lesson is not "the audit was wrong" — the audit is
+what made any of this visible — it is that *reachability* and *correctness of
+the call we make* are different questions, and the instrument only asked the
+first one.
+
+Baseline for every measurement below: dev egress, Proton VPN exit
+159.26.115.35, SG, AS208172.
+
+**1. Redirects. The shared client never followed them.** httpx ships
+`follow_redirects=False`, and `_InstrumentedClient.send` scored failure on
+`status_code >= 400`, so **a 301 carrying an empty body was recorded as a clean
+success** — the exact "empty but green" overclaim the previous entry exists to
+kill, surviving one layer down. Blast radius was 52 `fg.fetch_*` call sites plus
+84 bare `get_client().get/post/stream` sites; about twenty opted in.
+
+Two concrete casualties. `intel/conflict.py` sets
+`_GDELT_BASE = "http://data.gdeltproject.org/gdeltv2"` — plain HTTP — and calls
+`raise_for_status()`, which raises on a 3xx with a redirect location: **the
+GDELT conflict layer had been returning zero features on every pull, silently.**
+Proven by A/B on the single keyword, same process, same egress, with the TTL
+cache invalidated between runs (without that step both runs read 0 and the
+second one is just the first one's cached empty — worth knowing before anyone
+re-measures this):
+
+    follow_redirects=False  _latest_ts -> HTTPStatusError: Redirect response '301'
+                            conflict_events -> 0 features
+    follow_redirects=True   latest=20260821141500, zip 200, 101 714 bytes,
+                            58 war rows in one slice
+                            conflict_events -> 565 features
+
+And `wsprnet.org`, filed `BLOCKED` / 403 in the egress audit, actually 302s to
+`https://www.wsprnet.org/olddb` and serves **34 943 bytes**.
+
+The fix is `kwargs.setdefault("follow_redirects", True)` in
+`_InstrumentedClient.__init__` — on the class, not in `get_client()`, so the
+tests (which build the client directly over a `MockTransport`) exercise the
+production shape. **The scorer needed no 3xx branch**, and that is the point:
+with follow on, httpx resolves the chain *inside* `send()` and returns the final
+response, so `>= 400` sees the truth and a loop raises `TooManyRedirects` into
+the existing `except`. A `300 <= code < 400` branch instead would have converted
+GDELT from silently-empty to loudly-failing without making it work.
+
+**This does not weaken the SSRF boundary**, which was checked rather than
+assumed. All four paths that fetch a user-supplied URL already opt out
+per-request and re-validate each hop themselves: `intel/evidence.py:398`
+(chain-of-custody walks hops), `workflows/control.py` (own client, plus
+`check_url` and `_pin_http_url`, which pins the resolved IP), `news/images.py`
+(per-hop `_resolve_public`), and `browser_fetch.py` (`_is_public_url` before the
+sidecar). httpx per-request kwargs override the client default, so all four are
+untouched. The risk is the *next* route, which is what the guard is for.
+
+**2. CelesTrak's 403 is a conditional GET.** Body, verbatim:
+
+    GP data has not updated since your last successful download of GROUP=active
+    at 2026-08-21 13:05:49 UTC. Data is updated once every 2 hours.
+
+Keyed by (source IP, GROUP), and **identical for our UA and a browser UA** — so
+the comment in `routes/space.py` claiming CelesTrak "is more willing to serve a
+browser UA" was also wrong, and `apps/api/CLAUDE.md`'s "CelesTrak
+403-rate-limits bursts" was wrong. `space.py` turned it into
+`HTTPException(502)` and the satellite layer went empty.
+
+**This is the mechanism behind the documented "restart the backend ONCE and
+wait".** The 2 h TTL cache is in-process, so every restart threw away our own
+copy and re-asked, earning a 403 for the rest of the window. Not rate limiting —
+us discarding data and requesting it again.
+
+Fixed by reading the body: on 403 + that string, serve the last good copy and
+`record_success(host, 0.0, 304)` so `/api/status/sources` says **304** and
+explains itself. The `fail` counter still moves, which is honest about the wire.
+Any *other* 403 still fails, and a not-modified with no cached copy still 502s —
+never invent data.
+
+The last-good copy is on **disk** (`data/celestrak/<group>.tle`, atomic
+tmp+`os.replace`), because an in-process cache cannot survive the restart that
+causes the problem. Deliberately NOT `app.tilecache`: that is an LRU under a
+byte budget shared with imagery, and these files must not be evicted by a map
+pan. **One caller is not an abstraction** — generalise when a second
+reference-class feed wants it, not before.
+
+Scope, stated because it is the dangerous part: this is for **reference-class**
+feeds whose payload carries its own epoch. A TLE embeds its epoch in
+`TLE_LINE1` cols 19-32 and the client propagates from it, so a 4 h-old element
+set is the input SGP4 expects, not a stale reading. It must never extend to the
+ADS-B or AIS position stores: those are last-write-wins, and the 2026-07-15
+post-mortem below is exactly what happens when a cached tier serves into one.
+The response carries `stale` and `age_s` regardless — the age of the DATA.
+
+**3. Two URLs were simply wrong, and read as blocks.**
+`www.gdacs.org/.../geteventlist/MAP` answers **400**; the path parameter is
+`EVENTS4APP`, which answers 200 with the identical shape the parser already
+expects — verified against a live body before switching. **0 -> 100 features.**
+`api.reliefweb.int/v1` answers **410** and says so: *"The API version 'v1' has
+been decommissioned. Please use version 'v2' instead."* v2 needs a pre-approved
+`appname` (400 without one, 403 with an arbitrary one), so that one is an
+operator registration, recorded, not guessed.
+
+**4. `api.bgpview.io` is NXDOMAIN** — no A record from the system resolver or
+from 1.1.1.1. Re-pointed at RIPEstat, which was **already a substrate in the
+same file**. The swap is also an upgrade: RIPEstat's `asn-neighbours` labels
+direction (`type: left`), so `upstreams` is populated instead of being a
+hardcoded empty list with an apology beside it. Function and route names stay
+`bgpview_*` — they are a frontend contract and an ontology provenance string,
+and renaming them to advertise a backend swap would break `routeCoverage` for
+no gain.
+
+**5. `rx.linkfanel.net` resolves AAAA-only** (`2a01:e0a:6d:9140::42`, no A
+record) while `upstream._transport` pins `local_address="0.0.0.0"`. Host IPv6 is
+broken here, so it times out. A sixth failure class — *our own IPv4 pin versus
+an IPv6-only upstream* — that no report could express.
+
+**The one real block.** `api.airplanes.live` answers 403 with
+
+    {"error": "Please contact us at contact@airplanes.live. Your email MUST
+     include any links, a description of the project, and any information you
+     deem appropriate."}
+
+on `/v2/all-with-pos`, `/v2/point/...` and `/v2/mil` alike. That is an
+app-level ban with a contact address, not a WAF and not a rate limit. No tier
+opens it and none should be pointed at it: **the engineering action is to stop
+calling it, and the remediation is an email.** Removed from `_FIREHOSE_URLS`;
+moved to LAST in `_HEAD_HOSTS` rather than deleted, because this is self-hosted
+software, the ban is scoped to whoever asked, and `_HEAD_HOSTS` has no
+dead-skip — at index 0 it was the deterministic primary for a third of ~120
+cells and each paid a round trip into a wall every fan-out.
+
+`api.adsb.lol/v2/all-with-pos` was also removed: **404**, a verb that does not
+exist, which is egress-independent. `api.adsb.lol/v2/point/0/0/20000` — measured
+11 441 aircraft — was promoted to first, having been **last** behind three dead
+entries. adsb.fi's snapshot stays last rather than deleted: its 403 is the
+per-path WAF shape and `_try_firehose` returns on first success, so it costs
+zero requests while the entry above works. Measured after: **12 561 aircraft in
+2.0 s on the first try**, ≥8 000 floor intact.
+
+**Scraping: the browser tier got its first callers, and the measurement said no
+to most of them.** `tools/browser-fetch` had been built, supervised, selftested
+and called by nothing. Over the seven register feeds that answer httpx with 403:
+
+    en.mercopress.com   403 -> browser 200, 10 items   -> flagged
+    tass.com            403 -> browser 200, 100 items  -> flagged
+    riotimesonline.com  403 -> browser 200, 0 items    -> not flagged
+    tvn24 / dawn / politico.eu / washingtontimes  403 -> browser 403, headful too
+
+and, tested because they were the obvious candidates and rejected because the
+measurement said so: ISW, LiveUAMap, planespotters, reddit and LiveATC are **403
+to headless AND headful Chrome** — the address-level case no tier opens. Wiring
+them anyway would have spent a browser launch per feed per cycle to re-learn a
+permanent no, which is the auto-escalation ladder rejected on 2026-08-01. So the
+mechanism is a per-`Source` `browser: bool` flag set from a measurement, and it
+is set on exactly two feeds — both of which were already in the register and
+both of which had been contributing nothing.
+
+**Rejected here:** a robots.txt/crawl-delay framework (`paced()` in the sidecar
+already is the politeness, and it is guarded by `selftest.js`; ~200 lines to
+model a policy space of ~25 hand-picked hosts); a feed scheduler in
+`foundry/scheduler.py` (it runs transform builds — feeds would need an invented
+"fetch transform" kind to replace `fg.cached`, which already paces every feed);
+reinstating the circuit breaker (removed deliberately, and the fix for "we keep
+calling dead hosts" turned out to be deleting the dead hosts); and "fixing"
+`/api/health` to reflect upstream health — it is the Docker liveness probe, so
+a dead upstream would restart the container, which is worse than the defect.
+`/api/status/sources` is the honest surface and already exists.
+
+**Guards:** `apps/api/tests/test_feed_honesty.py` (redirect chain scored by its
+destination, one row keyed by the original host, loop is a failure, the client
+default itself), `test_space_gp_not_modified.py` (last-good across a simulated
+restart, registry reads 304/ok, a real 403 still fails, no cached copy still
+502s), `test_sigint_pskreporter.py`, `test_telegram_parser.py`,
+`test_news_browser_tier.py`, `test_osint_src_netblock.py` (fixtures replaced
+with real RIPEstat bodies — a fixture shaped like a host that no longer resolves
+proves nothing).
+
 ## Every backend route needs a UI address or a stated exception (2026-08-08)
 
 The operator's report was that the backend had grown a lot of capability the
@@ -1030,6 +1207,8 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2450 + 2 skipped — 2026-08-21, egress-reachability-2026-08, five non-blocks
+- 2401 + 2 skipped — 2026-08-20, feed-honesty-2026-08, measured source health
 - 2400 + 2 skipped — 2026-08-20, feed-honesty-2026-08, measured source health
 - 2393 + 2 skipped — 2026-08-08, gotham-parity-2026-08, connection wire coverage
 - 2390 + 2 skipped — 2026-08-08, gotham-parity-2026-08, SQL connection coverage

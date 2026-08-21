@@ -129,6 +129,7 @@ from app.routes import sar as sar_routes
 from app.routes import satnogs as satnogs_routes
 from app.routes import search as search_routes
 from app.routes import seismic as seismic_routes
+from app.routes import sigint as sigint_routes
 from app.routes import simulation as simulation_routes
 from app.routes import situations as situations_routes
 from app.routes import source_catalog as source_catalog_routes
@@ -717,6 +718,7 @@ def create_app() -> FastAPI:
     app.include_router(civil_defense_routes.router)
     app.include_router(deepstate_routes.router)
     app.include_router(satnogs_routes.router)
+    app.include_router(sigint_routes.router)
     app.include_router(mega_feeds_routes.router)
     app.include_router(source_catalog_routes.router)
 
