@@ -424,21 +424,26 @@ def _build_global_grid() -> list[tuple[float, float]]:
 _GLOBAL_GRID: list[tuple[float, float]] = _build_global_grid()
 
 
-# Hosts we rotate across grid cells. ADSB.lol is the most reliable
-# aggregator, so it's deliberately placed at index 1 (the second try after
-# whichever airplanes.live cell is the deterministic primary). When
-# airplanes.live rate-limits us, adsb.lol picks up the slack with the lowest
-# miss rate.
+# Hosts we rotate across grid cells.
 #
 # The per-host primary is chosen deterministically by md5(lat,lon) so the
 # same cell always lands on the same host across polls (good for the
 # upstream's own cache locality). On 429/403/timeout we just walk down the
 # list — no breaker, no long-term memory of failures. A host that 429'd one
 # cell may still serve the next once its sliding rate-limit window advances.
+#
+# airplanes.live is LAST, not first, and not deleted. Measured 2026-08-21 from
+# the dev egress it 403s every verb (see the ban note under _FIREHOSE_URLS), and
+# unlike the firehose this list has no dead-skip — at index 0 it was the
+# deterministic primary for roughly a third of ~120 cells and each one paid a
+# full round trip into a wall on every fan-out. Last position costs nothing
+# here while the other two answer, and keeps the tier for a deploy the ban does
+# not cover: this is self-hosted software and the ban is scoped to whoever
+# asked. adsb.lol stays ahead of adsb.fi as the most reliable aggregator.
 _HEAD_HOSTS: list[str] = [
-    "https://api.airplanes.live",
     "https://api.adsb.lol",
     "https://opendata.adsb.fi/api",
+    "https://api.airplanes.live",
 ]
 
 
@@ -449,27 +454,51 @@ _HEAD_HOSTS: list[str] = [
 # knows about in one response — when one of them answers, we skip the grid
 # entirely and ship 10-15k features instead of 3k.
 #
-# The order matters: airplanes.live first because its dataset is the largest
-# and it explicitly publishes /v2/all-with-pos as the firehose verb;
-# adsb.lol second (same verb, ADSBExchange-compatible payload); adsb.fi
-# last via its dedicated /v2/snapshot endpoint. On 429 / 403 / 451 / 5xx we
-# walk to the next; if all firehoses fail we fall through to the per-cell
-# grid below, so a temporary rate-limit blip on every host doesn't blank
-# the map (the existing snapshot retain-fraction guard further smooths
-# this).
+# ORDER IS MEASURED, 2026-08-21, not theorised. What this list used to say was
+# "airplanes.live first because its dataset is the largest"; probed from the dev
+# egress every entry ahead of the last one was dead:
+#
+#   api.airplanes.live/v2/all-with-pos   403  policy ban (see below)
+#   api.adsb.lol/v2/all-with-pos         404  the verb does not exist
+#   opendata.adsb.fi/api/v2/snapshot     403  per-path WAF
+#   api.adsb.lol/v2/point/0/0/20000      200  11,441 aircraft, 6.4 MB
+#
+# So every global snapshot paid three failed round trips before the one that
+# works, and api.adsb.lol read `failing` in /api/status/sources because of a verb
+# it never had, while its point verb served the whole planet on the next line.
+#
+# REMOVED — api.airplanes.live/v2/all-with-pos. Its 403 body is not a WAF and not
+# a rate limit; it is an app-level ban carrying a contact address:
+#   {"error": "Please contact us at contact@airplanes.live. Your email MUST
+#    include any links, a description of the project, and any information you
+#    deem appropriate."}
+# Measured 403 on /v2/all-with-pos, /v2/point/... and /v2/mil alike, so it is
+# API-wide from here. No tier opens that — not a proxy, not WARP, not real
+# Chrome — and polling a host every 30 s after it asked to be emailed is the
+# opposite of how this repo treats upstreams. OPERATOR ACTION: email them; if
+# they restore access, put the entry back at the front, where its dataset earns
+# it. Do not "fix" this with headers or an address.
+#
+# REMOVED — api.adsb.lol/v2/all-with-pos. A 404 is the server saying the route
+# does not exist; that is egress-independent and cannot come back.
+#
+# adsb.fi's snapshot stays LAST rather than being deleted: its 403 is the
+# per-PATH WAF shape (the same host's /v2/lat/{lat}/lon/{lon}/dist/{d} answers
+# 200), which docs/decisions.md#getting-past-cloudflare documents as address- and
+# time-dependent. _try_firehose returns on the first success, so while the entry
+# above works this one costs zero requests, and a deploy on a different egress
+# still gets it. On 429 / 403 / 451 / 5xx we walk to the next; if all fail we
+# fall through to the per-cell grid, so a blip never blanks the map.
 _FIREHOSE_URLS: tuple[str, ...] = (
-    "https://api.airplanes.live/v2/all-with-pos",
-    "https://api.adsb.lol/v2/all-with-pos",
-    "https://opendata.adsb.fi/api/v2/snapshot",
     # adsb.lol full-snapshot quirk: a /v2/point at the globe centre with a
-    # planet-spanning radius returns EVERY aircraft adsb.lol knows (~8-9k),
-    # keyless and — unlike /v2/point grid cells and the /v2/all* verbs — NOT
-    # Cloudflare/451-blocked from a datacenter egress (measured 8,473 from the
-    # droplet while the all-with-pos verbs 404 and the aircraft.json mirrors
-    # ReadError). It's the reliable breadth partner to OpenSky's ~9k; unioned by
-    # icao24 the two push the snapshot back toward ~13k. Tried after the real
-    # firehose verbs so a residential deploy still prefers them.
+    # planet-spanning radius returns EVERY aircraft adsb.lol knows, keyless and
+    # — unlike the /v2/all* verbs and the aircraft.json mirrors — NOT
+    # Cloudflare/451-blocked from a datacenter egress. Measured 8,473 from the
+    # droplet and 11,441 from the dev egress on 2026-08-21. It is the reliable
+    # breadth partner to OpenSky's ~9k; unioned by icao24 the two push the
+    # snapshot back toward ~13k.
     "https://api.adsb.lol/v2/point/0/0/20000",
+    "https://opendata.adsb.fi/api/v2/snapshot",
 )
 
 

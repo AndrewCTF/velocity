@@ -74,12 +74,23 @@ async def _load_eonet(
         params: dict[str, Any] = {"status": status, "limit": limit}
         if category:
             params["category"] = category
-        r = await get_client().get(
-            "https://eonet.gsfc.nasa.gov/api/v3/events", params=params
-        )
+        # httpx errors were not caught here, so a ConnectError propagated
+        # through cache.get_or_fetch and out of FastAPI as a 500 — an upstream
+        # problem reported as OUR bug, and one that also took /api/events/all
+        # down with it. Measured 2026-08-21: eonet.gsfc.nasa.gov resolves
+        # (129.164.142.189) but does not connect from this egress.
+        try:
+            r = await get_client().get(
+                "https://eonet.gsfc.nasa.gov/api/v3/events", params=params
+            )
+        except (httpx.HTTPError, OSError) as exc:
+            raise HTTPException(502, f"eonet upstream error: {exc}") from exc
         if r.status_code != 200:
             raise HTTPException(502, f"eonet upstream {r.status_code}")
-        j = r.json()
+        try:
+            j = r.json()
+        except ValueError as exc:
+            raise HTTPException(502, "eonet returned a non-JSON body") from exc
         feats: list[dict[str, Any]] = []
         for ev in j.get("events", []):
             geoms = ev.get("geometry") or []
@@ -215,7 +226,21 @@ async def _load_acled(settings: Settings, days: int = 7) -> dict[str, Any]:
             "event_date": f"{days}|0",
             "limit": 500,
         }
-        r = await get_client().get("https://api.acleddata.com/acled/read", params=params)
+        # api.acleddata.com went NXDOMAIN (measured 2026-08-21, system resolver
+        # and 1.1.1.1 both). ACLED moved to a registered-access API; we do not
+        # guess the new URL. Until an operator registers, this must degrade with
+        # a stated reason rather than throwing a transport error into
+        # /api/events/all, which aggregates eonet + gdelt + acled.
+        try:
+            r = await get_client().get(
+                "https://api.acleddata.com/acled/read", params=params
+            )
+        except (httpx.HTTPError, OSError) as exc:
+            raise HTTPException(
+                502,
+                "ACLED unavailable: api.acleddata.com no longer resolves; the "
+                f"current ACLED API requires registration ({type(exc).__name__})",
+            ) from exc
         if r.status_code != 200:
             raise HTTPException(502, f"acled upstream {r.status_code}")
         j = r.json()

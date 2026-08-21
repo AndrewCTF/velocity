@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from app.routes import _feedgeo as fg
 
@@ -27,7 +27,13 @@ router = APIRouter(tags=["hazards"])
 # ── GDACS — Global Disaster Alert and Coordination System ────────────────────
 # Returns a GeoJSON FeatureCollection of current events across six hazard types
 # (EQ/TC/FL/VO/DR/WF) each scored Green/Orange/Red by modelled impact. Keyless.
-GDACS_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP"
+# The path parameter is EVENTS4APP, not MAP. Measured 2026-08-21: .../MAP answers
+# HTTP 400 and has been doing so silently — the egress audit filed www.gdacs.org
+# as "0 ok / 7 failed" and it was read as a block. EVENTS4APP answers 200 with
+# the identical shape this parser already expects (FeatureCollection of Points
+# carrying eventid / eventtype / alertlevel / country / fromdate), verified
+# against a live body before the switch.
+GDACS_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/EVENTS4APP"
 _GDACS_TYPE = {
     "EQ": "earthquake",
     "TC": "cyclone",
@@ -272,53 +278,81 @@ async def radiation(
 
 
 # ── ReliefWeb active disasters (humanitarian) ────────────────────────────────
+#
+# v1 is DECOMMISSIONED. Measured 2026-08-21, and the upstream says it in the
+# body rather than leaving us to guess:
+#   {"status":410,"error":{"message":"The API version 'v1' has been
+#    decommissioned. Please use version 'v2' instead."}}
+# v2 exists but gate-keeps on a registered application name — 400 "Missing
+# appname parameter" without one, 403 "You are not using an approved appname"
+# with an arbitrary one, including the one below. That is an OPERATOR action
+# (free, request at https://apidoc.reliefweb.int/parameters#appname), not
+# something to guess a URL around, so the URL is left pointing at what we
+# actually call and the route says why it is empty instead of 502-ing.
 RELIEFWEB_URL = "https://api.reliefweb.int/v1/disasters"
+_RELIEFWEB_GONE = (
+    "ReliefWeb API v1 is decommissioned (HTTP 410). v2 needs an approved "
+    "appname — request one at https://apidoc.reliefweb.int/parameters#appname "
+    "and set it here."
+)
 
 
 @router.get("/api/hazards/reliefweb")
 async def reliefweb() -> dict[str, Any]:
     async def load() -> dict[str, Any]:
-        raw = await fg.fetch_json(
-            RELIEFWEB_URL,
-            params={
-                "appname": "velocity-osint",
-                "profile": "full",
-                "preset": "latest",
-                "filter[field]": "status",
-                "filter[value]": "current",
-                "limit": "200",
-            },
-        )
-        out: list[fg.Feature] = []
-        for d in (raw or {}).get("data", []) or []:
-            fields = d.get("fields") or {}
-            countries = fields.get("country") or []
-            country0 = countries[0] if countries and isinstance(countries[0], dict) else {}
-            loc = country0.get("location")
-            if not isinstance(loc, dict):
-                continue
-            lat = fg.num(loc.get("lat"))
-            lon = fg.num(loc.get("lon"))
-            did = str(d.get("id") or fields.get("id") or "")
-            if lat is None or lon is None or not did:
-                continue
-            types = fields.get("type") or []
-            dtype = types[0].get("name") if types and isinstance(types[0], dict) else None
-            out.append(
-                fg.point(
-                    f"relief:{did}",
-                    lon,
-                    lat,
-                    {
-                        "kind": "relief",
-                        "name": fields.get("name"),
-                        "status": fields.get("status"),
-                        "disaster_type": dtype,
-                        "country": country0.get("name"),
-                        "date": (fields.get("date") or {}).get("created"),
-                    },
-                )
-            )
-        return fg.fc(out)
+        try:
+            return await _load_reliefweb()
+        except HTTPException as exc:
+            # An empty layer must say why (docs/decisions.md 2026-08-20). A 410
+            # is the upstream telling us our URL is retired; that is a stated
+            # reason, not an outage, and it must not read as "no disasters".
+            if exc.status_code == 502:
+                return fg.degraded_fc(_RELIEFWEB_GONE)
+            raise
 
-    return await fg.cached("hazards:reliefweb", 1800.0, load)
+    return await fg.cached("hazards:reliefweb", 900.0, load)
+
+
+async def _load_reliefweb() -> dict[str, Any]:
+    raw = await fg.fetch_json(
+        RELIEFWEB_URL,
+        params={
+            "appname": "velocity-osint",
+            "profile": "full",
+            "preset": "latest",
+            "filter[field]": "status",
+            "filter[value]": "current",
+            "limit": "200",
+        },
+    )
+    out: list[fg.Feature] = []
+    for d in (raw or {}).get("data", []) or []:
+        fields = d.get("fields") or {}
+        countries = fields.get("country") or []
+        country0 = countries[0] if countries and isinstance(countries[0], dict) else {}
+        loc = country0.get("location")
+        if not isinstance(loc, dict):
+            continue
+        lat = fg.num(loc.get("lat"))
+        lon = fg.num(loc.get("lon"))
+        did = str(d.get("id") or fields.get("id") or "")
+        if lat is None or lon is None or not did:
+            continue
+        types = fields.get("type") or []
+        dtype = types[0].get("name") if types and isinstance(types[0], dict) else None
+        out.append(
+            fg.point(
+                f"relief:{did}",
+                lon,
+                lat,
+                {
+                    "kind": "relief",
+                    "name": fields.get("name"),
+                    "status": fields.get("status"),
+                    "disaster_type": dtype,
+                    "country": country0.get("name"),
+                    "date": (fields.get("date") or {}).get("created"),
+                },
+            )
+        )
+    return fg.fc(out)
