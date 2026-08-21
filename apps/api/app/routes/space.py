@@ -10,13 +10,62 @@ the frontend computes positions.
 
 from __future__ import annotations
 
+import logging
+import os
+import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app import upstream
 from app.upstream import cache, get_client
 
 router = APIRouter(tags=["space"])
+
+log = logging.getLogger("space")
+
+# The body CelesTrak returns with its conditional-GET 403. Matched as a
+# substring because the rest of the sentence carries the group and a timestamp.
+_NOT_MODIFIED = "GP data has not updated"
+
+
+def _disk_path(group: str) -> Path:
+    """Where the last good TLE text for a group lives.
+
+    Deliberately NOT app.tilecache: that class is an LRU under a byte budget
+    shared with imagery, and these files are ~7 MB total, must not be evicted by
+    a map pan, and are keyed by a name rather than a tile coordinate. One caller
+    is not an abstraction — if a second reference-class feed wants this (the EEZ
+    polygons are the obvious candidate), generalise it then, not now.
+    """
+    from app.config import get_settings  # noqa: PLC0415 — avoids an import cycle
+
+    root = Path(get_settings().tile_cache_dir).parent / "celestrak"
+    # ALLOWED_GROUPS gates `group` before we get here, so it cannot traverse.
+    return root / f"{group}.tle"
+
+
+def _write_disk(group: str, text: str) -> None:
+    """Persist the last good pull. Best-effort: a full disk must not kill a feed."""
+    try:
+        path = _disk_path(group)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tle.tmp")
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)  # atomic, so a reader never sees a half file
+    except OSError as exc:  # noqa: BLE001 — cache write is never load-bearing
+        log.warning("celestrak: could not cache %s to disk (%s)", group, exc)
+
+
+def _read_disk(group: str) -> tuple[str, float] | None:
+    """Last good text plus the epoch it was fetched, or None."""
+    try:
+        path = _disk_path(group)
+        return path.read_text(encoding="utf-8"), path.stat().st_mtime
+    except OSError:
+        return None
+
 
 ALLOWED_GROUPS = {
     "active",
@@ -92,10 +141,10 @@ async def gp(
         # We pull the 3-line text and parse it into the
         # {OBJECT_NAME, NORAD_CAT_ID, TLE_LINE1, TLE_LINE2} shape the frontend
         # consumes.
-        # Browser User-Agent: CelesTrak (like several feeds in this app) is more
-        # willing to serve a browser UA than the default client UA, especially
-        # for large groups under load. Per-request header overrides the shared
-        # client default.
+        # The browser User-Agent is kept but NOT for the reason once written
+        # here. Measured 2026-08-21: celestrak answers our own UA and a Chrome UA
+        # identically, including for the 403 below. Left in place because
+        # changing two things at once is how you learn nothing.
         r = await get_client().get(
             url,
             params={"GROUP": group, "FORMAT": "tle"},
@@ -106,9 +155,38 @@ async def gp(
                 )
             },
         )
-        if r.status_code != 200:
+        if r.status_code == 403 and _NOT_MODIFIED in r.text:
+            # NOT a block. CelesTrak answers a repeat request inside its 2h
+            # publish window with 403 and the body
+            #   "GP data has not updated since your last successful download
+            #    of GROUP=<g> at <ts>. Data is updated once every 2 hours."
+            # keyed by (source IP, GROUP). That is a conditional GET wearing a
+            # 403, and treating it as an outage is what emptied the satellite
+            # layer: the in-process TTL cache dies with the process, so every
+            # restart re-pulled into a guaranteed 403 for the rest of the window.
+            # That — not "bursts" — is the mechanism behind the documented
+            # "restart the backend ONCE and wait".
+            cached = _read_disk(group)
+            if cached is not None:
+                text, fetched_at = cached
+                # Report it as the 304 it actually is, so /api/status/sources
+                # explains itself. send() already booked a failure a moment ago;
+                # source_health() compares last_error_at against last_success, so
+                # this flips the state back to ok while the fail count stays
+                # honest about the wire.
+                upstream.record_success("celestrak.org", 0.0, 304)
+                return {
+                    "group": group,
+                    "items": _parse_tle(text),
+                    "fetched_at": fetched_at,
+                    "stale": True,
+                }
             raise HTTPException(502, f"celestrak upstream {r.status_code}")
-        return {"group": group, "items": _parse_tle(r.text)}
+        if r.status_code != 200:
+            # Any other 403 is a real refusal and must still surface as one.
+            raise HTTPException(502, f"celestrak upstream {r.status_code}")
+        _write_disk(group, r.text)
+        return {"group": group, "items": _parse_tle(r.text), "stale": False}
 
     # CelesTrak update ceiling is 2h; respect it. The FULL set is cached, but we
     # truncate per request: a default 'active' pull is ~16k sats / ~6.5 MB, and
@@ -116,9 +194,21 @@ async def gp(
     # janks the globe. Power users can raise `limit` up to 20000.
     data = await cache.get_or_fetch(key, 2 * 3600.0, load)
     items = data.get("items", []) if isinstance(data, dict) else []
-    return {
+    out: dict[str, Any] = {
         "group": group,
         "count": len(items),
         "returned": min(len(items), limit),
         "items": items[:limit],
     }
+    # A tier that can serve a CACHE publishes the age of the DATA, not of the
+    # response (docs/decisions.md 2026-07-15). A TLE carries its own epoch in
+    # TLE_LINE1 cols 19-32 and the client propagates from it, so a 4h-old
+    # element set is the input SGP4 expects rather than a stale reading — but
+    # the consumer still gets told.
+    if isinstance(data, dict) and data.get("stale"):
+        out["stale"] = True
+        fetched = data.get("fetched_at")
+        if isinstance(fetched, (int, float)):
+            out["fetched_at"] = fetched
+            out["age_s"] = round(time.time() - fetched, 1)
+    return out
