@@ -153,12 +153,19 @@ const LOOKUPS: readonly { readonly group: string; readonly items: readonly Looku
       {
         id: 'telegram',
         label: 'Channel posts · Telegram',
-        hint: 'Public channel previews. Claim tier: a post is somebody asserting something.',
+        hint: 'Public channel previews, 19 allowlisted channels. Each post carries a t.me permalink so a claim can be checked at source. Claim tier: a post is somebody asserting something.',
         path: '/api/news/telegram',
         args: [
-          { name: 'channel', label: 'Channel', placeholder: 'intelslava', initial: 'intelslava' },
+          { name: 'channel', label: 'Channel', placeholder: 'Faytuks', initial: 'Faytuks' },
           { name: 'limit', label: 'Limit', placeholder: '20', initial: '20' },
         ],
+      },
+      {
+        id: 'telegram-channels',
+        label: 'Channel list · Telegram',
+        hint: 'Which channels the backend will scrape. The allowlist is the security boundary on the scraper, so it is published rather than duplicated here.',
+        path: '/api/news/telegram/channels',
+        args: [],
       },
       {
         id: 'meteoalarm',
