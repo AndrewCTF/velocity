@@ -23,8 +23,12 @@ changing BOTH the guard and this file.
   (`/v2/point/0/0/20000`, measured 11 441 on 2026-08-21) + grid overlay
   (densify only). airplanes.live is BANNED at the application level from this
   egress — its 403 body carries a contact address, not a challenge — so it is
-  last in `_HEAD_HOSTS` and gone from `_FIREHOSE_URLS`. Do not put it back
-  without an email to contact@airplanes.live.
+  last in `_HEAD_HOSTS` and gone from `_FIREHOSE_URLS`. It is NOT deleted — a
+  ban is per-deployment, so the operator switches it off with
+  `ADSB_DISABLED_HOSTS=api.airplanes.live` (read by `head_hosts()` /
+  `firehose_urls()`, never returns an empty list) and a deploy they have not
+  banned keeps the tier. Draft outreach: `docs/outreach/airplanes-live-access.md`.
+  → `tests/test_adsb_disabled_hosts.py`
   → `OSINT_LIVE_PROBE=1` in `tests/test_invariants.py`
 - The snapshot union is FRESHEST-OBSERVATION-wins (`seen_at - seen_pos_s`), not
   merge-order — a cached tier must never clobber a fresher fix — and a fix that

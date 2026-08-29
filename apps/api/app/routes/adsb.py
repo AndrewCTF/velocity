@@ -502,11 +502,39 @@ _FIREHOSE_URLS: tuple[str, ...] = (
 )
 
 
+def _disabled_hosts() -> set[str]:
+    """Hostnames the operator has switched off for this deployment."""
+    raw = get_settings().adsb_disabled_hosts or ""
+    return {h.strip().lower() for h in raw.split(",") if h.strip()}
+
+
+def _host_of(url: str) -> str:
+    return url.split("//", 1)[-1].split("/", 1)[0].lower()
+
+
+def head_hosts() -> list[str]:
+    """_HEAD_HOSTS minus anything disabled here. Never returns empty: a config
+    typo must degrade the tier, not delete it."""
+    off = _disabled_hosts()
+    if not off:
+        return _HEAD_HOSTS
+    kept = [u for u in _HEAD_HOSTS if _host_of(u) not in off]
+    return kept or _HEAD_HOSTS
+
+
+def firehose_urls() -> tuple[str, ...]:
+    """_FIREHOSE_URLS minus anything disabled here."""
+    off = _disabled_hosts()
+    if not off:
+        return _FIREHOSE_URLS
+    return tuple(u for u in _FIREHOSE_URLS if _host_of(u) not in off)
+
+
 def _primary_host_idx(lat: float, lon: float) -> int:
     """Deterministic (lat,lon) → primary host index. Stable across polls."""
     key = f"{lat:.4f}:{lon:.4f}".encode()
     h = hashlib.md5(key, usedforsecurity=False).digest()
-    return h[0] % len(_HEAD_HOSTS)
+    return h[0] % len(head_hosts())
 
 
 # Anchor fallback — coarse continental hub list. Only fires when the full
@@ -564,8 +592,9 @@ async def _fetch_anchor_fallback(
     async def hit_anchor(lat: float, lon: float) -> list[dict[str, Any]]:
         primary_idx = _primary_host_idx(lat, lon)
         async with _UPSTREAM_SEMAPHORE:
-            for offset in range(len(_HEAD_HOSTS)):
-                host = _HEAD_HOSTS[(primary_idx + offset) % len(_HEAD_HOSTS)]
+            hosts = head_hosts()
+            for offset in range(len(hosts)):
+                host = hosts[(primary_idx + offset) % len(hosts)]
                 url = f"{host}/v2/point/{lat}/{lon}/250"
                 try:
                     r = await client.get(url, timeout=cell_timeout)
@@ -691,8 +720,9 @@ async def _fetch_cell(
     async def load_cell() -> list[dict[str, Any]]:
         client = get_client()
         async with _UPSTREAM_SEMAPHORE:
-            for offset in range(len(_HEAD_HOSTS)):
-                host = _HEAD_HOSTS[(primary_idx + offset) % len(_HEAD_HOSTS)]
+            hosts = head_hosts()
+            for offset in range(len(hosts)):
+                host = hosts[(primary_idx + offset) % len(hosts)]
                 url = f"{host}/v2/point/{lat}/{lon}/250"
                 try:
                     r = await client.get(url, timeout=cell_timeout)
@@ -750,7 +780,7 @@ async def _try_firehose() -> list[dict[str, Any]] | None:
     HTTP-200 text/plain rate-limit body the same way it does in the grid."""
     client = get_client()
     timeout = httpx.Timeout(8.0, connect=2.0)
-    for url in _FIREHOSE_URLS:
+    for url in firehose_urls():
         try:
             async with _UPSTREAM_SEMAPHORE:
                 r = await client.get(url, timeout=timeout)
@@ -2688,7 +2718,7 @@ async def _union_verb(verb: str, source: str | None = None) -> dict[str, Any]:
         except ValueError:
             return []
 
-    results = await asyncio.gather(*(_one(h) for h in _HEAD_HOSTS))
+    results = await asyncio.gather(*(_one(h) for h in head_hosts()))
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
     for ac_list in results:
@@ -2755,7 +2785,7 @@ async def _lol_lookup(
         return await cache.get_or_fetch(cache_key, ttl, lambda: _union_verb(verb))
 
     async def load() -> dict[str, Any]:
-        for host in _HEAD_HOSTS:
+        for host in head_hosts():
             url = f"{host}/v2/{verb}"
             try:
                 r = await get_client().get(url)

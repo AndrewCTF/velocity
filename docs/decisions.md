@@ -988,15 +988,17 @@ safety rule: **GET-only is NOT the safety boundary on this app.**
 skip list is `ratelimit.is_compute_path` plus four named mutating GETs, and every
 skip is reported with its reason rather than dropped.
 
-## Five things that looked like blocks and were not (2026-08-21)
+## Four things that looked like blocks and were not, and one that was (2026-08-21)
 
 The 2026-08-20 wave made upstream health measurable and the first measurement
 said 19 of 99 hosts were failing. This entry is what happened when each failure
-was actually opened up. **One of the five was a block. The other four were our
-own bugs wearing a 4xx.** The lesson is not "the audit was wrong" — the audit is
-what made any of this visible — it is that *reachability* and *correctness of
-the call we make* are different questions, and the instrument only asked the
-first one.
+was actually opened up. **Exactly one was a block. Four were our own bugs
+wearing a 4xx, and a fifth "finding" was the probe misreading a documentation
+string — retracted below, and the most instructive of the lot.** The lesson is
+not "the audit was wrong": the audit is what made any of this visible. It is
+that *reachability*, *correctness of the call we make*, and *whether we make
+that call at all* are three different questions, and the instrument only asked
+the first.
 
 Baseline for every measurement below: dev egress, Proton VPN exit
 159.26.115.35, SG, AS208172.
@@ -1099,10 +1101,36 @@ hardcoded empty list with an apology beside it. Function and route names stay
 and renaming them to advertise a backend swap would break `routeCoverage` for
 no gain.
 
-**5. `rx.linkfanel.net` resolves AAAA-only** (`2a01:e0a:6d:9140::42`, no A
-record) while `upstream._transport` pins `local_address="0.0.0.0"`. Host IPv6 is
-broken here, so it times out. A sixth failure class — *our own IPv4 pin versus
-an IPv6-only upstream* — that no report could express.
+**5. RETRACTED, and the retraction is the more useful finding.** This entry
+first claimed `rx.linkfanel.net` was AAAA-only and therefore unreachable behind
+`upstream._transport`'s IPv4 pin. **That was wrong on every count**, and it was
+wrong in exactly the way this whole entry is about.
+
+What is actually true: the host has an A record (82.64.25.168) as well as a
+AAAA; `getent hosts` printed only the first line and that was read as the whole
+answer. Its **`https://` resets the TLS handshake** while its `http://` answers
+200. And the backend never asks it for `https://` anyway —
+`source_catalog.py`'s `KIWISDR_URL` is `http://rx.linkfanel.net/kiwisdr_com.js`
+and `/api/sdr/kiwisdr` returns **866 stations**. There was no defect.
+
+The `https://` URL that was probed is the entry's `url_pattern` — a
+**documentation field in the source catalog**, describing a provider the
+platform knows about. `upstream_urls()` regexes every `http(s)://` literal out
+of every `.py` under `apps/api/app`, so roughly fifty catalog metadata strings
+sit in the results next to genuine upstreams with nothing distinguishing them.
+That is the same mistake as firing template strings, one level up: **the probe
+cannot tell a URL the app CALLS from a URL the app MENTIONS.**
+
+Fixed by giving those rows a `catalog-only` class, excluded from the
+reached/unreached arithmetic and named in the summary rather than dropped. The
+`ipv4-none` check stays because that failure really is indistinguishable from a
+plain timeout in every other report — but no host currently hits it, and this
+entry should not have said one did.
+
+Recorded rather than quietly deleted because the failure mode is the point: the
+correction came from re-reading the resolver output and the actual call site,
+not from the probe, which had happily produced a clean-looking row for a field
+nobody fetches.
 
 **The one real block.** `api.airplanes.live` answers 403 with
 
@@ -1118,6 +1146,16 @@ moved to LAST in `_HEAD_HOSTS` rather than deleted, because this is self-hosted
 software, the ban is scoped to whoever asked, and `_HEAD_HOSTS` has no
 dead-skip — at index 0 it was the deterministic primary for a third of ~120
 cells and each paid a round trip into a wall every fan-out.
+
+Follow-up the same day: "last in the list" still cost ~9 failed requests per
+boot, so the host moved behind a per-deployment switch —
+`ADSB_DISABLED_HOSTS`, read by `head_hosts()` and `firehose_urls()`, which
+filter but never return empty so a config typo degrades the tier instead of
+blanking the map. This deployment sets it; the codebase does not, because the
+ban belongs to whoever asked and not to everyone who runs this software. The
+outreach the 403 asks for is drafted at
+`docs/outreach/airplanes-live-access.md` and has NOT been sent — that is the
+owner's call, not the code's.
 
 `api.adsb.lol/v2/all-with-pos` was also removed: **404**, a verb that does not
 exist, which is egress-independent. `api.adsb.lol/v2/point/0/0/20000` — measured
