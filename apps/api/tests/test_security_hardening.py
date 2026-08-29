@@ -637,3 +637,23 @@ def test_collab_load_doc_serves_when_cleared(monkeypatch):
     out = asyncio.run(collab.load_doc("doc1", p=Principal(user_id="u", token="t", clearance=3)))
     assert out["exists"] is True
     assert out["state"] == "SECRETBLOB"
+
+
+# ── an ignored filter is a wrong answer, not a lenient one (2026-08-29) ──────
+
+
+def test_the_agent_query_routes_reject_a_filter_they_do_not_support():
+    """FastAPI drops undeclared query params silently. On these two routes that
+    handed an agent the whole unfiltered feed with a 200, which it then reasoned
+    over as the filtered answer."""
+    app = create_app()
+    with TestClient(app) as c:
+        for path in ("/api/intel/aircraft", "/api/intel/vessels"):
+            r = c.get(f"{path}?vessel_type=tanker&flag=RU")
+            assert r.status_code == 422, f"{path} -> {r.status_code}"
+            detail = r.json()["detail"]
+            assert "flag" in detail and "vessel_type" in detail
+            # It also says what the route DOES filter on, so the agent can retry.
+            assert "radius_nm" in detail
+            # A declared filter still works.
+            assert c.get(f"{path}?limit=5").status_code == 200

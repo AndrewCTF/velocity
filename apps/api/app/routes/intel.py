@@ -20,7 +20,7 @@ import json
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app import llm
@@ -109,7 +109,37 @@ async def intel_jamming(
     return await analytics.jamming(bbox)
 
 
-@router.get("/api/intel/aircraft")
+async def reject_unknown_query_params(request: Request) -> None:
+    """422 on a query parameter this route does not declare.
+
+    FastAPI drops undeclared params silently, which is the right default almost
+    everywhere and exactly wrong on the two query routes agents drive: an agent
+    that asks for `?flag=RU` or `?vessel_type=tanker` got the whole unfiltered
+    feed back with a 200 and no way to tell it had been ignored, then reasoned
+    over it as if it were the filtered answer. Silence is the defect; a 422
+    naming the parameter is the fix.
+
+    The known set is read off the route's own dependant at request time rather
+    than hand-listed, so adding a filter to the signature cannot leave a stale
+    allowlist behind.
+    """
+    route = request.scope.get("route")
+    dependant = getattr(route, "dependant", None)
+    if dependant is None:  # pragma: no cover - only if starlette stops setting it
+        return
+    known = {p.alias for p in dependant.query_params}
+    extra = sorted(set(request.query_params) - known)
+    if extra:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"unknown query parameter(s): {', '.join(extra)}. "
+                f"This route filters on: {', '.join(sorted(known))}."
+            ),
+        )
+
+
+@router.get("/api/intel/aircraft", dependencies=[Depends(reject_unknown_query_params)])
 async def intel_aircraft(
     min_lon: float | None = Query(None),
     min_lat: float | None = Query(None),
@@ -148,7 +178,7 @@ async def intel_aircraft_lookup(ident: str) -> dict[str, Any]:
     return await analytics.lookup_aircraft(ident)
 
 
-@router.get("/api/intel/vessels")
+@router.get("/api/intel/vessels", dependencies=[Depends(reject_unknown_query_params)])
 async def intel_vessels(
     min_lon: float | None = Query(None),
     min_lat: float | None = Query(None),

@@ -2656,3 +2656,76 @@ hot-blob builders also draw from, not request latency.
 the strip, the lanes and the density histogram on any `useTime` change, not just
 the four fields it reads. Per-field selectors now, matching `TimeDock.tsx` and
 `GlobeCanvas.tsx` — it was the only consumer in the tree doing it the other way.
+
+## Three ways the platform answered an agent without telling it the truth (2026-08-29)
+
+The 2026-08-20 wave made FEEDS honest. This is the same question asked of the
+API's own answers, from the two wave-2 persona findings that were still open.
+
+**An MCP error looked like a success.** `_get`/`_post`/`_delete` never raise —
+an unreachable backend or a non-2xx becomes `{"error": ..., "detail": ...}`, so
+a driving agent gets a parseable failure instead of a stack trace. That part is
+right. What was wrong is that the same dict reached the agent with the
+protocol's `isError` unset, and agents act on `isError`: several will feed the
+body forward as data.
+
+Registration is wrapped ONCE (`mcp.tool` is rebound before the 85 `@mcp.tool()`
+decorators run) rather than editing 85 functions. A top-level non-empty
+`"error"` key is the documented contract, so it is the signal; anything else
+passes through untouched.
+
+Two details worth keeping:
+
+- The raise costs `structuredContent` — the low-level server builds an error
+  result from the message alone (`_make_error_result(str(e))`) — so the message
+  carries the same dict as JSON behind a `tool_error: ` prefix. The agent keeps
+  every field it had AND learns the call failed.
+- The wrapper is REGISTERED but the module-level name stays the original
+  function. Seven existing tests and the REST-parity checks call these names
+  in-process and depend on the non-raising dict; two callers, two contracts, one
+  definition.
+
+**An unsupported filter was silently dropped.** FastAPI ignores query params a
+route does not declare, which is the right default nearly everywhere and exactly
+wrong on `/api/intel/aircraft` and `/api/intel/vessels`, the two routes agents
+drive. `?vessel_type=tanker&flag=RU` returned the whole unfiltered feed with a
+200, and the caller reasoned over it as the filtered answer. Both now carry
+`Depends(reject_unknown_query_params)`, which reads the known set off the
+route's own `dependant` at request time — a hand-listed allowlist would go stale
+the first time someone adds a filter — and 422s naming both the rejected
+parameter and what the route does filter on, so the caller can retry.
+
+**A first boot printed a loader error before uvicorn said anything.**
+`scripts/run-api.sh` set `LD_PRELOAD=libjemalloc.so.2` unconditionally, and
+jemalloc is a declared prerequisite in neither the README nor the Makefile. On a
+box without it, glibc prints `ERROR: ld.so: object 'libjemalloc.so.2' from
+LD_PRELOAD cannot be preloaded` ahead of the API's first line — which a
+first-time self-hoster reasonably reads as "already broken". It is probed with
+`ldconfig -p` now and prints which allocator it took, naming the apt package in
+the fallback line.
+
+→ `tests/test_mcp_server.py::test_a_structured_error_reaches_the_transport_as_a_tool_error`,
+`::test_a_successful_tool_is_untouched`,
+`::test_the_module_level_name_is_still_the_raw_function`,
+`tests/test_security_hardening.py::test_the_agent_query_routes_reject_a_filter_they_do_not_support`
+
+### Not a finding: XML parsing (checked 2026-08-29)
+
+An audit flagged the eight modules parsing XML with stdlib `ElementTree` rather
+than `defusedxml`, with `foundry/ingest.py`'s operator-uploaded KML/KMZ as the
+live risk. Measured on this tree, both halves are already covered:
+
+- The KMZ decompression bomb is bounded — `parse_kmz` reads
+  `MAX_UPLOAD_BYTES + 1` from the member and 413s past it, so the archive can
+  claim any ratio it likes.
+- Billion laughs is rejected by the interpreter. A 426-byte seven-level entity
+  bomb through `parse_kml` came back in 0.02 s with `limit on input
+  amplification factor (from DTD and entities) breached` (Python 3.14.4,
+  expat 2.7.4).
+
+So `defusedxml` would be a new dependency buying nothing here. Recorded because
+a grep finds the eight `ElementTree` imports and the next audit will report them
+again. If this platform ever runs on an older expat, the cheap fix is rejecting
+a `DOCTYPE` before parsing, not the dependency.
+
+Baseline 2555 → 2559.

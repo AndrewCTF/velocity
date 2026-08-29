@@ -9,7 +9,11 @@ to the working directory and fail in confusing ways from elsewhere.
   gate for "done". `--live` adds feed probes against :8000, which is what you
   want for any stale/slow/empty report. It is also where the browser-tier
   selftest runs.
-- `run-api.sh` — boots the API on :8000 with a jemalloc preload. Never set
+- `run-api.sh` — boots the API on :8000, preloading jemalloc IF `ldconfig` finds
+  it and printing which allocator it took. The preload is PROBED, not assumed:
+  jemalloc is not a declared prerequisite, and an unconditional `LD_PRELOAD` on
+  a box without it makes glibc print a loader ERROR ahead of uvicorn's first
+  line, which reads as "already broken" to a first-time self-hoster. Never set
   `M_ARENA_MAX=2`; sidecar children scrub `LD_PRELOAD` and that is guarded.
   Restart the backend ONCE and wait — repeated restarts get the egress
   rate-limited, which then looks like a code bug.

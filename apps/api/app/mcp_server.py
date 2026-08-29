@@ -31,6 +31,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import atexit
+import functools
+import inspect
+import json
 import os
 import subprocess
 import sys
@@ -40,6 +43,7 @@ from urllib.parse import quote, urlparse
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.routing import Route
@@ -354,6 +358,61 @@ async def _delete(path: str) -> dict[str, Any]:
     if r.status_code not in (200, 204):
         return {"error": f"backend_{r.status_code}", "detail": r.text[:400], "url": url}
     return {"ok": True}
+
+
+# ── error contract ────────────────────────────────────────────────────────────
+# The tool helpers below (_get/_post/_delete) never raise: an unreachable
+# backend or a non-2xx becomes a structured dict {"error": ..., "detail": ...}.
+# That is deliberate — an agent gets a parseable failure instead of a stack
+# trace — but it was ALSO being handed back with the protocol's isError unset,
+# so a driving agent saw a successful tool call whose payload happened to
+# describe a failure. Agents act on isError; several will happily feed that
+# body forward as data.
+#
+# Registration is wrapped once here rather than editing 85 tool functions. A
+# top-level non-empty "error" key IS the documented contract, so it is the
+# signal; anything else passes through untouched. The raise costs the
+# structuredContent field (the low-level server builds an error result from the
+# message alone), so the message carries the same dict as JSON — the agent keeps
+# every field it had, and now also knows the call failed.
+_ERROR_PREFIX = "tool_error: "
+_register_tool = mcp.tool
+
+
+def _tool(*d_args: Any, **d_kwargs: Any) -> Any:
+    decorate = _register_tool(*d_args, **d_kwargs)
+
+    def wrap(fn: Any) -> Any:
+        if inspect.iscoroutinefunction(fn):
+
+            @functools.wraps(fn)
+            async def inner(*args: Any, **kwargs: Any) -> Any:
+                return _raise_on_error(await fn(*args, **kwargs))
+
+        else:
+
+            @functools.wraps(fn)
+            def inner(*args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
+                return _raise_on_error(fn(*args, **kwargs))
+
+        decorate(inner)
+        # Return the ORIGINAL function, not the wrapper. The transport calls
+        # what was registered; everything in-process that imports these names
+        # (the tests, the REST-parity checks) keeps the non-raising dict
+        # contract the helpers were built around. Two callers, two contracts,
+        # one definition.
+        return fn
+
+    return wrap
+
+
+def _raise_on_error(out: Any) -> Any:
+    if isinstance(out, dict) and isinstance(out.get("error"), str) and out["error"]:
+        raise ToolError(_ERROR_PREFIX + json.dumps(out, default=str))
+    return out
+
+
+mcp.tool = _tool  # type: ignore[method-assign]
 
 
 # ── tools ─────────────────────────────────────────────────────────────────────
