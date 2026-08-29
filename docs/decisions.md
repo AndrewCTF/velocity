@@ -2588,3 +2588,71 @@ green while the jail leaked), skipped with a stated reason where bubblewrap does
 not work.
 
 Baseline 2545 → 2555.
+
+## Five CPU paths that ran on the event loop, and one boot sequence left alone (2026-08-29)
+
+Everything hot on this platform was already off the loop — `routes/adsb.py`,
+`routes/maritime.py` and `history.py` offload every comparable operation, and
+the ADS-B world payload is a pre-gzipped blob served with ETag/304. Five modules
+never got that treatment, and all five sit on request paths:
+
+- `intel/sar_damage.py` — PIL decode of two frames plus a numpy
+  percentile/clip, inline in `async def detect_damage`.
+- `intel/sar_vessels.py` — `np.asarray(Image.open(...))` on a frame up to
+  `_MAX_DIM` (2500 px) plus the CFAR detect, inline in
+  `async def detect_dark_vessels` (reachable from `routes/sar.py`).
+- `intel/offroad.py` — PNG decode of up to `_MAX_TILES_PER_SIDE ** 2` DEM tiles,
+  the `hstack`/`vstack` stitch, and a pure-Python 8-connected A* over up to
+  `_MAX_GRID ** 2` cells, all inline in `async def plan_offroad` (reachable from
+  `routes/route.py`).
+- `fusion/ingest.py` — a PIL decode per layer in `fetch_aligned_stack`.
+- `eusi.py` — decode, RGB convert and PNG re-encode in `best_chip`.
+
+None of the five contained a single `to_thread`/`run_in_executor` call. The loop
+they were running on also drives the 1 s ADS-B/AIS snapshot cycle and the WS
+broadcast, so one SAR detect or one route request stalled the live map for every
+connected viewer. Each CPU segment now crosses to a thread ONCE (a helper per
+site, rather than three hops for three consecutive numpy calls).
+
+**The lifespan chain was considered and deliberately left serial.** `main.py`
+awaits fourteen subsystems one after another before `yield`, and several carry
+capped waits that stack (`adsb_sidecar` 60 s, `llamacpp_sidecar` 300 s + 60 s,
+`vllm_sidecar` 120 s). Two of the orderings are load-bearing and say so in
+comments — warp before the browser/ADS-B sidecars for the SOCKS port, ADS-B
+sidecar before `start_snapshot()`. Of what remains, the only pair with real
+timeouts is llamacpp and vLLM, and those two contend for the same VRAM: starting
+them concurrently trades a boot-time saving for a memory spike on the one
+resource this box has already been bitten by (see the 2026-07-28 entry, 23 GB of
+VRAM). The rest are no-ops when their feature is disabled. Churning the most
+incident-heavy sequence in the repo for a saving that only materialises with two
+GPU engines enabled at once is the wrong trade. Recorded so the next audit does
+not re-derive it.
+
+### `history.py` re-ran its schema on every connection (2026-08-29)
+
+`_connect()` issued `PRAGMA auto_vacuum`, `journal_mode`, `journal_size_limit`,
+`CREATE TABLE IF NOT EXISTS`, two `CREATE INDEX IF NOT EXISTS` and a `commit()`
+on EVERY call, from 16 call sites including the flush that fires every
+`_FLUSH_INTERVAL_S` and every read query. Being idempotent is what made it easy
+to leave there. The schema work is now memoized per path, re-armed whenever the
+file is missing so "already set up" can never outlive the database it describes
+(a fresh boot, a new shard, a test that removed it).
+
+`PRAGMA synchronous` was set nowhere in the repo, so a WAL-mode store was still
+paying `FULL`'s fsync per commit. Now `NORMAL`, which under WAL is the
+documented-safe setting: a power loss can cost the last transactions, never the
+database. This is a position recorder flushing every few seconds, so the
+exposure is seconds of track.
+
+Measured on this box, ext4 (NOT /tmp, which is tmpfs here and hides the fsync
+difference entirely — the first run of this benchmark reported 9% for that
+reason), 60 flushes × 500 rows, median of 5: **228 ms → 215 ms, about 5%.**
+Modest, and it is steady-state overhead on the shared executor pool that the
+hot-blob builders also draw from, not request latency.
+
+### `Timeline.tsx` subscribed to a whole store (2026-08-29)
+
+`const { playing, multiplier, togglePlay, setMultiplier } = useTime()` re-renders
+the strip, the lanes and the density histogram on any `useTime` change, not just
+the four fields it reads. Per-field selectors now, matching `TimeDock.tsx` and
+`GlobeCanvas.tsx` — it was the only consumer in the tree doing it the other way.

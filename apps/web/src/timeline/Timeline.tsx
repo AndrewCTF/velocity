@@ -83,7 +83,13 @@ interface Lane {
 }
 
 export function Timeline({ viewer }: Props = {}): JSX.Element {
-  const { playing, multiplier, togglePlay, setMultiplier } = useTime();
+  // Per-field selectors, matching TimeDock and GlobeCanvas. Destructuring the
+  // whole store re-renders this component - the strip, the lanes, the density
+  // histogram - on any useTime change, not just the four fields it reads.
+  const playing = useTime((s) => s.playing);
+  const multiplier = useTime((s) => s.multiplier);
+  const togglePlay = useTime((s) => s.togglePlay);
+  const setMultiplier = useTime((s) => s.setMultiplier);
   const [stamp, setStamp] = useState(() => isoStamp(Date.now()));
   const [density, setDensity] = useState<Density | null>(null);
   const [lanes, setLanes] = useState<Lane[]>([]);
