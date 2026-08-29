@@ -2518,3 +2518,73 @@ deleting one gate and watching the test fail, then restoring it.
 `::test_every_mutating_actuation_route_carries_the_operator_gate`
 
 Baseline 2541 → 2545.
+
+## op.python gets a real jail, and says so when it does not have one (2026-08-29)
+
+`op.python` ran the operator's code in a separate process under RLIMIT_CPU 30 s,
+RLIMIT_AS, RLIMIT_NOFILE 64, a parent-enforced wall timeout, a 5 MB stdout cap
+and a process-group kill. Every one of those bounds an ACCIDENT — a runaway
+loop, a memory balloon. None of them bounds INTENT. Measured before the change:
+a block containing `open('apps/api/.env').read()` returned every API key on the
+box, and `socket.create_connection(...)` sent them anywhere. The child also
+inherited the API process's entire environment.
+
+That is remote code execution for anyone allowed to run a workflow, which the
+same-day `require_operator` change narrows but does not remove: the operator's
+own box should not hand its credentials to a block just because the block asked.
+
+**What ships.** `python_exec._child_argv()` wraps the runner in `bwrap`:
+`--unshare-net --unshare-ipc --unshare-uts --unshare-pid --die-with-parent`, a
+read-only `/usr` `/lib` `/lib64` `/bin` `/sbin`, a private `/tmp` tmpfs,
+`--chdir /tmp`, and a minimal `env` rather than this process's. Network OFF by
+default (operator decision this session); `WORKFLOWS_PYTHON_NET=1` puts it back
+and additionally binds `/etc/resolv.conf`, `/etc/ssl` and `/etc/hosts`, without
+which an "allowed" network is unusable. A block that needs to reach out should
+use `op.http`, which carries the SSRF guard, the per-run dispatch budget and the
+preview dry-run that a raw socket in here honours none of.
+
+Measured on this box, `bwrap-nonet` tier: `.env` read → FileNotFoundError,
+repo read → FileNotFoundError, socket → `[Errno 101] Network is unreachable`,
+DNS → gaierror, write to `/usr` → `[Errno 30] Read-only file system`, write to
+`/tmp` → fine, environment → the six names we pass. With
+`WORKFLOWS_PYTHON_NET=1`: DNS resolves, `.env` still unreadable.
+
+**Three things that are easy to get wrong here, all of them found by doing it.**
+
+- **The bind list must be surgical.** `sys.prefix` (the venv) and
+  `py_runner.py` both live inside the repo, and so does `apps/api/.env`.
+  Binding `apps/api` for convenience would carry every credential into the jail
+  and silently undo the whole change. A guard asserts directly on the argv that
+  no bound path is a parent of the `.env`.
+- **Probe by RUNNING it, with the real bind list.** bubblewrap installs cleanly
+  on kernels with unprivileged user namespaces disabled, where every invocation
+  fails at exec time; finding that out as an opaque block failure on the
+  operator's first run is the wrong place. The first probe here was also a
+  cut-down one (`/usr`, `/proc`, `/dev`, `/tmp`) and reported NO bubblewrap on a
+  box that has a working one — without `/lib64` the dynamic loader is missing
+  and even `/usr/bin/true` fails. The probe and the spawn now share
+  `_JAIL_BINDS`, because a probe testing a different sandbox than the one that
+  runs proves nothing about the one that runs.
+- **Report the tier, never assume it.** `sandbox_tier()` returns
+  `bwrap-nonet` / `bwrap` / `rlimits-only`, and the block's own help text says
+  which is in force — including the honest "resource limits ONLY … run only code
+  you trust" on a box without a working bubblewrap. "It is sandboxed" is a claim
+  an operator acts on when deciding whether to paste in code they have not read.
+
+**RLIMIT_AS went 1 GiB → 4 GiB in the same change**, which is a usability fix
+wearing security clothes. RLIMIT_AS bounds VIRTUAL address space and numpy's
+OpenBLAS reserves far more of it than it ever touches, so `import numpy` — the
+single most obvious thing to do in a data-transform block — died with "Memory
+allocation still failed after 10 retries". Measured: 1 GiB fails, 2 GiB and up
+succeed; 4 GiB leaves room for an array the block actually allocates while a
+9 GiB `bytearray` still dies with "memory limit exceeded".
+
+**Upgrade note:** an existing `op.python` block that opens a socket now fails.
+Set `WORKFLOWS_PYTHON_NET=1`, or move the fetch into an `op.http` block.
+
+→ `tests/test_python_exec_sandbox.py` — nine guards driving the REAL
+`run_python_block` against the REAL bind list (a mocked-argv test would stay
+green while the jail leaked), skipped with a stated reason where bubblewrap does
+not work.
+
+Baseline 2545 → 2555.

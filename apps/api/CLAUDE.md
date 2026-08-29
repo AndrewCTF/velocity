@@ -142,6 +142,16 @@ routes read that. → `tests/test_security_hardening.py`, whose anti-rot walk
 goes over the ROUTERS: `app.routes` hides leaves behind `_IncludedRouter` and an
 app-level walk passes vacuously.
 
+`op.python` runs inside a `bwrap` jail when bubblewrap works here: no network
+(default; `WORKFLOWS_PYTHON_NET=1` restores it), read-only system, private
+/tmp, minimal env. The bind list is SURGICAL — `sys.prefix` and `py_runner.py`
+sit inside the repo next to `apps/api/.env`, so binding any parent of them hands
+every key on the box to block code. bubblewrap is probed by RUNNING it with the
+real bind list (`_JAIL_BINDS`, shared with the spawn), because it installs fine
+on kernels with userns disabled and a cut-down probe reports "absent" on a box
+that has it. `sandbox_tier()` is reported in the block help, never assumed.
+→ `tests/test_python_exec_sandbox.py`
+
 ## Connections (operator-configured sources)
 
 `foundry/connections.py` runs MQTT / Kafka / SQL sources the operator points at
