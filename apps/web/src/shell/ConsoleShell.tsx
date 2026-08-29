@@ -359,7 +359,9 @@ export function ConsoleShell({
                     <PanelRightOpen size={14} strokeWidth={1.75} aria-hidden />
                   </button>
                 </div>
-                <div className="flex-1 min-h-0 overflow-auto bg-bg-1">{right}</div>
+                <div className="flex-1 min-h-0 overflow-auto bg-bg-1">
+                  <ErrorBoundary label="Selection">{right}</ErrorBoundary>
+                </div>
                 <RailResizer side="right" width={rightW} set={setRightW} />
               </aside>
             )}
@@ -373,7 +375,7 @@ export function ConsoleShell({
                   onClose={() => redockInspector(INSPECTOR_PANEL_ID)}
                 >
                   <div data-rail="right" className="h-full overflow-auto">
-                    {right}
+                    <ErrorBoundary label="Selection">{right}</ErrorBoundary>
                   </div>
                 </FloatingPanel>,
                 document.body,

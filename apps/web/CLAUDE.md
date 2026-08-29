@@ -117,6 +117,12 @@ the decision deliberately by changing BOTH the guard and this file.
   → `shell/panels.test.ts` (no `pending` list, no panel declared that App.tsx
   does not fill), `shell/rehoming.test.ts` (each address renders, and renders
   once)
+- Every rail that hosts foreign content is wrapped in `ErrorBoundary`. The
+  inspector rendered `{right}` raw in BOTH its docked and detached sites while
+  its own mobile sibling was wrapped, so one malformed selection payload
+  black-screened the pane behind the console's most common interaction with no
+  way back. A boundary added to one of the two sites is half a fix — the same
+  content node moves between them. → `shell/ConsoleShell.test.tsx`
 
 ## Copy / voice (2026-07-15, docs/decisions.md#dashboard-copy-one-voice-no-em-dashes-2026-07-15)
 
@@ -129,6 +135,10 @@ the decision deliberately by changing BOTH the guard and this file.
 - Errors the user sees are sentences that keep the code (`Cameras unavailable
   (HTTP 503)`), never raw internals (`cams 503`). Lowercase micro-labels
   (`loading…`, `saving…`) STAY: that register is deliberate, not sloppiness.
+- A thrown exception's `.message` is a stack fragment, so it is the raw-internals
+  case, not the keep-the-code case. `ErrorBoundary` says which panel stopped and
+  that the rest of the console is fine; the detail goes to `console.error` and to
+  a Copy button. → `shell/ConsoleShell.test.tsx`
 - TRACE A STRING TO A RENDER BEFORE REWRITING IT. Three things look like copy
   and are not: state enums (`setStatus('idle')`, build `'failed'`), parsed
   sentinels (`'error:<msg>'` job ids, `=== 'model unavailable'`), and dead text
