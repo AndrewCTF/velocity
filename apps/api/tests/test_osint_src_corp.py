@@ -241,3 +241,89 @@ async def test_wikidata_search_degrades_when_unavailable(monkeypatch) -> None:
     assert out["entities"] == []
     assert out["count"] == 0
     assert out["note"] == "wikidata unavailable"
+
+
+# ── LittleSis (2026-08-29 wave) ───────────────────────────────────────────
+
+_LS_SEARCH = {
+    "meta": {"currentPage": 1},
+    "data": [
+        {"type": "entities", "id": 15108, "attributes": {
+            "id": 15108, "name": "Donald Trump", "primary_ext": "Person",
+            "blurb": "b", "website": "http://trump.com/"}},
+        {"type": "entities", "id": 38805, "attributes": {
+            "id": 38805, "name": "Elon Musk", "primary_ext": "Person", "blurb": "c"}},
+        {"type": "entities", "id": 999, "attributes": {
+            "id": 999, "name": "Elon Musk Revocable Trust", "primary_ext": "Org"}},
+    ],
+}
+
+_LS_RELS = {
+    "meta": {"pageCount": 31},
+    "data": [
+        {"attributes": {"id": 1, "description": "Elon Musk  is/was a member of  Dialog",
+                        "description1": "Member", "amount": None,
+                        "start_date": "2015-00-00", "end_date": ""},
+         "entity": "https://littlesis.org/person/38805-Elon_Musk",
+         "related": "https://littlesis.org/org/7-Dialog"},
+        # The queried entity on the OTHER end: the counterparty is `entity`.
+        {"attributes": {"id": 2, "description": "Greg Brockman  and  Elon Musk  are peers",
+                        "description1": "Peer", "amount": 500},
+         "entity": "https://littlesis.org/person/123-Greg_Brockman",
+         "related": "https://littlesis.org/person/38805-Elon_Musk"},
+    ],
+}
+
+
+def _corp_fake(payload):  # type: ignore[no-untyped-def]
+    async def f(url, ttl, **kw):  # type: ignore[no-untyped-def]
+        return payload
+    return f
+
+
+async def test_littlesis_search_puts_the_exact_match_first(monkeypatch) -> None:
+    # The upstream ranks a better-known neighbour above the exact match; taking
+    # data[0] blindly attributes one person's network to another.
+    monkeypatch.setattr(corp, "fetch_json", _corp_fake(_LS_SEARCH))
+    out = await corp.littlesis_search("Elon Musk")
+    assert out["count"] == 3
+    assert out["entities"][0]["name"] == "Elon Musk"
+    assert out["entities"][0]["id"] == "38805"
+    assert out["entities"][0]["kind"] == "Person"
+    assert out["entities"][0]["url"] == "https://littlesis.org/entities/38805"
+
+
+async def test_littlesis_search_degrades(monkeypatch) -> None:
+    monkeypatch.setattr(corp, "fetch_json", _corp_fake(None))
+    out = await corp.littlesis_search("x")
+    assert out["count"] == 0 and out["entities"] == [] and out["note"]
+
+
+async def test_littlesis_search_empty_name_never_fetches(monkeypatch) -> None:
+    async def boom(*a: object, **k: object) -> None:
+        raise AssertionError("must not fetch on an empty name")
+
+    monkeypatch.setattr(corp, "fetch_json", boom)
+    assert (await corp.littlesis_search("   "))["note"] == "empty name"
+
+
+async def test_littlesis_relationships_names_the_other_end(monkeypatch) -> None:
+    monkeypatch.setattr(corp, "fetch_json", _corp_fake(_LS_RELS))
+    out = await corp.littlesis_relationships("38805")
+    assert out["count"] == 2
+    assert out["total_pages"] == 31
+    # Either end can be the subject; the counterparty is the one that is not.
+    assert out["relationships"][0]["counterparty"] == {
+        "id": "7", "kind": "Organization", "name": "Dialog"}
+    assert out["relationships"][1]["counterparty"] == {
+        "id": "123", "kind": "Person", "name": "Greg Brockman"}
+    assert out["relationships"][1]["amount"] == 500
+
+
+async def test_littlesis_relationships_rejects_a_non_numeric_id(monkeypatch) -> None:
+    async def boom(*a: object, **k: object) -> None:
+        raise AssertionError("must validate before fetching")
+
+    monkeypatch.setattr(corp, "fetch_json", boom)
+    out = await corp.littlesis_relationships("../../etc/passwd")
+    assert out["count"] == 0 and "numeric id" in out["note"]

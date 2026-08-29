@@ -195,9 +195,34 @@ Owns `app/routes/osint.py`, `apps/web/src/osint/InvestigatePanel.tsx`, and
   Shadowserver (vetted), DeHashed, Intelligence X, Companies House. Add later behind
   BYOK if the operator wants a specific one — the connector pattern is identical.
 - **Phone / MAC input kinds**: no verified keyless source with graph value → deferred.
+  Still true, and re-measured 2026-08-29 (NANPA unreachable from this egress,
+  every other ch. 26 source captcha'd or paid). Amended that day: `phone` IS now
+  a `classify_target` kind, but purely so the manual-pivot catalog
+  (`app/osint/pivots.py`, `GET /api/osint/pivots`) can answer for one. It has no
+  connector and mints no graph node, and `POST /api/osint/investigate` 400s a
+  phone with a pointer to the pivots route. MAC stays deferred entirely.
+  See `docs/decisions.md#selector-pivots-stealer-logs-and-the-phone-kind-2026-08-29`.
 - **Unverified small/new services** (Frostbyte, digga.dev, oti-labs, HoneyLabs, IPOK,
   isMalicious, SikkerAPI, Validin, ODIN, DFIR-Platform, etc.): not built until an
   endpoint is confirmed — too flaky for a batch.
 - Twitter/X unofficial scrapers (TwitterAPI.io, GetXAPI, SocialData, Xquik): ToS/
   stability risk, all key+paid → skipped.
 </content>
+
+
+## 2026-08-29 addition — OSINT Techniques 11th ed. wave
+
+Three keyless sources, each probed live before it was written:
+
+| Connector | Endpoint | Auth | Answers |
+| --- | --- | --- | --- |
+| `stealer.hudsonrock_email` | `cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-email` | none | was this address on an info-stealer'd machine |
+| `stealer.hudsonrock_username` | `…/search-by-username` | none | same, for a handle |
+| `stealer.hudsonrock_domain` | `…/search-by-domain` | none | how much of a domain's user/employee estate is in stealer logs |
+| `corp.littlesis_search` | `littlesis.org/api/entities/search` | none (CC BY-SA) | person/org in the US power-network register |
+| `corp.littlesis_relationships` | `littlesis.org/api/entities/{id}/relationships` | none | who that entity is tied to, and how |
+
+Plus `app/osint/pivots.py`: 170 manual-pivot URL templates over ten selector
+kinds, no network at all. Everything dropped from the book's lists, and every
+endpoint probed and rejected, is recorded in
+`docs/decisions.md#selector-pivots-stealer-logs-and-the-phone-kind-2026-08-29`.

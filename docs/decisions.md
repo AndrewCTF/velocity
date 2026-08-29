@@ -1207,7 +1207,8 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
-- 2450 + 2 skipped — 2026-08-21, egress-reachability-2026-08, five non-blocks
+- 2501 + 2 skipped — 2026-08-29, osint-book-intel-2026-08, OSINT-book wave
+- 2450 + 2 skipped — 2026-08-21, egress-reachability-2026-08, four non-blocks
 - 2401 + 2 skipped — 2026-08-20, feed-honesty-2026-08, measured source health
 - 2400 + 2 skipped — 2026-08-20, feed-honesty-2026-08, measured source health
 - 2393 + 2 skipped — 2026-08-08, gotham-parity-2026-08, connection wire coverage
@@ -2123,3 +2124,116 @@ contact was exactly 40×20 m (2×1 px) and the L/B of 2.0 is a pixel-grid artefa
 A single-pixel beam caps confidence at medium rather than marking it unresolved,
 because a destroyer's 20 m beam IS one pixel at 20 m/px.
 → `tests/test_vessel_class.py`
+
+---
+
+## Selector pivots, stealer logs, and the phone kind (2026-08-29)
+
+Branch `osint-book-intel-2026-08`. Source: *OSINT Techniques* 11th ed. (Bazzell
+& Edison, rev. 2025.04.02), chapters 16 and 23-35. Baseline 2450 → 2501.
+
+**What the book actually adds, given what was already here.** The digital-OSINT
+layer already ran 41 keyless connector routes over nine selector kinds, so the
+book's value was never "more connectors of the same sort". Three real gaps:
+
+1. **The book's own signature artefact had no home.** Its per-chapter tables are
+   URL templates — given a selector, the twenty-five places a human opens. Most
+   cannot ever be a connector: captcha, paywall, or a page that renders only in
+   JavaScript. They are still where the intel is. `app/osint/pivots.py` holds
+   170 of them across ten kinds as a static table; `GET /api/osint/pivots`
+   renders them. It touches no network, which is why a phone number, which no
+   keyless source answers, still gets a useful answer from this platform.
+2. **Two selectors the platform could not accept at all**: a telephone number
+   and a free-text person name.
+3. **Infostealer logs**: zero coverage, and the one keyless, reachable data
+   source the book names for it.
+
+**Phone is classified but deliberately has no connector.** This does not revoke
+`docs/osint-sources-plan.md` ("Phone / MAC input kinds: no verified keyless
+source with graph value → deferred") — that measurement still holds. Probed
+2026-08-29: NANPA's CO-code API is unreachable from this egress (curl exit
+`000`), and every other source in ch. 26 is captcha'd or a paid API. So
+`classify_target` learns the shape, the pivot catalog answers, and
+`POST /api/osint/investigate` returns **400 naming `/api/osint/pivots`** rather
+than minting an empty node. A classifiable target that mints nothing and says
+nothing reads as a broken route; a 400 that names the surface that does answer
+does not. MAC stays deferred entirely.
+
+**The phone/ASN collision, and which way it falls.** A bare digit run matches
+both `_PHONE_RE` and `_ASN_RE`. `normalise_phone` claims only three shapes: a
+leading `+` with 8-15 digits, punctuation plus 7-15 digits, or a bare 10 or 11
+digits. So `15169` stays `AS15169`, and the one thing phone does take from ASN
+is a bare 10-digit 32-bit ASN like `4200000000` — deliberate, because every
+source this platform reads writes an ASN with its `AS` prefix, and
+`normalise_asn` still accepts `AS4200000000`. Phone is checked BEFORE asn in
+`classify_target` for exactly this reason.
+
+**Credential material never enters the graph.** Hudson Rock returns
+`top_passwords` and `top_logins` for every compromised machine — live secrets
+belonging to third parties. `app/osint/sources/stealer.py` copies out a fixed
+field list and drops everything else, so the credentials are gone at the
+connector boundary rather than by anyone remembering to delete them later. They
+never reach the ontology, a case export, or a model prompt.
+`test_osint_src_stealer.py::test_credentials_never_leave_the_connector` is the
+guard, and the panel says so on the card.
+
+**"Checked, clean" is a finding.** Hudson Rock distinguishes a clean target
+(`stealers: []` plus a "is not associated" message) from an unreachable
+upstream, so the connector reports `checked` and `infected` separately and the
+card renders "checked · not in the corpus" rather than nothing. Same reasoning
+as the company-screening zeros above: a due-diligence record whose zeros are
+hidden is worthless. Its domain endpoint ships `1970-01-01T00:00:00.000Z` for
+"no employee was ever compromised"; that sentinel is normalised to empty,
+because rendering it claims a 1970 breach that did not happen.
+
+**A namesake's network is not this person's.** LittleSis relevance is loose — a
+search for one person returns better-known neighbours above the exact match, so
+taking `data[0]` blindly attributes one person's donors and board seats to
+another. `littlesis_search` sorts the exact name match first, and both
+`_investigate_person` and the panel card require an exact, case-insensitive name
+match on a `Person` before adopting any tie.
+
+**New relation verbs** (`intel/ontology_schema.py`): `affiliated_with`
+(symmetric, person/org — LittleSis edges are a whole vocabulary of donations,
+board seats and family, and one verb carries them all, with the upstream's own
+sentence on the link props so the specific tie is not lost) and
+`compromised_in` (threat → email/username/domain). No new `ObjectKind` was
+needed: `person`, `org` and `threat` already existed.
+
+**Excluded after probing, so nobody re-adds them blind** (all measured
+2026-08-29 from this egress):
+
+- `psbdmp.ws` API — connection failure (`000`). The web page still answers, so
+  it is a pivot link, not a connector.
+- `mail-api.proton.me` — 400, `Missing x-pm-appversion header`. Pivot link only.
+- `api.opencorporates.com` — 401 `Invalid Api Token`. Now key-gated; the
+  existing connector already degrades and the web search stays a pivot.
+- `aleph.occrp.org/api` and `api.opensanctions.org` — both now answer **401**.
+  Two existing connectors are therefore returning honest zeros for every query.
+  Not touched in this wave; recorded here so the next reader does not mistake
+  the zeros for a bug in the new person fan-out.
+- `sec_edgar_fulltext` was planned and then dropped: `sec_edgar_company`
+  already queries `efts.sec.gov/LATEST/search-index`.
+- MCP tools for the new routes were planned and dropped: there is no
+  REST↔MCP parity guard, and the entire 41-route osint layer has zero MCP
+  tools, so adding three would be an inconsistency rather than an addition.
+
+### Wikidata 403s HTTP/1.1 and serves HTTP/2 (found 2026-08-29, NOT fixed)
+
+`corp.wikidata_search` has been returning `"wikidata unavailable"` for every
+query. It is not the User-Agent, which was the obvious guess and is wrong.
+Measured, same host, same UA, same URL:
+
+```
+httpx.AsyncClient(http2=False) → 403  "Please respect our robot policy ..."
+httpx.AsyncClient(http2=True)  → 200  {"searchinfo": ...}
+curl (negotiates h2 via ALPN)  → 200
+```
+
+The shared client (`app/upstream.py`) is HTTP/1.1, so every Wikimedia call from
+it fails, and `curl` disagrees with the app for a reason that has nothing to do
+with headers. **Left unfixed on purpose**: `fetch_json` has no per-call http2
+escape hatch, and flipping the shared client to HTTP/2 changes the transport
+for every upstream in the platform — that is a deliberate decision with its own
+blast radius, not a side effect of an OSINT wave. Whoever takes it should
+measure the other upstreams first.

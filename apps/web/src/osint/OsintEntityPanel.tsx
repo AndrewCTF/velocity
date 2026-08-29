@@ -497,6 +497,151 @@ function BgpAsnCard({ target }: { target: string }): JSX.Element | null {
   );
 }
 
+// ── OSINT Techniques 11th ed. wave (ch. 23, 25, 34, 42) ──────────────────────
+
+// These two write their route out in full rather than going through useOsint's
+// template, because routeCoverage.test.ts searches apps/web for the literal
+// path and a route it cannot see reads as a feature nobody can reach.
+
+interface StealerExposure {
+  indicator?: string;
+  checked?: boolean;
+  infected?: boolean;
+  computer_count?: number;
+  stealer_families?: string[];
+  corporate_services?: number;
+  user_services?: number;
+  computers?: { date_compromised?: string; stealer_family?: string; computer_name?: string; operating_system?: string }[];
+  // domain shape
+  total?: number;
+  employees?: number;
+  users?: number;
+  third_parties?: number;
+  last_user_compromised?: string;
+  urls?: { url: string; type?: string; occurrence?: number }[];
+  note?: string;
+}
+
+function StealerCard({ target }: { target: string }): JSX.Element | null {
+  const [data, setData] = useState<StealerExposure | null>(null);
+  useEffect(() => {
+    setData(null);
+    const aborter = new AbortController();
+    apiFetch(`/api/osint/stealer?target=${encodeURIComponent(target)}`, { signal: aborter.signal })
+      .then((r) => (r.ok ? (r.json() as Promise<StealerExposure>) : null))
+      .then(setData)
+      .catch(() => undefined);
+    return () => aborter.abort();
+  }, [target]);
+
+  if (!data || data.checked === false) return null;
+  const isDomain = typeof data.total === 'number';
+  // A clean target is a finding, not an empty card: "checked, clean" is what an
+  // analyst needs on the record. Only an unchecked target renders nothing.
+  const hit = isDomain ? (data.total ?? 0) > 0 : Boolean(data.infected);
+  return (
+    <Widget title="Infostealer logs · Hudson Rock">
+      {!hit && <Row k="status" v="checked · not in the corpus" />}
+      {hit && isDomain && (
+        <>
+          <Row k="credentials" v={<span style={{ color: 'var(--alert)' }}>{data.total}</span>} />
+          <Row k="users" v={data.users ?? '—'} />
+          <Row k="employees" v={data.employees ?? '—'} />
+          <Row k="third parties" v={data.third_parties ?? '—'} />
+          <Row k="last user seen" v={data.last_user_compromised?.slice(0, 10) || '—'} />
+          {data.urls?.length ? (
+            <div style={{ fontSize: 10, color: 'var(--txt-3)', marginTop: 4, wordBreak: 'break-all' }}>
+              {data.urls.slice(0, 5).map((u) => (
+                <div key={u.url}>{u.url}</div>
+              ))}
+            </div>
+          ) : null}
+        </>
+      )}
+      {hit && !isDomain && (
+        <>
+          <Row
+            k="machines"
+            v={<span style={{ color: 'var(--alert)' }}>{data.computer_count}</span>}
+          />
+          {data.stealer_families?.length ? (
+            <Row k="malware" v={data.stealer_families.join(' · ')} />
+          ) : null}
+          <Row k="corporate services" v={data.corporate_services ?? '—'} />
+          <Row k="user services" v={data.user_services ?? '—'} />
+          {data.computers?.slice(0, 3).map((c, i) => (
+            <Row
+              key={`${c.computer_name ?? ''}${i}`}
+              k={c.date_compromised?.slice(0, 10) || 'machine'}
+              v={`${c.computer_name ?? '—'} · ${c.operating_system ?? '—'}`}
+            />
+          ))}
+        </>
+      )}
+      <div style={{ fontSize: 10, color: 'var(--txt-3)', marginTop: 6 }}>
+        Stolen passwords are dropped at the backend and never reach this panel.
+      </div>
+    </Widget>
+  );
+}
+
+interface LittleSisEntity { id?: string; name?: string; kind?: string; blurb?: string; url?: string }
+interface LittleSisRel {
+  id?: string;
+  description?: string;
+  role?: string;
+  amount?: number | null;
+  counterparty?: { id?: string; kind?: string; name?: string };
+}
+
+function AffiliationsCard({ target }: { target: string }): JSX.Element | null {
+  const [entity, setEntity] = useState<LittleSisEntity | null>(null);
+  const [rels, setRels] = useState<LittleSisRel[] | null>(null);
+
+  useEffect(() => {
+    setEntity(null);
+    setRels(null);
+    const aborter = new AbortController();
+    apiFetch(`/api/osint/littlesis?name=${encodeURIComponent(target)}`, { signal: aborter.signal })
+      .then((r) => (r.ok ? (r.json() as Promise<{ entities?: LittleSisEntity[] }>) : null))
+      .then((j) => {
+        // littlesis_search puts an exact name match first; anything else is a
+        // namesake and its network is not this person's.
+        const top = j?.entities?.[0];
+        if (!top?.id || top.name?.toLowerCase() !== target.toLowerCase()) return;
+        setEntity(top);
+        return apiFetch(
+          `/api/osint/littlesis-relationships?entity_id=${encodeURIComponent(top.id)}`,
+          { signal: aborter.signal },
+        )
+          .then((r) => (r.ok ? (r.json() as Promise<{ relationships?: LittleSisRel[] }>) : null))
+          .then((k) => setRels(k?.relationships ?? []));
+      })
+      .catch(() => undefined);
+    return () => aborter.abort();
+  }, [target]);
+
+  if (!entity) return null;
+  return (
+    <Widget title="Affiliations · LittleSis">
+      {entity.blurb && <Row k="who" v={entity.blurb} />}
+      {entity.url && <Row k="profile" v={<a href={entity.url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--accent-fg)' }}>{entity.url}</a>} />}
+      {rels?.length
+        ? rels.slice(0, 12).map((r, i) => (
+            <Row
+              key={r.id ?? i}
+              k={r.counterparty?.name ?? '—'}
+              v={r.role || r.description || '—'}
+            />
+          ))
+        : rels && <Row k="ties" v="none recorded" />}
+      <div style={{ fontSize: 10, color: 'var(--txt-3)', marginTop: 6 }}>
+        LittleSis, CC BY-SA 4.0.
+      </div>
+    </Widget>
+  );
+}
+
 // ── panel ─────────────────────────────────────────────────────────────────────
 
 export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
@@ -531,6 +676,7 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
           <InfraCard target={target} />
           <WaybackCard target={target} />
           <UrlscanCard target={target} />
+          <StealerCard target={target} />
           <ThreatCard target={target} />
         </>
       )}
@@ -552,14 +698,17 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
           <GitlabCard target={target} />
           <UsernameSitesCard target={target} />
           <RedditCard target={target} />
+          <StealerCard target={target} />
         </>
       )}
+      {kind === 'person' && <AffiliationsCard target={target} />}
       {kind === 'email' && (
         <>
           <GravatarCard target={target} />
           <HibpCard target={target} />
           <EmailRepCard target={target} />
           <LibravatarCard target={target} />
+          <StealerCard target={target} />
           <ThreatCard target={target} />
         </>
       )}
@@ -578,7 +727,7 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
       {kind === 'wallet' && <WalletCard target={target} />}
       {kind === 'asn' && <BgpAsnCard target={target} />}
       {kind === 'tx' && null}
-      {!['domain', 'ip', 'username', 'email', 'url', 'file', 'wallet', 'asn', 'tx'].includes(kind) && (
+      {!['domain', 'ip', 'username', 'email', 'url', 'file', 'wallet', 'asn', 'tx', 'person'].includes(kind) && (
         <ThreatCard target={target} />
       )}
     </div>

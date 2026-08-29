@@ -104,6 +104,10 @@ _ETH_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 _ASN_RE = re.compile(r"^(?:as)?(\d+)$", re.IGNORECASE)
 _ASN_MAX = 4_294_967_295
 
+# A phone target is punctuation + digits and NOTHING else, which is what keeps
+# it from eating a url or a hostname that merely contains digits.
+_PHONE_RE = re.compile(r"^\+?[0-9(][0-9 ()\-.]{5,20}$")
+
 
 def normalise_url(target: str) -> str | None:
     """Canonicalise a URL; None unless it carries a scheme OR a path/query.
@@ -179,14 +183,45 @@ def normalise_asn(target: str) -> str | None:
     return f"AS{n}"
 
 
+def normalise_phone(target: str) -> str | None:
+    """Canonicalise a telephone number to digits (``+`` kept for international).
+
+    Accepted shapes, and only these:
+
+      * a leading ``+`` with 8-15 digits — an explicit international number;
+      * separator punctuation plus 7-15 digits — ``618-462-0000``, ``(618) 462
+        0000``. The punctuation is the caller SAYING "this is a number";
+      * a bare 10 or 11 digits — NANP length, the one unpunctuated form common
+        enough to be worth claiming.
+
+    A bare 5-9 or 12-15 digit run stays ambiguous and is NOT a phone, which is
+    what leaves ``15169`` to ``normalise_asn``. The one collision this does
+    accept is a bare 10-digit 32-bit ASN: ``4200000000`` classifies as a phone.
+    That is deliberate — every source this platform reads writes an ASN with
+    its ``AS`` prefix, and ``normalise_asn`` still takes ``AS4200000000``.
+    """
+    t = (target or "").strip()
+    if not _PHONE_RE.match(t):
+        return None
+    plus = t.startswith("+")
+    digits = re.sub(r"\D", "", t)
+    n = len(digits)
+    if plus:
+        return f"+{digits}" if 8 <= n <= 15 else None
+    if re.search(r"[ ()\-.]", t):
+        return digits if 7 <= n <= 15 else None
+    return digits if n in (10, 11) else None
+
 def classify_target(target: str) -> tuple[str, str] | None:
     """Detect a target's kind. Returns (kind, canonical).
 
-    Order (specific → loose): ip → email (contains a domain) → wallet → asn →
-    file (hash) → url → domain → username. Wallet/asn/hash have a distinctive
-    enough shape to go before url/domain (a bech32 address is all lower-alnum
-    and would otherwise be eaten by username); url needs a scheme or a
-    path/query so it can't eat a bare domain; username stays the loosest.
+    Order (specific → loose): ip → email (contains a domain) → wallet →
+    phone → asn → file (hash) → url → domain → username. Wallet/asn/hash have a
+    distinctive enough shape to go before url/domain (a bech32 address is all
+    lower-alnum and would otherwise be eaten by username); url needs a scheme or
+    a path/query so it can't eat a bare domain; username stays the loosest.
+    Phone goes before asn on purpose: a bare 10-digit run matches ``_ASN_RE``
+    too, and ``normalise_phone`` documents which way that collision falls.
     """
     ip = normalise_ip(target)
     if ip is not None:
@@ -197,6 +232,9 @@ def classify_target(target: str) -> tuple[str, str] | None:
     wallet = normalise_wallet(target)
     if wallet is not None:
         return ("wallet", wallet)
+    phone = normalise_phone(target)
+    if phone is not None:
+        return ("phone", phone)
     asn = normalise_asn(target)
     if asn is not None:
         return ("asn", asn)
