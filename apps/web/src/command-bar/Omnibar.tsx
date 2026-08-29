@@ -16,6 +16,7 @@ import {
 } from '../transport/search.js';
 import { useSelection, useSearchTarget } from '../state/stores.js';
 import { useUiMode, type UiMode } from '../state/uiMode.js';
+import { useAppView, APP_IDS, APP_META } from '../state/appView.js';
 import { usePalette } from '../state/palette.js';
 import { flyToPosition } from '../globe/camera.js';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';
@@ -109,6 +110,21 @@ export function Omnibar({
         run: () => useUiMode.getState().setMode(m),
       });
     }
+    // The fourteen apps, each with the one-line hint APP_META already carries.
+    // They were reachable only from the switcher, which is icon-only for every
+    // app but the active one, so the ten apps a first-run tour never mentions
+    // (Investigate, Reports, Foundry, Workflows, Country, Markets...) had no
+    // address a newcomer could read. The command bar is where you look for
+    // "what is in this thing"; listing them here is that answer and a jump
+    // target in the same row.
+    for (const id of APP_IDS) {
+      list.push({
+        id: `app:${id}`,
+        label: `Open ${APP_META[id].label}`,
+        hint: APP_META[id].hint,
+        run: () => useAppView.getState().setApp(id),
+      });
+    }
     for (const d of registry.list()) {
       const on = registry.isEnabled(d.id);
       list.push({
@@ -123,7 +139,10 @@ export function Omnibar({
 
   const filteredActions = useMemo(() => {
     const term = q.trim();
-    if (!term) return actions.filter((a) => a.hint === 'mode'); // default: workspaces
+    // Empty query: workspaces AND every app, so opening the bar is a tour of
+    // what the product contains rather than a blank prompt you have to already
+    // know the answer to.
+    if (!term) return actions.filter((a) => a.id.startsWith('mode:') || a.id.startsWith('app:'));
     return actions.filter((a) => subseq(term, a.label)).slice(0, 8);
   }, [actions, q]);
 

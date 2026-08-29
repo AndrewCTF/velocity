@@ -2729,3 +2729,25 @@ again. If this platform ever runs on an older expat, the cheap fix is rejecting
 a `DOCTYPE` before parsing, not the dependency.
 
 Baseline 2555 → 2559.
+
+### The fourteen apps had no address a newcomer could read (2026-08-29)
+
+`AppSwitcher` renders every app but the active one icon-only — a deliberate call
+(the labelled segmented control overflowed the 42 px bar once Foundry, Workflows
+and City landed) with the name and hint on `title` hover. `Onboarding.tsx`
+introduces four concepts. Between them, the ten apps that carry what the README
+actually stakes the product on — Investigate, Reports, Evidence, Foundry,
+Workflows, Country, Markets — were discoverable only by hovering unlabelled
+icons one at a time, which never happens on touch and rarely happens at all.
+
+Not fixed with a longer tour. `APP_META` already carries a one-line `hint` for
+all fourteen, and the Omnibar already renders an action's hint as its subtitle
+and already lists something on an empty query. It listed UI *modes* only, so the
+apps were not reachable from the command bar at all. They are now listed there
+with their hints, and the empty-query view shows workspaces AND apps — opening
+the command bar is a tour of what the product contains instead of a blank prompt
+you have to already know the answer to. The list is `max-h-[52vh]
+overflow-y-auto`, so eighteen rows was already handled.
+
+→ `command-bar/Omnibar.appList.test.tsx` (every `AppId` is listed, with its
+hint). Web unit tests 777 → 778.
