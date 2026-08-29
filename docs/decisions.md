@@ -2752,3 +2752,36 @@ overflow-y-auto`, so eighteen rows was already handled.
 
 → `command-bar/Omnibar.appList.test.tsx` (every `AppId` is listed, with its
 hint). Web unit tests 777 → 778.
+
+### Correction: what the event-loop offload was actually worth (measured 2026-08-29)
+
+The entry above says an inline SAR detect or route request "stalls the live map
+for every connected viewer." That was reasoning about a mechanism, not a
+measurement, and the measurement is smaller. Taken on this box after the change,
+timing the segments that are now on a thread:
+
+| segment | size | cost |
+| --- | --- | --- |
+| `sar_vessels._decode_and_detect` | 2500×2500 (`_MAX_DIM`) | **140 ms** |
+| `sar_damage._change_arrays` | 1024×768 (route default) | **14 ms** |
+| `offroad.astar_grid` | 171×171 real plan | **31 ms** |
+| `offroad._stitch` | 4 terrarium tiles | **27 ms** |
+
+So the worst single stall was ~140 ms, not seconds. On a snapshot cycle whose
+own budget is 1 s and whose measured `cycle_ms.total` is ~219 ms, a 140 ms
+stall is worth removing — it is more than half the cycle's existing work — but
+"freezes the map" was an overclaim and is withdrawn.
+
+The off-road case is smaller still in context: a real plan
+(33.60,46.40 → 33.85,46.75, grid 171×171) took **6.55 s wall**, of which the two
+CPU segments were **58 ms, 1%**. The rest is DEM tile fetching, which was always
+awaited. The offload there buys correctness of shape, not a visible win.
+
+What IS measured live: with the offload in place, an off-road plan running 6.9 s
+left `/api/health` at p50 1.7 ms / p95 47.7 ms over 25 samples taken during it,
+and `/api/status/perf` loop lag p95 moved 232 → 287 ms across the request while
+`cycle_ms.total` stayed ~219 ms. The server kept serving throughout.
+
+Recorded rather than quietly edited: the original claim is the kind this repo's
+first operating rule exists to stop, and it was written by the same pass that
+added the fix.
