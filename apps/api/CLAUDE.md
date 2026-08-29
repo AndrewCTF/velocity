@@ -127,6 +127,12 @@ ADS-B blob path must not gain a buffering wrapper), fill-if-absent (so
 TLS; the app cannot truthfully assert it). List routes bound `limit` with
 `Query(..., ge=1, le=N)`. → `tests/test_security_hardening.py`
 
+The rate limiter believes `X-Forwarded-For` ONLY from a peer inside
+`TRUSTED_PROXIES` (default `127.0.0.1,::1` — the CF Worker → Caddy → uvicorn
+shape, where an empty default would collapse every prod client into one loopback
+bucket). Unconditional trust let any caller mint a fresh bucket per request.
+→ `tests/test_security_hardening.py`
+
 ## Connections (operator-configured sources)
 
 `foundry/connections.py` runs MQTT / Kafka / SQL sources the operator points at

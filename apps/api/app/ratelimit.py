@@ -14,8 +14,10 @@ an unconfigured box (issue #8), so the two hardening controls never drift apart.
 
 from __future__ import annotations
 
+import ipaddress
 import time
 from collections import defaultdict, deque
+from functools import lru_cache
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -65,6 +67,34 @@ _WINDOW_S = 60.0
 _MAX_KEYS = 8192  # bound the bucket table; evict stale keys past this
 
 
+@lru_cache(maxsize=8)
+def _trusted_nets(raw: str) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """Parse ``TRUSTED_PROXIES`` once. A bare IP is its own /32 or /128; an
+    unparseable entry is dropped rather than raised, because a typo in this
+    setting must narrow trust, never take the app down."""
+    nets = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            continue
+    return tuple(nets)
+
+
+def _peer_is_trusted(peer: str, raw: str) -> bool:
+    nets = _trusted_nets(raw)
+    if not nets:
+        return False
+    try:
+        addr = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return any(addr in n for n in nets)
+
+
 class ComputeRateLimitMiddleware(BaseHTTPMiddleware):
     """Per-client-IP sliding-window limiter on the compute paths.
 
@@ -78,11 +108,40 @@ class ComputeRateLimitMiddleware(BaseHTTPMiddleware):
         self._hits: dict[str, deque[float]] = defaultdict(deque)
 
     def _client_key(self, request: Request) -> str:
-        # X-Forwarded-For first hop when behind the gateway/nginx; else peer IP.
-        xff = request.headers.get("x-forwarded-for")
-        if xff:
-            return xff.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
+        """The per-client bucket key.
+
+        X-Forwarded-For is believed ONLY when the peer is a configured trusted
+        proxy (``TRUSTED_PROXIES``, loopback by default — the real shape here is
+        CF Worker -> Caddy -> uvicorn on the same box). Believing it
+        unconditionally, which is what this did, handed every caller a fresh
+        bucket per request for the cost of varying one header, so the limiter
+        bounded nothing at all against the one traffic it exists to bound.
+        """
+        peer = request.client.host if request.client else ""
+        if peer and _peer_is_trusted(peer, get_settings().trusted_proxies):
+            xff = request.headers.get("x-forwarded-for")
+            if xff:
+                return xff.split(",")[0].strip()
+        return peer or "unknown"
+
+    def _evict(self, cutoff: float) -> None:
+        """Hold the bucket table to ``_MAX_KEYS``.
+
+        Drained buckets go first. If that is not enough the table is under a
+        spread of distinct keys rather than normal traffic, so the
+        least-recently-used ones go too: a GC that can only drop drained buckets
+        is a bound on paper, since keys arriving faster than the window drains
+        them are never drained.
+        """
+        if len(self._hits) <= _MAX_KEYS:
+            return
+        for k in [k for k, v in self._hits.items() if not v or v[-1] < cutoff]:
+            self._hits.pop(k, None)
+        if len(self._hits) > _MAX_KEYS:
+            for k in sorted(self._hits, key=lambda k: self._hits[k][-1])[
+                : len(self._hits) - _MAX_KEYS
+            ]:
+                self._hits.pop(k, None)
 
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
         path = request.url.path
@@ -114,7 +173,5 @@ class ComputeRateLimitMiddleware(BaseHTTPMiddleware):
                 headers={"Retry-After": str(retry)},
             )
         dq.append(now)
-        if len(self._hits) > _MAX_KEYS:  # opportunistic GC of drained buckets
-            for k in [k for k, v in self._hits.items() if not v or v[-1] < cutoff]:
-                self._hits.pop(k, None)
+        self._evict(cutoff)
         return await call_next(request)

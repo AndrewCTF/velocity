@@ -105,6 +105,71 @@ def test_workflows_served_when_opted_in(monkeypatch):
         assert r.status_code != 503
 
 
+# ── the limiter's client key ────────────────────────────────────────────────
+# _client_key read X-Forwarded-For unconditionally, so any caller got a fresh
+# bucket per request by varying one header and the limiter bounded nothing
+# against the only traffic it exists to bound.
+
+
+def test_xff_is_ignored_from_an_untrusted_peer(monkeypatch):
+    monkeypatch.setattr(
+        ratelimit, "get_settings", lambda: _keyless_settings(trusted_proxies="10.9.9.9")
+    )
+    mw = ratelimit.ComputeRateLimitMiddleware(lambda *a: None)  # type: ignore[arg-type]
+
+    class _Req:
+        client = type("C", (), {"host": "203.0.113.5"})()
+        headers = {"x-forwarded-for": "1.2.3.4"}
+
+    # The peer is not a configured proxy, so its claim about the real client is
+    # not evidence: bucket by the address the socket actually came from.
+    assert mw._client_key(_Req()) == "203.0.113.5"
+
+
+def test_xff_is_honoured_from_a_trusted_proxy(monkeypatch):
+    monkeypatch.setattr(
+        ratelimit,
+        "get_settings",
+        lambda: _keyless_settings(trusted_proxies="127.0.0.1,::1"),
+    )
+    mw = ratelimit.ComputeRateLimitMiddleware(lambda *a: None)  # type: ignore[arg-type]
+
+    class _Req:
+        client = type("C", (), {"host": "127.0.0.1"})()
+        headers = {"x-forwarded-for": "1.2.3.4, 10.0.0.1"}
+
+    # The real deployment is CF Worker -> Caddy -> uvicorn on the same box, so
+    # loopback must keep working or every prod client shares one bucket.
+    assert mw._client_key(_Req()) == "1.2.3.4"
+
+
+def test_trusted_proxies_typo_narrows_trust_rather_than_crashing(monkeypatch):
+    monkeypatch.setattr(
+        ratelimit, "get_settings", lambda: _keyless_settings(trusted_proxies="not-an-ip")
+    )
+    mw = ratelimit.ComputeRateLimitMiddleware(lambda *a: None)  # type: ignore[arg-type]
+
+    class _Req:
+        client = type("C", (), {"host": "127.0.0.1"})()
+        headers = {"x-forwarded-for": "1.2.3.4"}
+
+    assert mw._client_key(_Req()) == "127.0.0.1"
+
+
+def test_bucket_table_stays_bounded_when_every_bucket_is_fresh(monkeypatch):
+    """The GC dropped only DRAINED buckets, which is no bound at all against a
+    caller minting fresh keys faster than the window drains them."""
+    monkeypatch.setattr(ratelimit, "_MAX_KEYS", 64)
+    mw = ratelimit.ComputeRateLimitMiddleware(lambda *a: None)  # type: ignore[arg-type]
+    now = time.monotonic()
+    for i in range(500):
+        mw._hits[f"key-{i}"].append(now)
+    mw._evict(now - ratelimit._WINDOW_S)
+    assert len(mw._hits) <= 64
+    # The survivors are the most recent, not an arbitrary slice.
+    assert all(mw._hits[k] for k in mw._hits)
+
+
 # ── baseline security response headers ──────────────────────────────────────
 
 

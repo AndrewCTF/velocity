@@ -262,6 +262,15 @@ class Settings(BaseSettings):
     # rules, airplanes.live 200+text throttle, CelesTrak 403 bursts); this bounds
     # /mcp request rate independently of the compute cap. 0 disables it.
     mcp_ratelimit_per_min: int = 120  # MCP_RATELIMIT_PER_MIN (0 = off)
+    # Peer addresses whose X-Forwarded-For header the rate limiter is allowed to
+    # believe. Comma-separated IPs or CIDRs. Defaults to loopback because that is
+    # the real deployment shape here (CF Worker -> Caddy -> uvicorn on the same
+    # box, so the peer IS 127.0.0.1) and because a header from anywhere else is
+    # attacker-controlled: trusting it unconditionally let any caller mint a
+    # fresh limiter bucket per request just by varying the header.
+    # Empty string = never believe the header, bucket strictly by peer address.
+    trusted_proxies: str = "127.0.0.1,::1"  # TRUSTED_PROXIES
+
     # Hard ceiling on concurrently-running recon jobs; further POSTs get 429.
     recon_max_active_jobs: int = 4  # RECON_MAX_ACTIVE_JOBS
 

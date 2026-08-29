@@ -2432,3 +2432,32 @@ in-process call. It has no HTTP surface and needs no bound. Recorded because a
 grep for `limit: int =` finds it and the next audit will report it again.
 
 Baseline 2531 → 2537.
+
+### The rate limiter believed whatever the caller said it was (2026-08-29)
+
+`ComputeRateLimitMiddleware._client_key` read `X-Forwarded-For`'s first hop
+unconditionally and fell back to the peer address only when the header was
+absent. The header is caller-supplied on a direct connection, so any client got
+a fresh sliding-window bucket per request for the cost of incrementing a number
+in a header — against the one traffic shape the limiter exists to bound
+(runaway loops and abuse of paid inference / GPU time), it bounded nothing.
+
+XFF is now believed only when the peer address is inside `TRUSTED_PROXIES`.
+That defaults to `127.0.0.1,::1` rather than to empty, because the deployment
+shape here is CF Worker → Caddy → uvicorn on the same box: with an empty
+default every production client would collapse into one shared loopback bucket
+and throttle each other. An unparseable entry is dropped rather than raised — a
+typo in this setting must narrow trust, never take the app down.
+
+The bucket table's GC had the same shape of problem one level down: it dropped
+only DRAINED buckets, which is not a bound against keys arriving faster than the
+60 s window drains them. `_evict()` now falls back to dropping the
+least-recently-used keys once the drained sweep is not enough. It is a method
+rather than an inline block so the guard can exercise the real eviction instead
+of a copy of it.
+→ `tests/test_security_hardening.py::test_xff_is_ignored_from_an_untrusted_peer`,
+`::test_xff_is_honoured_from_a_trusted_proxy`,
+`::test_trusted_proxies_typo_narrows_trust_rather_than_crashing`,
+`::test_bucket_table_stays_bounded_when_every_bucket_is_fresh`
+
+Baseline 2537 → 2541.
