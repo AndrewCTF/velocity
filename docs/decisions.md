@@ -2359,3 +2359,76 @@ the CDN ever starts 200-ing the placeholder, nothing else would tell them apart.
   full download per query. ransomware.live's rate limit is cheaper than that.
 - **CORE academic API** — answered 429 on the first request from this egress;
   left as a pivot link rather than shipped as a flaky connector.
+
+## Three surfaces that were open, and one that was only untidy (2026-08-29, hardening wave)
+
+The 2026-08-08 entry asked whether every backend route had a UI address, and the
+2026-08-20 entry asked whether the answer a route gives is true. This one asks a
+third question about the same 373 routes: **who is allowed to ask.**
+
+**Foundry answered anyone.** `ratelimit._COMPUTE_PREFIXES` is the single source
+of truth for "this route spends money or hardware", and `ApiKeyMiddleware`
+reuses it to fail those paths closed on a box with no credential configured
+(issue #8). `/api/workflows` is in that list. `/api/foundry` never was — so on a
+fresh keyless `docker compose up`, the operator SQL console
+(`POST /api/foundry/sql`), dataset upload, and the MQTT/Kafka/SQL connection
+config that points at the operator's own infrastructure all answered anyone who
+could reach the port. The Foundry surface is 55 routes; every one of them
+depends on `current_user_or_local`, which degrades to a shared `local` identity
+with no credential check when neither Supabase nor `API_KEY` is set.
+
+**Fixed at the router, not in the prefix list.** `router = APIRouter(tags=
+["foundry"], dependencies=[Depends(require_compute_enabled)])`. The auth posture
+is identical to a `_COMPUTE_PREFIXES` entry; what differs is the blast radius.
+That predicate also drives the inbound limiter, which buckets by the SECOND path
+segment — so every Foundry route would have shared one 60/min per-client bucket,
+and `BuildsView` alone polls `/api/foundry/builds` every 5 s (12/min). The
+hardening would have throttled the operator's own console. `require_compute_
+enabled` exists for exactly this shape and its docstring says so; this is its
+second caller after `POST /api/ai/local`.
+→ `tests/test_security_hardening.py::test_foundry_fails_closed_when_keyless_and_not_opted_in`,
+`::test_foundry_is_not_a_compute_prefix` (the second one pins the reasoning, so
+a later "cleanup" that moves Foundry into the prefix list fails loudly).
+
+Upgrade note: a keyless deployment loses the Foundry app until it sets `API_KEY`
+/ Supabase, or `ALLOW_UNAUTHENTICATED=1` on a box the operator trusts.
+
+**The whole tree set no security response headers.** A grep for
+`X-Content-Type-Options` / `Content-Security-Policy` / `X-Frame-Options` /
+`Strict-Transport-Security` across `apps/api/app` returned exactly one hit:
+`routes/evidence.py`, on the blob it serves. Several routes hand back
+operator-supplied bytes (dataset exports, report bundles, evidence blobs), and a
+browser that sniffs one of those into `text/html` runs it on this origin.
+`SecurityHeadersMiddleware` now sets `nosniff`, `X-Frame-Options: DENY` and
+`Referrer-Policy: no-referrer` on every response.
+
+Three deliberate calls inside that:
+
+- **No HSTS.** The TLS that would make the assertion true terminates in the
+  Caddy/Worker layer in front (see the prod-topology notes). An app asserting
+  HSTS over plain `http` teaches a browser something false about an origin it
+  does not control.
+- **Never overwrite.** The middleware fills a header only when it is absent, so
+  `/api/evidence`'s much stricter `default-src 'none'; sandbox` still wins for
+  the untrusted captured content it serves. Hardening that clobbers stronger
+  hardening is a regression wearing the right words.
+- **Pure ASGI, not `BaseHTTPMiddleware`.** Same reason `SelectiveGZipMiddleware`
+  is: this sits on the path of a multi-MB ADS-B blob served once a second per
+  client, and `BaseHTTPMiddleware` would wrap every one of those in a buffering
+  stream to append three constant headers.
+→ `tests/test_security_hardening.py::test_security_headers_on_every_response`
+
+**Four list routes had no ceiling.** `/api/alerts`, `/api/jamming/alerts`,
+`/api/alerts/deliveries` and `/api/correlations/{eid}` took `limit: int = 50`
+with no `le=`, while the rest of the tree uses `Query(..., ge=1, le=N)`. Now
+`Query(50, ge=1, le=500)`, matching the house style.
+→ `tests/test_security_hardening.py::test_list_limits_are_bounded`
+
+**Not a finding, though it was reported as one.** `routes/events.py`'s
+`limit: int = 150` is on `_load_eonet`, an internal cached loader that the
+`/eonet` route AND the `/all` aggregate both call directly — never through the
+route handler, precisely so a `Query(...)` default cannot leak into an
+in-process call. It has no HTTP surface and needs no bound. Recorded because a
+grep for `limit: int =` finds it and the next audit will report it again.
+
+Baseline 2531 → 2537.

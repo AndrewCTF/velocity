@@ -20,7 +20,7 @@ module is CRUD-only. ``email`` is rejected at creation until a sender exists.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.config import Settings, get_settings
@@ -211,7 +211,7 @@ async def delete_rule(
 
 
 @router.get("/api/alerts/deliveries")
-async def list_deliveries(limit: int = 50) -> dict[str, object]:
+async def list_deliveries(limit: int = Query(50, ge=1, le=500)) -> dict[str, object]:
     """Recent sink-delivery attempts (Discord/webhook) — the durable proof a
     firing actually reached an operator's endpoint, readable with no browser
     attached to the evaluator (e.g. ``curl`` on the box itself)."""

@@ -112,6 +112,21 @@ is parsed (Content-Length AND a running total, since chunked declares neither),
 and an unknown dataset and an unarmed one answer with the identical 404 so the
 route cannot enumerate dataset ids. → `tests/test_ingest_webhook.py`
 
+`/api/foundry` fails CLOSED on a keyless deployment — the router carries
+`Depends(require_compute_enabled)`, NOT a `ratelimit._COMPUTE_PREFIXES` entry.
+The prefix list also drives the inbound limiter, which buckets by the second
+path segment, so a prefix entry would put all 55 Foundry routes in one 60/min
+bucket shared with `BuildsView`'s 5 s build poll. Auth posture identical, blast
+radius not. → `tests/test_security_hardening.py` (both the fail-closed case and
+`test_foundry_is_not_a_compute_prefix`, which pins the reasoning)
+
+Every response carries `nosniff` / `X-Frame-Options: DENY` /
+`Referrer-Policy: no-referrer` from `SecurityHeadersMiddleware` — pure ASGI (the
+ADS-B blob path must not gain a buffering wrapper), fill-if-absent (so
+`/api/evidence`'s stricter CSP wins), and NO HSTS (the front proxy terminates
+TLS; the app cannot truthfully assert it). List routes bound `limit` with
+`Query(..., ge=1, le=N)`. → `tests/test_security_hardening.py`
+
 ## Connections (operator-configured sources)
 
 `foundry/connections.py` runs MQTT / Kafka / SQL sources the operator points at

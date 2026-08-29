@@ -15,7 +15,7 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 
 from app.auth import require_ws_key
 from app.config import get_settings
@@ -28,7 +28,7 @@ router = APIRouter(tags=["alerts"])
 
 
 @router.get("/api/alerts")
-async def recent_alerts(limit: int = 50) -> dict[str, Any]:
+async def recent_alerts(limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
     return {"alerts": [a.to_json() for a in bus.recent(limit)]}
 
 
@@ -104,7 +104,7 @@ async def standing_detections(
 
 @router.get("/api/jamming/alerts")
 async def recent_jamming_alerts(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=500),
     # bbox filter — all four required together
     min_lon: float | None = None,
     min_lat: float | None = None,

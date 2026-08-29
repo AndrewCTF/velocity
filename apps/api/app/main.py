@@ -144,6 +144,53 @@ from app.routes import weather as weather_routes
 from app.routes import workflows as workflows_routes
 
 
+class SecurityHeadersMiddleware:
+    """Set the response headers an API can state truthfully about itself.
+
+    ``nosniff`` matters because several routes hand back operator-supplied
+    bytes (dataset exports, evidence blobs, report bundles) and a browser that
+    sniffs one of those into ``text/html`` executes it on this origin.
+    ``DENY`` because nothing frames this console, and ``no-referrer`` because a
+    console URL carries the analyst's current selection in its query string and
+    every outbound link would otherwise leak it. HSTS is deliberately absent:
+    the TLS that would make it true terminates in the Caddy/Worker layer in
+    front, and an app asserting it over plain http teaches a browser a lie.
+
+    Pure ASGI rather than ``BaseHTTPMiddleware`` for the same reason
+    ``SelectiveGZipMiddleware`` below is: this sits on the path of a multi-MB
+    ADS-B blob served once a second per client, and BaseHTTPMiddleware would
+    put a buffering stream wrapper around every one of them to append three
+    constant headers.
+
+    Never overwrites: ``/api/evidence`` already answers with its own far
+    stricter ``default-src 'none'; sandbox`` for the untrusted content it
+    serves, and that must win.
+    """
+
+    _HEADERS: tuple[tuple[bytes, bytes], ...] = (
+        (b"x-content-type-options", b"nosniff"),
+        (b"x-frame-options", b"DENY"),
+        (b"referrer-policy", b"no-referrer"),
+    )
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                headers = message.setdefault("headers", [])
+                present = {k.lower() for k, _ in headers}
+                headers.extend((k, v) for k, v in self._HEADERS if k not in present)
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 class SelectiveGZipMiddleware:
     """GZip every response EXCEPT the MCP endpoint.
 
@@ -563,6 +610,14 @@ def create_app() -> FastAPI:
     # faster than swapping in ORJSONResponse (which FastAPI now deprecates).
     app = FastAPI(title="OSINT Console API", version="0.1.0", lifespan=lifespan)
 
+    # Baseline response headers for every route. Only /api/evidence set any of
+    # these, and only for the blob it serves. These three are the ones an app
+    # can honestly set for itself: HSTS is deliberately NOT here, because the
+    # TLS termination that would make it true lives in the Caddy/Worker layer in
+    # front and an app that claims it over plain http teaches a browser a lie.
+    # A route that has already stated a header keeps its own — /api/evidence
+    # serves untrusted captured content under a much stricter CSP.
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],

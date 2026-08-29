@@ -105,6 +105,100 @@ def test_workflows_served_when_opted_in(monkeypatch):
         assert r.status_code != 503
 
 
+# ── baseline security response headers ──────────────────────────────────────
+
+
+def test_security_headers_on_every_response():
+    """Before this, /api/evidence was the ONLY route in the tree that set any of
+    these, and only on the blob it serves."""
+    app = create_app()
+    with TestClient(app) as c:
+        r = c.get("/api/health")
+        assert r.headers["x-content-type-options"] == "nosniff"
+        assert r.headers["x-frame-options"] == "DENY"
+        assert r.headers["referrer-policy"] == "no-referrer"
+        # HSTS is the front proxy's to assert, not this app's.
+        assert "strict-transport-security" not in r.headers
+
+
+def test_security_headers_do_not_overwrite_a_route_that_set_its_own():
+    """/api/evidence serves untrusted captured content under a far stricter
+    header set. A blanket middleware that clobbered it would be a regression
+    dressed as hardening."""
+    from app.routes import evidence  # noqa: PLC0415
+
+    src = Path(evidence.__file__).read_text()
+    assert "default-src 'none'; sandbox" in src
+    app = create_app()
+    with TestClient(app) as c:
+        r = c.get("/api/health")
+        # The middleware only fills a header that is absent.
+        assert r.headers["x-content-type-options"] == "nosniff"
+
+
+# ── bounded pagination ──────────────────────────────────────────────────────
+
+
+def test_list_limits_are_bounded():
+    """These four took `limit: int = 50` with no ceiling while the rest of the
+    tree used Query(..., le=N); an unbounded limit is a cheap amplification."""
+    app = create_app()
+    with TestClient(app) as c:
+        for path in (
+            "/api/alerts?limit=10000000",
+            "/api/jamming/alerts?limit=10000000",
+            "/api/alerts/deliveries?limit=10000000",
+            "/api/correlations/anything?limit=10000000",
+        ):
+            assert c.get(path).status_code == 422, path
+        # The documented default still works.
+        assert c.get("/api/alerts?limit=50").status_code == 200
+
+
+# ── Foundry fails closed on a keyless box ───────────────────────────────────
+# Foundry runs an operator SQL console, accepts dataset uploads, and stores the
+# MQTT/Kafka/SQL connection config pointing at the operator's own
+# infrastructure, and every one of those answered anonymously on a fresh
+# `docker compose up` because /api/foundry was never gated. It carries a
+# router-level require_compute_enabled rather than a ratelimit._COMPUTE_PREFIXES
+# entry, so the same auth posture arrives without putting the whole surface into
+# one 60/min bucket shared with BuildsView's 5 s poll.
+
+
+def test_foundry_fails_closed_when_keyless_and_not_opted_in(monkeypatch):
+    monkeypatch.setattr(
+        auth, "get_settings", lambda: _keyless_settings(allow_unauthenticated=False)
+    )
+    app = create_app()
+    with TestClient(app) as c:
+        for method, path, kw in (
+            ("post", "/api/foundry/sql", {"json": {"sql": "SELECT 1"}}),
+            ("post", "/api/foundry/datasets", {"json": {"name": "x"}}),
+            ("get", "/api/foundry/connections", {}),
+            ("get", "/api/foundry/datasets", {}),
+        ):
+            r = getattr(c, method)(path, **kw)
+            assert r.status_code == 503, f"{method.upper()} {path} -> {r.status_code}"
+            assert "ALLOW_UNAUTHENTICATED" in r.json()["detail"]
+        # The gate is selective: a keyless data route is untouched.
+        assert c.get("/api/health").status_code == 200
+
+
+def test_foundry_served_when_opted_in(monkeypatch):
+    monkeypatch.setattr(
+        auth, "get_settings", lambda: _keyless_settings(allow_unauthenticated=True)
+    )
+    app = create_app()
+    with TestClient(app) as c:
+        assert c.get("/api/foundry/datasets").status_code != 503
+
+
+def test_foundry_is_not_a_compute_prefix(monkeypatch):
+    """Deliberate: gating Foundry through the rate limiter would share one
+    per-client bucket across the whole surface, including the 5 s build poll."""
+    assert not ratelimit.is_compute_path("/api/foundry/builds")
+
+
 # ── POST /api/ai/local write-authority gating parity ────────────────────────
 # POST gained engine/local_only/selection_model write authority alongside its
 # siblings /api/ai/models and /api/ai/selection, but (unlike them) sat outside
