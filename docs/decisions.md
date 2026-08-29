@@ -2461,3 +2461,60 @@ of a copy of it.
 `::test_bucket_table_stays_bounded_when_every_bucket_is_fresh`
 
 Baseline 2537 → 2541.
+
+### require_role existed and gated nothing, and could not be bolted on as-is (2026-08-29)
+
+`security.require_role` has been in the tree since the clearance model landed.
+`grep -rl require_role apps/api/app` returned exactly one file: the one that
+defines it. So once a credential WAS configured there was no tier between
+"holds the key" and "runs arbitrary `op.python` as the API's own user,
+dispatches a control/actuation block, deletes a model."
+
+**The obvious fix does not work, and the reason is worth writing down.** Roles
+are only ever populated from the Supabase `profiles` row
+(`security.current_principal`), and `Principal` defaults to `("analyst",)`. So
+`Depends(require_role("admin"))` on `/api/workflows` would have:
+
+- 401'd a static-`API_KEY` deployment, because `require_role` resolves through
+  `current_principal` → `current_user`, which demands a valid Supabase token;
+- 403'd a keyless box, because `current_principal_or_local` hands back the
+  least-privilege `local` identity.
+
+Both are the operator's own console. A hardening change whose first act is to
+lock the operator out is not a hardening change.
+
+**The rule shipped instead:** a deployment with no multi-user identity has
+exactly one user, and that user is the operator. `security.require_operator`
+passes unconditionally when Supabase is unconfigured — holding the static key,
+or having deliberately set `ALLOW_UNAUTHENTICATED=1`, IS the operator
+credential, and there is no second person to separate from. With Supabase
+configured there IS a second person, so `admin` is required and an analyst gets
+403.
+
+Two things it deliberately does NOT do:
+
+- It does not widen `current_principal_or_local`'s roles to `admin`. That
+  least-privilege `analyst` default is what the clearance-gated routes
+  (`/api/audit`, `/api/extract`, `/api/collab`, `/api/intel`) read; granting
+  blanket admin there would relax five surfaces in order to harden two.
+- It does not replace the compute-path gate. `/api/workflows` and
+  `/api/ai/models` are already in `ratelimit._COMPUTE_PREFIXES`, so a keyless
+  box refuses them outright until the operator opts in. The two compose.
+
+Applied to the 14 mutating routes on the two routers, not to the router, so the
+read routes the console polls stay open.
+
+**The guard's first draft was worthless and the reason generalizes.** It walked
+`app.routes` looking for paths under `/api/workflows`. `create_app` registers
+each router through an `_IncludedRouter` wrapper that exposes no leaf paths, so
+the walk matched ZERO routes and the assertion passed vacuously — a green test
+proving nothing, which is the failure mode the whole audit discipline exists to
+catch. Fixed by walking the routers themselves, and by asserting the walk saw
+at least 14 gated and 6 open routes so an empty walk fails loudly. Verified by
+deleting one gate and watching the test fail, then restoring it.
+→ `tests/test_security_hardening.py::test_operator_gate_passes_when_there_is_only_one_user`,
+`::test_operator_gate_403s_an_analyst_once_supabase_can_tell_users_apart`,
+`::test_operator_gate_admits_an_admin_on_a_multi_user_deployment`,
+`::test_every_mutating_actuation_route_carries_the_operator_gate`
+
+Baseline 2541 → 2545.

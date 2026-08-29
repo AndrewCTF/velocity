@@ -150,3 +150,46 @@ def require_role(role: str):  # type: ignore[no-untyped-def]
         return p
 
     return _dep
+
+
+async def require_operator(p: Principal = Depends(current_principal_or_local)) -> None:
+    """Gate the routes that carry OPERATOR authority, not merely analyst access:
+    running arbitrary ``op.python``, dispatching a control/actuation block,
+    downloading or deleting a model.
+
+    ``require_role("admin")`` alone cannot do this job. Roles are only ever
+    populated from the Supabase ``profiles`` row, and ``Principal`` defaults to
+    ``("analyst",)``. So on a static-``API_KEY`` deployment ``current_principal``
+    401s (there is no Supabase token to validate) and on a keyless box the
+    ``local`` identity is an ``analyst`` — bolting the role check straight on
+    would lock the operator out of their own console on every deployment that
+    does not run Supabase.
+
+    The rule instead: **a deployment with no multi-user identity has exactly one
+    user, and that user is the operator.** With Supabase unconfigured, holding
+    the static key (or having deliberately set ``ALLOW_UNAUTHENTICATED=1``) IS
+    the operator credential and there is no second person to separate from. With
+    Supabase configured there IS a second person, so the admin role is required
+    and an analyst gets 403.
+
+    Deliberately does NOT widen ``current_principal_or_local``'s roles. That
+    least-privilege ``analyst`` default is what the clearance-gated routes
+    (``/api/audit``, ``/api/extract``, ``/api/collab``, ``/api/intel``) read, and
+    granting blanket admin there would relax five surfaces to harden two.
+
+    Composes with, and does not replace, the compute-path gate: ``/api/workflows``
+    and ``/api/ai/models`` are already in ``ratelimit._COMPUTE_PREFIXES``, so a
+    keyless box refuses them outright until the operator opts in.
+    """
+    if _multi_user(get_settings()) and not p.has_role("admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="this endpoint carries operator authority and requires the admin role",
+        )
+
+
+def _multi_user(s: Settings) -> bool:
+    """True when the deployment can tell two humans apart. Supabase is the only
+    identity backend here (the ontology's Supabase backend was deleted; this is
+    auth, not storage), so its absence means one operator."""
+    return bool(s.supabase_jwt_secret or (s.supabase_url and s.supabase_anon_key))

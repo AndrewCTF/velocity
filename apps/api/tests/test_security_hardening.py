@@ -13,9 +13,10 @@ import time
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app import auth, ratelimit
+from app import auth, ratelimit, security
 from app.config import Settings
 from app.main import create_app
 from app.news import analyze
@@ -103,6 +104,79 @@ def test_workflows_served_when_opted_in(monkeypatch):
         # workflow is a 404, not the auth 503).
         r = c.post("/api/workflows/anything/run", json={})
         assert r.status_code != 503
+
+
+# ── operator authority on the actuation surfaces ────────────────────────────
+# require_role existed and was applied to zero routes, so once a credential was
+# configured there was no tier between "holds the key" and "runs arbitrary
+# op.python as the API's own user / deletes a model". require_role("admin") on
+# its own could not close it: roles come only from the Supabase profiles row and
+# Principal defaults to ("analyst",), so it would have 403'd the operator on
+# every deployment that does not run Supabase.
+
+
+def _supabase_settings(**over: object) -> Settings:
+    base: dict[str, object] = dict(
+        api_key="",
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="anon",
+        supabase_jwt_secret="secret",
+    )
+    base.update(over)
+    return Settings(**base)  # type: ignore[arg-type]
+
+
+def test_operator_gate_passes_when_there_is_only_one_user(monkeypatch):
+    """Static key or keyless open mode: the caller IS the operator, and there is
+    no second person to separate them from."""
+    monkeypatch.setattr(security, "get_settings", lambda: _keyless_settings())
+    asyncio.run(security.require_operator(Principal(user_id="local", token="")))
+
+
+def test_operator_gate_403s_an_analyst_once_supabase_can_tell_users_apart(monkeypatch):
+    monkeypatch.setattr(security, "get_settings", _supabase_settings)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            security.require_operator(Principal(user_id="u", token="t", roles=("analyst",)))
+        )
+    assert exc.value.status_code == 403
+
+
+def test_operator_gate_admits_an_admin_on_a_multi_user_deployment(monkeypatch):
+    monkeypatch.setattr(security, "get_settings", _supabase_settings)
+    asyncio.run(
+        security.require_operator(Principal(user_id="u", token="t", roles=("admin",)))
+    )
+
+
+def test_every_mutating_actuation_route_carries_the_operator_gate():
+    """Anti-rot, both directions: a new POST/PUT/DELETE on either router must
+    declare the gate, and the gate must not creep onto the read routes the
+    console polls.
+
+    Walks the ROUTERS, not ``app.routes`` — create_app registers each router
+    through an _IncludedRouter wrapper that does not expose leaf paths, so an
+    app-level walk matches nothing and passes vacuously.
+    """
+    from app.routes import ai_models as ai_models_routes  # noqa: PLC0415
+    from app.routes import workflows as workflows_routes  # noqa: PLC0415
+
+    mutating = {"POST", "PUT", "DELETE", "PATCH"}
+    gated = open_ = 0
+    for router in (workflows_routes.router, ai_models_routes.router):
+        for route in router.routes:
+            methods = getattr(route, "methods", set()) & mutating
+            has_gate = any(
+                getattr(getattr(d, "dependency", None), "__name__", "") == "require_operator"
+                for d in getattr(route, "dependencies", [])
+            )
+            assert bool(methods) == has_gate, (
+                f"{sorted(methods) or ['GET']} {route.path}: gated={has_gate}"
+            )
+            gated += has_gate
+            open_ += not has_gate
+    # A walk that matched nothing would pass vacuously and guard nothing.
+    assert gated >= 14 and open_ >= 6, (gated, open_)
 
 
 # ── the limiter's client key ────────────────────────────────────────────────

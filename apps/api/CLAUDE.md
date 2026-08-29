@@ -133,6 +133,15 @@ shape, where an empty default would collapse every prod client into one loopback
 bucket). Unconditional trust let any caller mint a fresh bucket per request.
 → `tests/test_security_hardening.py`
 
+The 14 mutating routes on `/api/workflows` and `/api/ai/models` carry
+`Depends(require_operator)`. It passes unconditionally when Supabase is
+unconfigured (static key or open mode = one user, who is the operator) and
+requires the `admin` role when Supabase can tell two humans apart. It does NOT
+widen `current_principal_or_local`'s `analyst` default — the clearance-gated
+routes read that. → `tests/test_security_hardening.py`, whose anti-rot walk
+goes over the ROUTERS: `app.routes` hides leaves behind `_IncludedRouter` and an
+app-level walk passes vacuously.
+
 ## Connections (operator-configured sources)
 
 `foundry/connections.py` runs MQTT / Kafka / SQL sources the operator points at
