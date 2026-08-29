@@ -642,6 +642,53 @@ function AffiliationsCard({ target }: { target: string }): JSX.Element | null {
   );
 }
 
+interface RansomwareClaim {
+  query?: string;
+  checked?: boolean;
+  count?: number;
+  searched?: number;
+  groups?: string[];
+  country_counts?: Record<string, number>;
+  victims?: { victim?: string; group?: string; domain?: string; country?: string; attackdate?: string; claim_url?: string }[];
+  note?: string;
+}
+
+function RansomwareCard({ target }: { target: string }): JSX.Element | null {
+  const [data, setData] = useState<RansomwareClaim | null>(null);
+  useEffect(() => {
+    setData(null);
+    const aborter = new AbortController();
+    apiFetch(`/api/osint/ransomware?target=${encodeURIComponent(target)}`, { signal: aborter.signal })
+      .then((r) => (r.ok ? (r.json() as Promise<RansomwareClaim>) : null))
+      .then(setData)
+      .catch(() => undefined);
+    return () => aborter.abort();
+  }, [target]);
+
+  // checked:false means rate limited or down. Rendering "no claims" for an
+  // un-asked question would be an all-clear nobody earned, so render nothing.
+  if (!data || data.checked !== true) return null;
+  const hits = data.count ?? 0;
+  return (
+    <Widget title="Ransomware leak sites">
+      {hits === 0 && <Row k="status" v="checked · no crew has posted this domain" />}
+      {hits > 0 && (
+        <>
+          <Row k="victim posts" v={<span style={{ color: 'var(--alert)' }}>{hits}</span>} />
+          {data.groups?.length ? <Row k="crews" v={data.groups.join(' · ')} /> : null}
+          {data.victims?.slice(0, 5).map((v, i) => (
+            <Row
+              key={`${v.victim ?? ''}${i}`}
+              k={v.attackdate?.slice(0, 10) || v.group || 'post'}
+              v={`${v.victim ?? '—'} · ${v.group ?? '—'}${v.country ? ` · ${v.country}` : ''}`}
+            />
+          ))}
+        </>
+      )}
+    </Widget>
+  );
+}
+
 // ── panel ─────────────────────────────────────────────────────────────────────
 
 export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
@@ -677,6 +724,7 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
           <WaybackCard target={target} />
           <UrlscanCard target={target} />
           <StealerCard target={target} />
+          <RansomwareCard target={target} />
           <ThreatCard target={target} />
         </>
       )}

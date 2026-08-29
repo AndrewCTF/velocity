@@ -258,3 +258,60 @@ describe('OsintEntityPanel — stealer logs and affiliations', () => {
     expect(screen.queryByText('Affiliations · LittleSis')).not.toBeInTheDocument();
   });
 });
+
+// ── ch. 43: ransomware leak-site claims ─────────────────────────────────────
+
+describe('OsintEntityPanel — ransomware leak sites', () => {
+  function route(table: Record<string, unknown>) {
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      for (const [prefix, body] of Object.entries(table)) {
+        if (u.startsWith(prefix)) return jsonResponse(body);
+      }
+      return jsonResponse({ note: 'no data' });
+    });
+  }
+
+  it('renders victim posts and the crews that made them', async () => {
+    route({
+      '/api/osint/ransomware': {
+        query: 'victim.example',
+        checked: true,
+        count: 2,
+        searched: 4,
+        groups: ['incransom', 'qilin'],
+        victims: [
+          { victim: 'Victim Co', group: 'qilin', country: 'ID', attackdate: '2025-01-05T00:00:00+00:00' },
+        ],
+      },
+    });
+    render(<OsintEntityPanel id="domain:victim.example" />);
+
+    expect(await screen.findByText('Ransomware leak sites')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('incransom · qilin')).toBeInTheDocument();
+    expect(screen.getByText(/Victim Co · qilin · ID/)).toBeInTheDocument();
+  });
+
+  it('renders a checked-clean search as a finding', async () => {
+    route({
+      '/api/osint/ransomware': { query: 'clean.example', checked: true, count: 0, searched: 0, groups: [] },
+    });
+    render(<OsintEntityPanel id="domain:clean.example" />);
+    expect(await screen.findByText('checked · no crew has posted this domain')).toBeInTheDocument();
+  });
+
+  it('renders nothing when the check was rate limited, rather than an all-clear', async () => {
+    route({
+      '/api/osint/ransomware': {
+        query: 'x.example',
+        checked: false,
+        count: 0,
+        note: 'ransomware.live rate limited (1 request per minute)',
+      },
+    });
+    render(<OsintEntityPanel id="domain:x.example" />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('Ransomware leak sites')).not.toBeInTheDocument();
+  });
+});

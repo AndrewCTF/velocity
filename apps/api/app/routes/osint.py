@@ -49,9 +49,11 @@ from app.osint.sources import (
     crypto,
     infra,
     netblock,
+    ransomware,
     social,
     stealer,
     threat_feeds,
+    video,
 )
 from app.upstream import get_client
 
@@ -68,6 +70,7 @@ _MAX_TX = 25
 _MAX_SANCTIONS = 10
 _MAX_OFFICERS = 15
 _MAX_AFFILIATES = 20
+_MAX_RANSOM_VICTIMS = 15
 
 
 # ── GET connector endpoints (keyless, no auth) ──────────────────────────────────
@@ -317,6 +320,28 @@ async def littlesis_relationships(
     return await corp.littlesis_relationships(entity_id)
 
 
+@router.get("/ransomware")
+async def ransomware_domain(target: str = Query(..., max_length=253)) -> dict[str, Any]:
+    """Ransomware leak-site posts naming this domain, exact-matched."""
+    return await ransomware.ransomware_domain(target)
+
+
+@router.get("/ransomware-search")
+async def ransomware_search(name: str = Query(..., max_length=120)) -> dict[str, Any]:
+    return await ransomware.ransomware_search(name)
+
+
+@router.get("/ransomware-group")
+async def ransomware_group(name: str = Query(..., max_length=120)) -> dict[str, Any]:
+    return await ransomware.ransomware_group(name)
+
+
+@router.get("/video")
+async def video_status(target: str = Query(..., max_length=2048)) -> dict[str, Any]:
+    """Is this YouTube video live, who posted it, and did it ever exist."""
+    return await video.youtube_video(target)
+
+
 @router.get("/pivots")
 async def pivots(
     target: str = Query(..., max_length=2048),
@@ -407,12 +432,12 @@ async def _investigate_domain(g: _Graph, d: str) -> dict[str, Any]:
     (
         dns_r, whois_r, certs_r, threat_r,
         wayback_r, hackertarget_r, anubis_r, columbus_r, certspotter_r, urlscan_r,
-        steal_r,
+        steal_r, ransom_r,
     ) = await asyncio.gather(
         C.lookup_dns(d), C.lookup_whois(d), C.lookup_certs(d), C.lookup_threat(d),
         infra.wayback_urls(d), infra.hackertarget_hosts(d), infra.anubis_subdomains(d),
         infra.columbus_subdomains(d), infra.certspotter_issuances(d), infra.urlscan_domain(d),
-        stealer.hudsonrock_domain(d),
+        stealer.hudsonrock_domain(d), ransomware.ransomware_domain(d),
     )
     root = g.obj("domain:" + d, "Domain", "rdap+dns", {
         "name": d,
@@ -508,6 +533,20 @@ async def _investigate_domain(g: _Graph, d: str) -> dict[str, Any]:
         })
         g.link(sid, root, "compromised_in")
 
+    # Leak-site claims. A crew posting a victim is the earliest public record
+    # that an org was breached, so it is a threat indicator on the domain, not
+    # a property of it. `searched` is kept so a zero can be read as "the search
+    # ran and matched nothing" rather than "the search did not run".
+    if ransom_r.get("checked") and ransom_r.get("count"):
+        rid = g.obj("threat:ransomware:" + d, "ThreatIndicator", "ransomware.live", {
+            "indicator": d,
+            "victim_posts": ransom_r.get("count"),
+            "groups": ransom_r.get("groups"),
+            "victims": ransom_r.get("victims"),
+            "country_counts": ransom_r.get("country_counts"),
+        })
+        g.link(rid, root, "indicates_threat")
+
     return {
         "resolved_ips": len(dns_r.get("ips", [])),
         "subdomains": certs_r.get("subdomain_count", 0),
@@ -519,6 +558,8 @@ async def _investigate_domain(g: _Graph, d: str) -> dict[str, Any]:
         "threat_pulses": threat_r.get("pulse_count", 0),
         "stealer_checked": bool(steal_r.get("checked")),
         "stealer_credentials": steal_r.get("total", 0),
+        "ransomware_checked": bool(ransom_r.get("checked")),
+        "ransomware_posts": ransom_r.get("count", 0),
     }
 
 
@@ -974,10 +1015,11 @@ async def _investigate_person(g: _Graph, name: str) -> dict[str, Any]:
 
 async def _investigate_company(g: _Graph, name: str) -> dict[str, Any]:
     """Mint an ``ext:organization:<slug>`` root + filings/sanctions/officers context."""
-    sec_r, sanc_r, oc_r, oo_r, al_r, wd_r = await asyncio.gather(
+    sec_r, sanc_r, oc_r, oo_r, al_r, wd_r, ransom_r = await asyncio.gather(
         corp.sec_edgar_company(name), corp.opensanctions_search(name),
         corp.opencorporates_search(name), corp.openownership_search(name),
         corp.aleph_search(name), corp.wikidata_search(name),
+        ransomware.ransomware_search(name),
     )
     companies = oc_r.get("companies") or []
     top_company = companies[0] if companies else {}
@@ -1017,12 +1059,31 @@ async def _investigate_company(g: _Graph, name: str) -> dict[str, Any]:
         g.link(pid, root, "officer_of")
         officers += 1
 
+    # The company search is free text, so a leak-site hit here is a LEAD, not a
+    # confirmed match on this org — the upstream matches the crews' own blurbs
+    # too. It is minted with the query that produced it so the reader can judge.
+    ransom_posts = 0
+    if ransom_r.get("count"):
+        rid = g.obj(
+            "threat:ransomware:" + _slug(name), "ThreatIndicator", "ransomware.live",
+            {
+                "indicator": name.strip(),
+                "match": "free-text name search, not an exact-domain match",
+                "victim_posts": ransom_r.get("count"),
+                "groups": ransom_r.get("groups"),
+                "victims": (ransom_r.get("victims") or [])[:_MAX_RANSOM_VICTIMS],
+            },
+        )
+        g.link(rid, root, "indicates_threat")
+        ransom_posts = int(ransom_r.get("count") or 0)
+
     screening = {
         "sanctions_matches": sanctioned,
         "opencorporates_matches": oc_r.get("count", 0),
         "officers": officers,
         "aleph_matches": al_r.get("count", 0),
         "wikidata_matches": wd_r.get("count", 0),
+        "ransomware_posts": ransom_posts,
     }
     # These are due-diligence counts, not identity fields: a 0 means "checked,
     # clean" and is the whole point of a durable screening record, so it must

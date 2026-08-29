@@ -1207,7 +1207,8 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
-- 2501 + 2 skipped — 2026-08-29, osint-book-intel-2026-08, OSINT-book wave
+- 2531 + 2 skipped — 2026-08-29, osint-book-intel-2026-08, OSINT-book wave 2
+- 2501 + 2 skipped — 2026-08-29, osint-book-intel-2026-08, OSINT-book wave 1
 - 2450 + 2 skipped — 2026-08-21, egress-reachability-2026-08, four non-blocks
 - 2401 + 2 skipped — 2026-08-20, feed-honesty-2026-08, measured source health
 - 2400 + 2 skipped — 2026-08-20, feed-honesty-2026-08, measured source health
@@ -2237,3 +2238,86 @@ escape hatch, and flipping the shared client to HTTP/2 changes the transport
 for every upstream in the platform — that is a deliberate decision with its own
 blast radius, not a side effect of an OSINT wave. Whoever takes it should
 measure the other upstreams first.
+
+---
+
+## Coordinates, ransomware leak sites, and video provenance (2026-08-29, wave 2)
+
+Second pass over *OSINT Techniques* 11th ed. on the same branch, covering the
+chapters wave 1 left: 27 (online maps), 28 (documents), 30 (videos), 43
+(ransomware). Baseline 2501 → 2531; catalog 170 → 206 pivots over 13 kinds.
+
+**The coordinate selector is the one this platform most obviously lacked.** It
+runs a Cesium globe and had no way to take a lat/lon as an OSINT target, so ch.
+27's whole toolkit — Google/Bing/Yandex/Apple, Street View, Mapillary, KartaView,
+Zoom Earth, EO Browser, SunCalc, AcreValue — had no address. `normalise_coordinate`
+takes decimal degrees and the DMS form that map sites and image EXIF hand you,
+**in either order** (`12°E 41°N` is the same point as `41°N 12°E`; half the
+sources write longitude first). Canonical form is 6 decimals, ~11 cm, so the
+same point always renders the same url.
+
+Coordinate is checked BEFORE phone in `classify_target` for the same class of
+reason phone goes before asn: `38.8977 -77.0365` is digits, dots, a space and a
+hyphen, which is exactly the phone shape.
+
+**The catalog gained `{lat}`/`{lon}` placeholders.** No mapping site takes the
+pair as one opaque string and several want longitude first, so the `coordinate`
+kind uses two tokens instead of `{q}`. `placeholders_for(kind)` states which
+tokens a kind may use and the guard checks every template against it, plus a
+test that no rendered url anywhere keeps a literal brace.
+
+### ransomware.live: three answers that look alike (all measured 2026-08-29)
+
+A crew that has not been paid publishes its victim, and that post is usually the
+earliest public record an org was breached. Wiring it turned up three upstream
+behaviours that a naive connector collapses into one:
+
+1. **A no-match is an object, not an empty list**:
+   `{"error": "No victims found for keyword ..."}`. That is a clean result and
+   is reported `checked: True, count: 0` — "no crew has posted this org" is a
+   finding worth recording.
+2. **`/searchvictims` is rate limited to one request per minute**, and says so
+   with `{"message": "1 per 1 minute"}` **and HTTP 429**. `fetch_json` collapses
+   every non-200 to `None`, so this connector reads the status itself (the way
+   `social._head_ok` does for a non-JSON body). A rate limit is reported
+   `checked: False` — reporting it as clean would hand out an all-clear nobody
+   asked for, on the single question where a false negative matters most.
+3. **It keeps its own cache, not the shared one.** `TtlCache` stores whatever
+   the loader returns, so a 429 would be cached for the same six hours as a real
+   answer and one unlucky request would blind that target for a working day.
+   Only an ANSWER is cached here; a 429 or an outage is not.
+
+**The search is fuzzy and matches the crews' own blurbs**, so a query for "cnn"
+returns a Ghanaian beverage manufacturer whose description mentions CNN Money.
+`ransomware_domain` therefore filters on the record's own `domain` field rather
+than the ranking — same lesson as the LittleSis namesake filter. The company
+fan-out keeps the free-text search but mints the node with
+`"match": "free-text name search, not an exact-domain match"` on it, because
+there it genuinely is a lead rather than a confirmation.
+
+**Placeholder domains are refused.** `killsec` files unattributed victims under
+literal `example.com`; measured, it had three such posts, none of them about
+example.com. An exact match there would report somebody else's breach as yours,
+so a small placeholder set is rejected before the fetch.
+
+### YouTube: the three-way answer ch. 30 is actually after
+
+`/oembed` is keyless and returns title and channel for a live video, 400 for one
+that is gone. The thumbnail CDN keeps serving after the watch page dies. Taken
+together they separate **live**, **removed but provably real** (the thumbnail is
+often the only surviving image of it), and **never existed** — a distinction a
+single found/not-found flag destroys. The placeholder YouTube serves for a
+missing thumbnail is a ~1 KB grey JPEG, so size is checked as well as status: if
+the CDN ever starts 200-ing the placeholder, nothing else would tell them apart.
+
+### Not built, and why
+
+- **A ransomware map layer.** Every victim record carries a country, and
+  `country_counts` is returned ready for one, but a country centroid is not a
+  position and this platform's layers are positional. Minting 6 000 victims at
+  country centroids would put fake precision on the globe. The counts are on the
+  node; a choropleth is a deliberate decision for whoever wants one.
+- **`ransomwatch`** (raw GitHub, 2.3 MB `posts.json`) — same data, no search, a
+  full download per query. ransomware.live's rate limit is cheaper than that.
+- **CORE academic API** — answered 429 on the first request from this egress;
+  left as a pivot link rather than shipped as a flaky connector.

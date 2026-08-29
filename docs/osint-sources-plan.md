@@ -226,3 +226,20 @@ Plus `app/osint/pivots.py`: 170 manual-pivot URL templates over ten selector
 kinds, no network at all. Everything dropped from the book's lists, and every
 endpoint probed and rejected, is recorded in
 `docs/decisions.md#selector-pivots-stealer-logs-and-the-phone-kind-2026-08-29`.
+
+
+## 2026-08-29 wave 2 — coordinates, ransomware, video
+
+| Connector | Endpoint | Auth | Answers |
+| --- | --- | --- | --- |
+| `ransomware.ransomware_domain` | `api.ransomware.live/v2/searchvictims/{q}` | none | leak-site posts naming this domain, exact-matched |
+| `ransomware.ransomware_search` | same | none | free-text victim search (fuzzy: matches crew blurbs too) |
+| `ransomware.ransomware_group` | `api.ransomware.live/v2/group/{name}` | none | one crew's leak sites, tooling and TTPs |
+| `video.youtube_video` | `youtube.com/oembed` + `img.youtube.com` | none | is the video live, who posted it, did it ever exist |
+
+New `classify_target` kind: **`coordinate`** (decimal degrees or DMS, either
+axis order). New pivot kinds: `coordinate` (ch. 27), `document` (ch. 28),
+`video` (ch. 30). Catalog 170 -> 206 entries over 13 kinds.
+
+Rate limits, the no-match-is-an-object trap and the placeholder-domain trap are
+in `docs/decisions.md#coordinates-ransomware-leak-sites-and-video-provenance-2026-08-29-wave-2`.

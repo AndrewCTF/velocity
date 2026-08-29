@@ -31,6 +31,11 @@ Formats: several sites want a specific rendering of the same selector (a phone
 as ``618-462-0000`` here and ``6184620000`` there; a name as ``michael-bazzell``
 here and ``michael+bazzell`` there). An entry names the one it wants in ``fmt``;
 ``raw`` is the default and means the canonical target unchanged.
+
+Placeholders: ``{q}`` is the whole target. The ``coordinate`` kind uses ``{lat}``
+and ``{lon}`` instead, because no mapping site takes the pair as one opaque
+string and several want longitude first. Both may appear more than once in a
+template (Google Maps names the point and then centres on it).
 """
 
 from __future__ import annotations
@@ -44,6 +49,7 @@ from urllib.parse import quote
 KINDS: tuple[str, ...] = (
     "email", "username", "person", "phone",
     "domain", "ip", "wallet", "company", "image", "url",
+    "coordinate", "document", "video",
 )
 
 # ── the catalog ────────────────────────────────────────────────────────────────
@@ -446,6 +452,102 @@ PIVOTS: dict[str, tuple[dict[str, str], ...]] = {
         {"id": "virustotal", "name": "VirusTotal", "category": "Behaviour",
          "url": "https://www.virustotal.com/gui/search/{q}"},
     ),
+
+    # ── Ch. 27: online maps (the target is a lat/lon pair) ─────────────────
+    # These take {lat} and {lon} rather than {q}: no mapping site wants the
+    # pair as one opaque string, and half of them want it in the other order.
+    "coordinate": (
+        {"id": "google-maps", "name": "Google Maps", "category": "Maps",
+         "url": "https://www.google.com/maps/place/{lat},{lon}/@{lat},{lon},18z"},
+        {"id": "google-earth", "name": "Google Earth web", "category": "Maps",
+         "url": "https://earth.google.com/web/@{lat},{lon},0a,1000d,35y,0h,0t,0r"},
+        {"id": "bing-maps", "name": "Bing Maps (bird's eye)", "category": "Maps",
+         "url": "https://www.bing.com/maps?cp={lat}~{lon}&lvl=18&style=h"},
+        {"id": "yandex-maps", "name": "Yandex Maps", "category": "Maps",
+         "url": "https://yandex.com/maps/?ll={lon}%2C{lat}&z=18&l=sat",
+         "note": "often the freshest imagery over Russia and central Asia"},
+        {"id": "apple-maps", "name": "Apple Maps", "category": "Maps",
+         "url": "https://beta.maps.apple.com/?ll={lat},{lon}&z=18&t=k"},
+        {"id": "osm", "name": "OpenStreetMap", "category": "Maps",
+         "url": "https://www.openstreetmap.org/#map=18/{lat}/{lon}"},
+        {"id": "here", "name": "HERE WeGo", "category": "Maps",
+         "url": "https://wego.here.com/?map={lat},{lon},18,satellite"},
+        {"id": "wikimapia", "name": "Wikimapia", "category": "Maps",
+         "url": "https://wikimapia.org/#lang=en&lat={lat}&lon={lon}&z=17&m=b"},
+        {"id": "streetview", "name": "Google Street View", "category": "Street level",
+         "url": "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={lat},{lon}"},
+        {"id": "mapillary", "name": "Mapillary", "category": "Street level",
+         "url": "https://www.mapillary.com/app/?lat={lat}&lng={lon}&z=17"},
+        {"id": "kartaview", "name": "KartaView", "category": "Street level",
+         "url": "https://kartaview.org/map/@{lat},{lon},17z"},
+        {"id": "zoom-earth", "name": "Zoom Earth", "category": "Imagery over time",
+         "url": "https://zoom.earth/#view={lat},{lon},18z"},
+        {"id": "satellites-pro", "name": "Satellites.pro", "category": "Imagery over time",
+         "url": "https://satellites.pro/#{lat},{lon},18"},
+        {"id": "eo-browser", "name": "Sentinel Hub EO Browser", "category": "Imagery over time",
+         "url": "https://apps.sentinel-hub.com/eo-browser/?lat={lat}&lng={lon}&zoom=13"},
+        {"id": "landviewer", "name": "EOS LandViewer", "category": "Imagery over time",
+         "url": "https://eos.com/landviewer/?lat={lat}&lng={lon}&z=12"},
+        {"id": "suncalc", "name": "SunCalc shadow and sun angle", "category": "Analysis",
+         "url": "https://www.suncalc.org/#/{lat},{lon},17/2024.06.21/12:00/1/3",
+         "note": "shadow length and bearing, for dating an image from its shadows"},
+        {"id": "acrevalue", "name": "AcreValue parcels", "category": "Analysis",
+         "url": "https://www.acrevalue.com/map/?lat={lat}&lng={lon}&zoom=15",
+         "note": "US parcel boundaries and owners"},
+    ),
+
+    # ── Ch. 28: documents ──────────────────────────────────────────────────
+    "document": (
+        {"id": "google-pdf", "name": "Google · filetype:pdf", "category": "Search engines",
+         "url": "https://www.google.com/search?q=%22{q}%22+filetype%3Apdf"},
+        {"id": "google-office", "name": "Google · office formats", "category": "Search engines",
+         "url": "https://www.google.com/search?q=%22{q}%22+filetype%3Adoc+OR+filetype%3Adocx"
+                "+OR+filetype%3Axls+OR+filetype%3Apptx"},
+        {"id": "google-books", "name": "Google Books", "category": "Search engines",
+         "url": "https://www.google.com/search?tbm=bks&q=%22{q}%22"},
+        {"id": "refseek", "name": "RefSeek", "category": "Search engines",
+         "url": "https://www.refseek.com/documents?q={q}"},
+        {"id": "archive-org", "name": "Internet Archive texts", "category": "Archives",
+         "url": "https://archive.org/search?query={q}&sin=TXT"},
+        {"id": "annas-archive", "name": "Anna's Archive", "category": "Archives",
+         "url": "https://annas-archive.org/search?q={q}"},
+        {"id": "pdfdrive", "name": "PDFDrive", "category": "Archives",
+         "url": "https://www.pdfdrive.com/search?q={q}"},
+        {"id": "us-archives", "name": "US National Archives", "category": "Government",
+         "url": "https://search.archives.gov/search?affiliate=national-archives&query={q}"},
+        {"id": "govinfo", "name": "GovInfo", "category": "Government",
+         "url": "https://www.govinfo.gov/app/search/%7B%22query%22%3A%22{q}%22%7D"},
+        {"id": "base", "name": "BASE academic search", "category": "Academic",
+         "url": "https://www.base-search.net/Search/Results?lookfor={q}"},
+        {"id": "core", "name": "CORE open access", "category": "Academic",
+         "url": "https://core.ac.uk/search/?q={q}"},
+        {"id": "grayhat-buckets", "name": "Open buckets · GrayHatWarfare",
+         "category": "Exposed storage",
+         "url": "https://buckets.grayhatwarfare.com/files?keywords={q}"},
+    ),
+
+    # ── Ch. 30: one video, by its YouTube id ───────────────────────────────
+    "video": (
+        {"id": "youtube", "name": "Watch page", "category": "The video",
+         "url": "https://www.youtube.com/watch?v={q}"},
+        {"id": "thumbnail", "name": "Full-size thumbnail", "category": "The video",
+         "url": "https://img.youtube.com/vi/{q}/maxresdefault.jpg",
+         "note": "a thumbnail that still serves after the watch page 404s is how "
+                 "ch. 30 confirms a deleted video existed"},
+        {"id": "polsy", "name": "Country restrictions · Polsy", "category": "Availability",
+         "url": "https://polsy.org.uk/stuff/ytrestrict.cgi?ytid={q}",
+         "note": "which countries the upload is blocked in, which is itself a lead"},
+        {"id": "wayback", "name": "Archived watch page", "category": "Availability",
+         "url": "https://web.archive.org/web/*/youtube.com/watch%3Fv%3D{q}"},
+        {"id": "filmot", "name": "Subtitle search · Filmot", "category": "Contents",
+         "url": "https://filmot.com/video/{q}"},
+        {"id": "lens-thumb", "name": "Google Lens on the thumbnail", "category": "Contents",
+         "url": "https://lens.google.com/uploadbyurl?url=https%3A%2F%2Fimg.youtube.com"
+                "%2Fvi%2F{q}%2Fmaxresdefault.jpg"},
+        {"id": "yandex-thumb", "name": "Yandex on the thumbnail", "category": "Contents",
+         "url": "https://yandex.com/images/search?rpt=imageview&url=https%3A%2F%2Fimg.youtube.com"
+                "%2Fvi%2F{q}%2Fmaxresdefault.jpg"},
+    ),
 }
 
 # ── rendering ──────────────────────────────────────────────────────────────────
@@ -494,6 +596,18 @@ def _render(target: str, kind: str, fmt: str) -> str:
     return target
 
 
+# Which placeholders a kind's templates may use. A template outside its kind's
+# set would survive into the url as literal braces, so the guard checks it.
+PLACEHOLDERS: dict[str, frozenset[str]] = {
+    "coordinate": frozenset({"lat", "lon"}),
+}
+DEFAULT_PLACEHOLDERS: frozenset[str] = frozenset({"q"})
+
+
+def placeholders_for(kind: str) -> frozenset[str]:
+    return PLACEHOLDERS.get(kind, DEFAULT_PLACEHOLDERS)
+
+
 def _chain_of(wallet: str) -> str:
     return wallet.split(":", 1)[0].lower() if ":" in wallet else ""
 
@@ -527,10 +641,18 @@ def pivots_for(kind: str, target: str) -> list[dict[str, Any]]:
         # printed form removes a difference nobody can test from this egress —
         # every site in that group WAFs a datacenter address.
         value = quote(_render(target, kind, fmt), safe="+" if fmt == "plus" else "")
+        url = e["url"]
+        if kind == "coordinate":
+            lat, _, lon = target.partition(",")
+            url = url.replace("{lat}", quote(lat, safe="-.")).replace(
+                "{lon}", quote(lon, safe="-.")
+            )
+        else:
+            url = url.replace("{q}", value)
         link: dict[str, Any] = {
             "id": e["id"],
             "name": e["name"],
-            "url": e["url"].replace("{q}", value),
+            "url": url,
         }
         if e.get("note"):
             link["note"] = e["note"]

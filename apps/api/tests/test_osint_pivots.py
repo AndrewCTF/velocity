@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.osint.pivots import KINDS, PIVOTS, pivots_for
+from app.osint.pivots import KINDS, PIVOTS, pivots_for, placeholders_for
 
 
 @pytest.fixture(scope="module")
@@ -34,9 +34,10 @@ def test_catalog_covers_exactly_the_declared_kinds() -> None:
         assert entries, f"{kind} declares no pivots"
 
 
-def test_every_template_carries_exactly_one_placeholder() -> None:
+def test_every_template_carries_at_least_one_placeholder() -> None:
     for kind, e in _all_entries():
-        assert e["url"].count("{q}") == 1, f"{kind}/{e['id']}: {e['url']}"
+        found = set(re.findall(r"\{([^}]*)\}", e["url"]))
+        assert found, f"{kind}/{e['id']} has no placeholder: {e['url']}"
 
 
 def test_every_url_is_https() -> None:
@@ -181,11 +182,83 @@ def test_catalog_is_worth_having() -> None:
     # A floor, not a target: the wave shipped 170 across ten kinds. If a future
     # edit halves it, that is a deletion someone should have to justify.
     total = sum(len(v) for v in PIVOTS.values())
-    assert total >= 150, total
+    assert total >= 200, total
 
 
-def test_placeholders_are_only_ever_q() -> None:
-    # `{anything_else}` would survive into the url as literal braces.
+def test_placeholders_stay_inside_the_kinds_allowed_set() -> None:
+    # `{anything_else}` would survive into the url as literal braces. The
+    # coordinate kind is the one that uses {lat}/{lon} instead of {q}.
     for kind, e in _all_entries():
+        allowed = placeholders_for(kind)
         for tok in re.findall(r"\{([^}]*)\}", e["url"]):
-            assert tok == "q", f"{kind}/{e['id']} uses {{{tok}}}"
+            assert tok in allowed, f"{kind}/{e['id']} uses {{{tok}}}, allowed {sorted(allowed)}"
+
+
+def test_no_rendered_url_keeps_a_literal_brace() -> None:
+    samples = {
+        "coordinate": "38.897700,-77.036500",
+        "wallet": "btc:1EzwoHtiXB4iFwedPr49iywjZn2nnekhoj",
+        "email": "jane@example.com",
+        "video": "dQw4w9WgXcQ",
+    }
+    for kind in KINDS:
+        for g in pivots_for(kind, samples.get(kind, "example")):
+            for link in g["links"]:
+                assert "{" not in link["url"] and "}" not in link["url"], (
+                    f"{kind}/{link['id']}: {link['url']}"
+                )
+
+
+# ── ch. 27 coordinates ─────────────────────────────────────────────────────
+
+
+def test_coordinate_splits_lat_and_lon_and_respects_site_order() -> None:
+    urls = {
+        link["id"]: link["url"]
+        for g in pivots_for("coordinate", "38.897700,-77.036500")
+        for link in g["links"]
+    }
+    # Google names the point and then centres on it: {lat}/{lon} twice each.
+    assert urls["google-maps"] == (
+        "https://www.google.com/maps/place/38.897700,-77.036500"
+        "/@38.897700,-77.036500,18z"
+    )
+    # Yandex wants longitude first, which is exactly why this kind cannot use {q}.
+    assert "ll=-77.036500%2C38.897700" in urls["yandex-maps"]
+    assert "lat=38.897700&lng=-77.036500" in urls["mapillary"]
+
+
+def test_coordinate_kind_is_detected_from_a_typed_pair(client: TestClient) -> None:
+    for target in ("38.8977,-77.0365", "38.8977 -77.0365"):
+        r = client.get("/api/osint/pivots", params={"target": target})
+        assert r.status_code == 200, target
+        assert r.json()["kind"] == "coordinate", target
+        assert r.json()["count"] == len(PIVOTS["coordinate"])
+
+
+def test_dms_coordinates_reach_the_same_links(client: TestClient) -> None:
+    r = client.get("/api/osint/pivots", params={"target": "41°53'23.2\"N 12°29'32.2\"E"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["kind"] == "coordinate"
+    assert body["target"] == "41.889778,12.492278"
+
+
+# ── ch. 28 / ch. 30 ────────────────────────────────────────────────────────
+
+
+def test_document_and_video_kinds_are_opt_in(client: TestClient) -> None:
+    for kind in ("document", "video"):
+        r = client.get("/api/osint/pivots", params={"target": "dQw4w9WgXcQ", "kind": kind})
+        assert r.status_code == 200
+        assert r.json()["kind"] == kind
+        assert r.json()["count"] == len(PIVOTS[kind])
+
+
+def test_video_pivots_build_the_thumbnail_reverse_search() -> None:
+    urls = {link["id"]: link["url"] for g in pivots_for("video", "dQw4w9WgXcQ")
+            for link in g["links"]}
+    assert urls["thumbnail"] == "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+    # The reverse-image pivots take the thumbnail url, already encoded.
+    assert "img.youtube.com%2Fvi%2FdQw4w9WgXcQ" in urls["lens-thumb"]
+    assert "img.youtube.com%2Fvi%2FdQw4w9WgXcQ" in urls["yandex-thumb"]

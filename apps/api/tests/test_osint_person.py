@@ -8,6 +8,7 @@ import pytest
 
 from app.osint.fetch import (
     classify_target,
+    normalise_coordinate,
     normalise_email,
     normalise_phone,
     normalise_username,
@@ -254,3 +255,87 @@ async def test_investigate_person_records_a_clean_screening(monkeypatch) -> None
     props = g.objs["person:jane-roe"].props
     assert props["sanctions_matches"] == 0
     assert props["aleph_matches"] == 0
+
+
+# ── ch. 27: coordinates, the selector a geospatial platform most needed ───────
+
+
+def test_classify_coordinate_decimal_and_dms() -> None:
+    assert classify_target("38.8977,-77.0365") == ("coordinate", "38.897700,-77.036500")
+    assert classify_target("38.8977, -77.0365") == ("coordinate", "38.897700,-77.036500")
+    assert classify_target("38.8977 -77.0365") == ("coordinate", "38.897700,-77.036500")
+    assert classify_target("41°53'23.2\"N 12°29'32.2\"E") == ("coordinate", "41.889778,12.492278")
+    # Half the sources write longitude first; the same point must resolve either way.
+    assert classify_target("12°29'32.2\"E 41°53'23.2\"N") == ("coordinate", "41.889778,12.492278")
+    assert classify_target("41°N 12°E") == ("coordinate", "41.0,12.0")
+
+
+def test_coordinate_does_not_steal_the_other_kinds() -> None:
+    # "38.8977 -77.0365" is digits, dots, a space and a hyphen: exactly the
+    # phone shape, which is why coordinate is checked first.
+    assert classify_target("618-462-0000") == ("phone", "6184620000")
+    assert classify_target("8.8.8.8") == ("ip", "8.8.8.8")
+    assert classify_target("1.2.3.4") == ("ip", "1.2.3.4")
+
+
+def test_out_of_range_pairs_are_not_coordinates() -> None:
+    assert normalise_coordinate("200.5,-77.0") is None      # latitude past the pole
+    assert normalise_coordinate("38.9,-200.0") is None      # longitude past the wrap
+    assert normalise_coordinate("1.2") is None              # one number is not a pair
+    assert normalise_coordinate("") is None
+
+
+# ── ch. 43: ransomware leak-site claims in the domain fan-out ────────────────
+
+
+async def test_domain_mints_a_ransomware_indicator(monkeypatch) -> None:
+    async def claimed(d):
+        return {"query": d, "checked": True, "count": 2,
+                "groups": ["qilin", "incransom"],
+                "country_counts": {"ID": 2},
+                "victims": [{"victim": d, "group": "qilin", "domain": d, "country": "ID"}]}
+
+    async def nothing(*a, **k):
+        return {}
+
+    monkeypatch.setattr(O.ransomware, "ransomware_domain", claimed)
+    for name in ("lookup_dns", "lookup_whois", "lookup_certs", "lookup_threat"):
+        monkeypatch.setattr(O.C, name, nothing)
+    for name in ("wayback_urls", "hackertarget_hosts", "anubis_subdomains",
+                 "columbus_subdomains", "certspotter_issuances", "urlscan_domain"):
+        monkeypatch.setattr(O.infra, name, nothing)
+    monkeypatch.setattr(O.stealer, "hudsonrock_domain", nothing)
+
+    g = O._Graph(ts=time.time())
+    summary = await O._investigate_domain(g, "victim.example")
+
+    assert "threat:ransomware:victim.example" in g.objs
+    assert summary["ransomware_posts"] == 2
+    assert summary["ransomware_checked"] is True
+    assert any(lk.rel == "indicates_threat" and lk.dst == "domain:victim.example"
+               for lk in g.links.values())
+
+
+async def test_a_rate_limited_ransomware_check_mints_nothing(monkeypatch) -> None:
+    # checked:False means the question was not answered. Minting an indicator
+    # would be inventing one; reporting 0 as clean would be an all-clear.
+    async def limited(d):
+        return {"query": d, "checked": False, "count": 0, "victims": [],
+                "groups": [], "country_counts": {}, "note": "rate limited"}
+
+    async def nothing(*a, **k):
+        return {}
+
+    monkeypatch.setattr(O.ransomware, "ransomware_domain", limited)
+    for name in ("lookup_dns", "lookup_whois", "lookup_certs", "lookup_threat"):
+        monkeypatch.setattr(O.C, name, nothing)
+    for name in ("wayback_urls", "hackertarget_hosts", "anubis_subdomains",
+                 "columbus_subdomains", "certspotter_issuances", "urlscan_domain"):
+        monkeypatch.setattr(O.infra, name, nothing)
+    monkeypatch.setattr(O.stealer, "hudsonrock_domain", nothing)
+
+    g = O._Graph(ts=time.time())
+    summary = await O._investigate_domain(g, "victim.example")
+
+    assert not [o for o in g.objs if o.startswith("threat:ransomware:")]
+    assert summary["ransomware_checked"] is False
