@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Markdown } from '../shell/Markdown.js';
 import { apiFetch } from '../transport/http.js';
 import { Card, type BriefResponse } from './shared.js';
+import { AiLabel } from '../shell/aiLabel.js';
 
 const briefCache = new Map<string, BriefResponse>();
 
@@ -100,6 +101,7 @@ export function BriefCard({ iso3 }: { iso3: string }): JSX.Element {
       {state.data?.ok === true && (
         <div className="mt-2 border-t border-line pt-2">
           <Markdown text={state.data.markdown} />
+          <AiLabel className="mt-2" />
         </div>
       )}
     </Card>

@@ -36,8 +36,13 @@ from app.keys import UserCtx
 _SITUATION_KIND = "situation"
 
 # The label that MUST wrap any generated narrative in an evidentiary document.
+# The separator is " · " and not an em dash because this string is now rendered
+# in the dashboard too (apps/web/src/shell/aiLabel.tsx), and apps/web/CLAUDE.md
+# holds dashboard copy to no em dashes. The two copies must stay byte-identical
+# -- tests/test_ai_label_parity.py fails if they drift -- so the stricter rule
+# wins on both sides.
 AI_LABEL = (
-    "AI-DRAFTED — UNVERIFIED. This text was machine-generated as a drafting "
+    "AI-DRAFTED · UNVERIFIED. This text was machine-generated as a drafting "
     "aid; a human must verify every statement against the cited evidence "
     "before relying on it. Not itself evidence."
 )
