@@ -129,6 +129,26 @@ def is_grounded(text: str, allowed_ids: Iterable[str] | None = None) -> bool:
     return all(f in allowed for f in found)
 
 
+def unknown_citations(text: str, allowed_ids: Iterable[str]) -> list[str]:
+    """The ids a model cited that were NOT in the evidence it was given.
+
+    `is_grounded` answers yes or no; this answers which, so a caller can both
+    withhold the prose and say what was wrong with it. That distinction matters
+    because the two failures are not the same: prose that cites nothing is
+    merely unsourced, while prose that cites an id we never supplied is a
+    fabricated provenance trail, and the second one survives a skim.
+
+    Order-preserving and deduplicated, so the reason shown to an operator reads
+    the way the text did.
+    """
+    allowed = set(allowed_ids)
+    out: list[str] = []
+    for c in citations_in(text):
+        if c not in allowed and c not in out:
+            out.append(c)
+    return out
+
+
 def with_prose_style(system: str) -> str:
     """Append the house prose style to an analyst system prompt.
 
