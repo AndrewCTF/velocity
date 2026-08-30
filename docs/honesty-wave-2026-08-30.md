@@ -76,9 +76,54 @@ together — `test_adsb_no_reverse`, `test_adsb_cached_age`, `test_adsb_hot_blob
 `test_adsb_viewport_stable`, `test_invariants`, `test_provenance` — 58 passed,
 1 skipped (the opt-in live probe).
 
+## Phase 6 — the AI label reaches the panels
+
+`case_export.py` has enforced an AI-DRAFTED marker on the evidentiary path since
+the locker shipped. None of the three panels rendering model output carried one:
+the entity panel's AI assessment, the watch officer's elaborated brief, the
+country brief. The document is read once by someone who knows it is a draft; the
+panel is read all day by someone triaging.
+
+One `<AiLabel />` sharing the export's exact wording, with
+`test_ai_label_parity.py` failing if the two copies drift. `IntelPanel` is
+deliberately excluded and the test pins that too — its narrative comes from
+`intel/incidents.py`, whose header says "Nothing is invented", and a label that
+appears on deterministic text is a label people stop seeing. The separator moved
+from an em dash to " · " on both sides, because the string is dashboard copy now
+and `apps/web/CLAUDE.md` holds dashboard copy to no em dashes.
+
+## Phase 14 — a replay window becomes a citable artifact
+
+The flagship. `POST /api/evidence/capture/replay-window` freezes what changed
+inside a box between two moments of the owned archive: SHA-256 over canonical
+JSON, attachable to a case, re-verifiable by someone who does not trust us. The
+diff is computed server-side and the request model has no field for one — a
+notary for whatever the caller typed is not evidence.
+
+Proved live against a 44.5M-row archive (North Sea, 45N-60N, one hour):
+
+    /api/history/diff  ->  arrived 45, departed 66, stayed 979
+    capture            ->  sha256 ac3ae6a7f504…
+                           "Replay window: 45 arrived, 66 departed, 979 stayed"
+                           truncated: {arrived: false, departed: false, stayed: false}
+    verify             ->  {"ok": true}
+
+**That live run caught a defect in the first version of this code**, which is the
+argument for running it. The exhibit said `stayed: 500` where 979 did: counts
+were measured with `len()` over `window_diff`'s id arrays, which are capped at
+`limit`, while the diff's own `counts` stay honest. An exhibit that silently
+truncates is worse than no exhibit — it is wrong in a way that looks precise.
+Counts now come off the diff, the capture asks for the route ceiling rather than
+the 500 default, and a per-lane `truncated` map records whether the stored list
+is shorter than the count it reports.
+
+`routeCoverage.test.ts` is what required the new route to have a UI address at
+all; the control lives in the evidence panel. The map gesture the plan wants —
+draw a box, pick two moments, see arrived/departed on the globe — is still to
+come.
+
 ## Still open
 
-Twenty of the plan's twenty-six phases. The largest are the container that
-cannot run its own sidecars (Phase 8), archive contiguity (Phase 11), the
-replay window as a citable artifact (Phase 14, the flagship), and photo
-geolocation's missing surface (Phase 19).
+Eighteen of the plan's twenty-six phases. The largest are the container that
+cannot run its own sidecars (Phase 8), archive contiguity (Phase 11), photo
+geolocation's missing surface (Phase 19), and Phase 14's map gesture.
