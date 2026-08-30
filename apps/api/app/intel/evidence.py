@@ -61,7 +61,16 @@ METHOD_URL = "url"
 METHOD_FILE = "file_upload"
 METHOD_SCREENSHOT = "screenshot"
 METHOD_FEED_FREEZE = "feed_freeze"
-_METHODS = frozenset({METHOD_URL, METHOD_FILE, METHOD_SCREENSHOT, METHOD_FEED_FREEZE})
+# A window of the OWNED ARCHIVE rather than a moment of the live feed: what
+# arrived, departed and stayed inside a box between two times. It is a distinct
+# method because the custody story is different — a feed freeze attests to what
+# the platform was being told right now, this attests to what the platform
+# RECORDED over a span, which is the thing a stateless viewer cannot produce at
+# all and the thing a skeptic will actually ask about.
+METHOD_REPLAY_WINDOW = "replay_window"
+_METHODS = frozenset(
+    {METHOD_URL, METHOD_FILE, METHOD_SCREENSHOT, METHOD_FEED_FREEZE, METHOD_REPLAY_WINDOW}
+)
 
 # Response headers worth notarizing on a URL capture (provenance, not the whole
 # noisy set). Server/date/content-type place the capture; the security/caching
@@ -500,6 +509,87 @@ async def capture_feed_freeze(
         filename=f"{entity_id.replace(':', '_')}.json",
         title=f"Live state: {entity_id}",
         extra_props={"entity_id": entity_id, "entity_snapshot": snapshot},
+        settings=settings,
+    )
+
+
+async def capture_replay_window(
+    ctx: UserCtx,
+    *,
+    bbox: tuple[float, float, float, float],
+    at_a: float,
+    at_b: float,
+    window_sec: int,
+    kind: str | None,
+    diff: dict[str, Any],
+    source_context: str | None = None,
+    settings: Settings | None = None,
+) -> Object:
+    """Notarize what changed inside a box between two moments of our own archive.
+
+    The competitor case, stated plainly because it is the whole argument for
+    this function: a stateless fusion globe can serialize its camera, its layer
+    set and one tracked target into a share URL. It cannot answer "is this a
+    different four vessels than last Tuesday", because it never held last
+    Tuesday. We do, so the answer exists — and once it exists it should leave
+    the building as something a skeptic can re-check, not as a screenshot.
+
+    The DIFF IS COMPUTED BY THE CALLER FROM THE ARCHIVE, never accepted from the
+    client. That is the difference between evidence and an assertion: a
+    feed-freeze notarizes a snapshot the client handed us, which is fine for
+    "this is what my console showed", but a window that claims six vessels left
+    a terminal has to be something the platform derived from its own store or it
+    proves nothing.
+
+    Canonical JSON with sorted keys, so the same window over the same archive
+    always yields the same hash and `GET /api/evidence/{sha}/verify` can be run
+    by someone who does not trust us.
+    """
+    payload = {
+        "bbox": list(bbox),
+        "at_a": at_a,
+        "at_b": at_b,
+        "window_sec": window_sec,
+        "kind": kind,
+        "diff": diff,
+    }
+    canon = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    # Take the TRUE counts off the diff, never len() of the lists. window_diff
+    # caps the id arrays at `limit` while its own `counts` stay honest, so
+    # measuring the arrays produced an artifact that said "500 stayed" about a
+    # window where 979 did. An exhibit that silently truncates is worse than no
+    # exhibit: it is wrong in a way that looks precise. `truncated` is recorded
+    # alongside so a reader can tell a capped list from a complete one.
+    true_counts = diff.get("counts") if isinstance(diff.get("counts"), dict) else None
+    counts = {
+        k: int((true_counts or {}).get(k, len(diff.get(k) or [])))
+        for k in ("arrived", "departed", "stayed")
+    }
+    truncated = {
+        k: counts[k] > len(diff.get(k) or []) for k in ("arrived", "departed", "stayed")
+    }
+    return await capture_bytes(
+        ctx,
+        data=canon,
+        media_type="application/json",
+        capture_method=METHOD_REPLAY_WINDOW,
+        source_context=source_context,
+        filename="replay-window.json",
+        title=(
+            f"Replay window: {counts['arrived']} arrived, "
+            f"{counts['departed']} departed, {counts['stayed']} stayed"
+        ),
+        extra_props={
+            "bbox": list(bbox),
+            "at_a": at_a,
+            "at_b": at_b,
+            "window_sec": window_sec,
+            "entity_kind": kind,
+            "counts": counts,
+            # True when the stored id list is shorter than the count it reports.
+            "truncated": truncated,
+            "diff": diff,
+        },
         settings=settings,
     )
 

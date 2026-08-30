@@ -1245,6 +1245,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2587 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, citable-replay wave
 - 2581 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, AI-label wave
 - 2578 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, honesty wave
 - 2570 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, grounding-gate wave

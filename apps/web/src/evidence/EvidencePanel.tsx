@@ -180,8 +180,16 @@ export function EvidencePanel(): JSX.Element {
   const upload = useEvidence((s) => s.upload);
   const loadSituations = useSituations((s) => s.load);
 
+  const captureReplayWindow = useEvidence((s) => s.captureReplayWindow);
+
   const [url, setUrl] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  // A box and two moments. Defaults to "the last hour, here" so the control is
+  // one click for the common case; the numbers stay editable because an
+  // investigation is rarely about the last hour.
+  const [win, setWin] = useState({
+    lamin: '50', lomin: '-1', lamax: '52', lomax: '1', hoursAgo: '1', windowMin: '10',
+  });
 
   useEffect(() => {
     void load();
@@ -197,6 +205,33 @@ export function EvidencePanel(): JSX.Element {
       toast.ok('URL captured & hashed');
     } else {
       toast.error('Could not capture the URL.');
+    }
+  };
+
+  const onFreezeWindow = async (): Promise<void> => {
+    const num = (v: string): number => Number.parseFloat(v);
+    const bbox = {
+      lamin: num(win.lamin), lomin: num(win.lomin),
+      lamax: num(win.lamax), lomax: num(win.lomax),
+    };
+    if (Object.values(bbox).some((n) => Number.isNaN(n))) {
+      toast.error('The box needs four numbers.');
+      return;
+    }
+    const nowSec = Date.now() / 1000;
+    const atA = nowSec - num(win.hoursAgo) * 3600;
+    const obj = await captureReplayWindow(
+      bbox, atA, nowSec, Math.round(num(win.windowMin) * 60), null,
+    );
+    if (obj) {
+      const c = (obj.props as { counts?: Record<string, number> }).counts;
+      toast.ok(
+        c
+          ? `window frozen · ${c.arrived} arrived, ${c.departed} departed`
+          : 'replay window frozen & hashed',
+      );
+    } else {
+      toast.error('Could not freeze the window.');
     }
   };
 
@@ -246,6 +281,45 @@ export function EvidencePanel(): JSX.Element {
             disabled={busy}
             className="block w-full text-[11px] text-txt-2 file:mr-2 file:rounded-sm file:border file:border-line-2 file:bg-bg-2 file:px-2 file:py-1 file:text-txt-1 file:mono file:text-[10px]"
           />
+        </div>
+        <div className="mt-2 space-y-1.5">
+          <MicroLabel>freeze a replay window (what changed in a box)</MicroLabel>
+          <p className="text-[10px] text-txt-3">
+            The question a live-only map cannot answer: are these the same contacts as
+            before. The diff is computed from your own archive and hashed, so it can be
+            attached to a case and re-verified.
+          </p>
+          <div className="grid grid-cols-4 gap-1">
+            {(['lamin', 'lomin', 'lamax', 'lomax'] as const).map((k) => (
+              <input
+                key={k}
+                value={win[k]}
+                onChange={(e) => setWin((w) => ({ ...w, [k]: e.target.value }))}
+                placeholder={k}
+                aria-label={k}
+                className="mono text-[11px] bg-bg-2 border border-line-2 rounded-sm px-1.5 py-1 text-txt-1"
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              value={win.hoursAgo}
+              onChange={(e) => setWin((w) => ({ ...w, hoursAgo: e.target.value }))}
+              aria-label="hours ago"
+              className="w-14 mono text-[11px] bg-bg-2 border border-line-2 rounded-sm px-1.5 py-1 text-txt-1"
+            />
+            <span className="text-[10px] text-txt-3">h ago vs now, ±</span>
+            <input
+              value={win.windowMin}
+              onChange={(e) => setWin((w) => ({ ...w, windowMin: e.target.value }))}
+              aria-label="window minutes"
+              className="w-14 mono text-[11px] bg-bg-2 border border-line-2 rounded-sm px-1.5 py-1 text-txt-1"
+            />
+            <span className="text-[10px] text-txt-3">min</span>
+            <Btn tone="accent" size="sm" disabled={busy} onClick={() => void onFreezeWindow()}>
+              freeze
+            </Btn>
+          </div>
         </div>
         {busy && <p className="text-[10px] text-txt-3 mt-1">capturing…</p>}
         {error && <p className="text-[10px] text-warn mt-1">{error}</p>}
