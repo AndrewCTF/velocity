@@ -64,7 +64,7 @@ interface Density {
   binWidthSec: number;
   detections: number[];
   alerts: number[];
-  gaps: number[];
+  gaps: number[] | null; // null = unmeasured (see gaps_status), never rendered
 }
 
 interface LaneEvent {

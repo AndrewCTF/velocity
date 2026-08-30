@@ -1245,6 +1245,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2578 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, honesty wave
 - 2570 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, grounding-gate wave
 - 2562 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, ground-truth wave
 - 2559 + 2 skipped — 2026-08-29, osint-book-intel-2026-08, hardening wave

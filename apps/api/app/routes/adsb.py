@@ -1765,6 +1765,18 @@ async def _do_global_fanout() -> dict[str, Any]:
     # floor (Chromium crash / cold start), so the map can't go empty.
     if get_settings().adsb_sidecar_only:
         sidecar: dict[Any, dict[str, Any]] = {}
+        # Same per-cycle observer map the multi-tier union below builds. This
+        # path used to skip both it and _stamp_sources entirely and return
+        # early, so on a sidecar-only deployment EVERY contact reached the
+        # client with no `sources`, no `source_count` and no `confidence` —
+        # measured 2026-08-30 as 8,081 of 8,588 features, 94%, which
+        # /api/status/provenance then honestly reported as `unattributed`
+        # rather than guessing. The reader was right; this writer was missing.
+        # One tier means every contact here is single-source, and saying that
+        # plainly is the point: "8.5k contacts, none corroborated" is a real
+        # answer about this deployment, and "we cannot speak to 94% of them"
+        # is not.
+        sidecar_seen: dict[Any, set[str]] = {}
         _t0 = time.monotonic()
         feeds0 = await _await_within(
             asyncio.ensure_future(_readsb_feeds()), time.monotonic() + _FANOUT_BUDGET_S
@@ -1775,7 +1787,10 @@ async def _do_global_fanout() -> dict[str, Any]:
             # place, and global_snapshot() copies them. Without this a consumer
             # could copy a set that is half cycle N and half cycle N+1.
             async with _SNAPSHOT_LOCK:
-                await asyncio.to_thread(_merge_raw_into, sidecar, feeds0)
+                # Tier name matches the multi-tier path's, because it is the
+                # same source (_readsb_feeds); a different label here would
+                # split one tier into two in the provenance rollup.
+                await asyncio.to_thread(_merge_raw_into, sidecar, feeds0, sidecar_seen, "feeds")
         _t2 = time.monotonic()
         # Split the fan-out's wall time into "waiting for the feed" and "turning
         # it into features". Only the second is loop-blocking CPU, and telling
@@ -1784,6 +1799,7 @@ async def _do_global_fanout() -> dict[str, Any]:
         _CYCLE_MS["fanout_wait"] = round((_t1 - _t0) * 1000, 1)
         _CYCLE_MS["fanout_cpu"] = round((_t2 - _t1) * 1000, 1)
         if len(sidecar) >= _SIDECAR_ONLY_FLOOR:
+            _stamp_sources(sidecar, sidecar_seen)
             return {"type": "FeatureCollection", "features": list(sidecar.values())}
         # sidecar thin/down → fall through to the full multi-tier union.
 
