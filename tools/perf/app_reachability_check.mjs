@@ -27,7 +27,11 @@ const browser = await chromium.launch({
 });
 const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
 await ctx.addInitScript(() => {
-  localStorage.setItem('velocity.onboarded', '1');
+  // 'velocity.onboarded.v1' — Onboarding.tsx:8 versioned the key; the old
+  // unversioned one stopped suppressing the tour, so every run since was
+  // measuring the console with the WELCOME modal open over it.
+  localStorage.setItem('velocity.onboarded.v1', '1');
+  localStorage.setItem('velocity.aiSetupSeen', '1'); // AppRouter.tsx:163 AiSetupGate
   localStorage.setItem('velocity.openModeDismissed', '1');
 });
 const page = await ctx.newPage();
