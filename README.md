@@ -47,7 +47,7 @@ labelled as automated output, not sold as "AI insight."
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-2255%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-2562%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
@@ -404,7 +404,7 @@ Protocol** server, so an AI agent can interrogate the same warm feeds the globe
 renders without scraping a dozen sites or flooding its own context. Ask "where
 is GPS being jammed right now?" and it answers from the live feed. Full
 architecture + `/api/intel/*` HTTP reference: [`docs/mcp-server.md`](./docs/mcp-server.md).
-It exposes 84 tools over `app.mcp_server` (a representative slice below; run
+It exposes 85 tools over `app.mcp_server` (a representative slice below; run
 `--list-tools` for the full set):
 
 | Tool | What it returns |
@@ -603,7 +603,7 @@ osint/
 
 ```bash
 # from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
-OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 2255 passed + 2 skipped
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 2562 passed + 2 skipped
 pnpm -r test                          # vitest (web, shared)
 pnpm -r typecheck
 bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot
