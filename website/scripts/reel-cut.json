@@ -1,0 +1,212 @@
+[
+ {
+  "src": "atc-tower-32001457",
+  "secs": 1.3,
+  "inPoint": 11.129999999999999,
+  "luma": 32,
+  "gamma": 1.68
+ },
+ {
+  "src": "aircraft-5703847",
+  "secs": 1,
+  "inPoint": 11.04,
+  "luma": 32,
+  "gamma": 1.67
+ },
+ {
+  "src": "ocean-33762469",
+  "secs": 1,
+  "inPoint": 16.1583085,
+  "luma": 70,
+  "gamma": 0.96
+ },
+ {
+  "src": "@hero-med",
+  "secs": 1.4,
+  "inPoint": 0.4,
+  "luma": 85,
+  "gamma": 0.84
+ },
+ {
+  "src": "harbour-4499159",
+  "secs": 1.1,
+  "inPoint": 9.785833499999999,
+  "luma": 72,
+  "gamma": 0.94
+ },
+ {
+  "src": "ship-34043280",
+  "secs": 1.2,
+  "inPoint": 23.7076165,
+  "luma": 87,
+  "gamma": 0.82
+ },
+ {
+  "src": "ocean-30537976",
+  "secs": 0.9,
+  "inPoint": 2.6364164999999997,
+  "luma": 60,
+  "gamma": 1.07
+ },
+ {
+  "src": "harbour-3075997",
+  "secs": 1.1,
+  "inPoint": 14.553333499999999,
+  "luma": 65,
+  "gamma": 1.01
+ },
+ {
+  "src": "ship-2943126",
+  "secs": 1,
+  "inPoint": 12.4808335,
+  "luma": 75,
+  "gamma": 0.92
+ },
+ {
+  "src": "console-36392564",
+  "secs": 1,
+  "inPoint": 4.1333335,
+  "luma": 21,
+  "gamma": 1.9
+ },
+ {
+  "src": "@hero-gulf",
+  "secs": 1.4,
+  "inPoint": 0.4,
+  "luma": 91,
+  "gamma": 0.8
+ },
+ {
+  "src": "launch-7615677",
+  "secs": 1.2,
+  "inPoint": 11.0366665,
+  "luma": 47,
+  "gamma": 1.26
+ },
+ {
+  "src": "orbit-38594546",
+  "secs": 1.2,
+  "inPoint": 9.8166665,
+  "luma": 73,
+  "gamma": 0.94
+ },
+ {
+  "src": "radar-33885210",
+  "secs": 1,
+  "inPoint": 8.1583335,
+  "luma": 111,
+  "gamma": 0.7
+ },
+ {
+  "src": "orbit-39025985",
+  "secs": 1.1,
+  "inPoint": 7.79,
+  "luma": 38,
+  "gamma": 1.47
+ },
+ {
+  "src": "wildfire-31129960",
+  "secs": 1.1,
+  "inPoint": 11.691396,
+  "luma": 104,
+  "gamma": 0.73
+ },
+ {
+  "src": "cables-33717724",
+  "secs": 0.9,
+  "inPoint": 3.7166664999999997,
+  "luma": 69,
+  "gamma": 0.97
+ },
+ {
+  "src": "@hero-asia",
+  "secs": 1.4,
+  "inPoint": 0.4,
+  "luma": 46,
+  "gamma": 1.28
+ },
+ {
+  "src": "storm-6065794",
+  "secs": 1.1,
+  "inPoint": 2.45,
+  "luma": 51,
+  "gamma": 1.2
+ },
+ {
+  "src": "datacenter-5028622",
+  "secs": 1,
+  "inPoint": 15.2866665,
+  "luma": 48,
+  "gamma": 1.25
+ },
+ {
+  "src": "cables-32333921",
+  "secs": 0.9,
+  "inPoint": 3.7166664999999997,
+  "luma": 69,
+  "gamma": 0.97
+ },
+ {
+  "src": "console-5647327",
+  "secs": 1,
+  "inPoint": 8.82,
+  "luma": 38,
+  "gamma": 1.47
+ },
+ {
+  "src": "coast-39104194",
+  "secs": 1.2,
+  "inPoint": 9.4016585,
+  "luma": 17,
+  "gamma": 1.9
+ },
+ {
+  "src": "drone-3723537",
+  "secs": 1,
+  "inPoint": 6.465,
+  "luma": 93,
+  "gamma": 0.79
+ },
+ {
+  "src": "@hero-orbit",
+  "secs": 1.4,
+  "inPoint": 0.4,
+  "luma": 4,
+  "gamma": 1.9
+ },
+ {
+  "src": "ship-35200489",
+  "secs": 1,
+  "inPoint": 4.630125,
+  "luma": 127,
+  "gamma": 0.63
+ },
+ {
+  "src": "wildfire-31130093",
+  "secs": 1.1,
+  "inPoint": 9.5017085,
+  "luma": 79,
+  "gamma": 0.88
+ },
+ {
+  "src": "atc-tower-29006443",
+  "secs": 1,
+  "inPoint": 5.26,
+  "luma": 123,
+  "gamma": 0.65
+ },
+ {
+  "src": "coast-37557938",
+  "secs": 1.2,
+  "inPoint": 3.0870165,
+  "luma": 80,
+  "gamma": 0.87
+ },
+ {
+  "src": "datacenter-9573897",
+  "secs": 1,
+  "inPoint": 7.42,
+  "luma": 33,
+  "gamma": 1.64
+ }
+]

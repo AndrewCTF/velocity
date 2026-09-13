@@ -23,6 +23,9 @@
   .press-table { width: 100%; max-width: 900px; border-collapse: collapse; font-size: .95rem; }
   .press-table th, .press-table td { text-align: left; padding: 10px 16px 10px 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
   .press-table th { font-weight: 600; white-space: nowrap; color: var(--txt-3); }
+  /* the install command is wider than a phone: let the table scroll inside its box instead of pushing the page sideways */
+  .press-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .press-table code { white-space: pre-wrap; word-break: break-word; }
   .press-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; align-items: start; }
   .press-grid figure { margin: 0; }
   .press-grid img, .press-grid video { width: 100%; height: auto; display: block; border-radius: 6px; }
@@ -88,7 +91,7 @@
       <tr><th>Install</th><td><code>git clone https://github.com/AndrewCTF/velocity &amp;&amp; docker compose up</code></td></tr>
       <tr><th>Live scale</th><td>21,186 aircraft and 55,086 vessels in one measured peak snapshot; a typical day is around 13,000 and 33,000</td></tr>
       <tr><th>Satellites</th><td>~16,000 orbital objects propagated client-side with real SGP4, not decorative orbits</td></tr>
-      <tr><th>Also counted</th><td>7,183 military bases, 46 MCP tools, 1,972 backend tests passing</td></tr>
+      <tr><th>Also counted</th><td>7,183 military bases, 85 MCP tools, 2,593 backend tests passing</td></tr>
       <tr><th>Archive</th><td>8.7M positions in a 1.8 GB SQLite file at a 2 GB cap, on one development box</td></tr>
       <tr><th>Keys required</th><td>None for aircraft, vessels, satellites, earthquakes or the base map</td></tr>
       <tr><th>Repository</th><td><a href="https://github.com/AndrewCTF/velocity" rel="noopener">github.com/AndrewCTF/velocity</a></td></tr>
