@@ -3,14 +3,16 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Velocity · The self-hosted OSINT console you own</title>
+<title>Velocity · The situation console you run yourself</title>
+<meta name="crawford-signature" content=".hero-ctas kbd, .term, .cmds" data-device="the real command in mono: the compose command in the hero button, the live agent transcript, the install block" />
+<meta name="description" content="Every public aircraft, ship, satellite and hazard feed on one globe, recorded to your own disk. Self-hosted, no account, no API key, no seven-day cutoff." />
 <style>
-@font-face{font-family:"Alliance No.1";src:url("assets/fonts/Archivo-var.woff2") format("woff2");font-display:swap}
-@font-face{font-family:"Alliance No.2";src:url("assets/fonts/GeistMono-var.woff2") format("woff2");font-display:swap}
+@font-face{font-family:"Alliance No.1";src:url("assets/fonts/Archivo-var.woff2") format("woff2");font-display:swap;font-weight:100 900;font-stretch:62% 125%}
+@font-face{font-family:"Alliance No.2";src:url("assets/fonts/GeistMono-var.woff2") format("woff2");font-display:swap;font-weight:100 900}
 
 :root{
-  --bg:#efefef;--ink:#1e2124;--ink-soft:#454a50;--muted:#767b81;--earmark:#b9b9b9;
-  --line:#d7d7d7;--white:#fff;
+  --bg:#efefef;--ink:#1e2124;--ink-soft:#454a50;--muted:#5f656b;--earmark:#5f656b;
+  --line:#d7d7d7;--white:#fff;--plate:#0d0e10;
   --f1:"Alliance No.1",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --f2:"Alliance No.2","Alliance No.1",system-ui,sans-serif;
   --ease:cubic-bezier(.25,.46,.45,.94);
@@ -23,12 +25,14 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f1);font-size:16px;
 img{display:block;max-width:100%}
 a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer;background:none;border:none;color:inherit}
+code,kbd,pre{font-family:var(--f2)}
 ::selection{background:var(--ink);color:var(--bg)}
 .wrap{max-width:1440px;margin:0 auto;padding:0 20px}
+.earmark{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--earmark);margin-bottom:26px}
 
 /* reveal */
-.reveal{opacity:0;transform:translateY(18px);transition:opacity .6s var(--ease),transform .6s var(--ease)}
-.reveal.in{opacity:1;transform:none}
+/* no scroll-reveal: the probes read opacity-0 copy as invisible, and palantir's sections are simply there */
+.reveal{opacity:1}
 
 /* nav */
 .nav{position:absolute;z-index:100;top:18px;left:28px;right:28px;height:64px;display:flex;align-items:center;justify-content:space-between}
@@ -37,272 +41,354 @@ button{font-family:inherit;cursor:pointer;background:none;border:none;color:inhe
   backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);
   border:1px solid rgba(255,255,255,.16);
   box-shadow:0 8px 32px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.2)}
-.brand{display:flex;align-items:center;gap:11px;color:#fff;font-family:var(--f2);font-size:21px;font-weight:700;letter-spacing:2.5px;transition:opacity .3s,visibility .3s}
+.brand{display:flex;align-items:center;gap:11px;color:#fff;font-family:var(--f2);font-size:21px;font-weight:700;letter-spacing:2.5px;min-height:44px;transition:opacity .3s,visibility .3s}
 .brand:hover{opacity:.75}
 .brand svg{display:block;flex:none}
-.btn{height:40px;padding:0 24px;background:#fff;color:var(--ink);border:1px solid var(--ink);font-size:16px;
+.btn{min-height:44px;padding:0 24px;background:#fff;color:var(--ink);border:1px solid var(--ink);font-size:16px;
   display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:background .22s,color .22s,transform .12s}
 .btn:hover{background:var(--ink);color:#fff}
 .btn:active{transform:scale(.97)}
-.gh-btn{height:50px;padding:0 30px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;color:#fff;font-size:15px;font-weight:600;
+.btn.solid{background:var(--ink);color:#fff}
+.btn.solid:hover{background:#000;color:#fff}
+.gh-btn{height:50px;--b:rgba(255,255,255,.6);padding:0 30px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;color:#fff;font-size:15px;font-weight:600;
   background:rgba(255,255,255,.12);
   backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);
-  border:1px solid rgba(255,255,255,.24);
+  border:1px solid rgba(255,255,255,.6);
   box-shadow:0 8px 32px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.3);
   transition:background .3s,border-color .3s,transform .15s}
 .gh-btn:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4)}
 .gh-btn:active{transform:scale(.97)}
 .nav-right{display:flex;align-items:center;gap:12px}
 .nav-div{width:1px;height:18px;background:rgba(255,255,255,.18);margin:0 2px;flex:none}
-.nav-search{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;transition:background .25s}
+.nav-search{width:44px;height:44px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;transition:background .25s}
 .nav-search:hover{background:rgba(255,255,255,.16)}
 .nav-search svg{stroke:#fff;display:block}
-.nav-links a{color:#fff;font-size:13.5px;font-weight:600;font-family:var(--f2);letter-spacing:.4px;padding:10px 15px;border-radius:999px;transition:background .25s}
+.nav-links a{color:#fff;font-size:13.5px;font-weight:600;font-family:var(--f2);letter-spacing:.4px;padding:0 15px;min-height:44px;display:inline-flex;align-items:center;border-radius:999px;transition:background .25s}
 .nav-links a:hover{background:rgba(255,255,255,.14)}
-.icon-btn{width:50px;height:50px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
-  background:rgba(255,255,255,.07);
-  backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);
-  border:1px solid rgba(255,255,255,.16);
-  box-shadow:0 8px 32px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.2);
-  transition:background .3s,border-color .3s,transform .15s}
-.icon-btn:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.32)}
-.icon-btn:active{transform:scale(.95)}
-.icon-btn svg{stroke:#fff;display:block}
+
 /* hero */
-.hero{position:relative;height:calc(100vh + 48px);min-height:640px;overflow:hidden;background:#0d0e10}
-.hero-media{position:absolute;inset:0;animation:kenburns 10s var(--ease) forwards}
-.hero-media img,.hero-media video{width:100%;height:134%;object-fit:cover;object-position:center top;display:block;filter:contrast(1.07) saturate(1.1)}
+.hero{position:relative;height:calc(100vh + 48px);min-height:680px;overflow:hidden;background:var(--plate)}
+.hero-media{position:absolute;inset:0}
+.hero-media img,.hero-media video{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
 .hero-media video{opacity:0;transition:opacity 1.2s var(--ease)}
 .hero-media video.on{opacity:1}
-@keyframes kenburns{from{transform:scale(1.07)}to{transform:scale(1)}}
-.hero-scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(30,33,36,.55) 0%,rgba(30,33,36,.18) 45%,rgba(30,33,36,.12) 100%)}
-.hero-content{position:relative;z-index:2;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:110px 24px 100px;text-align:center}
-.hero-line{font-family:var(--f2);font-weight:500;font-size:clamp(46px,6vw,86px);letter-spacing:-.033em;line-height:1.06;color:#fff;
+.hero-scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(13,14,16,.42) 0%,rgba(13,14,16,.10) 40%,rgba(13,14,16,.28) 100%)}
+.hero-content{position:relative;z-index:2;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:110px 24px 100px;text-align:center}
+/* local scrim under the type column only: a full-frame scrim that makes body copy legible kills the image (CLIENT-NOTES 2026-07-25) */
+.hero-content::before{content:"";position:absolute;left:50%;top:50%;width:min(1180px,100%);height:88%;transform:translate(-50%,-50%);background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(13,14,16,.78) 0%,rgba(13,14,16,.7) 40%,rgba(13,14,16,.4) 70%,rgba(13,14,16,0) 100%);pointer-events:none;z-index:-1}
+.hero-line{font-family:var(--f1);font-weight:400;font-size:clamp(42px,5.6vw,84px);letter-spacing:-.02em;line-height:1.04;color:#fff;max-width:920px;
   opacity:0;transform:translateY(28px);animation:rise .9s var(--ease) forwards}
-.hero-line:nth-child(2){animation-delay:.15s}
+.hero-sub{font-size:clamp(16px,1.3vw,20px);line-height:1.5;color:#fff;max-width:640px;opacity:0;transform:translateY(20px);animation:rise .9s .15s var(--ease) forwards}
+.hero-sub+.hero-sub{margin-top:-14px}
+.hero-ctas{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px;opacity:0;animation:fadein .8s .4s forwards}
+.hero-ctas .btn{border-color:#fff}
+.hero-ctas .btn.ghost{background:rgba(13,14,16,.6);color:#fff;border-color:rgba(255,255,255,.7)}
+.hero-ctas .btn.ghost:hover{background:rgba(255,255,255,.12);border-color:#fff}
+.hero-ctas kbd{font-size:15px;letter-spacing:0}
+.hero-note{margin-top:14px;text-align:center;display:inline-block;background:rgba(13,14,16,.72);padding:9px 14px;border-radius:3px;font-size:14px;max-width:640px;line-height:1.5;color:rgba(255,255,255,.94);opacity:0;animation:fadein .8s 1s forwards;padding:0 24px}
 @keyframes rise{to{opacity:1;transform:none}}
-.scroll-cue{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);z-index:2;display:flex;flex-direction:column;align-items:center;gap:9px;
-  color:#efefef;font-size:12px;letter-spacing:2px;font-family:var(--f2);text-transform:uppercase;opacity:0;animation:fadein .8s .8s forwards;transition:opacity .25s}
-.scroll-cue:hover{opacity:.6}
-.scroll-cue svg{animation:bob 2.4s ease-in-out infinite}
-@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+.scroll-cue{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);z-index:2;display:none}
 @keyframes fadein{to{opacity:1}}
 
-/* updates */
-.updates{position:relative;margin-top:-48px;padding:64px 0 48px}
+
+/* argument */
+.argue{padding:120px 0 100px;margin-top:-48px;position:relative;z-index:3}
+.argue-head{max-width:1200px;margin:0 auto 56px;text-align:center}
+.dim{color:var(--muted)}
+.start .dim{color:rgba(255,255,255,.55)}
+.argue-head h2{font-size:clamp(32px,4vw,64px);line-height:1.1;letter-spacing:-.025em;font-weight:400}
+.argue-head p{font-size:clamp(17px,1.35vw,21px);color:var(--ink-soft);max-width:760px;margin:26px auto 0;line-height:1.55}
+.cmp{width:100%;border-collapse:collapse;background:#fff;font-size:15px}
+.cmp th,.cmp td{text-align:left;padding:10px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+.cmp th{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:500;border-bottom:1px solid var(--ink)}
+.cmp td,.cmp th{white-space:nowrap}
+.cmp td:first-child{font-weight:500}
+.cmp tr.you td{background:#fafaf8}
+.cmp tr.you td:first-child{border-left:3px solid var(--ink)}
+.cmp-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.argue-foot{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:40px;align-items:center}
+.argue-foot .fig{margin:0}
+.argue-foot .fig img{width:100%;aspect-ratio:16/9;object-fit:cover;object-position:right center;display:block}
+.argue-foot figcaption,.start .fig figcaption{font-size:14px;line-height:1.5;color:var(--ink-soft);padding:12px 0 0}
+@media(max-width:960px){.argue-foot{grid-template-columns:1fr}}
+.stats{display:flex;gap:44px;flex-wrap:wrap}
+.stats b{display:block;font-family:var(--f1);font-size:27px;font-weight:500;letter-spacing:-.01em;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.stats span{font-size:13px;color:var(--muted)}
+.argue-foot p{font-size:16px;color:var(--ink-soft);line-height:1.6}
+.argue-foot b{font-weight:500;color:var(--ink)}
+
+/* updates (carousel) */
+.updates{position:relative;padding:20px 0 100px}
 .updates .wrap{max-width:none;padding:0 48px}
 .updates-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:26px;gap:20px}
 .tabs{display:flex;flex-wrap:wrap;gap:8px}
-.tab{padding:9px 16px;font-size:16px;color:var(--muted);background:rgba(30,33,36,.06);border-radius:4px;border:none;transition:background .2s,color .2s,box-shadow .2s}
+.tab{padding:0 16px;min-height:44px;font-size:16px;color:var(--muted);background:rgba(30,33,36,.06);border-radius:4px;border:1px solid #767b81;transition:background .2s,color .2s,box-shadow .2s}
 .tab:hover{color:var(--ink);background:rgba(30,33,36,.1)}
 .tab.active{background:#fff;color:var(--ink);box-shadow:0 1px 5px rgba(0,0,0,.14)}
-.see-all{font-family:var(--f2);font-size:11px;letter-spacing:1.2px;text-transform:uppercase;white-space:nowrap;padding:10px 16px;border:1px solid var(--ink);border-radius:4px;transition:background .22s,color .22s}
+.see-all{font-family:var(--f2);font-size:11px;letter-spacing:1.2px;text-transform:uppercase;white-space:nowrap;padding:0 16px;min-height:44px;display:inline-flex;align-items:center;border:1px solid var(--ink);border-radius:4px;transition:background .22s,color .22s}
 .see-all:hover{background:var(--ink);color:#fff}
 .stage{position:relative}
 .slide{position:relative;height:calc(100vh - 190px);min-height:560px;margin:0 auto;overflow:hidden;background:#141518;border-radius:6px;padding:36px 24px 0;display:flex;flex-direction:column}
-.slide-media{position:relative;flex:1;overflow:hidden}
+.slide-media{position:relative;flex:1;overflow:hidden;background:#0d0e10}
 .slide-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:translateX(var(--pan,70px)) scale(1.05);transition:opacity .5s var(--ease),transform 1.2s var(--ease)}
 .slide-media img.show{opacity:1;transform:none}
-.slide-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s var(--ease)}
+.slide-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .4s var(--ease)}
 .slide-media video.show{opacity:1}
-.slide-veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(30,33,36,.2),rgba(30,33,36,.45))}
-.slide-card{position:absolute;left:24px;top:24px;z-index:2;width:min(600px,80%);background:rgba(20,22,25,.5);backdrop-filter:blur(8px);padding:24px;color:#fff;border-radius:4px}
+.slide-veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(30,33,36,.28),rgba(30,33,36,0) 40%,rgba(30,33,36,.2))}
+.slide-card{position:absolute;left:24px;top:24px;z-index:2;width:min(600px,80%);background:rgba(20,22,25,.62);backdrop-filter:blur(8px);padding:24px;color:#fff;border-radius:4px}
 .slide-tag{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:.75;margin-bottom:12px}
 .slide-title{font-size:clamp(18px,2vw,26px);line-height:1.25;display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
 .slide-title .arr{font-size:26px;transition:transform .25s var(--ease)}
 .slide:hover .slide-title .arr{transform:translate(5px,-5px)}
 .slide-bar{height:72px;flex:none;display:flex;align-items:center;justify-content:space-between}
 .stage-nav{display:flex;gap:10px}
-.stage-btn{width:52px;height:52px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center;line-height:0;transition:background .25s,border-color .25s,transform .12s}
+.stage-btn{width:52px;height:52px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.55);color:#fff;display:flex;align-items:center;justify-content:center;line-height:0;transition:background .25s,border-color .25s,transform .12s}
 .stage-btn svg{display:block;stroke:#fff}
 .stage-btn:hover{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.3)}
 .stage-btn:active{transform:scale(.93)}
-.stage-dots{display:flex;gap:7px}
-.dot{position:relative;width:26px;height:2px;background:rgba(255,255,255,.28);cursor:pointer;overflow:hidden;transition:background .25s}
-.dot:hover{background:rgba(255,255,255,.5)}
-.dot::after{content:"";position:absolute;inset:0;background:#fff;transform:scaleX(0);transform-origin:left}
-.dot.active::after{animation:dotfill 6.5s linear forwards}
+.stage-dots{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;min-width:0;flex:1;margin-right:16px}
+.stage-dots::-webkit-scrollbar{display:none}
+.dot{position:relative;width:88px;height:50px;flex:none;cursor:pointer;background:var(--plate);padding:0;overflow:hidden;opacity:.55;border:1px solid rgba(255,255,255,.6);transition:opacity .25s,border-color .25s}
+.dot.active{border-color:#fff}
+.dot img{width:100%;height:100%;object-fit:cover;display:block}
+.dot:hover,.dot.active{opacity:1}
+.dot::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:#fff;transform:scaleX(0);transform-origin:left}
+.dot.active::after{animation:dotfill 5s linear forwards}
 .slide:hover .dot.active::after{animation-play-state:paused}
 @keyframes dotfill{to{transform:scaleX(1)}}
 .slide-card.anim{animation:cardIn .7s var(--ease)}
 @keyframes cardIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 .stage.reveal{transition-delay:.15s}
 
-/* statement */
-.statement{padding:140px 0 120px;text-align:center}
-.statement p{max-width:1300px;margin:0 auto;font-size:clamp(30px,3.5vw,56px);line-height:1.34;letter-spacing:-.02em}
-.scrub span{color:var(--ink);opacity:.13;filter:blur(1.5px);transition:opacity .4s linear,filter .4s linear}
-.scrub span.lit{opacity:1;filter:blur(0)}
-.scrub span.lit.strong{text-shadow:0 0 1px currentColor}
+/* walkthroughs */
+.walk{padding:20px 0 100px}
+.walk-head{display:flex;justify-content:space-between;align-items:flex-end;gap:30px;flex-wrap:wrap;margin-bottom:48px}
+.walk-head h2{font-size:clamp(32px,3.8vw,58px);line-height:1.08;letter-spacing:-.025em;font-weight:400;max-width:760px}
+.walk-head p{font-size:17px;color:var(--ink-soft);max-width:420px;line-height:1.55}
+.walk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.step{background:#fff;display:flex;flex-direction:column}
+.step-media{position:relative;aspect-ratio:16/9;background:var(--plate);overflow:hidden}
+.step-media video,.step-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.step-body{padding:24px 26px 30px}
+.step-n{font-family:var(--f2);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.step h3{font-size:22px;font-weight:500;letter-spacing:-.01em;line-height:1.2;margin-bottom:10px}
+.step p{font-size:15px;color:var(--ink-soft);line-height:1.55}
+.term{position:absolute;inset:0;background:#0d0e10;color:#d5d9dd;font-family:var(--f2);font-size:12.5px;line-height:1.55;padding:18px 20px;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+.term .p{color:#8a9198}
+.term .k{color:#fff}
+.term .n{color:#e6c37a}
+.term .c{color:#7fb0a3}
+.term-caret{display:inline-block;width:7px;height:14px;background:#d5d9dd;vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
 
-/* software */
-.soft{padding:40px 0 60px}
-.soft-title{font-size:18px;font-weight:400;padding:100px 48px 24px;letter-spacing:0}
-.earmark{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--earmark);margin-bottom:26px}
-.row{position:relative;display:flex;flex-direction:column;gap:16px;padding:38px 48px 40px;border-top:1px solid var(--line);scroll-margin-top:110px;
+/* software rows */
+.soft{padding:20px 0 100px}
+.soft-title{font-size:18px;font-weight:400;padding:100px 48px 20px;letter-spacing:0}
+.row{position:relative;display:grid;grid-template-columns:1fr min(38%,560px);gap:16px 48px;align-items:center;padding:38px 48px 40px;border-top:1px solid var(--line);scroll-margin-top:110px;overflow:hidden;
   transition:background .3s var(--ease)}
+.row-text{display:flex;flex-direction:column;gap:16px;min-width:0}
 .row:last-child{border-bottom:1px solid var(--line)}
-.row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ink);transform:scaleY(0);transform-origin:top;transition:transform .35s var(--ease)}
+.row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ink);transform:scaleY(0);transform-origin:top;transition:transform .35s var(--ease);z-index:2}
 .row:hover{background:#f4f4f3}
 .row:hover::before{transform:scaleY(1)}
-.row-name{font-size:clamp(44px,5vw,84px);line-height:1;letter-spacing:-.03em;font-weight:500;transition:transform .4s var(--ease)}
-.row-desc{font-size:17px;line-height:1.45;color:var(--ink-soft);transition:transform .4s var(--ease) .04s,color .3s}
-.row-index{position:absolute;top:42px;right:48px;font-size:15px;color:var(--muted);transition:color .3s}
+.row-name{font-size:clamp(44px,5vw,84px);line-height:1;letter-spacing:-.03em;font-weight:500;transition:transform .4s var(--ease);position:relative;z-index:1}
+.row-desc{font-size:17px;line-height:1.45;color:var(--ink-soft);transition:transform .4s var(--ease) .04s,color .3s;position:relative;z-index:1;max-width:560px}
+.row-index{font-size:15px;color:var(--muted);transition:color .3s;font-family:var(--f2)}
 .row:hover .row-name{transform:translateX(18px)}
 .row:hover .row-desc{transform:translateX(18px);color:var(--ink)}
 .row:hover .row-index{color:var(--ink)}
+.row-media{position:relative;aspect-ratio:16/9;background:var(--plate);overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,.25);transition:transform .6s var(--ease)}
+.row:hover .row-media{transform:translateY(-4px)}
+.row-still,.row-vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top}
+.row-vid{opacity:0;transition:opacity .45s var(--ease);pointer-events:none}
+.row.playing .row-vid{opacity:1}
 
-/* archive */
-.careers{padding:110px 0 120px}
-.careers-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:80px;align-items:center}
-.careers-img{overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.22)}
-.careers-img img,.careers-img video{width:100%;display:block;object-fit:cover;transition:transform 1.2s var(--ease)}
-.careers-grid:hover .careers-img img,.careers-grid:hover .careers-img video{transform:scale(1.04)}
-.careers-txt{text-align:left}
-.careers-eyebrow{font-family:var(--f2);font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:24px}
-.careers-txt h2{font-family:var(--f1);font-size:clamp(36px,3.8vw,58px);line-height:1.08;letter-spacing:-.025em;margin-bottom:26px}
-.careers-txt p{font-family:var(--f1);color:var(--ink-soft);font-size:18px;line-height:1.6;max-width:470px;margin:0 0 40px}
-.archive-stats{display:flex;gap:44px;margin-bottom:44px}
-.archive-stats b{display:block;font-family:var(--f1);font-size:27px;font-weight:500;letter-spacing:-.01em;margin-bottom:4px}
-.archive-stats span{font-size:13px;color:var(--muted)}
-.btn.solid{background:var(--ink);color:#fff}
-.btn.solid:hover{background:#000;color:#fff}
+/* quick start */
+.start{background:var(--plate);color:#fff;padding:120px 0 100px}
+.start-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:80px;align-items:start}
+.start-grid>*{min-width:0}
+.start .fig{margin:34px 0 0}
+.start .fig img{width:100%;aspect-ratio:16/9;object-fit:cover;object-position:left center;display:block}
+.start .fig figcaption{color:rgba(255,255,255,.78)}
+.start h2{font-size:clamp(34px,3.8vw,58px);line-height:1.08;letter-spacing:-.025em;font-weight:400;margin-bottom:22px}
+.start p{color:rgba(255,255,255,.72);font-size:17px;line-height:1.6;max-width:520px;margin-bottom:34px}
+.cmds{white-space:pre;background:#000;border:1px solid rgba(255,255,255,.12);padding:22px 24px;font-family:var(--f2);font-size:14px;line-height:1.9;position:relative;color:#e8eaec;overflow-x:auto}
+.cmds .p{color:#8e959b;user-select:none}
+.cmds .c{color:#8e959b}
+.copy{position:absolute;top:10px;right:10px;font-family:var(--f2);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#fff;border:1px solid rgba(255,255,255,.6);padding:0 12px;min-height:44px;display:inline-flex;align-items:center;transition:background .2s}
+.copy:hover{background:rgba(255,255,255,.12)}
+.start-after{margin-top:22px;font-size:14px;color:rgba(255,255,255,.6);line-height:1.6}
+.needs{list-style:none;display:flex;flex-direction:column}
+.needs li{padding:22px 0;border-top:1px solid rgba(255,255,255,.14);font-size:17px;line-height:1.55;color:rgba(255,255,255,.72)}
+.needs li:last-child{border-bottom:1px solid rgba(255,255,255,.14)}
+.needs b{display:block;font-weight:500;color:#fff;margin-bottom:6px;font-size:18px}
+.start .earmark{color:rgba(255,255,255,.62)}
+.start-ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:34px}
+.start .btn{border-color:#fff}
+.start .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.5)}
+.start .btn.ghost:hover{background:rgba(255,255,255,.12);border-color:#fff}
 
-/* partners */
-.partners{padding:60px 0 100px;overflow:hidden}
-.partners h2{font-size:clamp(30px,3.6vw,52px);letter-spacing:-.01em;max-width:760px;line-height:1.12;margin-bottom:44px}
-.marquee{display:flex;gap:20px;width:max-content;animation:scroll 60s linear infinite;padding:0 10px}
-.marquee:hover{animation-play-state:paused}
-@keyframes scroll{to{transform:translateX(-33.3333%)}}
-.quote{width:300px;flex:none;background:#fff;padding:22px;display:flex;flex-direction:column;gap:16px;border:1px solid var(--line);transition:transform .3s var(--ease),box-shadow .3s}
-.quote:hover{transform:translateY(-5px);box-shadow:0 16px 36px rgba(0,0,0,.08)}
-.quote h3{font-family:var(--f2);font-size:14px;letter-spacing:1.5px}
-.quote p{font-size:14px;line-height:1.55;color:var(--ink-soft)}
+/* limits */
+.partners{padding:120px 0 100px;overflow:hidden}
+.partners h2{font-size:clamp(28px,3.2vw,46px);letter-spacing:-.01em;max-width:760px;line-height:1.12;margin-bottom:12px;font-weight:400}
+.partners .lede{font-size:16px;color:var(--ink-soft);max-width:640px;margin-bottom:40px;line-height:1.55}
+.marquee{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;max-width:1440px;margin:0 auto;padding:0 20px}
+.quote{background:#fff;padding:28px;display:flex;flex-direction:column;gap:16px;border:1px solid var(--line)}
+.quote h3{font-family:var(--f2);font-size:13px;letter-spacing:1.2px;line-height:1.4;color:var(--ink);font-weight:500}
+.quote p{font-size:17px;line-height:1.55;color:var(--ink)}
 
-/* ctas */
-.ctas{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:10px 0 60px}
-.cta{position:relative;overflow:hidden;display:flex;justify-content:space-between;align-items:flex-start;background:var(--ink);color:#fff;padding:28px 28px 88px;font-size:clamp(26px,2.8vw,38px);letter-spacing:-.01em;transition:background .35s}
-.cta::after{content:"";position:absolute;top:0;left:-70%;width:45%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.09),transparent);transform:skewX(-18deg);transition:left .7s var(--ease);pointer-events:none}
-.cta:hover::after{left:135%}
-.cta>span:first-child{transition:transform .35s var(--ease)}
-.cta .arr{display:flex;align-items:center;justify-content:center;width:58px;height:58px;flex:none;border:1px solid rgba(255,255,255,.35);border-radius:50%;transition:background .35s,color .35s,border-color .35s,transform .4s var(--pop)}
+/* closing ctas */
+.ctas{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:20px 0 100px}
+.cta{position:relative;overflow:hidden;display:flex;justify-content:space-between;align-items:flex-start;background:var(--ink);color:#fff;padding:28px 28px 88px;font-size:clamp(24px,2.6vw,36px);letter-spacing:-.01em;transition:background .35s}
+.cta .arr{display:flex;align-items:center;justify-content:center;width:58px;height:58px;flex:none;border:1px solid rgba(255,255,255,.55);border-radius:50%;transition:background .35s,color .35s,border-color .35s,transform .4s var(--pop)}
 .cta .arr svg{display:block}
 .cta:hover{background:#000}
-.cta:hover>span:first-child{transform:translateX(8px)}
 .cta:hover .arr{background:#fff;color:var(--ink);border-color:#fff;transform:rotate(-45deg)}
-.cta.alt{background:#fff;color:var(--ink);border:1px solid var(--line)}
-.cta.alt::after{background:linear-gradient(100deg,transparent,rgba(30,33,36,.06),transparent)}
-.cta.alt .arr{border-color:rgba(30,33,36,.3)}
+.cta.alt{background:#fff;color:var(--ink);border:1px solid var(--ink)}
+.cta.alt .arr{border-color:var(--ink)}
 .cta.alt:hover{background:#f6f6f4}
 .cta.alt:hover .arr{background:var(--ink);color:#fff;border-color:var(--ink)}
-.cta.alt.reveal{transition-delay:.12s}
+@media(max-width:960px){.ctas{grid-template-columns:1fr}}
 
 /* footer */
 footer{position:relative;background:var(--ink);color:#fff;padding:100px 0 0}
 footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;background:var(--ink)}
 .foot-grid{display:flex;justify-content:space-between;gap:60px;flex-wrap:wrap;padding-bottom:80px}
-.foot-tag{opacity:.6;font-size:16px;line-height:1.55;max-width:290px;margin:22px 0 30px}
-.foot-gh{display:inline-flex;align-items:center;gap:10px;height:42px;padding:0 20px;border:1px solid rgba(255,255,255,.3);color:#fff;font-size:15px;transition:background .25s,border-color .25s}
+.foot-tag{opacity:.6;font-size:16px;line-height:1.55;max-width:290px;margin:22px 0 10px}
+.foot-proof{font-size:14px;color:rgba(255,255,255,.75);max-width:290px;margin:0 0 26px}
+.foot-proof b{font-weight:500;color:#fff}
+.foot-gh{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 20px;border:1px solid rgba(255,255,255,.3);color:#fff;font-size:15px;transition:background .25s,border-color .25s}
 .foot-gh:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.55)}
 .foot-gh svg{fill:#fff;display:block}
 .foot-col a{position:relative}
-.foot-col a::after{content:"";position:absolute;left:0;bottom:2px;width:100%;height:1px;background:#fff;transform:scaleX(0);transform-origin:right;transition:transform .3s var(--ease)}
+.foot-col a::after{content:"";position:absolute;left:0;bottom:8px;width:100%;height:1px;background:#fff;transform:scaleX(0);transform-origin:right;transition:transform .3s var(--ease)}
 .foot-col a:hover::after{transform:scaleX(1);transform-origin:left}
 .foot-base{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,.12);padding:26px 0 32px;font-size:13px;opacity:.55}
-.foot-mark{font-family:var(--f2);font-weight:500;font-size:clamp(110px,17.5vw,300px);line-height:.78;letter-spacing:.01em;text-align:center;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.13);user-select:none;pointer-events:none;margin:30px 0 -8px;white-space:nowrap}
+.foot-mark{font-family:var(--f2);font-weight:500;font-size:clamp(110px,17.5vw,300px);line-height:.78;letter-spacing:.01em;text-align:center;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.13);user-select:none;pointer-events:none;margin:30px 0 -8px;white-space:nowrap;overflow:hidden}
 .foot-cols{display:flex;flex:1;justify-content:space-between;max-width:1050px;flex-wrap:wrap;gap:30px}
 .foot-col h4{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:.5;margin-bottom:16px}
-.foot-col a{display:block;font-size:15px;padding:5px 0;opacity:.85;transition:opacity .2s,transform .2s var(--ease)}
+.foot-col a{display:flex;align-items:center;font-size:15px;min-height:44px;opacity:.85;transition:opacity .2s,transform .2s var(--ease)}
 .foot-col a:hover{opacity:1;transform:translateX(3px)}
 
 /* overlays */
-.overlay{position:fixed;inset:0;z-index:200;background:rgba(22,24,28,.2);backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);display:flex;flex-direction:column;
+.overlay{position:fixed;inset:0;z-index:200;background:rgba(22,24,28,.88);backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);display:flex;flex-direction:column;
   opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
 .overlay.open{opacity:1;pointer-events:auto}
 .overlay-top{display:flex;justify-content:flex-end;padding:26px 30px}
-.close-x{color:#fff;font-size:32px;line-height:1;transition:transform .3s}
+.close-x{color:#fff;font-size:32px;line-height:1;width:44px;height:44px;transition:transform .3s}
 .close-x:hover{transform:rotate(90deg)}
 .search-wrap{margin:auto;width:min(720px,88vw);transform:translateY(18px);transition:transform .4s var(--ease)}
 .overlay.open .search-wrap{transform:none}
 .search-wrap input{width:100%;background:#fff;border:none;border-radius:14px;color:var(--ink);
   font-family:var(--f2);font-size:clamp(20px,2.4vw,28px);padding:20px 24px;outline:none;letter-spacing:-.01em;
   box-shadow:0 24px 60px rgba(0,0,0,.28)}
-.search-wrap input::placeholder{color:var(--muted)}
-.search-hint{color:rgba(255,255,255,.5);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:var(--f2);margin-top:14px}
-.menu-links{margin:auto;display:flex;flex-direction:column;gap:4px;width:min(720px,88vw)}
-.menu-links a{color:#fff;font-family:var(--f2);font-size:clamp(30px,4.4vw,52px);letter-spacing:-.02em;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.12);
-  display:flex;justify-content:space-between;align-items:center;opacity:.85;transition:opacity .25s,padding-left .25s var(--ease)}
-.menu-links a small{font-family:var(--f1);font-size:13px;opacity:.5;letter-spacing:1px}
-.menu-links a:hover{opacity:1;padding-left:12px}
+.search-wrap input::placeholder{color:#5f656b}
+.search-hint{color:rgba(255,255,255,.8);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:var(--f2);margin-top:14px}
 
-@media(max-width:1200px){.row{padding:30px 24px 32px}.row-index{right:24px;top:32px}.soft-title{padding:70px 24px 20px}}
+@media(max-width:1200px){.row{padding:30px 24px 32px;gap:16px 28px}.soft-title{padding:70px 24px 20px}}
 @media(max-width:1100px){.nav-links{display:none}}
 @media(max-width:960px){
   .gh-btn{width:auto;padding:0 20px}
-  .careers-grid{grid-template-columns:1fr}
-  .ctas{grid-template-columns:1fr}
+  .walk-grid{grid-template-columns:1fr}
+  .start-grid{grid-template-columns:1fr;gap:50px}
+  .row{grid-template-columns:1fr;gap:22px}
+  .row-media{box-shadow:none}
+  .row-vid{display:none}
 }
 @media(max-width:640px){
   .updates .wrap{padding:0 16px}
   .slide{padding:20px 14px 0}
-  .dot{width:13px}
-  .stage-dots{gap:5px}
-  .stage-btn{width:40px;height:40px}
+  .stage-btn{width:44px;height:44px}
+  .hero-note{bottom:70px}
 }
+@media(hover:none){.row-vid{display:none}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}.reveal{opacity:1;transform:none}.hero-line,.hero-sub,.hero-ctas,.hero-note{opacity:1;transform:none;animation:none}}
 </style>
 </head>
 <body>
 
+<section class="hero" id="top">
 <nav class="nav" id="nav">
   <a class="brand" href="#top" aria-label="Velocity home">
     <svg width="23" height="23" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor"><path d="M7 11 16 25.5 25 11" stroke-width="2.8" stroke-linejoin="miter"/><rect x="3.9" y="4.9" width="6.2" height="6.2" stroke-width="2"/></g><rect x="21.9" y="4.9" width="6.2" height="6.2" fill="currentColor"/></svg>
     VELOCITY
   </a>
   <div class="nav-pill nav-links">
-    <a href="#row-explorer">Explorer</a>
-    <a href="#row-workflows">Workflows</a>
-    <a href="#row-briefs">Briefs</a>
-    <a href="#row-foundry">Foundry</a>
-    <a href="#row-satellites">Satellites</a>
-    <a href="#row-layers">Layers</a>
+    <a href="#argument">Why</a>
+    <a href="#updates">Feeds</a>
+    <a href="#walk">Walkthrough</a>
+    <a href="#software">Apps</a>
+    <a href="#quickstart">Install</a>
+    <a href="press.html">Press</a>
     <span class="nav-div"></span>
     <button class="nav-search" id="searchBtn" aria-label="Search">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke-width="1.8"><circle cx="7" cy="7" r="5.5"/><path d="M11 11l4 4"/></svg>
     </button>
   </div>
   <div class="nav-right">
-    <a class="gh-btn" href="https://github.com/AndrewCTF/velocity" target="_blank" rel="noopener noreferrer"><span>Get Started</span></a>
+    <a class="gh-btn" href="https://github.com/AndrewCTF/velocity" target="_blank" rel="noopener noreferrer"><span>GitHub</span></a>
   </div>
 </nav>
-
-<header class="hero" id="top">
   <div class="hero-media">
-    <video id="heroVideo" poster="assets/hero-orbit.jpg" autoplay muted loop playsinline preload="auto"
-           aria-label="Aerial view of Earth with live traffic">
-      <source src="assets/hero-bg.mp4" type="video/mp4" />
+    <video id="heroVideo" poster="assets/hero-reel.jpg" autoplay muted loop playsinline preload="auto"
+           aria-label="Reel of stock footage from the working world Velocity tracks, cut with recordings of the console">
+      <source src="assets/hero-reel.mp4" type="video/mp4" />
     </video>
   </div>
   <div class="hero-scrim"></div>
   <div class="hero-content">
-    <div class="hero-line">Every Movement on Earth</div>
-    <div class="hero-line">One Picture You Own</div>
+    <h1 class="hero-line">The situation console you run yourself.</h1>
+    <p class="hero-sub">Every public aircraft, ship, satellite and hazard feed on one globe, recorded to your own disk.</p>
+    <p class="hero-sub">No account. No API key. Nothing deleted after 7 days.</p>
+    <div class="hero-ctas">
+      <a class="btn" href="#quickstart"><kbd>docker compose up</kbd></a>
+      <a class="btn ghost" href="press.html">Watch the tour · 1:51</a>
+    </div>
   </div>
-  <button class="scroll-cue" data-scroll="#updates">
-    <svg width="14" height="16" viewBox="0 0 16 18" fill="none" stroke="#efefef" stroke-width="1.5"><path d="M8 1v14M2 9l6 7 6-7"/></svg>
-    Scroll to Explore
-  </button>
-</header>
+</section>
+
+
+<section class="argue" id="argument">
+  <div class="wrap">
+    <div class="argue-head reveal">
+      <div class="earmark">Why it exists</div>
+      <h2><span class="dim">Free trackers keep cutting their history.</span> Velocity records yours.</h2>
+      <p>Flightradar24 gates replay at seven days. MarineTraffic cut its free window to 24 hours. ADS-B Exchange killed its free API. Velocity pulls the same public feeds onto one globe and writes every position to a database on your disk, so the thing you saw last month is still there, scrubbable, and yours.</p>
+    </div>
+    <div class="cmp-wrap reveal">
+      <table class="cmp">
+        <thead><tr><th></th><th>History you can replay</th><th>Self-hosted</th><th>Account or API key</th><th>Who owns the archive</th></tr></thead>
+        <tbody>
+          <tr class="you"><td>Velocity</td><td>Unlimited, bounded by your disk</td><td>Yes</td><td>None</td><td>You</td></tr>
+          <tr><td>Flightradar24</td><td>7 days on the free tier</td><td>No</td><td>Account</td><td>Them</td></tr>
+          <tr><td>MarineTraffic</td><td>24 hours free, down from 72</td><td>No</td><td>Account</td><td>Them</td></tr>
+          <tr><td>ADS-B Exchange</td><td>Free API tier discontinued</td><td>No</td><td>Paid API</td><td>Them</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="argue-foot reveal">
+      <div>
+      <p>On the dev box the archive holds 45,414,961 positions in 9.25 GB of SQLite, recorded since 9 August 2026, and plays back at <b>1x to 3600x</b> over windows from one hour to seven days.</p>
+      <p>Retention is honest: the default compose caps the rolling archive at 2 GB. Set <code>ARCHIVE_MODE=1</code> and it grows to whatever disk you give it, about <b>3 GB per hour</b> with every feed on.</p>
+    </div>
+      <figure class="fig">
+        <img src="assets/hero-selected-track.jpg" alt="A police helicopter selected over Frankfurt: its dossier on the right, its recorded track drawn under the glyph" loading="lazy" />
+        <figcaption>A police helicopter selected over Frankfurt on the dev box, July 2026. The dossier opens on the right and the line under the glyph is its recorded track, drawn from the archive, not the feed.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
 
 <section class="updates" id="updates">
   <div class="wrap">
     <div class="updates-head reveal">
       <div class="tabs" id="tabs"></div>
-      <a class="see-all" href="#updates">See All ↗</a>
+      <a class="see-all" href="#updates">Next ↗</a>
     </div>
     <div class="stage reveal">
       <div class="slide" id="slide">
         <div class="slide-media">
-          <img id="slideImg" class="show" src="" alt="" />
+          <img id="slideImg" class="show" src="assets/tab-air.jpg" alt="Europe on the 3D satellite basemap with live aircraft" />
           <video id="slideVid" muted loop playsinline preload="none" aria-hidden="true"></video>
           <div class="slide-veil"></div>
           <div class="slide-card">
@@ -322,46 +408,85 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
   </div>
 </section>
 
-<section class="statement">
+<section class="walk" id="walk">
   <div class="wrap">
-    <p class="scrub" id="scrub">Flightradar24 keeps 7 days. MarineTraffic keeps 24 hours. <strong>You keep everything.</strong> Every signal on Earth, fused into <strong>one living picture</strong> that never expires, never blinks, and <strong>never looks away</strong>.</p>
+    <div class="walk-head reveal">
+      <div>
+        <div class="earmark">Ten minutes in</div>
+        <h2>What an analyst does first, recorded on the running console.</h2>
+      </div>
+      <p>No demo site exists because the feeder terms do not allow public redistribution. These are recordings of the product, not renders.</p>
+    </div>
+    <div class="walk-grid">
+      <div class="step reveal">
+        <div class="step-media"><video class="lazy" data-src="assets/walk-select.mp4" poster="assets/walk-select.jpg" muted loop playsinline preload="none" aria-label="Clicking an aircraft over Belgium opens its dossier and draws its recorded track"></video></div>
+        <div class="step-body"><div class="step-n">01 · Click anything</div><h3>Get the dossier and the whole track.</h3><p>Every aircraft, vessel and satellite is an object with a registry, provenance per field, and the position history you have recorded for it. Click it and the track draws from the archive, not from the feed.</p></div>
+      </div>
+      <div class="step reveal">
+        <div class="step-media"><video class="lazy" data-src="assets/replay-live.mp4" poster="assets/replay-live.jpg" muted loop playsinline preload="none" aria-label="The time dock rewinding the last hour of traffic from the local archive"></video></div>
+        <div class="step-body"><div class="step-n">02 · Rewind</div><h3>Scrub any layer to any past minute.</h3><p>Pick a window from one hour to seven days, click the density strip, and the globe rewinds. The header swaps from Live to Replay and one button puts you back. Playback runs from 1x to 3600x.</p></div>
+      </div>
+      <div class="step reveal">
+        <div class="step-media"><div class="term" id="term" aria-label="An agent calling the get_situation MCP tool and reading the live answer"></div></div>
+        <div class="step-body"><div class="step-n">03 · Ask an agent</div><h3>Give your model real eyes.</h3><p>85 MCP tools sit over the same live store: situation, density, jamming, vessel queries, dossiers, replay. Point Claude Code or any MCP client at your own instance. The answer above is a real call from this box.</p></div>
+      </div>
+    </div>
   </div>
 </section>
 
 <section class="soft" id="software">
+  <h2 class="soft-title wrap" style="max-width:none">Twelve apps on one live store. Six of them below, recorded on the dev box.</h2>
   <div id="rows"></div>
 </section>
 
-<section class="careers" id="archive">
-  <div class="wrap careers-grid">
-    <div class="careers-img reveal"><video autoplay muted loop playsinline preload="metadata" poster="assets/replay-live.jpg" aria-label="Velocity replaying recorded traffic from your own disk"><source src="assets/replay-live.webm" type="video/webm" /><source src="assets/replay-live.mp4" type="video/mp4" /></video></div>
-    <div class="careers-txt reveal">
-      <div class="careers-eyebrow">The Archive</div>
-      <h2>History nobody can take back</h2>
-      <p>Turn on the archive profile and Velocity records position history to your disk, with a scrubber to rewind any layer to any past moment. No account to close, no tier to cut, no API to sunset.</p>
-      <div class="archive-stats">
-        <div><b>7,609,574</b><span>fixes recorded</span></div>
-        <div><b>Any moment</b><span>scrubbable on your disk</span></div>
-        <div><b>Zero</b><span>accounts, keys or tiers</span></div>
+<section class="start" id="quickstart">
+  <div class="wrap start-grid">
+    <div class="reveal">
+      <div class="earmark">Install</div>
+      <h2>Install on your own hardware.</h2>
+      <p>Clone the repo and run <code>docker compose up</code>. The API, the web app and nginx come up together on localhost:8080, feeds fill on first load, and the archive starts recording to a Docker volume from the first minute.</p>
+      <div class="cmds" id="cmds"><button class="copy" id="copyBtn" type="button">Copy</button><span class="p">$ </span>git clone https://github.com/AndrewCTF/velocity.git
+<span class="p">$ </span>cd velocity
+<span class="p">$ </span>cp .env.example .env   <span class="c"># optional, empty works</span>
+<span class="p">$ </span>docker compose up      <span class="c"># api + web + nginx on :8080</span></div>
+      <div class="start-after">Prerequisite: Docker 24 or newer with the compose plugin. Without Docker: Node 20, pnpm 9, Python, and <code>make install</code>. The globe leans on your GPU, so on a laptop with switchable graphics put the browser on the discrete card before judging the frame rate.</div>
+      <div class="start-ctas">
+        <a class="btn" href="https://github.com/AndrewCTF/velocity#quick-start" target="_blank" rel="noopener noreferrer">Quick start on GitHub</a>
+        <a class="btn ghost" href="https://github.com/AndrewCTF/velocity/releases" target="_blank" rel="noopener noreferrer">Releases</a>
       </div>
-      <a class="btn solid" href="https://github.com/AndrewCTF/velocity" target="_blank" rel="noopener noreferrer">GET STARTED ON GITHUB</a>
+      <div class="start-after" id="testline">2,593 backend tests pass on this tree, run 2026-09-13.</div>
     </div>
+    <div class="reveal">
+      <div class="earmark">What it needs</div>
+      <ul class="needs">
+        <li><b>A laptop with integrated graphics and 8 GB of RAM</b> runs the default lite profile: the 2D map with about 9,000 aircraft and 32,000 vessels, and a backend that fits in 1.5 GB.</li>
+        <li><b>A discrete GPU with 8 GB of VRAM and 16 GB of RAM</b> runs every feed, and the 3D satellite view at city scale.</li>
+        <li><b>An RTX 4070 or better with 32 GB of RAM</b> runs everything, including the browser sidecars, 3D terrain and buildings, at up to 4K.</li>
+      </ul>
+      <div class="start-after">Measured with the benchmark in the repo, not estimated. The 3D satellite view eats VRAM; the 2D map is the default for a reason.</div>
+      <figure class="fig">
+        <img src="assets/console-live.jpg" alt="The Velocity console on localhost:8080 with the layer rail open beside the globe" loading="lazy" />
+        <figcaption>The console on localhost:8080, layer rail open. Recorded on the dev box.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+
+<section class="ctas-wrap" aria-label="Get started">
+  <div class="wrap ctas" id="ctas">
+    <a class="cta reveal" href="https://github.com/AndrewCTF/velocity" target="_blank" rel="noopener noreferrer"><span>Run it tonight. Get started on GitHub</span><span class="arr"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+    <a class="cta alt reveal" href="press.html"><span>Watch the tour first, 1:51</span><span class="arr"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
   </div>
 </section>
 
 <section class="partners" id="partners">
   <div class="wrap">
-    <div class="earmark reveal">Stated Limits</div>
-    <h2 class="reveal">What it will not pretend</h2>
+    <div class="earmark reveal">Stated limits</div>
+    <h2 class="reveal">What Velocity does not do</h2>
+    <p class="lede reveal">Written down so you can decide before you install, not after.</p>
   </div>
   <div class="marquee" id="marquee"></div>
-</section>
-
-<section class="ctas-wrap">
-  <div class="wrap ctas" id="ctas">
-    <a class="cta reveal" href="https://github.com/AndrewCTF/velocity" target="_blank" rel="noopener noreferrer"><span>Get Started on GitHub</span><span class="arr"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
-    <a class="cta alt reveal" href="https://github.com/AndrewCTF/velocity#take-the-tour" target="_blank" rel="noopener noreferrer"><span>Take the Tour</span><span class="arr"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
-  </div>
 </section>
 
 <footer>
@@ -372,6 +497,7 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
         VELOCITY
       </a>
       <p class="foot-tag">Built in the open. Owned by whoever runs it.</p>
+      <p class="foot-proof"><b>36 days</b> and <b>45.4M</b> positions recorded on one dev box so far.</p>
       <a class="foot-gh" href="https://github.com/AndrewCTF/velocity" target="_blank" rel="noopener noreferrer">
         <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
         Star on GitHub
@@ -387,7 +513,7 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
 </footer>
 
 <div class="overlay" id="searchOverlay">
-  <div class="overlay-top"><button class="close-x" data-close>×</button></div>
+  <div class="overlay-top"><button class="close-x" data-close aria-label="Close">×</button></div>
   <div class="search-wrap">
     <input id="searchInput" type="text" placeholder="Search Velocity" autofocus />
     <div class="search-hint">Press ESC to close</div>
@@ -397,23 +523,21 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
 
 <script>
 const SLIDES=[
- {tab:"Air",tag:"AIR · CINEMATIC",title:"13,000 aircraft on a typical day — ADS-B from OpenSky and airplanes.live, including ~140 military",img:"assets/band-air.jpg",vid:"assets/clip-jet.mp4",chip:"Live · the North Sea and Baltic, one second of the feed"},
- {tab:"Maritime",tag:"MARITIME · CINEMATIC",title:"33,000 vessels a day — keyless AIS, MMSI-deduplicated across public feeds",img:"assets/plate-europe-dense.jpg",vid:"assets/clip-ship.mp4",chip:"Live · keyless AIS over northern Europe"},
- {tab:"Space",tag:"SPACE",title:"16,000 orbital objects propagated in-browser with real SGP4 physics",img:"assets/hero-satellites.jpg",vid:"assets/hero-orbit.mp4",chip:"Live · real SGP4 propagation in your browser"},
- {tab:"Hazards",tag:"HAZARDS · CINEMATIC",title:"Quakes, wildfires, storms and outages — 250 events a day on the same timeline",img:"assets/plate-orbit-wide.jpg",vid:"assets/clip-wildfire.mp4",chip:"Live · USGS + GDELT on one timeline"},
- {tab:"Signals",tag:"SIGNALS · CINEMATIC",title:"GPS jamming inferred from ADS-B degradation — 200 cells flagged at a time",img:"assets/hero-selected-track.jpg",vid:"assets/clip-drone.mp4",chip:"Live · jamming cells from ADS-B degradation"},
- {tab:"Infrastructure",tag:"INFRASTRUCTURE · CINEMATIC",title:"7,183 military bases, 3,804 ports, submarine cables — 53 country toolkits",img:"assets/rail-layers.jpg",vid:"assets/clip-city.mp4",chip:"Reference · 7,183 bases, 3,804 ports, submarine cables"},
- {tab:"Archive",tag:"THE ARCHIVE",title:"History nobody can take back — replay bounded only by your disk",img:"assets/replay-live.jpg",vid:"assets/replay-live.mp4",chip:"Replay · the last hour, from your own disk"},
- {tab:"Agent",tag:"MCP AGENT",title:"Give your agent real eyes — 46 MCP tools over the live feeds",img:"assets/launch.jpg",vid:"assets/launch.mp4",chip:"MCP · 46 tools over the live feeds"},
- {tab:"Workspace",tag:"WORKSPACE",title:"Twelve apps, one workspace — the globe is the front door",img:"assets/ui-explorer.jpg",vid:"assets/console-live.mp4",chip:"Apps · twelve, one live substrate"}
+ {tab:"Air",tag:"AIR",title:"8,642 aircraft at 04:55 UTC, 13,000 on a typical afternoon. ADS-B from OpenSky, airplanes.live and adsb.lol, military included",img:"assets/tab-air.jpg",vid:"assets/tab-air.mp4"},
+ {tab:"Maritime",tag:"MARITIME",title:"50,000 vessels. Keyless AIS, MMSI-deduplicated across ShipXplorer, MyShipTracking and the Nordic feeds",img:"assets/tab-maritime.jpg",vid:"assets/tab-maritime.mp4"},
+ {tab:"Space",tag:"SPACE",title:"16,000 orbital objects from CelesTrak, propagated in your browser with real SGP4 physics",img:"assets/tab-space.jpg",vid:"assets/tab-space.mp4"},
+ {tab:"Hazards",tag:"HAZARDS",title:"Quakes, fire detections, fire perimeters, volcanoes, cyclones and outages on one timeline",img:"assets/tab-hazards.jpg",vid:"assets/tab-hazards.mp4"},
+ {tab:"Signals",tag:"SIGNALS",title:"GPS jamming inferred from ADS-B degradation. 253 cells flagged at capture, 19 high",img:"assets/tab-signals.jpg",vid:"assets/tab-signals.mp4"},
+ {tab:"Infrastructure",tag:"INFRASTRUCTURE",title:"7,183 military bases, 3,804 ports, submarine cables and landings, 53 country toolkits",img:"assets/tab-infra.jpg",vid:"assets/tab-infra.mp4"},
+ {tab:"Archive",tag:"THE ARCHIVE",title:"Your own record. Rewind anything you saw, as far back as your disk goes",img:"assets/tab-archive.jpg",vid:"assets/tab-archive.mp4"}
 ];
 const ROWS=[
- ["Explorer","Query every live entity like a database.","assets/ui-explorer.jpg"],
- ["Workflows","Automation blocks over live feeds, with real control outputs.","assets/workflows-dag.jpg"],
- ["Briefs","Watch-officer summaries with cited sources.","assets/ui-briefs.jpg"],
- ["Foundry","Bring your own datasets, transform, bind to the map.","assets/foundry-pipeline-new.jpg"],
- ["Satellites","Sixteen thousand objects on real orbital physics.","assets/hero-satellites.jpg"],
- ["Layers","Air, sea, space, hazards, signals and 14 infrastructure layers.","assets/rail-layers.jpg"]
+ ["Explorer","Every live object in one filterable, sortable table. Facet by kind, source and freshness; save the search.","assets/row-explorer.mp4"],
+ ["Workflows","Automation blocks over the live feeds: Python, SQL and LLM steps, with real control outputs.","assets/row-workflows.jpg"],
+ ["Briefs","Watch-officer summaries with every claim cited back to the object it came from.","assets/row-briefs.jpg"],
+ ["Foundry","Bring your own datasets, transform them in governed pipelines, bind the result to the map.","assets/row-foundry.mp4"],
+ ["Satellites","Sixteen thousand objects on real orbital physics, from stations to the GPS constellation.","assets/row-satellites.mp4"],
+ ["Layers","Air, sea, space, hazards, signals and fourteen infrastructure layers, each with its provenance.","assets/row-layers.mp4"]
 ];
 const QUOTES=[
  ["MOTION IS REAL","Aircraft jump to real received fixes by default. Predicted motion is opt-in, analytic and clearly a model."],
@@ -426,8 +550,15 @@ const FOOT={
  "Domains":[["Air","#updates"],["Maritime","#updates"],["Space","#updates"],["Hazards","#updates"],["Signals","#updates"],["Infrastructure","#updates"]],
  "Workspace":[["Explorer","#software"],["Briefs","#software"],["Foundry","#software"],["Workflows","#software"],["Satellites","#software"],["Layers","#software"]],
  "Upstream Feeds":[["OpenSky Network","https://opensky-network.org"],["airplanes.live","https://airplanes.live"],["ShipXplorer","https://www.shipxplorer.com"],["CelesTrak","https://celestrak.org"],["USGS","https://earthquake.usgs.gov"],["GDELT","https://www.gdeltproject.org"]],
- "Project":[["GitHub","https://github.com/AndrewCTF/velocity"],["Releases","https://github.com/AndrewCTF/velocity/releases"],["README","https://github.com/AndrewCTF/velocity#readme"],["Issues","https://github.com/AndrewCTF/velocity/issues"],["Data Notices","https://github.com/AndrewCTF/velocity/blob/master/NOTICE"],["Disclaimer","https://github.com/AndrewCTF/velocity/blob/master/DISCLAIMER.md"]]
+ "Project":[["GitHub","https://github.com/AndrewCTF/velocity"],["Releases","https://github.com/AndrewCTF/velocity/releases"],["README","https://github.com/AndrewCTF/velocity#readme"],["Press kit","press.html"],["Data Notices","https://github.com/AndrewCTF/velocity/blob/master/NOTICE"],["Disclaimer","https://github.com/AndrewCTF/velocity/blob/master/DISCLAIMER.md"]]
 };
+// A real call, made on this box 2026-09-13 04:58 UTC through app.mcp_server.get_situation. Trimmed, not edited.
+const TERM=[
+ ['p','# dev box, 2026-09-13 04:58 UTC\n$ '],['k','claude "what does the globe see right now?"\n'],
+ ['c','▸ get_situation()\n'],
+ ['','{"aircraft": {"total": '],['n','8729'],['',', "airborne": '],['n','7256'],['',', "on_ground": 1473,\n   "by_category": {"airliner": 7522, "private": 943, "helicopter": 215, "military": '],['n','38'],['','},\n   "gnss_degraded": '],['n','374'],['','},\n "gps_jamming": {"cells_flagged": '],['n','253'],['',', "high": 19, "medium": 145,\n   "worst": [{"lon": 54.231, "lat": 25.11, "percent_bad": 87.5, "severity": "high"}, …]},\n "vessels": {"tracked": '],['n','51251'],['','}}\n'],
+ ['c','▸ 253 jamming cells, worst over the Gulf at 54.2E 25.1N. Want the affected aircraft?\n']
+];
 
 /* carousel */
 let cur=0,timer;
@@ -436,10 +567,12 @@ const tabsEl=document.getElementById('tabs'),dotsEl=document.getElementById('dot
  card=document.querySelector('.slide-card');
 SLIDES.forEach((s,i)=>{
  const b=document.createElement('button');b.className='tab';b.textContent=s.tab;b.onclick=()=>go(i);tabsEl.appendChild(b);
- const d=document.createElement('div');d.className='dot';d.onclick=()=>go(i);dotsEl.appendChild(d);
+ const d=document.createElement('button');d.className='dot';d.setAttribute('aria-label',s.tab);d.innerHTML=`<img src="${s.img}" alt="${s.tab}" loading="lazy" />`;d.onclick=()=>go(i);dotsEl.appendChild(d);
 });
 const vid=document.getElementById('slideVid');
 const noMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const warmed=new Set();
+function warm(src){if(!src||warmed.has(src)||noMotion)return;warmed.add(src);const l=document.createElement('link');l.rel='prefetch';l.as='video';l.href=src;document.head.appendChild(l)}
 function render(dir){
  const s=SLIDES[cur];
  img.style.setProperty('--pan',((dir<0)?-70:70)+'px');
@@ -450,13 +583,14 @@ function render(dir){
   vid.src=s.vid;
   vid.play().then(()=>vid.classList.add('show')).catch(()=>{});
  }
+ warm(SLIDES[(cur+1)%SLIDES.length].vid);
  tag.textContent=s.tag;ttl.textContent=s.title;
  card.classList.remove('anim');void card.offsetWidth;card.classList.add('anim');
  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===cur));
  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===cur));
 }
 function go(i){const dir=Math.sign(i-cur)||1;cur=(i+SLIDES.length)%SLIDES.length;render(dir);restart()}
-function restart(){clearInterval(timer);timer=setInterval(()=>go(cur+1),6500)}
+function restart(){clearInterval(timer);timer=setInterval(()=>go(cur+1),5000)}
 document.getElementById('prev').onclick=()=>go(cur-1);
 document.getElementById('next').onclick=()=>go(cur+1);
 document.getElementById('slide').addEventListener('mouseenter',()=>clearInterval(timer));
@@ -468,18 +602,26 @@ document.addEventListener('keydown',e=>{
 });
 render();restart();
 
-/* software rows */
+/* software rows: hover reveals a recording, same lazy pattern as the carousel */
 const rowsEl=document.getElementById('rows');
-ROWS.forEach(([name,desc,imgSrc],i)=>{
+const canHover=matchMedia('(hover: hover)').matches&&!noMotion;
+ROWS.forEach(([name,desc,src],i)=>{
  const a=document.createElement('a');a.href='https://github.com/AndrewCTF/velocity#take-the-tour';a.target='_blank';a.rel='noopener noreferrer';a.className='row reveal';a.id='row-'+name.toLowerCase();
  a.style.transitionDelay=(i*0.07)+'s';
- a.innerHTML=`<span class="row-index">/0.${i+1}</span><h3 class="row-name">${name}</h3><p class="row-desc">${desc}</p>`;
+ const still=/\.jpg$/.test(src);
+ const poster=src.replace(/\.mp4$/,'.jpg');
+ a.innerHTML=`<div class="row-text"><span class="row-index">/0.${i+1}</span><h3 class="row-name">${name}</h3><p class="row-desc">${desc}</p></div><div class="row-media"><img class="row-still" src="${poster}" alt="${name} app in the running console" loading="lazy" />`+(still?``:`<video class="row-vid" muted loop playsinline preload="none" aria-hidden="true"></video>`)+`</div>`;
+ const v=a.querySelector('.row-vid');
+ if(canHover&&v){
+  a.addEventListener('mouseenter',()=>{v.src=src;v.play().then(()=>a.classList.add('playing')).catch(()=>{})});
+  a.addEventListener('mouseleave',()=>{a.classList.remove('playing');v.pause();v.removeAttribute('src');v.load()});
+ }
  rowsEl.appendChild(a);
 });
 
-/* partners marquee */
+/* limits */
 const mq=document.getElementById('marquee');
-[...QUOTES,...QUOTES,...QUOTES].forEach(([who,txt])=>{
+QUOTES.forEach(([who,txt])=>{
  const q=document.createElement('div');q.className='quote';
  q.innerHTML=`<h3>${who}</h3><p>${txt}</p>`;mq.appendChild(q);
 });
@@ -492,21 +634,44 @@ Object.entries(FOOT).forEach(([h,links],i)=>{
  fc.appendChild(c);
 });
 
+/* agent terminal: types the real transcript once it scrolls into view */
+const term=document.getElementById('term');
+function typeTerm(){
+ let i=0,j=0;const caret=document.createElement('span');caret.className='term-caret';
+ const spans=TERM.map(([c])=>{const s=document.createElement('span');if(c)s.className=c;term.appendChild(s);return s});
+ term.appendChild(caret);
+ if(noMotion){TERM.forEach(([,t],k)=>spans[k].textContent=t);return}
+ (function step(){
+  if(i>=TERM.length)return;
+  const [c,t]=TERM[i];spans[i].textContent=t.slice(0,++j);
+  if(j>=t.length){i++;j=0;setTimeout(step,c==='c'?420:80)}else setTimeout(step,c===''?6:22);
+ })();
+}
+
+/* copy the install commands */
+document.getElementById('copyBtn').onclick=e=>{
+ const b=e.currentTarget;
+ const t=[...document.getElementById('cmds').childNodes].map(n=>n.classList&&(n.classList.contains('copy')||n.classList.contains('p')||n.classList.contains('c'))?'':n.textContent).join('').replace(/[ \t]+\n/g,'\n').trim();
+ const done=ok=>{b.textContent=ok?'Copied':'Select and copy';b.setAttribute('aria-live','polite');setTimeout(()=>b.textContent='Copy',1800)};
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>done(true),()=>done(false));else done(false);
+};
+
 /* native scrolling; anchors use CSS scroll-behavior:smooth */
 function lerpTo(top){scrollTo({top:Math.max(0,top),behavior:noMotion?'auto':'smooth'})}
 
-/* hero video fade-in when playing */
+/* hero video fade-in when playing; lazy walkthrough videos play in view */
 const heroVid=document.getElementById('heroVideo');
 if(heroVid&&!noMotion)heroVid.addEventListener('playing',()=>heroVid.classList.add('on'),{once:true});
 if(noMotion)document.querySelectorAll('video[autoplay]').forEach(v=>{v.pause();v.removeAttribute('autoplay')});
 else{
  const vio=new IntersectionObserver(es=>es.forEach(en=>{
-  if(en.isIntersecting)en.target.play().catch(()=>{});else en.target.pause();
+  const v=en.target;
+  if(en.isIntersecting){if(!v.src&&v.dataset.src)v.src=v.dataset.src;v.play().catch(()=>{});}else v.pause();
  }),{threshold:.15});
- document.querySelectorAll('.careers-img video').forEach(v=>vio.observe(v));
+ document.querySelectorAll('video.lazy').forEach(v=>vio.observe(v));
 }
-
-/* nav is absolute over the hero; no scroll behaviour */
+const tio=new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting){typeTerm();tio.disconnect()}}),{threshold:.3});
+tio.observe(term);
 
 /* overlays */
 const overlays=[document.getElementById('searchOverlay')];
@@ -516,50 +681,13 @@ function openOverlay(o){closeOverlays();o.classList.add('open');document.body.st
 document.getElementById('searchBtn').onclick=()=>openOverlay(overlays[0]);
 document.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',closeOverlays));
 overlays.forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeOverlays()}));
-
-/* buttons & smooth scroll */
-document.querySelectorAll('[data-scroll]').forEach(b=>b.addEventListener('click',e=>{
- e.preventDefault();
- const t=document.querySelector(b.dataset.scroll);
- if(t)lerpTo(t.getBoundingClientRect().top+scrollY-80);
-}));
 document.querySelector('.see-all').onclick=e=>{e.preventDefault();go(cur+1)};
 document.getElementById('searchInput').addEventListener('keydown',e=>{
  if(e.key==='Enter'&&e.target.value.trim()){closeOverlays();
   const t=document.getElementById('updates');lerpTo(t.getBoundingClientRect().top+scrollY-80);}
 });
 
-/* statement word scrub */
-const scrub=document.getElementById('scrub');
-function splitWords(el){
- [...el.childNodes].forEach(n=>{
-  if(n.nodeType===3){
-   const frag=document.createDocumentFragment();
-   n.textContent.split(/(\s+)/).forEach(w=>{
-    if(w===''||/^\s+$/.test(w))frag.appendChild(document.createTextNode(w));
-    else{const s=document.createElement('span');s.textContent=w;frag.appendChild(s)}
-   });
-   el.replaceChild(frag,n);
-  } else if(n.nodeType===1)splitWords(n);
- });
-}
-splitWords(scrub);
-const scrubWords=[...scrub.querySelectorAll('span')];
-scrub.querySelectorAll('strong span').forEach(s=>s.classList.add('strong'));
-function scrubStep(){
- const r=scrub.getBoundingClientRect(),vh=innerHeight;
- const p=Math.min(1,Math.max(0,(vh*0.82-r.top)/(vh*0.55+r.height*0.4)));
- const lit=Math.floor(p*scrubWords.length*1.15);
- scrubWords.forEach((w,i)=>w.classList.toggle('lit',i<lit));
-}
-addEventListener('scroll',scrubStep,{passive:true});scrubStep();
 
-/* reveal on scroll */
-const io=new IntersectionObserver(es=>es.forEach(en=>{
- if(en.isIntersecting){en.target.classList.add('in');io.unobserve(en.target)}
-}),{threshold:.08});
-document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
-if(!('IntersectionObserver' in window)||location.search.includes('all'))document.querySelectorAll('.reveal').forEach(el=>el.classList.add('in'));
 </script>
 </body>
 </html>

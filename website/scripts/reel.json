@@ -1,0 +1,20 @@
+[
+ {"slot":"atc-tower","queries":["air traffic control tower night","airport control tower dusk"],"want":["tower","airport","control"],"take":2},
+ {"slot":"runway","queries":["runway lights night rain","airport runway night aerial"],"want":["runway","airport","plane","aircraft"],"take":2},
+ {"slot":"aircraft","queries":["airplane taking off night","jet airliner landing dusk","airplane wing clouds sunset"],"want":["plane","aircraft","jet","airliner","wing"],"take":3},
+ {"slot":"radar","queries":["radar dish rotating","satellite dish antenna night","radio telescope antenna"],"want":["radar","antenna","dish","telescope","satellite"],"take":3},
+ {"slot":"harbour","queries":["container port cranes night","shipping port gantry crane dusk aerial"],"want":["port","crane","container","harbor","harbour","shipping"],"take":3},
+ {"slot":"ship","queries":["cargo ship wake aerial ocean","tanker ship at sea aerial drone","container ship ocean night"],"want":["ship","vessel","cargo","tanker","sea","ocean"],"take":3},
+ {"slot":"orbit","queries":["earth from space night city lights","satellite orbit earth","planet earth from orbit"],"want":["earth","space","orbit","satellite","planet"],"take":3},
+ {"slot":"launch","queries":["rocket launch night","rocket launch pad"],"want":["rocket","launch"],"take":2},
+ {"slot":"wildfire","queries":["wildfire smoke plume aerial","forest fire smoke distance"],"want":["fire","smoke","wildfire"],"take":2},
+ {"slot":"storm","queries":["lightning storm night timelapse","hurricane clouds from space","storm clouds timelapse dark"],"want":["storm","lightning","cloud","hurricane"],"take":2},
+ {"slot":"earthquake","queries":["seismograph","cracked earth drone"],"want":["seismograph","earthquake","crack"],"take":1},
+ {"slot":"datacenter","queries":["data center server room corridor dark","server rack blinking lights"],"want":["server","data center","datacenter","rack"],"take":2},
+ {"slot":"cables","queries":["fiber optic cable light","undersea cable","power lines dusk aerial"],"want":["cable","fiber","fibre","power line","wire"],"take":2},
+ {"slot":"console","queries":["hands typing keyboard dark room","operator monitors dark control room"],"want":["keyboard","typing","monitor","screen","control room"],"take":2},
+ {"slot":"coast","queries":["coastline aerial dusk","city aerial night drone","desert highway aerial night"],"want":["coast","aerial","city","night","highway"],"take":3},
+ {"slot":"ocean","queries":["ocean waves aerial dark","sea surface aerial drone top down"],"want":["ocean","sea","wave"],"take":2},
+ {"slot":"drone","queries":["quadcopter flying dusk","drone flying over field sunset silhouette"],"want":["drone","quadcopter"],"take":1},
+ {"slot":"rail","queries":["freight train night aerial","railway night lights"],"want":["train","rail"],"take":1}
+]
