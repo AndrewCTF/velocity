@@ -67,8 +67,10 @@ def _python_sandbox_help() -> str:
         "bwrap": "isolated filesystem, network ALLOWED (WORKFLOWS_PYTHON_NET=1).",
         "rlimits-only": (
             "resource limits ONLY - bubblewrap is unavailable here, so block code "
-            "can read this machine's files and reach the network. Run only code you "
-            "trust."
+            "can read this machine's files and reach the network. Refused unless "
+            "WORKFLOWS_PYTHON_UNSANDBOXED=1"
+            + (" (set: run only code you trust)." if python_exec._unsandboxed_allowed()
+               else ".")
         ),
     }[python_exec.sandbox_tier()]
 
@@ -658,6 +660,8 @@ async def _run_op_python(
         out_rows, out_memory = await python_exec.run_python_block(
             code, rows, dict(ctx.memory), timeout_s=float(timeout_s)
         )
+    except python_exec.PythonSandboxUnavailable as exc:
+        raise WorkflowError(503, str(exc)) from exc  # host capability, not bad input
     except python_exec.PythonExecError as exc:
         raise WorkflowError(422, str(exc)) from exc
     ctx.memory.clear()

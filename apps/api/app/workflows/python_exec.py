@@ -158,6 +158,36 @@ class PythonExecError(Exception):
     """User-facing failure of an ``op.python`` block run."""
 
 
+class PythonSandboxUnavailable(PythonExecError):  # noqa: N818 — reads as the condition
+    """No jail here and the operator has not opted into running without one."""
+
+
+def _unsandboxed_allowed() -> bool:
+    """``WORKFLOWS_PYTHON_UNSANDBOXED=1``: the operator accepts running block
+    code at the ``rlimits-only`` tier. Off by default."""
+    return os.getenv("WORKFLOWS_PYTHON_UNSANDBOXED", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _refuse_unsandboxed() -> None:
+    """Refuse the ``rlimits-only`` tier unless opted in (G13, 2026-09).
+
+    Without a jail the child runs as the API's own uid, so it can read
+    ``/proc/<api pid>/environ`` — every secret the API was started with — and
+    the repo's ``.env``. Measured in the prod container: AppArmor's
+    ``kernel.apparmor_restrict_unprivileged_userns=1`` stops bwrap's uid map even
+    with ``--privileged``, so that tier is what prod actually gets. Refusing is
+    the default; running anyway is an explicit operator decision."""
+    if sandbox_tier() == "rlimits-only" and not _unsandboxed_allowed():
+        raise PythonSandboxUnavailable(
+            "op.python refused: bubblewrap is unavailable here (sandbox tier "
+            "rlimits-only), so block code would run as the API's own user and could "
+            "read its secrets. Make bubblewrap work on this host, or set "
+            "WORKFLOWS_PYTHON_UNSANDBOXED=1 to run trusted code without a jail."
+        )
+
+
 def _kill(proc: asyncio.subprocess.Process) -> None:
     for fn in (
         lambda: os.killpg(proc.pid, signal.SIGKILL),
@@ -196,6 +226,7 @@ async def run_python_block(
     NEVER lets an exception here look like anything but a normal Python
     exception to the caller (the engine turns it into a failed run, not a
     500)."""
+    _refuse_unsandboxed()
     timeout = min(max(1.0, float(timeout_s)), MAX_TIMEOUT_S)
     try:
         req = json.dumps({"code": code, "rows": rows, "memory": memory}, default=str).encode()
