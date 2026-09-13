@@ -750,7 +750,7 @@ export function AuthNotice(): JSX.Element | null {
         <Link
           to="/login"
           className="inline-block mt-2.5 px-3 py-1 rounded-sm text-[12px] font-medium"
-          style={{ background: 'var(--accent)', color: '#06121a' }}
+          style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
         >
           Sign in →
         </Link>
