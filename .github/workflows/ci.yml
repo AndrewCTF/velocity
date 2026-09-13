@@ -6,6 +6,9 @@ on:
   push:
     branches: [master]
   pull_request:
+  # publish.yml calls this before pushing images: a tag push is not a master
+  # push, so without the call a release would skip every unit gate.
+  workflow_call:
 
 # Least-privilege token: this workflow only builds, tests, and lints — it never
 # writes to the repo. Pin contents:read so a compromised transitive dependency

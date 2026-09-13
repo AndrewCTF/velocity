@@ -21,10 +21,7 @@ opencode.jsonc
 coverage/
 .vite/
 .turbo/
-# Cloudflare Worker local state + the entire built console bundle. deploy.sh
-# rebuilds site/ from apps/web on every deploy — it's an artifact, not source.
 .wrangler/
-site/
 # Anywhere in the tree — the cache lives at apps/api/data/tilecache; the old
 # root-anchored pattern missed it and 2.7k PNGs got committed.
 **/data/tilecache/
@@ -102,3 +99,6 @@ docs/superpowers/
 
 # Runtime local databases (SQLite, tile cache) — never committed
 /data/
+
+# release smoke failure screenshots/logs (scripts/smoke-release.cjs)
+smoke-artifacts/

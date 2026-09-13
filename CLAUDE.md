@@ -44,7 +44,7 @@ undo and why it was made.
 | `apps/desktop/CLAUDE.md` | Tauri watcher excludes, YOLO sidecar env |
 | `packages/shared/CLAUDE.md` | the web↔api contract, `Observation.t` semantics |
 | `tools/CLAUDE.md` | feeder processes, the real-Chrome tier, perf harnesses |
-| `scripts/CLAUDE.md` | boot, verify, kill-port, deploy |
+| `scripts/CLAUDE.md` | boot, verify, kill-port, release smoke |
 | `infra/CLAUDE.md` | the two SQL trees and which one you actually want |
 
 ## Environment facts / traps
@@ -52,8 +52,8 @@ undo and why it was made.
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **2587 passed + 2 skipped in ~185 s** (skip = opt-in live probes;
-  measured 2026-08-30, branch osint-book-intel-2026-08, citable-replay wave).
+  Baseline: **2593 passed + 2 skipped in ~155 s** (skip = opt-in live probes;
+  measured 2026-09-13, branch osint-book-intel-2026-08, release-gate wave).
   Runs SERIAL by default: `-n auto --dist
   loadfile` groups different files per worker on different core counts, so a
   suite with module-state leaks answers differently per machine and CI (4 cores)

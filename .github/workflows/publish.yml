@@ -13,7 +13,17 @@ permissions:
   packages: write
 
 jobs:
+  # Nothing is pushed unless the unit gates AND the booted-stack browser smoke
+  # pass for this exact commit. The push below rebuilds from the same commit
+  # and Dockerfiles with the gha layer cache; it is not a byte-for-byte reuse
+  # of the images the smoke booted.
+  ci:
+    uses: ./.github/workflows/ci.yml
+  release-gate:
+    uses: ./.github/workflows/release-gate.yml
+
   images:
+    needs: [ci, release-gate]
     runs-on: ubuntu-latest
     strategy:
       matrix:

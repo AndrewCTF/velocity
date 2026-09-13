@@ -55,10 +55,22 @@ services:
       - "8080:80"
     volumes:
       - ./infra/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
-      - web_dist:/usr/share/nginx/html:ro
+      # nocopy + wait for the build: otherwise nginx can reach the empty volume
+      # first and seed it with its own root-owned default page, the uid-10001
+      # `vite build` then fails EACCES unlinking 50x.html, and the site serves
+      # "Welcome to nginx!" forever (caught by scripts/smoke-release.cjs,
+      # 2026-09-13).
+      - type: volume
+        source: web_dist
+        target: /usr/share/nginx/html
+        read_only: true
+        volume:
+          nocopy: true
     depends_on:
-      - api
-      - web-build
+      api:
+        condition: service_started
+      web-build:
+        condition: service_completed_successfully
 
 volumes:
   web_dist: {}

@@ -1245,6 +1245,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2593 + 2 skipped — 2026-09-13, osint-book-intel-2026-08, release-gate wave
 - 2587 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, citable-replay wave
 - 2581 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, AI-label wave
 - 2578 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, honesty wave
@@ -1526,6 +1527,41 @@ budget on a 429 storm). The frontend faithfully mirrors a frozen blob.
 API lifespan blocks `accept` until the snapshot warms (~15-25 s);
 `transport/config.ts` retries with backoff. `/api/config` is keyless — a
 config error is transport/timing, never auth.
+2026-09-13: the map no longer WAITS on config. It showed "loading config…"
+for the whole lifespan, which now awaits the ADS-B sidecar (60 s cap on a
+fresh spawn), llama.cpp (60 s), vLLM (120 s) and the 24 s warm before
+accepting, so a restart could strand it for minutes. The globe boots on
+keyless defaults; the ion/Google keys are applied in their own effect so a
+late token upgrades imagery in place instead of remounting the viewer.
+
+### Release gate (2026-09-13)
+`publish.yml` pushed ghcr images on a tag with no tests at all, and CI never
+built or booted an image. The new gate (`release-gate.yml`, called by
+`publish.yml` together with `ci.yml`, and also run on every PR and master
+push) builds the prod compose images, boots them keyless, and runs
+`scripts/smoke-release.cjs` in Chromium: api stopped → globe renders →
+api started → page recovers without a reload. Its first local rehearsal found
+a second shipped bug: nginx could seed the shared `web_dist` volume with its
+root-owned default page, the uid-10001 `vite build` then failed EACCES
+unlinking `50x.html`, and the prod stack served "Welcome to nginx!". Fixed
+with `volume.nocopy` + `depends_on: service_completed_successfully`.
+Proven both ways locally: passes on the fix, fails on the reverted map fix
+(no globe canvas within 60 s). The first negative attempt passed vacuously:
+the rebuild failed on npm DNS and nginx kept serving the previous bundle,
+hence the probe's web-build exit-code check. A `desktop` job builds the web
+bundle and runs `cargo check --locked` on the Tauri crate (compile, not a
+signed installer). Not covered: the pushed image is a cached rebuild of the smoked commit, not the
+same bytes.
+
+Same day, operator decision: the June paid-SaaS gateway is DELETED. `site/`
+(untracked Worker "velocity": Stripe checkout, Supabase login gate,
+`BACKEND_URL=https://167.99.149.34.nip.io`, a droplet that no longer answers),
+`scripts/deploy.sh`, `apps/api/Dockerfile` (its container image) and
+`docs/deploy-cloudflare.md`. projectvelocity.org is served by `website/`
+(Worker "velocity-site"), where `/app/` and `/api/*` return 404, so nothing
+live used the gateway. Local backup of the untracked tree:
+`~/velocity-site-gateway-backup-2026-09-13.tar.gz`.
+Guard: `apps/api/tests/test_release_gate.py`.
 
 ### Commit / doc voice
 Human-style commit messages; a global commit-msg hook strips AI attribution.
