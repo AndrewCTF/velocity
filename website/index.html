@@ -146,13 +146,11 @@ code,kbd,pre{font-family:var(--f2)}
 .stage-btn svg{display:block;stroke:#fff}
 .stage-btn:hover{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.3)}
 .stage-btn:active{transform:scale(.93)}
-.stage-dots{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;min-width:0;flex:1;margin-right:16px}
-.stage-dots::-webkit-scrollbar{display:none}
-.dot{position:relative;width:88px;height:50px;flex:none;cursor:pointer;background:var(--plate);padding:0;overflow:hidden;opacity:.55;border:1px solid rgba(255,255,255,.6);transition:opacity .25s,border-color .25s}
-.dot.active{border-color:#fff}
-.dot img{width:100%;height:100%;object-fit:cover;display:block}
-.dot:hover,.dot.active{opacity:1}
-.dot::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:#fff;transform:scaleX(0);transform-origin:left}
+.stage-dots{display:flex;gap:2px}
+.dot{position:relative;width:32px;height:44px;cursor:pointer;background:none;padding:0}
+.dot::before{content:"";position:absolute;left:3px;right:3px;top:21px;height:2px;background:rgba(255,255,255,.28);transition:background .25s}
+.dot:hover::before{background:rgba(255,255,255,.5)}
+.dot::after{content:"";position:absolute;left:3px;right:3px;top:21px;height:2px;background:#fff;transform:scaleX(0);transform-origin:left}
 .dot.active::after{animation:dotfill 5s linear forwards}
 .slide:hover .dot.active::after{animation-play-state:paused}
 @keyframes dotfill{to{transform:scaleX(1)}}
@@ -298,6 +296,7 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
 @media(max-width:640px){
   .updates .wrap{padding:0 16px}
   .slide{padding:20px 14px 0}
+  .stage-dots{display:none}
   .stage-btn{width:44px;height:44px}
   .hero-note{bottom:70px}
 }
@@ -388,7 +387,7 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
     <div class="stage reveal">
       <div class="slide" id="slide">
         <div class="slide-media">
-          <img id="slideImg" class="show" src="assets/tab-air.jpg" alt="Europe on the 3D satellite basemap with live aircraft" />
+          <img id="slideImg" class="show" src="assets/tab-air.jpg" alt="An airliner landing on a busy runway" />
           <video id="slideVid" muted loop playsinline preload="none" aria-hidden="true"></video>
           <div class="slide-veil"></div>
           <div class="slide-card">
@@ -507,7 +506,7 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
   </div>
   <div class="wrap foot-base">
     <span>Velocity · AGPL-3.0-or-later · v1.0.1</span>
-    <span>Thanks to the volunteer feeder communities that make public tracking possible.</span>
+    <span>Thanks to the volunteer feeder communities that make public tracking possible. Footage: Pexels contributors and NASA.</span>
   </div>
   <div class="foot-mark" aria-hidden="true">VELOCITY</div>
 </footer>
@@ -567,7 +566,7 @@ const tabsEl=document.getElementById('tabs'),dotsEl=document.getElementById('dot
  card=document.querySelector('.slide-card');
 SLIDES.forEach((s,i)=>{
  const b=document.createElement('button');b.className='tab';b.textContent=s.tab;b.onclick=()=>go(i);tabsEl.appendChild(b);
- const d=document.createElement('button');d.className='dot';d.setAttribute('aria-label',s.tab);d.innerHTML=`<img src="${s.img}" alt="${s.tab}" loading="lazy" />`;d.onclick=()=>go(i);dotsEl.appendChild(d);
+ const d=document.createElement('button');d.className='dot';d.setAttribute('aria-label',s.tab);d.onclick=()=>go(i);dotsEl.appendChild(d);
 });
 const vid=document.getElementById('slideVid');
 const noMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
