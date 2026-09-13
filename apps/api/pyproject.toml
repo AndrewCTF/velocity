@@ -20,10 +20,10 @@ dependencies = [
   # Optional import there falls back to stdlib gzip if the wheel is absent.
   "isal>=1.6",
   "pydantic>=2.9.0",
-  "pydantic-settings>=2.5.0",
+  "pydantic-settings>=2.14.2",
   "httpx[socks]>=0.27.2",
   "websockets>=13.0",
-  "pillow>=10.0",
+  "pillow>=12.3",
   "python-pptx>=0.6.23",
   "numpy>=1.26",
   "pyyaml>=6.0",
@@ -37,10 +37,10 @@ dependencies = [
   # unbounded pin and would have failed on its next run.
   # Revisit deliberately: moving to 2.x means porting the FastMCP import and the
   # 50 tool registrations, not relaxing this line.
-  "mcp>=1.2.0,<2",
+  "mcp>=1.28.1,<2",
   "pyais>=2.6.0",
   "feedparser>=6.0.11",
-  "cryptography>=42.0",
+  "cryptography>=50.0",
   "pyjwt>=2.0",
   # Local model manager (app.localllm): HF Hub API for catalog metadata/size
   # preflight + snapshot_download for Unsloth GGUF pulls. Pure-Python, safe as
