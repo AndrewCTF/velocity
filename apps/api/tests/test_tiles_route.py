@@ -47,8 +47,8 @@ def mock_upstream(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
     def handler(request: httpx.Request) -> httpx.Response:
         urls.append(str(request.url))
         host = request.url.host
-        if "cartocdn" in host:
-            return httpx.Response(200, content=b"\x89PNG-carto")
+        if "World_Dark_Gray" in request.url.path:
+            return httpx.Response(200, content=_ESRI_JPEG)
         if "eox.at" in host:
             return httpx.Response(200, content=_EOX_JPEG)
         if "arcgisonline" in host:
@@ -66,7 +66,12 @@ def mock_upstream(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
 def test_basemap_second_call_is_disk_hit(client, mock_upstream: list[str]) -> None:
     r1 = client.get("/tiles/basemap/7/41/53.png")
     assert r1.status_code == 200
-    assert r1.content == b"\x89PNG-carto"
+    assert r1.content.startswith(b"\x89PNG")
+    assert r1.headers["x-basemap"] == "esri-darkgray"
+    # Base AND label reference are fetched; Carto is never asked (it watermarks).
+    assert sum("World_Dark_Gray_Base" in u for u in mock_upstream) == 1
+    assert sum("World_Dark_Gray_Reference" in u for u in mock_upstream) == 1
+    assert not any("cartocdn" in u for u in mock_upstream)
     n = len(mock_upstream)
     assert n >= 1
     r2 = client.get("/tiles/basemap/7/41/53.png")

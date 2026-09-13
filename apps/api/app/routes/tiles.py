@@ -7,7 +7,10 @@ a blank globe. The browser only ever sees /tiles/* — providers are
 swappable here in one place.
 
 Sources (all keyless):
-- basemap: Carto Dark Matter — (c) OpenStreetMap contributors, (c) CARTO.
+- basemap: Esri World Dark Gray Canvas (base + label reference, composited
+  here into one PNG) — attribution "Esri, HERE, Garmin, (c) OpenStreetMap
+  contributors". Carto Dark Matter was the source until CARTO began stamping
+  "API KEY REQUIRED" onto every keyless tile (2026-09).
 - sat z<=13: EOX Sentinel-2 cloudless (s2maps.eu) — CC BY-NC-SA 4.0,
   attribution: "Sentinel-2 cloudless by EOX (Contains modified Copernicus
   Sentinel data)". Rendered in the frontend attribution footer.
@@ -45,13 +48,33 @@ def _recent_date() -> str:
     Two days back to allow for processing/ingest latency."""
     return (dt.datetime.now(dt.UTC) - dt.timedelta(days=2)).strftime("%Y-%m-%d")
 
-# Carto's basemap CDN. `dark_all` = dark with English labels everywhere.
-CARTO_HOSTS = [
-    "https://a.basemaps.cartocdn.com",
-    "https://b.basemaps.cartocdn.com",
-    "https://c.basemaps.cartocdn.com",
-    "https://d.basemaps.cartocdn.com",
-]
+# Esri's keyless dark canvas: a label-free base plus a transparent label
+# reference, served z0-16. Carto's `dark_all` is no longer keyless: every tile
+# now carries an "API KEY REQUIRED" watermark, server-side requests included.
+_ESRI_CANVAS = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas"
+_BASEMAP_SOURCE = "esri-darkgray"
+
+
+async def _dark_basemap_png(z: int, x: int, y: int) -> bytes | None:
+    """Base + labels composited into one PNG. Labels are best-effort: a failed
+    reference tile still serves the base rather than a hole in the globe."""
+    base, ref = await asyncio.gather(
+        _fetch_bytes(f"{_ESRI_CANVAS}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"),
+        _fetch_bytes(f"{_ESRI_CANVAS}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"),
+    )
+    if base is None:
+        return None
+    from PIL import Image
+
+    img = Image.open(BytesIO(base)).convert("RGBA")
+    if ref is not None:
+        try:
+            img = Image.alpha_composite(img, Image.open(BytesIO(ref)).convert("RGBA"))
+        except (OSError, ValueError):
+            pass  # an undecodable label tile is not worth losing the base over
+    buf = BytesIO()
+    img.convert("RGB").save(buf, format="PNG", optimize=False)
+    return buf.getvalue()
 
 _EOX_LAYER = "s2cloudless-2024_3857"
 # z <= split → EOX Sentinel-2 (10 m cloudless mosaic, broad/low-zoom);
@@ -136,11 +159,10 @@ async def basemap_tile(
             )
         url, source, marker = tmpl.format(z=z, x=x, y=y), "commercial-base", "commercial"
     else:
-        host = CARTO_HOSTS[(x + y) % len(CARTO_HOSTS)]  # round-robin shard
-        url, source, marker = f"{host}/dark_all/{z}/{x}/{y}@2x.png", "carto", "carto-dark-matter"
+        url, source, marker = "", _BASEMAP_SOURCE, _BASEMAP_SOURCE
 
     async def load() -> bytes | None:
-        return await _fetch_bytes(url)
+        return await _fetch_bytes(url) if url else await _dark_basemap_png(z, x, y)
 
     data = await _cache_for(settings.tile_cache_dir, _tile_budget(settings)).get(
         source, z, x, y, "png", _TTL_BASEMAP, load
@@ -169,20 +191,16 @@ async def warm_basemap() -> None:
     settings = get_settings()
     cache = _cache_for(settings.tile_cache_dir, _tile_budget(settings))
     # Warm the source this deployment actually serves: commercial base if
-    # configured, else Carto dark. ponytail: warms one source; add a free+
+    # configured, else the Esri dark canvas. ponytail: warms one source; add a free+
     # commercial tier split only if a deployment serves both from cold.
     tmpl = settings.commercial_basemap_url
-    source = "commercial-base" if tmpl else "carto"
+    source = "commercial-base" if tmpl else _BASEMAP_SOURCE
 
     async def warm_one(z: int, x: int, y: int) -> None:
-        if tmpl:
-            url = tmpl.format(z=z, x=x, y=y)
-        else:
-            host = CARTO_HOSTS[(x + y) % len(CARTO_HOSTS)]
-            url = f"{host}/dark_all/{z}/{x}/{y}@2x.png"
-
         async def load() -> bytes | None:
-            return await _fetch_bytes(url)
+            if tmpl:
+                return await _fetch_bytes(tmpl.format(z=z, x=x, y=y))
+            return await _dark_basemap_png(z, x, y)
 
         try:
             await cache.get(source, z, x, y, "png", _TTL_BASEMAP, load)

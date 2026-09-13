@@ -101,7 +101,7 @@ Browser-tier pacing and the headful lever are in `tools/CLAUDE.md`.
 - Satellites: `/api/space/gp` requests `FORMAT=tle` (JSON variant → 0 sats);
   propagation stays chunked, client-side. → `tests/test_invariants.py`
 - Keyless layers keep working with no API key: ADS-B grid, Baltic AIS,
-  MyShipTracking, ShipXplorer, USGS quakes, Carto basemap, CelesTrak. FIRMS
+  MyShipTracking, ShipXplorer, USGS quakes, Esri dark-canvas basemap, CelesTrak. FIRMS
   degrades gracefully without MAP_KEY.
 
 ## Auth

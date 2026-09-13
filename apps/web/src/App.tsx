@@ -49,7 +49,7 @@ import { ErrorBoundary } from './shell/ErrorBoundary.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext.js';
 import { isSupabaseConfigured } from './transport/supabase.js';
-import { apiFetch, backendWsUrl, openAuthedWebSocket } from './transport/http.js';
+import { apiFetch, backendRejectedAuth, backendWsUrl, openAuthedWebSocket } from './transport/http.js';
 import { Console } from './shell/Console.js';
 import { ActionBar } from './shell/ActionBar.js';
 import { REHOMED, type LeftPanelId, type RightPanelId } from './shell/panels.js';
@@ -310,20 +310,24 @@ export function App(): JSX.Element {
             <div className="csl2-globe">
               <BootError message={error} />
             </div>
-          ) : config ? (
+          ) : (
+            // The map never waits on /api/config: every field has a keyless
+            // default, and the backend can take minutes to accept while its
+            // lifespan warms sidecars. Config upgrades the globe in place.
             <>
               <div className="csl2-globe">
                 <ErrorBoundary label="globe">
                   <GlobeCanvas
-                    ionToken={config.cesiumIonToken}
+                    ionToken={config?.cesiumIonToken ?? ''}
                     registry={registry}
                     onViewerReady={onViewerReady}
                     imageryMode={imageryMode}
-                    enableGoogle3D={config.features.enableGoogle3D}
-                    googleApiKey={config.googleApiKey}
+                    enableGoogle3D={config?.features.enableGoogle3D ?? false}
+                    googleApiKey={config?.googleApiKey ?? ''}
                   />
                 </ErrorBoundary>
               </div>
+              {!config && <BootLoading />}
               {/* Instrument overlays + resting command dock float over the globe.
                   Both are null/viewer-safe and pointer-scoped so they never
                   block globe interaction. */}
@@ -333,15 +337,13 @@ export function App(): JSX.Element {
               <MapToolPanels viewer={viewer} />
               <CopControl viewer={viewer} registry={registry} />
               <AuthNotice />
-              <OpenModeBanner open={Boolean(config.openMode)} />
+              <OpenModeBanner open={Boolean(config?.openMode)} />
               <AgentConsole viewer={viewer} />
               <Omnibar viewer={viewer} registry={registry} />
               <ContextMenu />
               <ImageryDiffPopup />
               <ModeSurface viewer={viewer} registry={registry} />
             </>
-          ) : (
-            <BootLoading />
           )
         }
         // Right rail is now the single object-centric Inspector (design §6.3) —
@@ -740,7 +742,7 @@ export function OpenModeBanner({ open }: { open: boolean }): JSX.Element | null 
 export function AuthNotice(): JSX.Element | null {
   const { user, loading } = useAuth();
   const feeds = useFeeds((s) => s.feeds);
-  if (loading || user || !isSupabaseConfigured) return null;
+  if (loading || user || !isSupabaseConfigured || !backendRejectedAuth()) return null;
 
   // Live data IS present when at least one feed has reported a recent fix.
   const now = Date.now();
@@ -844,8 +846,8 @@ export function ModeSurface({ viewer, registry }: { viewer: Cesium.Viewer | null
 
 function BootLoading(): JSX.Element {
   return (
-    <div className="h-full w-full flex items-center justify-center">
-      <span className="micro">loading config…</span>
+    <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-none on-dark">
+      <span className="micro">connecting to backend…</span>
     </div>
   );
 }
