@@ -229,8 +229,20 @@ Process:
 | ID | Raised | Source | Description | Clause or control | Correction | Due | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | NC-01 | 2026-09-13 | Audit A1 | Ruleset approval and signature rules bypassed; CI not required | 5.3, 8.4, 8.32 | RA-04 | 2026-09-30 | Open |
-| NC-02 | 2026-09-13 | Audit A2 | Write collaborator without an access review | 5.18, 8.2 | RA-03 | 2026-09-30 | Open |
+| NC-02 | 2026-09-13 | Audit A2 | Write collaborator without an access review | 5.18, 8.2 | RA-03 | 2026-09-30 | Closed 2026-09-13: access review below |
 | NC-03 | 2026-09-13 | Audit A3 | Security fixes unreleased; objective O2 at risk | 8.8, 6.2 | RA-01 | 2026-09-20 | Open |
 | NC-04 | 2026-09-13 | Audit A4 | Wrong advisory link in `SECURITY.md` | 6.8 | RA-02 | 2026-09-20 | Closed 2026-09-13: link corrected in commit `bbc1aae` (`SECURITY.md`) |
 | NC-05 | 2026-09-13 | Audit A5 | `apps/api/Dockerfile` bypasses the lockfile and the digest pinning | 5.21, 8.19 | RA-06 | 2026-10-15 | Closed 2026-09-13: file deleted in commit `bbc1aae` |
 | NC-G | 2026-09-13 | Gap analysis G1–G9, G11–G20 | 19 code and CI gaps | See §9.2.2 | PR #87, with guard tests named in the gap analysis | 2026-09-13 | Closed (evidence in `docs/security/gap-analysis-2026-09.md`) |
+
+
+## Access review record — 2026-09-13
+
+Performed by the maintainer (`AndrewCTF`), from `gh api repos/AndrewCTF/velocity/collaborators`.
+
+| Account | Permission | Decision | Reason |
+| --- | --- | --- | --- |
+| `AndrewCTF` | admin | Keep | Repository owner and sole maintainer |
+| `SimonRos1` | write | Keep, with the reason recorded | Collaborator approved by the owner on 2026-09-13. GitHub offers no read-only collaborator role on a personal repository: the `permission=pull` downgrade returned 204, but the account still has write. Their writes to `master` pass through the Security ruleset (PR required, signed commits, required CI once RA-04 lands). |
+
+Next review: at each management review (see §9.3) or whenever a collaborator is added or leaves.
