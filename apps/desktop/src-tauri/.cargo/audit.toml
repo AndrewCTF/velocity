@@ -1,0 +1,10 @@
+# cargo-audit policy for the Tauri shell. Every ignore names why it is safe
+# and when to revisit; CI (`.github/workflows/ci.yml` security job) fails on
+# anything not listed here.
+[advisories]
+ignore = [
+  # glib 0.18 VariantStrIter unsoundness. Pulled in by Tauri 2's GTK3 stack
+  # (gtk/webkit2gtk 0.18), which has no release on the fixed glib 0.20. This
+  # crate never calls VariantStrIter. Revisit when Tauri moves to gtk4-rs.
+  "RUSTSEC-2024-0429",
+]
