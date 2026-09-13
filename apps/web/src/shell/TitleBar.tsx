@@ -670,15 +670,21 @@ function SignInChip(): JSX.Element | null {
       </Link>
     );
   }
+  // The visible word is the action (ASVS V7.4.4): a chip showing only the email
+  // did not say that clicking it ends the session. The account stays in the
+  // tooltip and the accessible name. Same width budget as the email it
+  // replaces, so the title bar does not overflow.
+  const who = user.email ?? user.id.slice(0, 8);
   return (
     <button
       type="button"
       onClick={() => void signOut()}
-      title={user.email ?? user.id}
+      title={`Signed in as ${who}`}
+      aria-label={`Sign out ${who}`}
       className="flex h-6 shrink-0 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-(--hover)"
     >
       <Icon name="user" className="h-3 w-3" />
-      <span className="max-w-[110px] truncate">{user.email ?? user.id.slice(0, 8)}</span>
+      <span>Sign out</span>
     </button>
   );
 }

@@ -21,6 +21,9 @@ export const USER_DATA_KEYS = [
   'velocity.inbox.read',
   'velocity.inbox.archived',
   'osint.annotations',
+  // Last input time for the idle sign-out (auth/idle.ts). Cleared with the
+  // rest so the next sign-in does not read a stale stamp and end at once.
+  'velocity.auth.lastActivity',
 ] as const;
 
 export const DEVICE_PREF_KEYS = [

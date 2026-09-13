@@ -53,6 +53,24 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
     })
   : null;
 
+// A second client for proving the current password (auth/AuthForm.tsx,
+// ASVS V7.5.1 / V7.2.4). signInWithPassword on the app's own client would
+// replace this browser's session and leave the old refresh token alive on the
+// server. This one keeps its session in memory only, under its own storage key,
+// never refreshes, and the caller revokes its session as soon as the password
+// is proven.
+export function createReauthClient(): SupabaseClient | null {
+  if (!isSupabaseConfigured) return null;
+  return createClient(URL as string, ANON as string, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: 'velocity-reauth',
+    },
+  });
+}
+
 // ── access token for the API layer ──────────────────────────────────────────
 // The gated backend requires the Supabase access token (Authorization: Bearer).
 // Cache it here so the hot apiFetch path / WS upgrade can read it synchronously,

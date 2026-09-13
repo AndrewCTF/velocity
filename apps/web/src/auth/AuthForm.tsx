@@ -7,7 +7,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Factor } from '@supabase/supabase-js';
-import { supabase } from '../transport/supabase.js';
+import { createReauthClient, supabase } from '../transport/supabase.js';
 import { InlineAlert } from '../shell/InlineAlert.js';
 import { toast } from '../shell/toast.js';
 import { useAuth } from './AuthContext.js';
@@ -87,6 +87,48 @@ async function verifyTotpCode(code: string): Promise<void> {
   const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
   if (error) throw error;
   useMfaNeeded.getState().clear();
+}
+
+const WRONG_PASSWORD = 'The current password is not right.';
+
+/** Proves the current password without touching this browser's session
+ *  (ASVS V7.5.1). Signing in on the app's own client would mint a new session
+ *  and orphan the old refresh token (V7.2.4), so the proof runs on a throwaway
+ *  in-memory client and that session is revoked straight after. */
+async function proveCurrentPassword(email: string | null, password: string): Promise<void> {
+  if (!email) throw new Error('This account has no email address to check a password against.');
+  if (!password) throw new Error('Enter your current password first.');
+  const client = createReauthClient();
+  if (!client) throw new Error('Auth is not configured.');
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(WRONG_PASSWORD);
+  await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
+}
+
+function CurrentPasswordInput({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+}): JSX.Element {
+  return (
+    <>
+      <label className="micro mb-1 block" htmlFor={id}>
+        Current password
+      </label>
+      <input
+        id={id}
+        type="password"
+        autoComplete="current-password"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`mb-2 ${INPUT}`}
+      />
+    </>
+  );
 }
 
 function CodeInput({
@@ -427,11 +469,12 @@ function Subhead({ children }: { children: ReactNode }): JSX.Element {
 export function AccountSecurity(): JSX.Element | null {
   const { user } = useAuth();
   if (!supabase || !user) return null;
+  const email = user.email ?? null;
   return (
     <div>
-      <ChangePassword email={user.email ?? null} />
-      <OtherSessions />
-      <TwoFactor />
+      <ChangePassword email={email} />
+      <OtherSessions email={email} />
+      <TwoFactor email={email} />
     </div>
   );
 }
@@ -467,15 +510,11 @@ function ChangePassword({ email }: { email: string | null }): JSX.Element {
     try {
       if (!needNonce) {
         if (email) {
-          // Proves the current password. This mints a fresh aal1 session, so an
-          // account with an authenticator steps back up before the change.
-          const { error: err } = await supabase.auth.signInWithPassword({
-            email,
-            password: current,
-          });
-          if (err) throw new Error('The current password is not right.');
-          const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-          if (needsStepUp(aal)) await verifyTotpCode(code);
+          // Proves the current password on a throwaway client, so this
+          // session stays the only one this browser holds. An account with an
+          // authenticator also gives a fresh code.
+          await proveCurrentPassword(email, current);
+          if (hasTotp) await verifyTotpCode(code);
         } else {
           // No email to check a password against: the emailed nonce is the proof.
           const { error: err } = await supabase.auth.reauthenticate();
@@ -485,8 +524,12 @@ function ChangePassword({ email }: { email: string | null }): JSX.Element {
           return;
         }
       }
+      // current_password lets GoTrue check the old password itself (ASVS
+      // V6.2.3) when the project enables "require current password"; a server
+      // without that setting ignores the field. The check above is the
+      // browser half.
       const { error: err } = await supabase.auth.updateUser(
-        needNonce ? { password: next, nonce } : { password: next },
+        needNonce ? { password: next, nonce } : { password: next, current_password: current },
       );
       if (err) {
         // Secure password change is on in the Supabase project: GoTrue wants
@@ -584,8 +627,10 @@ function ChangePassword({ email }: { email: string | null }): JSX.Element {
   );
 }
 
-function OtherSessions(): JSX.Element {
+function OtherSessions({ email }: { email: string | null }): JSX.Element {
+  const [current, setCurrent] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <div>
       <Subhead>Sessions</Subhead>
@@ -593,24 +638,36 @@ function OtherSessions(): JSX.Element {
         Ends every sign-in except this one: other browsers, other devices, a machine you forgot
         to sign out of.
       </p>
+      <CurrentPasswordInput id="sessions-current" value={current} onChange={setCurrent} />
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || !current}
         className={SECONDARY}
         onClick={() => {
           if (!supabase) return;
+          const client = supabase;
           setBusy(true);
-          void supabase.auth
-            .signOut({ scope: 'others' })
-            .then(({ error }) => {
-              if (error) toast.error(`Could not sign out other sessions: ${error.message}`);
-              else toast.ok('Other sessions signed out.');
+          setError(null);
+          void proveCurrentPassword(email, current)
+            .then(async () => {
+              const { error: err } = await client.auth.signOut({ scope: 'others' });
+              if (err) toast.error(`Could not sign out other sessions: ${err.message}`);
+              else {
+                setCurrent('');
+                toast.ok('Other sessions signed out.');
+              }
             })
+            .catch((err: unknown) => setError(errText(err)))
             .finally(() => setBusy(false));
         }}
       >
         Sign out other sessions
       </button>
+      {error && (
+        <InlineAlert tone="alert" className="mt-2 font-mono">
+          {error}
+        </InlineAlert>
+      )}
     </div>
   );
 }
@@ -621,8 +678,14 @@ interface Enrolment {
   secret: string;
 }
 
-function TwoFactor(): JSX.Element {
+function TwoFactor({ email }: { email: string | null }): JSX.Element {
   const [factors, setFactors] = useState<Factor[]>([]);
+  // Adding or removing an authenticator proves the current password first
+  // (ASVS V7.5.1): GoTrue lets an aal1 session enrol a first factor, so a
+  // hijacked single-factor session could otherwise lock the owner out.
+  const [current, setCurrent] = useState('');
+  // After a change, other sessions end by default (ASVS V7.4.3).
+  const [others, setOthers] = useState(true);
   const [stepUp, setStepUp] = useState(false);
   const [enrol, setEnrol] = useState<Enrolment | null>(null);
   const [code, setCode] = useState('');
@@ -650,6 +713,8 @@ function TwoFactor(): JSX.Element {
     setBusy(true);
     setError(null);
     try {
+      await proveCurrentPassword(email, current);
+      setCurrent('');
       // An abandoned enrolment leaves an unverified factor that blocks a new one.
       for (const f of factors.filter((x) => x.status !== 'verified')) {
         await supabase.auth.mfa.unenroll({ factorId: f.id });
@@ -682,7 +747,12 @@ function TwoFactor(): JSX.Element {
       if (err) throw err;
       setEnrol(null);
       useMfaNeeded.getState().clear();
-      toast.ok('Authenticator added. Sign-ins now ask for a code.');
+      await endOtherSessions();
+      toast.ok(
+        others
+          ? 'Authenticator added. Sign-ins now ask for a code, and your other sessions are signed out.'
+          : 'Authenticator added. Sign-ins now ask for a code.',
+      );
       await refresh();
     } catch (err) {
       setError(errText(err));
@@ -692,14 +762,23 @@ function TwoFactor(): JSX.Element {
     }
   }
 
+  async function endOtherSessions(): Promise<void> {
+    if (!supabase || !others) return;
+    const { error: err } = await supabase.auth.signOut({ scope: 'others' });
+    if (err) toast.error(`Could not sign out other sessions: ${err.message}`);
+  }
+
   async function remove(f: Factor): Promise<void> {
     if (!supabase) return;
     setBusy(true);
     setError(null);
     try {
+      await proveCurrentPassword(email, current);
+      setCurrent('');
       const { error: err } = await supabase.auth.mfa.unenroll({ factorId: f.id });
       if (err) throw err;
-      toast.ok('Authenticator removed.');
+      await endOtherSessions();
+      toast.ok(others ? 'Authenticator removed. Your other sessions are signed out.' : 'Authenticator removed.');
       await refresh();
     } catch (err) {
       setError(errText(err));
@@ -728,12 +807,23 @@ function TwoFactor(): JSX.Element {
           sign-in.
         </p>
       )}
+      {!enrol && (
+        <>
+          <CurrentPasswordInput id="mfa-current" value={current} onChange={setCurrent} />
+          <SignOutOthersBox checked={others} onChange={setOthers} />
+        </>
+      )}
       {verified.map((f) => (
         <div key={f.id} className="mb-1.5 flex items-center justify-between gap-2">
           <span className="mono truncate text-[11px] text-txt-1">
             {f.friendly_name || 'Authenticator'} · added {f.created_at.slice(0, 10)}
           </span>
-          <button type="button" disabled={busy} className={SECONDARY} onClick={() => void remove(f)}>
+          <button
+            type="button"
+            disabled={busy || !current}
+            className={SECONDARY}
+            onClick={() => void remove(f)}
+          >
             Remove
           </button>
         </div>
@@ -763,7 +853,12 @@ function TwoFactor(): JSX.Element {
         </form>
       ) : (
         verified.length === 0 && (
-          <button type="button" disabled={busy} className={SECONDARY} onClick={() => void startEnrol()}>
+          <button
+            type="button"
+            disabled={busy || !current}
+            className={SECONDARY}
+            onClick={() => void startEnrol()}
+          >
             Set up an authenticator app
           </button>
         )

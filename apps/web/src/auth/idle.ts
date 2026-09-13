@@ -6,6 +6,45 @@ export const DEFAULT_IDLE_MINUTES = 30;
 /** How long before the sign-out the warning appears. */
 export const IDLE_WARNING_MS = 60_000;
 
+/** localStorage key holding the time of the last input, in epoch ms. */
+export const LAST_ACTIVITY_KEY = 'velocity.auth.lastActivity';
+
+/** Where the last input time survives the tab. */
+export interface ActivityStore {
+  get: () => number | null;
+  set: (ms: number) => void;
+  clear: () => void;
+}
+
+/** localStorage-backed store. Blocked storage reads as "no record" and drops
+ *  writes, which is the old in-page-only behaviour, never a sign-out. */
+export function localActivityStore(): ActivityStore {
+  return {
+    get: () => {
+      try {
+        const v = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
+        return Number.isFinite(v) && v > 0 ? v : null;
+      } catch {
+        return null;
+      }
+    },
+    set: (ms) => {
+      try {
+        localStorage.setItem(LAST_ACTIVITY_KEY, String(ms));
+      } catch {
+        /* storage blocked */
+      }
+    },
+    clear: () => {
+      try {
+        localStorage.removeItem(LAST_ACTIVITY_KEY);
+      } catch {
+        /* storage blocked */
+      }
+    },
+  };
+}
+
 export interface IdleTimerOptions {
   /** Read on every re-arm, so a value that arrives later (runtime config) applies. */
   timeoutMs: () => number;
@@ -14,6 +53,9 @@ export interface IdleTimerOptions {
   /** Activity after a warning, before the sign-out: withdraw the warning. */
   onResume: () => void;
   onIdle: () => void;
+  /** Persisted last input. When given, a start more than the timeout after it
+   *  (the tab was closed or asleep) calls onIdle at once instead of arming. */
+  lastActivity?: ActivityStore;
 }
 
 export interface IdleTimer {
@@ -38,6 +80,7 @@ export function createIdleTimer(opts: IdleTimerOptions): IdleTimer {
   const arm = (): void => {
     clear();
     armedAt = Date.now();
+    opts.lastActivity?.set(armedAt);
     const total = Math.max(1000, opts.timeoutMs());
     const warnMs = Math.min(opts.warnMs ?? IDLE_WARNING_MS, total);
     warnT = setTimeout(() => {
@@ -51,7 +94,13 @@ export function createIdleTimer(opts: IdleTimerOptions): IdleTimer {
     }, total);
   };
 
-  arm();
+  const last = opts.lastActivity?.get() ?? null;
+  if (last !== null && Date.now() - last > Math.max(1000, opts.timeoutMs())) {
+    stopped = true;
+    opts.onIdle();
+  } else {
+    arm();
+  }
 
   return {
     activity: () => {

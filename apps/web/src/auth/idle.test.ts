@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createIdleTimer, idleMinutesFrom, DEFAULT_IDLE_MINUTES } from './idle.js';
+import { createIdleTimer, idleMinutesFrom, DEFAULT_IDLE_MINUTES, localActivityStore, LAST_ACTIVITY_KEY } from './idle.js';
 
 const MIN = 60_000;
 
@@ -72,5 +72,60 @@ describe('idle sign-out timer (ASVS V7.3.1)', () => {
     expect(idleMinutesFrom({ sessionIdleTimeoutMin: 15 })).toBe(15);
     expect(idleMinutesFrom({ sessionIdleTimeoutMin: 0 })).toBe(30);
     expect(idleMinutesFrom({ sessionIdleTimeoutMin: '15' })).toBe(30);
+  });
+});
+
+// A closed tab stops the in-page timer but keeps the refresh token, so the
+// session used to resume after any idle stretch. The last input time now
+// outlives the tab and is checked when the timer starts.
+describe('idle sign-out across a closed tab (ASVS V7.3.1)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-13T12:00:00Z'));
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function make(minutes = 30) {
+    const onIdle = vi.fn();
+    const timer = createIdleTimer({
+      timeoutMs: () => minutes * MIN,
+      onWarn: vi.fn(),
+      onResume: vi.fn(),
+      onIdle,
+      lastActivity: localActivityStore(),
+    });
+    return { timer, onIdle };
+  }
+
+  it('signs out at start when the last input is older than the timeout', () => {
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now() - 31 * MIN));
+    const { onIdle } = make(30);
+    expect(onIdle).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(60 * MIN);
+    expect(onIdle).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a recent session and resumes the countdown from now', () => {
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now() - 5 * MIN));
+    const { onIdle } = make(30);
+    expect(onIdle).not.toHaveBeenCalled();
+    expect(Number(localStorage.getItem(LAST_ACTIVITY_KEY))).toBe(Date.now());
+  });
+
+  it('records input so the next load sees it', () => {
+    const { timer } = make(30);
+    vi.advanceTimersByTime(10 * MIN);
+    timer.activity();
+    expect(Number(localStorage.getItem(LAST_ACTIVITY_KEY))).toBe(Date.now());
+  });
+
+  it('treats no record as fresh, and clear() forgets it', () => {
+    const { onIdle } = make(30);
+    expect(onIdle).not.toHaveBeenCalled();
+    localActivityStore().clear();
+    expect(localStorage.getItem(LAST_ACTIVITY_KEY)).toBeNull();
   });
 });

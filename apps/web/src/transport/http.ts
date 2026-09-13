@@ -9,11 +9,17 @@
 import { getAccessToken, getAccessTokenAsync, supabase } from './supabase.js';
 import { isMfaRequired, mfaDetail, useMfaNeeded } from '../auth/mfa.js';
 
+// Spelled `import.meta.env` literally: vitest's stubEnv (http.test.ts) only
+// rewrites that exact token, not a cast-wrapped `(import.meta).env`.
+function readEnv(name: string): string | undefined {
+  const v = (import.meta.env as Record<string, string | boolean | undefined> | undefined)?.[name];
+  return typeof v === 'string' ? v : undefined;
+}
+
 function readKey(): string | null {
   // Vite exposes import.meta.env at runtime via the bundler.
   try {
-    const k = (import.meta as unknown as { env?: { VITE_API_KEY?: string } }).env
-      ?.VITE_API_KEY;
+    const k = readEnv('VITE_API_KEY');
     return k && k.trim() ? k : null;
   } catch {
     return null;
@@ -24,8 +30,7 @@ const API_KEY = readKey();
 
 function readApiBase(): string | null {
   try {
-    const v = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env
-      ?.VITE_API_URL;
+    const v = readEnv('VITE_API_URL');
     return v && v.trim() ? v.trim().replace(/\/+$/, '') : null;
   } catch {
     return null;
@@ -86,12 +91,30 @@ async function bearerToken(): Promise<string | null> {
   }
 }
 
+// Whether a resolved URL points at this app's own backend (ASVS V10.1.1): a
+// path on the page origin, the page origin spelled out, or the configured
+// backend base. Anything else is a third party and gets no credential, so a
+// variable URL that turns out absolute never carries the session token away.
+// Protocol-relative `//host/x` is another host, not a path.
+export function isBackendUrl(resolvedUrl: string): boolean {
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(resolvedUrl) && !resolvedUrl.startsWith('//')) return true;
+  const base = backendHttpBase();
+  if (base && (resolvedUrl === base || resolvedUrl.startsWith(`${base}/`))) return true;
+  if (typeof window === 'undefined') return false;
+  try {
+    return new URL(resolvedUrl).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 export async function apiFetch(
   url: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const token = await bearerToken();
   const resolvedUrl = backendUrl(url);
+  if (!isBackendUrl(resolvedUrl)) return fetch(resolvedUrl, init);
+  const token = await bearerToken();
   if (!token && !API_KEY) return fetch(resolvedUrl, init);
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);

@@ -5,8 +5,16 @@
 // The timeout is `sessionIdleTimeoutMin` from /api/config when the backend
 // sends one, otherwise DEFAULT_IDLE_MINUTES. A minute before it fires a toast
 // says so; any input withdraws it.
+//
+// The last input time is kept in localStorage, so a tab closed while signed in
+// and reopened after the timeout signs out on load instead of resuming. The
+// check runs before /api/config has necessarily arrived, so an operator timeout
+// longer than the default can sign a reopened tab out early (never late).
+// The key is in USER_DATA_KEYS, so AuthProvider's SIGNED_OUT clear removes it
+// and the next sign-in starts fresh. The server-side guarantee still needs Supabase's own inactivity
+// timeout; this is the browser half.
 import { useEffect } from 'react';
-import { createIdleTimer, idleMinutesFrom } from './idle.js';
+import { createIdleTimer, idleMinutesFrom, localActivityStore } from './idle.js';
 import { isSupabaseConfigured, supabase } from '../transport/supabase.js';
 import { latestRuntimeConfig } from '../transport/config.js';
 import { toast } from '../shell/toast.js';
@@ -32,6 +40,7 @@ export function useIdleSignOut(signedIn: boolean): void {
         if (warningId !== null) toast.dismiss(warningId);
         warningId = null;
       },
+      lastActivity: localActivityStore(),
       onIdle: () => {
         if (warningId !== null) toast.dismiss(warningId);
         warningId = null;

@@ -58,6 +58,25 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    # Secrets as files instead of environment variables (which `docker
+    # inspect` shows and child processes inherit). Uncomment together with the
+    # top-level `secrets:` block at the end of this file; each file lands at
+    # /run/secrets/<name>. The api reads them only once its settings model
+    # loads /run/secrets (pydantic secrets_dir); until then keep using .env.
+    # secrets:
+    #   - api_key
+    #   - supabase_jwt_secret
+    #   - byok_enc_key
+    #
+    # Off-host logs. A compromised host can rewrite logs it keeps itself, so
+    # ship stdout somewhere else. Any Docker logging driver works (syslog,
+    # fluentd, gelf, loki plugin); the same block fits the nginx service. The
+    # default json-file driver keeps logs on this machine only.
+    # logging:
+    #   driver: syslog
+    #   options:
+    #     syslog-address: "tcp+tls://logs.example.internal:6514"
+    #     tag: "velocity-api"
     volumes:
       # Named volume (matching web_dist's style below) so the SQLite stores
       # (history/ontology/foundry/workflows/alert-rules) and tile cache under
@@ -94,13 +113,25 @@ services:
       context: .
       dockerfile: infra/docker/nginx.Dockerfile
     runtime: runc
+    # Unprivileged like api and web-build: the stock image's `nginx` user
+    # (uid 101), no capabilities, read-only root. nginx.prod.conf listens on
+    # 8080 and keeps its pid file and temp paths on the /tmp tmpfs; uploads and
+    # proxied responses stream rather than spool there (nginx.prod.conf says how).
+    user: nginx
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
     ports:
       # Loopback only: TLS terminates at a reverse proxy on the host, which
       # fronts this port with a real certificate. An operator who
       # wants nginx to face the internet directly widens this deliberately;
       # it is not this compose file's default because it would ship a plain
       # HTTP origin with no TLS of its own.
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8080:8080"
     networks:
       - front
     volumes:
@@ -115,6 +146,16 @@ networks:
     ipam:
       config:
         - subnet: 172.28.0.0/24
+
+# Pairs with the commented `secrets:` list on the api service. Files are read
+# from the host at `up`; keep them mode 0400 and out of the repository.
+# secrets:
+#   api_key:
+#     file: ./secrets/api_key
+#   supabase_jwt_secret:
+#     file: ./secrets/supabase_jwt_secret
+#   byok_enc_key:
+#     file: ./secrets/byok_enc_key
 
 volumes:
   web_dist: {}
