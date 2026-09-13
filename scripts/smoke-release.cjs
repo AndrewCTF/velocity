@@ -131,6 +131,12 @@ async function browserChecks() {
   } catch (e) {
     fs.mkdirSync(ART, { recursive: true });
     await page.screenshot({ path: path.join(ART, 'failure.png') }).catch(() => {});
+    // A screenshot shows that the globe is gone, not why: keep the page's own
+    // errors and the globe's DOM next to it.
+    const globe = await page
+      .evaluate(() => (document.querySelector('.csl2-globe') || {}).outerHTML || 'no .csl2-globe')
+      .catch((err) => `unreadable: ${err}`);
+    fs.writeFileSync(path.join(ART, 'page.txt'), `pageerrors:\n${pageErrors.join('\n')}\n\nglobe:\n${globe}\n`);
     throw e;
   } finally {
     await browser.close();
