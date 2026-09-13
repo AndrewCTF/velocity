@@ -7,6 +7,7 @@
 // per-country cards work.
 
 import { Card, Skeleton, useCachedFetch } from './shared.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 interface NewsArticle {
   title: string;
@@ -31,7 +32,7 @@ function NewsRow({ a }: { a: NewsArticle }): JSX.Element {
       <div className="min-w-0 flex-1">
         {a.link ? (
           <a
-            href={a.link}
+            href={safeHttpUrl(a.link)}
             target="_blank"
             rel="noreferrer"
             className="text-[11px] text-txt-1 hover:text-txt-0 hover:underline"

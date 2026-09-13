@@ -2,16 +2,24 @@
 // supported, in priority order:
 //   1. The Supabase access token (Authorization: Bearer …) — the gated backend
 //      requires this; it's the "API key you get from Supabase" after sign-in.
-//   2. A static VITE_API_KEY (X-API-Key) — legacy/dev fallback.
+//   2. A static VITE_API_KEY (X-API-Key) — dev server and desktop build only;
+//      a hosted production build refuses to bundle it (buildGuard.ts, V7.2.2).
 // When neither is present it behaves like plain fetch (keyless local dev).
 
 import { getAccessToken, getAccessTokenAsync, supabase } from './supabase.js';
+import { isMfaRequired, mfaDetail, useMfaNeeded } from '../auth/mfa.js';
+
+// Spelled `import.meta.env` literally: vitest's stubEnv (http.test.ts) only
+// rewrites that exact token, not a cast-wrapped `(import.meta).env`.
+function readEnv(name: string): string | undefined {
+  const v = (import.meta.env as Record<string, string | boolean | undefined> | undefined)?.[name];
+  return typeof v === 'string' ? v : undefined;
+}
 
 function readKey(): string | null {
   // Vite exposes import.meta.env at runtime via the bundler.
   try {
-    const k = (import.meta as unknown as { env?: { VITE_API_KEY?: string } }).env
-      ?.VITE_API_KEY;
+    const k = readEnv('VITE_API_KEY');
     return k && k.trim() ? k : null;
   } catch {
     return null;
@@ -22,8 +30,7 @@ const API_KEY = readKey();
 
 function readApiBase(): string | null {
   try {
-    const v = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env
-      ?.VITE_API_URL;
+    const v = readEnv('VITE_API_URL');
     return v && v.trim() ? v.trim().replace(/\/+$/, '') : null;
   } catch {
     return null;
@@ -84,27 +91,69 @@ async function bearerToken(): Promise<string | null> {
   }
 }
 
+// Whether a resolved URL points at this app's own backend (ASVS V10.1.1): a
+// path on the page origin, the page origin spelled out, or the configured
+// backend base. Anything else is a third party and gets no credential, so a
+// variable URL that turns out absolute never carries the session token away.
+// Protocol-relative `//host/x` is another host, not a path.
+export function isBackendUrl(resolvedUrl: string): boolean {
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(resolvedUrl) && !resolvedUrl.startsWith('//')) return true;
+  const base = backendHttpBase();
+  if (base && (resolvedUrl === base || resolvedUrl.startsWith(`${base}/`))) return true;
+  if (typeof window === 'undefined') return false;
+  try {
+    return new URL(resolvedUrl).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 export async function apiFetch(
   url: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const token = await bearerToken();
   const resolvedUrl = backendUrl(url);
+  if (!isBackendUrl(resolvedUrl)) return fetch(resolvedUrl, init);
+  const token = await bearerToken();
   if (!token && !API_KEY) return fetch(resolvedUrl, init);
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (API_KEY) headers.set('X-API-Key', API_KEY);
-  return fetch(resolvedUrl, { ...init, headers });
+  const res = await fetch(resolvedUrl, { ...init, headers });
+  if (res.status === 403 && token) noteMfaRequired(res);
+  return res;
+}
+
+// The backend refuses an aal1 Supabase token on operator routes with a 403 that
+// names MFA. Read a CLONE so the caller still owns the body; never throws.
+function noteMfaRequired(res: Response): void {
+  if (useMfaNeeded.getState().needed) return;
+  void res
+    .clone()
+    .text()
+    .then((body) => {
+      if (isMfaRequired(res.status, body)) useMfaNeeded.getState().report(mfaDetail(body));
+    })
+    .catch(() => undefined);
 }
 
 // For WebSocket URLs, append ?key=… (browsers can't set headers on the upgrade
 // request). The backend accepts the Supabase token or the static key via ?key=.
-export function withWsKey(url: string): string {
-  url = backendWsUrl(url);
+// WebSocket credential carrier (ASVS V14.2.1). Browsers cannot set headers on
+// the upgrade, so the credential rides in Sec-WebSocket-Protocol as
+// ["velocity.v1", "key.<credential>"]; the API echoes only velocity.v1
+// (apps/api/app/auth.py). That keeps tokens out of URLs, and so out of proxy
+// access logs. A credential with characters a subprotocol cannot carry (a
+// hand-made API_KEY with = / +) falls back to ?key=, which the API still takes.
+const WS_TOKEN_CHARS = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+export function openAuthedWebSocket(url: string): WebSocket {
+  const full = backendWsUrl(url);
   const key = getAccessToken() ?? API_KEY;
-  if (!key) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}key=${encodeURIComponent(key)}`;
+  if (!key) return new WebSocket(full);
+  if (WS_TOKEN_CHARS.test(key)) return new WebSocket(full, ['velocity.v1', `key.${key}`]);
+  const sep = full.includes('?') ? '&' : '?';
+  return new WebSocket(`${full}${sep}key=${encodeURIComponent(key)}`);
 }
 
 export function hasApiKey(): boolean {

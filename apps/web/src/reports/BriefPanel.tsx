@@ -4,6 +4,8 @@ import { useEntityStats, acquireStats } from '../globe/entityStats.js';
 import { apiFetch } from '../transport/http.js';
 import type { AlertSeverity } from '@osint/shared';
 import { SlidesDeck, type Slide } from '../slides/SlidesDeck.js';
+import { escapeHtml } from '../shell/escapeHtml.js';
+import { dict } from '../shell/safeKeys.js';
 
 // Live-data brief (design §8 "Slides/Stencil live-data briefs") — a print-ready
 // situation brief generated from the SAME live stores the map reads (no fabricated
@@ -23,29 +25,31 @@ export function BriefPanel(): JSX.Element {
 
   const feedList = Object.values(feeds);
   const feedLive = feedList.filter((f) => f.status === 'green').length;
-  const sevCount: Record<string, number> = {};
+  const sevCount = dict<number>();
   for (const a of alerts) sevCount[a.severity] = (sevCount[a.severity] ?? 0) + 1;
   const topAlerts = alerts.slice(0, 8);
 
   const buildHtml = (): string => {
     const now = new Date().toISOString();
-    const esc = (s: string): string => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] ?? c);
+    // Every interpolation below goes through the complete escaper, numbers and
+    // enums included: the document opens as a same-origin blob.
+    const esc = escapeHtml;
     const feedRows = feedList
-      .map((f) => `<tr><td>${esc(f.label)}</td><td style="text-align:right">${f.status}</td></tr>`)
+      .map((f) => `<tr><td>${esc(f.label)}</td><td style="text-align:right">${esc(f.status)}</td></tr>`)
       .join('');
     const alertRows = topAlerts
       .map((a) => `<tr><td>${esc(a.severity)}</td><td>${esc(a.message)}</td><td>${esc(new Date(a.t).toISOString().slice(11, 19))}Z</td></tr>`)
       .join('');
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Situation brief ${now}</title>
+    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Situation brief ${esc(now)}</title>
 <style>body{font:13px/1.5 system-ui,sans-serif;color:#111;max-width:760px;margin:32px auto;padding:0 16px}
 h1{font-size:16px;border-bottom:2px solid #111;padding-bottom:6px}h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#555;margin-top:22px}
 table{width:100%;border-collapse:collapse;font-size:12px}td,th{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}
 .cls{background:#0c3b1f;color:#86e0a6;text-align:center;font-weight:700;letter-spacing:.1em;padding:4px;text-transform:uppercase;font-size:11px}
 .kpi{display:flex;gap:20px;margin:10px 0}.kpi div{border:1px solid #ccc;padding:8px 12px;border-radius:3px}.kpi b{font-size:20px;display:block}</style></head>
 <body><div class="cls">Unclassified // Open-source intelligence</div>
-<h1>Situation brief</h1><p>Generated ${now} · keyless OSINT picture</p>
-<div class="kpi"><div><b>${stats.counted.toLocaleString()}</b>tracked contacts</div><div><b>${feedLive}/${feedList.length}</b>feeds live</div><div><b>${alerts.length}</b>alerts</div></div>
-<h2>Alerts by severity</h2><p>${SEVERITIES.map((s) => `${s}: ${sevCount[s] ?? 0}`).join(' · ')}</p>
+<h1>Situation brief</h1><p>Generated ${esc(now)} · keyless OSINT picture</p>
+<div class="kpi"><div><b>${esc(stats.counted.toLocaleString())}</b>tracked contacts</div><div><b>${esc(feedLive)}/${esc(feedList.length)}</b>feeds live</div><div><b>${esc(alerts.length)}</b>alerts</div></div>
+<h2>Alerts by severity</h2><p>${SEVERITIES.map((s) => `${esc(s)}: ${esc(sevCount[s] ?? 0)}`).join(' · ')}</p>
 ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</th><th>Time</th></tr>${alertRows}</table>` : ''}
 <h2>Sources</h2><table>${feedRows}</table>
 </body></html>`;

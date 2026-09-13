@@ -90,6 +90,11 @@ def test_route_serves_the_tile_and_refuses_commercial(
         return b"\xff\xd8\xff\xe0jpeg"
 
     monkeypatch.setattr(apple_maps, "fetch_tile", fake_tile)
+    # X-Velocity-Tier is believed only from a TRUSTED_PROXIES peer (ASVS V2.4.1,
+    # 2026-09-13); TestClient's peer is "testclient", so stand in for the gateway.
+    from app import ratelimit  # noqa: PLC0415
+
+    monkeypatch.setattr(ratelimit, "_peer_is_trusted", lambda peer, raw: True)
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: Settings(
         cdse_client_id="", cdse_client_secret="", tile_cache_dir=str(tmp_path)
@@ -101,10 +106,14 @@ def test_route_serves_the_tile_and_refuses_commercial(
             assert r.headers["content-type"] == "image/jpeg"
             assert r.headers["X-Sat-Source"] == "apple"
             # Apple's ToS is not a redistribution licence, so an entitled
-            # (paid) request — the one that must be served commercial-legal
+            # (commercial) request — the one that must be served commercial-legal
             # sources — is refused rather than quietly served.
-            r2 = c.get("/tiles/apple/12/3638/1612.jpg", headers={"X-Velocity-Tier": "paid"})
+            from app.tier import commercial_request  # noqa: PLC0415
+
+            app.dependency_overrides[commercial_request] = lambda: True
+            r2 = c.get("/tiles/apple/12/3638/1612.jpg")
             assert r2.status_code == 451
+            del app.dependency_overrides[commercial_request]
             assert c.get("/tiles/apple/20/1/1.jpg").status_code == 400
     finally:
         app.dependency_overrides.clear()

@@ -47,8 +47,9 @@ import { presetKnobs } from '../qualityPresets.js';
 import { useSelection, useFilters } from '../../state/stores.js';
 import { useSettings } from '../../state/settings.js';
 import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
-import { apiFetch, withWsKey } from '../../transport/http.js';
+import { apiFetch, openAuthedWebSocket } from '../../transport/http.js';
 import { tierOf } from '../../registry/provenance.js';
+import { isUnsafeKey } from '../../shell/safeKeys.js';
 
 // Alpha applied to a billboard the active map-side filter (useFilters /
 // HistogramPanel) excludes. The icon stays DRAWN (same SVG image, same
@@ -201,6 +202,9 @@ const VESSEL_FREEZE_HYSTERESIS_M = 250_000; // 250 km
 export function refreshBagInPlace(bag: Cesium.PropertyBag, props: Record<string, unknown>): void {
   const raw = bag as unknown as Record<string, unknown>;
   for (const key in props) {
+    // A feed-supplied `__proto__` / `constructor` key would re-point or shadow
+    // the bag's own prototype members (shell/safeKeys.ts). Never a real field.
+    if (isUnsafeKey(key)) continue;
     if (bag.hasProperty(key)) {
       // Assign ONLY on a real change. PropertyBag's generated setter raises
       // definitionChanged unconditionally, and that event is not cheap: it walks
@@ -1058,7 +1062,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     if (this.detached || !this.props.ws) return;
     let ws: WebSocket;
     try {
-      ws = new WebSocket(withWsKey(this.props.ws));
+      ws = openAuthedWebSocket(this.props.ws);
     } catch {
       this.scheduleWsReconnect();
       return;

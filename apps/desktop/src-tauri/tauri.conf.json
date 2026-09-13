@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' data: blob: https://server.arcgisonline.com https://a.tile.opentopomap.org https://basemap.nationalmap.gov https://tiles.maps.eox.at https://api.cesium.com https://assets.ion.cesium.com https://tile.googleapis.com https://overpass-api.de http://127.0.0.1:8000 ws://127.0.0.1:8000 ipc: http://ipc.localhost; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' data: blob: https://server.arcgisonline.com https://a.tile.opentopomap.org https://basemap.nationalmap.gov https://tiles.maps.eox.at https://api.cesium.com https://assets.ion.cesium.com https://tile.googleapis.com https://overpass-api.de http://127.0.0.1:8000 ws://127.0.0.1:8000 ipc: http://ipc.localhost; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'"
     }
   },
   "bundle": {

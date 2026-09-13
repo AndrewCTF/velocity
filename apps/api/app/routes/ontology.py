@@ -27,6 +27,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.audit import audit_mutation
 from app.config import get_settings
 from app.intel import graph_analytics
 from app.intel.ontology import (
@@ -40,7 +41,32 @@ from app.intel.ontology import (
 from app.intel.ontology_schema import schema_payload, validate_object
 from app.keys import UserCtx, current_user_or_local
 
-router = APIRouter(tags=["ontology"])
+# Every ontology mutation leaves an audit row naming its actor (ASVS V15.3.3).
+router = APIRouter(tags=["ontology"], dependencies=[Depends(audit_mutation)])
+
+# Evidence is written by /api/evidence, which hashes the bytes and appends the
+# custody log. The generic object route must not be a second way to write it,
+# or a caller rewrites the hash a custody record vouches for (ASVS V15.3.3,
+# gap-analysis G18 residual).
+_CUSTODY_PROPS = frozenset(
+    {"sha256", "custody", "captured_by", "captured_at", "capture_method", "size_bytes"}
+)
+
+
+def _refuse_custody_writes(obj: Object) -> None:
+    kind = str(obj.kind or "")
+    pkind = str((obj.props or {}).get("kind") or "")
+    if obj.id.startswith("evidence:") or "evidence" in (kind, pkind):
+        raise HTTPException(
+            status_code=403,
+            detail="evidence objects are written through /api/evidence, not the generic route",
+        )
+    forged = sorted(_CUSTODY_PROPS & set((obj.props or {}).keys()))
+    if forged:
+        raise HTTPException(
+            status_code=403,
+            detail=f"custody properties {forged} are written by /api/evidence only",
+        )
 
 
 class ObjectSaved(Object):
@@ -154,6 +180,7 @@ async def upsert_object(
     The write happens first and unconditionally: ``warnings`` describes the
     object that was stored, it does not gate storing it.
     """
+    _refuse_custody_writes(obj)
     reg = get_registry(ctx, get_settings())
     saved = await reg.upsert(obj)
     return ObjectSaved(
@@ -199,6 +226,15 @@ async def promote_object(
         raise HTTPException(
             status_code=400,
             detail="id must be '<kind>:<value>' with a known ontology kind",
+        )
+    # evidence is a known kind, and assert_props MERGES: without this a promote
+    # of ``evidence:<sha>`` rewrites the hash, type or custody a record vouches
+    # for (ASVS V2.2.1). Same boundary as the object route, minus the custody-prop
+    # names, which a promoted feed entity may legitimately carry.
+    if prefix == "evidence" or str(body.props.get("kind") or "") == "evidence":
+        raise HTTPException(
+            status_code=403,
+            detail="evidence objects are written through /api/evidence, not the generic route",
         )
     reg = get_registry(ctx, get_settings())
     return await reg.assert_props(

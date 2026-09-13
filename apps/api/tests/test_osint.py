@@ -99,8 +99,8 @@ def test_investigate_domain_builds_objects_and_links(monkeypatch: pytest.MonkeyP
         },
         "crt.sh": [{"name_value": "vpn.example.com", "issuer_name": "CA"}],
         "internetdb": {"ports": [443, 22], "hostnames": [], "cpes": [], "tags": [], "vulns": []},
-        "ip-api.com": {"status": "success", "as": "AS15169 Google LLC", "org": "Google",
-                       "city": "Mountain View", "country": "US", "lat": 37.4, "lon": -122.0},
+        "ipwho.is": {"success": True, "connection": {"asn": 15169, "org": "Google"},
+                     "city": "Mountain View", "country": "US", "latitude": 37.4, "longitude": -122.0},
         "otx.alienvault.com": {"pulse_info": {"count": 3, "pulses": [{"name": "bad", "tags": ["c2"]}]}},
     })
     g = R._Graph(ts=1234.0)

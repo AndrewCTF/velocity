@@ -35,6 +35,9 @@ def _isolate(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_minted_token_passes_real_validator() -> None:
+    """The backend's internal-token check accepts it; the USER-session check
+    never does (ASVS V9.2.4: until 2026-09-13 it carried aud "authenticated" and
+    was indistinguishable from a signed-in user)."""
     s = get_settings()
     object.__setattr__(s, "supabase_jwt_secret", _SECRET)
 
@@ -43,13 +46,16 @@ def test_minted_token_passes_real_validator() -> None:
     token = headers["Authorization"].removeprefix("Bearer ")
 
     # The actual backend gate must accept it...
-    assert auth._verify_hs256(token, _SECRET) is True
+    assert auth._verify_internal(token, _SECRET) is True
     # ...and reject it under any other secret (signature is real).
-    assert auth._verify_hs256(token, "some-other-secret") is False
+    assert auth._verify_internal(token, "some-other-secret") is False
+    # It is not a user session.
+    assert auth._verify_hs256(token, _SECRET) is False
 
     claims = auth._jwt_claims(token) or {}
-    assert claims.get("role") == "authenticated"  # the claim the gate demands
-    assert claims.get("aud") == "authenticated"
+    assert claims.get("aud") == auth.INTERNAL_AUDIENCE
+    assert claims.get("iss") == auth.INTERNAL_ISSUER
+    assert claims.get("role") != "authenticated"
     assert claims.get("exp", 0) > claims.get("iat", 0)
 
 

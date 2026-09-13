@@ -20,6 +20,7 @@ from typing import Any
 import websockets
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
+from app import ws_limits
 from app.auth import require_ws_key
 from app.config import Settings, get_settings
 from app.correlate.store import store
@@ -212,38 +213,49 @@ async def ais_ws(ws: WebSocket, settings: Settings = Depends(get_settings)) -> N
     if not await require_ws_key(ws):
         await ws.close(code=1008)
         return
-    await ws.accept()
-    # AISStream is the key-gated upstream; the keyless Kystverket firehose
-    # (started at boot) also fans out to _clients, so we accept the socket even
-    # with no key — vessels still flow. We only flag info when NEITHER source
-    # can run.
-    if settings.aisstream_key:
-        _ensure_upstream(settings.aisstream_key)
-    elif not settings.ais_firehose_enabled:
-        await ws.send_text(
-            json.dumps(
-                {
-                    "kind": "info",
-                    "message": "No AIS source: set AISSTREAM_KEY or enable the keyless firehose",
-                }
-            )
-        )
-        await ws.close()
+    # Per-client socket cap (ASVS V2.4.1, app/ws_limits.py): after the key
+    # gate, before accept, released however the handler ends.
+    slot = ws_limits.acquire(ws)
+    if slot is None:
+        await ws.close(code=1008)
         return
-
-    _clients.add(ws)
     try:
-        while True:
-            # we don't expect client messages, but keep the socket draining
-            await ws.receive_text()
-    except WebSocketDisconnect:
-        pass
+        await ws.accept()
+        # AISStream is the key-gated upstream; the keyless Kystverket firehose
+        # (started at boot) also fans out to _clients, so we accept the socket even
+        # with no key — vessels still flow. We only flag info when NEITHER source
+        # can run.
+        if settings.aisstream_key:
+            _ensure_upstream(settings.aisstream_key)
+        elif not settings.ais_firehose_enabled:
+            await ws.send_text(
+                json.dumps(
+                    {
+                        "kind": "info",
+                        "message": (
+                            "No AIS source: set AISSTREAM_KEY or enable the keyless firehose"
+                        ),
+                    }
+                )
+            )
+            await ws.close()
+            return
+
+        _clients.add(ws)
+        try:
+            while True:
+                # we don't expect client messages, but keep the socket draining
+                await ws.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            _clients.discard(ws)
+            # On-demand AISStream: when the last viewer leaves, drop the keyed
+            # upstream to conserve its API cap. The keyless Kystverket firehose
+            # keeps feeding the store + any future clients regardless. In firehose
+            # mode (aisstream_firehose) the upstream is always-on, so we never drop
+            # it on viewer-leave.
+            if not _clients and not settings.aisstream_firehose:
+                await _stop_upstream()
     finally:
-        _clients.discard(ws)
-        # On-demand AISStream: when the last viewer leaves, drop the keyed
-        # upstream to conserve its API cap. The keyless Kystverket firehose
-        # keeps feeding the store + any future clients regardless. In firehose
-        # mode (aisstream_firehose) the upstream is always-on, so we never drop
-        # it on viewer-leave.
-        if not _clients and not settings.aisstream_firehose:
-            await _stop_upstream()
+        ws_limits.release(slot)

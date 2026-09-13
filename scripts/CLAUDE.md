@@ -25,8 +25,8 @@ to the working directory and fail in confusing ways from elsewhere.
   silent no-op here reads as "the supervisor resurrected it" and sends you
   debugging the wrong component (measured 2026-08-02; the AIS twin taught it
   first on 2026-07-15).
-- `preflight.sh`, `deploy.sh` — production path; read `docs/decisions.md` before
-  changing either.
+- `preflight.sh` — pre-PR local gate. The Cloudflare gateway deploy path
+  (`deploy.sh`) was deleted 2026-09-13; releases ship as ghcr images.
 - `warp.sh` — Cloudflare WARP proxy control for the egress tier, OFF by default.
   See `apps/api/CLAUDE.md` for why `warp_hosts` ships empty.
 - `screenshot-*.mjs` — drive the running dev server, not a production build:

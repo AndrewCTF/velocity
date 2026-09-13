@@ -46,5 +46,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # SPDX SBOM and build provenance pushed to ghcr as attestations on the
+          # image itself, so the bill of materials travels with every published
+          # tag (ci.yml's syft SBOM is a short-lived CI artifact). Read it back
+          # with `docker buildx imagetools inspect <image> --format '{{ json .SBOM }}'`.
+          sbom: true
+          provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max

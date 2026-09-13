@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Widget, Badge, Caveat, KV, KVRow, MicroLabel, type BadgeTone } from '../shell/instruments.js';
 import { fetchMetar, type AirportEnrichment, type Metar, type Runway } from '../transport/entity.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 // ── ILS CAT badge ────────────────────────────────────────────────────────
 // CAT data is FAA NASR (ils_rf.txt) — US-only. `ils_category*` is null for
@@ -136,7 +137,7 @@ function LiveAtcBlock({
     <div className="space-y-1.5">
       <div className="flex items-center gap-2 flex-wrap">
         <a
-          href={liveatcUrl}
+          href={safeHttpUrl(liveatcUrl)}
           target="_blank"
           rel="noreferrer"
           className="mono text-[10px] text-accent hover:underline"
@@ -177,7 +178,7 @@ function LiveAtcBlock({
           ) : (
             <audio
               controls
-              src={selected}
+              src={safeHttpUrl(selected)}
               className="w-full h-8"
               onError={() => setStreamError(true)}
             />

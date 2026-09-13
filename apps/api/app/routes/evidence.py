@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import re
 import time
 from typing import Any
 from urllib.parse import quote
@@ -51,15 +52,13 @@ def _content_disposition(filename: str, disposition: str = "inline") -> str:
     """Build a header-safe Content-Disposition. A user-supplied filename with
     non-Latin-1 chars (e.g. Cyrillic) or a quote/CRLF would otherwise raise
     UnicodeEncodeError at the ASGI layer (HTTP 500). Emit an ASCII fallback plus
-    the RFC 5987 UTF-8 form so the real name survives where supported."""
-    ascii_name = (
-        filename.encode("ascii", "ignore")
-        .decode("ascii")
-        .replace('"', "")
-        .replace("\r", "")
-        .replace("\n", "")
-        .strip()
-    ) or "download"
+    the RFC 5987 UTF-8 form so the real name survives where supported.
+
+    The quoted fallback keeps only ``[A-Za-z0-9._ -]`` (ASVS V5.4.2): a trailing
+    backslash escapes the closing quote of an RFC 6266 quoted-string, and tab or
+    NUL make the header invalid. The percent-encoded ``filename*`` carries the
+    real name."""
+    ascii_name = re.sub(r"[^A-Za-z0-9._ -]", "", filename).strip() or "download"
     return (
         f"{disposition}; filename=\"{ascii_name}\"; "
         f"filename*=UTF-8''{quote(filename, safe='')}"
@@ -78,7 +77,10 @@ class CaptureUrlIn(BaseModel):
 class CaptureScreenshotIn(BaseModel):
     # base64-encoded image bytes (data-URL prefix tolerated).
     data_base64: str = Field(min_length=1, max_length=_MAX_B64)
-    media_type: str = "image/png"
+    # A type/subtype token (ASVS V2.2.1): it is served back as Content-Type.
+    media_type: str = Field(
+        default="image/png", max_length=200, pattern=f"^{ev.MEDIA_TYPE_RE.pattern}$"
+    )
     title: str | None = Field(default=None, max_length=400)
     context: str | None = Field(default=None, max_length=8000)
     situation_id: str | None = Field(default=None, max_length=200)
@@ -143,6 +145,9 @@ async def _maybe_attach(ctx: UserCtx, obj: Object, situation_id: str | None) -> 
 
 
 def _capture_error(exc: ev.EvidenceError) -> HTTPException:
+    # A full locker is the server's condition, not a bad request (ASVS V2.4.1).
+    if isinstance(exc, ev.EvidenceStorageFull):
+        return HTTPException(status_code=507, detail=str(exc))
     return HTTPException(status_code=422, detail=str(exc))
 
 
@@ -329,14 +334,15 @@ async def get_evidence_blob(
         raise HTTPException(status_code=404, detail="blob missing")
     if await asyncio.to_thread(ev.sha256_bytes, data) != canonical:
         raise HTTPException(status_code=409, detail="blob failed hash verification")
-    media_type = obj.props.get("media_type") or "application/octet-stream"
+    # Declared type only when the bytes do not contradict it (ASVS V5.2.2).
+    media_type = ev.served_media_type(obj.props)
     filename = str(obj.props.get("filename") or canonical[:16])
     return Response(
         content=data,
         media_type=media_type,
         headers={
-            # media_type is attacker-controlled (upload/screenshot set it
-            # verbatim, no validation), and the locker runs keyless on the open
+            # media_type is client-declared (normalized to a type/subtype token
+            # and overridden when the bytes disagree), and the locker runs keyless on the open
             # default. Force a download and forbid MIME sniffing + script/embed
             # execution so an anonymous text/html or image/svg+xml blob cannot
             # run in the app's origin when someone opens /blob directly. The FE

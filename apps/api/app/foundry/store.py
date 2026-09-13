@@ -196,6 +196,22 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+_APPEND_LOCKS: dict[tuple[int, str], asyncio.Lock] = {}
+
+
+def _append_lock(dataset_id: str) -> asyncio.Lock:
+    # Keyed by loop too: an asyncio.Lock is bound to the loop that first waits
+    # on it, and the test suite runs many loops in one process.
+    key = (id(asyncio.get_running_loop()), dataset_id)
+    lock = _APPEND_LOCKS.get(key)
+    if lock is None:
+        if len(_APPEND_LOCKS) > 4096:
+            for k in [k for k, lk in _APPEND_LOCKS.items() if not lk.locked()]:
+                _APPEND_LOCKS.pop(k, None)
+        lock = _APPEND_LOCKS[key] = asyncio.Lock()
+    return lock
+
+
 class FoundryError(Exception):
     """Raised for store-level failures the route layer maps to HTTP errors."""
 
@@ -664,14 +680,20 @@ class FoundryStore:
             finally:
                 con.close()
 
-        existing_rows = await self._run(_read_latest)
         from app.foundry.ingest import (
             infer_schema,  # noqa: PLC0415 — break the store<->ingest cycle
         )
 
-        combined = [*existing_rows, *new_rows]
-        schema = infer_schema(combined)
-        return await self.add_version(dataset_id, combined, schema, source="upload:append")
+        # Read-latest and write-next under ONE per-dataset lock (ASVS V2.3.3):
+        # two concurrent appends (two /api/ingest pushes) both read version N
+        # and both wrote N+1 from it, so one push's rows vanished or the second
+        # write hit the version UNIQUE constraint. Single process, so an asyncio
+        # lock is the whole serialization needed.
+        async with _append_lock(dataset_id):
+            existing_rows = await self._run(_read_latest)
+            combined = [*existing_rows, *new_rows]
+            schema = infer_schema(combined)
+            return await self.add_version(dataset_id, combined, schema, source="upload:append")
 
     async def get_version(self, dataset_id: str, version: int) -> dict[str, Any] | None:
         def _sync() -> dict[str, Any] | None:

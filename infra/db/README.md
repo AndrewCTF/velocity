@@ -25,6 +25,7 @@ collab/BYOK features:
 | --- | --- |
 | `0000_profiles.sql` | base `public.profiles` (id → `auth.users`, email) + own-row RLS + signup trigger — the clearance table's root |
 | `0001_gotham_substrate_acl_audit.sql` | clearance columns on `profiles`; `current_clearance()/current_compartments()/current_roles()`; **clearance-aware** RLS on `objects`/`links`/`target_board`; the **`collab_docs`** table with clearance-gated read/write RLS; the **`collab_doc_acl`** SECURITY DEFINER RPC; append-only `action_log` |
+| `0002_profile_privilege_columns_and_anon_lockout.sql` | revokes self-UPDATE on `profiles` (roles/clearance were self-grantable); `admin_set_profile_access()` admin RPC; email synced from `auth.users`; clearance/collab policies scoped `to authenticated` so the anon key reads nothing; collab owner enforced on write |
 
 Apply **in numeric order** (0000 before 0001 — 0001 ALTERs `profiles` and the
 helper functions validate their bodies at `CREATE` time):
@@ -36,6 +37,7 @@ supabase db push
 # …or raw psql against the project DB:
 psql "$SUPABASE_DB_URL" -f apps/api/supabase/migrations/0000_profiles.sql
 psql "$SUPABASE_DB_URL" -f apps/api/supabase/migrations/0001_gotham_substrate_acl_audit.sql
+psql "$SUPABASE_DB_URL" -f apps/api/supabase/migrations/0002_profile_privilege_columns_and_anon_lockout.sql
 ```
 
 The backend never runs DDL — the operator applies these. A guard test

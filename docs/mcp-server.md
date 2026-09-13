@@ -176,8 +176,8 @@ claude mcp add --transport http osint-geoint \
 > The backend's in-process tools self-call `/api/intel/*` over localhost, so a
 > hosted deployment must set `API_KEY` (the static key the self-hop presents)
 > **and** Supabase auth (`SUPABASE_JWT_SECRET`) so the directly-reachable
-> backend `/mcp` is gated too — not only the Worker path. See
-> [`deploy-cloudflare.md`](./deploy-cloudflare.md).
+> backend `/mcp` is gated too. See
+> [`security/auth-and-sessions.md`](./security/auth-and-sessions.md).
 
 ### Self-host / develop
 

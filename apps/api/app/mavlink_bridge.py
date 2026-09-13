@@ -25,6 +25,7 @@ token (``MAVLINK_BRIDGE_TOKEN``) matches the block's ``auth_env`` field.
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -313,7 +314,9 @@ def make_handler(state: _State) -> type[BaseHTTPRequestHandler]:
         def _authed(self) -> bool:
             if not state.token:
                 return True
-            return self.headers.get("Authorization", "") == f"Bearer {state.token}"
+            return hmac.compare_digest(
+                self.headers.get("Authorization", "").encode(), f"Bearer {state.token}".encode()
+            )
 
         def do_GET(self) -> None:  # noqa: N802 — stdlib handler name
             if self.path.startswith("/health"):
@@ -368,6 +371,12 @@ def make_handler(state: _State) -> type[BaseHTTPRequestHandler]:
 
 
 def build_server(port: int, connect: str = "", token: str = "") -> ThreadingHTTPServer:
+    # An armed uplink (a real MAVLink endpoint) moves a vehicle, so it never runs
+    # without a bearer (ASVS V13.2.1). Log-only mode (no connect) may stay open.
+    if connect and not token:
+        raise RuntimeError(
+            "MAVLINK_BRIDGE_TOKEN is required when MAVLINK_CONNECT arms the uplink"
+        )
     state = _State(MavlinkLink(connect), token)
     server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state))
     server.bridge_state = state  # type: ignore[attr-defined] — exposed for tests

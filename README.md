@@ -47,7 +47,7 @@ labelled as automated output, not sold as "AI insight."
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-2632%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-2804%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
@@ -154,9 +154,13 @@ cd apps/api && .venv/bin/uvicorn app.main:app     # backend on :8000
 pnpm dev                                          # vite on :5173, proxies /api to localhost:8000
 ```
 
-Set `VITE_API_URL` if the backend isn't on `http://localhost:8000`. If you set
-`API_KEY` on the backend, build the web app with a matching `VITE_API_KEY`; it
-rides along as `X-API-Key` on every call.
+Set `API_PROXY_TARGET` if the backend isn't on `http://127.0.0.1:8000`; the dev
+server proxies `/api`, `/tiles` and `/ws` there, so the browser stays same-origin.
+(`VITE_API_URL` is different: it makes the browser call the API directly,
+cross-origin, and is only for builds with no proxy in front.) `API_KEY`
+is for servers, the CLI and the MCP server. Never build it into a hosted web
+bundle, because anyone who loads the page can read it. Browsers sign in with
+Supabase instead (`docs/security/auth-and-sessions.md`).
 </details>
 
 ## The apps
@@ -603,7 +607,7 @@ osint/
 
 ```bash
 # from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
-OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 2632 passed + 2 skipped
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 2804 passed + 2 skipped
 pnpm -r test                          # vitest (web, shared)
 pnpm -r typecheck
 bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot

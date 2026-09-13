@@ -10,6 +10,8 @@ import { detectImage, isDesktop } from '../transport/desktop.js';
 import { useGround } from './groundStore.js';
 import { useCaptures } from '../state/captures.js';
 import { BboxOverlay, colorFor } from './detectionOverlay.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
+import { dict } from '../shell/safeKeys.js';
 
 export function PanoramaViewer(): JSX.Element | null {
   const selectedId = useGround((s) => s.selectedId);
@@ -69,7 +71,7 @@ export function PanoramaViewer(): JSX.Element | null {
   const counts = dets.reduce<Record<string, number>>((acc, d) => {
     acc[d.cls] = (acc[d.cls] ?? 0) + 1;
     return acc;
-  }, {});
+  }, dict<number>());
 
   return (
     <div className="border border-line-2 rounded-sm bg-bg-1 overflow-hidden">
@@ -89,7 +91,7 @@ export function PanoramaViewer(): JSX.Element | null {
       <div ref={imgWrapRef} className="relative overflow-x-auto bg-black">
         <div className="relative" style={{ minWidth: '100%' }}>
           <img
-            src={photo.photo_url}
+            src={safeHttpUrl(photo.photo_url)}
             alt={photo.name}
             draggable={false}
             className="block w-full select-none"

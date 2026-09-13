@@ -5,6 +5,7 @@
 // country tab switch instead of re-hitting the backend per country.
 
 import { useCachedFetch, Card, CaveatList } from './shared.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 interface AdvisoryItem {
   country: string;
@@ -52,7 +53,7 @@ function AdvisoryRow({ item }: { item: AdvisoryItem }): JSX.Element {
       <div className="min-w-0 flex-1">
         {item.link ? (
           <a
-            href={item.link}
+            href={safeHttpUrl(item.link)}
             target="_blank"
             rel="noreferrer"
             className="text-[11px] text-txt-1 hover:text-txt-0 hover:underline"

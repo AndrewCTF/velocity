@@ -5,6 +5,7 @@ import { apiFetch, backendUrl } from '../transport/http.js';
 import type { Edition, Story } from './types.js';
 import { chipUrl, STATUS_LABEL, STATUS_TONE, type StoryGeo } from './VelocityNewsPage.js';
 import './news.css';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 // "From orbit": a real satellite chip of the place the story is actually
 // about (apps/api/app/news/storygeo.py locate_story), never the moment of
@@ -114,7 +115,7 @@ export function StoryView(): JSX.Element {
             )}
 
             {story.image && (
-              <div className="vn-media vn-lead-media"><img src={story.image} alt="" /></div>
+              <div className="vn-media vn-lead-media"><img src={safeHttpUrl(story.image)} alt="" /></div>
             )}
             {story.image && <div className="vn-cap">Lead image via source outlet</div>}
 
@@ -167,7 +168,7 @@ export function StoryView(): JSX.Element {
               <div className="vn-box facts vn-proofs">
                 <h4>Proof &amp; sources ({story.proofs.length})</h4>
                 {story.proofs.map((p, i) => (
-                  <a key={i} href={p.url} target="_blank" rel="noreferrer">
+                  <a key={i} href={safeHttpUrl(p.url)} target="_blank" rel="noreferrer">
                     <span>{p.source} ↗</span>
                     {p.published && <span className="vn-when">{p.published.slice(0, 10)}</span>}
                   </a>
@@ -181,7 +182,7 @@ export function StoryView(): JSX.Element {
                 {story.supporting_docs.map((d, i) => (
                   d.kind === 'satellite' && d.url ? (
                     <figure key={i} style={{ margin: '8px 0' }}>
-                      <img src={backendUrl(d.url)} alt={d.caption ?? ''} />
+                      <img src={safeHttpUrl(backendUrl(d.url))} alt={d.caption ?? ''} />
                       <figcaption className="vn-cap">{d.caption}</figcaption>
                     </figure>
                   ) : (

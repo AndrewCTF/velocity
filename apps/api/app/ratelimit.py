@@ -16,6 +16,7 @@ an unconfigured box (issue #8), so the two hardening controls never drift apart.
 from __future__ import annotations
 
 import ipaddress
+import logging
 import time
 from collections import defaultdict, deque
 from functools import lru_cache
@@ -26,6 +27,8 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from app.config import get_settings
+
+_log = logging.getLogger("app.security")
 
 # Endpoints that spend hosted-LLM credits or GPU/CPU compute per call. Prefixes
 # are matched with ``startswith``; the ``/coa/propose`` suffix is matched
@@ -105,6 +108,85 @@ def _peer_is_trusted(peer: str, raw: str) -> bool:
     return any(addr in n for n in nets)
 
 
+def client_key(peer: str, headers) -> str:  # type: ignore[no-untyped-def]
+    """The per-client bucket key, shared by the limiter and the auth-failure
+    throttle so both agree on who a client is.
+
+    X-Forwarded-For is believed ONLY when the peer is a configured trusted
+    proxy (``TRUSTED_PROXIES``, loopback by default — CF Worker -> Caddy ->
+    uvicorn on the same box). Believing it unconditionally handed every caller
+    a fresh bucket per request for the cost of varying one header.
+
+    And from a trusted peer the RIGHTMOST address that is not itself a trusted
+    proxy is the client, never the leftmost: each proxy APPENDS the address it
+    saw, so everything left of the last hop we trust was written by the caller.
+    A leftmost read let a client send ``X-Forwarded-For: <anything>`` and pick
+    its own bucket through the proxy (ASVS V15.3.4).
+    """
+    raw = get_settings().trusted_proxies
+    if peer and _peer_is_trusted(peer, raw):
+        xff = headers.get("x-forwarded-for") if headers is not None else None
+        if xff:
+            hops = [h.strip() for h in xff.split(",") if h.strip()]
+            for hop in reversed(hops):
+                if not _peer_is_trusted(hop, raw):
+                    return hop
+            if hops:
+                return hops[0]
+    return peer or "unknown"
+
+
+class SlidingWindow:
+    """A per-key sliding one-minute window of events, bounded to ``_MAX_KEYS``.
+
+    ``record`` appends an event; ``retry_after`` answers None while the key has
+    room under ``limit``, else the seconds until its oldest event leaves the
+    window. Used by the auth-failure throttle; the limiter below keeps its own
+    table on the instance so each test app starts empty.
+    """
+
+    def __init__(self) -> None:
+        self._hits: dict[str, deque[float]] = defaultdict(deque)
+
+    def clear(self) -> None:
+        self._hits.clear()
+
+    def _trim(self, key: str, now: float) -> deque[float]:
+        dq = self._hits[key]
+        cutoff = now - _WINDOW_S
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        return dq
+
+    def retry_after(self, key: str, *, limit: int) -> int | None:
+        if key not in self._hits:
+            return None
+        now = time.monotonic()
+        dq = self._trim(key, now)
+        if len(dq) < limit:
+            if not dq:
+                self._hits.pop(key, None)
+            return None
+        return max(1, int(dq[0] + _WINDOW_S - now) + 1)
+
+    def record(self, key: str, *, limit: int) -> None:
+        now = time.monotonic()
+        dq = self._trim(key, now)
+        dq.append(now)
+        # A locked key needs only its newest ``limit`` events to stay locked.
+        while len(dq) > max(limit, 1):
+            dq.popleft()
+        if len(self._hits) > _MAX_KEYS:
+            cutoff = now - _WINDOW_S
+            for k in [k for k, v in self._hits.items() if not v or v[-1] < cutoff]:
+                self._hits.pop(k, None)
+            if len(self._hits) > _MAX_KEYS:
+                for k in sorted(self._hits, key=lambda k: self._hits[k][-1])[
+                    : len(self._hits) - _MAX_KEYS
+                ]:
+                    self._hits.pop(k, None)
+
+
 class ComputeRateLimitMiddleware(BaseHTTPMiddleware):
     """Per-client-IP sliding-window limiter on the compute paths.
 
@@ -118,21 +200,8 @@ class ComputeRateLimitMiddleware(BaseHTTPMiddleware):
         self._hits: dict[str, deque[float]] = defaultdict(deque)
 
     def _client_key(self, request: Request) -> str:
-        """The per-client bucket key.
-
-        X-Forwarded-For is believed ONLY when the peer is a configured trusted
-        proxy (``TRUSTED_PROXIES``, loopback by default — the real shape here is
-        CF Worker -> Caddy -> uvicorn on the same box). Believing it
-        unconditionally, which is what this did, handed every caller a fresh
-        bucket per request for the cost of varying one header, so the limiter
-        bounded nothing at all against the one traffic it exists to bound.
-        """
-        peer = request.client.host if request.client else ""
-        if peer and _peer_is_trusted(peer, get_settings().trusted_proxies):
-            xff = request.headers.get("x-forwarded-for")
-            if xff:
-                return xff.split(",")[0].strip()
-        return peer or "unknown"
+        """See ``client_key``."""
+        return client_key(request.client.host if request.client else "", request.headers)
 
     def _evict(self, cutoff: float) -> None:
         """Hold the bucket table to ``_MAX_KEYS``.
@@ -157,7 +226,10 @@ class ComputeRateLimitMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         is_mcp = path == "/mcp" or path.startswith("/mcp/")
         is_api = path.startswith("/api/") and not _is_exempt(path)
-        if not (is_mcp or is_api):
+        # /tiler fetches a remote COG per request (GDAL egress), so it shares the
+        # general per-client cap under its own bucket (ASVS V13.2.4 / V2.4.1).
+        is_tiler = path == "/tiler" or path.startswith("/tiler/")
+        if not (is_mcp or is_api or is_tiler):
             return await call_next(request)
         settings = get_settings()
         client = self._client_key(request)
@@ -174,6 +246,8 @@ class ComputeRateLimitMiddleware(BaseHTTPMiddleware):
             buckets.append((f"{client}|{seg}", settings.ratelimit_compute_per_min))
         if is_api:
             buckets.append((f"{client}|api", settings.api_ratelimit_per_min))
+        if is_tiler:
+            buckets.append((f"{client}|tiler", settings.api_ratelimit_per_min))
         buckets = [(k, lim) for k, lim in buckets if lim > 0]  # 0 = that limiter off
         if not buckets:
             return await call_next(request)
@@ -188,6 +262,10 @@ class ComputeRateLimitMiddleware(BaseHTTPMiddleware):
                 dq.popleft()
             if len(dq) >= limit:
                 retry = max(1, int(dq[0] + _WINDOW_S - now))
+                _log.warning(
+                    "rate limit exceeded client=%s path=%s bucket=%s", client, path,
+                    key.split("|", 1)[-1],
+                )
                 return JSONResponse(
                     {"detail": "rate limit exceeded for this endpoint; slow down"},
                     status_code=429,

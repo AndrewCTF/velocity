@@ -418,12 +418,23 @@ def test_blob_path_rejects_traversal_from_forged_props(
         ev.blob_path(get_settings(), forged)
 
     fake = "ab" * 32
+    # Since 2026-09-13 the generic route refuses evidence writes (403), so the
+    # forged row is planted in the store directly: the hex check is defence in
+    # depth for any other path that reaches props.sha256.
     r = client.post(
         "/api/ontology/object",
         json={"id": f"evidence:{fake}", "kind": "evidence",
               "props": {"kind": "evidence", "sha256": forged}},
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 403, r.text
+    import asyncio  # noqa: PLC0415
+
+    from app.intel.ontology import Object, get_registry  # noqa: PLC0415
+    from app.keys import UserCtx  # noqa: PLC0415
+
+    asyncio.run(get_registry(UserCtx("local", ""), get_settings()).upsert(
+        Object(id=f"evidence:{fake}", kind="evidence", props={"kind": "evidence", "sha256": forged})
+    ))
     man = client.post("/api/evidence/manifest", json={"evidence_ids": [fake]}).json()
     assert [i["blob_present"] for i in man["items"]] == [False]
     assert client.get(f"/api/evidence/{fake}/blob").status_code == 404

@@ -462,6 +462,8 @@ async def status_provenance() -> dict[str, Any]:
 # _fetch_one_feed_sync swallows every failure into an empty aircraft list.
 # → guarded by tests/test_feed_honesty.py
 _UNMEASURED: list[tuple[str, str]] = [
+    ("imagery/tiler.py:100",
+     "redirect-off HEAD that re-checks each /tiler?url= hop before GDAL fetches it"),
     ("routes/adsb.py:1140",
      "sync ADS-B feed client (thread-bound; the async client cannot be used there)"),
     ("adsb_fr24.py:199", "FR24 tier"),

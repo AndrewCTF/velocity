@@ -57,7 +57,7 @@ async def places_airports(
     if box is None:
         return _EMPTY_FC
     # Reference data is static — let the browser cache it like /tiles do.
-    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Cache-Control"] = "private, max-age=86400"
     return places.bbox_features("airport", *box, limit=limit, large_only=large_only)
 
 
@@ -71,7 +71,7 @@ async def places_ports(
     box = _parse_bbox(bbox)
     if box is None:
         return _EMPTY_FC
-    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Cache-Control"] = "private, max-age=86400"
     return places.bbox_features("port", *box, limit=limit)
 
 
@@ -85,7 +85,7 @@ async def places_bases(
     box = _parse_bbox(bbox)
     if box is None:
         return _EMPTY_FC
-    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Cache-Control"] = "private, max-age=86400"
     return places.bbox_features("base", *box, limit=limit)
 
 
@@ -109,7 +109,7 @@ async def places_infrastructure(
     box = _parse_bbox(bbox)
     if box is None:
         return _EMPTY_FC
-    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Cache-Control"] = "private, max-age=86400"
     return places.facility_bbox_features("infrastructure", *box, limit=limit, category=category)
 
 
@@ -124,7 +124,7 @@ async def places_military(
     box = _parse_bbox(bbox)
     if box is None:
         return _EMPTY_FC
-    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Cache-Control"] = "private, max-age=86400"
     return places.facility_bbox_features("military", *box, limit=limit, category=category)
 
 

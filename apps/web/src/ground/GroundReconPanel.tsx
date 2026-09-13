@@ -15,6 +15,7 @@ import { PanoramaViewer } from './PanoramaViewer.js';
 import { WeatherCard } from '../weather/WeatherCard.js';
 import { TrafficSimSection } from '../sim/TrafficSimSection.js';
 import type { GroundPhotoFeature } from './types.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 function recentIso(days: number): string {
   const d = new Date();
@@ -160,7 +161,7 @@ export function GroundReconPanel({ viewer }: { viewer: unknown }): JSX.Element {
                   }`}
                 >
                   <img
-                    src={p.thumb_url}
+                    src={safeHttpUrl(p.thumb_url)}
                     alt={p.name}
                     className="w-full h-full object-cover"
                     draggable={false}

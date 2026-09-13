@@ -85,7 +85,9 @@ def radius_for_geo_type(geo_type: int | None) -> float | None:
     country-level or unknown precision (never fabricated)."""
     return _GEO_TYPE_RADIUS_M.get(geo_type) if geo_type is not None else None
 
-_GDELT_BASE = "http://data.gdeltproject.org/gdeltv2"
+_GDELT_BASE = "https://data.gdeltproject.org/gdeltv2"
+# A 15-minute GDELT export is a few MB uncompressed; 64 MB is generous.
+_GDELT_MAX_UNZIPPED = 64 * 1024 * 1024
 _MAX_FEATURES = 1500
 _TTL = 900.0  # 15 min — matches GDELT's publish cadence
 
@@ -126,7 +128,16 @@ async def _fetch_slice(ts: str) -> list[list[str]]:
         if r.status_code != 200:
             return []
         z = zipfile.ZipFile(io.BytesIO(r.content))
-        raw = z.read(z.namelist()[0]).decode("utf-8", "replace")
+        infos = z.infolist()
+        # Bounded BEFORE decompressing (ASVS V5.2.3): one member, of a size a
+        # 15-minute export plausibly has; a zip bomb decompresses nothing.
+        if len(infos) != 1 or infos[0].file_size > _GDELT_MAX_UNZIPPED:
+            return []
+        with z.open(infos[0]) as fh:
+            blob = fh.read(_GDELT_MAX_UNZIPPED + 1)
+        if len(blob) > _GDELT_MAX_UNZIPPED:
+            return []
+        raw = blob.decode("utf-8", "replace")
     except (OSError, zipfile.BadZipFile, ValueError, httpx.HTTPError):
         return []
     out: list[list[str]] = []

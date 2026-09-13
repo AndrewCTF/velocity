@@ -20,6 +20,12 @@
 //                                                 the first response the page
 //                                                 made whose URL matches
 //   GET /health                                 → {ok, contexts, last_good}
+//   GET /auth                                   → 204 with the token, else 401
+//
+// Every request must carry a loopback Host header (a DNS-rebinding page names
+// its own host), and every route except /health must carry
+// `Authorization: Bearer $SIDECAR_TOKEN` when the API set one at spawn
+// (apps/api/app/sidecar_token.py).
 //
 // Bodies come back base64 in JSON because case 2 is routinely binary (zstd).
 // There is deliberately no eval endpoint: this is an HTTP server that fetches
@@ -28,6 +34,7 @@
 'use strict';
 
 const http = require('http');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -277,18 +284,44 @@ async function loadPage(host, url, { capture, waitMs }) {
   }
 }
 
+// ASVS V13.2.1. The API mints SIDECAR_TOKEN per spawn; without one (a manual
+// run) only the Host check applies.
+const SIDECAR_TOKEN = process.env.SIDECAR_TOKEN || '';
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+function hostOk(req) {
+  const host = String(req.headers.host || '').toLowerCase();
+  const i = host.lastIndexOf(':');
+  if (i <= 0) return false;
+  return LOOPBACK_HOSTS.has(host.slice(0, i)) && host.slice(i + 1) === String(req.socket.localPort);
+}
+
+function tokenOk(req) {
+  if (!SIDECAR_TOKEN) return true;
+  const got = Buffer.from(String(req.headers.authorization || ''));
+  const want = Buffer.from(`Bearer ${SIDECAR_TOKEN}`);
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+
 const server = http.createServer(async (req, res) => {
   const send = (code, obj) => {
     res.writeHead(code, { 'content-type': 'application/json' });
     res.end(JSON.stringify(obj));
   };
+  if (!hostOk(req)) return send(421, { error: 'host not allowed' });
   let u;
   try { u = new URL(req.url, `http://127.0.0.1:${PORT}`); } catch (e) { return send(400, { error: 'bad url' }); }
 
   if (u.pathname === '/health') {
     return send(200, { ok: true, contexts: contexts.size, last_good: lastGood, max: MAX_CONTEXTS });
   }
+  if (u.pathname === '/auth' && SIDECAR_TOKEN) {
+    if (!tokenOk(req)) return send(401, { error: 'unauthorized' });
+    res.writeHead(204);
+    return res.end();
+  }
   if (u.pathname !== '/fetch') return send(404, { error: 'not found' });
+  if (!tokenOk(req)) return send(401, { error: 'unauthorized' });
 
   const target = u.searchParams.get('url');
   if (!target || !/^https?:\/\//i.test(target)) return send(400, { error: 'url must be http(s)' });
@@ -335,5 +368,5 @@ if (require.main === module) {
   }
 } else {
   // Required as a module (selftest.js) — export the pure bits worth checking.
-  module.exports = { paced, gates, PACE_MS, JITTER_MS, launchOpts, HEADFUL };
+  module.exports = { paced, gates, PACE_MS, JITTER_MS, launchOpts, HEADFUL, server };
 }

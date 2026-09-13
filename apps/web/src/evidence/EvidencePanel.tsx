@@ -4,6 +4,7 @@ import { useSituations } from '../situations/situationStore.js';
 import { apiFetch } from '../transport/http.js';
 import { SectionLabel, Btn, MicroLabel, Widget, Badge } from '../shell/instruments.js';
 import { toast } from '../shell/toast.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 // Evidence locker (roadmap P1) — chain-of-custody capture. Preserve a URL, a
 // file, or a moment of the live world as a content-addressed, hash-verified,
@@ -25,10 +26,29 @@ function fmtBytes(n?: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Thumbnails only for raster types (ASVS V1.3.4). The locker keeps uploaded
+// bytes unaltered for chain of custody, so an SVG is never sanitized; a blob URL
+// carrying image/svg+xml is a same-origin document that runs script if opened
+// directly. The declared media_type is the uploader's claim, so the blob is also
+// re-typed to that allowlisted raster type before it becomes a URL.
+const RASTER_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'image/bmp',
+]);
+
+export function thumbnailType(mediaType: string | undefined): string | null {
+  const t = (mediaType ?? '').split(';')[0]!.trim().toLowerCase();
+  return RASTER_TYPES.has(t) ? t : null;
+}
+
 // Auth'd image thumbnail: fetch the blob through apiFetch (carries the Bearer /
 // X-API-Key) then objectURL it, so images render on a signed-in remote box too —
 // a raw <img src=/api/evidence/…/blob> can't set the auth header and would 401.
-function EvidenceThumb({ sha, alt }: { sha: string; alt: string }): JSX.Element | null {
+function EvidenceThumb({ sha, alt, type }: { sha: string; alt: string; type: string }): JSX.Element | null {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +62,7 @@ function EvidenceThumb({ sha, alt }: { sha: string; alt: string }): JSX.Element 
         // already ran (url was still null then), so allocate nothing — otherwise
         // the object URL would leak until page reload.
         if (cancelled) return;
-        url = URL.createObjectURL(blob);
+        url = URL.createObjectURL(new Blob([blob], { type }));
         setSrc(url);
       } catch {
         /* leave blank */
@@ -52,7 +72,7 @@ function EvidenceThumb({ sha, alt }: { sha: string; alt: string }): JSX.Element 
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [sha]);
+  }, [sha, type]);
   if (!src) return null;
   return (
     <img
@@ -101,7 +121,7 @@ function EvidenceRow({ obj }: { obj: EvidenceObject }): JSX.Element {
   const [sit, setSit] = useState('');
   const [verified, setVerified] = useState<boolean | null>(null);
 
-  const isImage = (p.media_type || '').startsWith('image/');
+  const thumbType = thumbnailType(p.media_type);
 
   const onVerify = async (): Promise<void> => {
     const ok = await verify(p.sha256);
@@ -128,7 +148,7 @@ function EvidenceRow({ obj }: { obj: EvidenceObject }): JSX.Element {
           <Badge tone={verified ? 'ok' : 'alert'}>{verified ? 'verified' : 'ALTERED'}</Badge>
         )}
       </div>
-      {isImage && <EvidenceThumb sha={p.sha256} alt={p.title ?? 'evidence'} />}
+      {thumbType && <EvidenceThumb sha={p.sha256} alt={p.title ?? 'evidence'} type={thumbType} />}
       <div className="mono text-[10px] text-txt-3 break-all" title="SHA-256 (content address)">
         sha256 {p.sha256}
       </div>
@@ -137,7 +157,7 @@ function EvidenceRow({ obj }: { obj: EvidenceObject }): JSX.Element {
         <span>{p.media_type}</span>
         {p.captured_at && <span>{p.captured_at}</span>}
         {p.source_url && (
-          <a href={p.source_url} target="_blank" rel="noreferrer" className="text-accent truncate max-w-[200px]">
+          <a href={safeHttpUrl(p.source_url)} target="_blank" rel="noreferrer" className="text-accent truncate max-w-[200px]">
             {p.source_url}
           </a>
         )}

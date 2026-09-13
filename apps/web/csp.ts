@@ -86,7 +86,9 @@ export function buildCsp(opts: CspOptions = {}): string {
     "worker-src 'self' blob:",
     "font-src 'self' data:",
     "object-src 'none'",
-    "base-uri 'self'",
+    // No page here uses <base>; 'none' stops an injected one re-pointing
+    // every relative script and API path (ASVS V3.4.3).
+    "base-uri 'none'",
     "form-action 'self'",
   ].join('; ');
 }

@@ -15,7 +15,7 @@ import {
   encodeAwarenessUpdate,
 } from 'y-protocols/awareness';
 
-import { apiFetch, backendWsUrl, withWsKey } from '../transport/http.js';
+import { apiFetch, backendWsUrl, openAuthedWebSocket } from '../transport/http.js';
 
 const TAG_SYNC = 0x00;
 const TAG_AWARE = 0x01;
@@ -142,9 +142,7 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
 
     const connect = () => {
       if (closed) return; // effect torn down while a reconnect was pending
-      const sock = new WebSocket(
-        withWsKey(`${wsBase()}/ws/collab?doc=${encodeURIComponent(docId)}`),
-      );
+      const sock = openAuthedWebSocket(`${wsBase()}/ws/collab?doc=${encodeURIComponent(docId)}`);
       sock.binaryType = 'arraybuffer';
       ws = sock;
       sock.onopen = () => {

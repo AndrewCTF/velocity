@@ -2817,3 +2817,38 @@ behaviour changes an operator will notice:
 Accepted, not changed: a single `API_KEY` holder is the operator (`security.py:155`); use Supabase to
 separate roles. TypeScript stays on 6.0.3 because typescript-eslint 8.70 peers `<6.1`, though TS 7
 itself type-checks clean.
+
+## ASVS 5.0 Level 2: every requirement assessed, and what an operator will notice (2026-09-13)
+
+All 253 Level 1 + 2 requirements are in `docs/security/asvs-l2-assessment.md` with evidence: 159 pass,
+42 not applicable, 21 met by Supabase Auth, 17 operator settings (`docs/security/operator-hardening.md`),
+14 accepted deviations with risk-register entries (R26-R33). Behaviour changes:
+
+- **nginx resolves service names per request** (`resolver 127.0.0.11`, variable `proxy_pass`). A static
+  upstream kept the api container's boot-time IP, so `docker compose up -d api` gave 502 or reached a
+  container that reused the address. Guard: `tests/test_nginx_resolver.py`. Bare-metal nginx must change
+  the resolver line.
+- **The dev proxy target is `API_PROXY_TARGET`, never `VITE_API_URL`.** Vite inlines every `VITE_*`
+  variable into the bundle, so compose's `http://api:8000` became the browser's API base and requests
+  skipped nginx. Guard: `apps/web/src/composeApiUrl.test.ts`.
+- **Production nginx listens on 8080 inside the container** (`127.0.0.1:8080:8080`), as the nginx user,
+  read-only, all capabilities dropped. It clears `X-Velocity-Tier`, rate-limits `/tiles/`, caps
+  concurrent `/ws/` and `/tiles/` requests, refuses `.map`, and allows 330 s on `/api/workflows/`.
+- **`X-Velocity-Tier` is ignored from every peer**; `COMMERCIAL_MODE` alone decides.
+- **WebSocket credentials ride in `Sec-WebSocket-Protocol`** (`velocity.v1`, `key.<credential>`);
+  `?key=` still works on WS for older clients.
+- **Supabase sessions:** ES256/RS256 verified against the project JWKS; with `SUPABASE_URL` + anon key,
+  every session is re-checked with GoTrue at most once a minute and fails closed when GoTrue is
+  unreachable (`SESSION_LIVENESS_CHECK=0` disables). Opt-in `REQUIRE_MFA_ALL_USERS`, `SESSION_MAX_AGE_S`.
+  A JWT-secret-only deployment cannot ask GoTrue: `exp` is its only revocation (accepted).
+- **Secrets shorter than 32 characters refuse to boot**; settings also read `/run/secrets`.
+- **Sidecars require a per-spawn bearer** and get an allowlisted environment; a sidecar started before
+  this change is evicted once on the first boot after upgrade.
+- **Evidence:** total store cap `EVIDENCE_MAX_TOTAL_BYTES` (507), sniffed media type stored beside the
+  declared one, URL capture pinned to the checked address. `WS_MAX_CONN_PER_CLIENT` caps sockets.
+- **Audit:** `audit_log.db` is append-only with a hash chain (`GET /api/audit/verify`) and
+  `AUDIT_RETENTION_DAYS` (default 0 = keep all). The local `action_log.db` is not yet (R33, RA-22).
+- **KiwiSDR stays on over plain HTTP** (no https publisher; R32); `KIWISDR_ALLOW_HTTP=0` removes it.
+
+Not claimed: ISO/IEC 27001 certification. Certification is of an organisation's ISMS by an accredited
+body; this repository carries the controls and evidence (`docs/security/isms/`), self-assessed.

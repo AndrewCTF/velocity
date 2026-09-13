@@ -8,6 +8,7 @@ import { haversineKm, getDrawController } from '../globe/draw.js';
 import { flyToPosition } from '../globe/camera.js';
 import { CoordEntry } from '../globe/CoordEntry.js';
 import { Icon } from '../normal/Icon.js';
+import { dict } from '../shell/safeKeys.js';
 
 // Palantir-Gotham "Search Objects" left sidebar. A single scoping surface: object
 // type + intrinsic date (static range OR rolling window) + keyword + up to four
@@ -157,7 +158,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
           const inside = d.results.filter((res) =>
             live.some((rg) => haversineKm({ lat: res.lat, lon: res.lon }, rg.center) <= rg.radiusKm),
           );
-          const by_type: Record<string, number> = {};
+          const by_type = dict<number>();
           for (const res of inside) by_type[res.kind] = (by_type[res.kind] ?? 0) + 1;
           setData({ results: inside, count: inside.length, by_type });
         } else {

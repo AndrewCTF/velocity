@@ -21,7 +21,10 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.13@sha256:b485bd65cc2cf1c9a93b3554012c9c37
 # here is what makes the stronger tier the deployed default; see
 # python_exec.py's sandbox_tier() for how the fallback is reported, never
 # silently assumed.
+# `upgrade` pulls Debian security fixes newer than the pinned base digest
+# (Trivy found fixable perl/pcre2/sqlite/gzip CVEs without it).
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends bubblewrap \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,19 +33,18 @@ RUN apt-get update \
 # whatever the stale lock says — `--frozen` was tried first and shipped an
 # image missing `huggingface_hub` (a hard dependency added to pyproject.toml
 # after the lock was last regenerated; app.main import-errors without it).
-# `--no-dev` keeps pytest/ruff out of the runtime image (tests are bind-mounted
-# in the dev compose file purely so they hot-reload alongside app code).
+# `--no-dev` keeps pytest/ruff out of the runtime image (tests are not in the
+# image at all; the dev compose file bind-mounts them).
 COPY apps/api/pyproject.toml apps/api/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 
 COPY apps/api/app ./app
-COPY apps/api/tests ./tests
 RUN uv sync --locked --no-dev
 
 # Run as an unprivileged user (defense-in-depth: the API shells out to recon/
 # sidecar/YOLO subprocesses, so a process compromise must not land as root).
 RUN useradd --system --uid 10001 --create-home --home-dir /home/app app \
-    && mkdir -p /srv/data \
+    && mkdir -p /srv/data/.tmp \
     && chown -R app /srv
 USER app
 

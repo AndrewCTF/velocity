@@ -31,6 +31,13 @@ describe('content security policy', () => {
     }
   });
 
+  it("base-uri is 'none' and no page declares a <base> (ASVS V3.4.3)", () => {
+    for (const policy of [buildCsp(), buildCsp({ desktop: true })]) {
+      expect(directives(policy).get('base-uri')).toEqual(["'none'"]);
+    }
+    expect(readFileSync(join(process.cwd(), 'index.html'), 'utf8')).not.toMatch(/<base[\s>]/i);
+  });
+
   it('names keyed imagery origins exactly and never allows any https: origin', () => {
     // Keyless boxes never contact these; an operator who supplies an ion or
     // Google key (GlobeCanvas.tsx) must not be silently broken by the policy.

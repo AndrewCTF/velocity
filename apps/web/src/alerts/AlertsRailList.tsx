@@ -5,6 +5,7 @@ import { slewToEntity } from '../globe/camera.js';
 import { useReducedMotion } from '../shell/useReducedMotion.js';
 import { SectionLabel, Badge, Btn, type BadgeTone } from '../shell/instruments.js';
 import type { Alert, AlertSeverity } from '@osint/shared';
+import { dict } from '../shell/safeKeys.js';
 
 interface Props {
   viewer: Cesium.Viewer | null;
@@ -39,7 +40,7 @@ export function AlertsRailList({ viewer }: Props): JSX.Element {
   const [filterSev, setFilterSev] = useState<AlertSeverity | null>(null);
   const reduced = useReducedMotion();
 
-  const sevCounts: Record<string, number> = {};
+  const sevCounts = dict<number>();
   for (const a of alerts) sevCounts[a.severity] = (sevCounts[a.severity] ?? 0) + 1;
 
   const filtered = filterSev ? alerts.filter((a) => a.severity === filterSev) : alerts;

@@ -36,13 +36,15 @@ import asyncio
 import contextlib
 import hashlib
 import json
+import os
 import re
 import socket
+import threading
 import time
 import uuid
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 from app.config import Settings, get_settings
 from app.intel.ontology import Object, get_registry
@@ -118,6 +120,7 @@ _DIR_OVERRIDE: str | None = None
 def override_evidence_dir(path: str | None) -> None:
     global _DIR_OVERRIDE
     _DIR_OVERRIDE = path
+    _totals.clear()
 
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
@@ -149,7 +152,15 @@ def _write_blob(settings: Settings, sha256: str, data: bytes) -> None:
     path = blob_path(settings, sha256)
     if path.exists():
         return
-    path.parent.mkdir(parents=True, exist_ok=True)
+    # Identical bytes dedup above and cost nothing; only new bytes count.
+    _reserve_bytes(settings, len(data))
+    # 0700 dirs, 0600 blobs, as config.py documents: captured evidence is
+    # whatever an analyst fetched, and another local account must not read it.
+    root = _blob_dir(settings)
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    root.chmod(0o700)
+    path.parent.mkdir(mode=0o700, exist_ok=True)
+    path.parent.chmod(0o700)
     # Write to a temp sibling then atomically rename so a crash mid-write never
     # leaves a truncated blob under a hash that claims to verify. The temp name
     # is unique per writer: capture_bytes now runs this in a thread, so two
@@ -157,7 +168,17 @@ def _write_blob(settings: Settings, sha256: str, data: bytes) -> None:
     # share one .partial file (they would double-replace it and raise). The
     # final content-addressed rename is idempotent — identical bytes either way.
     tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex}.partial")
-    tmp.write_bytes(data)
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        _release_bytes(settings, len(data))
+        raise
+    if path.exists():
+        # A parallel writer landed identical bytes first; they were counted once.
+        _release_bytes(settings, len(data))
     try:
         tmp.replace(path)
     except OSError:
@@ -198,6 +219,129 @@ def blob_exists(settings: Settings, sha256: str) -> bool:
 
 class EvidenceError(Exception):
     """Capture failed (too large, upstream error, unusable input)."""
+
+
+class EvidenceStorageFull(EvidenceError):
+    """The locker is at ``EVIDENCE_MAX_TOTAL_BYTES`` — the route answers 507."""
+
+
+# ── media type: declared vs detected (ASVS V2.2.1 / V5.2.2) ───────────────────
+
+# RFC 6838 type/subtype token shape. The declared type is client-controlled
+# (multipart Content-Type, screenshot JSON, an upstream's header) and is served
+# back as Content-Type, so anything else is recorded as octet-stream.
+MEDIA_TYPE_RE = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,127}"
+)
+_OCTET = "application/octet-stream"
+
+# Leading-byte signatures for the formats evidence actually arrives as. Text
+# formats (HTML, JSON, CSV) have no signature, so they are never "detected" and
+# the declared type stands.
+_MAGIC: tuple[tuple[bytes, str], ...] = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+    (b"%PDF-", "application/pdf"),
+    (b"PK\x03\x04", "application/zip"),
+    (b"\x1f\x8b", "application/gzip"),
+    (b"\x1aE\xdf\xa3", "video/webm"),
+    (b"OggS", "audio/ogg"),
+    (b"ID3", "audio/mpeg"),
+    (b"II*\x00", "image/tiff"),
+    (b"MM\x00*", "image/tiff"),
+)
+
+
+def normalize_media_type(value: str | None) -> str:
+    """Declared type reduced to a bare, well-formed ``type/subtype`` (lowercase),
+    or octet-stream. Parameters (``; charset=``) are dropped."""
+    base = (value or "").split(";", 1)[0].strip().lower()
+    return base if MEDIA_TYPE_RE.fullmatch(base) else _OCTET
+
+
+def sniff_media_type(data: bytes) -> str | None:
+    """Type from the leading bytes, or None when the format has no signature."""
+    head = data[:16]
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    if head[:4] == b"RIFF" and head[8:12] == b"WAVE":
+        return "audio/wav"
+    if head[4:8] == b"ftyp":
+        return "video/mp4"
+    for sig, mime in _MAGIC:
+        if head.startswith(sig):
+            return mime
+    return None
+
+
+def served_media_type(props: dict[str, Any]) -> str:
+    """The Content-Type ``/blob`` may send for a stored object.
+
+    The declared type is served only when the bytes do not contradict it; on a
+    disagreement (a "PNG" that is really HTML) the blob goes out as octet-stream.
+    The bytes are never rejected at capture — chain of custody keeps exactly what
+    arrived, and both types stay on the object for an analyst to see.
+    """
+    declared = normalize_media_type(props.get("media_type"))
+    detected = props.get("detected_media_type")
+    if isinstance(detected, str) and detected and detected != declared:
+        return _OCTET
+    return declared
+
+
+# ── storage cap (ASVS V2.4.1) ──────────────────────────────────────────────────
+
+_DEFAULT_MAX_TOTAL_BYTES = 20 * 1024**3
+_total_lock = threading.Lock()
+# blob dir -> bytes on disk, measured once per dir then kept by adding writes.
+_totals: dict[str, int] = {}
+
+
+def max_total_bytes() -> int:
+    """``EVIDENCE_MAX_TOTAL_BYTES`` (default 20 GiB; 0 disables the cap)."""
+    raw = os.getenv("EVIDENCE_MAX_TOTAL_BYTES", "").strip()
+    try:
+        return max(0, int(raw)) if raw else _DEFAULT_MAX_TOTAL_BYTES
+    except ValueError:
+        return _DEFAULT_MAX_TOTAL_BYTES
+
+
+def _measure_dir(root: Path) -> int:
+    total = 0
+    if not root.is_dir():
+        return 0
+    for shard in root.iterdir():
+        if not shard.is_dir():
+            continue
+        for blob in shard.iterdir():
+            with contextlib.suppress(OSError):
+                total += blob.stat().st_size
+    return total
+
+
+def _reserve_bytes(settings: Settings, n: int) -> None:
+    """Count ``n`` new bytes against the cap, or raise EvidenceStorageFull."""
+    cap = max_total_bytes()
+    root = _blob_dir(settings)
+    key = str(root.resolve())
+    with _total_lock:
+        if key not in _totals:
+            _totals[key] = _measure_dir(root)
+        if cap and _totals[key] + n > cap:
+            raise EvidenceStorageFull(
+                f"evidence store is at {_totals[key]:,} of {cap:,} bytes "
+                "(EVIDENCE_MAX_TOTAL_BYTES); free space or raise the cap"
+            )
+        _totals[key] += n
+
+
+def _release_bytes(settings: Settings, n: int) -> None:
+    key = str(_blob_dir(settings).resolve())
+    with _total_lock:
+        if key in _totals:
+            _totals[key] = max(0, _totals[key] - n)
 
 
 def _enforce_size(data: bytes, settings: Settings) -> None:
@@ -307,7 +451,10 @@ async def capture_bytes(
                 "kind": EVIDENCE_KIND,  # list_by_kind filters on props.kind
                 "sha256": sha,
                 "size_bytes": len(data),
-                "media_type": media_type or "application/octet-stream",
+                # Declared (normalized) and detected-from-bytes, side by side:
+                # served_media_type() decides what /blob may send.
+                "media_type": normalize_media_type(media_type),
+                "detected_media_type": sniff_media_type(data),
                 "capture_method": capture_method,
                 "source_url": source_url,
                 "source_context": source_context,
@@ -347,28 +494,39 @@ def _ip_is_blocked(ip: str) -> bool:
     return is_non_public_ip(ip)
 
 
-def _validate_public_host_sync(host: str) -> None:
+def _validate_public_host_sync(host: str) -> str:
+    """Resolve ``host`` ONCE, refuse if any address is non-public, and return the
+    address to connect to (IPv4 first: this host's IPv6 egress is broken)."""
     infos = socket.getaddrinfo(host, None)
     if not infos:
         raise EvidenceError(f"could not resolve {host!r}")
+    addrs: list[str] = []
     for info in infos:
-        ip = info[4][0]
+        ip = str(info[4][0])
         if _ip_is_blocked(ip):
+            from app.netguard import log_refusal  # noqa: PLC0415
+
+            log_refusal("evidence-capture", host, f"non-public address {ip}")
             raise EvidenceError(
                 "refusing to capture a private / loopback / link-local address "
                 "(SSRF guard) — only public hosts can be fetched server-side"
             )
+        if ip not in addrs:
+            addrs.append(ip)
+    v4 = [a for a in addrs if ":" not in a]
+    return (v4 or addrs)[0]
 
 
-async def _validate_public_url(url: str) -> None:
-    """Reject non-http(s), hostless, and internal-address URLs before fetching.
+async def _validate_public_url(url: str) -> str:
+    """Reject non-http(s), hostless, and internal-address URLs before fetching,
+    and return the validated address the fetch must connect to.
 
     A keyless / open box exposes capture_url unauthenticated; without this an
     attacker could make the server fetch 169.254.169.254 (cloud metadata) or an
     internal admin port and read the bytes back via /blob. Re-run per redirect
-    hop so a public URL can't 302 to an internal one. (Residual DNS-rebinding
-    TOCTOU is accepted — pinning the resolved IP into the socket would need a
-    custom transport; this closes the direct SSRF path.)
+    hop so a public URL can't 302 to an internal one. The returned address is
+    PINNED by ``_fetch_guarded`` (ASVS V1.3.6): httpx resolving the name a second
+    time is exactly the window a rebinding name (public, then 127.0.0.1) uses.
     """
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https"):
@@ -377,11 +535,36 @@ async def _validate_public_url(url: str) -> None:
     if not host:
         raise EvidenceError("URL has no host")
     try:
-        await asyncio.to_thread(_validate_public_host_sync, host)
+        return await asyncio.to_thread(_validate_public_host_sync, host)
     except EvidenceError:
         raise
     except OSError as exc:
         raise EvidenceError(f"DNS resolution failed: {exc}") from exc
+
+
+def _pinned_request(url: str, ip: str) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """URL aimed at ``ip`` + the headers/extensions that keep it the same request.
+
+    ``Host`` carries the original name (virtual hosting), and for https the
+    ``sni_hostname`` extension makes httpcore send that name as SNI and verify
+    the certificate against it — so pinning never weakens TLS. Userinfo is
+    dropped: evidence capture has no business sending credentials.
+    """
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    ip_host = f"[{ip}]" if ":" in ip else ip
+    netloc = f"{ip_host}:{parts.port}" if parts.port else ip_host
+    host_header = f"{host}:{parts.port}" if parts.port else host
+    if ":" in host and not host.startswith("["):
+        host_header = f"[{host}]:{parts.port}" if parts.port else f"[{host}]"
+    pinned = urlunsplit((parts.scheme, netloc, parts.path, parts.query, ""))
+    extensions: dict[str, Any] = {}
+    if parts.scheme == "https":
+        extensions["sni_hostname"] = host
+    # Connection: close — httpcore pools by origin, which is now (scheme, ip,
+    # port): a keep-alive socket opened with one name's SNI and certificate would
+    # otherwise be reused for a different name on the same address.
+    return pinned, {"Host": host_header, "Connection": "close"}, extensions
 
 
 class _Fetched:
@@ -400,13 +583,17 @@ async def _fetch_guarded(url: str, settings: Settings, *, max_hops: int = 5) -> 
     cap = settings.evidence_max_blob_bytes
     current = url
     for _ in range(max_hops + 1):
-        await _validate_public_url(current)
-        async with client.stream("GET", current, follow_redirects=False) as resp:
+        ip = await _validate_public_url(current)
+        target, headers, extensions = _pinned_request(current, ip)
+        async with client.stream(
+            "GET", target, headers=headers, extensions=extensions, follow_redirects=False
+        ) as resp:
             if resp.is_redirect:
                 loc = resp.headers.get("location")
                 if not loc:
                     raise EvidenceError("redirect without a Location header")
-                current = str(resp.url.join(loc))
+                # Join against the NAMED url, not resp.url (the pinned address).
+                current = urljoin(current, loc)
                 continue
             chunks: list[bytes] = []
             total = 0
@@ -420,7 +607,7 @@ async def _fetch_guarded(url: str, settings: Settings, *, max_hops: int = 5) -> 
             return _Fetched(
                 status=resp.status_code,
                 headers={k: v for k, v in resp.headers.items()},
-                final_url=str(resp.url),
+                final_url=current,
                 body=b"".join(chunks),
             )
     raise EvidenceError("too many redirects")

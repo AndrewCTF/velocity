@@ -164,14 +164,19 @@ _minted_jwt: tuple[str, float] | None = None  # (token, wall-clock expiry)
 
 
 def _mint_internal_jwt(secret: str) -> str | None:
-    """Mint a short-lived HS256 token the backend's ``app.auth`` accepts.
+    """Mint a short-lived HS256 SERVICE token for the MCP's self-hop to the API.
 
     In prod the gate is Supabase-JWT-only (no static ``API_KEY``); a server-to-
-    server hop carries no browser session, so we sign our own. ``_verify_hs256``
-    requires an HS256 signature over the JWT secret, ``role=="authenticated"``,
-    and an unexpired ``exp`` — we also set the standard Supabase ``aud``/``sub``/
-    ``iat`` so the token is well-formed. Cached until ~60 s before ``exp``.
+    server hop carries no browser session, so we sign our own. It is NOT a user
+    session (ASVS V9.2.4 / V6.8.1): ``aud`` and ``iss`` are
+    ``app.auth.INTERNAL_AUDIENCE`` / ``INTERNAL_ISSUER`` and ``role`` is not
+    ``authenticated``, so ``app.auth`` accepts it at ``ApiKeyMiddleware`` and
+    ``require_api_key`` only. A route that resolves a user (``current_user``)
+    refuses it, a WS refuses it, and PostgREST refuses it. Cached until ~60 s
+    before ``exp``.
     """
+    from app.auth import INTERNAL_AUDIENCE, INTERNAL_ISSUER  # noqa: PLC0415
+
     global _minted_jwt
     now = time.time()
     if _minted_jwt is not None:
@@ -179,13 +184,14 @@ def _mint_internal_jwt(secret: str) -> str | None:
         if expiry - 60 > now:
             return token
     try:
-        import jwt  # noqa: PLC0415 — pyjwt, the lib app.auth's HS256 check mirrors
+        import jwt  # noqa: PLC0415 — pyjwt
     except Exception:  # noqa: BLE001 — pyjwt missing → no Authorization header
         return None
     exp = int(now) + _INTERNAL_JWT_TTL_S
     claims = {
-        "role": "authenticated",  # the claim app.auth._verify_hs256 demands
-        "aud": "authenticated",
+        "role": "velocity-internal",
+        "aud": INTERNAL_AUDIENCE,
+        "iss": INTERNAL_ISSUER,
         "sub": "osint-mcp-internal",
         "iat": int(now),
         "exp": exp,

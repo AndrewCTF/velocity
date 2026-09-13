@@ -29,6 +29,7 @@ import {
   tableHeadCls,
 } from '../foundry/ui.js';
 import { Icon } from '../normal/Icon.js';
+import { dict } from '../shell/safeKeys.js';
 
 // Editor — the heart of Workflows. A pan/zoom SVG DAG canvas (same pattern as
 // foundry/PipelineView.tsx: layered left-to-right auto-layout, node click to
@@ -680,7 +681,7 @@ export function EditorView(): JSX.Element {
   const addBlock = (type: string): void => {
     const spec = catalogByType.get(type);
     if (!spec) return;
-    const config: Record<string, unknown> = {};
+    const config = dict<unknown>();
     for (const f of spec.config_schema) if (f.default !== undefined) config[f.key] = f.default;
     const id = newBlockId(type, new Set(draft.spec.blocks.map((b) => b.id)));
     setDraft((d) => ({ ...d, spec: { ...d.spec, blocks: [...d.spec.blocks, { id, type, config }] } }));

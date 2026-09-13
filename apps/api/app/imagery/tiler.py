@@ -46,15 +46,108 @@ responses are gzip-eligible. That is harmless here: tile bodies are PNG/JPEG
 MCP SSE stream — they send a body immediately, so the gzip "buffer the start
 message" stall does not apply. tilejson/info are small JSON. No special-casing
 needed.
+
+URL GUARD (ASVS V13.2.4 / V15.3.2, 2026-09-13)
+----------------------------------------------
+``?url=`` goes to GDAL, and GDAL opens local paths, ``/vsi*`` handlers and any
+host curl can reach. Measured before the guard: ``/tiler/info?url=/etc/hostname``
+answered with GDAL's "not recognized as a supported file format" (a file
+oracle), and ``?url=http://127.0.0.1:9/`` with a curl connect error (loopback,
+LAN and IMDS SSRF). ``check_cog_url`` is TiTiler's ``path_dependency`` now:
+http(s) only, every resolved address public (``netguard``), and each redirect
+hop walked with redirects OFF and re-checked, because GDAL has no switch to
+stop curl following one. Verdicts are cached per URL for ``_CHECK_TTL_S`` so a
+tile burst pays one check. ``TILER_ALLOW_HOSTS`` names hosts that may be
+private on purpose. Residual, documented: a server that answers the check with
+a 200 and GDAL moments later with a redirect, or a DNS answer that changes
+between the two, is not caught. ``/tiler`` also fails closed on a keyless box
+and shares the general per-client limiter (``auth``/``ratelimit``).
 """
 
 from __future__ import annotations
 
 import logging
+import socket
+import time
+from urllib.parse import urljoin, urlsplit
+
+import httpx
+
+from app.netguard import is_non_public_ip
 
 logger = logging.getLogger("app.imagery.tiler")
+security_log = logging.getLogger("app.security")
 
-__all__ = ["build_tiler_app", "TILER_AVAILABLE"]
+__all__ = ["build_tiler_app", "TILER_AVAILABLE", "check_cog_url", "CogUrlRefused"]
+
+_CHECK_TTL_S = 600.0
+_MAX_HOPS = 5
+_checked: dict[str, float] = {}
+
+
+class CogUrlRefused(ValueError):
+    """The ``?url=`` is not a public http(s) COG this server may fetch."""
+
+
+def _resolve(host: str) -> list[str]:
+    try:
+        return [ai[4][0] for ai in socket.getaddrinfo(host, None)]
+    except OSError:
+        return []
+
+
+def _head_no_redirect(url: str) -> httpx.Response:
+    with httpx.Client(timeout=httpx.Timeout(6.0, connect=4.0), follow_redirects=False) as c:
+        return c.head(url)
+
+
+def _allow_hosts() -> set[str]:
+    from app.config import get_settings  # noqa: PLC0415
+
+    raw = getattr(get_settings(), "tiler_allow_hosts", "") or ""
+    return {h.strip().lower() for h in raw.split(",") if h.strip()}
+
+
+def _check_one(url: str) -> None:
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise CogUrlRefused("url must be an http(s) URL with a host")
+    host = parts.hostname.lower()
+    if host in _allow_hosts():
+        return
+    addrs = _resolve(host)
+    if not addrs:
+        raise CogUrlRefused(f"host {host!r} does not resolve")
+    if any(is_non_public_ip(a) for a in addrs):
+        raise CogUrlRefused(f"host {host!r} is not a public address")
+
+
+def check_cog_url(url: str) -> str:
+    """Refuse anything but a public http(s) COG, following redirects by hand."""
+    now = time.time()
+    hit = _checked.get(url)
+    if hit and hit > now:
+        return url
+    current = url
+    for _ in range(_MAX_HOPS + 1):
+        _check_one(current)
+        try:
+            r = _head_no_redirect(current)
+        except httpx.HTTPError:
+            break  # unreachable now: GDAL will fail on its own, nothing to follow
+        if not r.is_redirect:
+            break
+        nxt = r.headers.get("location")
+        if not nxt:
+            break
+        current = urljoin(current, nxt)
+    else:
+        raise CogUrlRefused("too many redirects")
+    _checked[url] = now + _CHECK_TTL_S
+    if len(_checked) > 2048:
+        for k in [k for k, v in _checked.items() if v <= now]:
+            _checked.pop(k, None)
+    return url
 
 # Resolved by build_tiler_app() on first call; None until then / if titiler is
 # absent. Exposed so callers (and the test) can introspect without re-importing.
@@ -87,9 +180,12 @@ def build_tiler_app() -> object | None:
         return None
 
     # A standalone sub-app so it owns its own OpenAPI + exception handlers and
-    # composes cleanly under app.mount(). Docs are kept (small, useful for the
-    # operator to discover the COG tile/tilejson URLs); they sit at /tiler/docs.
+    # composes cleanly under app.mount(). Docs are OFF (ASVS V13.4.5): the route
+    # map is not handed out; the parent's /openapi.json needs a credential.
     tiler_app = FastAPI(
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
         title="Velocity COG Tiler",
         description=(
             "XYZ / tilejson tiles for any Cloud-Optimized GeoTIFF (pass ?url=<cog>). "
@@ -102,7 +198,16 @@ def build_tiler_app() -> object | None:
     # tilejson / info / preview / bbox / point — the full COG surface B3/B4/B5
     # consume. Mount its router at the sub-app root so paths read
     # /tiler/tiles/WebMercatorQuad/{z}/{x}/{y}.
-    cog = TilerFactory(router_prefix="")
+    from fastapi import HTTPException, Query  # noqa: PLC0415
+
+    def _guarded_url(url: str = Query(..., description="Public http(s) COG URL")) -> str:
+        try:
+            return check_cog_url(url)
+        except CogUrlRefused as exc:
+            security_log.warning("ssrf refused where=tiler reason=%s", exc)
+            raise HTTPException(status_code=403, detail=f"url refused: {exc}") from exc
+
+    cog = TilerFactory(router_prefix="", path_dependency=_guarded_url)
     tiler_app.include_router(cog.router)
 
     # rio-tiler raises typed errors (TileOutsideBounds, InvalidColorMapName,

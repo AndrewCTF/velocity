@@ -3,6 +3,7 @@
 // (from the desktop CUDA sidecar, apps/desktop/sidecar/yolo_sidecar.py). One
 // owner so the two surfaces stay visually identical.
 import type { GroundDetection } from './types.js';
+import { dict } from '../shell/safeKeys.js';
 
 // Literal hexes required — colorFor() output is also embedded in SVG data-URI
 // billboards (globe/CaptureLayer.ts), where CSS var() cannot resolve. person
@@ -26,7 +27,7 @@ export function colorFor(cls: string): string {
 }
 
 export function detCounts(dets: GroundDetection[]): [string, number][] {
-  const acc: Record<string, number> = {};
+  const acc = dict<number>();
   for (const d of dets) acc[d.cls] = (acc[d.cls] ?? 0) + 1;
   return Object.entries(acc).sort((a, b) => b[1] - a[1]);
 }

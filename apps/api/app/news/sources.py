@@ -68,7 +68,15 @@ FEEDS: list[Source] = [
     Source("DW", "https://rss.dw.com/rdf/rss-en-world", "center", "DE"),
     Source("Sky News World", "https://feeds.skynews.com/feeds/rss/world.xml", "center", "UK"),
     Source("CNBC", "https://www.cnbc.com/id/100727362/device/rss/rss.html", "center", "US"),
-    Source("CNN World", "http://rss.cnn.com/rss/edition_world.rss", "center-left", "US"),
+    # rss.cnn.com is plain HTTP only (https fails the TLS handshake, probed
+    # 2026-09-13), so CNN comes through the same Google News form as the wires
+    # below: an unauthenticated feed can be rewritten in transit (ASVS V12.3.1).
+    Source(
+        "CNN World",
+        "https://news.google.com/rss/search?q=when:1d%20source:cnn&hl=en-US&gl=US&ceid=US:en",
+        "center-left",
+        "US",
+    ),
     Source("Fox World", "https://moxie.foxnews.com/google-publisher/world.xml", "right", "US"),
     Source(
         "Reuters",

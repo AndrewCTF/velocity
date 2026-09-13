@@ -13,7 +13,7 @@ backported fix.
 Please report suspected vulnerabilities privately through **GitHub Security
 Advisories**, not a public issue:
 
-<https://github.com/AndrewCTF/OSINT/security/advisories/new>
+<https://github.com/AndrewCTF/velocity/security/advisories/new>
 
 Do not open a public issue, discussion, or pull request for a suspected
 vulnerability until a fix has shipped — this repo has no bug bounty, but
@@ -30,9 +30,12 @@ both).
 - **Acknowledgement:** within 72 hours.
 - **Triage** (confirmed/not, severity, affected versions): within 7 days.
 - **Fix timeline for confirmed issues:** high/critical severity patched and
-  released within 7 days of triage; medium/low severity folded into the next
-  regular release. These are targets for a project run by one maintainer, not
-  contractual SLAs.
+  released within 7 days of triage; medium within 30 days; low within 90 days.
+  These are targets for a project run by one maintainer, not contractual SLAs.
+- **Dependency advisories (direct and transitive) and CodeQL findings,** once a
+  fix exists: critical 7 days, high 14 days, medium 30 days, low 90 days
+  (`docs/security/isms/operations.md` §8.2.1). The 7-day target below for
+  high/critical issues in our own code or a direct dependency still applies.
 
 ## Update cadence
 
@@ -50,6 +53,14 @@ both).
 - **Static analysis:** CodeQL runs on every push to `master`, every pull
   request, and weekly on a schedule (`.github/workflows/codeql.yml`), across
   the TypeScript/JavaScript and Python code.
+
+## How authentication and authorization work
+
+Every authentication pathway is described in
+[`docs/security/auth-and-sessions.md`](docs/security/auth-and-sessions.md): the static key, WebSocket
+keys, Supabase sessions, the internal MCP token and ingest tokens. So are session lifetimes and
+revocation, the authorization matrix across deployment modes, and the Supabase project settings
+this project relies on but cannot set itself.
 
 ## Scope
 

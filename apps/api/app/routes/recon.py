@@ -31,14 +31,15 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from app.auth import _bearer, _jwt_claims
+from app import childenv
+from app.auth import _bearer
 from app.config import get_settings
+from app.keys import user_id_for_token
 from app.uploads import write_capped
 
-router = APIRouter(tags=["recon"], prefix="/api/recon")
 log = logging.getLogger("app.recon")
 
 # ── paths (env-overridable; default to the repo's GPU lab) ───────────────────
@@ -80,15 +81,30 @@ def _scrub(text: str) -> str:
     return text
 
 
-def _owner_key(request: Request) -> str:
-    """Owner id for scoping recon jobs (issue #15). The request already passed
-    ApiKeyMiddleware; extract the Supabase ``sub`` from a bearer token when one is
-    present, else fall back to the shared ``local`` identity (keyless / static-key
-    single-operator box — same convention as the local ontology graph)."""
+async def _resolve_owner(request: Request) -> None:
+    """Router dependency: the owner id for scoping recon jobs (issue #15), put on
+    ``request.state`` for ``_owner_key``. The ``sub`` of a VERIFIED Supabase
+    session, else the shared ``local`` identity (keyless / static-key
+    single-operator box — same convention as the local ontology graph).
+
+    Verified, not decoded (ASVS V9.1.1): the middleware authorizes a static
+    ``X-API-Key`` before it looks at the bearer, so reading ``sub`` from an
+    unchecked token let the key holder attach a forged bearer naming any user
+    and read that user's jobs."""
     # Headers only, matching ApiKeyMiddleware: an unvalidated ?key= must not pick the owner.
     token = _bearer(request.headers) or request.headers.get("x-api-key")
-    claims = _jwt_claims(token or "") or {}
-    return str(claims.get("sub") or "local")
+    request.state.recon_owner = await user_id_for_token(token) or "local"
+
+
+def _owner_key(request: Request) -> str:
+    """The owner ``_resolve_owner`` verified for this request (``local`` if the
+    dependency did not run: that identity sees only unowned jobs)."""
+    return str(getattr(getattr(request, "state", None), "recon_owner", "local"))
+
+
+router = APIRouter(
+    tags=["recon"], prefix="/api/recon", dependencies=[Depends(_resolve_owner)]
+)
 
 
 def _drop_job(job_id: str) -> None:
@@ -121,6 +137,35 @@ def _evict_jobs() -> None:
             _drop_job(j["id"])
 
 
+_IMG_UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp"}
+
+
+def _allowed_name(name: str) -> bool:
+    """Recon takes images or a video, nothing else (ASVS V5.2.2)."""
+    return Path(name).suffix.lower() in (_IMG_UPLOAD_EXT | _VIDEO_EXT)
+
+
+def _content_matches(ext: str, head: bytes) -> bool:
+    """The first bytes agree with the extension. ffmpeg and the SfM stack parse
+    whatever they are handed, so a renamed file must not reach them."""
+    ext = ext.lower()
+    if ext in (".jpg", ".jpeg"):
+        return head.startswith(b"\xff\xd8\xff")
+    if ext == ".png":
+        return head.startswith(b"\x89PNG\r\n\x1a\n")
+    if ext in (".tif", ".tiff"):
+        return head.startswith((b"II*\x00", b"MM\x00*"))
+    if ext == ".webp":
+        return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
+    if ext == ".avi":
+        return head[:4] == b"RIFF" and head[8:12] == b"AVI "
+    if ext in (".mp4", ".mov", ".m4v"):
+        return head[4:8] in (b"ftyp", b"moov", b"mdat", b"wide", b"free", b"skip")
+    if ext in (".mkv", ".webm"):
+        return head.startswith(b"\x1a\x45\xdf\xa3")
+    return False
+
+
 def _enforce_active_cap() -> None:
     """Reject new jobs with 429 once too many are already running (issue #9)."""
     cap = get_settings().recon_max_active_jobs
@@ -140,7 +185,8 @@ def _cuda_env() -> dict[str, str]:
     bundled CUDA 12.8 toolchain — NOT the system nvcc (which fatals on
     'compute_120'). This is the single most load-bearing detail of the pipeline."""
     ch = _FUSION / ".mamba-cuda"
-    env = dict(os.environ)
+    # Allowlisted, so API_KEY / JWT secret / BYOK key never reach the job (ASVS V13.3.2).
+    env = childenv.child_env(keep_prefixes=childenv.GPU_PREFIXES + ("TORCH_", "HF_"))
     env.update(
         CUDA_HOME=str(ch),
         PATH=f"{ch / 'bin'}:{env.get('PATH', '')}",
@@ -570,6 +616,10 @@ async def create_job(
     sh = max(0, min(sh, 3))
     down = max(1, min(down, 8))
     job_id = uuid.uuid4().hex[:12]
+    # Reserve the slot BEFORE the first await (ASVS V2.3.2 / V2.3.4). The record
+    # used to be written after the uploads, so N concurrent submits all passed
+    # the cap while each was still streaming its files.
+    _JOBS[job_id] = _new_job_record(job_id, _owner_key(request))
     work = _JOBS_ROOT / job_id
     inp = work / "images"  # Pi3X SfM + train_gs read <work>/images/
     inp.mkdir(parents=True, exist_ok=True)
@@ -581,14 +631,20 @@ async def create_job(
             name = Path(uf.filename or f"f{saved}").name
             if not name:
                 continue
+            if not _allowed_name(name):
+                raise HTTPException(415, f"{name}: recon takes images or video only")
             used = await write_capped(uf, inp / name, cap, used)
+            with open(inp / name, "rb") as fh:  # noqa: ASYNC230 — 16 bytes
+                head = fh.read(16)
+            if not _content_matches(Path(name).suffix, head):
+                raise HTTPException(415, f"{name}: content does not match its extension")
             saved += 1
+        if saved == 0:
+            raise HTTPException(400, "no files received")
     except HTTPException:
+        _JOBS.pop(job_id, None)
         shutil.rmtree(work, ignore_errors=True)  # no partial job dir left behind
         raise
-    if saved == 0:
-        raise HTTPException(400, "no files received")
-    _JOBS[job_id] = _new_job_record(job_id, _owner_key(request))
     task = (
         _pipeline_mapany(job_id) if mode == "mapany"
         else _pipeline(job_id, steps, sh, down, matcher)

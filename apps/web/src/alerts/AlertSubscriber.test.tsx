@@ -13,7 +13,7 @@ vi.mock('../auth/AuthContext.js', () => ({
 vi.mock('../transport/http.js', () => ({
   apiFetch: vi.fn(() => Promise.resolve()),
   hasStaticApiKey: () => false,
-  withWsKey: (u: string) => u,
+  openAuthedWebSocket: (u: string) => new WebSocket(u),
 }));
 
 class FakeWS {

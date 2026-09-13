@@ -57,6 +57,7 @@ import { resolveAircraftFamily, aircraftSilhouette, vesselSilhouette } from './s
 import { useChip } from '../imagery/chipStore.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { usePolReplay } from '../state/polReplayStore.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -1357,9 +1358,9 @@ export function ProfileCard({
         </div>
       )}
       {photo && (
-        <a href={e2?.photo_link ?? photo} target="_blank" rel="noreferrer" className="block">
+        <a href={safeHttpUrl(e2?.photo_link ?? photo)} target="_blank" rel="noreferrer" className="block">
           <img
-            src={photo}
+            src={safeHttpUrl(photo)}
             alt="entity reference"
             loading="lazy"
             className="block w-full rounded-sm border border-line"
@@ -1450,7 +1451,7 @@ export function EnrichmentCard({
       <div className="flex flex-wrap gap-2 mt-1.5">
         {wikidata && (
           <a
-            href={wikidata}
+            href={safeHttpUrl(wikidata)}
             target="_blank"
             rel="noreferrer"
             className="mono text-[10px] text-accent hover:underline"
@@ -1460,7 +1461,7 @@ export function EnrichmentCard({
         )}
         {kind === 'quake' && (enrichment as { url?: string }).url && (
           <a
-            href={(enrichment as { url: string }).url}
+            href={safeHttpUrl((enrichment as { url: string }).url)}
             target="_blank"
             rel="noreferrer"
             className="mono text-[10px] text-accent hover:underline"

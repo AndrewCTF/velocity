@@ -75,18 +75,15 @@ describe('CLAUDE.md sacred behaviors (source-scan guards)', () => {
     expect(s).not.toContain('ConstantPositionProperty');
   });
 
-  it('every new WebSocket() wraps its URL in withWsKey()', () => {
-    // Decision (CLAUDE.md Auth): raw sockets bypass auth; withWsKey is mandatory.
+  it('every WebSocket is opened through openAuthedWebSocket()', () => {
+    // Decision (CLAUDE.md Auth): raw sockets bypass auth. transport/http.ts is
+    // the one place that constructs a WebSocket, carrying the credential in
+    // Sec-WebSocket-Protocol rather than the URL (ASVS V14.2.1).
     for (const file of walk(SRC)) {
-      const s = readFileSync(file, 'utf8');
-      let i = s.indexOf('new WebSocket(');
-      while (i !== -1) {
-        expect(
-          s.slice(i, i + 250),
-          `${file}: new WebSocket without withWsKey()`,
-        ).toContain('withWsKey(');
-        i = s.indexOf('new WebSocket(', i + 1);
-      }
+      if (/\.test\.tsx?$/.test(file) || file.endsWith('transport/http.ts')) continue;
+      expect(readFileSync(file, 'utf8'), `${file}: new WebSocket outside openAuthedWebSocket()`).not.toContain(
+        'new WebSocket(',
+      );
     }
   });
 });

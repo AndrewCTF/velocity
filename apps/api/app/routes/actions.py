@@ -18,9 +18,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.config import get_settings
 from app.intel import action_proposals_local
 from app.intel.actions import ActionResult, dispatch, list_actions
-from app.keys import UserCtx, current_user
+from app.keys import UserCtx, current_user, multi_user
 
 router = APIRouter(tags=["actions"])
 
@@ -62,14 +63,45 @@ PROPOSAL_TTL_S = 900
 
 
 async def propose(name: str, params: dict, ctx, confidence: float = 0.0) -> str:
-    """Queue action ``name`` with ``params`` for operator approval; returns its id."""
-    return await action_proposals_local.add(name, params, confidence, PROPOSAL_TTL_S)
+    """Queue action ``name`` with ``params`` for operator approval; returns its id.
+    The proposing user is recorded as the owner."""
+    owner = getattr(ctx, "user_id", None)
+    return await action_proposals_local.add(
+        name, params, confidence, PROPOSAL_TTL_S, owner=owner
+    )
+
+
+async def _is_admin(ctx: UserCtx) -> bool:
+    from app.security import _fetch_profile  # noqa: PLC0415
+
+    prof = await _fetch_profile(ctx, get_settings())
+    return "admin" in (prof.get("roles") or ())
+
+
+async def _may_decide(row: dict, ctx: UserCtx | None) -> bool:
+    """ASVS V8.2.2: on a multi-user deployment a proposal is seen and decided by
+    the user whose agent run proposed it, or an admin. A row with no owner
+    (queued before owners were recorded) is admin-only. Single-user: anyone
+    who got past auth is the operator."""
+    if ctx is None or not multi_user():
+        return True
+    if row.get("owner") and row.get("owner") == ctx.user_id:
+        return True
+    return await _is_admin(ctx)
+
+
+def _public(row: dict) -> dict:
+    return {k: v for k, v in row.items() if k != "owner"}
 
 
 @router.get("/api/actions/proposals")
 async def list_proposals(ctx: UserCtx = Depends(current_user)) -> list[dict]:
     """Pending proposals awaiting operator approval, oldest first."""
-    return await action_proposals_local.list_pending(PROPOSAL_TTL_S)
+    rows = await action_proposals_local.list_pending(PROPOSAL_TTL_S)
+    if ctx is not None and multi_user():
+        admin = await _is_admin(ctx)
+        rows = [r for r in rows if admin or (r.get("owner") and r["owner"] == ctx.user_id)]
+    return [_public(r) for r in rows]
 
 
 @router.post("/api/actions/proposals/{pid}/approve")
@@ -82,6 +114,10 @@ async def approve_proposal(pid: str, ctx: UserCtx = Depends(current_user)):
 
     ``take`` removes the row before dispatching, so a double-click approves once.
     """
+    # 404, not 403, for someone else's: the id space is not an oracle.
+    peeked = await action_proposals_local.peek(pid, PROPOSAL_TTL_S)
+    if peeked is None or not await _may_decide(peeked, ctx):
+        raise HTTPException(status_code=404, detail="unknown or expired proposal")
     row = await action_proposals_local.take(pid, PROPOSAL_TTL_S)
     if row is None:
         raise HTTPException(status_code=404, detail="unknown or expired proposal")
@@ -91,6 +127,9 @@ async def approve_proposal(pid: str, ctx: UserCtx = Depends(current_user)):
 @router.post("/api/actions/proposals/{pid}/reject")
 async def reject_proposal(pid: str, ctx: UserCtx = Depends(current_user)) -> dict:
     """Drop a queued proposal without executing it. 404 if unknown/expired."""
+    peeked = await action_proposals_local.peek(pid, PROPOSAL_TTL_S)
+    if peeked is None or not await _may_decide(peeked, ctx):
+        raise HTTPException(status_code=404, detail="unknown or expired proposal")
     if await action_proposals_local.take(pid, PROPOSAL_TTL_S) is None:
         raise HTTPException(status_code=404, detail="unknown or expired proposal")
     return {"ok": True, "id": pid}

@@ -16,6 +16,7 @@ import { useFoundryNav } from './nav.js';
 import { useFoundryPoll } from './useFoundryPoll.js';
 import { EmptyState, Field, ViewHeader, controlCls } from './ui.js';
 import { Icon } from '../normal/Icon.js';
+import { dict } from '../shell/safeKeys.js';
 
 // Pipeline — the lineage DAG (datasets as rounded nodes, transforms as
 // diamonds, bezier edges in topological layers) now with zoom/pan + keyboard-
@@ -119,7 +120,7 @@ function StepRow({
         )}
         {step.type === 'rename' && (
           <input className={controlCls} placeholder="old:new, old2:new2" value={Object.entries((step.map as Record<string, string>) ?? {}).map(([k, v]) => `${k}:${v}`).join(', ')} onChange={(e) => {
-            const map: Record<string, string> = {};
+            const map = dict<string>();
             for (const pair of e.target.value.split(',')) {
               const [k, v] = pair.split(':').map((s) => s.trim());
               if (k && v) map[k] = v;
@@ -151,7 +152,7 @@ function StepRow({
           <>
             <input className={controlCls} placeholder="group_by (comma-separated)" value={(step.group_by as string[] | undefined)?.join(',') ?? ''} onChange={(e) => set({ group_by: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
             <input className={controlCls} placeholder="aggs: out=count, out2=sum:col" value={Object.entries((step.aggs as Record<string, string>) ?? {}).map(([k, v]) => `${k}=${v}`).join(', ')} onChange={(e) => {
-              const aggs: Record<string, string> = {};
+              const aggs = dict<string>();
               for (const pair of e.target.value.split(',')) {
                 const [k, v] = pair.split('=').map((s) => s.trim());
                 if (k && v) aggs[k] = v;

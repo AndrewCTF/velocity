@@ -177,20 +177,30 @@ async def _fire(
     )
 
 
+def render_prompt(template: str, dataset: str, rows: str, trigger: str) -> str:
+    """Substitute exactly ``{dataset}``, ``{rows}`` and ``{trigger}``. Plain
+    replacement, not ``str.format``: an analyst-authored template like
+    ``{dataset.__class__.__mro__}`` walked object attributes into the prompt
+    (ASVS V1.3.10), and a stray brace crashed the monitor. Any other brace text
+    stays literal."""
+    return (
+        template.replace("{dataset}", dataset)
+        .replace("{rows}", rows)
+        .replace("{trigger}", trigger)
+    )
+
+
 async def _run_llm(
     monitor: dict[str, Any], dataset_name: str, rows: list[dict[str, Any]]
 ) -> str | None:
     """Call the LLM ladder with the monitor's system prompt + prompt template.
     Returns the summary text, or ``None`` on ANY failure — never raises."""
-    try:
-        prompt = (monitor["llm_prompt"] or "{dataset}: {rows}").format(
-            dataset=dataset_name,
-            rows=json.dumps(rows, default=str)[:20_000],
-            trigger=monitor["trigger"],
-        )
-    except Exception as exc:  # noqa: BLE001 — a malformed template must degrade, not crash
-        log.warning("foundry monitor %s: prompt template error: %s", monitor["id"], exc)
-        return None
+    prompt = render_prompt(
+        monitor["llm_prompt"] or "{dataset}: {rows}",
+        dataset_name,
+        json.dumps(rows, default=str)[:20_000],
+        str(monitor["trigger"]),
+    )
     messages = [
         {"role": "system", "content": monitor["llm_system"] or "You are a data monitor assistant."},
         {"role": "user", "content": prompt},

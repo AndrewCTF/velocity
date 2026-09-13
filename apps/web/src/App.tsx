@@ -49,7 +49,7 @@ import { ErrorBoundary } from './shell/ErrorBoundary.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext.js';
 import { isSupabaseConfigured } from './transport/supabase.js';
-import { apiFetch, backendWsUrl, withWsKey } from './transport/http.js';
+import { apiFetch, backendWsUrl, openAuthedWebSocket } from './transport/http.js';
 import { Console } from './shell/Console.js';
 import { ActionBar } from './shell/ActionBar.js';
 import { REHOMED, type LeftPanelId, type RightPanelId } from './shell/panels.js';
@@ -90,11 +90,29 @@ export function App(): JSX.Element {
   // forward, exactly like investigationOpenSeq does for Search-around.
   const groundOpenSeq = useGround((s) => s.openSeq);
 
+  // Refetch on sign-in and sign-out: with auth on, the backend returns the ion
+  // and Google keys only to a signed-in caller. The first fetch waits for the
+  // initial session (auth loading) so a signed-in reload asks once, with its
+  // token. A refetch that fails keeps the config already on screen.
+  const { user: authUser, loading: authLoading } = useAuth();
+  const authUserId = authUser?.id ?? null;
+  const haveConfig = useRef(false);
   useEffect(() => {
+    if (authLoading) return;
+    let live = true;
     fetchRuntimeConfig()
-      .then(setConfig)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
+      .then((c) => {
+        if (!live) return;
+        haveConfig.current = true;
+        setConfig(c);
+      })
+      .catch((e: unknown) => {
+        if (live && !haveConfig.current) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      live = false;
+    };
+  }, [authLoading, authUserId]);
 
   // Saved-search subscription poller (§6.5) — re-runs standing queries, posts to
   // the Inbox when new objects match. Idempotent; no-ops when no searches exist.
@@ -562,7 +580,7 @@ export function CopControl({
     (id: string) => {
       if (!viewer) return;
       stopFollow();
-      const ws = new WebSocket(withWsKey(`${wsBase()}/ws/cop?map=${encodeURIComponent(id)}`));
+      const ws = openAuthedWebSocket(`${wsBase()}/ws/cop?map=${encodeURIComponent(id)}`);
       wsRef.current = ws;
       setFollowingId(id);
       // Lead: broadcast this camera on move (debounced via Cesium's own change

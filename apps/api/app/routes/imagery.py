@@ -493,7 +493,7 @@ async def imagery_chip(
         content=result["bytes"],
         media_type=result["media_type"],
         headers={
-            "Cache-Control": "public, max-age=21600",
+            "Cache-Control": "private, max-age=21600",
             "X-Chip": json.dumps(meta, separators=(",", ":")),
             "X-Imagery-Provider": str(meta["provider"]),
             "X-Imagery-Gsd-M": str(meta["gsd_m"]),
@@ -623,7 +623,7 @@ async def imagery_change(
         content=result["bytes"],
         media_type=result["media_type"],
         headers={
-            "Cache-Control": "public, max-age=21600",
+            "Cache-Control": "private, max-age=21600",
             "X-Chip": json.dumps(meta, separators=(",", ":")),
             "X-Imagery-Provider": str(meta["provider"]),
             "X-Imagery-Gsd-M": str(meta["gsd_m"]),
@@ -757,7 +757,7 @@ async def imagery_tile(
         content=data,
         media_type=_MEDIA[meta["ext"]],
         headers={
-            "Cache-Control": "public, max-age=21600",
+            "Cache-Control": "private, max-age=21600",
             "X-Imagery": f"gibs/{layer}",
         },
     )

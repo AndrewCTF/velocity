@@ -6,6 +6,7 @@ client_credentials used automatically when OPENSKY_CLIENT_ID/SECRET are set.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
@@ -16,6 +17,7 @@ from app.ingest.opensky import OpenSkyTokenManager, fetch_states, states_to_geoj
 from app.upstream import cache
 
 router = APIRouter(tags=["aviation"])
+log = logging.getLogger("app.aviation")
 
 # Module-level token manager so OAuth2 token is reused across requests.
 _TM: OpenSkyTokenManager | None = None
@@ -28,6 +30,19 @@ def _token_manager(settings: Settings) -> OpenSkyTokenManager:
             settings.opensky_client_id, settings.opensky_client_secret
         )
     return _TM
+
+
+def _upstream_error(exc: httpx.HTTPError) -> HTTPException:
+    """A generic answer for the caller; the specifics go to the server log only
+    (ASVS V16.5.1). OpenSky's body and the transport error text can name hosts,
+    ports or account state, so neither is echoed. The status code is kept: a
+    429 or 503 tells the client when to retry."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        log.warning("opensky upstream status=%s", status)
+        return HTTPException(status_code=status, detail="opensky upstream unavailable")
+    log.warning("opensky transport error=%s", type(exc).__name__)
+    return HTTPException(status_code=502, detail="opensky upstream unavailable")
 
 
 @router.get("/api/aviation/states")
@@ -66,20 +81,12 @@ async def aviation_states(
                     raw = await fetch_states(anon, bbox)
                     return states_to_geojson(raw)
                 except httpx.HTTPStatusError as e2:
-                    raise HTTPException(
-                        status_code=e2.response.status_code,
-                        detail=f"opensky upstream: {e2.response.text[:200]}",
-                    ) from e2
+                    raise _upstream_error(e2) from e2
                 except httpx.HTTPError as e2:
-                    raise HTTPException(
-                        status_code=502, detail=f"opensky transport: {e2}"
-                    ) from e2
-            raise HTTPException(
-                status_code=e.response.status_code,
-                detail=f"opensky upstream: {e.response.text[:200]}",
-            ) from e
+                    raise _upstream_error(e2) from e2
+            raise _upstream_error(e) from e
         except httpx.HTTPError as e:
-            raise HTTPException(status_code=502, detail=f"opensky transport: {e}") from e
+            raise _upstream_error(e) from e
         return states_to_geojson(raw)
 
     # Anonymous gets ~10s resolution per docs; authenticated 5s. Cache 10s.

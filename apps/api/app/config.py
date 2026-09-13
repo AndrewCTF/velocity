@@ -8,13 +8,23 @@ the browser can hand it to CesiumJS at runtime.
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Docker / Kubernetes secrets (ASVS V13.3.1): a file named after a setting under
+# this directory (``/run/secrets/api_key``) supplies it, so API_KEY,
+# SUPABASE_JWT_SECRET and BYOK_ENC_KEY need not sit in the environment where
+# ``docker inspect`` and every child process can read them. Real env vars and
+# .env still win over a secrets file. Only set when the directory exists:
+# pydantic-settings warns on a missing one, and a bare-metal box has none.
+SECRETS_DIR = "/run/secrets"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
+        secrets_dir=SECRETS_DIR if os.path.isdir(SECRETS_DIR) else None,
         # ".env" resolves against the server's CWD (apps/api in local dev,
         # /app in the container); the repo-root path covers running uvicorn
         # from apps/api against the monorepo's single .env. Later entries
@@ -222,7 +232,9 @@ class Settings(BaseSettings):
     browser_idle_s: float = 300.0
 
     # ── infra ──
-    database_url: str = "postgresql+asyncpg://osint:osint@localhost:5432/osint"
+    # Unused by the app (grep: no reader). Empty rather than a default
+    # credential nobody should copy (ASVS V13.2.3).
+    database_url: str = ""
     redis_url: str = "redis://localhost:6379/0"
     # Disk tile cache root (basemap / sat / terrain proxies). Grows with use;
     # safe to delete at any time — it refills on demand. Self-bounding: once the
@@ -235,6 +247,11 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     log_level: str = "info"
+    # Days a local audit_log row (keyless / static-key deployments) is kept.
+    # 0 = forever, the default: deleting an operator's audit history is not a
+    # change to make silently on upgrade. ASVS V14.2.4 — set it (365 is the
+    # usual figure) where the rows' IP/email/user-agent fall under a policy.
+    audit_retention_days: int = 0  # AUDIT_RETENTION_DAYS
     cors_origins: str = (
         "http://localhost:8080,http://127.0.0.1:8080,"
         "http://localhost:5173,http://127.0.0.1:5173,"
@@ -281,6 +298,14 @@ class Settings(BaseSettings):
     # fresh limiter bucket per request just by varying the header.
     # Empty string = never believe the header, bucket strictly by peer address.
     trusted_proxies: str = "127.0.0.1,::1"  # TRUSTED_PROXIES
+    # Host headers this server answers (DNS-rebinding guard, app/origin_guard.py).
+    # Comma list; "*" disables. Empty = localhost/127.0.0.1/::1 plus every host
+    # named in CORS_ORIGINS, so a deployment behind a domain must list that
+    # domain here or in CORS_ORIGINS.
+    allowed_hosts: str = ""  # ALLOWED_HOSTS
+    # Hosts /tiler?url= may fetch even when they resolve to a private address
+    # (an operator's own LAN COG server). Everything else must be public.
+    tiler_allow_hosts: str = ""  # TILER_ALLOW_HOSTS
 
     # Hard ceiling on concurrently-running recon jobs; further POSTs get 429.
     recon_max_active_jobs: int = 4  # RECON_MAX_ACTIVE_JOBS
@@ -309,6 +334,46 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
+    # Expected `iss` of a Supabase session token. Empty = derived as
+    # f"{SUPABASE_URL}/auth/v1" (GoTrue's own value); set it only when the
+    # project issues tokens under a custom domain that differs from SUPABASE_URL.
+    supabase_jwt_issuer: str = ""  # SUPABASE_JWT_ISSUER
+    # Longest session-token lifetime (exp - iat) accepted, in seconds. Supabase
+    # defaults to 3600 and lets a project raise it to a week; a token claiming
+    # more than this is refused rather than trusted for days.
+    jwt_max_lifetime_s: int = 86_400  # JWT_MAX_LIFETIME_S
+    # Multi-user mode only: routes carrying operator authority (require_operator)
+    # demand an `aal2` session, i.e. the admin passed a TOTP challenge. 0 turns
+    # the requirement off (e.g. while MFA is being rolled out).
+    operator_require_mfa: bool = True  # OPERATOR_REQUIRE_MFA
+    # Multi-user mode only: EVERY session must be aal2, not just operator
+    # routes (ASVS V6.3.3). Off by default: the web client's MFA banner nudges
+    # rather than forces enrolment, so switching this on before every account
+    # has a factor 401s those users out of the whole console.
+    require_mfa_all_users: bool = False  # REQUIRE_MFA_ALL_USERS
+    # Absolute session age cap, in seconds, measured from the sign-in time the
+    # token carries (Supabase `amr[].timestamp`), however often it was refreshed
+    # (ASVS V7.3.2). 0 = off, the default: Supabase's own "time-box user
+    # sessions" is the authoritative control where the plan has it, and the web
+    # client has no re-auth prompt for a mid-session 401 yet. When on, a token
+    # with no `amr` timestamp is refused.
+    session_max_age_s: int = 0  # SESSION_MAX_AGE_S
+    # With SUPABASE_URL + SUPABASE_ANON_KEY set, every user session (not only
+    # operator routes) is re-checked with GoTrue at most once a minute, so a
+    # signed-out, banned or deleted user stops within 60 s even when the token
+    # is verified locally (ASVS V7.4.1 / V7.4.2). Fails closed when GoTrue is
+    # unreachable. 0 turns it off. A JWT-secret-only box has nothing to ask.
+    session_liveness_check: bool = True  # SESSION_LIVENESS_CHECK
+    # Session-token signature algorithms accepted. HS256 is the legacy project
+    # secret; ES256/RS256 are Supabase's asymmetric signing keys, verified
+    # against SUPABASE_URL/auth/v1/.well-known/jwks.json (ASVS V11.2.2).
+    supabase_jwt_algorithms: str = "HS256,ES256,RS256"  # SUPABASE_JWT_ALGORITHMS
+    # Failed credentials (a wrong API key, a bad or expired token, a bad ingest
+    # token) allowed per client per minute before every attempt from that client
+    # answers 429 with Retry-After, the right credential included. Only attempts
+    # that PRESENT a credential count, so a signed-out browser polling is not
+    # locked out. 0 disables.
+    auth_failure_limit_per_min: int = 20  # AUTH_FAILURE_LIMIT_PER_MIN
 
     # ── BYOK (bring-your-own-key) ──
     # Symmetric key (Fernet, urlsafe-base64 32 bytes) used to encrypt user API

@@ -15,7 +15,8 @@ from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, Request
 
-from app.auth import _jwt_claims, _valid_supabase_token
+from app import auth as _auth
+from app.auth import _banned, _jwt_claims, _valid_supabase_token
 from app.config import Settings, get_settings
 from app.keys import UserCtx, _client, _headers, current_user, current_user_or_local
 
@@ -152,6 +153,49 @@ def require_role(role: str):  # type: ignore[no-untyped-def]
     return _dep
 
 
+# token -> wall-clock expiry of a positive GoTrue liveness answer. Never longer
+# than a minute: this is what makes a ban or deletion bite on operator routes.
+_active_until: dict[str, float] = {}
+_ACTIVE_TTL = 60.0
+
+
+def reset_state() -> None:
+    _cache.clear()
+    _active_until.clear()
+
+
+async def _session_active(token: str, s: Settings) -> bool:
+    """Is the user behind ``token`` still active in GoTrue (not deleted, not
+    banned, session not signed out)? Cached per token for at most 60 s.
+
+    A JWT-secret-only deployment has no GoTrue URL to ask, so this answers True
+    there and the token's own ``exp`` is the only revocation (documented in
+    docs/security/auth-and-sessions.md)."""
+    if not (s.supabase_url and s.supabase_anon_key):
+        return True
+    now = time.time()
+    hit = _active_until.get(token)
+    if hit and hit > now:
+        return True
+    status, body = await _auth._gotrue_user(token, s)
+    ok = status == 200 and not _banned(body)
+    if ok:
+        _active_until[token] = now + _ACTIVE_TTL
+        if len(_active_until) > 4096:
+            for k in [k for k, v in _active_until.items() if v <= now]:
+                _active_until.pop(k, None)
+    else:
+        _active_until.pop(token, None)
+    return ok
+
+
+MFA_REQUIRED_DETAIL = (
+    "this endpoint carries operator authority and requires MFA: enrol a TOTP "
+    "authenticator (Settings > Security > Two-factor) and sign in with it, so "
+    "the session is aal2"
+)
+
+
 async def require_operator(p: Principal = Depends(current_principal_or_local)) -> None:
     """Gate the routes that carry OPERATOR authority, not merely analyst access:
     running arbitrary ``op.python``, dispatching a control/actuation block,
@@ -169,8 +213,14 @@ async def require_operator(p: Principal = Depends(current_principal_or_local)) -
     user, and that user is the operator.** With Supabase unconfigured, holding
     the static key (or having deliberately set ``ALLOW_UNAUTHENTICATED=1``) IS
     the operator credential and there is no second person to separate from. With
-    Supabase configured there IS a second person, so the admin role is required
-    and an analyst gets 403.
+    Supabase configured there IS a second person, so, in order:
+
+      1. the ``admin`` role (403 otherwise);
+      2. an ``aal2`` session, i.e. MFA, unless ``OPERATOR_REQUIRE_MFA=0``
+         (403 naming MFA enrolment otherwise; ASVS V6.3.3 / V6.8.4 / V10.3.4);
+      3. the account still active in GoTrue, cached at most 60 s, so a banned or
+         deleted admin loses operator authority within a minute rather than at
+         token expiry (401 otherwise; ASVS V7.4.2 / V7.4.5).
 
     Deliberately does NOT widen ``current_principal_or_local``'s roles. That
     least-privilege ``analyst`` default is what the clearance-gated routes
@@ -181,10 +231,23 @@ async def require_operator(p: Principal = Depends(current_principal_or_local)) -
     and ``/api/ai/models`` are already in ``ratelimit._COMPUTE_PREFIXES``, so a
     keyless box refuses them outright until the operator opts in.
     """
-    if _multi_user(get_settings()) and not p.has_role("admin"):
+    s = get_settings()
+    if not _multi_user(s):
+        return
+    if not p.has_role("admin"):
         raise HTTPException(
             status_code=403,
             detail="this endpoint carries operator authority and requires the admin role",
+        )
+    if s.operator_require_mfa and (_jwt_claims(p.token) or {}).get("aal") != "aal2":
+        raise HTTPException(status_code=403, detail=MFA_REQUIRED_DETAIL)
+    if not await _session_active(p.token, s):
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "this session is no longer active (signed out, banned or deleted); "
+                "sign in again"
+            ),
         )
 
 

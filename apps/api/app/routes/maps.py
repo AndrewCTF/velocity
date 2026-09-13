@@ -40,10 +40,11 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from app.auth import require_ws_key
+from app import ws_limits
+from app.auth import _bearer, require_ws_key
 from app.config import get_settings
 from app.intel.ontology import Object, get_registry
-from app.keys import UserCtx, current_user_or_local
+from app.keys import UserCtx, current_user_or_local, multi_user, user_id_for_token
 
 router = APIRouter(tags=["maps"])
 
@@ -329,92 +330,118 @@ async def cop_ws(ws: WebSocket, map: str | None = None) -> None:
     if not await require_ws_key(ws):
         await ws.close(code=1008)
         return
-    # A room id is required — without it there's nobody to follow. Accept first so
-    # the client gets a clean close frame with a reason rather than a bare 403.
-    if not map:
-        await ws.accept()
-        await ws.send_text(json.dumps({"kind": "error", "error": "missing ?map=<id>"}))
+    # Per-client socket cap (ASVS V2.4.1, app/ws_limits.py): after the key
+    # gate, before accept, released however the handler ends.
+    slot = ws_limits.acquire(ws)
+    if slot is None:
         await ws.close(code=1008)
         return
+    try:
+        # A room id is required — without it there's nobody to follow. Accept first so
+        # the client gets a clean close frame with a reason rather than a bare 403.
+        if not map:
+            await ws.accept()
+            await ws.send_text(json.dumps({"kind": "error", "error": "missing ?map=<id>"}))
+            await ws.close(code=1008)
+            return
 
-    await ws.accept()
-    map_id = map
-    q = cop_hub.subscribe(map_id)
+        # Multi-user (ASVS V8.2.2): only a user who can LOAD the map may join its
+        # room, and the room is keyed by owner + id, since two users can each own a
+        # ``map:abc``. Saved maps are owner-scoped with no sharing model yet, so
+        # follow-along on a multi-user deployment is between one user's own tabs
+        # and devices. A caller with no user (static key) is refused. Single-user:
+        # unchanged.
+        room = map
+        if multi_user():
+            uid = await user_id_for_token(_bearer(ws.headers) or ws.query_params.get("key"))
+            obj = None
+            if uid:
+                obj = await get_registry(UserCtx(user_id=uid, token=""), get_settings()).get(map)
+            if obj is None or _from_object(obj) is None:
+                await ws.close(code=1008)
+                return
+            room = f"{uid}|{map}"
 
-    async def _pump_out() -> None:
-        """Forward deltas published by peers to this socket (+ heartbeat).
+        await ws.accept()
+        map_id = map
+        q = cop_hub.subscribe(room)
 
-        Returns on disconnect rather than raising, so the gathered task finishes
-        cleanly (no 'Task exception was never retrieved'). A send to a gone socket
-        raises WebSocketDisconnect/RuntimeError — both end this pump.
-        """
-        while True:
-            try:
-                delta = await asyncio.wait_for(q.get(), timeout=20.0)
-                await ws.send_text(json.dumps(delta))
-            except TimeoutError:
+        async def _pump_out() -> None:
+            """Forward deltas published by peers to this socket (+ heartbeat).
+
+            Returns on disconnect rather than raising, so the gathered task finishes
+            cleanly (no 'Task exception was never retrieved'). A send to a gone socket
+            raises WebSocketDisconnect/RuntimeError — both end this pump.
+            """
+            while True:
                 try:
-                    await ws.send_text(json.dumps({"kind": "heartbeat"}))
+                    delta = await asyncio.wait_for(q.get(), timeout=20.0)
+                    await ws.send_text(json.dumps(delta))
+                except TimeoutError:
+                    try:
+                        await ws.send_text(json.dumps({"kind": "heartbeat"}))
+                    except (WebSocketDisconnect, RuntimeError):
+                        return
                 except (WebSocketDisconnect, RuntimeError):
                     return
-            except (WebSocketDisconnect, RuntimeError):
-                return
 
-    async def _pump_in() -> None:
-        """Read this socket's outbound deltas and fan them to the room.
+        async def _pump_in() -> None:
+            """Read this socket's outbound deltas and fan them to the room.
 
-        Returns on disconnect (the common path — the client closes the tab); the
-        WebSocketDisconnect is swallowed HERE so the task ends without leaving an
-        unretrieved exception when the other pump is cancelled.
-        """
-        while True:
-            try:
-                raw = await ws.receive_text()
-            except (WebSocketDisconnect, RuntimeError):
-                return
-            if len(raw) > _MAX_DELTA_BYTES:
-                continue  # oversized — ignore, don't relay
-            try:
-                msg = json.loads(raw)
-            except (ValueError, TypeError):
-                continue
-            if not isinstance(msg, dict):
-                continue
-            kind = msg.get("kind")
-            if kind not in _RELAY_KINDS or kind == "ping":
-                continue
-            # Re-stamp the map so a peer can't relay into a different room, and
-            # publish to everyone EXCEPT the sender.
-            cop_hub.publish(map_id, {**msg, "map": map_id}, exclude=q)
+            Returns on disconnect (the common path — the client closes the tab); the
+            WebSocketDisconnect is swallowed HERE so the task ends without leaving an
+            unretrieved exception when the other pump is cancelled.
+            """
+            while True:
+                try:
+                    raw = await ws.receive_text()
+                except (WebSocketDisconnect, RuntimeError):
+                    return
+                if len(raw) > _MAX_DELTA_BYTES:
+                    continue  # oversized — ignore, don't relay
+                try:
+                    msg = json.loads(raw)
+                except (ValueError, TypeError):
+                    continue
+                if not isinstance(msg, dict):
+                    continue
+                kind = msg.get("kind")
+                if kind not in _RELAY_KINDS or kind == "ping":
+                    continue
+                # Re-stamp the map so a peer can't relay into a different room, and
+                # publish to everyone EXCEPT the sender.
+                cop_hub.publish(room, {**msg, "map": map_id}, exclude=q)
 
-    try:
-        # Announce current room size so a joiner knows whether anyone is driving.
-        # Inside the try so a join-send to an already-gone socket still unsubscribes
-        # q in the finally (otherwise the queue would leak in the room).
-        await ws.send_text(
-            json.dumps(
-                {"kind": "joined", "map": map_id, "followers": cop_hub.room_size(map_id)}
+        try:
+            # Announce current room size so a joiner knows whether anyone is driving.
+            # Inside the try so a join-send to an already-gone socket still unsubscribes
+            # q in the finally (otherwise the queue would leak in the room).
+            await ws.send_text(
+                json.dumps(
+                    {"kind": "joined", "map": map_id, "followers": cop_hub.room_size(room)}
+                )
             )
-        )
-        # Run both directions; whichever finishes first (a disconnect) tears down
-        # the other.
-        out_task = asyncio.create_task(_pump_out())
-        in_task = asyncio.create_task(_pump_in())
-        _, pending = await asyncio.wait(
-            {out_task, in_task}, return_when=asyncio.FIRST_COMPLETED
-        )
-        for t in pending:
-            t.cancel()
-            try:
-                await t  # retrieve the CancelledError so it isn't logged as orphaned
-            except (asyncio.CancelledError, WebSocketDisconnect, RuntimeError):
-                pass
-    except (WebSocketDisconnect, RuntimeError):
-        # A disconnect during the join send (or an already-closed socket) — the
-        # finally still unsubscribes, so just exit quietly (matches /ws/alerts).
-        pass
+            # Run both directions; whichever finishes first (a disconnect) tears down
+            # the other.
+            out_task = asyncio.create_task(_pump_out())
+            in_task = asyncio.create_task(_pump_in())
+            _, pending = await asyncio.wait(
+                {out_task, in_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            for t in pending:
+                t.cancel()
+                try:
+                    await t  # retrieve the CancelledError so it isn't logged as orphaned
+                except (asyncio.CancelledError, WebSocketDisconnect, RuntimeError):
+                    pass
+        except (WebSocketDisconnect, RuntimeError):
+            # A disconnect during the join send (or an already-closed socket) — the
+            # finally still unsubscribes, so just exit quietly (matches /ws/alerts).
+            pass
+        finally:
+            cop_hub.unsubscribe(room, q)
     finally:
-        cop_hub.unsubscribe(map_id, q)
+        ws_limits.release(slot)
 
 
 def _now_iso() -> str:

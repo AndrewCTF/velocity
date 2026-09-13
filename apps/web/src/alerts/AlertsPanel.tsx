@@ -5,6 +5,7 @@ import { slewToEntity } from '../globe/camera.js';
 import { SectionLabel, Badge, Btn, type BadgeTone } from '../shell/instruments.js';
 import type { Alert } from '@osint/shared';
 import { Icon } from '../normal/Icon.js';
+import { dict } from '../shell/safeKeys.js';
 
 interface Props {
   open: boolean;
@@ -130,7 +131,7 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
   );
   const ruleKeys = useMemo(() => Array.from(new Set(alerts.map((a) => a.ruleId))), [alerts]);
   const sevCounts = useMemo(() => {
-    const c: Record<string, number> = {};
+    const c = dict<number>();
     for (const a of alerts) c[a.severity] = (c[a.severity] ?? 0) + 1;
     return c;
   }, [alerts]);

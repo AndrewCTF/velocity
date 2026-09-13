@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useAlerts, useConnection } from '../state/stores.js';
 import type { Alert } from '@osint/shared';
-import { apiFetch, hasStaticApiKey, withWsKey } from '../transport/http.js';
+import { apiFetch, hasStaticApiKey, openAuthedWebSocket } from '../transport/http.js';
 import { useAuth } from '../auth/AuthContext.js';
 
 // How often we re-POST /api/alerts/watch-session. The backend geofence
@@ -49,7 +49,7 @@ export function AlertSubscriber(): null {
     const connect = () => {
       if (stopped) return;
       setWs('connecting');
-      ws = new WebSocket(withWsKey('/ws/alerts'));
+      ws = openAuthedWebSocket('/ws/alerts');
       ws.onopen = () => {
         backoff = 1000;
         everOpened = true;
@@ -90,7 +90,7 @@ export function AlertSubscriber(): null {
     // fresh session identity on TOKEN_REFRESHED / refocus, which would tear
     // down and reconnect /ws/alerts hourly and on every window focus. The
     // socket only cares whether we're authed (token present) — the specific
-    // token is carried by withWsKey at connect time.
+    // token is carried by openAuthedWebSocket at connect time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [push, setWs, session?.access_token, loading]);
 

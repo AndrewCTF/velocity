@@ -2,19 +2,23 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import cesium from 'vite-plugin-cesium';
 import { buildCsp } from './csp';
+import { bundledApiKeyError } from './buildGuard';
 
 declare const process: { env: Record<string, string | undefined> };
 
-// VITE_API_URL lets you target the API from either a Docker (`http://api:8000`,
-// set explicitly in docker-compose.yml) or a local backend. Default to
-// localhost so a bare `pnpm dev` against `uvicorn app.main:app` works with
-// zero configuration — the old `api:8000` default only resolved inside the
-// compose network and broke every request outside it.
+// API_PROXY_TARGET is where the dev server's /api, /tiles and /ws proxy sends
+// requests (docker-compose.yml sets `http://api:8000`). It must NOT be a VITE_*
+// name: Vite inlines every VITE_* variable from the shell into the browser
+// bundle, and transport/http.ts treats VITE_API_URL as the browser's API base,
+// so a compose-internal hostname there made the browser call `api:8000`
+// directly, which does not resolve outside the compose network, instead of
+// going through nginx. Defaults to 127.0.0.1 so a bare `pnpm dev` against
+// `uvicorn app.main:app` works with zero configuration.
 // Pin 127.0.0.1, not `localhost`: in some containers (GitHub Codespaces) the
 // dev proxy's Node process resolves `localhost` to IPv6 `::1` first, but uvicorn
 // binds IPv4 only → ECONNREFUSED, surfacing in the browser as a bare
 // "NetworkError" on /api/config. Same trap the Tauri path pins around.
-const apiTarget = process.env['VITE_API_URL'] ?? 'http://127.0.0.1:8000';
+const apiTarget = process.env['API_PROXY_TARGET'] ?? 'http://127.0.0.1:8000';
 const wsTarget = apiTarget.replace(/^http/, 'ws');
 
 // Every production build carries a CSP (csp.ts says what each source is for).
@@ -55,8 +59,26 @@ function cspPlugin(): Plugin {
   };
 }
 
+// Refuses a hosted build that would inline VITE_API_KEY (buildGuard.ts says
+// why). configResolved sees config.env, which includes .env* files as well as
+// the shell environment.
+function bundledKeyGuardPlugin(): Plugin {
+  return {
+    name: 'velocity-no-bundled-api-key',
+    apply: 'build',
+    configResolved(config) {
+      const err = bundledApiKeyError({
+        env: config.env as Record<string, string | undefined>,
+        desktop,
+        isProduction: config.isProduction,
+      });
+      if (err) throw new Error(err);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), cesium(), cspPlugin()],
+  plugins: [bundledKeyGuardPlugin(), react(), cesium(), cspPlugin()],
   server: {
     host: '0.0.0.0',
     port: 5173,

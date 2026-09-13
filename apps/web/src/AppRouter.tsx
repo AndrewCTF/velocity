@@ -12,6 +12,8 @@ import { fetchModelsOnce } from './settings/localAi/LocalAiSection.js';
 import { ToastHost } from './shell/toast.js';
 import { LowEndBanner } from './globe/LowEndBanner.js';
 import { DegradedBanner } from './globe/DegradedBanner.js';
+import { readMfaStep, useMfaNeeded, type MfaStep } from './auth/mfa.js';
+import { supabase } from './transport/supabase.js';
 
 // Served under the Vite base path (e.g. "/app" in production, "/" in dev), so
 // the router's basename tracks it — keeps client routes correct behind /app.
@@ -47,6 +49,7 @@ export function AppRouter(): JSX.Element {
         <PredictedMotionBadge />
         <LowEndBanner />
         <DegradedBanner />
+        <MfaBanner />
         <OnboardingGate />
         <AiSetupGate />
         <Suspense fallback={<RouteLoading />}>
@@ -185,6 +188,57 @@ function AiSetupGate(): JSX.Element | null {
 
   if (!show || !onMap) return null;
   return <AiSetupWizard onClose={() => setShow(false)} />;
+}
+
+// The backend refused an operator action because this session is not aal2
+// (auth/mfa.ts). Say what is needed and open Settings, where Account security
+// holds both the enrolment and the code step. Hidden on the auth pages.
+function MfaBanner(): JSX.Element | null {
+  const loc = useLocation();
+  const { needed, detail, clear } = useMfaNeeded();
+  const [step, setStep] = useState<MfaStep | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!needed || !supabase) return;
+    let live = true;
+    void readMfaStep(supabase)
+      .then((s) => live && setStep(s))
+      .catch(() => live && setStep('enrol'));
+    return () => {
+      live = false;
+    };
+  }, [needed]);
+
+  if (!isSupabaseConfigured || !needed) return null;
+  if (['/login', '/signup', '/forgot', '/reset'].includes(loc.pathname)) return null;
+  const action = step === 'verify' ? 'Enter your code' : 'Set up two-factor';
+  return (
+    <>
+      <div
+        role="alert"
+        className="fixed left-1/2 top-10 z-(--z-dock) flex max-w-[92vw] -translate-x-1/2 items-center gap-2.5 rounded-sm border border-warn-line bg-bg-1 px-3 py-1.5 mono text-[11px] text-warn-fg shadow-lg"
+      >
+        <span>
+          {step === 'verify'
+            ? 'Operator actions need the code from your authenticator app.'
+            : 'Operator actions need two-factor sign-in on this deployment.'}
+          {detail ? <span className="text-txt-2"> · {detail}</span> : null}
+        </span>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          className="text-accent-fg hover:underline"
+        >
+          {action}
+        </button>
+        <button type="button" onClick={clear} className="text-txt-3 hover:text-txt-1">
+          dismiss
+        </button>
+      </div>
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+    </>
+  );
 }
 
 function AccountChip(): JSX.Element | null {

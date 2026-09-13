@@ -31,11 +31,14 @@ node_line() {
     | grep -F "$1" | head -1 | awk '{printf "pid=%s rss=%dMB cpu=%s%% up=%ss", $1, $2/1024, $3, $4}'
 }
 
-probe() { # url label reps
-  local url="$1" label="$2" reps="${3:-10}" i out
+probe() { # url label reps [sidecar token name]
+  local url="$1" label="$2" reps="${3:-10}" tok="${4:-}" i out
+  local -a auth=()
+  # Sidecar data routes need the per-spawn token (app/sidecar_token.py); /health does not.
+  [[ -n "$tok" && -r "data/sidecar-tokens/$tok.token" ]] && auth=(-H "Authorization: Bearer $(cat "data/sidecar-tokens/$tok.token")")
   local -a totals=() sizes=()
   for ((i = 0; i < reps; i++)); do
-    out=$(curl -s -o /dev/null -H 'Accept-Encoding: gzip' \
+    out=$(curl -s -o /dev/null -H 'Accept-Encoding: gzip' "${auth[@]}" \
           -w '%{time_total} %{size_download} %{http_code}' --max-time 20 "$url" 2>/dev/null) || out="0 0 000"
     totals+=("$(echo "$out" | cut -d' ' -f1)")
     sizes+=("$(echo "$out" | cut -d' ' -f2)")
@@ -60,9 +63,9 @@ header() {
 endpoints() {
   echo "| endpoint | code | p50 total | p50 size |"
   echo "|---|---|---|---|"
-  probe "$ADSB/aircraft.json" "adsb :8090 /aircraft.json" 10
+  probe "$ADSB/aircraft.json" "adsb :8090 /aircraft.json" 10 adsb
   probe "$ADSB/health"        "adsb :8090 /health"        10
-  probe "$AIS/vessels.json"   "ais  :8093 /vessels.json"  6
+  probe "$AIS/vessels.json"   "ais  :8093 /vessels.json"  6 ais-myshiptracking
   probe "$AIS/health"         "ais  :8093 /health"        10
   echo
   echo "### /health bodies"

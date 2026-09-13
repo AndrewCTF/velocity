@@ -40,7 +40,11 @@ from pathlib import Path
 
 import httpx
 
+from app import childenv, sidecar_token
+
 log = logging.getLogger("browser_fetch")
+
+TOKEN_NAME = "browser-fetch"
 
 _PARENTS = Path(__file__).resolve().parents
 _REPO_ROOT = _PARENTS[3] if len(_PARENTS) > 3 else _PARENTS[-1]
@@ -72,6 +76,40 @@ async def _serving() -> bool:
         return False
 
 
+async def _evict_port_holder() -> None:
+    """Kill whatever holds our port so a token-holding sidecar can bind it."""
+    pid = await asyncio.to_thread(_port_holder_pid)
+    if pid is None:
+        return
+    # SIGTERM, then SIGKILL if it still holds the port (the adsb_sidecar rule).
+    with contextlib.suppress(ProcessLookupError):
+        os.kill(pid, signal.SIGTERM)
+    for _ in range(16):
+        await asyncio.sleep(0.5)
+        if await asyncio.to_thread(_port_holder_pid) != pid:
+            return
+    with contextlib.suppress(ProcessLookupError):
+        os.kill(pid, signal.SIGKILL)
+
+
+def _port_holder_pid() -> int | None:
+    """pid holding our port (best-effort, via ss). BLOCKING."""
+    import re  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    try:
+        out = subprocess.run(["ss", "-ltnp"], capture_output=True, text=True, timeout=3).stdout
+    except Exception:  # noqa: BLE001 — ss missing / permission
+        return None
+    port = _port()
+    for line in out.splitlines():
+        if f":{port} " in line or line.rstrip().endswith(f":{port}"):
+            m = re.search(r"pid=(\d+)", line)
+            if m:
+                return int(m.group(1))
+    return None
+
+
 async def start() -> None:
     """Spawn the node sidecar. Idempotent, best-effort, never raises."""
     global _proc
@@ -81,15 +119,27 @@ async def start() -> None:
     settings = get_settings()
     if not settings.browser_fetch_enabled:
         return
+    # Adopt a serving sidecar only if it holds a token we have (V13.2.1): one
+    # from before enforcement is an open fetch proxy, and one whose token we lost
+    # would 401 every fetch() while answering /health forever.
     if await _serving():
-        log.info("browser-fetch already serving on %s — reusing", _base())
-        return
+        if not await sidecar_token.mismatch(_base(), TOKEN_NAME):
+            log.info("browser-fetch already serving on %s — reusing", _base())
+            return
+        log.warning("browser-fetch on %s does not hold our token — replacing it", _base())
+        await _evict_port_holder()
     if not _INDEX.exists():
         log.warning("browser-fetch sidecar missing at %s — tier disabled", _INDEX)
         return
 
-    env = {
-        **os.environ,
+    # Allowlisted env (V13.3.2): the API's keys never reach a browser that
+    # loads third-party pages. BROWSER_* are index.js's own pacing knobs.
+    env = childenv.child_env(
+        keep_names=childenv.BROWSER_NAMES,
+        keep_prefixes=(*childenv.BROWSER_PREFIXES, "BROWSER_"),
+    )
+    env |= {
+        "SIDECAR_TOKEN": sidecar_token.mint(TOKEN_NAME),
         "BROWSER_FETCH_PORT": str(_port()),
         "BROWSER_MAX_PAGES": str(settings.browser_max_pages),
         "BROWSER_IDLE_S": str(int(settings.browser_idle_s)),
@@ -104,7 +154,7 @@ async def start() -> None:
         env["WARP_PROXY"] = warp.socks_url()
     # jemalloc must never reach the Chrome tree: LD_PRELOAD + MALLOC_CONF
     # together kill the zygote fork at spawn (bisected 2026-07-04, see
-    # adsb_sidecar.start()).
+    # adsb_sidecar.start()). child_env() already drops both; kept as the guard.
     env.pop("LD_PRELOAD", None)
     env.pop("MALLOC_CONF", None)
 
@@ -204,7 +254,9 @@ async def fetch(
         params["wait"] = str(wait_ms)
     try:
         async with httpx.AsyncClient(timeout=timeout_s) as c:
-            r = await c.get(f"{_base()}/fetch", params=params)
+            r = await c.get(
+                f"{_base()}/fetch", params=params, headers=sidecar_token.headers(TOKEN_NAME)
+            )
         payload = r.json()
     except Exception as e:  # noqa: BLE001 — tier down / bad payload
         log.warning("browser-fetch failed for %s: %s", url[:120], e)

@@ -6,6 +6,7 @@ import { Modal, useConfirm } from '../shell/Modal.js';
 import { useFoundryPoll } from './useFoundryPoll.js';
 import { EmptyState, Field, Select, ViewHeader, controlCls } from './ui.js';
 import { Icon } from '../normal/Icon.js';
+import { dict } from '../shell/safeKeys.js';
 
 // Ontology — bindings map a dataset into the local ontology (dataset → object
 // kind, key column, column→property map). Now: object-kind picker from the
@@ -59,7 +60,7 @@ function BindingEditor({ open, onClose }: { open: boolean; onClose: () => void }
   const schemaCols = selectedDs?.schema.map((c) => c.name) ?? [];
 
   const save = async (): Promise<void> => {
-    const cleanMap: Record<string, string> = {};
+    const cleanMap = dict<string>();
     for (const [c, p] of Object.entries(propMap)) if (c && p) cleanMap[c] = p;
     await createBinding({ dataset_id: datasetId, object_kind: objectKind, key_column: keyColumn, prop_map: cleanMap, resolve });
     setDatasetId('');

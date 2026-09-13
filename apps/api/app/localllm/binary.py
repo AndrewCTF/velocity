@@ -90,6 +90,26 @@ def status(
     return True, version(p)
 
 
+# Bounds on the release tarball, checked over the member list BEFORE anything
+# is extracted (ASVS V5.2.3). The Vulkan build is ~60 files / ~100 MB.
+_MAX_EXTRACT_BYTES = 2 * 1024**3
+_MAX_MEMBERS = 5000
+
+
+def check_archive_bounds(tf: tarfile.TarFile) -> None:
+    """Raise ValueError when the archive is over the size or member caps.
+    Member NAMES are policed per member by ``_safe_extract_member``, which skips
+    a traversal or link member rather than failing the install."""
+    members = tf.getmembers()
+    if len(members) > _MAX_MEMBERS:
+        raise ValueError(f"archive has {len(members)} members (> {_MAX_MEMBERS})")
+    total = 0
+    for m in members:
+        total += max(0, m.size)
+        if total > _MAX_EXTRACT_BYTES:
+            raise ValueError(f"archive expands past {_MAX_EXTRACT_BYTES} bytes")
+
+
 def _safe_extract_member(tf: tarfile.TarFile, member: tarfile.TarInfo, dest_dir: Path) -> None:
     parts = Path(member.name).parts
     if len(parts) < 2:  # skip the top-level dir entry itself
@@ -182,6 +202,7 @@ def ensure_installed(models_root: Path, settings: Settings | None = None) -> Pat
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tf:
+        check_archive_bounds(tf)
         for member in tf.getmembers():
             _safe_extract_member(tf, member, dest_dir)
 

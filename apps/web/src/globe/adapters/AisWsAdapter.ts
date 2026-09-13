@@ -5,7 +5,7 @@ import { labelFor, vesselLabelText } from './labelStyle.js';
 import { intel } from '../../intel/registry.js';
 import { tracks } from '../../intel/tracks.js';
 import { useSelection } from '../../state/stores.js';
-import { withWsKey } from '../../transport/http.js';
+import { openAuthedWebSocket } from '../../transport/http.js';
 import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { refreshBagInPlace } from './PollGeoJsonAdapter.js';
 import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
@@ -124,7 +124,7 @@ export class AisWsAdapter implements LayerAdapter {
 
   private connect(): void {
     if (this.destroyed) return;
-    const ws = new WebSocket(withWsKey(this.props.url));
+    const ws = openAuthedWebSocket(this.props.url);
     this.ws = ws;
     this.props.ctx.reportStatus({ status: 'amber', note: 'connecting' });
 

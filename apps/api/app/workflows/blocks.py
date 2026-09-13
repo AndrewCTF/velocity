@@ -825,7 +825,7 @@ async def _run_op_http(config: dict[str, Any], inputs: list[list[Row]], ctx: Blo
     if mode == "per_row":
         out: list[Row] = []
         for r in rows[:max_requests]:
-            url = _template_row(url_tmpl, r)
+            url = _template_row(url_tmpl, r, url=True)
             body = _body(_template_row(body_tmpl, r)) if body_tmpl else None
             result = await control.request(
                 method,
@@ -841,7 +841,7 @@ async def _run_op_http(config: dict[str, Any], inputs: list[list[Row]], ctx: Blo
 
     # once
     first = rows[0] if rows else {}
-    url = _template_row(_render_template(url_tmpl, rows, ctx.memory), first)
+    url = _template_row(_render_template(url_tmpl, rows, ctx.memory), first, url=True)
     body = (
         _body(_template_row(_render_template(body_tmpl, rows, ctx.memory), first))
         if body_tmpl
@@ -1075,10 +1075,16 @@ _register(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _template_row(template: str, row: Row) -> str:
+def _template_row(template: str, row: Row, *, url: bool = False) -> str:
+    """Substitute ``{field}`` from ``row``. ``url=True`` percent-encodes every
+    value (nothing kept safe), so a row value such as ``../admin`` or
+    ``a&b=c`` cannot change the path or add query parameters of an op.http
+    request (ASVS V1.2.2)."""
+    from urllib.parse import quote  # noqa: PLC0415
+
     out = template
     for k, v in row.items():
-        out = out.replace("{" + k + "}", str(v))
+        out = out.replace("{" + k + "}", quote(str(v), safe="") if url else str(v))
     return out
 
 

@@ -7,6 +7,7 @@
 // --fs-* type scale, txt/bg/line/accent color tokens, compact panel margins.
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { safeHttpUrl } from './safeUrl.js';
 
 const BODY = 'text-(length:--fs-dense) text-txt-1 leading-snug';
 
@@ -42,7 +43,7 @@ const components: Components = {
   strong: ({ children }) => <strong className="font-semibold text-txt-0">{children}</strong>,
   a: ({ children, href }) => (
     <a
-      href={href}
+      href={safeHttpUrl(href)}
       target="_blank"
       rel="noreferrer"
       className="text-accent underline decoration-accent-line underline-offset-2 hover:text-accent-fg wrap-break-word"
