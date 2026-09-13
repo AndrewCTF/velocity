@@ -44,7 +44,7 @@ RUN uv sync --locked --no-dev
 # Run as an unprivileged user (defense-in-depth: the API shells out to recon/
 # sidecar/YOLO subprocesses, so a process compromise must not land as root).
 RUN useradd --system --uid 10001 --create-home --home-dir /home/app app \
-    && mkdir -p /srv/data \
+    && mkdir -p /srv/data/.tmp \
     && chown -R app /srv
 USER app
 

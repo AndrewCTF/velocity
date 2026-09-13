@@ -45,6 +45,11 @@ services:
       # nginx (on the `front` network below) ever talks to api directly, so
       # trusting the whole compose subnet — not just nginx's one IP — is safe
       # and survives nginx being recreated with a new address.
+      # Multipart uploads spool to TMPDIR before the handler's size cap runs;
+      # recon accepts up to 4 GB, which would overflow the 512 MB /tmp tmpfs.
+      # Spool on the data volume instead (tempfile falls back to /tmp if the
+      # directory is missing on a volume created before this image).
+      TMPDIR: /srv/data/.tmp
       TRUSTED_PROXIES: 172.28.0.0/24,127.0.0.1,::1
     # No source bind-mount and no --reload: the image is the deployable unit.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
