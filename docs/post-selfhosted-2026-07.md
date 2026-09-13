@@ -1,4 +1,10 @@
-# r/selfhosted — drafted 2026-07-17
+# r/selfhosted — drafted 2026-07-17, retooled 2026-08-30
+
+> **Retooled 2026-08-30 for the God's Eye View wave.** `bilawalsidhu/gods-eye-view`
+> went MIT-public ~2026-08-24 and is at ~12.7k stars; that is the news hook this
+> draft was missing in July. Positioning rules, verified claims and the fire order
+> are in [`docs/campaign-gev-wave-2026-08.md`](campaign-gev-wave-2026-08.md) —
+> read it before posting. Never punch at GEV.
 
 Campaign plan (`docs/star-campaign-2026-07.md`) rates r/selfhosted the #1 planned
 channel (day 1) and it has never fired. This community punishes marketing voice
@@ -23,6 +29,7 @@ Before posting here:
 ## TITLE (pick one)
 
 - I got tired of flight/ship trackers deleting their history, so I self-host one
+- Like God's Eye View but it keeps the history, and there's no Google Maps key
 - Self-hosted flight + ship + satellite tracker: one compose file, no API keys,
   keeps history until your disk fills
 - Own your tracking history: a keyless situation console you run at home
@@ -40,6 +47,11 @@ airplanes.live community grid), vessels (keyless AIS, MMSI-deduped), satellites
 (CelesTrak TLEs, client-side SGP4), earthquakes, wildfires, and conflict events
 onto one globe with a replay scrubber. `docker compose up` brings up api + web +
 nginx on :8080. No API key for any core feed.
+
+If you tried God's Eye View this week and bounced off the Google Maps key: there
+isn't one here. No Google account, no metered billing, no provider quota to cap.
+One compose file and the core feeds — planes, ships, quakes, satellites, basemap
+— all run keyless.
 
 **What it costs to run** (the part this sub actually cares about):
 

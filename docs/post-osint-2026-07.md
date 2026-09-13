@@ -1,4 +1,10 @@
-# r/OSINT — drafted 2026-07-17
+# r/OSINT — drafted 2026-07-17, retooled 2026-08-30
+
+> **Retooled 2026-08-30 for the God's Eye View wave.** `bilawalsidhu/gods-eye-view`
+> went MIT-public ~2026-08-24 and is at ~12.7k stars; that is the news hook this
+> draft was missing in July. Positioning rules, verified claims and the fire order
+> are in [`docs/campaign-gev-wave-2026-08.md`](campaign-gev-wave-2026-08.md) —
+> read it before posting. Never punch at GEV.
 
 Campaign plan rates r/OSINT the #2 planned channel (day 2), never fired. This
 community is sharp and allergic to "tools" that are actually SaaS funnels or
@@ -17,12 +23,24 @@ in, and if it's filtered, message mods rather than reposting.
 
 ## TITLE (pick one)
 
+- The other half of the God's Eye View idea: a keyless console that keeps the
+  archive, not just the view
 - Self-hosted, keyless OSINT console: fuse ADS-B, AIS, satellites and conflict
   events on one globe, with an evidence trail you own
 - I built a keyless situation console that records the world so you can replay it
 - Free trackers keep cutting their history — so I self-host the whole picture
 
 ## BODY
+
+If you came from God's Eye View, this is the other half of that idea. GEV is the
+best-looking public-data globe out there and it got a lot of people interested in
+this category in one week. It's also explicit that it's a foundation for
+exploration rather than a service you leave running, and the photorealistic
+planet needs a metered Google Maps key. This is the leave-it-running half: no key
+for any core feed, one `docker compose up`, and it records the picture to your
+own disk so you can scrub back to last Tuesday. Every contact carries which
+sources reported it and how old the fix actually is, and captures come out with a
+SHA-256 custody log. Different job, same excitement.
 
 Most live trackers are fine until you need the past. FR24 gives you 7 days of
 history, MarineTraffic cut its free window to 24 hours, ADS-B Exchange killed its
