@@ -26,8 +26,17 @@ to the working directory and fail in confusing ways from elsewhere.
   debugging the wrong component (measured 2026-08-02; the AIS twin taught it
   first on 2026-07-15).
 - `preflight.sh` — pre-PR local gate. The Cloudflare gateway deploy path
-  (`deploy.sh`) was deleted 2026-09-13; releases ship as ghcr images.
+  (`site/`, `deploy.sh`) was deleted 2026-09-13; releases ship as ghcr images
+  behind `.github/workflows/release-gate.yml`.
 - `warp.sh` — Cloudflare WARP proxy control for the egress tier, OFF by default.
   See `apps/api/CLAUDE.md` for why `warp_hosts` ships empty.
+- `smoke-release.cjs` — the release gate's browser probe
+  (`.github/workflows/release-gate.yml`; `publish.yml` pushes nothing without
+  it). Drives the booted `docker-compose.prod.yml` stack: stops the api, loads
+  the page, requires the globe to render, starts the api, requires in-place
+  recovery. DOM-only, since a production build has no DEV globals. Rehearse
+  locally from a copy WITHOUT the root `.env` (CI has none), and check
+  `web-build` exited 0: a failed build leaves the previous bundle in the volume
+  and the probe then tests stale code. → `apps/api/tests/test_release_gate.py`
 - `screenshot-*.mjs` — drive the running dev server, not a production build:
   they depend on the `window.__viewer` / `__Cesium` DEV globals.

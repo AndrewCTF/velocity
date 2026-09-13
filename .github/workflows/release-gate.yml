@@ -1,0 +1,87 @@
+# Release gate: build the images we ship, boot them the way a self-hoster
+# does, and drive the result in a real browser.
+#
+# Unit tests were green while the shipped stack was broken twice over
+# (docs/decisions.md, 2026-09-13): the map sat on "loading config…" for the
+# whole backend boot, and docker-compose.prod.yml served "Welcome to nginx!"
+# because the web build could not write its own output volume. Neither exists
+# until the real images boot and a browser loads the page, so that is what
+# this job does. publish.yml will not push an image unless it passes.
+name: release-gate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: docker-compose.prod.yml
+      ARTIFACT_DIR: smoke-artifacts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Same version tools/ pins, so a local rehearsal and CI drive one browser.
+      - name: Install Playwright
+        run: |
+          npm install --prefix "$RUNNER_TEMP/pw" playwright@1.61.1
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Build release images
+        run: docker compose build
+
+      # `up -d` returns once web-build has completed (nginx depends on it);
+      # a failed web build fails this step instead of leaving a stale bundle.
+      - name: Boot the production stack (keyless, no .env)
+        run: docker compose up -d
+
+      - name: Browser smoke
+        run: NODE_PATH="$RUNNER_TEMP/pw/node_modules" node scripts/smoke-release.cjs
+
+      - name: Dump container logs
+        if: failure()
+        run: |
+          mkdir -p "$ARTIFACT_DIR"
+          docker compose ps -a > "$ARTIFACT_DIR/ps.txt" 2>&1 || true
+          docker compose logs --no-color > "$ARTIFACT_DIR/compose.log" 2>&1 || true
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: release-smoke
+          path: smoke-artifacts
+
+  # The Tauri shell embeds apps/web/dist at compile time (frontendDist), so a
+  # broken web build or a Rust/Tauri API drift both fail here.
+  desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: System libraries for Tauri
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @osint/web build
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - run: cargo check --locked --manifest-path apps/desktop/src-tauri/Cargo.toml

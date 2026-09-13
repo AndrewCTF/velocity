@@ -44,7 +44,7 @@ undo and why it was made.
 | `apps/desktop/CLAUDE.md` | Tauri watcher excludes, YOLO sidecar env |
 | `packages/shared/CLAUDE.md` | the web↔api contract, `Observation.t` semantics |
 | `tools/CLAUDE.md` | feeder processes, the real-Chrome tier, perf harnesses |
-| `scripts/CLAUDE.md` | boot, verify, kill-port, deploy |
+| `scripts/CLAUDE.md` | boot, verify, kill-port, release smoke |
 | `infra/CLAUDE.md` | the two SQL trees and which one you actually want |
 
 ## Environment facts / traps
