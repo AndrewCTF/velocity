@@ -24,6 +24,9 @@ jobs:
     timeout-minutes: 30
     env:
       COMPOSE_FILE: docker-compose.prod.yml
+      # The prod compose refuses to run without a pinned image tag. These
+      # images are built here and never pushed, so tag them with the commit.
+      VELOCITY_VERSION: ci-${{ github.sha }}
       ARTIFACT_DIR: smoke-artifacts
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
