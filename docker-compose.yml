@@ -97,7 +97,9 @@ services:
     command: ["pnpm", "--filter", "@osint/web", "dev", "--host", "0.0.0.0"]
 
   nginx:
-    image: nginx:1.27-alpine
+    # Digest-pinned like the prod stack's nginx (docker-compose.prod.yml) —
+    # Dependabot's docker ecosystem keeps this current (.github/dependabot.yml).
+    image: nginx:1.30.4-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c
     runtime: runc
     ports:
       # Loopback only: this dev stack runs with ALLOW_UNAUTHENTICATED=1, so a

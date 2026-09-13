@@ -2,14 +2,32 @@
 
 services:
   api:
-    # Published by .github/workflows/publish.yml on a version tag, so
-    # `docker compose -f docker-compose.prod.yml pull` skips the source build.
+    # Published by .github/workflows/publish.yml on a version tag (that
+    # workflow only ever pushes `latest` + the pushed tag itself — there is no
+    # floating major/minor alias) — so pin to a real released version here,
+    # never `:latest`, and require the operator to say which one.
+    # `docker compose -f docker-compose.prod.yml pull` skips the source build;
     # `up` still builds locally when the image is absent.
-    image: ghcr.io/andrewctf/velocity-api:latest
+    image: ghcr.io/andrewctf/velocity-api:${VELOCITY_VERSION:?set VELOCITY_VERSION to a published tag, e.g. v1.0.1}
     build:
       context: .
       dockerfile: infra/docker/api.Dockerfile
     runtime: runc
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 8g
+    # Everything the process writes goes to a real mount: /srv/data is the
+    # named volume below, /tmp is where the sidecar log files
+    # (adsb/ais/llamacpp/vllm/mavlink/browser-fetch) and imagery/ondemand.py's
+    # tempfile.mkdtemp() land. Proven booted + serving /api/health under this
+    # exact read_only+tmpfs shape — see this wave's report for the command.
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+    networks:
+      - front
     env_file:
       # Optional: the platform boots keyless. `cp .env.example .env` to add keys.
       - path: .env
@@ -22,6 +40,12 @@ services:
       # archive instead of the bounded live buffer.
       ARCHIVE_MODE: 1
       HISTORY_DISK_BUDGET_GB: 5
+      # The rate limiter only believes X-Forwarded-For from a peer inside this
+      # list (apps/api/app/ratelimit.py `_trusted_nets`, CIDR-aware). Only
+      # nginx (on the `front` network below) ever talks to api directly, so
+      # trusting the whole compose subnet — not just nginx's one IP — is safe
+      # and survives nginx being recreated with a new address.
+      TRUSTED_PROXIES: 172.28.0.0/24,127.0.0.1,::1
     # No source bind-mount and no --reload: the image is the deployable unit.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
     healthcheck:
@@ -37,28 +61,57 @@ services:
 
   web-build:
     # One-shot builder: compiles the static web bundle into the shared web_dist
-    # volume, then exits. nginx serves the produced files.
-    image: ghcr.io/andrewctf/velocity-web:latest
+    # volume, then exits. nginx serves the produced files. Same tag discipline
+    # as api — this is a build tool, not a long-running service, but it still
+    # must not silently drift to whatever `latest` happens to be today.
+    image: ghcr.io/andrewctf/velocity-web:${VELOCITY_VERSION:?set VELOCITY_VERSION to a published tag, e.g. v1.0.1}
     build:
       context: .
       dockerfile: infra/docker/web.Dockerfile
     runtime: runc
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 4g
+    # NOT read_only: tested (`docker run --read-only … pnpm --filter
+    # @osint/web build`) and it fails before vite even starts — corepack's
+    # shim can't create ~/.cache/node/corepack on every invocation, even
+    # though `corepack prepare --activate` already ran at image build time.
+    # This container exits immediately either way, so the read-only root's
+    # defense-in-depth value is low here relative to chasing corepack/vite's
+    # full write-path list.
+    networks:
+      - front
     command: ["pnpm", "--filter", "@osint/web", "build"]
     volumes:
       - web_dist:/srv/apps/web/dist
     restart: "no"
 
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.30.4-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c
     runtime: runc
     ports:
-      - "8080:80"
+      # Loopback only: TLS terminates at a reverse proxy on the host, which
+      # fronts this port with a real certificate. An operator who
+      # wants nginx to face the internet directly widens this deliberately;
+      # it is not this compose file's default because it would ship a plain
+      # HTTP origin with no TLS of its own.
+      - "127.0.0.1:8080:80"
+    networks:
+      - front
     volumes:
       - ./infra/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
       - web_dist:/usr/share/nginx/html:ro
     depends_on:
       - api
       - web-build
+
+networks:
+  front:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
 
 volumes:
   web_dist: {}
