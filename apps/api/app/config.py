@@ -23,6 +23,10 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        # `.env.example` ships every knob as a bare `KEY=`; treat an empty
+        # value as unset so those placeholders fall through to the field
+        # default instead of failing bool/int parsing.
+        env_ignore_empty=True,
     )
 
     # ── visual / runtime config exposed to the browser ──
