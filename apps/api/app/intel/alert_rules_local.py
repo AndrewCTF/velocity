@@ -90,7 +90,8 @@ CREATE TABLE IF NOT EXISTS alert_deliveries (
   status     INTEGER,
   error      TEXT,
   message    TEXT NOT NULL DEFAULT '',
-  ts         TEXT NOT NULL
+  ts         TEXT NOT NULL,
+  user_id    TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_deliveries_ts ON alert_deliveries(ts DESC);
 """
@@ -109,6 +110,13 @@ def _migrate(con: sqlite3.Connection) -> None:
         if col not in have:
             con.execute(f"ALTER TABLE alert_rules ADD COLUMN {col} TEXT")
     _relax_aoi_not_null(con)
+    # Owner of each delivery attempt (ASVS V8.2.2): the target is a sink URL,
+    # often a secret Discord webhook, so a multi-user deployment shows each user
+    # only their own. Rows written before this column existed stay NULL and are
+    # visible only on single-user deployments.
+    dcols = {row[1] for row in con.execute("PRAGMA table_info(alert_deliveries)").fetchall()}
+    if "user_id" not in dcols:
+        con.execute("ALTER TABLE alert_deliveries ADD COLUMN user_id TEXT")
 
 
 # An identity-only rule (P6.1: icao24/mmsi/callsign with no AOI) persists NULL
@@ -302,6 +310,7 @@ async def record_delivery(
     status: int | None,
     error: str | None,
     message: str,
+    user_id: str | None = None,
     settings: Settings | None = None,
 ) -> None:
     ts = _now_iso()
@@ -311,11 +320,11 @@ async def record_delivery(
         try:
             con.execute(
                 "INSERT INTO alert_deliveries (rule_id, entity_id, transition,"
-                " channel, target, ok, status, error, message, ts)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                " channel, target, ok, status, error, message, ts, user_id)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     rule_id, entity_id, transition, channel, target,
-                    int(ok), status, error, message, ts,
+                    int(ok), status, error, message, ts, user_id,
                 ),
             )
             # Bound the append-only log: drop everything older than the newest
@@ -333,16 +342,21 @@ async def record_delivery(
 
 
 async def recent_deliveries(
-    limit: int = 50, *, settings: Settings | None = None
+    limit: int = 50, *, user_id: str | None = None, settings: Settings | None = None
 ) -> list[dict[str, Any]]:
+    """Newest delivery attempts. ``user_id`` given = that owner's rows only
+    (multi-user); None = every row (single-user, where there is one owner)."""
+
     def _sync() -> list[dict[str, Any]]:
         con = _connect(settings)
         try:
+            where, args = ("WHERE user_id=? ", [user_id]) if user_id is not None else ("", [])
             rows = con.execute(
                 "SELECT rule_id, entity_id, transition, channel, target, ok,"
-                " status, error, message, ts FROM alert_deliveries"
-                " ORDER BY id DESC LIMIT ?",
-                (int(limit),),
+                " status, error, message, ts FROM alert_deliveries "
+                + where
+                + "ORDER BY id DESC LIMIT ?",
+                (*args, int(limit)),
             ).fetchall()
         finally:
             con.close()

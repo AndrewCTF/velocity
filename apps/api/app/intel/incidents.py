@@ -171,7 +171,7 @@ async def _gather(bbox: BBox | None, window_s: float) -> list[Signal]:
     }
     seen: set[str] = set()
     alert_sigs: list[Signal] = []
-    for al in bus.recent(200) + jamming_recent(100):
+    for al in bus.recent_shared(200) + jamming_recent(100):
         if al.id in seen or al.t < cutoff:
             continue
         seen.add(al.id)

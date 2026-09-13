@@ -113,7 +113,7 @@ REGISTER: list[Source] = [
     Source("RT", "https://www.rt.com/rss/news/", "ru-state", "RU", category="regional", tier=1),
     Source("TASS", "https://tass.com/rss/v2.xml", "ru-state", "RU", category="regional", tier=1, browser=True),
     Source("CGTN", "https://www.cgtn.com/subscribe/rss/section/world.xml", "cn-state", "CN", category="regional", tier=1),
-    Source("Xinhua EN", "http://www.xinhuanet.com/english/rss/worldrss.xml", "cn-state", "CN", category="regional", tier=1),
+    Source("Xinhua EN", "https://www.xinhuanet.com/english/rss/worldrss.xml", "cn-state", "CN", category="regional", tier=1),
     Source("Anadolu", "https://www.aa.com.tr/en/rss/default?cat=guncel", "tr-state", "TR", category="regional", tier=2),
     Source("Press TV", "https://www.presstv.ir/rss.xml", "ir-state", "IR", category="regional", tier=2),
     Source("France24 Africa", "https://www.france24.com/en/africa/rss", "center", "FR", category="regional", tier=2),

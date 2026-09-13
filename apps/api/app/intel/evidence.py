@@ -36,6 +36,7 @@ import asyncio
 import contextlib
 import hashlib
 import json
+import os
 import re
 import socket
 import time
@@ -149,7 +150,13 @@ def _write_blob(settings: Settings, sha256: str, data: bytes) -> None:
     path = blob_path(settings, sha256)
     if path.exists():
         return
-    path.parent.mkdir(parents=True, exist_ok=True)
+    # 0700 dirs, 0600 blobs, as config.py documents: captured evidence is
+    # whatever an analyst fetched, and another local account must not read it.
+    root = _blob_dir(settings)
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    root.chmod(0o700)
+    path.parent.mkdir(mode=0o700, exist_ok=True)
+    path.parent.chmod(0o700)
     # Write to a temp sibling then atomically rename so a crash mid-write never
     # leaves a truncated blob under a hash that claims to verify. The temp name
     # is unique per writer: capture_bytes now runs this in a thread, so two
@@ -157,7 +164,9 @@ def _write_blob(settings: Settings, sha256: str, data: bytes) -> None:
     # share one .partial file (they would double-replace it and raise). The
     # final content-addressed rename is idempotent — identical bytes either way.
     tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex}.partial")
-    tmp.write_bytes(data)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(data)
     try:
         tmp.replace(path)
     except OSError:
@@ -354,6 +363,9 @@ def _validate_public_host_sync(host: str) -> None:
     for info in infos:
         ip = info[4][0]
         if _ip_is_blocked(ip):
+            from app.netguard import log_refusal  # noqa: PLC0415
+
+            log_refusal("evidence-capture", host, f"non-public address {ip}")
             raise EvidenceError(
                 "refusing to capture a private / loopback / link-local address "
                 "(SSRF guard) — only public hosts can be fetched server-side"

@@ -15,21 +15,34 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 
-from app.auth import require_ws_key
+from app.auth import _bearer, require_ws_key
 from app.config import get_settings
 from app.correlate.bus import bus, jamming_recent
 from app.intel import watch
 from app.intel.geo import NM_TO_KM, haversine_km
-from app.keys import UserCtx, current_user_or_local
+from app.keys import UserCtx, current_user_or_local, multi_user, user_id_for_token
 
 router = APIRouter(tags=["alerts"])
 
 
+async def _viewer(token: str | None) -> tuple[bool, str | None]:
+    """(filter?, user). Multi-user: alerts owned by another user's watch rule
+    are hidden (ASVS V8.2.2); a caller with no user (static key, internal
+    token) sees only system-wide alerts. Single-user: no filter."""
+    if not multi_user():
+        return False, None
+    return True, await user_id_for_token(token)
+
+
 @router.get("/api/alerts")
-async def recent_alerts(limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
-    return {"alerts": [a.to_json() for a in bus.recent(limit)]}
+async def recent_alerts(request: Request, limit: int = Query(50, ge=1, le=500)) -> dict[str, Any]:
+    scoped, uid = await _viewer(_bearer(request.headers) or request.headers.get("x-api-key"))
+    rows = bus.recent(bus._max_recent) if scoped else bus.recent(limit)
+    if scoped:
+        rows = [a for a in rows if a.visible_to(uid)][-limit:]
+    return {"alerts": [a.to_json() for a in rows]}
 
 
 @router.post("/api/alerts/watch-session")
@@ -152,15 +165,21 @@ async def alerts_ws(ws: WebSocket) -> None:
     if not await require_ws_key(ws):
         await ws.close(code=1008)
         return
+    scoped, uid = await _viewer(_bearer(ws.headers) or ws.query_params.get("key"))
     await ws.accept()
     # Backfill recent so a freshly-opened tab isn't empty
-    for a in bus.recent(20):
+    backfill = bus.recent(bus._max_recent) if scoped else bus.recent(20)
+    if scoped:
+        backfill = [a for a in backfill if a.visible_to(uid)][-20:]
+    for a in backfill:
         await ws.send_text(json.dumps(a.to_json()))
     q = bus.subscribe()
     try:
         while True:
             try:
                 a = await asyncio.wait_for(q.get(), timeout=20.0)
+                if scoped and not a.visible_to(uid):
+                    continue
                 await ws.send_text(json.dumps(a.to_json()))
             except TimeoutError:
                 # heartbeat to keep the socket alive through proxies

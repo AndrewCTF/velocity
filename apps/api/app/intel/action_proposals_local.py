@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS action_proposals (
   name       TEXT NOT NULL,
   params     TEXT NOT NULL DEFAULT '{}',
   confidence REAL NOT NULL DEFAULT 0.0,
-  created    REAL NOT NULL
+  created    REAL NOT NULL,
+  owner      TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_action_proposals_created
   ON action_proposals(created);
@@ -66,6 +67,10 @@ def _connect() -> sqlite3.Connection:
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA busy_timeout=5000")
     con.executescript(_SCHEMA)
+    # ``owner`` (ASVS V8.2.2) arrived after the table shipped.
+    cols = {r[1] for r in con.execute("PRAGMA table_info(action_proposals)").fetchall()}
+    if "owner" not in cols:
+        con.execute("ALTER TABLE action_proposals ADD COLUMN owner TEXT")
     con.commit()
     return con
 
@@ -81,11 +86,16 @@ def _row(r: tuple[Any, ...]) -> dict[str, Any]:
         "params": json.loads(r[2]),
         "confidence": r[3],
         "created": r[4],
+        "owner": r[5] if len(r) > 5 else None,
     }
 
 
 async def add(
-    name: str, params: dict[str, Any], confidence: float, ttl_s: float
+    name: str,
+    params: dict[str, Any],
+    confidence: float,
+    ttl_s: float,
+    owner: str | None = None,
 ) -> str:
     """Queue a proposal and return its id, pruning anything already expired."""
     pid = uuid.uuid4().hex[:12]
@@ -98,9 +108,9 @@ async def add(
                 "DELETE FROM action_proposals WHERE created < ?", (now - ttl_s,)
             )
             con.execute(
-                "INSERT INTO action_proposals (id, name, params, confidence, created)"
-                " VALUES (?,?,?,?,?)",
-                (pid, name, json.dumps(params), float(confidence), now),
+                "INSERT INTO action_proposals (id, name, params, confidence, created, owner)"
+                " VALUES (?,?,?,?,?,?)",
+                (pid, name, json.dumps(params), float(confidence), now, owner),
             )
             con.commit()
         finally:
@@ -122,7 +132,7 @@ async def list_pending(ttl_s: float) -> list[dict[str, Any]]:
         con = _connect()
         try:
             rows = con.execute(
-                "SELECT id, name, params, confidence, created FROM action_proposals"
+                "SELECT id, name, params, confidence, created, owner FROM action_proposals"
                 " WHERE created >= ? ORDER BY created ASC",
                 (time.time() - ttl_s,),
             ).fetchall()
@@ -133,32 +143,48 @@ async def list_pending(ttl_s: float) -> list[dict[str, Any]]:
     return await _run(_sync)
 
 
+async def peek(pid: str, ttl_s: float) -> dict[str, Any] | None:
+    """One unexpired proposal without removing it (for the owner check)."""
+
+    def _sync() -> dict[str, Any] | None:
+        con = _connect()
+        try:
+            row = con.execute(
+                "SELECT id, name, params, confidence, created, owner FROM action_proposals"
+                " WHERE id=? AND created >= ?",
+                (pid, time.time() - ttl_s),
+            ).fetchone()
+        finally:
+            con.close()
+        return _row(row) if row is not None else None
+
+    return await _run(_sync)
+
+
 async def take(pid: str, ttl_s: float) -> dict[str, Any] | None:
     """Remove and return one unexpired proposal, or None.
 
-    Delete-then-read in one connection so two approvals of the same proposal
-    cannot both execute it.
+    ONE statement, ``DELETE ... RETURNING``: the delete is the claim. The old
+    read-then-delete let two approvals on separate connections both read the
+    row before either deleted it, and both executed the action (ASVS V2.3.4).
     """
 
     def _sync() -> dict[str, Any] | None:
         con = _connect()
         try:
             row = con.execute(
-                "SELECT id, name, params, confidence, created FROM action_proposals"
-                " WHERE id=? AND created >= ?",
-                (pid, time.time() - ttl_s),
+                "DELETE FROM action_proposals WHERE id=?"
+                " RETURNING id, name, params, confidence, created, owner",
+                (pid,),
             ).fetchone()
-            if row is None:
-                # Still clear an expired row of the same id so the table does
-                # not keep one nobody can act on.
-                con.execute("DELETE FROM action_proposals WHERE id=?", (pid,))
-                con.commit()
-                return None
-            con.execute("DELETE FROM action_proposals WHERE id=?", (pid,))
             con.commit()
-            return _row(row)
         finally:
             con.close()
+        if row is None or row[4] < time.time() - ttl_s:
+            # Absent, already taken, or expired (an expired row is still cleared
+            # so the table does not keep one nobody can act on).
+            return None
+        return _row(row)
 
     return await _run(_sync)
 

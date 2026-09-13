@@ -441,9 +441,14 @@ def _severity_word(rank: int) -> str:
     )
 
 
-def _to_bus_alert(rule: dict[str, Any], cand: _Candidate, transition: str) -> Alert:
-    """Adapt a firing to the ``correlate.types.Alert`` the /ws/alerts bus pushes."""
+def _to_bus_alert(
+    rule: dict[str, Any], cand: _Candidate, transition: str, owner: str | None = None
+) -> Alert:
+    """Adapt a firing to the ``correlate.types.Alert`` the /ws/alerts bus pushes.
+    ``owner`` is the rule's user; /api/alerts and /ws/alerts show the alert to
+    that user only on a multi-user deployment."""
     return Alert(
+        owner=owner,
         id=uuid.uuid4().hex[:12],
         rule_id=f"watch:{rule.get('id')}",
         severity=_severity_word(cand.severity_rank),  # type: ignore[arg-type]
@@ -660,11 +665,11 @@ async def evaluate_session(
     for rule, cand, transition in firings:
         await _persist_firing(reg, rule, cand, transition)
         await _maybe_cue(reg, rule, cand, transition)
-        await _deliver_sinks(rule, cand, transition)
+        await _deliver_sinks(rule, cand, transition, owner=ctx.user_id)
         # Reuse the EXISTING /ws/alerts transport: publish onto the bus the live
         # socket already broadcasts. Enters and exits both notify.
         try:
-            bus.publish(_to_bus_alert(rule, cand, transition))
+            bus.publish(_to_bus_alert(rule, cand, transition, owner=ctx.user_id))
         except Exception:  # noqa: BLE001
             pass
         fired += 1
@@ -672,7 +677,7 @@ async def evaluate_session(
 
 
 async def _deliver_sinks(
-    rule: dict[str, Any], cand: _Candidate, transition: str
+    rule: dict[str, Any], cand: _Candidate, transition: str, owner: str | None = None
 ) -> None:
     """Push a firing to the rule's configured out-of-band sink — a Discord
     webhook or a generic ``webhook`` URL (``routes/alert_rules.py`` CHANNELS) —
@@ -704,7 +709,7 @@ async def _deliver_sinks(
         await alert_rules_local.record_delivery(
             rule_id=rule_id, entity_id=cand.entity_id, transition=transition,
             channel=channel, target=url, ok=False, status=None,
-            error=str(exc), message=message,
+            error=str(exc), message=message, user_id=owner,
         )
         return
 
@@ -724,14 +729,14 @@ async def _deliver_sinks(
         await alert_rules_local.record_delivery(
             rule_id=rule_id, entity_id=cand.entity_id, transition=transition,
             channel=channel, target=url, ok=ok, status=res.status,
-            error=res.error, message=message,
+            error=res.error, message=message, user_id=owner,
         )
     except Exception as exc:  # noqa: BLE001 — never let a sink failure stall the sweep
         log.debug("watch: sink delivery failed (%s): %s", cand.entity_id, exc)
         await alert_rules_local.record_delivery(
             rule_id=rule_id, entity_id=cand.entity_id, transition=transition,
             channel=channel, target=url, ok=False, status=None,
-            error=str(exc), message=message,
+            error=str(exc), message=message, user_id=owner,
         )
 
 

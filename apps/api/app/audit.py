@@ -110,6 +110,37 @@ def _write_local_sync(row: dict[str, Any]) -> None:
         con.close()
 
 
+def list_local_rows_sync(limit: int) -> list[dict[str, Any]]:
+    """Newest local ``audit_log`` rows (mutation attempts, OSINT/extract audits)."""
+    if not Path(_local_db_path()).exists():
+        return []
+    con = _local_connect()
+    try:
+        rows = con.execute(
+            "SELECT user_id, action, resource_type, target_id, classification, params,"
+            " ts FROM audit_log ORDER BY ts DESC, id DESC LIMIT ?",
+            (int(limit),),
+        ).fetchall()
+    finally:
+        con.close()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        try:
+            params = json.loads(r[5])
+        except ValueError:
+            params = {}
+        out.append({
+            "user_id": r[0], "action": r[1], "resource_type": r[2],
+            "target_id": r[3] or "", "classification": r[4], "params": params,
+            "ts": r[6], "store": "audit_log",
+        })
+    return out
+
+
+async def list_local_rows(limit: int) -> list[dict[str, Any]]:
+    return await asyncio.get_running_loop().run_in_executor(None, list_local_rows_sync, limit)
+
+
 async def _audit_local(row: dict[str, Any]) -> bool:
     try:
         await asyncio.get_running_loop().run_in_executor(None, _write_local_sync, row)
@@ -204,9 +235,16 @@ def _actor(request: Request) -> UserCtx:
     the auth layer already validated it (it is in the per-token cache); a static
     key holder is ``api-key``; an ingest sender is ``ingest``; else ``local``.
     The ingest token is never read here."""
-    from app.auth import _bearer, _jwt_claims, _token_ok_until  # noqa: PLC0415
+    from app.auth import (  # noqa: PLC0415
+        _bearer,
+        _internal_ok_until,
+        _jwt_claims,
+        _token_ok_until,
+    )
 
     token = _bearer(request.headers) or ""
+    if token and token in _internal_ok_until:
+        return UserCtx(user_id="mcp-internal", token="")
     if token and token in _token_ok_until:
         sub = (_jwt_claims(token) or {}).get("sub")
         if sub:

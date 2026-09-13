@@ -53,8 +53,9 @@ def test_recon_upload_over_cap_is_413_and_leaves_no_job_dir(
     started: list[str] = []
     monkeypatch.setattr(recon.asyncio, "create_task", lambda coro: started.append(coro) or coro.close())
     files = [
-        ("files", ("a.jpg", io.BytesIO(b"x" * 60), "image/jpeg")),
-        ("files", ("b.jpg", io.BytesIO(b"x" * 60), "image/jpeg")),  # total 120 > 100
+        # JPEG magic first: recon checks content against the extension (V5.2.2).
+        ("files", ("a.jpg", io.BytesIO(b"\xff\xd8\xff" + b"x" * 57), "image/jpeg")),
+        ("files", ("b.jpg", io.BytesIO(b"\xff\xd8\xff" + b"x" * 57), "image/jpeg")),  # 120 > 100
     ]
     r = client.post("/api/recon/jobs", files=files)
     assert r.status_code == 413

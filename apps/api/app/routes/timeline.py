@@ -51,7 +51,7 @@ async def density(
         if 0 <= idx < bins and o.emits_kind in ("aircraft", "vessel", "quake"):
             detections[idx] += 1
 
-    for a in bus.recent(500):
+    for a in bus.recent_shared(500):
         idx = int((a.t - (now - window_sec)) / bin_width)
         if 0 <= idx < bins:
             alerts[idx] += 1
@@ -110,7 +110,7 @@ async def events(
 
     # ── Signals lane: recent alert-bus events within the window. ──
     sig_events: list[dict[str, Any]] = []
-    for a in bus.recent(1000):
+    for a in bus.recent_shared(1000):
         if a.t < floor:
             continue
         sig_events.append(

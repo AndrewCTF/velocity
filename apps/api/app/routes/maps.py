@@ -40,10 +40,10 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from app.auth import require_ws_key
+from app.auth import _bearer, require_ws_key
 from app.config import get_settings
 from app.intel.ontology import Object, get_registry
-from app.keys import UserCtx, current_user_or_local
+from app.keys import UserCtx, current_user_or_local, multi_user, user_id_for_token
 
 router = APIRouter(tags=["maps"])
 
@@ -337,9 +337,26 @@ async def cop_ws(ws: WebSocket, map: str | None = None) -> None:
         await ws.close(code=1008)
         return
 
+    # Multi-user (ASVS V8.2.2): only a user who can LOAD the map may join its
+    # room, and the room is keyed by owner + id, since two users can each own a
+    # ``map:abc``. Saved maps are owner-scoped with no sharing model yet, so
+    # follow-along on a multi-user deployment is between one user's own tabs
+    # and devices. A caller with no user (static key) is refused. Single-user:
+    # unchanged.
+    room = map
+    if multi_user():
+        uid = await user_id_for_token(_bearer(ws.headers) or ws.query_params.get("key"))
+        obj = None
+        if uid:
+            obj = await get_registry(UserCtx(user_id=uid, token=""), get_settings()).get(map)
+        if obj is None or _from_object(obj) is None:
+            await ws.close(code=1008)
+            return
+        room = f"{uid}|{map}"
+
     await ws.accept()
     map_id = map
-    q = cop_hub.subscribe(map_id)
+    q = cop_hub.subscribe(room)
 
     async def _pump_out() -> None:
         """Forward deltas published by peers to this socket (+ heartbeat).
@@ -385,7 +402,7 @@ async def cop_ws(ws: WebSocket, map: str | None = None) -> None:
                 continue
             # Re-stamp the map so a peer can't relay into a different room, and
             # publish to everyone EXCEPT the sender.
-            cop_hub.publish(map_id, {**msg, "map": map_id}, exclude=q)
+            cop_hub.publish(room, {**msg, "map": map_id}, exclude=q)
 
     try:
         # Announce current room size so a joiner knows whether anyone is driving.
@@ -393,7 +410,7 @@ async def cop_ws(ws: WebSocket, map: str | None = None) -> None:
         # q in the finally (otherwise the queue would leak in the room).
         await ws.send_text(
             json.dumps(
-                {"kind": "joined", "map": map_id, "followers": cop_hub.room_size(map_id)}
+                {"kind": "joined", "map": map_id, "followers": cop_hub.room_size(room)}
             )
         )
         # Run both directions; whichever finishes first (a disconnect) tears down
@@ -414,7 +431,7 @@ async def cop_ws(ws: WebSocket, map: str | None = None) -> None:
         # finally still unsubscribes, so just exit quietly (matches /ws/alerts).
         pass
     finally:
-        cop_hub.unsubscribe(map_id, q)
+        cop_hub.unsubscribe(room, q)
 
 
 def _now_iso() -> str:

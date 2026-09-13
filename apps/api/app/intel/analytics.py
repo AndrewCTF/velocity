@@ -134,7 +134,7 @@ async def situation() -> dict[str, Any]:
     ves_cat: Counter[str] = Counter(
         vessel_category((o.attrs or {}).get("shipType")) for o in vessels
     )
-    alerts = bus.recent(200)
+    alerts = bus.recent_shared(200)
     sev: Counter[str] = Counter(a.severity for a in alerts)
 
     return {
@@ -510,7 +510,7 @@ async def anomalies(
     jam = await jamming(bbox, features=features)
     jam_hot = [c for c in jam["cells"] if c["severity"] in ("high", "medium")][:_MAX_SAMPLE]
 
-    alerts_raw = bus.recent(200) + jamming_recent(100)
+    alerts_raw = bus.recent_shared(200) + jamming_recent(100)
     seen: set[str] = set()
     alerts: list[dict[str, Any]] = []
     for al in alerts_raw:

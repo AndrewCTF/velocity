@@ -249,3 +249,52 @@ def test_minting_a_token_for_an_unknown_dataset_is_a_404(client: TestClient) -> 
     assert (
         client.post("/api/foundry/datasets/ds_nope/ingest-token").status_code == 404
     )
+
+
+# ── the per-dataset token is the WHOLE gate, also on an authenticated box ─────
+# ASVS V6.3.4. The route and apps/api/CLAUDE.md said "no session dependency — an
+# external sender has no session", but /api/ingest/ was not a public prefix, so
+# on any box with API_KEY or Supabase configured ApiKeyMiddleware 401'd the
+# sender before its token was read. The suite runs auth-disabled and never saw it.
+
+_LONG = "ingest-test-static-key-0123456789abcdef"
+
+
+def _keyed_app(monkeypatch):
+    from app import auth
+    from app.config import get_settings
+    from app.main import create_app
+
+    monkeypatch.setenv("API_KEY", _LONG)
+    get_settings.cache_clear()
+    auth.reset_state()
+    return TestClient(create_app())
+
+
+def test_a_sender_with_only_the_ingest_token_gets_through_on_a_keyed_box(monkeypatch) -> None:
+    with _keyed_app(monkeypatch) as c:
+        op = {"X-API-Key": _LONG}
+        r = c.post(
+            "/api/foundry/datasets/upload",
+            files={"file": ("seed.csv", b"mmsi,name\n1,Alpha\n", "text/csv")},
+            data={"name": "pushed"}, headers=op,
+        )
+        assert r.status_code == 200, r.text
+        ds = r.json().get("dataset_id") or r.json()["id"]
+        token = c.post(f"/api/foundry/datasets/{ds}/ingest-token", headers=op).json()["token"]
+
+        pushed = c.post(f"/api/ingest/{ds}", json={"mmsi": 2}, headers={"X-Ingest-Token": token})
+        assert pushed.status_code == 200, pushed.text
+        # Still a gate: no token, no write; and the rest of /api stays keyed.
+        assert c.post(f"/api/ingest/{ds}", json={"mmsi": 3}).status_code == 401
+        assert c.get("/api/foundry/datasets").status_code == 401
+
+
+def test_bad_ingest_tokens_count_toward_the_failed_credential_lockout(monkeypatch) -> None:
+    monkeypatch.setenv("AUTH_FAILURE_LIMIT_PER_MIN", "3")
+    with _keyed_app(monkeypatch) as c:
+        for _ in range(3):
+            r = c.post("/api/ingest/ds_nope", json={}, headers={"X-Ingest-Token": "guess"})
+            assert r.status_code in (401, 404)
+        r = c.post("/api/ingest/ds_nope", json={}, headers={"X-Ingest-Token": "guess"})
+        assert r.status_code == 429 and r.headers.get("Retry-After")

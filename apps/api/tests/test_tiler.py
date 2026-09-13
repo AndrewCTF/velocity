@@ -98,9 +98,14 @@ def _write_tiny_cog(minx: float, miny: float, maxx: float, maxy: float) -> str:
 
 
 @pytest.fixture
-def tiler_client() -> Iterator[TestClient]:
+def tiler_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """A TestClient over a bare app that ONLY mounts /tiler (no auth, no
-    lifespan side effects) — isolates the tile path from the full app."""
+    lifespan side effects) — isolates the tile path from the full app.
+
+    The COGs here are local temp files, which the ?url= guard refuses in
+    production (ASVS V13.2.4, 2026-09-13; tests/test_asvs_v11_v17.py). These
+    tests are about rendering, so the guard is stood down for them only."""
+    monkeypatch.setattr(T, "check_cog_url", lambda url: url)
     sub = T.build_tiler_app()
     assert sub is not None
     app = FastAPI()
@@ -162,14 +167,14 @@ def test_tiler_is_gated_when_auth_enabled(monkeypatch: pytest.MonkeyPatch) -> No
     Settings, not the dependency override), so the static key is driven via the
     env var + a cache clear, restored on exit so other tests stay hermetic.
     """
-    monkeypatch.setenv("API_KEY", "secret-test-key")  # turns auth ON
+    monkeypatch.setenv("API_KEY", "secret-test-key-for-the-tiler-gate-0123")  # turns auth ON
     get_settings.cache_clear()
     try:
         app = create_app()
         with TestClient(app) as c:
             unauth = c.get("/tiler/healthz")
             assert unauth.status_code == 401  # gated, not fail-open
-            ok = c.get("/tiler/healthz", headers={"X-API-Key": "secret-test-key"})
+            ok = c.get("/tiler/healthz", headers={"X-API-Key": "secret-test-key-for-the-tiler-gate-0123"})
             assert ok.status_code == 200
             assert ok.json() == {"ok": True}
     finally:

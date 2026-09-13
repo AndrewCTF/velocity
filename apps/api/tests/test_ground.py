@@ -147,7 +147,7 @@ def test_photo_proxy_passes_bytes(monkeypatch):
     assert r.status_code == 200
     assert r.content == b"\xff\xd8jpeg"
     assert r.headers["content-type"].startswith("image/")
-    assert r.headers["cache-control"] == "public, max-age=60"
+    assert r.headers["cache-control"] == "private, max-age=60"  # ASVS V14.2.2
 
 
 def test_photo_proxy_404_unknown(monkeypatch):

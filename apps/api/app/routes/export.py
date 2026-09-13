@@ -136,7 +136,7 @@ def _to_kml(feats: list[dict[str, Any]]) -> str:
 # fmt → (media type, file extension)
 _MEDIA = {
     "csv": ("text/csv", "csv"),
-    "kml": ("application/vnd.google-earth.kml+xml", "kml"),
+    "kml": ("application/vnd.google-earth.kml+xml; charset=utf-8", "kml"),
     "geojson": ("application/geo+json", "geojson"),
 }
 

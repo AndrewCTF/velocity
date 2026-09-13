@@ -41,6 +41,36 @@ from app.routes import _feedgeo as fg
 router = APIRouter(tags=["mega_feeds"])
 
 
+def _strict_bbox(raw: str) -> tuple[float, float, float, float]:
+    """``lon_min,lat_min,lon_max,lat_max`` as four finite floats inside the
+    globe, or 400. The strings went straight into an Overpass QL program
+    (``nwr["military"]({s},{w},{n},{e})``), so ``1,2,3,4);out;node(1`` closed
+    the filter and ran the caller's own statements from this server's address,
+    cached for a day under the attacker's key (ASVS V1.2.4 / V1.3.3 / V2.2.1).
+    Everything downstream (the query, WFS params, cache keys) is rebuilt from
+    these floats, never from the input."""
+    import math  # noqa: PLC0415
+
+    try:
+        parts = [float(x) for x in raw.split(",")]
+    except ValueError:
+        raise HTTPException(
+            400, "bbox must be four numbers: lon_min,lat_min,lon_max,lat_max"
+        ) from None
+    if len(parts) != 4 or not all(math.isfinite(p) for p in parts):
+        raise HTTPException(400, "bbox must be four numbers: lon_min,lat_min,lon_max,lat_max")
+    w, s, e, n = parts
+    if not (-180 <= w <= 180 and -180 <= e <= 180 and -90 <= s <= 90 and -90 <= n <= 90):
+        raise HTTPException(400, "bbox is outside lon [-180,180] / lat [-90,90]")
+    if s >= n or w >= e:
+        raise HTTPException(400, "bbox min must be below max")
+    return w, s, e, n
+
+
+def _bbox_text(b: tuple[float, float, float, float]) -> str:
+    return ",".join(f"{v:.6f}" for v in b)
+
+
 # ── CISA KEV — Known Exploited Vulnerabilities ────────────────────────────
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
@@ -94,6 +124,7 @@ async def mineral_sites(
     # so without a viewport we answer nothing rather than pull it.
     if not bbox:
         return fg.fc([])
+    bbox = _bbox_text(_strict_bbox(bbox))
 
     async def load() -> dict[str, Any]:
         import xml.etree.ElementTree as ET
@@ -173,11 +204,9 @@ async def osm_military(
     # can stay registered and simply render nothing above its LOD gate.
     if not bbox:
         return fg.fc([])
-    parts = [x.strip() for x in bbox.split(",")]
-    if len(parts) != 4:
-        raise HTTPException(400, "bbox must be lon_min,lat_min,lon_max,lat_max")
     # Overpass wants south,west,north,east; the map speaks lon/lat corners.
-    w, s, e, n = parts
+    w, s, e, n = (f"{v:.6f}" for v in _strict_bbox(bbox))
+    bbox = f"{w},{s},{e},{n}"
     query = f"""[out:json][timeout:25];
 (
   nwr["military"]({s},{w},{n},{e});
@@ -235,9 +264,8 @@ async def wikimapia(
     # Same LOD contract as /api/osm/military — no bbox, no query, no error.
     if not bbox:
         return fg.fc([])
-    parts = [x.strip() for x in bbox.split(",")]
-    if len(parts) != 4:
-        raise HTTPException(400, "bbox must be lon_min,lat_min,lon_max,lat_max")
+    parts = [f"{v:.6f}" for v in _strict_bbox(bbox)]
+    bbox = ",".join(parts)
 
     async def load() -> dict[str, Any]:
         params: dict[str, str] = {

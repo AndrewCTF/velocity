@@ -365,12 +365,20 @@ def parse_kml(text: str) -> list[dict[str, Any]]:
     return rows
 
 
+# An archive's member count is bounded before any member is read (ASVS V5.2.3).
+MAX_ARCHIVE_MEMBERS = 1000
+
+
 def parse_kmz(content: bytes) -> list[dict[str, Any]]:
     """A KMZ is a zip whose payload is a KML, conventionally ``doc.kml``."""
     import zipfile
 
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            if len(zf.infolist()) > MAX_ARCHIVE_MEMBERS:
+                raise FoundryError(
+                    413, f"KMZ has more than {MAX_ARCHIVE_MEMBERS} members"
+                )
             names = [n for n in zf.namelist() if n.lower().endswith(".kml")]
             if not names:
                 raise FoundryError(422, "KMZ archive contains no .kml file")

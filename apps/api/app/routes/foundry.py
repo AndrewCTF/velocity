@@ -32,6 +32,7 @@ from app.foundry import transforms as tf_mod
 from app.foundry.store import FoundryError, FoundryStore
 from app.intel.ontology import _KNOWN_KINDS
 from app.keys import UserCtx, current_user_or_local
+from app.security import require_operator
 from app.uploads import read_capped
 
 # Foundry fails CLOSED on an unauthenticated deployment (issue #8), the same
@@ -185,7 +186,7 @@ async def summary(ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, An
 # ── SQL console ──────────────────────────────────────────────────────────────
 
 
-@router.post("/api/foundry/sql")
+@router.post("/api/foundry/sql", dependencies=[Depends(require_operator)])
 async def foundry_sql(
     body: SqlIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -234,7 +235,7 @@ async def list_datasets(ctx: UserCtx = Depends(current_user_or_local)) -> list[d
     return await _store().list_datasets()
 
 
-@router.post("/api/foundry/datasets")
+@router.post("/api/foundry/datasets", dependencies=[Depends(require_operator)])
 async def create_dataset(
     body: DatasetIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -254,7 +255,7 @@ async def get_dataset(
     return ds
 
 
-@router.delete("/api/foundry/datasets/{dataset_id}")
+@router.delete("/api/foundry/datasets/{dataset_id}", dependencies=[Depends(require_operator)])
 async def delete_dataset(
     dataset_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, bool]:
@@ -296,7 +297,7 @@ async def _read_upload(
         raise AssertionError("unreachable") from exc  # pragma: no cover
 
 
-@router.post("/api/foundry/seed/reference")
+@router.post("/api/foundry/seed/reference", dependencies=[Depends(require_operator)])
 async def seed_reference(
     refresh: bool = Query(False, description="write a new version for datasets that already exist"),
     ctx: UserCtx = Depends(current_user_or_local),
@@ -308,7 +309,7 @@ async def seed_reference(
     return await seed_mod.seed_reference_datasets(_store(), refresh=refresh)
 
 
-@router.post("/api/foundry/datasets/upload")
+@router.post("/api/foundry/datasets/upload", dependencies=[Depends(require_operator)])
 async def upload_dataset(
     file: UploadFile = File(...),
     name: str = Form(...),
@@ -328,7 +329,7 @@ async def upload_dataset(
     return result
 
 
-@router.post("/api/foundry/datasets/{dataset_id}/upload")
+@router.post("/api/foundry/datasets/{dataset_id}/upload", dependencies=[Depends(require_operator)])
 async def upload_dataset_version(
     dataset_id: str,
     request: Request,
@@ -434,7 +435,7 @@ async def list_connections(
     return {"connections": rows, "availability": connections_mod.availability()}
 
 
-@router.post("/api/foundry/connections")
+@router.post("/api/foundry/connections", dependencies=[Depends(require_operator)])
 async def create_connection(
     body: ConnectionIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -453,7 +454,7 @@ async def create_connection(
     return created
 
 
-@router.put("/api/foundry/connections/{connection_id}")
+@router.put("/api/foundry/connections/{connection_id}", dependencies=[Depends(require_operator)])
 async def update_connection(
     connection_id: str,
     body: ConnectionUpdate,
@@ -476,7 +477,7 @@ async def update_connection(
     return updated
 
 
-@router.delete("/api/foundry/connections/{connection_id}")
+@router.delete("/api/foundry/connections/{connection_id}", dependencies=[Depends(require_operator)])
 async def delete_connection(
     connection_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -486,7 +487,9 @@ async def delete_connection(
     return {"deleted": connection_id}
 
 
-@router.post("/api/foundry/datasets/{dataset_id}/ingest-token")
+@router.post(
+    "/api/foundry/datasets/{dataset_id}/ingest-token", dependencies=[Depends(require_operator)]
+)
 async def mint_ingest_token(
     dataset_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -508,7 +511,9 @@ async def mint_ingest_token(
     }
 
 
-@router.delete("/api/foundry/datasets/{dataset_id}/ingest-token")
+@router.delete(
+    "/api/foundry/datasets/{dataset_id}/ingest-token", dependencies=[Depends(require_operator)]
+)
 async def revoke_ingest_token(
     dataset_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -518,7 +523,9 @@ async def revoke_ingest_token(
     return {"dataset_id": dataset_id, "ingest": "closed"}
 
 
-@router.post("/api/foundry/datasets/{dataset_id}/rollback")
+@router.post(
+    "/api/foundry/datasets/{dataset_id}/rollback", dependencies=[Depends(require_operator)]
+)
 async def rollback_dataset(
     dataset_id: str, body: RollbackIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -659,7 +666,7 @@ async def list_checks(
     return await _store().list_checks(dataset_id)
 
 
-@router.post("/api/foundry/checks")
+@router.post("/api/foundry/checks", dependencies=[Depends(require_operator)])
 async def create_check(
     body: CheckIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -675,7 +682,7 @@ async def create_check(
         _raise(exc)
 
 
-@router.put("/api/foundry/checks/{check_id}")
+@router.put("/api/foundry/checks/{check_id}", dependencies=[Depends(require_operator)])
 async def update_check(
     check_id: str, body: CheckIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -697,7 +704,7 @@ async def update_check(
     return updated
 
 
-@router.delete("/api/foundry/checks/{check_id}")
+@router.delete("/api/foundry/checks/{check_id}", dependencies=[Depends(require_operator)])
 async def delete_check(
     check_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, bool]:
@@ -713,7 +720,7 @@ async def list_transforms(ctx: UserCtx = Depends(current_user_or_local)) -> list
     return await _store().list_transforms()
 
 
-@router.post("/api/foundry/transforms")
+@router.post("/api/foundry/transforms", dependencies=[Depends(require_operator)])
 async def create_transform(
     body: TransformIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -741,7 +748,7 @@ async def create_transform(
         _raise(exc)
 
 
-@router.post("/api/foundry/transforms/preview")
+@router.post("/api/foundry/transforms/preview", dependencies=[Depends(require_operator)])
 async def preview_transform_spec(
     body: SpecPreviewIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -767,7 +774,7 @@ async def get_transform(
     return t
 
 
-@router.put("/api/foundry/transforms/{transform_id}")
+@router.put("/api/foundry/transforms/{transform_id}", dependencies=[Depends(require_operator)])
 async def update_transform(
     transform_id: str, body: TransformIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -806,7 +813,7 @@ async def update_transform(
     return updated
 
 
-@router.delete("/api/foundry/transforms/{transform_id}")
+@router.delete("/api/foundry/transforms/{transform_id}", dependencies=[Depends(require_operator)])
 async def delete_transform(
     transform_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, bool]:
@@ -814,7 +821,9 @@ async def delete_transform(
     return {"ok": True}
 
 
-@router.post("/api/foundry/transforms/{transform_id}/preview")
+@router.post(
+    "/api/foundry/transforms/{transform_id}/preview", dependencies=[Depends(require_operator)]
+)
 async def preview_transform(
     transform_id: str, body: PreviewIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -829,7 +838,9 @@ async def preview_transform(
         _raise(exc)
 
 
-@router.post("/api/foundry/transforms/{transform_id}/build")
+@router.post(
+    "/api/foundry/transforms/{transform_id}/build", dependencies=[Depends(require_operator)]
+)
 async def build_transform(
     transform_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -840,7 +851,7 @@ async def build_transform(
     return await builds_mod.run_transform_build(store, transform_id)
 
 
-@router.post("/api/foundry/pipeline/build")
+@router.post("/api/foundry/pipeline/build", dependencies=[Depends(require_operator)])
 async def build_pipeline(
     body: PipelineBuildIn | None = None, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -891,7 +902,7 @@ async def list_bindings(ctx: UserCtx = Depends(current_user_or_local)) -> list[d
     return await _store().list_bindings()
 
 
-@router.post("/api/foundry/bindings")
+@router.post("/api/foundry/bindings", dependencies=[Depends(require_operator)])
 async def create_binding(
     body: BindingIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -910,7 +921,7 @@ async def create_binding(
     )
 
 
-@router.put("/api/foundry/bindings/{binding_id}")
+@router.put("/api/foundry/bindings/{binding_id}", dependencies=[Depends(require_operator)])
 async def update_binding(
     binding_id: str, body: BindingIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -928,7 +939,7 @@ async def update_binding(
     return updated
 
 
-@router.delete("/api/foundry/bindings/{binding_id}")
+@router.delete("/api/foundry/bindings/{binding_id}", dependencies=[Depends(require_operator)])
 async def delete_binding(
     binding_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, bool]:
@@ -936,7 +947,7 @@ async def delete_binding(
     return {"ok": True}
 
 
-@router.post("/api/foundry/bindings/{binding_id}/sync")
+@router.post("/api/foundry/bindings/{binding_id}/sync", dependencies=[Depends(require_operator)])
 async def sync_binding(
     binding_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -955,7 +966,7 @@ async def list_schedules(ctx: UserCtx = Depends(current_user_or_local)) -> list[
     return await _store().list_schedules()
 
 
-@router.post("/api/foundry/schedules")
+@router.post("/api/foundry/schedules", dependencies=[Depends(require_operator)])
 async def create_schedule(
     body: ScheduleIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -966,7 +977,7 @@ async def create_schedule(
     return await store.create_schedule(body.transform_id, body.interval_s, body.enabled)
 
 
-@router.put("/api/foundry/schedules/{schedule_id}")
+@router.put("/api/foundry/schedules/{schedule_id}", dependencies=[Depends(require_operator)])
 async def update_schedule(
     schedule_id: str, body: ScheduleIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -976,7 +987,7 @@ async def update_schedule(
     return updated
 
 
-@router.delete("/api/foundry/schedules/{schedule_id}")
+@router.delete("/api/foundry/schedules/{schedule_id}", dependencies=[Depends(require_operator)])
 async def delete_schedule(
     schedule_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, bool]:
@@ -994,7 +1005,7 @@ async def list_monitors(
     return await _store().list_monitors(dataset_id)
 
 
-@router.post("/api/foundry/monitors")
+@router.post("/api/foundry/monitors", dependencies=[Depends(require_operator)])
 async def create_monitor(
     body: MonitorIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -1019,7 +1030,7 @@ async def create_monitor(
         _raise(exc)
 
 
-@router.put("/api/foundry/monitors/{monitor_id}")
+@router.put("/api/foundry/monitors/{monitor_id}", dependencies=[Depends(require_operator)])
 async def update_monitor(
     monitor_id: str, body: MonitorIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -1044,7 +1055,7 @@ async def update_monitor(
     return updated
 
 
-@router.delete("/api/foundry/monitors/{monitor_id}")
+@router.delete("/api/foundry/monitors/{monitor_id}", dependencies=[Depends(require_operator)])
 async def delete_monitor(
     monitor_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, bool]:

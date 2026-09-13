@@ -143,16 +143,31 @@ def test_operator_gate_403s_an_analyst_once_supabase_can_tell_users_apart(monkey
 
 
 def test_operator_gate_admits_an_admin_on_a_multi_user_deployment(monkeypatch):
+    """Since 2026-09-13 the admin must also hold an aal2 (MFA) session and still
+    be active in GoTrue; tests/test_auth_asvs.py covers both refusals."""
+    from tests._authkit import mint  # noqa: PLC0415
+
+    async def _active(token, s):
+        return True
+
     monkeypatch.setattr(security, "get_settings", _supabase_settings)
+    monkeypatch.setattr(security, "_session_active", _active)
     asyncio.run(
-        security.require_operator(Principal(user_id="u", token="t", roles=("admin",)))
+        security.require_operator(Principal(user_id="u", token=mint(aal="aal2"), roles=("admin",)))
     )
 
 
 def test_every_mutating_actuation_route_carries_the_operator_gate():
     """Anti-rot, both directions: a new POST/PUT/DELETE on either router must
-    declare the gate, and the gate must not creep onto the read routes the
-    console polls.
+    declare the gate, and the gate must not creep onto read routes that are not
+    user data.
+
+    Revised 2026-09-13 (ASVS V8.2.2): the workflows READ routes are gated too —
+    definitions, runs, schedules and memory are not owner-scoped, so on a
+    multi-user deployment any analyst could read the operator's workflows,
+    their outputs and their memory. The gate still passes unconditionally on a
+    single-user box, so the console there is unchanged. What stays open: the
+    block catalog and every ai_models read (model list, engine status).
 
     Walks the ROUTERS, not ``app.routes`` — create_app registers each router
     through an _IncludedRouter wrapper that does not expose leaf paths, so an
@@ -162,6 +177,7 @@ def test_every_mutating_actuation_route_carries_the_operator_gate():
     from app.routes import workflows as workflows_routes  # noqa: PLC0415
 
     mutating = {"POST", "PUT", "DELETE", "PATCH"}
+    open_workflow_reads = {"/api/workflows/blocks"}
     gated = open_ = 0
     for router in (workflows_routes.router, ai_models_routes.router):
         for route in router.routes:
@@ -170,13 +186,17 @@ def test_every_mutating_actuation_route_carries_the_operator_gate():
                 getattr(getattr(d, "dependency", None), "__name__", "") == "require_operator"
                 for d in getattr(route, "dependencies", [])
             )
-            assert bool(methods) == has_gate, (
+            if router is workflows_routes.router:
+                want = route.path not in open_workflow_reads
+            else:
+                want = bool(methods)
+            assert want == has_gate, (
                 f"{sorted(methods) or ['GET']} {route.path}: gated={has_gate}"
             )
             gated += has_gate
             open_ += not has_gate
     # A walk that matched nothing would pass vacuously and guard nothing.
-    assert gated >= 14 and open_ >= 6, (gated, open_)
+    assert gated >= 20 and open_ >= 1, (gated, open_)
 
 
 # ── the limiter's client key ────────────────────────────────────────────────
@@ -210,11 +230,36 @@ def test_xff_is_honoured_from_a_trusted_proxy(monkeypatch):
 
     class _Req:
         client = type("C", (), {"host": "127.0.0.1"})()
-        headers = {"x-forwarded-for": "1.2.3.4, 10.0.0.1"}
+        headers = {"x-forwarded-for": "1.2.3.4"}
 
     # The real deployment is CF Worker -> Caddy -> uvicorn on the same box, so
     # loopback must keep working or every prod client shares one bucket.
     assert mw._client_key(_Req()) == "1.2.3.4"
+
+
+def test_a_spoofed_xff_prefix_does_not_move_the_bucket(monkeypatch):
+    """ASVS V15.3.4. Each proxy APPENDS the address it saw, so from a trusted
+    peer the client is the rightmost hop that is not itself a trusted proxy.
+    This test read the LEFTMOST until 2026-09-13, which let a caller write
+    ``X-Forwarded-For: <anything>`` and choose its own limiter bucket."""
+    monkeypatch.setattr(
+        ratelimit,
+        "get_settings",
+        lambda: _keyless_settings(trusted_proxies="127.0.0.1,::1,172.30.0.0/24"),
+    )
+    mw = ratelimit.ComputeRateLimitMiddleware(lambda *a: None)  # type: ignore[arg-type]
+
+    def _key(xff: str) -> str:
+        class _Req:
+            client = type("C", (), {"host": "127.0.0.1"})()
+            headers = {"x-forwarded-for": xff}
+
+        return mw._client_key(_Req())
+
+    assert _key("1.2.3.4, 203.0.113.7") == "203.0.113.7"
+    assert _key("9.9.9.9, 203.0.113.7") == "203.0.113.7"
+    # Trusted hops on the right are skipped (proxy chain inside our network).
+    assert _key("6.6.6.6, 203.0.113.7, 172.30.0.5") == "203.0.113.7"
 
 
 def test_trusted_proxies_typo_narrows_trust_rather_than_crashing(monkeypatch):

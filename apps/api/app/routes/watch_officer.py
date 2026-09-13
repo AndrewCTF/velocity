@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from app import llm, upstream
+from app.audit import audit_mutation
 from app.intel import watch_officer
 from app.keys import UserCtx, current_user_or_local
 
@@ -41,16 +42,18 @@ async def briefs() -> dict[str, Any]:
     return {"briefs": watch_officer.list_briefs()}
 
 
-@router.post("/api/watch-officer/briefs/{bid}/dismiss")
-async def dismiss_brief(bid: str) -> dict[str, Any]:
+# Triage changes a queue every user shares, so it needs a person (not merely a
+# credential) and leaves an audit row naming them (ASVS V8.2.1).
+@router.post("/api/watch-officer/briefs/{bid}/dismiss", dependencies=[Depends(audit_mutation)])
+async def dismiss_brief(bid: str, _ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, Any]:
     """Drop a brief as noise. 404 if unknown/expired."""
     if not watch_officer.dismiss(bid):
         raise HTTPException(status_code=404, detail="unknown brief")
     return {"ok": True, "id": bid}
 
 
-@router.post("/api/watch-officer/briefs/{bid}/ack")
-async def ack_brief(bid: str) -> dict[str, Any]:
+@router.post("/api/watch-officer/briefs/{bid}/ack", dependencies=[Depends(audit_mutation)])
+async def ack_brief(bid: str, _ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, Any]:
     """Acknowledge a brief (operator saw the finding). 404 if unknown/expired."""
     if not watch_officer.ack(bid):
         raise HTTPException(status_code=404, detail="unknown brief")

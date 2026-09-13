@@ -106,11 +106,20 @@ WS handlers call `require_ws_key` BEFORE `accept`. `?key=` is honoured ONLY
 there: on HTTP it lands in proxy logs and browser history, so HTTP reads headers
 only, and `RedactKeyFilter` scrubs `key=` from `uvicorn.access` AND
 `uvicorn.error` (where the WS handshake line logs). HS256 session tokens must
-carry `aud` "authenticated" and a past `nbf`.
-→ `tests/test_auth_query_key_and_jwt.py`
+carry header `alg` HS256, `aud` "authenticated", a required `exp` and `sub`, a
+past `nbf`, `exp - iat` ≤ `JWT_MAX_LIFETIME_S`, and `iss` = `SUPABASE_URL/auth/v1`
+when a URL is set; the GoTrue path applies the same claim rules after its 200.
+The MCP's internal token has `aud`/`iss` `velocity-internal` and is accepted at
+`ApiKeyMiddleware`/`require_api_key` ONLY — never on a WS, never as a user
+(`current_user`). Failed credentials lock a client out (429 + Retry-After) after
+`AUTH_FAILURE_LIMIT_PER_MIN`; the lifespan refuses an `API_KEY` or JWT secret
+under 32 characters. Full pathway table: `docs/security/auth-and-sessions.md`.
+→ `tests/test_auth_query_key_and_jwt.py`, `tests/test_auth_asvs.py`
 
 `POST /api/ingest/{dataset_id}` is the ONE route with no session dependency — an
-external sender has no session, so a per-dataset token is the whole gate. Only
+external sender has no session, so a per-dataset token is the whole gate, and
+`/api/ingest/` is in `auth.PUBLIC_PREFIXES` so the middleware does not 401 the
+sender first (it did until 2026-09-13). Bad tokens count toward the lockout. Only
 the token's sha256 is stored, comparison is `compare_digest`, the token is never
 logged or echoed after the response that mints it, the body is capped BEFORE it
 is parsed (Content-Length AND a running total, since chunked declares neither),
@@ -129,7 +138,16 @@ Every response carries `nosniff` / `X-Frame-Options: DENY` /
 `Referrer-Policy: no-referrer` from `SecurityHeadersMiddleware` — pure ASGI (the
 ADS-B blob path must not gain a buffering wrapper), fill-if-absent (so
 `/api/evidence`'s stricter CSP wins), and NO HSTS (the front proxy terminates
-TLS; the app cannot truthfully assert it). List routes bound `limit` with
+TLS; the app cannot truthfully assert it). It is the OUTERMOST middleware (added
+last) so 401/429/503/preflight answers carry the headers too, and it fills
+`Cache-Control: no-store` on `/api/`, `/mcp`, `/tiler/` when a route set none
+(auth-gated imagery says `private`, never `public`). Next inside it,
+`OriginHostGuardMiddleware` (pure ASGI) refuses unknown `Host` headers
+(`ALLOWED_HOSTS`) and cross-site writes/WS upgrades by `Origin`/`Referer`; the
+suite runs with `ALLOWED_HOSTS=*` (conftest) and `tests/test_asvs_v1_v5.py`
+exercises it. `/tiler?url=` goes through `imagery/tiler.check_cog_url` (public
+http(s) only, redirect hops re-checked), fails closed keyless, and shares the
+general limiter. → `tests/test_asvs_v11_v17.py` List routes bound `limit` with
 `Query(..., ge=1, le=N)`. → `tests/test_security_hardening.py`
 
 The rate limiter believes `X-Forwarded-For` ONLY from a peer inside
@@ -142,10 +160,14 @@ Besides the compute cap, EVERY `/api/` path shares a per-client
 `API_RATELIMIT_PER_MIN` (default 3000; health/status/config exempt; 0 disables).
 → `tests/test_security_hardening.py`, `tests/test_api_ratelimit.py`
 
-The 14 mutating routes on `/api/workflows` and `/api/ai/models` carry
-`Depends(require_operator)`. It passes unconditionally when Supabase is
-unconfigured (static key or open mode = one user, who is the operator) and
-requires the `admin` role when Supabase can tell two humans apart. It does NOT
+Every `/api/workflows` route except `/blocks` (reads too, since 2026-09-13:
+the store is not owner-scoped), the mutating `/api/ai/models` routes, and every
+Foundry POST/PUT/DELETE carry `Depends(require_operator)`. It passes
+unconditionally when Supabase is unconfigured (static key or open mode = one
+user, who is the operator); when Supabase can tell two humans apart it requires
+the `admin` role, an `aal2` (MFA) session unless `OPERATOR_REQUIRE_MFA=0`, and
+the account still active in GoTrue (cached ≤ 60 s). Multi-user owner scoping of
+alerts, deliveries, proposals and COP rooms: `tests/test_multi_user_scoping.py`. It does NOT
 widen `current_principal_or_local`'s `analyst` default — the clearance-gated
 routes read that. → `tests/test_security_hardening.py`, whose anti-rot walk
 goes over the ROUTERS: `app.routes` hides leaves behind `_IncludedRouter` and an

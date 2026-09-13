@@ -154,9 +154,13 @@ cd apps/api && .venv/bin/uvicorn app.main:app     # backend on :8000
 pnpm dev                                          # vite on :5173, proxies /api to localhost:8000
 ```
 
-Set `VITE_API_URL` if the backend isn't on `http://localhost:8000`. If you set
-`API_KEY` on the backend, build the web app with a matching `VITE_API_KEY`; it
-rides along as `X-API-Key` on every call.
+Set `API_PROXY_TARGET` if the backend isn't on `http://127.0.0.1:8000`; the dev
+server proxies `/api`, `/tiles` and `/ws` there, so the browser stays same-origin.
+(`VITE_API_URL` is different: it makes the browser call the API directly,
+cross-origin, and is only for builds with no proxy in front.) `API_KEY`
+is for servers, the CLI and the MCP server. Never build it into a hosted web
+bundle, because anyone who loads the page can read it. Browsers sign in with
+Supabase instead (`docs/security/auth-and-sessions.md`).
 </details>
 
 ## The apps

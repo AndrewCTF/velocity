@@ -52,7 +52,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
-from app.netguard import is_non_public_ip
+from app.netguard import is_non_public_ip, log_refusal
 from app.workflows.store import WorkflowError
 
 Row = dict[str, Any]
@@ -258,12 +258,16 @@ def check_sink_url(url: str) -> None:
     it is listed in ``WORKFLOWS_HTTP_ALLOW_HOSTS``. Blocking DNS — call it off the
     event loop. Delivery re-checks via ``send(public_only=True)``. A malformed
     URL is 400; a host the policy refuses is 422."""
+    host = urlsplit(url.strip()).hostname or ""
     try:
         check_url(url)
     except WorkflowError as exc:  # check_url: 422 = malformed, 403 = refused host
+        if exc.status_code != 422:
+            log_refusal("alert-sink", host, exc.detail)
         raise WorkflowError(400 if exc.status_code == 422 else 422, exc.detail) from exc
     _, _, blocked = _pin_http_url(url, {}, public_only=True)
     if blocked is not None:
+        log_refusal("alert-sink", host, blocked)
         raise WorkflowError(422, blocked)
 
 

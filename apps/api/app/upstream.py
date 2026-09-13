@@ -239,6 +239,24 @@ def source_health() -> list[dict[str, Any]]:
         r["last_success"] or 0.0, r["last_error_at"] or 0.0))
 
 
+class InsecureRedirectError(httpx.TransportError):
+    """An https URL redirected to plain http (ASVS V12.3.1)."""
+
+
+async def _refuse_downgrade(response: httpx.Response) -> None:
+    """Response hook, run for EVERY hop of a redirect chain: an https request
+    answered by a redirect to http:// would carry the rest of the exchange in
+    cleartext, so the chain stops there. http -> https upgrades still follow."""
+    if not response.is_redirect or response.request.url.scheme != "https":
+        return
+    location = response.headers.get("location", "")
+    if response.request.url.join(location).scheme == "http":
+        raise InsecureRedirectError(
+            f"refused https->http redirect from {response.request.url.host}",
+            request=response.request,
+        )
+
+
 class _InstrumentedClient(httpx.AsyncClient):
     """The shared client, plus one row per request in the health registry.
 
@@ -266,6 +284,9 @@ class _InstrumentedClient(httpx.AsyncClient):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs.setdefault("follow_redirects", True)
+        hooks = dict(kwargs.pop("event_hooks", None) or {})
+        hooks["response"] = [_refuse_downgrade, *hooks.get("response", [])]
+        kwargs["event_hooks"] = hooks
         super().__init__(*args, **kwargs)
 
     async def send(self, request: httpx.Request, **kwargs: Any) -> httpx.Response:

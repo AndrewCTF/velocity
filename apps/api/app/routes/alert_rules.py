@@ -219,11 +219,20 @@ async def delete_rule(
 
 
 @router.get("/api/alerts/deliveries")
-async def list_deliveries(limit: int = Query(50, ge=1, le=500)) -> dict[str, object]:
+async def list_deliveries(
+    limit: int = Query(50, ge=1, le=500),
+    ctx: UserCtx = Depends(current_user_or_local),
+) -> dict[str, object]:
     """Recent sink-delivery attempts (Discord/webhook) — the durable proof a
     firing actually reached an operator's endpoint, readable with no browser
-    attached to the evaluator (e.g. ``curl`` on the box itself)."""
-    from app.intel import alert_rules_local  # noqa: PLC0415
+    attached to the evaluator (e.g. ``curl`` on the box itself).
 
-    rows = await alert_rules_local.recent_deliveries(limit)
+    Each row's ``target`` is a sink URL, and a Discord webhook URL IS its
+    credential, so a multi-user deployment returns the caller's rows only
+    (ASVS V8.2.2). Single-user: every row, as before."""
+    from app.intel import alert_rules_local  # noqa: PLC0415
+    from app.keys import multi_user  # noqa: PLC0415
+
+    owner = ctx.user_id if multi_user() else None
+    rows = await alert_rules_local.recent_deliveries(limit, user_id=owner)
     return {"deliveries": rows}

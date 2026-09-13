@@ -11,6 +11,16 @@ mapped literal like ``::ffff:127.0.0.1`` to the ``is_*`` flags. CGNAT
 from __future__ import annotations
 
 import ipaddress
+import logging
+
+_sec = logging.getLogger("app.security")
+
+
+def log_refusal(where: str, host: str, reason: str) -> None:
+    """One WARNING line per refused outbound fetch (ASVS V16.3.3). ``host`` only,
+    never the full URL: a sink URL is itself a credential (Discord webhooks)."""
+    _sec.warning("ssrf refused where=%s host=%s reason=%s", where, host, reason[:160])
+
 
 _CGNAT = ipaddress.ip_network("100.64.0.0/10")
 

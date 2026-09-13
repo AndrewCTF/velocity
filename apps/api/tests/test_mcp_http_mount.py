@@ -18,7 +18,7 @@ from app import auth
 from app.config import get_settings
 from app.main import create_app
 
-_KEY = "s3cret"
+_KEY = "s3cret-mcp-mount-test-key-0123456789"  # >= 32: startup refuses shorter
 _HEADERS = {
     "accept": "application/json, text/event-stream",
     "content-type": "application/json",

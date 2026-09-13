@@ -87,10 +87,25 @@ async def push_rows(
     Arm the endpoint first with ``POST /api/foundry/datasets/{id}/ingest-token``
     and send the token it returns as ``X-Ingest-Token``.
     """
+    from app import auth  # noqa: PLC0415
+    from app.ratelimit import client_key  # noqa: PLC0415
+
     settings = get_settings()
     store = FoundryStore(settings)
 
+    # The same failed-credential lockout the API key and sessions get (V6.3.1):
+    # this route is outside ApiKeyMiddleware, so it counts its own failures.
+    who = client_key(request.client.host if request.client else "", request.headers)
+    retry = auth._locked(who, settings)
+    if retry is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="too many failed credentials from this client; retry later",
+            headers={"Retry-After": str(retry)},
+        )
     verdict = await store.ingest_token_matches(dataset_id, x_ingest_token or "")
+    if not verdict and x_ingest_token:
+        auth.record_auth_failure(who, settings, "bad-ingest-token", "/api/ingest")
     if verdict is None:
         raise HTTPException(status_code=404, detail=_NO_ENDPOINT)
     if not verdict:

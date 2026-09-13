@@ -171,30 +171,31 @@ async def lookup_certs(domain: str, *, max_subdomains: int = 100) -> dict[str, A
     }
 
 
-# ── IP geolocation + ASN (ip-api.com) ────────────────────────────────────────────
+# ── IP geolocation + ASN (ipwho.is) ─────────────────────────────────────────────
+# Was ip-api.com, whose keyless tier is http-only: every investigated IP left
+# this server in cleartext (ASVS V12.3.1). ipwho.is is keyless over https
+# (measured 2026-09-13: 200 with geo + connection.asn). It has no reverse-DNS
+# field, so ``reverse`` is empty.
 
 async def lookup_ip(ip: str) -> dict[str, Any]:
     v = normalise_ip(ip)
     if v is None:
         return {"ip": ip, "note": "invalid ip"}
-    data = await fetch_json(
-        f"http://ip-api.com/json/{v}"
-        "?fields=status,country,countryCode,city,lat,lon,isp,org,as,reverse,query",
-        3600.0,
-    )
-    if not data or data.get("status") != "success":
-        return {"ip": v, "note": "ip-api unavailable"}
-    asn = str(data.get("as", "")).split(" ", 1)[0]  # "AS15169 Google LLC" → AS15169
+    data = await fetch_json(f"https://ipwho.is/{v}", 3600.0)
+    if not data or data.get("success") is not True:
+        return {"ip": v, "note": "ip geolocation unavailable"}
+    conn = data.get("connection") or {}
+    asn = f"AS{conn['asn']}" if conn.get("asn") else ""
     return {
         "ip": v,
         "city": str(data.get("city", "")),
         "country": str(data.get("country", "")),
-        "country_code": str(data.get("countryCode", "")),
-        "lat": data.get("lat"),
-        "lon": data.get("lon"),
+        "country_code": str(data.get("country_code", "")),
+        "lat": data.get("latitude"),
+        "lon": data.get("longitude"),
         "asn": asn,
-        "org": str(data.get("org") or data.get("isp") or ""),
-        "reverse": str(data.get("reverse", "")),
+        "org": str(conn.get("org") or conn.get("isp") or ""),
+        "reverse": "",
     }
 
 

@@ -18,6 +18,8 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from app.intel import ground as ground_lib
 from app.upstream import cache, get_client
 
+_RASTER_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
+
 router = APIRouter(tags=["ground"])
 
 _NEARBY_TTL = 3600.0
@@ -75,7 +77,11 @@ async def ground_photo(
         r = await get_client().get(url, headers={"User-Agent": _BROWSER_UA})
         if r.status_code != 200:
             raise HTTPException(502, f"ground upstream {r.status_code}")
-        ctype = r.headers.get("content-type", "image/jpeg")
+        ctype = r.headers.get("content-type", "image/jpeg").split(";")[0].strip().lower()
+        # Raster only (ASVS V3.2.1): SVG is a script-capable document, and this
+        # route serves it from the app's own origin.
+        if ctype not in _RASTER_TYPES:
+            raise HTTPException(415, "ground upstream returned a non-raster image type")
         # Stash the content type on the loader via a closure attr so the route can
         # return it (httpx already validated a non-empty body here).
         load.ctype = ctype  # type: ignore[attr-defined]
@@ -85,6 +91,6 @@ async def ground_photo(
     ctype = getattr(load, "ctype", "image/jpeg")
     return Response(
         content=data,
-        media_type=ctype if ctype.startswith("image/") else "image/jpeg",
-        headers={"Cache-Control": "public, max-age=60"},
+        media_type=ctype if ctype in _RASTER_TYPES else "image/jpeg",
+        headers={"Cache-Control": "private, max-age=60"},
     )

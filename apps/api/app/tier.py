@@ -20,7 +20,7 @@ See docs/commercial-licensing.md for which sources each side maps to.
 
 from __future__ import annotations
 
-from fastapi import Header
+from fastapi import Header, Request
 
 from app.config import get_settings
 
@@ -36,6 +36,17 @@ def resolve_commercial(tier: str | None) -> bool:
     return s.commercial_mode
 
 
-def commercial_request(x_velocity_tier: str | None = Header(default=None)) -> bool:
-    """FastAPI dependency: True → serve only commercial-legal sources."""
-    return resolve_commercial(x_velocity_tier)
+def commercial_request(
+    request: Request, x_velocity_tier: str | None = Header(default=None)
+) -> bool:
+    """FastAPI dependency: True → serve only commercial-legal sources.
+
+    ``X-Velocity-Tier`` is set by the gateway in front. It is believed only when
+    the peer is in ``TRUSTED_PROXIES`` (ASVS V2.4.1); from anyone else the header
+    is ignored and the deployment default applies, so a client cannot choose its
+    own licensing tier."""
+    from app.ratelimit import _peer_is_trusted  # noqa: PLC0415
+
+    peer = request.client.host if getattr(request, "client", None) else ""
+    trusted = bool(peer) and _peer_is_trusted(peer, get_settings().trusted_proxies)
+    return resolve_commercial(x_velocity_tier if trusted else None)

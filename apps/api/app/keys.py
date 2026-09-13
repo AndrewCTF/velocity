@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass
 
 import httpx
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from fastapi import HTTPException, Request
 
 from app.auth import _bearer, _jwt_claims, _valid_supabase_token
@@ -93,15 +93,27 @@ PROVIDERS: dict[str, Provider] = {
 # ── Fernet crypto ────────────────────────────────────────────────────────────
 
 
-def _fernet(s: Settings) -> Fernet:
-    if not s.byok_enc_key:
+def _fernet(s: Settings) -> MultiFernet:
+    """``BYOK_ENC_KEY`` is one Fernet key, or a comma-separated list, newest
+    FIRST (ASVS V11.2.2). New ciphertext uses the first key; decryption tries
+    each. Rotation: prepend a new key, run ``rotate_value`` over stored rows
+    (or let users re-save), then drop the old key.
+    docs/security/crypto-and-keys.md."""
+    raw = [k.strip() for k in (s.byok_enc_key or "").split(",") if k.strip()]
+    if not raw:
         raise HTTPException(
             status_code=503, detail="BYOK is not configured (BYOK_ENC_KEY unset)"
         )
     try:
-        return Fernet(s.byok_enc_key.encode())
+        return MultiFernet([Fernet(k.encode()) for k in raw])
     except (ValueError, TypeError) as exc:  # malformed key
         raise HTTPException(status_code=503, detail="BYOK key is malformed") from exc
+
+
+def rotate_value(ciphertext: str, s: Settings | None = None) -> str:
+    """Re-encrypt ``ciphertext`` under the first (newest) key."""
+    s = s or get_settings()
+    return _fernet(s).rotate(ciphertext.encode()).decode()
 
 
 def encrypt_value(value: str, s: Settings | None = None) -> str:
@@ -149,6 +161,25 @@ async def current_user(request: Request) -> UserCtx:
     if not sub:
         raise HTTPException(status_code=401, detail="token has no subject")
     return UserCtx(user_id=str(sub), token=token)
+
+
+async def user_id_for_token(token: str | None) -> str | None:
+    """The Supabase user behind ``token``, or None (no token, invalid, the
+    static key, or the internal service token). For surfaces that serve a
+    caller with no user as "sees only what is not anyone's"."""
+    s = get_settings()
+    if not token or not await _valid_supabase_token(token, s):
+        return None
+    sub = (_jwt_claims(token) or {}).get("sub")
+    return str(sub) if sub else None
+
+
+def multi_user(s: Settings | None = None) -> bool:
+    """True when the deployment can tell two humans apart (Supabase configured).
+    The same predicate as ``security._multi_user``; lives here so modules that
+    ``security`` imports can use it without a cycle."""
+    s = s or get_settings()
+    return bool(s.supabase_jwt_secret or (s.supabase_url and s.supabase_anon_key))
 
 
 async def current_user_or_local(request: Request) -> UserCtx:

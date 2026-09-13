@@ -225,5 +225,5 @@ async def cam_snapshot(cam_id: str) -> Response:
     return Response(
         content=data,
         media_type="image/jpeg",
-        headers={"Cache-Control": "public, max-age=60"},
+        headers={"Cache-Control": "private, max-age=60"},
     )

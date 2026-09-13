@@ -54,7 +54,7 @@ async def wayback_urls(domain: str) -> dict[str, Any]:
             "note": "invalid domain",
         }
     data = await fetch_json(
-        f"http://web.archive.org/cdx/search/cdx?url={d}"
+        f"https://web.archive.org/cdx/search/cdx?url={d}"
         "&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500",
         3600.0,
     )

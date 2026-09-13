@@ -72,6 +72,18 @@ class AlertBus:
     def recent(self, n: int = 50) -> list[Alert]:
         return list(self._recent[-n:])
 
+    def recent_shared(self, n: int = 50) -> list[Alert]:
+        """``recent`` for surfaces every user sees (timeline, briefs, analytics,
+        correlations). On a multi-user deployment an alert fired by one user's
+        private watch rule (``Alert.owner``) is left out, so it cannot reach
+        another user through an aggregate (ASVS V8.2.2)."""
+        from app.config import get_settings  # noqa: PLC0415
+
+        s = get_settings()
+        if not (s.supabase_jwt_secret or (s.supabase_url and s.supabase_anon_key)):
+            return self.recent(n)
+        return [a for a in self._recent if a.owner is None][-n:]
+
     async def stream(self) -> AsyncIterator[Alert]:
         q = self.subscribe()
         try:

@@ -52,10 +52,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.auth import ApiKeyMiddleware, install_access_log_redaction, log_auth_mode
+from app.auth import (
+    ApiKeyMiddleware,
+    check_credential_strength,
+    install_access_log_redaction,
+    log_auth_mode,
+)
 from app.config import get_settings
 from app.correlate import runner as correlate_runner
 from app.mcp_server import build_mcp_mount
+from app.origin_guard import OriginHostGuardMiddleware
 from app.ratelimit import ComputeRateLimitMiddleware
 from app.routes import acars as acars_routes
 from app.routes import actions as actions_routes
@@ -172,6 +178,11 @@ class SecurityHeadersMiddleware:
         (b"x-frame-options", b"DENY"),
         (b"referrer-policy", b"no-referrer"),
     )
+    # Fill-if-absent on API responses only (ASVS V14.3.2): session-bearing JSON,
+    # evidence, keys and audit rows must not sit in a browser or proxy cache. A
+    # route that states its own Cache-Control (tiles, the ADS-B ETag blob,
+    # private imagery) keeps it; /tiles and static assets are outside the prefix.
+    _NO_STORE_PREFIXES: tuple[str, ...] = ("/api/", "/mcp", "/tiler/")
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -180,12 +191,15 @@ class SecurityHeadersMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        path = scope.get("path", "")
 
         async def send_with_headers(message: dict) -> None:
             if message["type"] == "http.response.start":
                 headers = message.setdefault("headers", [])
                 present = {k.lower() for k, _ in headers}
                 headers.extend((k, v) for k, v in self._HEADERS if k not in present)
+                if b"cache-control" not in present and path.startswith(self._NO_STORE_PREFIXES):
+                    headers.append((b"cache-control", b"no-store"))
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
@@ -221,6 +235,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     background = not os.environ.get("OSINT_DISABLE_BACKGROUND")
     settings = get_settings()
     # One-line auth-posture banner so an unauthenticated box is never a surprise.
+    from app import logging_setup  # noqa: PLC0415
+
+    logging_setup.configure(settings.log_level)
+    # Refuse to serve behind a guessable API_KEY / JWT secret (ASVS V6.3.1).
+    check_credential_strength(settings)
     log_auth_mode(settings)
     # The mounted /mcp endpoint's streamable-HTTP session manager runs a task
     # group that must stay live for the whole app lifetime. Starlette does NOT
@@ -603,6 +622,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await vllm_sidecar.stop()
 
 
+def _install_security_event_logging(app: FastAPI) -> None:
+    """Every 401/403 a route raises becomes one WARNING line on ``app.security``
+    (ASVS V16.3.1 / V16.3.2): client, method, path, status and the refusal's
+    own detail. The middleware's 401/429 log themselves in ``auth`` and
+    ``ratelimit``. The credential is never in the line."""
+    import logging as _logging  # noqa: PLC0415
+
+    from fastapi.exception_handlers import http_exception_handler  # noqa: PLC0415
+    from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: PLC0415
+    from starlette.requests import Request as StarletteRequest  # noqa: PLC0415
+
+    from app.ratelimit import client_key  # noqa: PLC0415
+
+    sec = _logging.getLogger("app.security")
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _logged(request: StarletteRequest, exc: StarletteHTTPException):  # type: ignore[no-untyped-def]
+        if exc.status_code in (401, 403, 429):
+            who = client_key(request.client.host if request.client else "", request.headers)
+            word = {401: "unauthorized", 403: "forbidden", 429: "throttled"}[exc.status_code]
+            sec.warning(
+                "%s client=%s method=%s path=%s reason=%s",
+                word, who, request.method, request.url.path, str(exc.detail)[:160],
+            )
+        return await http_exception_handler(request, exc)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     # Hot-path serialization: every route annotates its return type, so
@@ -612,14 +658,7 @@ def create_app() -> FastAPI:
     # ?key= (WS upgrades) must never reach the access log in clear.
     install_access_log_redaction()
 
-    # Baseline response headers for every route. Only /api/evidence set any of
-    # these, and only for the blob it serves. These three are the ones an app
-    # can honestly set for itself: HSTS is deliberately NOT here, because the
-    # TLS termination that would make it true lives in the Caddy/Worker layer in
-    # front and an app that claims it over plain http teaches a browser a lie.
-    # A route that has already stated a header keeps its own — /api/evidence
-    # serves untrusted captured content under a much stricter CSP.
-    app.add_middleware(SecurityHeadersMiddleware)
+    _install_security_event_logging(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
@@ -638,6 +677,17 @@ def create_app() -> FastAPI:
     # compresslevel 5 trades a little ratio for much less CPU than default 9.
     # Selective: /mcp must NOT be gzipped (would stall its SSE stream).
     app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024, compresslevel=5)
+    # Baseline response headers for every route, added LAST so it is the
+    # OUTERMOST layer (ASVS V3.4.4 / V3.4.5): registered first it was innermost,
+    # and the 401/429/503 and CORS-preflight answers produced by the layers
+    # above it went out without nosniff/DENY/no-referrer. HSTS is deliberately
+    # NOT here, because the TLS termination that would make it true lives in the
+    # Caddy/Worker layer in front. A route that has already stated a header
+    # keeps its own — /api/evidence serves untrusted content under a stricter CSP.
+    # Host allowlist + cross-site write/WS refusal, outside everything but the
+    # headers so a refused request never reaches auth, limiter or a handler.
+    app.add_middleware(OriginHostGuardMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
 
     app.include_router(config_routes.router)
     app.include_router(health_routes.router)

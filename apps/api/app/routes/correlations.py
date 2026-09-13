@@ -30,6 +30,11 @@ _ring: deque[Alert] = deque(maxlen=_INDEX_MAX)
 
 
 def _on_alert(alert: Alert) -> None:
+    # A private watch-rule firing is one user's; this index is served to every
+    # caller, so it holds only system-wide alerts (ASVS V8.2.2). Private
+    # alerts reach their owner through /api/alerts and /ws/alerts.
+    if alert.owner is not None:
+        return
     # If the ring is at cap, the about-to-be-pushed-out alert is _ring[0].
     if len(_ring) == _ring.maxlen:
         evicted = _ring[0]

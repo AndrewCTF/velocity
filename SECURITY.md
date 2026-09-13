@@ -51,6 +51,14 @@ both).
   request, and weekly on a schedule (`.github/workflows/codeql.yml`), across
   the TypeScript/JavaScript and Python code.
 
+## How authentication and authorization work
+
+Every authentication pathway is described in
+[`docs/security/auth-and-sessions.md`](docs/security/auth-and-sessions.md): the static key, WebSocket
+keys, Supabase sessions, the internal MCP token and ingest tokens. So are session lifetimes and
+revocation, the authorization matrix across deployment modes, and the Supabase project settings
+this project relies on but cannot set itself.
+
 ## Scope
 
 In scope: the FastAPI backend (`apps/api`), the web console (`apps/web`), the

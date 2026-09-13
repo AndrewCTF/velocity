@@ -106,7 +106,7 @@ async def preview_workflow(
 #    segment must win over a same-position {workflow_id} param) ────────────
 
 
-@router.get("/api/workflows/runs/{run_id}")
+@router.get("/api/workflows/runs/{run_id}", dependencies=[Depends(require_operator)])
 async def get_run(run_id: str, ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, Any]:
     r = await _store().get_run(run_id)
     if r is None:
@@ -117,7 +117,7 @@ async def get_run(run_id: str, ctx: UserCtx = Depends(current_user_or_local)) ->
 # ── schedules (literal path — declared before {workflow_id}) ────────────────
 
 
-@router.get("/api/workflows/schedules")
+@router.get("/api/workflows/schedules", dependencies=[Depends(require_operator)])
 async def list_schedules(
     workflow_id: str | None = Query(None), ctx: UserCtx = Depends(current_user_or_local)
 ) -> list[dict[str, Any]]:
@@ -156,7 +156,7 @@ async def delete_schedule(
 # ── workflows CRUD ───────────────────────────────────────────────────────────
 
 
-@router.get("/api/workflows")
+@router.get("/api/workflows", dependencies=[Depends(require_operator)])
 async def list_workflows(ctx: UserCtx = Depends(current_user_or_local)) -> list[dict[str, Any]]:
     return await _store().list_workflows()
 
@@ -174,7 +174,7 @@ async def create_workflow(
         raise AssertionError("unreachable") from exc  # pragma: no cover
 
 
-@router.get("/api/workflows/{workflow_id}")
+@router.get("/api/workflows/{workflow_id}", dependencies=[Depends(require_operator)])
 async def get_workflow(
     workflow_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -216,7 +216,7 @@ async def run_workflow_now(
     return await engine.run_workflow(store, wf, ctx, trigger="manual")
 
 
-@router.get("/api/workflows/{workflow_id}/runs")
+@router.get("/api/workflows/{workflow_id}/runs", dependencies=[Depends(require_operator)])
 async def list_workflow_runs(
     workflow_id: str,
     limit: int = Query(50, ge=1, le=500),
@@ -225,7 +225,7 @@ async def list_workflow_runs(
     return await _store().list_runs(workflow_id, limit=limit)
 
 
-@router.get("/api/workflows/{workflow_id}/memory")
+@router.get("/api/workflows/{workflow_id}/memory", dependencies=[Depends(require_operator)])
 async def get_memory(
     workflow_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:

@@ -121,6 +121,35 @@ def _evict_jobs() -> None:
             _drop_job(j["id"])
 
 
+_IMG_UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp"}
+
+
+def _allowed_name(name: str) -> bool:
+    """Recon takes images or a video, nothing else (ASVS V5.2.2)."""
+    return Path(name).suffix.lower() in (_IMG_UPLOAD_EXT | _VIDEO_EXT)
+
+
+def _content_matches(ext: str, head: bytes) -> bool:
+    """The first bytes agree with the extension. ffmpeg and the SfM stack parse
+    whatever they are handed, so a renamed file must not reach them."""
+    ext = ext.lower()
+    if ext in (".jpg", ".jpeg"):
+        return head.startswith(b"\xff\xd8\xff")
+    if ext == ".png":
+        return head.startswith(b"\x89PNG\r\n\x1a\n")
+    if ext in (".tif", ".tiff"):
+        return head.startswith((b"II*\x00", b"MM\x00*"))
+    if ext == ".webp":
+        return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
+    if ext == ".avi":
+        return head[:4] == b"RIFF" and head[8:12] == b"AVI "
+    if ext in (".mp4", ".mov", ".m4v"):
+        return head[4:8] in (b"ftyp", b"moov", b"mdat", b"wide", b"free", b"skip")
+    if ext in (".mkv", ".webm"):
+        return head.startswith(b"\x1a\x45\xdf\xa3")
+    return False
+
+
 def _enforce_active_cap() -> None:
     """Reject new jobs with 429 once too many are already running (issue #9)."""
     cap = get_settings().recon_max_active_jobs
@@ -570,6 +599,10 @@ async def create_job(
     sh = max(0, min(sh, 3))
     down = max(1, min(down, 8))
     job_id = uuid.uuid4().hex[:12]
+    # Reserve the slot BEFORE the first await (ASVS V2.3.2 / V2.3.4). The record
+    # used to be written after the uploads, so N concurrent submits all passed
+    # the cap while each was still streaming its files.
+    _JOBS[job_id] = _new_job_record(job_id, _owner_key(request))
     work = _JOBS_ROOT / job_id
     inp = work / "images"  # Pi3X SfM + train_gs read <work>/images/
     inp.mkdir(parents=True, exist_ok=True)
@@ -581,14 +614,20 @@ async def create_job(
             name = Path(uf.filename or f"f{saved}").name
             if not name:
                 continue
+            if not _allowed_name(name):
+                raise HTTPException(415, f"{name}: recon takes images or video only")
             used = await write_capped(uf, inp / name, cap, used)
+            with open(inp / name, "rb") as fh:  # noqa: ASYNC230 — 16 bytes
+                head = fh.read(16)
+            if not _content_matches(Path(name).suffix, head):
+                raise HTTPException(415, f"{name}: content does not match its extension")
             saved += 1
+        if saved == 0:
+            raise HTTPException(400, "no files received")
     except HTTPException:
+        _JOBS.pop(job_id, None)
         shutil.rmtree(work, ignore_errors=True)  # no partial job dir left behind
         raise
-    if saved == 0:
-        raise HTTPException(400, "no files received")
-    _JOBS[job_id] = _new_job_record(job_id, _owner_key(request))
     task = (
         _pipeline_mapany(job_id) if mode == "mapany"
         else _pipeline(job_id, steps, sh, down, matcher)

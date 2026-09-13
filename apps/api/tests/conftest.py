@@ -39,6 +39,10 @@ os.environ.setdefault("WORKFLOWS_PYTHON_UNSANDBOXED", "1")
 # it on put ~2000 live aircraft into the slice store mid-assertion. Off for the
 # suite; tests that mean to exercise it flip the setting themselves.
 os.environ.setdefault("ADSB_FR24_ENABLED", "0")
+# TestClient sends Host "testserver", which the DNS-rebinding guard (ALLOWED_HOSTS,
+# app/origin_guard.py) does not know. Disable the host half for the suite;
+# tests/test_asvs_v1_v5.py sets it explicitly to exercise the guard.
+os.environ.setdefault("ALLOWED_HOSTS", "*")
 # Same reason for the OpenSky gap filler: it spends real credits against the
 # real API, and a suite that burns the day's anonymous budget is a suite that
 # breaks the running deployment.
@@ -234,3 +238,17 @@ def client() -> Iterator[TestClient]:
             yield c
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_auth_state() -> Iterator[None]:
+    """Token caches and the failed-credential throttle are process-wide. Every
+    TestClient peer is "testclient", so without this one test's wrong keys
+    would lock the next test out."""
+    from app import auth, security
+
+    auth.reset_state()
+    security.reset_state()
+    yield
+    auth.reset_state()
+    security.reset_state()
