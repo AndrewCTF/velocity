@@ -102,10 +102,14 @@ Browser-tier pacing and the headful lever are in `tools/CLAUDE.md`.
 
 ## Auth
 
-WS handlers call `require_ws_key` BEFORE `accept`. `?key=` is honoured ONLY
-there: on HTTP it lands in proxy logs and browser history, so HTTP reads headers
-only, and `RedactKeyFilter` scrubs `key=` from `uvicorn.access` AND
-`uvicorn.error` (where the WS handshake line logs). HS256 session tokens must
+WS handlers call `require_ws_key` BEFORE `accept`. The web client sends the WS
+credential in `Sec-WebSocket-Protocol` (`velocity.v1`, `key.<credential>`);
+`WsSubprotocolMiddleware` copies it to `Authorization` and selects `velocity.v1`
+on accept (a browser drops the socket otherwise). `?key=` is still honoured on
+WS only, for older clients: on HTTP it lands in proxy logs and browser history,
+so HTTP reads headers only, and `RedactKeyFilter` scrubs `key=` from
+`uvicorn.access` AND `uvicorn.error`. ES256/RS256 sessions verify against the
+project JWKS (`SUPABASE_JWT_ALGORITHMS` allowlist). HS256 session tokens must
 carry header `alg` HS256, `aud` "authenticated", a required `exp` and `sub`, a
 past `nbf`, `exp - iat` ≤ `JWT_MAX_LIFETIME_S`, and `iss` = `SUPABASE_URL/auth/v1`
 when a URL is set; the GoTrue path applies the same claim rules after its 200.

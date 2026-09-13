@@ -95,7 +95,7 @@ the decision deliberately by changing BOTH the guard and this file.
 
 ## Auth
 
-- `apiFetch` / `withWsKey` wrap every browser→backend call; raw `fetch` only
+- `apiFetch` / `openAuthedWebSocket` wrap every browser→backend call; raw `fetch` only
   for third-party hosts via scoped eslint ignore. → eslint +
   `invariants.test.ts`
 
