@@ -183,3 +183,4 @@ maintainer's commitments as of 2026-09-13; progress is reviewed in [`operations.
 | RA-19 | Write a register of legal and contractual requirements (licence, data protection, upstream terms) | 5.31 | R13 | Maintainer | 2026-12-31 |
 | RA-20 | **Done 2026-09-13** (guidance): scheduled, encrypted, checksummed, off-host backup procedure in `docs/security/data-protection.md` §4.2. A checksum step inside `scripts/backup-data.sh` itself is not built | 7.10, 8.13 | R12 | Maintainer | 2026-12-31 |
 | RA-21 | Add a "Clear local investigation data" control for keyless and static-key modes, with a test that it removes every user-data key (`apps/web/src/auth/userData.ts`) | 5.34, 8.10 | R30 | Maintainer | 2026-12-31 |
+| RA-22 | Give the local action log (`apps/api/app/intel/action_log_local.py`) the same append-only triggers, hash chain and retention as `audit_log.db` | 8.15 | R33 | Maintainer | 2026-12-31 |

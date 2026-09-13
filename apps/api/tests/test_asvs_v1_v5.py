@@ -306,19 +306,17 @@ def test_kml_export_has_charset():
     assert "charset=utf-8" in export._MEDIA["kml"][0]
 
 
-# ── V2.4.1: X-Velocity-Tier is believed only from a trusted proxy ───────────
+# ── V4.1.3: X-Velocity-Tier is never believed ───────────────────────────────
+# The gateway that set it was deleted 2026-09-13; any caller could send it.
 
 
-def test_tier_header_ignored_from_untrusted_peers(monkeypatch):
+def test_tier_header_is_ignored_and_the_setting_decides(monkeypatch):
     from app import tier
 
     monkeypatch.setenv("COMMERCIAL_MODE", "0")
-    monkeypatch.setenv("TRUSTED_PROXIES", "127.0.0.1")
     get_settings.cache_clear()
-
-    class _Req:
-        def __init__(self, host):
-            self.client = type("C", (), {"host": host})()
-
-    assert tier.commercial_request(_Req("203.0.113.9"), "paid") is False
-    assert tier.commercial_request(_Req("127.0.0.1"), "paid") is True
+    assert tier.commercial_request() is False
+    monkeypatch.setenv("COMMERCIAL_MODE", "1")
+    get_settings.cache_clear()
+    assert tier.commercial_request() is True
+    get_settings.cache_clear()

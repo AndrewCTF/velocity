@@ -106,10 +106,14 @@ def test_route_serves_the_tile_and_refuses_commercial(
             assert r.headers["content-type"] == "image/jpeg"
             assert r.headers["X-Sat-Source"] == "apple"
             # Apple's ToS is not a redistribution licence, so an entitled
-            # (paid) request — the one that must be served commercial-legal
+            # (commercial) request — the one that must be served commercial-legal
             # sources — is refused rather than quietly served.
-            r2 = c.get("/tiles/apple/12/3638/1612.jpg", headers={"X-Velocity-Tier": "paid"})
+            from app.tier import commercial_request  # noqa: PLC0415
+
+            app.dependency_overrides[commercial_request] = lambda: True
+            r2 = c.get("/tiles/apple/12/3638/1612.jpg")
             assert r2.status_code == 451
+            del app.dependency_overrides[commercial_request]
             assert c.get("/tiles/apple/20/1/1.jpg").status_code == 400
     finally:
         app.dependency_overrides.clear()

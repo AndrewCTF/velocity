@@ -33,6 +33,8 @@ os.environ.setdefault("ALLOW_UNAUTHENTICATED", "1")
 # a working bubblewrap ran the op.python tests at that tier; opt in so they still
 # run there. test_python_exec_unsandboxed_gate.py clears the flag to check the
 # refusal, so this default does not hide the guard.
+# Spawn tests mint sidecar tokens; keep them out of the repo's data/.
+os.environ.setdefault("SIDECAR_TOKEN_DIR", tempfile.mkdtemp(prefix="velocity-sidecar-tokens-"))
 os.environ.setdefault("WORKFLOWS_PYTHON_UNSANDBOXED", "1")
 # The FR24 tier (app/adsb_fr24.py) is a REAL bbox-grid pull. The feed tests stub
 # the readsb HTTP fetch, but this tier does not go through that stub, so leaving

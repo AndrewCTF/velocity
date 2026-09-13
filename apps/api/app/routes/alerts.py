@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 
+from app import ws_limits
 from app.auth import _bearer, require_ws_key
 from app.config import get_settings
 from app.correlate.bus import bus, jamming_recent
@@ -165,26 +166,35 @@ async def alerts_ws(ws: WebSocket) -> None:
     if not await require_ws_key(ws):
         await ws.close(code=1008)
         return
-    scoped, uid = await _viewer(_bearer(ws.headers) or ws.query_params.get("key"))
-    await ws.accept()
-    # Backfill recent so a freshly-opened tab isn't empty
-    backfill = bus.recent(bus._max_recent) if scoped else bus.recent(20)
-    if scoped:
-        backfill = [a for a in backfill if a.visible_to(uid)][-20:]
-    for a in backfill:
-        await ws.send_text(json.dumps(a.to_json()))
-    q = bus.subscribe()
+    # Per-client socket cap (ASVS V2.4.1, app/ws_limits.py): after the key
+    # gate, before accept, released however the handler ends.
+    slot = ws_limits.acquire(ws)
+    if slot is None:
+        await ws.close(code=1008)
+        return
     try:
-        while True:
-            try:
-                a = await asyncio.wait_for(q.get(), timeout=20.0)
-                if scoped and not a.visible_to(uid):
-                    continue
-                await ws.send_text(json.dumps(a.to_json()))
-            except TimeoutError:
-                # heartbeat to keep the socket alive through proxies
-                await ws.send_text(json.dumps({"kind": "heartbeat"}))
-    except WebSocketDisconnect:
-        pass
+        scoped, uid = await _viewer(_bearer(ws.headers) or ws.query_params.get("key"))
+        await ws.accept()
+        # Backfill recent so a freshly-opened tab isn't empty
+        backfill = bus.recent(bus._max_recent) if scoped else bus.recent(20)
+        if scoped:
+            backfill = [a for a in backfill if a.visible_to(uid)][-20:]
+        for a in backfill:
+            await ws.send_text(json.dumps(a.to_json()))
+        q = bus.subscribe()
+        try:
+            while True:
+                try:
+                    a = await asyncio.wait_for(q.get(), timeout=20.0)
+                    if scoped and not a.visible_to(uid):
+                        continue
+                    await ws.send_text(json.dumps(a.to_json()))
+                except TimeoutError:
+                    # heartbeat to keep the socket alive through proxies
+                    await ws.send_text(json.dumps({"kind": "heartbeat"}))
+        except WebSocketDisconnect:
+            pass
+        finally:
+            bus.unsubscribe(q)
     finally:
-        bus.unsubscribe(q)
+        ws_limits.release(slot)

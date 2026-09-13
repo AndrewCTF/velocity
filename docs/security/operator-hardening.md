@@ -74,7 +74,8 @@ and may move; they are not verifiable from this repository.
       URLs of this deployment. No wildcards on a production host. (V10.4.1)
 - [ ] **Refresh token reuse detection** on ("Detect and revoke potentially compromised refresh tokens"),
       reuse interval ≤ 10 s. (V10.4.5)
-- [ ] **Session time-box 12 h** and **inactivity timeout 30 min** (Authentication > Sessions; Pro plan).
+- [ ] **Session time-box 12 h** and **inactivity timeout 30 min** (Authentication > Sessions; Pro plan). The browser idle sign-out only covers an open or reopened tab; this is the server-side control (ASVS V7.3.1).
+- [ ] **Require current password when updating password** (Authentication > Providers > Email). The web app sends it; GoTrue enforces it only with this on (ASVS V6.2.3).
       Without Pro, refresh tokens have no absolute lifetime; record that as an accepted risk in your own
       register. (V10.4.8, V7.1.1)
 - [ ] **JWT expiry ≤ 3600 s.** The api refuses tokens whose lifetime exceeds `JWT_MAX_LIFETIME_S`
@@ -106,6 +107,8 @@ and may move; they are not verifiable from this repository.
       investigation data stays in the browser ([`data-protection.md`](data-protection.md) §6). (R30)
 
 ## 4. Application settings
+
+- [ ] **Off-host logs**: ship api and nginx stdout with a Docker logging driver (commented `logging:` example in `docker-compose.prod.yml`; `docs/security/logging.md`) (ASVS V16.4.3).
 
 - [ ] `ALLOW_UNAUTHENTICATED` unset (default off, `Settings.allow_unauthenticated`) on anything reachable
       beyond the operator's own machine.

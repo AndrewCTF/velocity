@@ -136,7 +136,7 @@ APP = pathlib.Path(__file__).resolve().parents[1] / "app"
 # belong in the unmeasured list.
 _LOCALHOST_CLIENTS = {
     "adsb_sidecar.py", "ais_sidecar.py", "browser_fetch.py", "llamacpp_sidecar.py",
-    "vllm_sidecar.py", "mavlink_sidecar.py", "routes/ai_models.py",
+    "vllm_sidecar.py", "mavlink_sidecar.py", "routes/ai_models.py", "sidecar_token.py",
 }
 
 

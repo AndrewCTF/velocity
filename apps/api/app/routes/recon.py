@@ -34,6 +34,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
+from app import childenv
 from app.auth import _bearer
 from app.config import get_settings
 from app.keys import user_id_for_token
@@ -184,7 +185,8 @@ def _cuda_env() -> dict[str, str]:
     bundled CUDA 12.8 toolchain — NOT the system nvcc (which fatals on
     'compute_120'). This is the single most load-bearing detail of the pipeline."""
     ch = _FUSION / ".mamba-cuda"
-    env = dict(os.environ)
+    # Allowlisted, so API_KEY / JWT secret / BYOK key never reach the job (ASVS V13.3.2).
+    env = childenv.child_env(keep_prefixes=childenv.GPU_PREFIXES + ("TORCH_", "HF_"))
     env.update(
         CUDA_HOME=str(ch),
         PATH=f"{ch / 'bin'}:{env.get('PATH', '')}",

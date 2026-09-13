@@ -70,6 +70,10 @@ while clearing Cloudflare and a `total > 0` trigger respawn-storms the ≥8 000
 feed. Same split governs `start()`: adopt a holder that IS serving (mid-warm),
 evict only one that holds the port WITHOUT serving (it EADDRINUSEs the
 replacement). A dry-but-serving sidecar self-heals internally — leave it.
+Sidecar data routes need the per-spawn bearer (`app/sidecar_token.py`, file in
+`data/sidecar-tokens/`); adoption also requires that the holder accepts the
+token on file, so a pre-token sidecar is evicted once after upgrade. Children get
+`app/childenv.py`'s allowlisted env, never `os.environ` (ASVS V13.2.1, V13.3.2).
 → `tests/test_adsb_sidecar_supervise.py`, `tests/test_ais_sidecar_reuse.py`
 
 ## Egress tiers (both OFF by default)

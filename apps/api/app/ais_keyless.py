@@ -30,7 +30,7 @@ from typing import Any
 
 import websockets
 
-from app import ais_firehose
+from app import ais_firehose, sidecar_token
 from app.config import get_settings
 from app.correlate.types import Observation
 
@@ -311,7 +311,9 @@ async def _run_vesselfinder_sidecar() -> None:
     backoff = interval
     while True:
         try:
-            r = await client.get(url, timeout=60.0)
+            r = await client.get(
+                url, timeout=60.0, headers=sidecar_token.headers("ais-vesselfinder")
+            )
             if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
                 vessels = (r.json().get("vessels")) or []
                 n = _publish_vesselfinder(vessels)
@@ -389,7 +391,9 @@ async def _run_marinetraffic_sidecar() -> None:
     backoff = interval
     while True:
         try:
-            r = await client.get(url, timeout=60.0)
+            r = await client.get(
+                url, timeout=60.0, headers=sidecar_token.headers("ais-marinetraffic")
+            )
             if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
                 vessels = (r.json().get("vessels")) or []
                 n = _publish_marinetraffic(vessels)
@@ -489,7 +493,9 @@ async def _run_myshiptracking_sidecar() -> None:
     backoff = interval
     while True:
         try:
-            r = await client.get(url, timeout=60.0)
+            r = await client.get(
+                url, timeout=60.0, headers=sidecar_token.headers("ais-myshiptracking")
+            )
             if r.status_code == 200 and "json" in r.headers.get("content-type", ""):
                 body = r.json()
                 vessels = body.get("vessels") or []

@@ -18,10 +18,10 @@ import base64
 import json
 import logging
 import math
-import os
 from pathlib import Path
 from typing import Any
 
+from app import childenv
 from app.config import get_settings
 from app.imagery import cdse
 
@@ -93,7 +93,7 @@ async def _run_yolo(image_bytes: bytes) -> list[dict[str, Any]] | None:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
-            env={**os.environ},
+            env=childenv.child_env(keep_prefixes=childenv.GPU_PREFIXES + ("YOLO_", "TORCH_")),
         )
         out, _ = await asyncio.wait_for(proc.communicate(req.encode()), _YOLO_TIMEOUT_S)
     except (TimeoutError, OSError) as e:

@@ -76,6 +76,42 @@ const { paced } = require('./index.js');
   assert.strictEqual(headless.headless, true, 'default must stay headless');
   assert.ok(!headless.x11, 'the x11 pin belongs to headful only');
 
+  // 5. The fetch proxy answers only the API (ASVS V13.2.1): a loopback Host
+  //    header on everything, the spawn token on everything but /health. Run in
+  //    a child because SIDECAR_TOKEN is read at module load; no browser starts
+  //    because every request here is refused or never reaches fetchUrl.
+  const authProbe = `
+    const http = require('http');
+    const { server } = require('./index.js');
+    const get = (port, path, headers) => new Promise((ok, bad) => {
+      http.get({ host: '127.0.0.1', port, path, headers }, (r) => { r.resume(); ok(r.statusCode); }).on('error', bad);
+    });
+    server.listen(0, '127.0.0.1', async () => {
+      const p = server.address().port;
+      const h = { host: '127.0.0.1:' + p };
+      const out = {
+        noToken: await get(p, '/fetch?url=https://example.test/', h),
+        badToken: await get(p, '/fetch?url=https://example.test/', { ...h, authorization: 'Bearer nope' }),
+        goodTokenBadUrl: await get(p, '/fetch?url=ftp://x', { ...h, authorization: 'Bearer t0k' }),
+        rebindHost: await get(p, '/health', { host: 'evil.example:' + p }),
+        health: await get(p, '/health', h),
+        authBare: await get(p, '/auth', h),
+        authOk: await get(p, '/auth', { ...h, authorization: 'Bearer t0k' }),
+      };
+      console.log(JSON.stringify(out));
+      process.exit(0);
+    });`;
+  const auth = JSON.parse(
+    execFileSync(process.execPath, ['-e', authProbe], {
+      cwd: __dirname,
+      env: { ...process.env, SIDECAR_TOKEN: 't0k' },
+    }).toString().trim().split('\n').pop()
+  );
+  assert.deepStrictEqual(auth, {
+    noToken: 401, badToken: 401, goodTokenBadUrl: 400, rebindHost: 421,
+    health: 200, authBare: 401, authOk: 204,
+  });
+
   console.log('browser-fetch selftest: ok');
   process.exit(0);
 })();

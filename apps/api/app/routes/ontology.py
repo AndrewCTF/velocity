@@ -227,6 +227,15 @@ async def promote_object(
             status_code=400,
             detail="id must be '<kind>:<value>' with a known ontology kind",
         )
+    # evidence is a known kind, and assert_props MERGES: without this a promote
+    # of ``evidence:<sha>`` rewrites the hash, type or custody a record vouches
+    # for (ASVS V2.2.1). Same boundary as the object route, minus the custody-prop
+    # names, which a promoted feed entity may legitimately carry.
+    if prefix == "evidence" or str(body.props.get("kind") or "") == "evidence":
+        raise HTTPException(
+            status_code=403,
+            detail="evidence objects are written through /api/evidence, not the generic route",
+        )
     reg = get_registry(ctx, get_settings())
     return await reg.assert_props(
         body.id,

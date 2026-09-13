@@ -52,6 +52,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from . import childenv
 from .config import get_settings
 from .localllm import binary, manager
 from .localllm import state as engine_state
@@ -310,7 +311,9 @@ async def start() -> None:
         "--jinja",
     ]
 
-    env = dict(os.environ)
+    # Allowlisted env (V13.3.2): llama-server reads only its GPU runtime's
+    # variables, never the API's keys.
+    env = childenv.child_env(keep_prefixes=childenv.GPU_PREFIXES + ("LLAMA_",))
     # Chrome's zygote-style crash under jemalloc's LD_PRELOAD/MALLOC_CONF
     # doesn't apply to llama-server, but scrub the same pair anyway — it's the
     # standing rule for every spawned sidecar child (adsb_sidecar/ais_sidecar).

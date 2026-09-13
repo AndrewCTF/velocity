@@ -23,6 +23,7 @@ import sys
 
 import httpx
 
+from . import childenv
 from .config import get_settings
 
 log = logging.getLogger("mavlink_sidecar")
@@ -54,13 +55,14 @@ class _Bridge:
             self._reuse = True
             log.info("mavlink bridge already up on %s — reusing", self.base)
             return
-        env = {
-            **os.environ,
-            "PORT": str(self.port),
-            "MAVLINK_CONNECT": self.connect,
-        }
+        # Allowlisted env (V13.3.2): the bridge reads PORT, MAVLINK_CONNECT and
+        # MAVLINK_BRIDGE_TOKEN (mavlink_bridge.main) and none of the API's keys.
+        env = childenv.child_env(
+            {"PORT": str(self.port), "MAVLINK_CONNECT": self.connect},
+            keep_prefixes=("MAVLINK_", "PYTHON"),
+        )
         # Same jemalloc-scrub as the browser sidecars: a forked child must not
-        # inherit run-api.sh's LD_PRELOAD / MALLOC_CONF.
+        # inherit run-api.sh's LD_PRELOAD / MALLOC_CONF (child_env drops both).
         env.pop("LD_PRELOAD", None)
         env.pop("MALLOC_CONF", None)
         log_path = "/tmp/mavlink-bridge.log"

@@ -46,9 +46,19 @@ from pathlib import Path
 
 import httpx
 
+from . import childenv, sidecar_token
 from .config import get_settings
 
 log = logging.getLogger("ais_sidecar")
+
+# Spawn-token auth for the AIS feeders (ASVS V13.2.1, app/sidecar_token.py).
+# index.js enforces SIDECAR_TOKEN when it is set; ais_keyless.py sends
+# sidecar_token.headers(sc.token_name) on every vessel poll.
+TOKEN_ENFORCED = True
+# index.js knobs an operator may export (process.env.* in tools/ais-*-feeder).
+_FEEDER_KNOBS = frozenset(
+    {"SITE", "GRID_DEG", "ZOOM", "CONCURRENCY", "MIN_VESSELS", "MAX_VESSELS", "PACE_MS"}
+)
 
 # tools/ sits at the repo root (this file is apps/api/app/).
 # In the Docker image this file only has 2 ancestors, so parents[3] would
@@ -77,6 +87,7 @@ class _Sidecar:
         self.is_enabled = is_enabled  # () -> bool
         self.max_age_s = max_age_s  # () -> float | None; oldest union we'll adopt
         self.extra_env = extra_env or {}
+        self.token_name = f"ais-{name}"
         self._proc: asyncio.subprocess.Process | None = None
         # pid of a sidecar we REUSED (not spawned) — tracked so stop() can still
         # tear it down across a backend restart (saves a ~15s browser respawn).
@@ -165,7 +176,15 @@ class _Sidecar:
         if not self.index.exists():
             log.warning("ais sidecar %s index not found at %s — skipping", self.name, self.index)
             return
-        if await self._already_healthy():
+        foreign = (
+            TOKEN_ENFORCED
+            and await _serving(self)
+            and await sidecar_token.mismatch(self.base, self.token_name)
+        )
+        if foreign:
+            log.warning("ais sidecar %s on %s does not hold our token — replacing it",
+                        self.name, self.base)
+        if not foreign and await self._already_healthy():
             self._reuse_pid = await self._port_holder_pid_async()
             log.info(
                 "ais sidecar %s already up on %s — reusing pid %s",
@@ -183,8 +202,15 @@ class _Sidecar:
             )
             await self._kill_pid(holder)
 
-        env = {
-            **os.environ,
+        # Allowlisted env (V13.3.2): the API's keys never reach a browser that
+        # loads third-party pages. _FEEDER_KNOBS are the feeders' own settings.
+        env = childenv.child_env(
+            keep_names=childenv.BROWSER_NAMES | _FEEDER_KNOBS,
+            keep_prefixes=childenv.BROWSER_PREFIXES,
+        )
+        if TOKEN_ENFORCED:
+            env["SIDECAR_TOKEN"] = sidecar_token.mint(self.token_name)
+        env |= {
             "PORT": str(self.port),
             # Reuse the ADS-B feeder's playwright install (require('playwright')
             # resolves via NODE_PATH); no bundled Chromium — index.js honours
@@ -205,7 +231,7 @@ class _Sidecar:
             env["WARP_PROXY"] = warp.socks_url()
         # Chrome's zygote fork dies (error_code=1002 → 0 vessels) if it inherits
         # run-api.sh's jemalloc LD_PRELOAD / MALLOC_CONF(background_thread:true).
-        # Scrub both from the child env — same fix as adsb_sidecar.
+        # child_env() never forwards either; the pops stay as the explicit guard.
         env.pop("LD_PRELOAD", None)
         env.pop("MALLOC_CONF", None)
 

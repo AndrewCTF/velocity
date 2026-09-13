@@ -54,7 +54,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 
-from app import adsb_fr24, adsb_opensky_gaps
+from app import adsb_fr24, adsb_opensky_gaps, adsb_sidecar, sidecar_token, ws_limits
 from app.auth import require_ws_key
 from app.config import get_settings
 from app.ingest.opensky import OpenSkyTokenManager, fetch_states, states_to_geojson
@@ -1159,9 +1159,12 @@ def _feed_total_s(url: str) -> float:
 
 
 async def _fetch_one_feed(client: httpx.AsyncClient, url: str) -> list[dict[str, Any]]:
+    headers = {"User-Agent": _FEED_UA}
+    if ("127.0.0.1" in url or "localhost" in url) and f":{adsb_sidecar._PORT}/" in url:
+        headers.update(sidecar_token.headers(adsb_sidecar.TOKEN_NAME))
     try:
         r = await asyncio.wait_for(
-            client.get(url, timeout=_feed_timeout(url), headers={"User-Agent": _FEED_UA}),
+            client.get(url, timeout=_feed_timeout(url), headers=headers),
             timeout=_feed_total_s(url),
         )
     except (httpx.TimeoutException, httpx.TransportError, TimeoutError):
@@ -1229,6 +1232,10 @@ def _fetch_one_feed_sync(url: str) -> tuple[float, list[dict[str, Any]] | Any]:
         headers = {"User-Agent": _FEED_UA}
         if not local:
             headers["Accept-Encoding"] = "gzip"
+        elif f":{adsb_sidecar._PORT}/" in url:
+            # The :8090 sidecar refuses /aircraft.json without its spawn token
+            # (ASVS V13.2.1, app/sidecar_token.py). Only ever sent to that port.
+            headers.update(sidecar_token.headers(adsb_sidecar.TOKEN_NAME))
         prev = _FEED_ETAGS.get(url)
         if prev:
             headers["If-None-Match"] = prev
@@ -2583,23 +2590,32 @@ async def adsb_ws(ws: WebSocket) -> None:
     if not await require_ws_key(ws):
         await ws.close(code=1008)
         return
-    await ws.accept()
-    # Ensure the refresher is running even if no HTTP poll kicked it off (idempotent).
-    await start_snapshot()
-    _WS_SUBSCRIBERS.add(ws)
-    note_demand()
+    # Per-client socket cap (ASVS V2.4.1, app/ws_limits.py): after the key
+    # gate, before accept, released however the handler ends.
+    slot = ws_limits.acquire(ws)
+    if slot is None:
+        await ws.close(code=1008)
+        return
     try:
-        if _HOT_BLOB is not None:
-            await ws.send_bytes(_HOT_BLOB)
-        # We only PUSH; draining the socket is just how we detect disconnect.
-        while True:
-            await ws.receive_text()
-    except WebSocketDisconnect:
-        pass
-    except Exception:  # noqa: BLE001 — any socket error just ends this subscriber
-        pass
+        await ws.accept()
+        # Ensure the refresher is running even if no HTTP poll kicked it off (idempotent).
+        await start_snapshot()
+        _WS_SUBSCRIBERS.add(ws)
+        note_demand()
+        try:
+            if _HOT_BLOB is not None:
+                await ws.send_bytes(_HOT_BLOB)
+            # We only PUSH; draining the socket is just how we detect disconnect.
+            while True:
+                await ws.receive_text()
+        except WebSocketDisconnect:
+            pass
+        except Exception:  # noqa: BLE001 — any socket error just ends this subscriber
+            pass
+        finally:
+            _WS_SUBSCRIBERS.discard(ws)
     finally:
-        _WS_SUBSCRIBERS.discard(ws)
+        ws_limits.release(slot)
 
 
 async def start_snapshot() -> None:

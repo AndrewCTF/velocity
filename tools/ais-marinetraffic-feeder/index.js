@@ -264,11 +264,44 @@ async function pump() {
   }
 }
 
+// ASVS V13.2.1 (apps/api/app/sidecar_token.py). The API mints SIDECAR_TOKEN per
+// spawn; data routes then need `Authorization: Bearer <token>`. /health stays
+// open because supervision's liveness probe must answer whoever holds the
+// token. Every route needs a loopback Host header (a DNS-rebinding page names
+// its own host). Without SIDECAR_TOKEN (a manual run) only the Host check applies.
+const SIDECAR_TOKEN = process.env.SIDECAR_TOKEN || '';
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+function hostOk(req) {
+  const host = String(req.headers.host || '').toLowerCase();
+  const i = host.lastIndexOf(':');
+  if (i <= 0) return false;
+  return LOOPBACK_HOSTS.has(host.slice(0, i)) && host.slice(i + 1) === String(req.socket.localPort);
+}
+
+function tokenOk(req) {
+  if (!SIDECAR_TOKEN) return true;
+  const got = Buffer.from(String(req.headers.authorization || ''));
+  const want = Buffer.from(`Bearer ${SIDECAR_TOKEN}`);
+  return got.length === want.length && require('crypto').timingSafeEqual(got, want);
+}
+
+// Answers for the gate, or false when the request may proceed.
+function refuse(req, res, dataRoute) {
+  if (!hostOk(req)) { res.statusCode = 421; res.end('host not allowed'); return true; }
+  if (req.url.startsWith('/auth') && SIDECAR_TOKEN) {
+    res.statusCode = tokenOk(req) ? 204 : 401; res.end(); return true;
+  }
+  if (dataRoute && !tokenOk(req)) { res.statusCode = 401; res.end('unauthorized'); return true; }
+  return false;
+}
+
 async function main() {
   // Serve IMMEDIATELY — before browser init — so a slow challenge clear can never
   // block the port. The union is empty until the first scrape lands; the backend
   // poller tolerates an empty/200 response.
   http.createServer((req, res) => {
+    if (refuse(req, res, req.url.startsWith('/vessels.json'))) return;
     if (req.url.startsWith('/vessels.json')) {
       res.setHeader('content-type', 'application/json');
       res.setHeader('access-control-allow-origin', '*');

@@ -12,6 +12,7 @@ complete.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -607,7 +608,18 @@ async def source_catalog(
 # that page every few minutes and serves it as a plain JS array. Every failure
 # path returns an EMPTY FeatureCollection, never a bare dict: this route backs a
 # map layer, and a layer handed `{"stations": []}` has no `features` to read.
+#
+# That mirror is PLAIN HTTP ONLY (https resets the connection, and kiwisdr.com's
+# own https fails too; probed 2026-09-13), so its body can be rewritten in
+# transit and lands on the map as receiver points and links (ASVS V12.3.1). The
+# list is public and carries no credential, so the layer stays on (accepted
+# risk R32, docs/security/isms/risk-assessment.md); KIWISDR_ALLOW_HTTP=0 turns
+# it off.
 KIWISDR_URL = "http://rx.linkfanel.net/kiwisdr_com.js"
+
+
+def _kiwisdr_http_allowed() -> bool:
+    return os.getenv("KIWISDR_ALLOW_HTTP", "1").strip().lower() not in ("0", "false", "no", "off")
 
 
 @router.get("/api/sdr/kiwisdr")
@@ -616,6 +628,11 @@ async def kiwisdr_stations() -> dict[str, Any]:
         import json
         import re
 
+        if not _kiwisdr_http_allowed():
+            return fg.degraded_fc(
+                "The KiwiSDR receiver list is only published over plain HTTP, so it "
+                "is turned off here (KIWISDR_ALLOW_HTTP=0)."
+            )
         try:
             text = await fg.fetch_text(KIWISDR_URL)
         except Exception:

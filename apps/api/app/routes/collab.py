@@ -27,6 +27,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from app import ws_limits
 from app.auth import _auth_enabled, _bearer, require_ws_key
 from app.config import get_settings
 from app.intel import classification as clf
@@ -154,44 +155,55 @@ async def collab_ws(ws: WebSocket, doc: str | None = None) -> None:
     if not await require_ws_key(ws):
         await ws.close(code=1008)
         return
-    if not doc:
+    # Per-client socket cap (ASVS V2.4.1, app/ws_limits.py): after the key
+    # gate, before accept, released however the handler ends.
+    slot = ws_limits.acquire(ws)
+    if slot is None:
         await ws.close(code=1008)
         return
-    if not await _collab_join_allowed(ws, doc):
-        await ws.close(code=1008)
-        return
-    await ws.accept()
-    q = collab_hub.subscribe(doc)
-
-    async def _out() -> None:
-        while True:
-            try:
-                data = await asyncio.wait_for(q.get(), timeout=25.0)
-            except TimeoutError:
-                data = _HEARTBEAT  # detect a dead socket; client ignores 0xFF
-            try:
-                await ws.send_bytes(data)
-            except (WebSocketDisconnect, RuntimeError):
-                return
-
-    async def _in() -> None:
-        while True:
-            try:
-                data = await ws.receive_bytes()
-            except (WebSocketDisconnect, RuntimeError, KeyError):
-                return
-            if not data or len(data) > _MAX_UPDATE_BYTES:
-                continue
-            collab_hub.publish(doc, data, exclude=q)
-
-    out_task = asyncio.create_task(_out())
-    in_task = asyncio.create_task(_in())
     try:
-        _, pending = await asyncio.wait({out_task, in_task}, return_when=asyncio.FIRST_COMPLETED)
-        for t in pending:
-            t.cancel()
+        if not doc:
+            await ws.close(code=1008)
+            return
+        if not await _collab_join_allowed(ws, doc):
+            await ws.close(code=1008)
+            return
+        await ws.accept()
+        q = collab_hub.subscribe(doc)
+
+        async def _out() -> None:
+            while True:
+                try:
+                    data = await asyncio.wait_for(q.get(), timeout=25.0)
+                except TimeoutError:
+                    data = _HEARTBEAT  # detect a dead socket; client ignores 0xFF
+                try:
+                    await ws.send_bytes(data)
+                except (WebSocketDisconnect, RuntimeError):
+                    return
+
+        async def _in() -> None:
+            while True:
+                try:
+                    data = await ws.receive_bytes()
+                except (WebSocketDisconnect, RuntimeError, KeyError):
+                    return
+                if not data or len(data) > _MAX_UPDATE_BYTES:
+                    continue
+                collab_hub.publish(doc, data, exclude=q)
+
+        out_task = asyncio.create_task(_out())
+        in_task = asyncio.create_task(_in())
+        try:
+            _, pending = await asyncio.wait(
+                {out_task, in_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            for t in pending:
+                t.cancel()
+        finally:
+            collab_hub.unsubscribe(doc, q)
     finally:
-        collab_hub.unsubscribe(doc, q)
+        ws_limits.release(slot)
 
 
 # ── persistence (RLS-gated via the user's own token) ──────────────────────────

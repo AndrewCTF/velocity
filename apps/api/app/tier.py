@@ -1,12 +1,20 @@
 """Per-request commercial-source gating.
 
-The Velocity gateway Worker stamps every proxied request with an
-``X-Velocity-Tier`` header (``paid`` for an entitled customer, ``free``
-otherwise). This module turns that — together with the deployment-level
-``commercial_mode`` / ``allow_nc_for_free`` settings — into a single boolean:
-"serve only commercial-legally-licensed sources for this request?"
+Turns the deployment-level ``commercial_mode`` / ``allow_nc_for_free`` settings
+into a single boolean: "serve only commercial-legally-licensed sources for this
+request?"
 
-Truth table (commercial == "must use the commercial-legal source set"):
+Until 2026-09-13 the Velocity gateway Worker stamped proxied requests with an
+``X-Velocity-Tier`` header (``paid`` / ``free``) and this module believed it from
+a ``TRUSTED_PROXIES`` peer. The gateway was deleted that day, and the shipped
+nginx is itself a trusted peer that forwards client headers unchanged, so the
+header had become client-controlled: ``X-Velocity-Tier: paid`` passed the 402
+gate on ``POST /api/imagery/task`` (ASVS V4.1.3). No component sets it any more,
+so the request dependency no longer reads it; the DEPLOYMENT decides.
+
+Truth table of :func:`resolve_commercial` (commercial == "must use the
+commercial-legal source set"). The ``tier`` argument is kept for a future
+entitlement source that the server itself derives (never a request header):
 
     tier    commercial_mode  allow_nc_for_free  -> commercial
     paid    *                *                  -> True   (paying customer, always legal)
@@ -19,8 +27,6 @@ See docs/commercial-licensing.md for which sources each side maps to.
 """
 
 from __future__ import annotations
-
-from fastapi import Header, Request
 
 from app.config import get_settings
 
@@ -36,17 +42,11 @@ def resolve_commercial(tier: str | None) -> bool:
     return s.commercial_mode
 
 
-def commercial_request(
-    request: Request, x_velocity_tier: str | None = Header(default=None)
-) -> bool:
+def commercial_request() -> bool:
     """FastAPI dependency: True → serve only commercial-legal sources.
 
-    ``X-Velocity-Tier`` is set by the gateway in front. It is believed only when
-    the peer is in ``TRUSTED_PROXIES`` (ASVS V2.4.1); from anyone else the header
-    is ignored and the deployment default applies, so a client cannot choose its
-    own licensing tier."""
-    from app.ratelimit import _peer_is_trusted  # noqa: PLC0415
-
-    peer = request.client.host if getattr(request, "client", None) else ""
-    trusted = bool(peer) and _peer_is_trusted(peer, get_settings().trusted_proxies)
-    return resolve_commercial(x_velocity_tier if trusted else None)
+    The deployment default, always. ``X-Velocity-Tier`` is ignored from every
+    peer (see the module docstring), so a client cannot choose its own licensing
+    tier; a keyless box keeps ``commercial_mode=False`` and its fuller sources.
+    """
+    return resolve_commercial(None)

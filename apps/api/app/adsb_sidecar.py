@@ -39,7 +39,17 @@ from pathlib import Path
 
 import httpx
 
+from app import childenv, sidecar_token
+
 log = logging.getLogger("adsb_sidecar")
+
+TOKEN_NAME = "adsb"
+# index.js tuning knobs an operator may export for the child (process.env.* in
+# tools/adsb-globe-feeder/index.js); everything else of the API's env stays here.
+_FEEDER_KNOBS = frozenset(
+    {"VIEW_W", "VIEW_H", "CENTER", "MIN_PLANES", "NUDGE_MS", "READ_TIMEOUT_MS",
+     "BLOCK_IMAGES", "HIDE_LAYERS"}
+)
 
 # tools/adsb-globe-feeder sits at the repo root (this file is apps/api/app/).
 # In the Docker image this file only has 2 ancestors, so parents[3] would
@@ -183,7 +193,14 @@ async def start() -> None:
     if not _INDEX.exists():
         log.warning("sidecar index not found at %s — skipping", _INDEX)
         return
-    if await _already_healthy():
+    # A serving sidecar we cannot drive with a token we hold (one from before
+    # token enforcement, or whose token file is gone) is not adoptable: the
+    # poller would get 401 from a sidecar that answers /health forever, which
+    # supervise() would never replace. Evict it once; see app/sidecar_token.py.
+    foreign = await _serving() and await sidecar_token.mismatch(_BASE, TOKEN_NAME)
+    if foreign:
+        log.warning("sidecar on %s does not hold our token — replacing it", _BASE)
+    if not foreign and await _already_healthy():
         # Reuse the running sidecar (saves a ~15s browser respawn) but remember
         # its pid so stop() can still tear the (non-child) process down.
         _reuse_pid = await _port_holder_pid_async()
@@ -201,7 +218,7 @@ async def start() -> None:
     #     EADDRINUSE our replacement, so it has to go.
     holder = await _port_holder_pid_async()
     if holder is not None:
-        if await _serving():
+        if not foreign and await _serving():
             _reuse_pid = holder
             log.info("sidecar on %s is up but has no aircraft yet — adopting pid %s", _BASE, holder)
             await _wait_for_aircraft(None)
@@ -209,9 +226,14 @@ async def start() -> None:
         log.warning("evicting pid %s holding %s without serving", holder, _BASE)
         await _kill_pid(holder)
 
-    env = {
-        **os.environ,
+    env = childenv.child_env(
+        keep_names=childenv.BROWSER_NAMES | _FEEDER_KNOBS,
+        keep_prefixes=childenv.BROWSER_PREFIXES,
+    )
+    env |= {
         "PORT": str(_PORT),
+        # Per-spawn bearer the poller sends on /aircraft.json (V13.2.1).
+        "SIDECAR_TOKEN": sidecar_token.mint(TOKEN_NAME),
         "READ_MS": str(_READ_MS),
         # THREE tar1090 aggregators, freshest-wins-by-hex in the sidecar
         # (index.js unioned()):
@@ -250,12 +272,11 @@ async def start() -> None:
 
         env["WARP_PROXY"] = warp.socks_url()
     # The backend runs under jemalloc (scripts/run-api.sh exports LD_PRELOAD +
-    # MALLOC_CONF with background_thread:true). Chrome inherits them through this
-    # env and its zygote fork dies at spawn ("GPU process launch failed:
-    # error_code=1002" → FATAL), leaving the sidecar serving 0 aircraft forever.
-    # Bisected 2026-07-04: the LD_PRELOAD+MALLOC_CONF pair is the minimal failing
-    # combination; either alone is fine. jemalloc is for the Python process only —
-    # never let it leak into the node/Chrome tree.
+    # MALLOC_CONF with background_thread:true). Chrome inheriting them dies at
+    # zygote fork ("GPU process launch failed: error_code=1002" → FATAL), leaving
+    # the sidecar serving 0 aircraft forever. Bisected 2026-07-04: the pair is the
+    # minimal failing combination. child_env() never forwards either (nor the
+    # API's keys — V13.3.2); the pops below stay as the explicit guard.
     env.pop("LD_PRELOAD", None)
     env.pop("MALLOC_CONF", None)
     log_path = "/tmp/adsb-sidecar.log"

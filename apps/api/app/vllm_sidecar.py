@@ -36,6 +36,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from . import childenv
 from .config import get_settings
 from .localllm import manager
 
@@ -163,7 +164,13 @@ async def start() -> None:
         "--trust-remote-code=false",
     ]
 
-    env = dict(os.environ)
+    # Allowlisted env (V13.3.2): vLLM reads its HF/torch/CUDA variables, never the API's keys.
+    env = childenv.child_env(
+        keep_prefixes=(
+            *childenv.GPU_PREFIXES, "HF_", "HUGGING_FACE_", "VLLM_", "TORCH", "PYTORCH_",
+            "NCCL_", "TRANSFORMERS_", "TRITON_", "OMP_", "PYTHON", "VIRTUAL_ENV",
+        )
+    )
     env.pop("LD_PRELOAD", None)
     env.pop("MALLOC_CONF", None)
 
