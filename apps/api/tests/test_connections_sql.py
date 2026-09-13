@@ -85,10 +85,14 @@ async def test_a_query_lands_rows_and_mints_ontology_objects(
         },
     }
     task = asyncio.create_task(C._run_sql(FoundryStore(get_settings()), conn))
-    for _ in range(100):
+    # Wait for BOTH effects: rows land first and the ontology mint follows, so
+    # cancelling on rows alone raced the mint on a slow 4-core CI runner.
+    hits: list = []
+    for _ in range(200):
         await asyncio.sleep(0.05)
         rows = client.get(f"/api/foundry/datasets/{ds}/rows").json()["rows"]
-        if len(rows) >= 3:
+        hits = client.get("/api/ontology/search", params={"q": "SQL ROW ONE"}).json()
+        if len(rows) >= 3 and any(o["props"].get("name") == "SQL ROW ONE" for o in hits):
             break
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
@@ -97,7 +101,6 @@ async def test_a_query_lands_rows_and_mints_ontology_objects(
     assert [r.get("name") for r in rows] == ["SEED", "SQL ROW ONE", "SQL ROW TWO"]
     assert rows[1]["lat"] == 51.9
 
-    hits = client.get("/api/ontology/search", params={"q": "SQL ROW ONE"}).json()
     assert any(o["props"].get("name") == "SQL ROW ONE" for o in hits), hits
 
 
