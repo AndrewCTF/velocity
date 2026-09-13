@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://projectvelocity.org/sitemap.xml
