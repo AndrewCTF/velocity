@@ -52,7 +52,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.auth import ApiKeyMiddleware, log_auth_mode
+from app.auth import ApiKeyMiddleware, install_access_log_redaction, log_auth_mode
 from app.config import get_settings
 from app.correlate import runner as correlate_runner
 from app.mcp_server import build_mcp_mount
@@ -609,6 +609,8 @@ def create_app() -> FastAPI:
     # FastAPI serializes straight to JSON bytes via pydantic-core — already
     # faster than swapping in ORJSONResponse (which FastAPI now deprecates).
     app = FastAPI(title="OSINT Console API", version="0.1.0", lifespan=lifespan)
+    # ?key= (WS upgrades) must never reach the access log in clear.
+    install_access_log_redaction()
 
     # Baseline response headers for every route. Only /api/evidence set any of
     # these, and only for the blob it serves. These three are the ones an app

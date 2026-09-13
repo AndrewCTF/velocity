@@ -166,3 +166,71 @@ async def audit(
     except Exception as exc:  # noqa: BLE001 — audit must never break the action
         log.warning("audit write error: %s", exc)
         return False
+
+
+# ── mutation audit (G15) ─────────────────────────────────────────────────────
+#
+# One seam instead of a hand-written call per handler: state-changing routers
+# carry ``dependencies=[Depends(audit_mutation)]`` and every POST/PUT/PATCH/
+# DELETE on them records "who attempted what, on which resource" BEFORE the
+# handler runs. It records the attempt, not the outcome. The write is scheduled
+# as a background task so a slow or dead audit store can never add latency to,
+# or fail, the action itself. ``tests/test_audit_mutations.py`` walks the
+# routers and fails if a mutating route lacks the dependency.
+
+_MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+_pending: set[asyncio.Task[Any]] = set()
+
+
+def audit_background(ctx: UserCtx, action: str, resource_type: str, resource_id: str = "",
+                     **kw: Any) -> None:
+    """Fire-and-forget ``audit()``. Never raises, never awaits the store."""
+    async def _run() -> None:
+        try:
+            await audit(ctx, action, resource_type, resource_id, **kw)
+        except Exception as exc:  # noqa: BLE001 — audit must never break the action
+            log.warning("audit task error: %s", exc)
+
+    try:
+        task = asyncio.get_running_loop().create_task(_run())
+    except RuntimeError:  # no running loop — nothing to schedule on
+        return
+    _pending.add(task)
+    task.add_done_callback(_pending.discard)
+
+
+def _actor(request: Request) -> UserCtx:
+    """Identity for the row without re-validating: a bearer token counts only if
+    the auth layer already validated it (it is in the per-token cache); a static
+    key holder is ``api-key``; an ingest sender is ``ingest``; else ``local``.
+    The ingest token is never read here."""
+    from app.auth import _bearer, _jwt_claims, _token_ok_until  # noqa: PLC0415
+
+    token = _bearer(request.headers) or ""
+    if token and token in _token_ok_until:
+        sub = (_jwt_claims(token) or {}).get("sub")
+        if sub:
+            return UserCtx(user_id=str(sub), token=token)
+    if request.url.path.startswith("/api/ingest/"):
+        return UserCtx(user_id="ingest", token="")
+    if request.headers.get("x-api-key"):
+        return UserCtx(user_id="api-key", token="")
+    return UserCtx(user_id="local", token="")
+
+
+async def audit_mutation(request: Request) -> None:
+    """Router dependency: audit every mutating request (see block comment)."""
+    if request.method not in _MUTATING:
+        return
+    route = request.scope.get("route")
+    template = getattr(route, "path", request.url.path)
+    tags = getattr(route, "tags", None) or ["api"]
+    params = {k: str(v) for k, v in request.path_params.items()}
+    audit_background(
+        _actor(request),
+        f"{request.method} {template}",
+        str(tags[0]),
+        "/".join(params.values()),
+        detail={"path_params": params} if params else None,
+        request=request,
+    )

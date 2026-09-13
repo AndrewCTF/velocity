@@ -464,11 +464,16 @@ def test_evaluate_all_fires_keyless_local_rule_and_logs_delivery(
 
     sent: list[dict] = []
 
-    async def _fake_send(method, url, *, headers, json_body=None, timeout_s=15.0):  # type: ignore[no-untyped-def]
+    async def _fake_send(method, url, *, headers, json_body=None, timeout_s=15.0, public_only=False):  # type: ignore[no-untyped-def]  # noqa: E501
+        assert public_only is True  # a sink is delivered public-only (G7)
         sent.append({"method": method, "url": url, "body": json_body})
         return control.HttpResult(status=204, ok=True, json=None, text="", error=None)
 
     monkeypatch.setattr(control, "send", _fake_send)
+    # Hermetic: the delivery-time sink check resolves the host (G7).
+    monkeypatch.setattr(
+        control.socket, "getaddrinfo", lambda *a, **k: [(2, 1, 0, "", ("162.159.135.232", 0))]
+    )
 
     # No registered session and no Supabase configured (default Settings()).
     assert watch.active_sessions() == []

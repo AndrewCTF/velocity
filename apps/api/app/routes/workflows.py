@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.audit import audit_mutation
 from app.keys import UserCtx, current_user_or_local
 from app.security import require_operator
 from app.workflows import blocks as blocks_mod
@@ -18,7 +19,7 @@ from app.workflows import engine
 from app.workflows.python_exec import MAX_TIMEOUT_S
 from app.workflows.store import WorkflowError, WorkflowStore
 
-router = APIRouter(tags=["workflows"])
+router = APIRouter(tags=["workflows"], dependencies=[Depends(audit_mutation)])
 
 
 def _store() -> WorkflowStore:

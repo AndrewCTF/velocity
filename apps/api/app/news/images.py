@@ -12,6 +12,7 @@ import logging
 import re
 from urllib.parse import urljoin, urlparse
 
+from app.netguard import is_non_public_ip
 from app.upstream import get_client
 
 log = logging.getLogger(__name__)
@@ -55,14 +56,7 @@ async def _getaddrinfo(host: str, port: int | None) -> list:
 
 
 def _is_non_public(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    return bool(
-        addr.is_private
-        or addr.is_loopback
-        or addr.is_link_local
-        or addr.is_reserved
-        or addr.is_multicast
-        or addr.is_unspecified
-    )
+    return is_non_public_ip(str(addr))
 
 
 async def _resolve_public(url: str) -> tuple[bool, str | None]:

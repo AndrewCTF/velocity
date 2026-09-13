@@ -140,11 +140,8 @@ async def current_user(request: Request) -> UserCtx:
     we re-extract + validate the bearer token and pull ``sub``.
     """
     s = get_settings()
-    token = (
-        _bearer(request.headers)
-        or request.query_params.get("key")
-        or request.headers.get("x-api-key")
-    )
+    # Headers only: ?key= authenticates WebSocket upgrades, never HTTP (G8).
+    token = _bearer(request.headers) or request.headers.get("x-api-key")
     if not token or not await _valid_supabase_token(token, s):
         raise HTTPException(status_code=401, detail="sign-in required")
     claims = _jwt_claims(token) or {}

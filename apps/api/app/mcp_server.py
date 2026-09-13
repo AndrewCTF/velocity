@@ -72,6 +72,28 @@ mcp = FastMCP(
 )
 
 
+# Audit every tool invocation at the ONE dispatch point (G15). FastMCP binds
+# ``self.call_tool`` as the protocol handler at construction and that delegates
+# to ``_tool_manager.call_tool``, so the instance attribute is the seam that
+# every transport (stdio and /mcp) goes through. Argument NAMES only: values can
+# carry free text. Fire-and-forget, so the audit store never slows a tool.
+_dispatch_tool = mcp._tool_manager.call_tool
+
+
+async def _audited_call_tool(name: str, arguments: dict[str, Any], **kw: Any) -> Any:
+    from app.audit import audit_background  # noqa: PLC0415
+    from app.keys import UserCtx  # noqa: PLC0415
+
+    audit_background(
+        UserCtx(user_id="mcp", token=""), f"mcp.tool {name}", "mcp", name,
+        detail={"args": sorted(arguments or {})},
+    )
+    return await _dispatch_tool(name, arguments, **kw)
+
+
+mcp._tool_manager.call_tool = _audited_call_tool  # type: ignore[method-assign]
+
+
 # ── hosted mount (streamable-HTTP at /mcp of the FastAPI app) ──────────────────
 # The agent-facing endpoint. Mounting the MCP into the SAME uvicorn process the
 # globe runs lets every tool share the warm in-process snapshot + fusion engine

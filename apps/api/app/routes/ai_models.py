@@ -20,12 +20,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app import llamacpp_sidecar
+from app.audit import audit_mutation
 from app.config import get_settings
 from app.keys import UserCtx, current_user_or_local
 from app.localllm import binary, catalog, hardware, manager, state
 from app.security import require_operator
 
-router = APIRouter(tags=["ai-models"])
+router = APIRouter(tags=["ai-models"], dependencies=[Depends(audit_mutation)])
 
 
 async def _probe_health(url: str) -> bool:

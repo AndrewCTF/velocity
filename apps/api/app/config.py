@@ -262,6 +262,13 @@ class Settings(BaseSettings):
     # rules, airplanes.live 200+text throttle, CelesTrak 403 bursts); this bounds
     # /mcp request rate independently of the compute cap. 0 disables it.
     mcp_ratelimit_per_min: int = 120  # MCP_RATELIMIT_PER_MIN (0 = off)
+    # General per-client cap on EVERY /api/ path (one bucket per client), on top
+    # of the compute and /mcp caps. Generous on purpose: a globe session is the
+    # 1 Hz ADS-B poll (60/min) plus many 5-30 s layer polls plus imagery tile
+    # bursts under /api/imagery. It bounds floods, not normal use. Health,
+    # status and config are exempt. Behind a proxy, TRUSTED_PROXIES must name it
+    # or every client shares one bucket. 0 disables.
+    api_ratelimit_per_min: int = 3000  # API_RATELIMIT_PER_MIN (0 = off)
     # Peer addresses whose X-Forwarded-For header the rate limiter is allowed to
     # believe. Comma-separated IPs or CIDRs. Defaults to loopback because that is
     # the real deployment shape here (CF Worker -> Caddy -> uvicorn on the same
@@ -273,6 +280,10 @@ class Settings(BaseSettings):
 
     # Hard ceiling on concurrently-running recon jobs; further POSTs get 429.
     recon_max_active_jobs: int = 4  # RECON_MAX_ACTIVE_JOBS
+    # Total bytes one recon job may upload (all its images/video together).
+    # Video input is large, so the default is generous; over it → 413 and the
+    # job dir is removed. 0 disables the cap.
+    recon_upload_max_bytes: int = 4_000_000_000  # RECON_UPLOAD_MAX_BYTES
 
     # ── recon job retention (issue #14) ──
     # Recon jobs (in-memory records + on-disk artifact dirs under .recon_jobs/)

@@ -16,19 +16,27 @@ a minimum severity + a delivery channel. Two backends, selected by the same
 ``sink_url`` — a Discord webhook URL or a generic endpoint); delivery is
 performed by the watch evaluator (``intel/watch.py``), not this route — this
 module is CRUD-only. ``email`` is rejected at creation until a sender exists.
+
+A ``sink_url`` must be a PUBLIC host (``control.check_sink_url``: loopback, private,
+link-local, reserved and CGNAT refused with 422, after DNS resolution) unless it
+is listed in ``WORKFLOWS_HTTP_ALLOW_HOSTS``; delivery re-checks. Rules are
+analyst-reachable, unlike the operator-gated control blocks (G7, 2026-09).
 """
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.audit import audit_mutation
 from app.config import Settings, get_settings
 from app.keys import UserCtx, _client, _headers, current_user_or_local
-from app.workflows.control import check_url
+from app.workflows.control import check_sink_url
 from app.workflows.store import WorkflowError
 
-router = APIRouter(tags=["alerts"])
+router = APIRouter(tags=["alerts"], dependencies=[Depends(audit_mutation)])
 
 # Phase-2 behavioral kinds (ais_gap/rendezvous/loiter) are computed by the watch
 # evaluator from the position-history store (intel/detectors.py), not the brief.
@@ -145,9 +153,9 @@ def _validate(body: AlertRuleIn) -> None:
                 detail=f"channel {body.channel!r} requires sink_url",
             )
         try:
-            check_url(body.sink_url)
+            check_sink_url(body.sink_url)
         except WorkflowError as exc:
-            raise HTTPException(status_code=400, detail=exc.detail) from exc
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.get("/api/alerts/rules", response_model=list[AlertRule])
@@ -173,7 +181,7 @@ async def list_rules(ctx: UserCtx = Depends(current_user_or_local)) -> list[Aler
 async def create_rule(
     body: AlertRuleIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> AlertRule:
-    _validate(body)
+    await asyncio.to_thread(_validate, body)  # sink_url check resolves DNS
     s = get_settings()
     if _use_local(s):
         from app.intel import alert_rules_local  # noqa: PLC0415

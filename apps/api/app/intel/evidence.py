@@ -35,7 +35,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
-import ipaddress
 import json
 import socket
 import time
@@ -47,6 +46,7 @@ from urllib.parse import unquote, urlsplit
 from app.config import Settings, get_settings
 from app.intel.ontology import Object, get_registry
 from app.keys import UserCtx
+from app.netguard import is_non_public_ip
 from app.upstream import get_client
 
 EVIDENCE_KIND = "evidence"
@@ -326,28 +326,7 @@ async def capture_bytes(
 
 def _ip_is_blocked(ip: str) -> bool:
     """Block any non-public address (SSRF guard). Unparseable → blocked."""
-    try:
-        addr = ipaddress.ip_address(ip)
-    except ValueError:
-        return True
-    # Unwrap IPv4-in-IPv6 encodings to their embedded IPv4 before classifying.
-    # Older CPython (the pinned python:3.12-slim container) does NOT delegate a
-    # mapped literal like ::ffff:169.254.169.254 to the is_* flags, so it would
-    # otherwise read as public and slip past the guard to reach cloud metadata.
-    if isinstance(addr, ipaddress.IPv6Address):
-        embedded = addr.ipv4_mapped or addr.sixtofour
-        if embedded is None and addr.teredo is not None:
-            embedded = addr.teredo[1]  # Teredo client IPv4
-        if embedded is not None:
-            addr = embedded
-    return (
-        addr.is_private
-        or addr.is_loopback
-        or addr.is_link_local
-        or addr.is_reserved
-        or addr.is_multicast
-        or addr.is_unspecified
-    )
+    return is_non_public_ip(ip)
 
 
 def _validate_public_host_sync(host: str) -> None:

@@ -32,6 +32,11 @@ rewritten to the IP, ``Host`` header set to the original name). ``https://``
 keeps the hostname in the URL because certificate validation needs it, leaving a
 residual rebinding window for https — accepted because the cloud-metadata
 endpoints this guard targets are http, not https.
+
+Alert-rule sinks are stricter than the blocks: ``check_sink_url`` and
+``send(public_only=True)`` refuse every non-public address (``app.netguard``),
+IP literals and https included, unless the host is allowlisted. The blocks keep
+the LAN default above.
 """
 
 from __future__ import annotations
@@ -47,6 +52,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from app.netguard import is_non_public_ip
 from app.workflows.store import WorkflowError
 
 Row = dict[str, Any]
@@ -156,22 +162,8 @@ def _is_metadata_ip(addr: Any) -> bool:
 
 
 def _ip_is_private(ip: str) -> bool:
-    """True for any non-public address. IPv4-in-IPv6 encodings are unwrapped
-    before classifying (older CPython does not delegate a mapped literal to the
-    is_* flags) — same hardening as ``intel/evidence.py``'s SSRF guard."""
-    try:
-        addr: Any = ipaddress.ip_address(ip)
-    except ValueError:
-        return True  # unparseable → treat as unsafe
-    addr = _unwrap_mapped(addr)
-    return (
-        addr.is_private
-        or addr.is_loopback
-        or addr.is_link_local
-        or addr.is_reserved
-        or addr.is_multicast
-        or addr.is_unspecified
-    )
+    """True for any non-public address (the shared ``app.netguard`` classifier)."""
+    return is_non_public_ip(ip)
 
 
 def _resolves_private(host: str) -> bool:
@@ -259,6 +251,22 @@ def check_url(url: str) -> None:
         )
 
 
+def check_sink_url(url: str) -> None:
+    """``check_url`` plus PUBLIC-ONLY for alert-rule sinks (analyst-reachable,
+    unlike the operator-gated control blocks): a host that is, or resolves to,
+    loopback / private / link-local / reserved / CGNAT is refused with 422 unless
+    it is listed in ``WORKFLOWS_HTTP_ALLOW_HOSTS``. Blocking DNS — call it off the
+    event loop. Delivery re-checks via ``send(public_only=True)``. A malformed
+    URL is 400; a host the policy refuses is 422."""
+    try:
+        check_url(url)
+    except WorkflowError as exc:  # check_url: 422 = malformed, 403 = refused host
+        raise WorkflowError(400 if exc.status_code == 422 else 422, exc.detail) from exc
+    _, _, blocked = _pin_http_url(url, {}, public_only=True)
+    if blocked is not None:
+        raise WorkflowError(422, blocked)
+
+
 def auth_headers(auth_env: str) -> dict[str, str]:
     """Read a bearer token from the named env var → ``Authorization`` header.
     The token is NEVER stored in the workflow spec — only the env var's NAME
@@ -272,7 +280,9 @@ def auth_headers(auth_env: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _pin_http_url(url: str, headers: dict[str, str]) -> tuple[str, dict[str, str], str | None]:
+def _pin_http_url(
+    url: str, headers: dict[str, str], public_only: bool = False
+) -> tuple[str, dict[str, str], str | None]:
     """Close the DNS-rebinding gap for plain ``http://`` DNS-name URLs.
 
     ``check_url`` resolved the host once at validation time, but ``httpx``
@@ -288,23 +298,37 @@ def _pin_http_url(url: str, headers: dict[str, str]) -> tuple[str, dict[str, str
     Never raises: a detected rebind is returned as the third element so ``send``
     can turn it into a per-row ``HttpResult(error=...)`` instead of aborting the
     whole run (the ``send`` never-raises contract). Runs blocking DNS, so call
-    it off the event loop (``asyncio.to_thread``)."""
+    it off the event loop (``asyncio.to_thread``).
+
+    ``public_only`` (alert sinks): every resolved address, IP literals and
+    ``https://`` included, must be public — not just outside link-local — and an
+    unresolvable host is refused rather than waved through."""
     parts = urlsplit(url)
-    if parts.scheme != "http" or not parts.hostname:
+    host = parts.hostname
+    if not host or (parts.scheme != "http" and not public_only):
         return url, headers, None
-    try:
-        ipaddress.ip_address(parts.hostname)
-        return url, headers, None  # already an IP literal — nothing to rebind
-    except ValueError:
-        pass
     allow = _allow_hosts()
-    if allow is not None and parts.hostname.lower() in allow:
+    if allow is not None and host.lower() in allow:
         return url, headers, None  # operator explicitly trusts this host
     try:
-        resolved = sorted({ai[4][0] for ai in socket.getaddrinfo(parts.hostname, None)})
+        ipaddress.ip_address(host)
+        literal = True
+    except ValueError:
+        literal = False
+    try:
+        resolved = (
+            [host] if literal else sorted({ai[4][0] for ai in socket.getaddrinfo(host, None)})
+        )
     except OSError:
+        if public_only:
+            return url, headers, f"host {host!r} did not resolve; a sink must be a public host"
         return url, headers, None  # unresolvable — let the request itself fail
     for addr in resolved:
+        if public_only and is_non_public_ip(addr):
+            return url, headers, (
+                f"host {host!r} resolved to a non-public address ({addr}); "
+                "alert sinks must be public hosts unless listed in WORKFLOWS_HTTP_ALLOW_HOSTS"
+            )
         try:
             ip = ipaddress.ip_address(addr)
         except ValueError:
@@ -313,9 +337,11 @@ def _pin_http_url(url: str, headers: dict[str, str]) -> tuple[str, dict[str, str
             return (
                 url,
                 headers,
-                f"host {parts.hostname!r} resolved to the link-local/metadata range "
+                f"host {host!r} resolved to the link-local/metadata range "
                 f"({addr}); blocked as a DNS-rebinding attempt",
             )
+    if literal or parts.scheme != "http":
+        return url, headers, None  # nothing to rebind / TLS needs the hostname
     pin = next((a for a in resolved if ":" not in a), resolved[0] if resolved else None)
     if pin is None:
         return url, headers, None
@@ -323,7 +349,7 @@ def _pin_http_url(url: str, headers: dict[str, str]) -> tuple[str, dict[str, str
     if parts.port is not None:
         netloc = f"{netloc}:{parts.port}"
     pinned = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
-    host_header = parts.hostname if parts.port is None else f"{parts.hostname}:{parts.port}"
+    host_header = host if parts.port is None else f"{host}:{parts.port}"
     return pinned, {**headers, "Host": host_header}, None
 
 
@@ -357,6 +383,7 @@ async def send(
     headers: dict[str, str],
     json_body: Any = None,
     timeout_s: float = 15.0,
+    public_only: bool = False,
 ) -> HttpResult:
     """Perform ONE request and normalize the outcome. Never raises — a
     transport/timeout error becomes ``HttpResult(error=...)`` so a single bad
@@ -364,7 +391,7 @@ async def send(
     replace to assert envelopes without real network."""
     # Off-thread: _pin_http_url does blocking DNS; a hanging resolver must stall
     # only this row, never the event loop.
-    url, headers, blocked = await asyncio.to_thread(_pin_http_url, url, headers)
+    url, headers, blocked = await asyncio.to_thread(_pin_http_url, url, headers, public_only)
     if blocked is not None:
         return HttpResult(status=None, ok=False, json=None, text="", error=blocked)
     try:

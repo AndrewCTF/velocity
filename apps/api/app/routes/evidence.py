@@ -32,12 +32,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Respon
 from pydantic import BaseModel, Field
 
 from app import history
+from app.audit import audit_mutation
 from app.config import get_settings
 from app.intel import evidence as ev
 from app.intel.ontology import Object
 from app.keys import UserCtx, current_user_or_local
+from app.uploads import read_capped
 
-router = APIRouter(tags=["evidence"])
+router = APIRouter(tags=["evidence"], dependencies=[Depends(audit_mutation)])
 
 # ~24 MB of base64 (~18 MB decoded) — ample for a screenshot, bounds the JSON
 # body so a giant paste can't be buffered into memory. Files use the multipart
@@ -169,22 +171,8 @@ async def upload_evidence(
     ctx: UserCtx = Depends(current_user_or_local),
 ) -> Object:
     """Upload a file/image/video; SHA-256 at ingest, original bytes preserved."""
-    # Read in chunks and stop as soon as the cap is exceeded, so a multi-GB
-    # upload can't be fully buffered into memory before the size check.
-    cap = get_settings().evidence_max_blob_bytes
-    parts: list[bytes] = []
-    total = 0
-    while True:
-        chunk = await file.read(1024 * 1024)
-        if not chunk:
-            break
-        total += len(chunk)
-        if cap and total > cap:
-            raise HTTPException(
-                status_code=413, detail=f"upload exceeds the {cap:,}-byte cap"
-            )
-        parts.append(chunk)
-    data = b"".join(parts)
+    # Chunked, stops at the cap: a multi-GB upload is never fully buffered.
+    data = await read_capped(file, get_settings().evidence_max_blob_bytes)
     if not data:
         raise HTTPException(status_code=422, detail="empty upload")
     media_type = file.content_type or "application/octet-stream"
