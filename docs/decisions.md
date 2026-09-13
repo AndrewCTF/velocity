@@ -1245,6 +1245,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2804 + 2 skipped — 2026-09-13, compliance-2026-09, ASVS L2 wave
 - 2628 + 2 skipped — 2026-09-13, security-hardening-2026-09, security gap wave
 - 2587 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, citable-replay wave
 - 2581 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, AI-label wave
