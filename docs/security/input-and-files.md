@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Covers | OWASP ASVS 5.0 V2.1.1–V2.1.3 (validation and business-logic documentation), V5.1.1 (file handling documentation), V5.4.3 (malware scanning); ISO/IEC 27001:2022 A.8.26, A.8.28 |
-| Version | 1.0 (Draft until merged to `master`) |
+| Covers | OWASP ASVS 5.0 V2.1.1–V2.1.3 (validation and business-logic documentation), V5.1.1 (file handling documentation), V5.4.3 (malware scanning, accepted risk R26), V15.1.3 (time-consuming functions and timeouts); ISO/IEC 27001:2022 A.8.26, A.8.28 |
+| Version | 1.1 (Draft until merged to `master`). 1.1 adds §3.1 timeouts and long-running work, and links the malware decision to R26 |
 | Adopted | 2026-09-13 |
 | Owner | Maintainer |
 | Code citations | `path:line` at commit `2cd38d9`. Read them with `git show 2cd38d9:<path>`. Configuration files outside `apps/` are cited at the same commit |
@@ -59,6 +59,37 @@ Validation is at the API boundary. The web client's own checks are a convenience
 | News verification | 300 s budget | `apps/api/app/config.py:423` |
 | Stored artifacts | See the caps in [`data-protection.md`](data-protection.md) §3 | — |
 
+### 3.1 Timeouts and long-running work (V15.1.3)
+
+Added 2026-09-13. Citations are to the working tree read that day (base commit `56db34f`); the nginx
+configuration and `recon.py` were being changed by parallel work, so they are cited by symbol, and rows
+marked `<!-- recheck -->` must be re-read.
+
+**Rule (policy).** A request that can take longer than 30 seconds must either stream progress (SSE or
+WebSocket) or run in the background and be polled. Where an existing route instead holds the request open,
+every proxy in front of it must have a read timeout longer than the route's server budget, so the client
+gets the result rather than a 504 while the work continues.
+
+| Function | Server budget | How the response is delivered | nginx read timeout | Client | Source |
+| --- | --- | --- | --- | --- | --- |
+| `POST /api/workflows/{id}/run` (manual run) | 300 s wall budget | **Held open** until the run ends. Exception to the rule: kept because the run result is the response | 330 s on `location /api/workflows/` | `apiFetch` with no timeout (`apps/web/src/state/workflows.ts:290`) | `apps/api/app/routes/workflows.py:208-216`, `apps/api/app/workflows/engine.py:19`, `location /api/workflows/` in `infra/nginx/nginx.prod.conf` <!-- recheck --> |
+| `GET /api/intel/agent` (analysis agent) | 6 tool steps, 240 s wall budget | SSE stream with `X-Accel-Buffering: no`, one event per step | nginx default (60 s) on `location /api/`: the connection is cut if **no byte** arrives for 60 s, for example during one slow model call. Not measured | `apiFetch` reading the stream (`apps/web/src/command-bar/AgentConsole.tsx:298`) | `apps/api/app/routes/intel.py:420`, `apps/api/app/routes/intel.py:480-485`, `apps/api/app/intel/agent.py:440-441` <!-- recheck --> |
+| Recon job events | Job lifetime (GPU reconstruction) | Job created by `POST /api/recon/jobs`, progress on an SSE stream | nginx default on `/api/` | Browser | `job_events` in `apps/api/app/routes/recon.py` <!-- recheck --> |
+| WebSockets (`/ws/`) and `/mcp` | Long-lived | Stream | 86400 s | — | `location /ws/` and `location /mcp` in `infra/nginx/nginx.prod.conf` <!-- recheck --> |
+| News edition verification | 300 s | Background refresh loop, not a request | — | — | `Settings.news_verify_budget_s`, `apps/api/app/news/verify.py:357` |
+| User SQL (`op.sql`, Foundry SQL) | 10 s | Inside the request or run | as its route | — | §1 |
+| `op.python` | 30 s default, 60 s maximum | Inside the workflow run | as the run | — | §1 |
+| `/api/config` | Fast | Normal | 60 s | 4 s client timeout (`apps/web/src/transport/config.ts:36`) | — |
+
+**Operator action.** The host TLS proxy in front of nginx has its own read timeout (often 60 s). Set it to
+at least 330 s for `/api/workflows/`, and to a long value for `/ws/`, `/mcp` and SSE routes, or manual
+workflow runs will fail at the proxy while the run continues on the server
+([`operator-hardening.md`](operator-hardening.md) §1).
+
+**Open item.** The agent SSE stream may be cut by the 60 s read timeout when a single model call is slower
+than that. Not measured; a periodic SSE comment (keep-alive) from the route, or a longer read timeout on
+`/api/intel/agent`, would remove it.
+
 ## 4. File uploads (V5.1.1)
 
 ### 4.1 Upload routes
@@ -92,7 +123,8 @@ No other route accepts or extracts archives (`git grep` for `zipfile`, `tarfile`
 ## 5. Malware scanning (V5.4.3)
 
 **Velocity does not scan uploaded or captured files for malware.** No antivirus engine runs on any upload
-path in §4.1.
+path in §4.1. This is an accepted risk: R26 in [`isms/risk-assessment.md`](isms/risk-assessment.md), decided
+2026-09-13. Nothing in the application marks a blob as known-malicious to the analyst.
 
 Rationale:
 - **Evidence integrity.** Evidence files must be kept bit for bit as received: the SHA-256 is taken at

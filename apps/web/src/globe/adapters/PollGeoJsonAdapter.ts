@@ -47,7 +47,7 @@ import { presetKnobs } from '../qualityPresets.js';
 import { useSelection, useFilters } from '../../state/stores.js';
 import { useSettings } from '../../state/settings.js';
 import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
-import { apiFetch, withWsKey } from '../../transport/http.js';
+import { apiFetch, openAuthedWebSocket } from '../../transport/http.js';
 import { tierOf } from '../../registry/provenance.js';
 import { isUnsafeKey } from '../../shell/safeKeys.js';
 
@@ -1062,7 +1062,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     if (this.detached || !this.props.ws) return;
     let ws: WebSocket;
     try {
-      ws = new WebSocket(withWsKey(this.props.ws));
+      ws = openAuthedWebSocket(this.props.ws);
     } catch {
       this.scheduleWsReconnect();
       return;

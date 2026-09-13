@@ -139,12 +139,21 @@ function noteMfaRequired(res: Response): void {
 
 // For WebSocket URLs, append ?key=… (browsers can't set headers on the upgrade
 // request). The backend accepts the Supabase token or the static key via ?key=.
-export function withWsKey(url: string): string {
-  url = backendWsUrl(url);
+// WebSocket credential carrier (ASVS V14.2.1). Browsers cannot set headers on
+// the upgrade, so the credential rides in Sec-WebSocket-Protocol as
+// ["velocity.v1", "key.<credential>"]; the API echoes only velocity.v1
+// (apps/api/app/auth.py). That keeps tokens out of URLs, and so out of proxy
+// access logs. A credential with characters a subprotocol cannot carry (a
+// hand-made API_KEY with = / +) falls back to ?key=, which the API still takes.
+const WS_TOKEN_CHARS = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+export function openAuthedWebSocket(url: string): WebSocket {
+  const full = backendWsUrl(url);
   const key = getAccessToken() ?? API_KEY;
-  if (!key) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}key=${encodeURIComponent(key)}`;
+  if (!key) return new WebSocket(full);
+  if (WS_TOKEN_CHARS.test(key)) return new WebSocket(full, ['velocity.v1', `key.${key}`]);
+  const sep = full.includes('?') ? '&' : '?';
+  return new WebSocket(`${full}${sep}key=${encodeURIComponent(key)}`);
 }
 
 export function hasApiKey(): boolean {

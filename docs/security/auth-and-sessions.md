@@ -29,6 +29,9 @@ being configured is the signal. Which store a feature uses does not matter.
 | Supabase session, local HS256 | `Authorization: Bearer <jwt>` | Password, plus TOTP when the session is `aal2` | header `alg` = `HS256` (and `typ` = `JWT` if present); signature; `exp` required and in the future; `nbf` in the past; `exp - iat` ≤ `JWT_MAX_LIFETIME_S` (24 h); `sub` required; `aud` contains `authenticated`; `role` = `authenticated`; `iss` = `SUPABASE_URL/auth/v1` (or `SUPABASE_JWT_ISSUER`) when a URL is set; lockout | everywhere; the only kind that resolves a user |
 | Supabase session, GoTrue | same | same | Every claim rule above except the signature, which GoTrue checks when it answers `/auth/v1/user` with 200. | same |
 | Internal MCP token | `Authorization: Bearer <jwt>`, minted by `mcp_server._mint_internal_jwt` | HS256 over the project secret. 10-minute lifetime, 1-hour ceiling. | `alg` = `HS256`; signature; `exp` required; `aud` and `iss` both `velocity-internal`. `role` is not `authenticated`, so PostgREST refuses it too. | `ApiKeyMiddleware` and `require_api_key` only. Never on a WebSocket. Never as a user: `current_user` returns 401. |
+| Supabase session in `X-API-Key` | a Supabase access token sent in the `X-API-Key` header instead of `Authorization` | same as the session it carries | `ApiKeyMiddleware` takes the Bearer header, or else the `X-API-Key` value, as the token (`apps/api/app/auth.py`) <!-- recheck -->, and `keys.current_user` does the same (`apps/api/app/keys.py:156`). The same claim rules and lockout apply as for the Bearer forms | everywhere the Bearer form is |
+| `/api/config` credential probe | `X-API-Key` or `Authorization` on `GET /api/config` | same as the credential it carries | The route checks the credential only to decide whether to return the Cesium and Google keys; an invalid one gets blanks, not 401. **Not counted toward the failed-credential lockout** (docstring of `get_config`, `apps/api/app/routes/config.py`), so it tells a caller whether a credential is valid, limited only by the general per-client rate limit and the nginx edge rate <!-- recheck --> | `/api/config` only |
+| MAVLink bridge bearer | `Authorization: Bearer` from the API to the loopback bridge (`MAVLINK_BRIDGE_TOKEN`) | operator-generated shared secret | `hmac.compare_digest` (`apps/api/app/mavlink_bridge.py:317-318`); required when an uplink is armed (`apps/api/app/mavlink_bridge.py:375-379`); the bridge binds `127.0.0.1` only (`apps/api/app/mavlink_bridge.py:381`). Off by default (`Settings.mavlink_bridge_enabled`) | the bridge process only, not the API |
 | Ingest token | `X-Ingest-Token` on `POST /api/ingest/{dataset_id}` | 256-bit random value, stored as sha256 | Constant-time compare. An unknown dataset and an unarmed one both return the same 404. The body is capped before it is parsed. Lockout applies. | that route only. The middleware treats `/api/ingest/` as public, so the token is the whole gate. |
 
 Tests: `tests/test_auth_asvs.py`, `tests/test_auth_query_key_and_jwt.py`,
@@ -46,6 +49,32 @@ GoTrue's own rate limits (see the checklist below).
 **Minimum secret length.** The lifespan calls `auth.check_credential_strength`. It refuses to boot
 with an `API_KEY` or `SUPABASE_JWT_SECRET` shorter than 32 characters. Generate a key with
 `python -c 'import secrets; print(secrets.token_urlsafe(32))'`.
+
+## Passwords (V6.1.2, V6.2.1, V6.2.4, V6.2.11, V6.2.12)
+
+Passwords are set and checked by GoTrue, not by this repository. The web form only sets
+`minLength` to 8 (`PASSWORD_MIN` in `apps/web/src/auth/AuthForm.tsx`), which a
+caller can bypass by talking to GoTrue directly. Every password control below is therefore a Supabase
+project setting, listed in the checklist at the end of this page and in
+[`operator-hardening.md`](operator-hardening.md).
+
+**Context-specific words (V6.1.2).** A password must not contain any of these, case-insensitively:
+
+- the product and project names: `velocity`, `osint`, `gotham`, `foundry`, `watchofficer`;
+- the name of the organisation running the deployment, and its domain name without the TLD;
+- the local part of the user's own email address;
+- the words `password`, `admin`, `operator`, `analyst`, `supabase`.
+
+**Decision (2026-09-13, V6.2.11).** This list is not enforced in code. GoTrue's password policy offers a
+minimum length, required character classes and the leaked-password (HaveIBeenPwned) check, and has no
+custom word list, so a server-side check would need a proxy in front of GoTrue. The repository has no
+client-side check either: `apps/web/src/auth/AuthForm.tsx` passes the password to `supabase.auth.signUp` and
+`supabase.auth.updateUser` without inspecting its content (no word check found on 2026-09-13)
+<!-- recheck -->, and a client check would be bypassable in any case. The
+compensating controls are GoTrue's leaked-password protection, which rejects passwords already seen in
+breaches (common product-name passwords are among them), a minimum length of 15 on deployments that
+follow the checklist, and TOTP on every operator account. Operators who need the list enforced must
+place an auth proxy in front of GoTrue. Risk: low, recorded with the ASVS assessment.
 
 **Browser-facing requests with no credential (V3.5, V4.4.2, V13.4.5, V13.3.2).**
 
@@ -104,6 +133,7 @@ Tests: `test_auth_asvs.py::test_aal1_admin_is_refused_with_an_mfa_message`, `::t
 | Profile (roles, clearance) cache | 60 s per user | `security._TTL` |
 | Internal MCP token | 10 min. Re-minted about 60 s before expiry. | `mcp_server._INTERNAL_JWT_TTL_S` |
 | Static `API_KEY` | Until rotated. Rotating means changing the env var and restarting. | operator |
+| Web idle sign-out | 30 min without input, with a warning toast 60 s before (`DEFAULT_IDLE_MINUTES`, `IDLE_WARNING_MS` in `apps/web/src/auth/idle.ts`). The time of the last input is kept in `localStorage` (`LAST_ACTIVITY_KEY`), so a tab reopened after the limit signs out at once. Runs only in the browser and only with a Supabase session (`useIdleSignOut`). The web reads `sessionIdleTimeoutMin` from `/api/config` (`idleMinutesFrom`), but `RuntimeConfig` in `apps/api/app/routes/config.py` does not send that field, so the value is fixed at 30 min <!-- recheck --> | `auth/idle.ts` |
 
 **Revocation (V7.4.1, V7.4.2, V7.4.5).** An admin can sign a user out, ban them or delete them in
 the Supabase dashboard. How fast that takes effect depends on the route:
@@ -128,7 +158,69 @@ the Supabase dashboard. How fast that takes effect depends on the route:
   deployment choice. The backend works either way.
 
 The web client refreshes tokens automatically. The Supabase time-box and inactivity timeout are
-what actually end a session.
+what actually end a session on the server side.
+
+**Why these values (V7.1.1).** NIST SP 800-63B sets reauthentication limits per assurance level.
+Revision 3 (§4.2.3) requires AAL2 reauthentication at least every 12 hours and after 30 minutes of
+inactivity; Revision 4 relaxes this to 24 hours and 1 hour. Velocity's operator routes require AAL2
+(password plus TOTP), so the recommended settings follow the stricter Revision 3 figures: a 12-hour
+time-box and a 30-minute inactivity limit. An access token lifetime of at most 3600 s bounds how long a
+copied token outlives a sign-out (see Revocation).
+
+**Without Supabase Pro.** The time-box and inactivity timeout need the Pro plan. On the free plan, or a
+self-hosted GoTrue without those settings, refresh tokens have no absolute expiry, and the only
+inactivity control is the 30-minute browser timer above. That timer does not help when a refresh token
+has been stolen, because the attacker's client never runs it. Operators handling D4 data on such a plan
+accept that risk in their own register, or use Pro.
+
+**Concurrent sessions (V7.1.2).** Policy: **unlimited concurrent sessions per account by default.** An
+analyst commonly works on a desktop and a laptop, and each session is individually bounded by the time-box
+and inactivity limit. A deployment that wants one session per account turns on **Single session per
+user** in Supabase. According to Supabase's documentation, the most recent sign-in then keeps its
+session and older sessions are terminated when they next refresh; this behaviour is Supabase's and was not
+verified from this repository. No user-visible notice is shown on the older device beyond being signed
+out. A user can end their own other sessions from the account page ("Sign out other sessions", after
+re-entering the current password), and a password change or reset offers the same; both call
+`supabase.auth.signOut({ scope: 'others' })` in `apps/web/src/auth/AuthForm.tsx` <!-- recheck -->. Admins can end
+every session of a user from the Supabase dashboard (Authentication > Users > the user > Sign out) at any
+time.
+
+## Multi-factor authentication (V6.4.4, V6.5.1, V6.5.5)
+
+TOTP enrolment, challenge and verification are GoTrue's. The web client enrols, challenges and removes
+factors through supabase-js (`supabase.auth.mfa.enroll` and `mfa.unenroll` in `apps/web/src/auth/AuthForm.tsx`).
+There are no recovery codes.
+
+**Accepted upstream deviations.** GoTrue validates TOTP with a 30-second period and a skew of one step,
+so a code is accepted for about 90 seconds, and it does not record used codes, so the same code can pass
+a second challenge inside that window (V6.5.1, V6.5.5). Each challenge can be verified only once. The
+repository cannot change this. The email one-time code used for reauthentication before a password
+change (`supabase.auth.reauthenticate` in `apps/web/src/auth/AuthForm.tsx`) must expire within 600 seconds (checklist below).
+Source: the GoTrue implementation (`supabase/auth`, TOTP validation), read by the assessor on 2026-09-13
+and not re-verified here.
+
+### Lost authenticator procedure (V6.4.4)
+
+A user who has lost their TOTP device cannot remove the factor themselves: removal needs an `aal2`
+session. Recovery is done by a Supabase project admin, as follows.
+
+1. **Request.** The user asks through a channel the organisation already trusts (not a reply to an email
+   the user just sent from an unknown address).
+2. **Identity proofing, at least as strong as enrolment.** The admin confirms the request out of band,
+   using contact details recorded before the loss (a known phone number or an in-person or video check
+   against the person the account was issued to). If the account holds the `admin` role, a **second**
+   admin must also confirm.
+3. **Password first.** If the user also lost their password, they reset it through the normal reset email
+   before the factor is removed, so that one person never controls both steps.
+4. **Remove the factor.** In the Supabase dashboard, Authentication > Users > the user > delete the
+   factor (or `DELETE /auth/v1/admin/users/{id}/factors/{factor_id}` with the service-role key). Then sign
+   the user out of all sessions from the same page.
+5. **Record it.** Write an entry in the organisation's change record with: date and time (UTC), user id,
+   admin(s) who approved, the proofing method used, and the factor id removed. Velocity's own audit log
+   does not see Supabase dashboard actions; the GoTrue audit log in Supabase (Authentication > Logs) holds
+   the corresponding event.
+6. **Re-enrol.** The user signs in (reaching `aal1`), enrols a new authenticator at once, and an admin
+   confirms `aal2` works on an operator route before the ticket is closed.
 
 ## Authorization matrix (V8.1.1, V8.1.2)
 
@@ -210,7 +302,14 @@ or a full sink URL.
 ## Delegated Supabase settings checklist
 
 These controls live in the Supabase project, not in this repository. Set them on every
-multi-user deployment.
+multi-user deployment. [`operator-hardening.md`](operator-hardening.md) repeats them together with the
+host, proxy and network settings.
+
+- [ ] **Auth > Providers > Email > Allow new users to sign up: OFF** (invite-only). Any account that
+      exists gets the `analyst` role by default (`apps/api/supabase/migrations/0001_gotham_substrate_acl_audit.sql:21`)
+      <!-- recheck -->, and with that the compute, LLM and Foundry read routes. With sign-up on, anyone who
+      can reach the project can create one. With it off, the web `/signup` page
+      (`apps/web/src/AppRouter.tsx:63`) returns GoTrue's refusal. Invite users from Authentication > Users.
 
 - [ ] **Auth > Providers > Email > Minimum password length**: at least 8, 15 recommended
       (`GOTRUE_PASSWORD_MIN_LENGTH`).
@@ -225,9 +324,17 @@ multi-user deployment.
 - [ ] **Auth > URL Configuration**: Site URL and **exact** redirect URLs. No wildcards on a
       production host.
 - [ ] **PKCE** flow for the web client (`flowType: 'pkce'`). Owned by the web client.
-- [ ] **Auth > Providers > Email > Email OTP expiry**: ≤ 3600 s.
+- [ ] **Auth > Providers > Email > Email OTP expiry**: ≤ 600 s (ASVS V6.5.5 caps out-of-band codes at 10 minutes).
 - [ ] **Auth > Sessions > Detect and revoke compromised refresh tokens** (refresh-token reuse
       detection) on, with a reuse interval ≤ 10 s.
 - [ ] **Auth > Sessions**: time-box, inactivity timeout and JWT expiry as listed under session
       lifecycle.
+- [ ] **Auth > Sessions > Single session per user**: set per the concurrent-session policy above.
+- [ ] Use a **dedicated Supabase project** for each deployment. Do not share one with another
+      application: every user of that project is a user here.
+- [ ] **Host reverse proxy access log**: strip the query string, or at least the `key=` parameter.
+      WebSocket upgrades carry the session token or `API_KEY` as `?key=` (`require_ws_key`).
+      The bundled nginx already logs the path without the query (`log_format noquery` in
+      `infra/nginx/nginx.prod.conf`) and the api redacts uvicorn's lines (`RedactKeyFilter`), but the host
+      proxy in front of them is the operator's ([`logging.md`](logging.md), L11).
 - [ ] Migrations `0000`, `0001` and `0002` applied in order (`infra/db/README.md`).

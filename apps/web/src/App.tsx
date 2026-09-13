@@ -49,7 +49,7 @@ import { ErrorBoundary } from './shell/ErrorBoundary.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext.js';
 import { isSupabaseConfigured } from './transport/supabase.js';
-import { apiFetch, backendWsUrl, withWsKey } from './transport/http.js';
+import { apiFetch, backendWsUrl, openAuthedWebSocket } from './transport/http.js';
 import { Console } from './shell/Console.js';
 import { ActionBar } from './shell/ActionBar.js';
 import { REHOMED, type LeftPanelId, type RightPanelId } from './shell/panels.js';
@@ -580,7 +580,7 @@ export function CopControl({
     (id: string) => {
       if (!viewer) return;
       stopFollow();
-      const ws = new WebSocket(withWsKey(`${wsBase()}/ws/cop?map=${encodeURIComponent(id)}`));
+      const ws = openAuthedWebSocket(`${wsBase()}/ws/cop?map=${encodeURIComponent(id)}`);
       wsRef.current = ws;
       setFollowingId(id);
       // Lead: broadcast this camera on move (debounced via Cesium's own change

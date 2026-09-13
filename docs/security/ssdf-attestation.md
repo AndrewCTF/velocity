@@ -5,7 +5,7 @@
 | Framework | NIST SP 800-218, Secure Software Development Framework version 1.1 (`references/NIST.SP.800-218.pdf`) |
 | Subject | Velocity software (`AndrewCTF/velocity`), development, build and release |
 | Assessed | 2026-09-13 by the maintainer (self-attestation, not third-party) |
-| Version | 1.0 (Draft until merged to `master`) |
+| Version | 1.1 (Draft until merged to `master`). 1.1 records the completed ASVS assessment and the remediation deadlines |
 | Task IDs | Extracted from the PDF with `pdftotext`: 47 identifiers, of which 42 are active tasks and 5 are retired in 1.1 |
 
 **Status values.** *Met*: the task's outcome is in place, with the evidence named. *Partial*: some of it
@@ -18,7 +18,7 @@ Task summaries are paraphrased.
 | Task | Summary | Status | Evidence |
 | --- | --- | --- | --- |
 | PO.1.1 | Write down the security requirements for the development infrastructure and processes | Partial | Policy commitments 1–10 in `docs/security/isms/README.md` §3; CI rules in `.github/workflows/ci.yml`. No requirement set for the maintainer endpoint (RA-08) |
-| PO.1.2 | Write down the security requirements the software itself must meet | Partial | Invariants with guard tests in `apps/api/CLAUDE.md` (Auth, Model prose, Connections). ASVS L2 requirement baseline pending (`docs/security/asvs-l2-assessment.md`, RA-11) |
+| PO.1.2 | Write down the security requirements the software itself must meet | Partial | Invariants with guard tests in `apps/api/CLAUDE.md` (Auth, Model prose, Connections). OWASP ASVS 5.0 Level 2 used as the requirement baseline and assessed on 2026-09-13 (`docs/security/asvs-l2-assessment.md`, RA-11 done) |
 | PO.1.3 | Communicate security requirements to third parties who supply components | Partial | Reporting expectations in `SECURITY.md`; contributors meet requirements through CI. Upstream open-source suppliers cannot be bound by agreement (SoA 5.20) |
 | PO.2.1 | Assign SDLC security roles and responsibilities | Met | `docs/security/isms/README.md` §4 |
 | PO.2.2 | Train people for their security roles | Partial | Self-directed; no training record (SoA 6.3) |
@@ -62,7 +62,7 @@ Task summaries are paraphrased.
 | PW.7.1 | Decide when human review or automated code analysis is required | Met | Policy commitment 2 in `docs/security/isms/README.md` §3; CodeQL runs on every PR (`.github/workflows/codeql.yml`) |
 | PW.7.2 | Perform the review or analysis and record and act on the results | Partial | CodeQL first scan: 43 alerts, 3 fixed (G18–G20), 40 dismissed with reasons (`docs/security/gap-analysis-2026-09.md`). Human review is not recorded; PR #87 merged with no human approval (RA-04) |
 | PW.8.1 | Decide when executable testing is required | Met | CI runs web and API test suites on every PR (`.github/workflows/ci.yml`); `scripts/verify.sh` before commit |
-| PW.8.2 | Scope, run and document tests, and act on the results | Partial | 45 security regression tests added (for example `apps/api/tests/test_sink_ssrf.py`, `apps/api/tests/test_auth_query_key_and_jwt.py`, `apps/api/tests/test_python_exec_unsandboxed_gate.py`). No DAST, fuzzing in CI or penetration test; ASVS L2 pending (RA-11) |
+| PW.8.2 | Scope, run and document tests, and act on the results | Partial | 45 security regression tests added (for example `apps/api/tests/test_sink_ssrf.py`, `apps/api/tests/test_auth_query_key_and_jwt.py`, `apps/api/tests/test_python_exec_unsandboxed_gate.py`). ASVS 5.0 Level 2 assessment with per-requirement evidence (`docs/security/asvs-l2-assessment.md`, 2026-09-13). No DAST, fuzzing in CI or penetration test |
 | PW.9.1 | Define a secure default configuration | Met | `docker-compose.prod.yml` (read-only root, `cap_drop`, loopback bind, version pinning); fail-closed decisions in `docs/decisions.md` (2026-09-13) |
 | PW.9.2 | Ship the secure defaults and document them for administrators | Met | The defaults ship in `docker-compose.prod.yml`, `apps/web/csp.ts` and `infra/nginx/nginx.prod.conf`; operator-visible changes are explained in `docs/decisions.md` (2026-09-13 entry) |
 
@@ -74,7 +74,7 @@ Task summaries are paraphrased.
 | RV.1.2 | Review and test the software regularly for undetected vulnerabilities | Met | CodeQL weekly schedule (`.github/workflows/codeql.yml`); annual internal audit (`docs/security/isms/operations.md` §9.2) |
 | RV.1.3 | Maintain a vulnerability disclosure and response policy | Met | `SECURITY.md` (private reporting to `AndrewCTF/velocity` advisories, corrected in commit `bbc1aae`; 72 h acknowledgement, 7-day triage, patch targets) |
 | RV.2.1 | Analyse each vulnerability to decide how to respond | Partial | Triage target in `SECURITY.md`; severity criteria in `docs/security/isms/operations.md` §8.2 (adopted 2026-09-13). No reports yet to show it working |
-| RV.2.2 | Plan and carry out the response, including a fix and an advisory | Partial | G1–G20 fixed and merged (PR #87). Not yet released to operators (RA-01) |
+| RV.2.2 | Plan and carry out the response, including a fix and an advisory | Partial | Remediation deadlines for dependency advisories (direct and transitive) and CodeQL findings: critical 7 days, high 14, medium 30, low 90, or shorter where `SECURITY.md` commits to less (`docs/security/isms/operations.md` §8.2.1, adopted 2026-09-13). G1–G20 fixed and merged (PR #87). Not yet released to operators (RA-01) |
 | RV.3.1 | Find the root cause of each vulnerability | Met | Cause stated per finding in `docs/security/gap-analysis-2026-09.md`; post-mortems in `docs/decisions.md` |
 | RV.3.2 | Look for root-cause patterns across vulnerabilities over time | Partial | Corrective action process in `docs/security/isms/operations.md` §10.2 (adopted 2026-09-13); one audit cycle so far |
 | RV.3.3 | Check the code for other instances of the same flaw | Met | G7 merged three SSRF helpers into `apps/api/app/netguard.py`; G19 fixed the same regex shape in `_DD_RE` and `apps/api/app/routes/search.py` (`docs/security/gap-analysis-2026-09.md`) |

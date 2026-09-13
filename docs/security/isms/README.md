@@ -120,7 +120,10 @@ source so operators and contributors can read it.
     least twice a year, and nonconformities are tracked to closure ([`operations.md`](operations.md)).
 
 Topic-specific rules live where they are enforced: `apps/api/CLAUDE.md` (application security
-invariants), `SECURITY.md` (disclosure and patching), `docs/security/incident-response.md` (incidents).
+invariants), `SECURITY.md` (disclosure and patching), `docs/security/incident-response.md` (incidents),
+`docs/security/crypto-and-keys.md` (key management), `docs/security/communications.md` (network
+communications and egress), `docs/security/logging.md` (log sinks and retention) and
+`docs/security/operator-hardening.md` (what an operator must configure).
 
 ## 4. Roles, responsibilities and authorities (5.1, 5.3)
 

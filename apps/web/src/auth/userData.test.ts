@@ -43,7 +43,9 @@ describe('sign-out clears investigation data (ASVS V14.3.1)', () => {
 
   it('every storage key the app writes is classified as user data or a device preference', () => {
     const src = join(process.cwd(), 'src');
-    const known = new Set<string>([...USER_DATA_KEYS, ...DEVICE_PREF_KEYS, 'osint.probe']);
+    const known = new Set<string>([...USER_DATA_KEYS, ...DEVICE_PREF_KEYS, 'osint.probe',
+      // WebSocket subprotocol name (transport/http.ts), not a storage key.
+      'velocity.v1']);
     const found = new Set<string>();
     for (const file of walk(src)) {
       const text = readFileSync(file, 'utf8');

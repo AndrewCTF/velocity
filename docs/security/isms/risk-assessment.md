@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ISO/IEC 27001:2022 clauses | 6.1.2 (risk assessment), 6.1.3 (risk treatment), 8.2, 8.3 |
-| Version | 1.0 (Draft until merged to `master`) |
+| Version | 1.1 (Draft until merged to `master`). 1.1 adds R26–R31 from the ASVS 5.0 Level 2 assessment ([`../asvs-l2-assessment.md`](../asvs-l2-assessment.md)) |
 | Adopted | 2026-09-13 |
 | Owner | Maintainer |
 | Next review | 2027-09-13, or sooner on a trigger in [Reassessment triggers](#4-reassessment-triggers) |
@@ -13,7 +13,8 @@ release of Velocity plus the maintainer's reference deployment. Risks that exist
 own deployment are listed with the owner **Operator**, because the maintainer can reduce them in the
 software but cannot operate the treatment.
 
-Inputs: [`../gap-analysis-2026-09.md`](../gap-analysis-2026-09.md) (G1 to G20), GitHub repository
+Inputs: [`../gap-analysis-2026-09.md`](../gap-analysis-2026-09.md) (G1 to G20), the ASVS 5.0 Level 2
+assessment ([`../asvs-l2-assessment.md`](../asvs-l2-assessment.md), R26–R31), GitHub repository
 settings read with `gh api` on 2026-09-13, and the security invariants in `apps/api/CLAUDE.md`.
 
 ## 1. Method (6.1.2)
@@ -103,6 +104,12 @@ Controls cite ISO/IEC 27001:2022 Annex A control numbers. Status of each control
 | R22 | A1, A3 | Maintainer unavailable for weeks, so advisories go unpatched | Single maintainer | 2 | 4 | 8 | Accept | 5.29, 5.30: Dependabot keeps opening PRs; code is mirrored in a second remote and local clones; `SECURITY.md` states the targets are not contractual | 2×4 = 8 (accepted: no second maintainer exists) | Maintainer |
 | R23 | A8 | Audit trail cannot support an investigation (gaps, unbounded growth, tampering by a host-level attacker) | `audit()` is best-effort and records the attempt, not the outcome; no retention rule in `apps/api/app/audit.py` | 2 | 3 | 6 | Accept now; reduce later (RA-09) | 8.15, 5.28, 5.33: `Depends(audit_mutation)` on six routers and MCP calls (`apps/api/tests/test_audit_mutations.py`) | 2×3 = 6 | Maintainer / Operator |
 | R24 | A8 | Evidence-locker chain of custody broken by editing an evidence object's props | Generic ontology object route can write props on an `evidence:` id (G18 residual) | 3 | 3 | 9 | Reduce (RA-16) | 5.28, 8.3: blob path accepts only 64-hex sha256 (`apps/api/tests/test_evidence.py`); props write-protection not yet decided | 2×3 = 6 after RA-16 | Maintainer |
+| R26 | A8, A9 | An analyst opens a malicious file collected into the evidence locker or uploaded for recon (ASVS V5.4.3) | No malware scan on any upload or capture; nothing marks a known-malicious blob | 2 | 3 | 6 | Accept | 8.7, 5.28: blobs are write-once, re-hashed and served only as `attachment` with `nosniff` and a `sandbox` CSP; the server never executes or renders them; operator guidance for out-of-band read-only scanning (`docs/security/input-and-files.md` §5) | 2×3 = 6 | Maintainer / Operator |
+| R27 | A7, A9 | Cross-site scripting in the web origin reads the Supabase access and refresh tokens and replays them (ASVS V10.1.1) | supabase-js stores tokens in `localStorage` (`ACCEPTED RISK` comment and `persistSession: true` in `apps/web/src/transport/supabase.ts`); no backend-for-frontend with an httpOnly cookie | 2 | 4 | 8 | Accept | 8.26, 8.5, 5.17: build CSP with no inline script and no eval (`apps/web/csp.ts`); PKCE flow; access token ≤ 3600 s; 30-minute idle sign-out that survives a reload (`apps/web/src/auth/idle.ts`); users can sign out other sessions; operator routes need TOTP (`aal2`) and a live GoTrue check within 60 s; refresh-token reuse detection (operator setting) | 2×4 = 8 | Maintainer |
+| R28 | A7, A8 | Traffic on the nginx-to-api bridge or on loopback sidecar ports is read or altered (ASVS V12.3.3) | Internal hops are plain HTTP (`docs/security/crypto-and-keys.md` §2.1) | 1 | 4 | 4 | Accept | 8.20, 8.22: api publishes no port; nginx binds `127.0.0.1:8080`; sidecars bind `127.0.0.1`; an attacker able to read these hops already holds the host. Condition: nginx and api stay on one host | 1×4 = 4 | Maintainer / Operator |
+| R29 | A9, A10 | A malicious or compromised analyst uses evidence capture, `/tiler` or alert sinks to send requests to arbitrary public hosts (ASVS V13.2.4, V13.2.5) | Outbound control is "public addresses only", not a host allowlist (`docs/security/communications.md` §3) | 2 | 3 | 6 | Accept; operator may reduce | 8.20, 8.23: `apps/api/app/netguard.py` refuses non-public ranges; `WORKFLOWS_HTTP_ALLOW_HOSTS` and `WORKFLOWS_HTTP_BLOCK_PRIVATE` for operators; egress firewall and proxy guidance (`docs/security/communications.md` §3); audit rows on mutations | 2×3 = 6 | Maintainer / Operator |
+| R30 | A8 | Investigation data (captures, saved searches, tasking questions, annotations) left in a browser is read by the next user of the machine (ASVS V14.3.3) | D4 data in `localStorage` (`USER_DATA_KEYS` in `apps/web/src/auth/userData.ts`); cleared on Supabase sign-out only, never in keyless or static-key mode | 2 | 3 | 6 | Accept; reduce later (RA-21) | 5.34, 8.10: sign-out clears the keys (`apps/web/src/auth/AuthContext.tsx:50-52`); keyless and static-key modes are single-operator by definition; CSP | 2×3 = 6 | Maintainer / Operator |
+| R31 | A9 | A weak or replayed second factor or password passes GoTrue (ASVS V6.2.11, V6.5.1, V6.5.5) | GoTrue has no context-specific word list and accepts a TOTP code for about 90 s without recording used codes; neither is changeable from this repository (`docs/security/auth-and-sessions.md`, Passwords and Multi-factor authentication) | 1 | 3 | 3 | Accept | 5.17, 8.5: leaked-password protection and minimum length 15 (operator settings); single-verify challenges; GoTrue MFA rate limits; failed-credential lockout on the API | 1×3 = 3 | Operator |
 | R25 | A6, A5, A7 | Compromise of the maintainer's workstation (malware, stolen laptop) | Signing key, GitHub session and local provider credentials sit on one endpoint; no documented endpoint baseline | 2 | 5 | 10 | Reduce (RA-08) | 8.1, 7.9, 7.14, 6.7: endpoint baseline (disk encryption, screen lock, updates, key storage) to be written and self-checked | 1×5 = 5 after RA-08 | Maintainer |
 
 ### 2.1 Summary
@@ -110,9 +117,9 @@ Controls cite ISO/IEC 27001:2022 Annex A control numbers. Status of each control
 | Band | Inherent | Residual (after listed treatment, including Planned actions) |
 | --- | --- | --- |
 | High (15–25) | 6: R01, R02, R03, R07, R09, R11 | 0 |
-| Medium (8–12) | 18 | 11: R01, R02, R03, R05, R07, R11, R14, R16, R18, R21, R22 |
-| Low (1–6) | 1: R23 | 14 |
-| Total | 25 | 25 |
+| Medium (8–12) | 19 | 12: R01, R02, R03, R05, R07, R11, R14, R16, R18, R21, R22, R27 |
+| Low (1–6) | 6: R23, R26, R28, R29, R30, R31 | 19 |
+| Total | 31 | 31 |
 
 The residual column assumes the Planned actions are done. On 2026-09-13 they are not: R03 stays at 20
 until RA-01 ships and R07 stays at 16 until RA-03 and RA-04 are done, so the **current** profile has two
@@ -120,12 +127,18 @@ High risks. Both are scheduled before the next release, as the High acceptance c
 
 ## 3. Risk acceptance record
 
-| Risk | Residual | Accepted by | Date | Reason |
-| --- | --- | --- | --- | --- |
-| R13 | 6 | Maintainer | 2026-09-13 | Keyless public sources are a product requirement (`CLAUDE.md`); the operator carries request-level responsibility (`DISCLAIMER.md`) |
-| R16 | 9 | Maintainer | 2026-09-13 | Recorded in `docs/decisions.md` on 2026-09-13; Supabase mode exists for multi-user separation |
-| R22 | 8 | Maintainer | 2026-09-13 | No second maintainer exists; the response targets in `SECURITY.md` say so |
-| R23 | 6 | Maintainer | 2026-09-13 | Low band; retention and outcome recording tracked as RA-09 |
+| Risk | Residual | Accepted by | Date | Next review | Reason |
+| --- | --- | --- | --- | --- | --- |
+| R13 | 6 | Maintainer | 2026-09-13 | 2027-09-13 | Keyless public sources are a product requirement (`CLAUDE.md`); the operator carries request-level responsibility (`DISCLAIMER.md`) |
+| R16 | 9 | Maintainer | 2026-09-13 | 2027-09-13 | Recorded in `docs/decisions.md` on 2026-09-13; Supabase mode exists for multi-user separation |
+| R22 | 8 | Maintainer | 2026-09-13 | 2027-09-13 | No second maintainer exists; the response targets in `SECURITY.md` say so |
+| R23 | 6 | Maintainer | 2026-09-13 | 2027-09-13 | Low band; retention and outcome recording tracked as RA-09 |
+| R26 | 6 | Maintainer | 2026-09-13 | 2027-09-13 | Evidence must stay bit-for-bit as collected, and analysts legitimately collect hostile files; a bundled scanner would add a large, fast-moving dependency to every deployment, including air-gapped ones. Operators who need scanning run it out of band, read-only (`docs/security/input-and-files.md` §5) |
+| R27 | 8 | Maintainer | 2026-09-13 | 2026-12-15, at the next management review (`operations.md` §9.3.2, decision D8) | A backend-for-frontend holding tokens in an httpOnly cookie would change the deployment topology for every operator and is not built. Compensating controls listed in the register row. Revisit if a CSP bypass or XSS is found, or when Supabase offers cookie sessions for SPAs |
+| R28 | 4 | Maintainer | 2026-09-13 | 2027-09-13 | Same-host hops; TLS would protect nothing a host-level attacker cannot already read (`docs/security/crypto-and-keys.md` §2.1). Void if an operator splits nginx and api across hosts |
+| R29 | 6 | Maintainer | 2026-09-13 | 2027-09-13 | Arbitrary public capture and lookup is the product; SSRF to internal ranges is refused; operators can narrow egress (`docs/security/communications.md` §3) |
+| R30 | 6 | Maintainer | 2026-09-13 | 2027-09-13 | Keyless and static-key modes have one operator and no account; multi-user sign-out clears the data. Treatment RA-21 planned |
+| R31 | 3 | Maintainer | 2026-09-13 | 2027-09-13 | Upstream GoTrue behaviour; compensating Supabase settings are on the operator checklist (`docs/security/operator-hardening.md`) |
 
 ## 4. Reassessment triggers
 

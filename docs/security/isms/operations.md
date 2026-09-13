@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Standard | ISO/IEC 27001:2022, clauses 8, 9.1, 9.2, 9.3 and 10 |
-| Version | 1.0 (Draft until merged to `master`) |
+| Version | 1.1 (Draft until merged to `master`). 1.1 adds remediation deadlines (§8.2.1) and the ASVS assessment addendum to the first management review (§9.3.2) |
 | Adopted | 2026-09-13 |
 | Owner | Maintainer |
 
@@ -33,9 +33,31 @@ An event becomes an **incident** when any of these is true:
 | Severity | Criteria | Response |
 | --- | --- | --- |
 | Critical | Maintainer account, signing key or GHCR image compromised; a released artifact contains malicious code; an exploited vulnerability in a release | Start `docs/security/incident-response.md` at once; public advisory; release within 72 h |
-| High | Confirmed vulnerability with CVSS 7.0 or more in a release; a secret-scanning alert for a live credential; a high Dependabot or CodeQL alert affecting shipped code | Patch and release within 7 days of triage (`SECURITY.md`) |
-| Medium or low | Confirmed vulnerability with CVSS below 7.0; CI security job red on `master` | Fix in the next regular release; a red CI job is fixed within 7 days |
+| High | Confirmed vulnerability with CVSS 7.0 or more in a release; a secret-scanning alert for a live credential; a high Dependabot or CodeQL alert affecting shipped code | Patch and release within 7 days of triage (`SECURITY.md`); a high advisory in a transitive dependency, or a high CodeQL finding, within 14 days (§8.2.1) |
+| Medium or low | Confirmed vulnerability with CVSS below 7.0; CI security job red on `master` | Per §8.2.1: medium within 30 days, low within 90 days; a red CI job is fixed within 7 days |
 | Not an incident | Alert dismissed as a false positive, with the reason recorded on GitHub | Record the dismissal reason |
+
+#### 8.2.1 Remediation deadlines for vulnerable components and code findings (adopted 2026-09-13)
+
+ASVS 5.0 V15.1.1. These deadlines apply to **dependency advisories** (Dependabot, `pnpm audit`,
+`pip-audit`, `cargo audit`, container image scans), for **direct and transitive** dependencies alike, and to
+**CodeQL findings** on shipped code. The clock starts when the alert opens, or when an upstream fix becomes
+available if none existed then. "Remediated" means a fix is merged to `master` **and** released, or the
+alert is dismissed with a recorded reason (not affected, not reachable, false positive).
+
+| Severity (GitHub advisory or CodeQL rating; CVSS where given) | Deadline |
+| --- | --- |
+| Critical (CVSS 9.0–10.0) | 7 days |
+| High (7.0–8.9) | 14 days |
+| Medium (4.0–6.9) | 30 days |
+| Low (0.1–3.9) | 90 days |
+
+Where `SECURITY.md` sets a shorter target, the shorter one applies: it commits to 7 days for a high or
+critical vulnerability in the project's own code, and for a high or critical advisory in a direct dependency
+once an upstream fix exists. A dependency pull request opened by Dependabot must not stay unmerged past
+the deadline for the advisory it fixes. When no upstream fix exists by the deadline, the maintainer records
+a mitigation or an accepted risk in [`risk-assessment.md`](risk-assessment.md) and reviews it at every
+management review. Overdue items are counted under objective O7.
 
 ### 8.3 Risk assessment and treatment in operation
 
@@ -176,6 +198,17 @@ Standing agenda (the 9.3.2 inputs):
 | D5 | Keep G10 (a single static key holder is the operator) as accepted. This matches the 2026-09-13 entry in `docs/decisions.md` | Maintainer | — |
 | D6 | Resources: no budget; rely on the GitHub security features that are free for public repositories. Revisit if RA-13 (independent review) needs funding | Maintainer | 2027-09-13 |
 | D7 | Next management review by 2026-12-15 | Maintainer | 2026-12-15 |
+
+**Addendum, 2026-09-13: OWASP ASVS 5.0 Level 2 assessment**
+
+The ASVS Level 2 assessment ([`../asvs-l2-assessment.md`](../asvs-l2-assessment.md)) was completed the same
+day (RA-11). The maintainer reviewed its accepted-risk items and made these further decisions.
+
+| # | Decision | Owner | Due |
+| --- | --- | --- | --- |
+| D8 | Add R26–R31 to the risk register (31 risks) and accept them at their residual scores, with the reasons in `risk-assessment.md` §3. R27 (Medium, session tokens in browser storage) is re-reviewed at the next management review | Maintainer | 2026-12-15 |
+| D9 | Adopt the remediation deadlines in §8.2.1, the key management basis in `../crypto-and-keys.md` §1.0, the log inventory `../logging.md`, the communications inventory `../communications.md` and the operator checklist `../operator-hardening.md` | Maintainer | On merge |
+| D10 | Plan RA-21 (clear local investigation data in keyless and static-key modes) | Maintainer | 2026-12-31 |
 
 #### 9.3.3 Review record template
 

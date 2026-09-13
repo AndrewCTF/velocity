@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Covers | OWASP ASVS 5.0 V14.1.1 (classification), V14.1.2 (protection requirements), V14.2.4 (at-rest controls), V14.3.3 (third-party disclosure); ISO/IEC 27001:2022 A.5.12, A.5.13, A.5.33, A.5.34, A.8.10, A.8.13 |
-| Version | 1.0 (Draft until merged to `master`) |
+| Covers | OWASP ASVS 5.0 V14.1.1 (classification), V14.1.2 (protection requirements), V14.2.4 (at-rest controls), V14.3.3 (sensitive data in browser storage, §6); ISO/IEC 27001:2022 A.5.12, A.5.13, A.5.33, A.5.34, A.8.10, A.8.13 |
+| Version | 1.1 (Draft until merged to `master`). 1.1 adds logging, log-access and privacy rows to §2, the D5 retention policy, and §6 browser storage |
 | Adopted | 2026-09-13 |
 | Owner | Maintainer (software controls); Operator (the data in a deployment, `DISCLAIMER.md` "Personal data") |
 | Code citations | `path:line` at commit `2cd38d9`. Read them with `git show 2cd38d9:<path>` |
@@ -54,7 +54,10 @@ real government classified information, and nothing in this software is approved
 | Availability | Bounded archive; loss acceptable | Recoverable from the operator's secret store | Supabase's service | Backed up (§4.2) | Backed up with the volume | Not required |
 | In transit | TLS to upstreams (`apps/api/app/upstream.py:344-349`) | TLS at the host proxy | TLS at the host proxy | TLS at the host proxy | TLS at the host proxy | TLS to the provider |
 | At rest | Plain; volume encryption optional | Encrypted (BYOK) or operator secret store | Supabase at rest; local fields plain | **Operator must encrypt the volume** | **Operator must encrypt the volume** | As the store that keeps them |
-| Retention | Time and byte caps (§3) | Until rotated | Operator policy | Operator policy; the byte caps bound some stores (§3) | **No cap in code** (RA-09) | As the store |
+| Retention | Time and byte caps (§3) | Until rotated | Operator policy | Operator policy; the byte caps bound some stores (§3) | Policy: 365 days (adopted 2026-09-13). Local `audit_log` rows are pruned when `AUDIT_RETENTION_DAYS` is set (default 0, keep all); the local governed-action log has no retention (RA-09, [`logging.md`](logging.md) L6, L6b) <!-- recheck --> | As the store |
+| Logging (what may appear in logs, [`logging.md`](logging.md)) | May be logged | **Never** | Security logs may record the client IP address and user id; never passwords or email one-time codes | **Never** in access or query logs. Identifiers such as looked-up domains may appear only in the audit row's argument names and targets. Known deviation: outbound URLs in the `httpx` log ([`logging.md`](logging.md) §3) | Is itself the log | **Never** prompt or completion text; metadata only (`llm_calls`) |
+| Log access | Host root and the `docker` group | — | Host root, `docker` group, Supabase project admins | as D3 | Operator, auditor or admin role (`GET /api/audit`) and host root | Supabase project admins |
+| Privacy-enhancing measures | None needed | Encryption of stored BYOK values (Fernet) | Minimal profile fields; IPs only in security and audit logs | Local models for sensitive work, so prompts never leave the host; operator-controlled egress proxy so lookups are not tied to the organisation's address (§5); clearance and compartments; sign-out clears browser copies (§6) | Argument **names** only for MCP calls | Local models; provider sees prompts otherwise |
 
 ## 3. At-rest controls, retention and deletion per store (V14.2.4)
 
@@ -76,7 +79,7 @@ backup tarball, can read every local store.
 | Evidence directory | `./data/evidence` (`apps/api/app/config.py:710`) | D4 blobs, content-addressed by SHA-256 (`apps/api/app/intel/evidence.py:142-144`) | No | API auth; served as an attachment with a sandbox CSP (`apps/api/app/routes/evidence.py:345-347`) | 200 MB per blob (`apps/api/app/config.py:713`); no total cap. The config comment says "created 0700" (`apps/api/app/config.py:707`), but `_write_blob` calls `mkdir` without a mode (`apps/api/app/intel/evidence.py:152`), so permissions follow the process umask | Write-once by design (`apps/api/app/intel/evidence.py:147-152`); `apps/api/app/routes/evidence.py` has no delete route. Deleting evidence breaks chain of custody, so the operator must record why |
 | Tile cache | `./data/tilecache` (`apps/api/app/config.py:231`) | D1 (basemap and imagery tiles) | No | Served to the web app | 1 GB, LRU eviction (`apps/api/app/config.py:232`, `apps/api/app/tilecache.py:117-118`) | Automatic |
 | Recon job directories | `.recon_jobs/` (`apps/api/app/config.py:293`) | D4 (uploaded imagery and video) | No | Compute-gated path (`apps/api/app/ratelimit.py:36`) | 40 jobs and 24 h TTL (`apps/api/app/config.py:296-297`), evicted in `apps/api/app/routes/recon.py:115-120` | Automatic; the whole job directory is removed |
-| Browser localStorage | The user's browser profile | D3 (Supabase session, `apps/web/src/transport/supabase.ts:13`, `apps/web/src/transport/supabase.ts:35`), D4 (saved searches, tasking questions, captures: `apps/web/src/state/savedSearches.ts:22`, `apps/web/src/state/taskingQuestions.ts:18`, `apps/web/src/state/captures.ts:25`), UI preferences (`apps/web/src/state/settings.ts:90`, `apps/web/src/state/theme.ts:17`) | No | Same-origin policy; readable by any script that runs in the app origin (the CSP limits this, `apps/web/csp.ts`) | Captures capped at 200 (`apps/web/src/state/captures.ts:26`); tasking questions at 30 (`apps/web/src/state/taskingQuestions.ts:30`); others unbounded but small | Browser "clear site data"; signing out ends the Supabase session. Users on shared machines should use a separate browser profile |
+| Browser localStorage | The user's browser profile | D3 (Supabase session, `persistSession: true` in `apps/web/src/transport/supabase.ts`), D4 (keys `velocity.captures`, `velocity.savedSearches`, `velocity.taskingQuestions`, `velocity.inbox.read`, `velocity.inbox.archived`, `osint.annotations`: `USER_DATA_KEYS` in `apps/web/src/auth/userData.ts`), device preferences, including the idle timer's last-activity time (`DEVICE_PREF_KEYS` in `apps/web/src/auth/userData.ts`) <!-- recheck --> | No | Same-origin policy; readable by any script that runs in the app origin (the CSP limits this, `apps/web/csp.ts`) | Captures capped at 200 and tasking questions at 30 (at `2cd38d9`: `apps/web/src/state/captures.ts:26`, `apps/web/src/state/taskingQuestions.ts:30`); others unbounded but small | D4 keys are removed on every Supabase sign-out (`apps/web/src/auth/AuthContext.tsx:50-52`; `clearUserData` in `apps/web/src/auth/userData.ts`); never cleared automatically in keyless or static-key mode (§6). Browser "clear site data" removes everything |
 | Supabase (optional) | Operator's Supabase project | D3 profiles, BYOK ciphertext (`apps/api/app/keys.py:4-12`), `llm_calls` metadata (`apps/api/app/llm.py:405-406`), `action_log` audit (`apps/api/app/audit.py:1-9`) | BYOK values encrypted by the app; storage encryption is Supabase's (provider responsibility) | Row-level security, for example `auth.uid() = user_id` on `user_keys` (`apps/api/app/keys.py:8-10`); schemas in `apps/api/supabase/migrations/` and `infra/db/` | Operator policy in Supabase | Operator, in Supabase |
 
 ### 3.1 Operator guidance: encrypt the volume
@@ -125,7 +128,7 @@ encrypted and has no checksum**, so it holds every D3, D4 and D5 record in the c
 7. **Do not back up `.env` in the same archive.** Store secrets in a secret manager or a separately
    encrypted copy ([`crypto-and-keys.md`](crypto-and-keys.md) §1.1).
 
-## 5. What OSINT lookups disclose to third parties (V14.3.3)
+## 5. What OSINT lookups disclose to third parties
 
 Every lookup is an outbound request from the deployment's IP address. It tells the upstream provider what,
 or whom, the analyst is investigating.
@@ -150,3 +153,31 @@ Operator guidance:
 4. Leave paid-key connectors (HIBP) unset unless your jurisdiction and your purpose allow sending target
    identifiers to them.
 5. Record in your own privacy notice which third parties receive investigation identifiers.
+
+## 6. Sensitive data in browser storage (V14.3.3)
+
+Added 2026-09-13. Citations are to the working tree read that day (base commit `56db34f`).
+
+**What is stored.** Besides the Supabase session tokens (accepted risk R27, the `ACCEPTED RISK` comment in `apps/web/src/transport/supabase.ts`),
+the browser's `localStorage` holds D4 investigation data: pinned captures with coordinates, saved searches,
+tasking questions, inbox triage state and map annotations (`USER_DATA_KEYS` in `apps/web/src/auth/userData.ts`).
+Every storage key the app writes is listed as either user data or a device preference, and
+`apps/web/src/auth/userData.test.ts` fails on a key in neither list (header comment of `userData.ts`).
+
+**What clears it.** On a Supabase sign-out from any cause (the user, the idle timer, an expired refresh
+token, another tab), the app empties the stores and removes the user-data keys
+(`apps/web/src/auth/AuthContext.tsx:47-52`; `clearUserData` in `apps/web/src/auth/userData.ts`). In keyless and
+static-key modes there is no sign-out, so this data stays until the browser's site data is cleared.
+
+**Decision (2026-09-13): accepted risk R30.** The browser copy is kept because it lets the console keep an
+analyst's working set without an account, which the keyless product requirement needs, and because moving
+captures, saved searches and tasking questions to the server would change their ownership model. Conditions:
+
+1. In multi-user mode, sign-out clears D4 keys (above).
+2. In keyless and static-key modes, the browser belongs to the one operator. Operators must not use those
+   modes on a shared machine or a shared browser profile.
+3. The CSP limits which scripts can read the origin's storage (`apps/web/csp.ts`).
+
+Not built: a "Clear local investigation data" control for keyless and static-key modes. It is the named
+treatment for R30.
+
