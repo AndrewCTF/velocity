@@ -13,7 +13,7 @@ backported fix.
 Please report suspected vulnerabilities privately through **GitHub Security
 Advisories**, not a public issue:
 
-<https://github.com/AndrewCTF/OSINT/security/advisories/new>
+<https://github.com/AndrewCTF/velocity/security/advisories/new>
 
 Do not open a public issue, discussion, or pull request for a suspected
 vulnerability until a fix has shipped — this repo has no bug bounty, but
