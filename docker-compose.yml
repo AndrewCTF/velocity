@@ -90,11 +90,10 @@ services:
       - ./apps/web/index.html:/srv/apps/web/index.html
       - ./apps/web/vite.config.ts:/srv/apps/web/vite.config.ts
       - ./apps/web/eslint.config.js:/srv/apps/web/eslint.config.js
-      - ./apps/web/tailwind.config.js:/srv/apps/web/tailwind.config.js
       - ./apps/web/postcss.config.js:/srv/apps/web/postcss.config.js
       - ./apps/web/tsconfig.json:/srv/apps/web/tsconfig.json
       - ./packages/shared/src:/srv/packages/shared/src
-    command: ["pnpm", "--filter", "@osint/web", "dev", "--host", "0.0.0.0"]
+    command: ["node_modules/.bin/vite", "--host", "0.0.0.0"]
 
   nginx:
     # Digest-pinned like the prod stack's nginx (docker-compose.prod.yml) —

@@ -74,22 +74,20 @@ services:
       - no-new-privileges:true
     pids_limit: 512
     mem_limit: 4g
-    # NOT read_only: tested (`docker run --read-only … pnpm --filter
-    # @osint/web build`) and it fails before vite even starts — corepack's
-    # shim can't create ~/.cache/node/corepack on every invocation, even
-    # though `corepack prepare --activate` already ran at image build time.
-    # This container exits immediately either way, so the read-only root's
-    # defense-in-depth value is low here relative to chasing corepack/vite's
-    # full write-path list.
+    # NOT read_only: vite writes node_modules/.vite-temp during the build
+    # (measured: EROFS mkdir with --read-only). The container exits as soon as
+    # the bundle is written, and it runs with no capabilities as uid 10001.
     networks:
       - front
-    command: ["pnpm", "--filter", "@osint/web", "build"]
+    command: ["sh", "-c", "node_modules/.bin/tsc --noEmit && node_modules/.bin/vite build"]
     volumes:
       - web_dist:/srv/apps/web/dist
     restart: "no"
 
   nginx:
-    image: nginx:1.30.4-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c
+    build:
+      context: .
+      dockerfile: infra/docker/nginx.Dockerfile
     runtime: runc
     ports:
       # Loopback only: TLS terminates at a reverse proxy on the host, which

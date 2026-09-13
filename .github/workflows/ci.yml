@@ -6,6 +6,9 @@ on:
   push:
     branches: [master]
   pull_request:
+  # Weekly re-run: new CVEs land in unchanged images and lockfiles.
+  schedule:
+    - cron: '17 6 * * 1'
 
 # Least-privilege token: this workflow only builds, tests, and lints — it never
 # writes to the repo. Pin contents:read so a compromised transitive dependency
@@ -20,7 +23,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
-          version: 10.33.2
+          version: 10.34.5
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -56,7 +59,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
-          version: 10.33.2
+          version: 10.34.5
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -74,3 +77,24 @@ jobs:
         run: |
           uv export --locked --no-hashes --no-emit-project > req.txt
           uvx pip-audit -r req.txt --no-deps --disable-pip
+
+  images:
+    # Build every shipped image and fail on any HIGH/CRITICAL CVE that has a
+    # fix available. Trivy runs from a digest-pinned image, not a marketplace
+    # action, so no third-party action code gets the checkout.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Build images
+        run: |
+          docker build -t velocity-api:ci -f infra/docker/api.Dockerfile .
+          docker build -t velocity-web:ci -f infra/docker/web.Dockerfile .
+          docker build -t velocity-nginx:ci -f infra/docker/nginx.Dockerfile .
+      - name: Scan images
+        run: |
+          for img in velocity-api:ci velocity-web:ci velocity-nginx:ci; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:0.66.0@sha256:086971aaf400beebd94e8300fd8ea623774419597169156cec56eec5b00dfb1e \
+              image --quiet --scanners vuln --severity HIGH,CRITICAL \
+              --ignore-unfixed --exit-code 1 "$img"
+          done
