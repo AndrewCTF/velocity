@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { apiFetch } from '../transport/http.js';
 import type { Brief, Edition, FeedArticle, FeedResponse, Story, Verification } from './types.js';
 import './news.css';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 const TICKER_REFRESH_MS = 60_000;
 
@@ -40,7 +41,7 @@ function Media({ src, title }: { src: string; title: string }): JSX.Element {
   return (
     <div className="vn-media">
       {src
-        ? <img src={src} alt="" loading="lazy" />
+        ? <img src={safeHttpUrl(src)} alt="" loading="lazy" />
         : <div className="vn-media-ph">{(title[0] || 'V').toUpperCase()}</div>}
     </div>
   );
@@ -270,7 +271,7 @@ function LatestTicker(): JSX.Element | null {
       <ul>
         {items.map((a, i) => (
           <li key={`${a.link}-${i}`}>
-            <a href={a.link} target="_blank" rel="noreferrer">
+            <a href={safeHttpUrl(a.link)} target="_blank" rel="noreferrer">
               <span className="vn-rail-title">{a.title}</span>
               <span className="vn-rail-meta">
                 <span className="vn-src-chip">{a.source}</span>

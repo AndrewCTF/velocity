@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import cesium from 'vite-plugin-cesium';
 import { buildCsp } from './csp';
+import { bundledApiKeyError } from './buildGuard';
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -55,8 +56,26 @@ function cspPlugin(): Plugin {
   };
 }
 
+// Refuses a hosted build that would inline VITE_API_KEY (buildGuard.ts says
+// why). configResolved sees config.env, which includes .env* files as well as
+// the shell environment.
+function bundledKeyGuardPlugin(): Plugin {
+  return {
+    name: 'velocity-no-bundled-api-key',
+    apply: 'build',
+    configResolved(config) {
+      const err = bundledApiKeyError({
+        env: config.env as Record<string, string | undefined>,
+        desktop,
+        isProduction: config.isProduction,
+      });
+      if (err) throw new Error(err);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), cesium(), cspPlugin()],
+  plugins: [bundledKeyGuardPlugin(), react(), cesium(), cspPlugin()],
   server: {
     host: '0.0.0.0',
     port: 5173,

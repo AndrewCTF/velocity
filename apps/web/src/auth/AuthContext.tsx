@@ -9,13 +9,16 @@ import {
   type ReactNode,
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../transport/supabase.js';
+import { clearLegacyTokens, supabase } from '../transport/supabase.js';
+import { clearUserData } from './userData.js';
+import { useIdleSignOut } from './useIdleSignOut.js';
 
 interface AuthState {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  signOut: () => Promise<void>;
+  /** 'local' (default) ends this browser's session; 'others' ends every other one. */
+  signOut: (scope?: 'local' | 'others') => Promise<void>;
 }
 
 const Ctx = createContext<AuthState | null>(null);
@@ -38,9 +41,16 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     });
     // onAuthStateChange fires on sign-in, sign-out, and token refresh — this
     // is what keeps every consumer in sync after a login from another tab.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
       setLoading(false);
+      // Every way a session ends lands here: the chip, the idle timer, an
+      // expired refresh token, a sign-out in another tab. Clear the user's
+      // investigation data with it (auth/userData.ts).
+      if (event === 'SIGNED_OUT') {
+        clearUserData();
+        clearLegacyTokens();
+      }
     });
     return () => {
       active = false;
@@ -48,12 +58,14 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     };
   }, []);
 
+  useIdleSignOut(Boolean(session));
+
   const value: AuthState = {
     session,
     user: session?.user ?? null,
     loading,
-    signOut: async () => {
-      await supabase?.auth.signOut();
+    signOut: async (scope = 'local') => {
+      await supabase?.auth.signOut({ scope });
     },
   };
 

@@ -9,6 +9,7 @@ import { apiFetch } from '../transport/http.js';
 import { Widget, SectionLabel } from '../shell/instruments.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { AiAssessmentCard } from '../entity-panel/AiAssessmentCard.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 function targetOf(id: string): string {
   const i = id.indexOf(':');
@@ -625,7 +626,7 @@ function AffiliationsCard({ target }: { target: string }): JSX.Element | null {
   return (
     <Widget title="Affiliations · LittleSis">
       {entity.blurb && <Row k="who" v={entity.blurb} />}
-      {entity.url && <Row k="profile" v={<a href={entity.url} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--accent-fg)' }}>{entity.url}</a>} />}
+      {entity.url && <Row k="profile" v={<a href={safeHttpUrl(entity.url)} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--accent-fg)' }}>{entity.url}</a>} />}
       {rels?.length
         ? rels.slice(0, 12).map((r, i) => (
             <Row

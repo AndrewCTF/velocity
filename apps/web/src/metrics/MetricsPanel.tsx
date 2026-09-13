@@ -3,6 +3,7 @@ import { useFeeds, useAlerts, type FeedStatus } from '../state/stores.js';
 import { useEntityStats, acquireStats } from '../globe/entityStats.js';
 import { apiFetch } from '../transport/http.js';
 import type { AlertSeverity } from '@osint/shared';
+import { dict } from '../shell/safeKeys.js';
 
 interface TsBucket {
   t: number;
@@ -89,7 +90,7 @@ export function MetricsPanel(): JSX.Element {
 
   const feedList = Object.values(feeds);
   const feedLive = feedList.filter((f) => f.status === 'green').length;
-  const sevCount: Record<string, number> = {};
+  const sevCount = dict<number>();
   for (const a of alerts) sevCount[a.severity] = (sevCount[a.severity] ?? 0) + 1;
 
   const catHist = stats.histograms.find((h) => h.facet === 'aircraftCategory');

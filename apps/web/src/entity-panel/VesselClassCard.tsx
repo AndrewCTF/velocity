@@ -9,6 +9,7 @@ import {
   type FeatureTag,
   type AisVerdictLevel,
 } from '../intel/vesselClasses.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 // Imagery recognition: the analyst ticks the WEAPONS / SENSOR / DECK features they
 // can see in the detailed chip, and candidate classes rank by weighted feature
@@ -190,7 +191,7 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
                     <span>{m.cls.country}</span>
                     <span>{m.cls.lengthM} m</span>
                     {m.cls.sources[0] && (
-                      <a href={m.cls.sources[0]} target="_blank" rel="noreferrer" className="text-accent hover:underline ml-auto">
+                      <a href={safeHttpUrl(m.cls.sources[0])} target="_blank" rel="noreferrer" className="text-accent hover:underline ml-auto">
                         src
                       </a>
                     )}

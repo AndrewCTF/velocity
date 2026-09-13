@@ -6,5 +6,5 @@
       "@osint/shared": ["../../packages/shared/src/index.ts"]
     }
   },
-  "include": ["src/**/*", "csp.ts", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src/**/*", "csp.ts", "buildGuard.ts", "vite.config.ts", "vitest.config.ts"]
 }

@@ -896,11 +896,20 @@ export function GlobeCanvas({
       viewerRef.current = null;
       setViewerState(null);
     };
-    // Intentionally exclude imageryMode/enableGoogle3D/googleApiKey — the stack
-    // is handled by the swap effect below and the Google key is read once at
-    // construction, so toggling never remounts the viewer.
+    // Intentionally exclude imageryMode/enableGoogle3D/googleApiKey/ionToken —
+    // the stack is handled by the swap effect below and the keys by the effect
+    // after this one, so neither a toggle nor a sign-in remounts the viewer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ionToken, registry, onViewerReady]);
+  }, [registry, onViewerReady]);
+
+  // Keys can arrive after boot: with auth on, /api/config returns the ion and
+  // Google keys only to a signed-in caller, so App refetches it on sign-in and
+  // sign-out. Apply them in place; the swap effect below (which depends on both)
+  // then builds or drops the keyed stack. The globe boots keyless either way.
+  useEffect(() => {
+    Cesium.Ion.defaultAccessToken = ionToken;
+    if (googleApiKey) Cesium.GoogleMaps.defaultApiKey = googleApiKey;
+  }, [ionToken, googleApiKey]);
 
   // Swap the imagery stack in place whenever imageryMode (or its inputs)
   // changes. This effect intentionally does NOT recreate the viewer.
@@ -1060,7 +1069,7 @@ export function GlobeCanvas({
       // eslint-disable-next-line react-hooks/exhaustive-deps
       stackGenRef.current++;
     };
-  }, [imageryMode, ionToken, enableGoogle3D]);
+  }, [imageryMode, ionToken, enableGoogle3D, googleApiKey]);
 
   useEffect(() => {
     const v = viewerRef.current;

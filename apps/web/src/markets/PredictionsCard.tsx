@@ -2,6 +2,7 @@
 // question, probability as a percent, 24h volume, outbound link to the market.
 import { Widget, ErrorLine } from './primitives.js';
 import type { FetchState, PredictionItem, PredictionsResponse } from './types.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 function fmtVolume(v: number | null): string {
   if (v == null || !Number.isFinite(v)) return '—';
@@ -16,7 +17,7 @@ function Row({ item }: { item: PredictionItem }): JSX.Element {
   const pct = Math.round(item.prob * 100);
   return (
     <a
-      href={item.url}
+      href={safeHttpUrl(item.url)}
       target="_blank"
       rel="noreferrer noopener"
       className="flex items-center gap-2 py-1.5 border-b border-line/60 last:border-b-0 min-w-0 hover:bg-bg-2 rounded-sm px-1 -mx-1"

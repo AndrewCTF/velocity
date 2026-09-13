@@ -11,6 +11,7 @@ import { apiFetch } from '../transport/http.js';
 import { useInvestigation } from '../graph/investigationStore.js';
 import { useSelection } from '../state/stores.js';
 import { Icon } from '../normal/Icon.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 interface CountrySummary {
   code: string;
@@ -287,7 +288,7 @@ export function CountriesPanel(): JSX.Element {
                     </div>
                     {resources.map((res) => (
                       <div key={res.url} style={{ fontSize: 12, padding: '3px 0' }}>
-                        <a href={res.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--txt-1)' }}>
+                        <a href={safeHttpUrl(res.url)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--txt-1)' }}>
                           {res.name}
                         </a>
                         {res.note && <div style={{ fontSize: 10, color: 'var(--txt-3)' }}>{res.note}</div>}

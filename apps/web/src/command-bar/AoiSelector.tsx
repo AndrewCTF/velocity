@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { chokepoints, type Chokepoint } from '../registry/chokepoints.js';
 import { useAoi } from '../state/aoi.js';
+import { dict } from '../shell/safeKeys.js';
 
 interface Props {
   onPick: (c: Chokepoint | null) => void;
@@ -36,7 +37,7 @@ export function AoiSelector({ onPick }: Props): JSX.Element {
   const grouped = filtered.reduce<Record<string, Chokepoint[]>>((acc, c) => {
     (acc[c.category] ||= []).push(c);
     return acc;
-  }, {});
+  }, dict<Chokepoint[]>());
 
   return (
     <div className="relative" ref={ref}>

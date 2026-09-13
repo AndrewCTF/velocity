@@ -30,6 +30,7 @@ import {
   type Histogram,
 } from '../explorer/facets.js';
 import { tierOf } from '../registry/provenance.js';
+import { dict } from '../shell/safeKeys.js';
 
 export interface EntityStats {
   histograms: Histogram[];
@@ -135,7 +136,7 @@ function sampleOnce(): void {
         if (!bag) continue;
         const names = bag.propertyNames as readonly string[] | undefined;
         if (!names || names.length === 0) continue;
-        const props: Record<string, unknown> = {};
+        const props = dict<unknown>();
         for (const nm of names) {
           const p = (bag as unknown as Record<string, Cesium.Property | undefined>)[nm];
           if (!p) continue;
@@ -149,7 +150,7 @@ function sampleOnce(): void {
       }
     }
 
-    const aoiCounts: Record<string, number> = {};
+    const aoiCounts = dict<number>();
     for (const [k, v] of aoi) aoiCounts[k] = v;
     useEntityStats.setState({
       histograms: buildHistograms(tally),

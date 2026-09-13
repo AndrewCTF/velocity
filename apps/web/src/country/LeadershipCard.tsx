@@ -14,6 +14,7 @@ import {
   type LeadershipEntry,
   type ProfileResponse,
 } from './shared.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 // Stable strategic ordering: state > government > defence > foreign > CINC.
 function roleRank(role: string): number {
@@ -47,7 +48,7 @@ function Portrait({ entry }: { entry: LeadershipEntry }): JSX.Element {
     <div className="w-12 h-12 shrink-0 rounded-sm overflow-hidden border border-line-2 bg-bg-3 flex items-center justify-center">
       {showImage ? (
         <img
-          src={thumbUrl(entry.image as string)}
+          src={safeHttpUrl(thumbUrl(entry.image as string))}
           alt=""
           loading="lazy"
           className="w-full h-full object-cover"

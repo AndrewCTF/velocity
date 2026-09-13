@@ -18,6 +18,9 @@ import { LocalAiSection } from './localAi/LocalAiSection.js';
 import { AlertRulesSection } from './AlertRulesSection.js';
 import { useTheme } from '../state/theme.js';
 import { SCHEMES } from '../theme/schemes.js';
+import { AccountSecurity } from '../auth/AuthForm.js';
+import { useAuth } from '../auth/AuthContext.js';
+import { isSupabaseConfigured } from '../transport/supabase.js';
 
 interface Me {
   email?: string;
@@ -30,6 +33,7 @@ const ACCOUNT_URL = '/account';
 
 export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element {
   const [me, setMe] = useState<Me | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     let live = true;
@@ -91,6 +95,16 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
               >
                 Manage plan →
               </a>
+            </div>
+          )}
+
+          {/* Supabase mode only: a keyless box has no account to secure. */}
+          {isSupabaseConfigured && user && (
+            <div className="mb-4 pb-3 border-b border-line">
+              <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3">
+                Account security
+              </div>
+              <AccountSecurity />
             </div>
           )}
 

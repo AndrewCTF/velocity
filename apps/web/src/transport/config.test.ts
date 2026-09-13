@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { fetchRuntimeConfig } from './config.js';
+import { fetchRuntimeConfig, KEYLESS_CONFIG } from './config.js';
 import { apiFetch } from './http.js';
 
 vi.mock('./http.js', () => ({ apiFetch: vi.fn() }));
@@ -45,5 +45,16 @@ describe('fetchRuntimeConfig', () => {
     mocked.mockResolvedValue(status(404));
     await expect(fetchRuntimeConfig()).rejects.toThrow('Configuration unavailable (HTTP 404)');
     expect(mocked).toHaveBeenCalledTimes(1);
+  });
+
+  it('boots keyless when an auth-gated backend refuses config to a signed-out caller', async () => {
+    for (const code of [401, 403]) {
+      mocked.mockReset();
+      mocked.mockResolvedValue(status(code));
+      await expect(fetchRuntimeConfig()).resolves.toEqual(KEYLESS_CONFIG);
+      expect(mocked).toHaveBeenCalledTimes(1);
+    }
+    expect(KEYLESS_CONFIG.cesiumIonToken).toBe('');
+    expect(KEYLESS_CONFIG.features.enableGoogle3D).toBe(false);
   });
 });

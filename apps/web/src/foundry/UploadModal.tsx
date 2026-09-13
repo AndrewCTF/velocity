@@ -7,6 +7,7 @@ import { useFoundry, type Build, type Dataset } from '../state/foundry.js';
 import { Badge, Btn } from '../shell/instruments.js';
 import { Modal } from '../shell/Modal.js';
 import { Field, Select, controlCls } from './ui.js';
+import { dict } from '../shell/safeKeys.js';
 
 const TYPE_OPTS = ['auto', 'str', 'int', 'float', 'bool'].map((v) => ({ value: v, label: v }));
 
@@ -101,7 +102,7 @@ export function UploadModal({
     if (!file) return;
     if (!versionMode && !name.trim()) return;
     setBusy(true);
-    const types: Record<string, string> = {};
+    const types = dict<string>();
     for (const [c, t] of Object.entries(pins)) if (t && t !== 'auto') types[c] = t;
     const d = versionMode
       ? await uploadVersion(existing!.id, file, mode, { types, cascade })

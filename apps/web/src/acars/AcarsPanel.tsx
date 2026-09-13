@@ -8,6 +8,7 @@ import {
   type AcarsMsg,
   type AcarsResponse,
 } from './acars.js';
+import { dict } from '../shell/safeKeys.js';
 
 // All-aircraft ACARS feed browser. Pulls the recent airframes.io firehose
 // (≤100, backend-cached 15s) and lets the operator filter by SYSTEM (datalink
@@ -55,7 +56,7 @@ export function AcarsPanel(): JSX.Element {
   // Per-system / per-origin counts for the filter chips (computed over the full
   // pull so the chip badges reflect the whole feed, not the current filter).
   const counts = useMemo(() => {
-    const bySys: Record<string, number> = {};
+    const bySys = dict<number>();
     let pilot = 0;
     let system = 0;
     for (const m of all) {

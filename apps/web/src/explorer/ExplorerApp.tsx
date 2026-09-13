@@ -9,6 +9,7 @@ import { toast } from '../shell/toast.js';
 import { Icon } from '../normal/Icon.js';
 import { apiFetch } from '../transport/http.js';
 import { useOntologySchema, type OntologySchema } from '../state/ontologySchema.js';
+import { dict } from '../shell/safeKeys.js';
 
 // Explorer app (design §6.1 / §8 "Object Explorer") — top-down analysis over the
 // live object store: type facets + keyword + rolling window, live counts, and a
@@ -157,7 +158,7 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
           const inside = d.results.filter(
             (r) => haversineKm({ lat: r.lat, lon: r.lon }, { lat: geoScope.lat, lon: geoScope.lon }) <= geoScope.radiusKm,
           );
-          const by_type: Record<string, number> = {};
+          const by_type = dict<number>();
           for (const r of inside) by_type[r.kind] = (by_type[r.kind] ?? 0) + 1;
           setData({ results: inside, count: inside.length, by_type });
         } else {
@@ -180,7 +181,7 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
   }, [source]);
 
   const ontByKind = useMemo(() => {
-    const counts: Record<string, number> = {};
+    const counts = dict<number>();
     for (const o of ont) counts[o.kind] = (counts[o.kind] ?? 0) + 1;
     return counts;
   }, [ont]);

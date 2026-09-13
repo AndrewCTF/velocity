@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../transport/http.js';
 import { Btn, Widget } from '../shell/instruments.js';
 import { SplatView, type CamPose } from './SplatView.js';
+import { validJobId } from './jobId.js';
 
 type Stage = 'queued' | 'frames' | 'sfm' | 'train' | 'export' | 'done' | 'error';
 interface Progress {
@@ -47,7 +48,9 @@ export function StudioPage(): JSX.Element {
 
   // Load a finished job: the .ply + a good initial camera (a real training
   // viewpoint, so the viewer opens framed on the scene — not inside the cloud).
-  const loadJob = useCallback(async (id: string) => {
+  const loadJob = useCallback(async (raw: string) => {
+    const id = validJobId(raw);
+    if (!id) return;
     // Prefer the full-SH .spz (compact, whole splat, no cap); fall back to .ply.
     let url = `/api/recon/jobs/${id}/result.ply`;
     try {
@@ -70,7 +73,9 @@ export function StudioPage(): JSX.Element {
   // satellite-AOI form from the map: /studio?lat=&lon=&radius= (Splat tab).
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    const id = q.get('job');
+    // The id lands in /api/recon/jobs/<id>/… with the auth header attached, so
+    // only a real job id (hex, as recon.py mints them) may reach that path.
+    const id = validJobId(q.get('job'));
     if (id) {
       void loadJob(id);
       return;
@@ -318,7 +323,7 @@ function NumberInput({
 // Read the SSE stream via apiFetch so the API key / bearer is carried (a raw
 // EventSource cannot set auth headers). Frames are `data: {json}\n\n`.
 async function streamEvents(jobId: string, onEvent: (p: Progress) => void): Promise<void> {
-  const res = await apiFetch(`/api/recon/jobs/${jobId}/events`);
+  const res = await apiFetch(`/api/recon/jobs/${encodeURIComponent(jobId)}/events`);
   if (!res.ok || !res.body) throw new Error(`Could not stream reconstruction progress (HTTP ${res.status}).`);
   const reader = res.body.getReader();
   const dec = new TextDecoder();

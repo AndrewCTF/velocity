@@ -4,6 +4,7 @@ import { useSituations } from '../situations/situationStore.js';
 import { apiFetch } from '../transport/http.js';
 import { SectionLabel, Btn, MicroLabel, Widget, Badge } from '../shell/instruments.js';
 import { toast } from '../shell/toast.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 // Evidence locker (roadmap P1) — chain-of-custody capture. Preserve a URL, a
 // file, or a moment of the live world as a content-addressed, hash-verified,
@@ -137,7 +138,7 @@ function EvidenceRow({ obj }: { obj: EvidenceObject }): JSX.Element {
         <span>{p.media_type}</span>
         {p.captured_at && <span>{p.captured_at}</span>}
         {p.source_url && (
-          <a href={p.source_url} target="_blank" rel="noreferrer" className="text-accent truncate max-w-[200px]">
+          <a href={safeHttpUrl(p.source_url)} target="_blank" rel="noreferrer" className="text-accent truncate max-w-[200px]">
             {p.source_url}
           </a>
         )}

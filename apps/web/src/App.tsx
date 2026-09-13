@@ -90,11 +90,29 @@ export function App(): JSX.Element {
   // forward, exactly like investigationOpenSeq does for Search-around.
   const groundOpenSeq = useGround((s) => s.openSeq);
 
+  // Refetch on sign-in and sign-out: with auth on, the backend returns the ion
+  // and Google keys only to a signed-in caller. The first fetch waits for the
+  // initial session (auth loading) so a signed-in reload asks once, with its
+  // token. A refetch that fails keeps the config already on screen.
+  const { user: authUser, loading: authLoading } = useAuth();
+  const authUserId = authUser?.id ?? null;
+  const haveConfig = useRef(false);
   useEffect(() => {
+    if (authLoading) return;
+    let live = true;
     fetchRuntimeConfig()
-      .then(setConfig)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
+      .then((c) => {
+        if (!live) return;
+        haveConfig.current = true;
+        setConfig(c);
+      })
+      .catch((e: unknown) => {
+        if (live && !haveConfig.current) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      live = false;
+    };
+  }, [authLoading, authUserId]);
 
   // Saved-search subscription poller (§6.5) — re-runs standing queries, posts to
   // the Inbox when new objects match. Idempotent; no-ops when no searches exist.

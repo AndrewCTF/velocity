@@ -24,6 +24,7 @@ import { CoaCards } from './CoaCards.js';
 import { ImageryDiff } from '../imagery/ImageryDiff.js';
 import { AiAssessmentCard } from '../entity-panel/AiAssessmentCard.js';
 import { Icon, type IconName } from '../normal/Icon.js';
+import { dict } from '../shell/safeKeys.js';
 
 const SEV_TONE: Record<Severity, BadgeTone> = {
   critical: 'alert',
@@ -111,7 +112,7 @@ export function SituationPanel({ id, viewer: _viewer }: Props): JSX.Element {
     const k = o.kind || 'object';
     m[k] = (m[k] ?? 0) + 1;
     return m;
-  }, {});
+  }, dict<number>());
 
   const tabs: TabDef[] = [
     {

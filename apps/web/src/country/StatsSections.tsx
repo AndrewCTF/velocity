@@ -16,6 +16,7 @@ import {
   type UnResponse,
   type WorldBankResponse,
 } from './shared.js';
+import { safeHttpUrl } from '../shell/safeUrl.js';
 
 function IndicatorGrid({ indicators }: { indicators: Indicator[] }): JSX.Element {
   return (
@@ -187,7 +188,7 @@ export function OsintSection({
                 {resources.map((res) => (
                   <div key={res.url} className="py-0.5 min-w-0">
                     <a
-                      href={res.url}
+                      href={safeHttpUrl(res.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[12px] text-txt-1 hover:text-accent truncate block"

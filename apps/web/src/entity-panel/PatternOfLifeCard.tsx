@@ -34,6 +34,7 @@ import {
   MicroLabel,
   Btn,
 } from '../shell/instruments.js';
+import { dict } from '../shell/safeKeys.js';
 
 // ── tolerant POL contract ─────────────────────────────────────────────────────
 // One z-scored baseline metric, the shape intel/baseline.assess emits per key.
@@ -122,7 +123,7 @@ function baselineMetrics(b: PolResponse['baseline']): Record<string, BaselineMet
   if (envelope.metrics && typeof envelope.metrics === 'object') return envelope.metrics;
   // Flat map — keep only object-valued entries (skip an 'anomalies' array if the
   // backend returned the assess() envelope shape without a `metrics` wrapper).
-  const out: Record<string, BaselineMetric> = {};
+  const out = dict<BaselineMetric>();
   for (const [k, v] of Object.entries(b as Record<string, unknown>)) {
     if (k === 'anomalies') continue;
     if (v && typeof v === 'object' && !Array.isArray(v)) out[k] = v as BaselineMetric;
