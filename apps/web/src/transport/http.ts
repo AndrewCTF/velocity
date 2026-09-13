@@ -108,6 +108,15 @@ export function isBackendUrl(resolvedUrl: string): boolean {
   }
 }
 
+// True once the backend has answered 401: the only case where signing in would
+// change what the map shows. A down backend is not a reason to ask for a login.
+// ponytail: module flag, read on the next render; make it a store if a surface
+// needs to react the instant it flips.
+let unauthorized = false;
+export function backendRejectedAuth(): boolean {
+  return unauthorized;
+}
+
 export async function apiFetch(
   url: string,
   init: RequestInit = {},
@@ -115,11 +124,11 @@ export async function apiFetch(
   const resolvedUrl = backendUrl(url);
   if (!isBackendUrl(resolvedUrl)) return fetch(resolvedUrl, init);
   const token = await bearerToken();
-  if (!token && !API_KEY) return fetch(resolvedUrl, init);
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (API_KEY) headers.set('X-API-Key', API_KEY);
-  const res = await fetch(resolvedUrl, { ...init, headers });
+  const res = await fetch(resolvedUrl, token || API_KEY ? { ...init, headers } : init);
+  if (res.status === 401) unauthorized = true;
   if (res.status === 403 && token) noteMfaRequired(res);
   return res;
 }

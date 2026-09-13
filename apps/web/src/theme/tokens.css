@@ -1,22 +1,22 @@
-/* Design tokens — warm-ink instrument palette. Single source of truth.
+/* Design tokens — single source of truth. The default palette is IBM Carbon g100.
    Variable NAMES are stable (Tailwind utilities + every component reference
-   them); only the VALUES shift the look. Dark theme is deliberately a few
-   steps LIGHTER and warmer than a typical near-black console. */
+   them); only the VALUES shift the look. */
 :root {
   /* Dark by default: makes native controls (select popups, number spinners,
      scrollbars, date pickers) render dark instead of OS-light. */
   color-scheme: dark;
-  /* substrate — warm dark ink (slightly amber-shifted grey, not blue-black).
-     Lifted well off pure black so panels read as material, not void. */
-  --bg-0: #111418;
-  --bg-1: #1c2127;
-  --bg-2: #252a31;
-  --bg-3: #2f343c;
-  --bg-4: #383e47;
+  /* substrate — Carbon gray 100 / 90 / 80 / 70, neutral with no hue cast.
+     bg-1 sits between background and layer-01 so rails read as their own
+     surface. */
+  --bg-0: #161616;
+  --bg-1: #1c1c1c;
+  --bg-2: #262626;
+  --bg-3: #393939;
+  --bg-4: #525252;
   /* left tool panels (icon rail + flyout) — a neutral dark grey, deliberately
      cooler/greyer than the warm substrate so the panels read as their own
      surface. Light theme keeps the white panel below. */
-  --panel-bg: #1c2127;
+  --panel-bg: #1c1c1c;
   /* hairlines — warm white; a notch stronger since the lighter bg eats alpha */
   --line: rgba(255, 255, 255, 0.08);
   --line-2: rgba(255, 255, 255, 0.16);
@@ -25,38 +25,38 @@
      tier now clears 4.5:1 on both bg-1 and the lighter card bg-2, including the
      muted txt-3/txt-4 tiers that previously failed (2.81:1 / 1.71:1) and were
      carrying live text. txt-2 lifted to open headroom for a descending ramp. */
-  --txt-0: #f6f7f9;
-  --txt-1: #c5cbd3;
-  --txt-2: #abb3bf;
-  --txt-3: #8f99a8;
-  --txt-4: #8f99a8;
+  --txt-0: #f4f4f4;
+  --txt-1: #e0e0e0;
+  --txt-2: #c6c6c6;
+  --txt-3: #a8a8a8;
+  --txt-4: #a8a8a8;
 
-  /* accent — soft sky-steel blue (interactive / focus / active). Lighter than
-     the old cobalt so it sits comfortably on the warmer substrate. */
-  --accent: #2d72d2;
-  --accent-dim: rgba(45, 114, 210, 0.20);
-  --accent-line: rgba(45, 114, 210, 0.55);
+  /* accent — Carbon blue 60 fill (interactive / focus / active); text on the
+     substrate uses blue 30, which holds AA on its own tint. */
+  --accent: #0f62fe;
+  --accent-dim: rgba(15, 98, 254, 0.2);
+  --accent-line: rgba(15, 98, 254, 0.55);
 
   /* SEMANTIC — threat state ONLY */
-  --warn: #ec9a3c;
-  --warn-bg: rgba(236, 154, 60, 0.16);
-  --warn-line: rgba(236, 154, 60, 0.40);
+  --warn: #f1c21b;
+  --warn-bg: rgba(241, 194, 27, 0.16);
+  --warn-line: rgba(241, 194, 27, 0.4);
   /* warn "foreground" — the lightened text hue used on a --warn-bg tint (a raw
      --warn is too saturated to read as body text). */
-  --warn-fg: #fbb360;
-  --alert: #cd4246;
-  --alert-bg: rgba(205, 66, 70, 0.16);
-  --alert-line: rgba(205, 66, 70, 0.40);
-  --alert-fg: #fa999c;
-  --ok: #32a467;
-  --ok-bg: rgba(50, 164, 103, 0.16);
-  --ok-line: rgba(50, 164, 103, 0.38);
+  --warn-fg: #f1c21b;
+  --alert: #da1e28;
+  --alert-bg: rgba(218, 30, 40, 0.16);
+  --alert-line: rgba(218, 30, 40, 0.4);
+  --alert-fg: #ffb3b8;
+  --ok: #24a148;
+  --ok-bg: rgba(36, 161, 72, 0.16);
+  --ok-line: rgba(36, 161, 72, 0.4);
   /* ok "foreground" — the lightened tier --ok never had, while warn, alert
      and accent all did. `text-ok` therefore rendered the raw FILL as text and
      measured 3.85:1 on its own --ok-bg tint (the "installed" model badge). */
-  --ok-fg: #7ddba4;
+  --ok-fg: #6fdc8c;
   /* accent "foreground" — lightened accent text on an --accent-dim tint. */
-  --accent-fg: #8abbff;
+  --accent-fg: #a6c8ff;
   /* magenta — selection / correlation lineage (matches the globe selection
      polyline family; distinct from the blue interactive accent). */
   --mag: #d946ef;
@@ -65,7 +65,7 @@
   --mag-fg: #f0a8f8;
   /* Low severity — kept distinct from the selection accent so a "low" alert
      badge doesn't read as "selected". Mirrors --txt-1. */
-  --sev-low: #c5cbd3;
+  --sev-low: #e0e0e0;
 
   /* ── Ink on a SOLID fill ─────────────────────────────────────────────────
      Text sitting on --accent / --mag / --alert / --ok / --warn was a literal
@@ -99,9 +99,9 @@
   --g-icon: 16px;
   --g-pad: 14px;    /* panel gutter, left and right */
   --g-gap: 8px;     /* gutter BETWEEN regions, so nothing shares an edge */
-  /* Row hover is a HALF step, not the full Blueprint one: --txt-3 measures
-     4.35:1 on dark-gray3 and layer subtitles ARE --txt-3 on rows that hover. */
-  --hover: #2a2f37;
+  /* Row hover — Carbon layer-hover-01. --txt-3 sits on it on every hoverable
+     row, so contrast.test.ts holds the pair to AA. */
+  --hover: #333333;
 
   /* radii — hard-cornered, instrument-grade */
   --r-sm: 2px;
@@ -161,71 +161,61 @@
 }
 
 /* ── Light theme ───────────────────────────────────────────────────────────
-   Standard global token override, toggled by state/theme.ts (data-theme on
-   <html>). Every component reads var(--bg-*) / var(--txt-*) so the whole chrome
-   flips; the Cesium globe canvas is not token-coloured, so the map itself stays
-   dark (a light basemap would be a separate change). */
+   Daylight = IBM Carbon's White theme (v11): white layers on gray 10, gray 100
+   text, blue 60 interactive. Every component reads var(--bg-*) / var(--txt-*)
+   so the whole chrome flips; the Cesium globe canvas is not token-coloured, so
+   the map itself stays dark. A scheme overrides --hover with its substrate: the
+   light block once inherited the DARK hover and flashed near-black rows.
+   Carbon's yellow 30 cannot hold white ink, so --on-warn stays dark. */
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg-0: #f6f7f9;
+  --bg-0: #f4f4f4;
   --bg-1: #ffffff;
-  --bg-2: #edeff2;
-  --bg-3: #e5e8eb;
-  --bg-4: #d3d8de;
+  --bg-2: #f4f4f4;
+  --bg-3: #e0e0e0;
+  --bg-4: #c6c6c6;
   --panel-bg: #ffffff;
-  --line: rgba(17, 20, 24, 0.10);
-  --line-2: rgba(17, 20, 24, 0.18);
-  --txt-0: #111418;
-  --txt-1: #1c2127;
-  --txt-2: #5f6b7c;
-  /* txt-3/txt-4 darkened to clear AA on white AND the pale card bg-2 (were
-     3.04:1 / 2.14:1 — both failed while carrying live text). See contrast.test.ts */
-  --txt-3: #5f6b7c;
-  --txt-4: #5f6b7c;
-  --accent: #215db0;
-  --accent-dim: rgba(33, 93, 176, 0.10);
-  --accent-line: rgba(33, 93, 176, 0.34);
-  /* accent/threat "foreground" hues — darkened for legibility on the pale tints */
-  --accent-fg: #184a90;
-  --warn: #935610;
-  --warn-bg: rgba(183, 121, 31, 0.12);
-  --warn-line: rgba(183, 121, 31, 0.4);
-  --warn-fg: #77450d;
-  --alert: #a82a2a;
-  --alert-bg: rgba(216, 57, 47, 0.12);
-  --alert-line: rgba(216, 57, 47, 0.4);
-  --alert-fg: #8e292c;
-  --ok: #1c6e42;
-  --ok-bg: rgba(31, 157, 107, 0.12);
-  --ok-line: rgba(31, 157, 107, 0.35);
-  --ok-fg: #125c34;
+  --line: rgba(22, 22, 22, 0.10);
+  --line-2: rgba(22, 22, 22, 0.18);
+  --txt-0: #161616;
+  --txt-1: #262626;
+  --txt-2: #525252;
+  --txt-3: #525252;
+  --txt-4: #525252;
+  --accent: #0f62fe;
+  --accent-dim: rgba(15, 98, 254, 0.12);
+  --accent-line: rgba(15, 98, 254, 0.34);
+  --accent-fg: #0043ce;
+  --warn: #f1c21b;
+  --warn-bg: rgba(241, 194, 27, 0.12);
+  --warn-line: rgba(241, 194, 27, 0.38);
+  --warn-fg: #684e00;
+  --alert: #da1e28;
+  --alert-bg: rgba(218, 30, 40, 0.12);
+  --alert-line: rgba(218, 30, 40, 0.38);
+  --alert-fg: #a2191f;
+  --ok: #198038;
+  --ok-bg: rgba(25, 128, 56, 0.12);
+  --ok-line: rgba(25, 128, 56, 0.38);
+  --ok-fg: #0e6027;
   --mag: #b13fc4;
   --mag-dim: rgba(177, 63, 196, 0.12);
   --mag-line: rgba(177, 63, 196, 0.45);
   --mag-fg: #8a2b9c;
-  /* low severity mirrors --txt-1 (see :root note) */
-  --sev-low: #33414f;
-  /* classification banner — readable on light chrome */
-  --cls-unclas-bg: #d6f0e0;
-  --cls-unclas-fg: #1f7a44;
-  --cls-exercise-bg: #f6e6c0;
-  --cls-exercise-fg: #8a6410;
-  /* Row hover. The light block used to inherit the DARK `--hover: #2a2f37`, so
-     every hoverable row in the light theme flashed near-black under the
-     cursor. A scheme that overrides the substrate must override the hover that
-     sits on it. */
-  /* #e3e8ee put the muted tier at 4.39:1 — under the floor, on a surface every
-     hoverable row uses. A half step lighter clears it at 4.52:1. Hover states
-     are not in the DOM until hovered, so the live sweep could not see this. */
-  --hover: #e7ebf0;
-  --sh-1: 0 1px 2px rgba(17, 20, 24, 0.10);
-  --sh-2: 0 6px 22px rgba(17, 20, 24, 0.14);
-  --sh-pop: 0 18px 50px rgba(17, 20, 24, 0.18);
+  --sev-low: #262626;
+  --hover: #e8e8e8;
+  --cls-unclas-bg: #defbe6;
+  --cls-unclas-fg: #0e6027;
+  --cls-exercise-bg: #fcf4d6;
+  --cls-exercise-fg: #684e00;
+  --sh-1: 0 1px 2px rgba(22, 22, 22, 0.1);
+  --sh-2: 0 6px 22px rgba(22, 22, 22, 0.14);
+  --sh-pop: 0 18px 50px rgba(22, 22, 22, 0.18);
   --on-accent: #ffffff;
   --on-mag: #ffffff;
   --on-alert: #ffffff;
   --on-ok: #ffffff;
-  --on-warn: #ffffff;
+  --on-warn: var(--ink-dark);
 }
 
 /* ── Additional colour schemes ─────────────────────────────────────────────
@@ -239,152 +229,99 @@
    The globe canvas is not token-coloured, so the map itself is unchanged by
    any of these; the basemap is picked separately in Layers. */
 
-/* Midnight — cool blue-black. The classic operations-room look: a colder
-   substrate than the warm default, hairlines tinted toward the accent. */
+/* Midnight — GitHub Primer's dark theme (canvas, border and fg tokens as
+   published). Emphasis hues are the fills; the -fg tokens are Primer's scale-3
+   text tones, a step brighter than its muted fg so they hold AA on a tint. */
 :root[data-theme='midnight'] {
   color-scheme: dark;
-  --bg-0: #0b0f1a;
-  --bg-1: #121826;
-  --bg-2: #1a2233;
-  --bg-3: #232d42;
-  --bg-4: #2e3a52;
-  --panel-bg: #121826;
-  --line: rgba(148, 178, 255, 0.10);
-  --line-2: rgba(148, 178, 255, 0.20);
-  --txt-0: #f2f6ff;
-  --txt-1: #c3ccdf;
-  --txt-2: #a8b3ca;
-  --txt-3: #8e9bb5;
-  --txt-4: #8e9bb5;
-  --accent: #4c8dff;
-  --accent-dim: rgba(76, 141, 255, 0.20);
-  --accent-line: rgba(76, 141, 255, 0.55);
-  --accent-fg: #8fc0ff;
-  --warn: #e9a13b;
-  --warn-bg: rgba(233, 161, 59, 0.16);
-  --warn-line: rgba(233, 161, 59, 0.40);
-  --warn-fg: #f7bd6b;
-  --alert: #e2545a;
-  --alert-bg: rgba(226, 84, 90, 0.16);
-  --alert-line: rgba(226, 84, 90, 0.40);
-  --alert-fg: #ffa0a4;
-  --ok: #2ea36a;
-  --ok-bg: rgba(46, 163, 106, 0.16);
-  --ok-line: rgba(46, 163, 106, 0.38);
-  --ok-fg: #79d9a5;
+  --bg-0: #010409;
+  --bg-1: #0d1117;
+  --bg-2: #161b22;
+  --bg-3: #21262d;
+  --bg-4: #30363d;
+  --panel-bg: #0d1117;
+  --line: rgba(240, 246, 252, 0.10);
+  --line-2: rgba(240, 246, 252, 0.18);
+  --txt-0: #f0f6fc;
+  --txt-1: #e6edf3;
+  --txt-2: #b7bdc8;
+  --txt-3: #9ea7b3;
+  --txt-4: #9ea7b3;
+  --accent: #1f6feb;
+  --accent-dim: rgba(31, 111, 235, 0.2);
+  --accent-line: rgba(31, 111, 235, 0.55);
+  --accent-fg: #58a6ff;
+  --warn: #d29922;
+  --warn-bg: rgba(210, 153, 34, 0.16);
+  --warn-line: rgba(210, 153, 34, 0.4);
+  --warn-fg: #e3b341;
+  --alert: #da3633;
+  --alert-bg: rgba(218, 54, 51, 0.16);
+  --alert-line: rgba(218, 54, 51, 0.4);
+  --alert-fg: #ff7b72;
+  --ok: #238636;
+  --ok-bg: rgba(35, 134, 54, 0.16);
+  --ok-line: rgba(35, 134, 54, 0.4);
+  --ok-fg: #56d364;
   --mag: #d472f5;
   --mag-dim: rgba(212, 114, 245, 0.16);
-  --mag-line: rgba(212, 114, 245, 0.50);
+  --mag-line: rgba(212, 114, 245, 0.5);
   --mag-fg: #eeaefb;
-  --sev-low: #c3ccdf;
-  --hover: #1f2839;
-  --cls-unclas-bg: #0a3324;
-  --cls-unclas-fg: #7fe3b3;
-  --cls-exercise-bg: #33280a;
+  --sev-low: #e6edf3;
+  --hover: #1c2128;
+  --cls-unclas-bg: #0c3b1f;
+  --cls-unclas-fg: #86e0a6;
+  --cls-exercise-bg: #3a2a05;
   --cls-exercise-fg: #f5c451;
-  --on-accent: var(--ink-dark);
+  --on-accent: #ffffff;
   --on-mag: var(--ink-dark);
-  --on-alert: var(--ink-dark);
-  --on-ok: var(--ink-dark);
+  --on-alert: #ffffff;
+  --on-ok: #ffffff;
   --on-warn: var(--ink-dark);
 }
 
-/* Slate — neutral graphite with a teal accent. For operators who read blue as
-   a data colour and want the chrome to stay out of the way of it. */
+/* Slate — Radix Colors slate (dark) with teal as the accent, so blue stays a
+   data colour. Steps 1-6 are the substrate, 11/12 the text; fills are step 9,
+   text-on-substrate hues step 11. */
 :root[data-theme='slate'] {
   color-scheme: dark;
-  --bg-0: #14161a;
-  --bg-1: #1b1e23;
-  --bg-2: #23272e;
-  --bg-3: #2c313a;
-  --bg-4: #373d47;
-  --panel-bg: #1b1e23;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-2: rgba(255, 255, 255, 0.18);
-  --txt-0: #f4f5f7;
-  --txt-1: #c8cdd4;
-  --txt-2: #adb4bd;
-  --txt-3: #949ca7;
-  --txt-4: #949ca7;
-  --accent: #16a394;
-  --accent-dim: rgba(22, 163, 148, 0.20);
-  --accent-line: rgba(22, 163, 148, 0.55);
-  --accent-fg: #5fd3c4;
-  --warn: #e0a02f;
-  --warn-bg: rgba(224, 160, 47, 0.16);
-  --warn-line: rgba(224, 160, 47, 0.40);
-  --warn-fg: #f2bc63;
-  /* Lifted from #d4494d: dark ink measured 4.40:1 on it, under AA. */
-  --alert: #e05a5e;
-  --alert-bg: rgba(224, 90, 94, 0.16);
-  --alert-line: rgba(224, 90, 94, 0.40);
-  --alert-fg: #f79a9d;
-  /* Lifted from #4a9c5c: 4.43:1 as TEXT on this scheme's card bg, under AA. */
-  --ok: #52a865;
-  --ok-bg: rgba(82, 168, 101, 0.16);
-  --ok-line: rgba(82, 168, 101, 0.38);
-  --ok-fg: #8ad79b;
+  --bg-0: #111113;
+  --bg-1: #18191b;
+  --bg-2: #212225;
+  --bg-3: #272a2d;
+  --bg-4: #363a3f;
+  --panel-bg: #18191b;
+  --line: rgba(216, 244, 246, 0.09);
+  --line-2: rgba(221, 234, 248, 0.18);
+  --txt-0: #edeef0;
+  --txt-1: #d4d6da;
+  --txt-2: #b0b4ba;
+  --txt-3: #b0b4ba;
+  --txt-4: #b0b4ba;
+  --accent: #12a594;
+  --accent-dim: rgba(18, 165, 148, 0.2);
+  --accent-line: rgba(18, 165, 148, 0.55);
+  --accent-fg: #0bd8b6;
+  --warn: #ffc53d;
+  --warn-bg: rgba(255, 197, 61, 0.16);
+  --warn-line: rgba(255, 197, 61, 0.4);
+  --warn-fg: #ffca16;
+  --alert: #e5484d;
+  --alert-bg: rgba(229, 72, 77, 0.16);
+  --alert-line: rgba(229, 72, 77, 0.4);
+  --alert-fg: #ff9592;
+  --ok: #30a46c;
+  --ok-bg: rgba(48, 164, 108, 0.16);
+  --ok-line: rgba(48, 164, 108, 0.4);
+  --ok-fg: #3dd68c;
   --mag: #c765dd;
   --mag-dim: rgba(199, 101, 221, 0.16);
-  --mag-line: rgba(199, 101, 221, 0.50);
-  --mag-fg: #e5a6f0;
-  --sev-low: #c8cdd4;
-  --hover: #282d35;
-  --cls-unclas-bg: #0d3524;
-  --cls-unclas-fg: #83dcae;
-  --cls-exercise-bg: #33280a;
-  --cls-exercise-fg: #f2c463;
-  --on-accent: var(--ink-dark);
-  --on-mag: var(--ink-dark);
-  --on-alert: var(--ink-dark);
-  --on-ok: var(--ink-dark);
-  --on-warn: var(--ink-dark);
-}
-
-/* Night watch — a warm amber substrate for a darkened room. Deliberately not
-   monochrome: the threat hues stay distinguishable, because a scheme that
-   collapses alert and warn into one amber cannot carry a threat state. */
-:root[data-theme='amber'] {
-  color-scheme: dark;
-  --bg-0: #0f0d0a;
-  --bg-1: #17140f;
-  --bg-2: #201c15;
-  --bg-3: #2b251b;
-  --bg-4: #383024;
-  --panel-bg: #17140f;
-  --line: rgba(255, 214, 148, 0.10);
-  --line-2: rgba(255, 214, 148, 0.20);
-  --txt-0: #fdf6e8;
-  --txt-1: #d8cdb6;
-  --txt-2: #bdb098;
-  --txt-3: #a4977f;
-  --txt-4: #a4977f;
-  --accent: #e0a838;
-  /* 0.14, not 0.20: this accent is bright, so a 20% tint lifted the card
-     substrate until txt-3 measured 4.37:1 on it. Measured, not guessed. */
-  --accent-dim: rgba(224, 168, 56, 0.14);
-  --accent-line: rgba(224, 168, 56, 0.55);
-  --accent-fg: #f5c76a;
-  --warn: #e08a2c;
-  --warn-bg: rgba(224, 138, 44, 0.18);
-  --warn-line: rgba(224, 138, 44, 0.42);
-  --warn-fg: #f2ac5e;
-  --alert: #d9534a;
-  --alert-bg: rgba(217, 83, 74, 0.18);
-  --alert-line: rgba(217, 83, 74, 0.42);
-  --alert-fg: #f79f97;
-  --ok: #63a04a;
-  --ok-bg: rgba(99, 160, 74, 0.16);
-  --ok-line: rgba(99, 160, 74, 0.38);
-  --ok-fg: #a3d189;
-  --mag: #c96ad2;
-  --mag-dim: rgba(201, 106, 210, 0.16);
-  --mag-line: rgba(201, 106, 210, 0.50);
-  --mag-fg: #e6a9ec;
-  --sev-low: #d8cdb6;
-  --hover: #26211a;
-  --cls-unclas-bg: #1f3318;
-  --cls-unclas-fg: #a8d68e;
+  --mag-line: rgba(199, 101, 221, 0.5);
+  --mag-fg: #e796f3;
+  --sev-low: #d4d6da;
+  --hover: #272a2d;
+  --cls-unclas-bg: #0c3b1f;
+  --cls-unclas-fg: #86e0a6;
   --cls-exercise-bg: #3a2a05;
   --cls-exercise-fg: #f5c451;
   --on-accent: var(--ink-dark);
@@ -394,45 +331,98 @@
   --on-warn: var(--ink-dark);
 }
 
-/* High contrast — near-black substrate, a bright text ramp and hairlines that
-   are actually visible. Every tier clears AAA (7:1) here, not just AA. */
+/* Night watch — Radix Colors sand (dark) with amber as the accent, for a
+   darkened room. Warn moves to Radix orange so it never reads as the accent;
+   alert stays red, because a scheme that collapses alert and warn into one
+   amber cannot carry a threat state. The accent tint is 14%, not 20%: amber is
+   bright and a 20% tint lifted the card until the muted tier fell under AA. */
+:root[data-theme='amber'] {
+  color-scheme: dark;
+  --bg-0: #111110;
+  --bg-1: #191918;
+  --bg-2: #222221;
+  --bg-3: #2a2a28;
+  --bg-4: #3b3a37;
+  --panel-bg: #191918;
+  --line: rgba(244, 244, 243, 0.09);
+  --line-2: rgba(247, 247, 240, 0.18);
+  --txt-0: #eeeeec;
+  --txt-1: #d6d5d1;
+  --txt-2: #b5b3ad;
+  --txt-3: #b5b3ad;
+  --txt-4: #b5b3ad;
+  --accent: #ffc53d;
+  --accent-dim: rgba(255, 197, 61, 0.14);
+  --accent-line: rgba(255, 197, 61, 0.55);
+  --accent-fg: #ffca16;
+  --warn: #f76b15;
+  --warn-bg: rgba(247, 107, 21, 0.16);
+  --warn-line: rgba(247, 107, 21, 0.4);
+  --warn-fg: #ff801f;
+  --alert: #e5484d;
+  --alert-bg: rgba(229, 72, 77, 0.16);
+  --alert-line: rgba(229, 72, 77, 0.4);
+  --alert-fg: #ff9592;
+  --ok: #30a46c;
+  --ok-bg: rgba(48, 164, 108, 0.16);
+  --ok-line: rgba(48, 164, 108, 0.4);
+  --ok-fg: #3dd68c;
+  --mag: #c96ad2;
+  --mag-dim: rgba(201, 106, 210, 0.16);
+  --mag-line: rgba(201, 106, 210, 0.5);
+  --mag-fg: #e796f3;
+  --sev-low: #d6d5d1;
+  --hover: #2a2a28;
+  --cls-unclas-bg: #0c3b1f;
+  --cls-unclas-fg: #86e0a6;
+  --cls-exercise-bg: #3a2a05;
+  --cls-exercise-fg: #f5c451;
+  --on-accent: var(--ink-dark);
+  --on-mag: var(--ink-dark);
+  --on-alert: var(--ink-dark);
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
+}
+
+/* High contrast — GitHub Primer's dark high-contrast theme. Hairlines are
+   actually visible and every text tier clears AAA (7:1), not just AA. */
 :root[data-theme='contrast'] {
   color-scheme: dark;
-  --bg-0: #000000;
-  --bg-1: #0a0a0a;
-  --bg-2: #141414;
-  --bg-3: #1f1f1f;
-  --bg-4: #2e2e2e;
-  --panel-bg: #0a0a0a;
+  --bg-0: #010409;
+  --bg-1: #0a0c10;
+  --bg-2: #151b23;
+  --bg-3: #272b33;
+  --bg-4: #3a404a;
+  --panel-bg: #0a0c10;
   --line: rgba(255, 255, 255, 0.28);
   --line-2: rgba(255, 255, 255, 0.45);
   --txt-0: #ffffff;
-  --txt-1: #f0f0f0;
-  --txt-2: #e0e0e0;
-  --txt-3: #cfcfcf;
-  --txt-4: #cfcfcf;
-  --accent: #3d8bfd;
-  --accent-dim: rgba(61, 139, 253, 0.28);
-  --accent-line: rgba(61, 139, 253, 0.85);
-  --accent-fg: #9ec5ff;
-  --warn: #ffb648;
-  --warn-bg: rgba(255, 182, 72, 0.22);
-  --warn-line: rgba(255, 182, 72, 0.7);
-  --warn-fg: #ffd28c;
-  --alert: #ff6b6f;
-  --alert-bg: rgba(255, 107, 111, 0.22);
-  --alert-line: rgba(255, 107, 111, 0.7);
-  --alert-fg: #ffb3b5;
-  --ok: #3fd67f;
-  --ok-bg: rgba(63, 214, 127, 0.20);
-  --ok-line: rgba(63, 214, 127, 0.65);
-  --ok-fg: #7cf0ab;
+  --txt-1: #f0f3f6;
+  --txt-2: #e0e4ea;
+  --txt-3: #d9dee3;
+  --txt-4: #d9dee3;
+  --accent: #409eff;
+  --accent-dim: rgba(64, 158, 255, 0.28);
+  --accent-line: rgba(64, 158, 255, 0.55);
+  --accent-fg: #91cbff;
+  --warn: #f0b72f;
+  --warn-bg: rgba(240, 183, 47, 0.16);
+  --warn-line: rgba(240, 183, 47, 0.4);
+  --warn-fg: #f7c843;
+  --alert: #ff6a69;
+  --alert-bg: rgba(255, 106, 105, 0.16);
+  --alert-line: rgba(255, 106, 105, 0.4);
+  --alert-fg: #ffb1af;
+  --ok: #09b43a;
+  --ok-bg: rgba(9, 180, 58, 0.16);
+  --ok-line: rgba(9, 180, 58, 0.4);
+  --ok-fg: #4ae168;
   --mag: #f07bff;
-  --mag-dim: rgba(240, 123, 255, 0.22);
-  --mag-line: rgba(240, 123, 255, 0.7);
+  --mag-dim: rgba(240, 123, 255, 0.16);
+  --mag-line: rgba(240, 123, 255, 0.5);
   --mag-fg: #f7bcff;
-  --sev-low: #f0f0f0;
-  --hover: #262626;
+  --sev-low: #f0f3f6;
+  --hover: #272b33;
   --cls-unclas-bg: #00351f;
   --cls-unclas-fg: #8dffc0;
   --cls-exercise-bg: #3a2a05;
@@ -444,57 +434,56 @@
   --on-warn: var(--ink-dark);
 }
 
-/* Paper — a warm light scheme for print-adjacent work and bright rooms, where
-   the cool white of Daylight reads clinical. */
+/* Paper — Radix Colors sand (light) with indigo, a warm print-adjacent white
+   where Carbon's Daylight reads clinical. Radix step-9 red and step-11 amber
+   fail AA as fill/ink here, so alert fills with red 11 and the -fg tones are
+   step 12. */
 :root[data-theme='paper'] {
-  color-scheme: light;
-  --bg-0: #f7f3e9;
-  --bg-1: #fffdf7;
-  --bg-2: #f2ede1;
-  --bg-3: #e8e1d1;
-  --bg-4: #d8cfba;
-  --panel-bg: #fffdf7;
-  --line: rgba(26, 23, 18, 0.12);
-  --line-2: rgba(26, 23, 18, 0.22);
-  --txt-0: #1a1712;
-  --txt-1: #2a251c;
-  --txt-2: #5c5346;
-  --txt-3: #5c5346;
-  --txt-4: #5c5346;
-  --accent: #1c5e8c;
-  --accent-dim: rgba(28, 94, 140, 0.12);
-  --accent-line: rgba(28, 94, 140, 0.38);
-  --accent-fg: #14486c;
-  --warn: #8a5410;
-  --warn-bg: rgba(160, 105, 25, 0.14);
-  --warn-line: rgba(160, 105, 25, 0.42);
-  --warn-fg: #70430c;
-  --alert: #9c2b28;
-  --alert-bg: rgba(190, 55, 50, 0.14);
-  --alert-line: rgba(190, 55, 50, 0.42);
-  --alert-fg: #85262a;
-  --ok: #1c6238;
-  --ok-bg: rgba(30, 130, 82, 0.14);
-  --ok-line: rgba(30, 130, 82, 0.38);
-  --ok-fg: #12522c;
+  color-scheme: dark;
+  --bg-0: #f1f0ef;
+  --bg-1: #fdfdfc;
+  --bg-2: #f9f9f8;
+  --bg-3: #e9e8e6;
+  --bg-4: #dad9d6;
+  --panel-bg: #fdfdfc;
+  --line: rgba(33, 32, 28, 0.12);
+  --line-2: rgba(33, 32, 28, 0.22);
+  --txt-0: #21201c;
+  --txt-1: #3b3a37;
+  --txt-2: #63635e;
+  --txt-3: #63635e;
+  --txt-4: #63635e;
+  --accent: #3e63dd;
+  --accent-dim: rgba(62, 99, 221, 0.2);
+  --accent-line: rgba(62, 99, 221, 0.55);
+  --accent-fg: #1f2d5c;
+  --warn: #ffc53d;
+  --warn-bg: rgba(255, 197, 61, 0.16);
+  --warn-line: rgba(255, 197, 61, 0.4);
+  --warn-fg: #4f3422;
+  --alert: #ce2c31;
+  --alert-bg: rgba(206, 44, 49, 0.16);
+  --alert-line: rgba(206, 44, 49, 0.4);
+  --alert-fg: #641723;
+  --ok: #218358;
+  --ok-bg: rgba(33, 131, 88, 0.16);
+  --ok-line: rgba(33, 131, 88, 0.4);
+  --ok-fg: #193b2d;
   --mag: #93318f;
-  --mag-dim: rgba(147, 49, 143, 0.12);
-  --mag-line: rgba(147, 49, 143, 0.45);
+  --mag-dim: rgba(147, 49, 143, 0.16);
+  --mag-line: rgba(147, 49, 143, 0.5);
   --mag-fg: #7a2576;
-  --sev-low: #2a251c;
-  --hover: #ece5d5;
-  --cls-unclas-bg: #d8ecdd;
-  --cls-unclas-fg: #1c6238;
-  --cls-exercise-bg: #f3e4bd;
-  --cls-exercise-fg: #7a5810;
-  --sh-1: 0 1px 2px rgba(26, 23, 18, 0.10);
-  --sh-2: 0 6px 22px rgba(26, 23, 18, 0.14);
-  --sh-pop: 0 18px 50px rgba(26, 23, 18, 0.18);
+  --sev-low: #3b3a37;
+  --hover: #f1f0ef;
+  --cls-unclas-bg: #defbe6;
+  --cls-unclas-fg: #0e6027;
+  --cls-exercise-bg: #fcf4d6;
+  --cls-exercise-fg: #684e00;
   --on-accent: #ffffff;
   --on-mag: #ffffff;
   --on-alert: #ffffff;
   --on-ok: #ffffff;
-  --on-warn: #ffffff;
+  --on-warn: var(--ink-dark);
 }
 
 /* Blueprint dark — blue3, the accent Blueprint and the reference both use.

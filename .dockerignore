@@ -34,7 +34,6 @@ scratchpad/
 tmp/
 test_images/
 .wrangler/
-site/
 
 # Whole apps NOT referenced by either Dockerfile's COPY — apps/ml/fusion
 # alone runs tens of GB of model/training artifacts, and apps/desktop's Rust

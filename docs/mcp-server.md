@@ -158,19 +158,16 @@ works on Windows, macOS, and Linux. The installer prints the exact commands per 
 `plugin\osint-geoint\install.ps1` (Windows, `-Run` to register). See
 [`plugin/osint-geoint/README.md`](../plugin/osint-geoint/README.md).
 
-### Hosted
+### Over HTTP (your own box)
 
-On the hosted deployment the MCP server is mounted into the FastAPI backend at
-`/mcp` (streamable-HTTP) — no separate process. The gateway Worker proxies
-`https://projectvelocity.org/mcp` to it, verifying the caller's Velocity
-(Supabase) token and forwarding it; the backend's `ApiKeyMiddleware` re-checks
-the token, so the endpoint is gated like every other non-public route. Connect
-any MCP client:
+The MCP server is also mounted into the FastAPI backend at `/mcp`
+(streamable-HTTP), so no separate process is needed. `/mcp` answers 503 on a
+keyless box; set `API_KEY` on the backend and present it as `X-API-Key`:
 
 ```bash
 claude mcp add --transport http osint-geoint \
-  https://projectvelocity.org/mcp \
-  --header "Authorization: Bearer $VELOCITY_TOKEN"
+  http://<your-host>:8000/mcp \
+  --header "X-API-Key: $API_KEY"
 ```
 
 > The backend's in-process tools self-call `/api/intel/*` over localhost, so a

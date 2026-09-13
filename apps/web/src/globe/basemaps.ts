@@ -6,7 +6,7 @@ import type { ImageryMode } from '../state/stores.js';
 // GlobeCanvas.tsx) so this tooltip is the attribution surface for now; a
 // future pass can also surface it in a persistent footer.
 export const BASEMAP_OPTIONS: Array<{ value: ImageryMode; label: string; title: string }> = [
-  { value: '2d-dark', label: '2D dark', title: 'Dark Matter basemap (Carto, proxied, keyless)' },
+  { value: '2d-dark', label: '2D dark', title: 'Dark gray canvas (Esri, proxied, keyless)' },
   {
     value: '3d-sat',
     label: '3D sat',

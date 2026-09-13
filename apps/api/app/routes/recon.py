@@ -1,6 +1,6 @@
 """Local 3D Gaussian Splatting reconstruction jobs (Studio backend).
 
-POST images or a video → frames (ffmpeg) → COLMAP SfM (.mamba-colmap) → gsplat
+POST images or a video → frames (ffmpeg) → Pi3X feed-forward SfM (.venv) → gsplat
 train (.venv, built against the .mamba-cuda 12.8 toolchain for Blackwell sm_120)
 → INRIA .ply export. Progress streams over SSE; the finished .ply is served for
 the in-app WebGL viewer. Everything runs LOCALLY on the box's GPU — no upload,
