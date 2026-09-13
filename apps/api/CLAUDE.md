@@ -102,7 +102,12 @@ Browser-tier pacing and the headful lever are in `tools/CLAUDE.md`.
 
 ## Auth
 
-WS handlers call `require_ws_key` BEFORE `accept`.
+WS handlers call `require_ws_key` BEFORE `accept`. `?key=` is honoured ONLY
+there: on HTTP it lands in proxy logs and browser history, so HTTP reads headers
+only, and `RedactKeyFilter` scrubs `key=` from `uvicorn.access` AND
+`uvicorn.error` (where the WS handshake line logs). HS256 session tokens must
+carry `aud` "authenticated" and a past `nbf`.
+→ `tests/test_auth_query_key_and_jwt.py`
 
 `POST /api/ingest/{dataset_id}` is the ONE route with no session dependency — an
 external sender has no session, so a per-dataset token is the whole gate. Only
@@ -131,7 +136,11 @@ The rate limiter believes `X-Forwarded-For` ONLY from a peer inside
 `TRUSTED_PROXIES` (default `127.0.0.1,::1` — the CF Worker → Caddy → uvicorn
 shape, where an empty default would collapse every prod client into one loopback
 bucket). Unconditional trust let any caller mint a fresh bucket per request.
-→ `tests/test_security_hardening.py`
+Behind the prod compose nginx the peer is a bridge address, so
+`docker-compose.prod.yml` sets `TRUSTED_PROXIES` to its fixed `front` subnet.
+Besides the compute cap, EVERY `/api/` path shares a per-client
+`API_RATELIMIT_PER_MIN` (default 3000; health/status/config exempt; 0 disables).
+→ `tests/test_security_hardening.py`, `tests/test_api_ratelimit.py`
 
 The 14 mutating routes on `/api/workflows` and `/api/ai/models` carry
 `Depends(require_operator)`. It passes unconditionally when Supabase is
@@ -150,7 +159,26 @@ every key on the box to block code. bubblewrap is probed by RUNNING it with the
 real bind list (`_JAIL_BINDS`, shared with the spawn), because it installs fine
 on kernels with userns disabled and a cut-down probe reports "absent" on a box
 that has it. `sandbox_tier()` is reported in the block help, never assumed.
-→ `tests/test_python_exec_sandbox.py`
+At the `rlimits-only` tier (including the prod container on kernels with
+`apparmor_restrict_unprivileged_userns=1`) `op.python` answers 503 unless
+`WORKFLOWS_PYTHON_UNSANDBOXED=1`: unjailed, the child shares the API's uid and
+reads its secrets from `/proc/<pid>/environ`. The test conftest sets the opt-in
+so no-bwrap CI still exercises op.python.
+→ `tests/test_python_exec_sandbox.py`, `tests/test_python_exec_unsandboxed_gate.py`
+
+Outbound URLs go through ONE classifier, `app/netguard.is_non_public_ip`
+(mapped/6to4/Teredo unwrapped, CGNAT blocked). `op.http`/drone/device are
+operator-gated and keep the LAN reachable (link-local/IMDS refused). Alert-rule
+`sink_url` is NOT operator-gated, so it is public-only unless its host is in
+`WORKFLOWS_HTTP_ALLOW_HOSTS`, checked at create AND again at delivery.
+→ `tests/test_sink_ssrf.py`
+
+Uploads stream through `app/uploads.py` with a cap (foundry = `store.MAX_UPLOAD_BYTES`,
+shared with ingest; recon = `recon_upload_max_bytes`); over the cap is 413 and
+nothing is left on disk. Every mutating route on workflows, foundry, evidence,
+ai_models, ingest and alert_rules carries `Depends(audit_mutation)` (written
+before the handler: an attempt, not an outcome), and MCP tool calls audit with
+argument NAMES only. → `tests/test_upload_caps.py`, `tests/test_audit_mutations.py`
 
 ## Connections (operator-configured sources)
 

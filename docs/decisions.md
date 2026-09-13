@@ -2790,3 +2790,29 @@ and `/api/status/perf` loop lag p95 moved 232 → 287 ms across the request whil
 Recorded rather than quietly edited: the original claim is the kind this repo's
 first operating rule exists to stop, and it was written by the same pass that
 added the fix.
+
+## Security gap analysis against ISO 27001 / CSF 2.0 / SSDF / ASVS 5.0 (2026-09-13)
+
+The full report, with evidence and status for each gap, is `docs/security/gap-analysis-2026-09.md`. The
+behaviour changes an operator will notice:
+
+- **`?key=` works on WebSocket upgrades only.** HTTP callers must send `X-API-Key` or
+  `Authorization: Bearer`. The web app already did. A script that used `?key=` over HTTP now gets 401.
+- **Alert-rule webhooks must be public** unless the host is in `WORKFLOWS_HTTP_ALLOW_HOSTS`. Any analyst
+  can create a rule, so a LAN sink was an analyst-reachable SSRF. `op.http` keeps its LAN default,
+  because it is operator-gated and LAN control servers are its purpose (`docs/workflows-control-blocks.md`).
+- **`op.python` refuses to run without a jail** (503) unless `WORKFLOWS_PYTHON_UNSANDBOXED=1`. This
+  was measured in the prod container: bwrap cannot map uids when the kernel restricts unprivileged
+  user namespaces, even under `--privileged`. Granting `CAP_SYS_ADMIN` plus unconfined
+  seccomp/apparmor would give back more than the jail protects, so the container fails closed instead.
+- **Production compose** needs `VELOCITY_VERSION` (no `:latest`) and binds nginx to `127.0.0.1:8080`,
+  so TLS terminates at a host proxy. It runs the api read-only with all capabilities dropped.
+- **Web CSP ships in every production build.** It is placed after `Cesium.js`, whose bundled Knockout
+  evals at load. A third-party camera `hls_url` or a pasted splat URL on a new origin is refused until
+  it is proxied through the backend.
+- **Lockfiles are authoritative.** CI and the API image install with `uv sync --locked`, and Dependabot
+  opens weekly PRs. The CI `security` job fails on a high npm advisory or any known Python vulnerability.
+
+Accepted, not changed: a single `API_KEY` holder is the operator (`security.py:155`); use Supabase to
+separate roles. TypeScript stays on 6.0.3 because typescript-eslint 8.70 peers `<6.1`, though TS 7
+itself type-checks clean.
