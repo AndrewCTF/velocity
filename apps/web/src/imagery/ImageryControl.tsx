@@ -35,7 +35,7 @@ interface EventsAllResponse {
 
 // Shared field styling — tokenised mono inputs/selects matching the console.
 const FIELD =
-  'mono text-[11px] bg-bg-1 border border-line rounded-sm px-1.5 py-1 text-txt-1 placeholder:text-txt-3/60 focus:outline-none focus:border-accent-line disabled:opacity-40';
+  'mono text-[11px] bg-bg-1 border border-line rounded-sm px-1.5 py-1 text-txt-1 placeholder:text-txt-3/60 focus:outline-hidden focus:border-accent-line disabled:opacity-40';
 
 // Square mono step button for the day stepper — matches the Btn neutral look
 // but stays a native <button> so the aria-label is forwarded.

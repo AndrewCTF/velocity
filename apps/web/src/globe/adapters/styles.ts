@@ -667,6 +667,7 @@ const HAZARD_COLORS: Record<string, string> = {
   spc_storm: '#eab308', // storm-report yellow, tinted by event type
   ds_radiation: '#facc15', // same yellow as the radiation tile it mirrors
   ds_event: '#f472b6', // pink: DeepState's written reports are a claim
+  radio_report: '#22d3ee', // cyan: an emitter somebody heard
   satnogs_obs: '#8b5cf6', // violet: a received pass
   satnogs_stn: '#a78bfa', // lighter violet: the receiver itself
   sonde: '#38bdf8', // sky: an instrument under a balloon
@@ -700,6 +701,8 @@ function hazardGlyph(kind: string): string {
       return '<circle cx="12" cy="12" r="1.8" fill="#1a1400"/><path d="M12 12 5.8 8.4A7 7 0 0 1 12 5v7z" fill="#1a1400"/><path d="M12 12 18.2 8.4A7 7 0 0 0 12 5v7z" fill="#1a1400"/><path d="M12 12 12 19a7 7 0 0 0 6.2-3.6L12 12z" fill="#1a1400"/>';
     case 'ds_event': // speech mark: somebody said this
       return '<path d="M5 6h14v9H13l-4 4v-4H5z" fill="#2b0417"/><path d="M8.5 10.5h7M8.5 13h4.5" stroke="#f472b6" stroke-width="1.3" stroke-linecap="round"/>';
+    case 'radio_report': // an antenna radiating: mast plus two arcs
+      return '<path d="M12 21V9" stroke="#03303a" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7" r="1.9" fill="#03303a"/><path d="M7.6 10.4a6 6 0 0 1 0-6.8M16.4 3.6a6 6 0 0 1 0 6.8" stroke="#03303a" stroke-width="1.5" fill="none" stroke-linecap="round"/>';
     case 'satnogs_obs': // signal arcs into a dish
       return '<path d="M6 18 13 8" stroke="#1a0838" stroke-width="1.8" stroke-linecap="round"/><path d="M5 19a7 7 0 0 1 9-9z" fill="#1a0838"/><path d="M16 5a6 6 0 0 1 3 3M15.5 8.5a3 3 0 0 1 1.6 1.6" stroke="#1a0838" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
     case 'satnogs_stn': // dish on a mast

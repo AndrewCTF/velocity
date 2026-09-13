@@ -324,12 +324,12 @@ export function GlobeToolbar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
 
   return (
     <div
-      className="absolute top-1/2 -translate-y-1/2 z-[var(--z-dock)] pointer-events-none flex items-center gap-2"
+      className="absolute top-1/2 -translate-y-1/2 z-(--z-dock) pointer-events-none flex items-center gap-2"
       style={{ right: 'calc(var(--rail-right-w, 360px) + 12px)' }}
     >
       {/* Live readout popover — sits to the LEFT of the rail so it never covers it. */}
       {(measure || area) && (
-        <div className="pointer-events-auto mono text-[10px] rounded-md border border-line bg-bg-1/95 backdrop-blur-sm shadow-xl p-2 max-w-[190px] flex flex-col gap-1">
+        <div className="pointer-events-auto mono text-[10px] rounded-md border border-line bg-bg-1/95 backdrop-blur-xs shadow-xl p-2 max-w-[190px] flex flex-col gap-1">
           {measure && (
             <>
               <div className="flex items-center justify-between">

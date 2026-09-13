@@ -24,18 +24,22 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import time
 from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 
+from app import history
+from app.audit import audit_mutation
 from app.config import get_settings
 from app.intel import evidence as ev
 from app.intel.ontology import Object
 from app.keys import UserCtx, current_user_or_local
+from app.uploads import read_capped
 
-router = APIRouter(tags=["evidence"])
+router = APIRouter(tags=["evidence"], dependencies=[Depends(audit_mutation)])
 
 # ~24 MB of base64 (~18 MB decoded) — ample for a screenshot, bounds the JSON
 # body so a giant paste can't be buffered into memory. Files use the multipart
@@ -83,6 +87,23 @@ class CaptureScreenshotIn(BaseModel):
 class FeedFreezeIn(BaseModel):
     entity_id: str = Field(min_length=1, max_length=200)
     snapshot: dict[str, Any]
+    context: str | None = Field(default=None, max_length=8000)
+    situation_id: str | None = Field(default=None, max_length=200)
+
+
+class ReplayWindowIn(BaseModel):
+    """A box and two moments. Deliberately NOT a diff — the server computes that
+    from its own archive, so the evidence is something the platform derived
+    rather than something the caller asserted."""
+
+    lamin: float = Field(ge=-90, le=90)
+    lomin: float = Field(ge=-180, le=180)
+    lamax: float = Field(ge=-90, le=90)
+    lomax: float = Field(ge=-180, le=180)
+    at_a: float = Field(description="Centre of the earlier window, epoch seconds")
+    at_b: float | None = Field(default=None, description="Centre of the later window; default now")
+    window_sec: int = Field(default=600, ge=60, le=86_400)
+    kind: str | None = Field(default=None, max_length=32)
     context: str | None = Field(default=None, max_length=8000)
     situation_id: str | None = Field(default=None, max_length=200)
 
@@ -150,22 +171,8 @@ async def upload_evidence(
     ctx: UserCtx = Depends(current_user_or_local),
 ) -> Object:
     """Upload a file/image/video; SHA-256 at ingest, original bytes preserved."""
-    # Read in chunks and stop as soon as the cap is exceeded, so a multi-GB
-    # upload can't be fully buffered into memory before the size check.
-    cap = get_settings().evidence_max_blob_bytes
-    parts: list[bytes] = []
-    total = 0
-    while True:
-        chunk = await file.read(1024 * 1024)
-        if not chunk:
-            break
-        total += len(chunk)
-        if cap and total > cap:
-            raise HTTPException(
-                status_code=413, detail=f"upload exceeds the {cap:,}-byte cap"
-            )
-        parts.append(chunk)
-    data = b"".join(parts)
+    # Chunked, stops at the cap: a multi-GB upload is never fully buffered.
+    data = await read_capped(file, get_settings().evidence_max_blob_bytes)
     if not data:
         raise HTTPException(status_code=422, detail="empty upload")
     media_type = file.content_type or "application/octet-stream"
@@ -224,6 +231,53 @@ async def capture_feed_freeze(
             ctx,
             entity_id=body.entity_id,
             snapshot=body.snapshot,
+            source_context=body.context,
+        )
+    except ev.EvidenceError as exc:
+        raise _capture_error(exc) from exc
+    await _maybe_attach(ctx, obj, body.situation_id)
+    return obj
+
+
+@router.post("/api/evidence/capture/replay-window", response_model=Object)
+async def capture_replay_window(
+    body: ReplayWindowIn, ctx: UserCtx = Depends(current_user_or_local)
+) -> Object:
+    """Notarize what changed inside a box between two moments of the archive.
+
+    The one thing a stateless globe cannot do. It can serialize a camera and a
+    tracked target into a link; it cannot tell you the four vessels off that
+    terminal are a different four to last Tuesday's, because it never held last
+    Tuesday. This freezes that answer into the evidence locker with a SHA-256
+    over canonical JSON, so it can be attached to a case and re-verified by
+    someone who does not trust us.
+
+    The diff is computed HERE from our own store. Accepting one from the client
+    would make this a notary for whatever the caller typed.
+    """
+    b = time.time() if body.at_b is None else body.at_b
+    bbox = (body.lomin, body.lamin, body.lomax, body.lamax)
+    diff = await history.window_diff(
+        body.kind,
+        bbox,
+        body.at_a - body.window_sec,
+        body.at_a + body.window_sec,
+        b - body.window_sec,
+        b + body.window_sec,
+        # The route's own ceiling, not the 500 default: an exhibit should carry
+        # as much of the answer as the store will give it, and `truncated` on
+        # the artifact says so when even this was not enough.
+        5000,
+    )
+    try:
+        obj = await ev.capture_replay_window(
+            ctx,
+            bbox=bbox,
+            at_a=body.at_a,
+            at_b=b,
+            window_sec=body.window_sec,
+            kind=body.kind,
+            diff=diff,
             source_context=body.context,
         )
     except ev.EvidenceError as exc:

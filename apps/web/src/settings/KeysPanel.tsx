@@ -159,7 +159,7 @@ function KeyRow({
             }}
             placeholder="paste key…"
             autoComplete="off"
-            className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+            className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
           <button
             type="button"

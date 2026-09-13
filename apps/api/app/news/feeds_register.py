@@ -10,6 +10,17 @@ which is itself pre-verified (same host/parser as the wire feeds in
 ``sources.py``). Re-probe before adding new entries; don't hand-type a URL
 you haven't fetched.
 
+``browser=True`` routes a feed through the real-Chrome tier
+(``tools/browser-fetch`` :8095) instead of httpx, and is set ONLY from a
+measurement. As of 2026-08-21 seven register feeds answered httpx with 403;
+real Chrome cleared three of them and only two of those parsed to items, so the
+flag is on MercoPress and TASS and nowhere else. The other five — tvn24,
+dawn.com, politico.eu, washingtontimes, riotimesonline — were 403 to headless
+AND headful Chrome from this egress, which is the address-level case no tier
+opens (docs/decisions.md#getting-past-cloudflare); do not set the flag on them
+hoping. Note the tier ships OFF (``BROWSER_FETCH_ENABLED``), and a flagged feed
+simply contributes nothing when it is off, exactly as a 403 did before.
+
 ``REGISTER`` is additive to :data:`app.news.sources.FEEDS` — ``fetch_all``
 unions the two (plus :data:`app.news.sources.CONFLICT_FEEDS`) by default.
 Tier-2 entries are fetched in rotation rather than on every cycle so a 100+
@@ -98,9 +109,9 @@ REGISTER: list[Source] = [
     Source("Moscow Times", "https://www.themoscowtimes.com/rss/news", "center", "RU", category="regional", tier=1),
     Source("Africanews", "https://www.africanews.com/feed/rss", "center", "Africa", category="regional", tier=1),
     Source("AllAfrica", "https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf", "center", "Africa", category="regional", tier=2),
-    Source("MercoPress", "https://en.mercopress.com/rss/", "center", "SouthAmerica", category="regional", tier=2),
+    Source("MercoPress", "https://en.mercopress.com/rss/", "center", "SouthAmerica", category="regional", tier=2, browser=True),
     Source("RT", "https://www.rt.com/rss/news/", "ru-state", "RU", category="regional", tier=1),
-    Source("TASS", "https://tass.com/rss/v2.xml", "ru-state", "RU", category="regional", tier=1),
+    Source("TASS", "https://tass.com/rss/v2.xml", "ru-state", "RU", category="regional", tier=1, browser=True),
     Source("CGTN", "https://www.cgtn.com/subscribe/rss/section/world.xml", "cn-state", "CN", category="regional", tier=1),
     Source("Xinhua EN", "http://www.xinhuanet.com/english/rss/worldrss.xml", "cn-state", "CN", category="regional", tier=1),
     Source("Anadolu", "https://www.aa.com.tr/en/rss/default?cat=guncel", "tr-state", "TR", category="regional", tier=2),

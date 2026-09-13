@@ -1234,6 +1234,25 @@ export const defaultLayers: readonly LayerDescriptor[] = [
   // Amateur ground segment. SatNOGS stations and observations, and the radio
   // sondes a weather balloon drops on its way down.
   {
+    // PSKReporter: an emitter heard by an independent receiving station. Off by
+    // default like every other dense feed — ~500 stations per 10 min window.
+    // Positions are Maidenhead grid-square CENTRES (properties.precision_km),
+    // not fixes, which is why this is 'claim' provenance rather than 'sensor'.
+    id: 'sigint.pskreporter',
+    group: 'space',
+    title: 'Radio emitters · PSKReporter (heard)',
+    kind: 'geojson',
+    auth: 'none',
+    endpoint: '/api/sigint/pskreporter?minutes=10&limit=1500',
+    refresh: { mode: 'pull', ttlSec: 300 },
+    time: { temporal: true },
+    crs: 'EPSG:4326',
+    license: 'PSKReporter (free, non-commercial courtesy)',
+    opacity: 1,
+    visibleByDefault: false,
+    emits: ['detection'],
+  },
+  {
     id: 'space.satnogs.observations',
     group: 'space',
     title: 'Satellite passes · SatNOGS (observed)',

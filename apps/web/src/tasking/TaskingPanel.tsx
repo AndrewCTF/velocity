@@ -367,7 +367,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
               value={lat}
               onChange={(e) => setLat(e.target.value)}
               inputMode="decimal"
-              className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-none focus:border-accent-line"
+              className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-hidden focus:border-accent-line"
             />
           </label>
           <label className="block">
@@ -376,7 +376,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
               value={lon}
               onChange={(e) => setLon(e.target.value)}
               inputMode="decimal"
-              className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-none focus:border-accent-line"
+              className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-hidden focus:border-accent-line"
             />
           </label>
         </div>
@@ -404,7 +404,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
             type="datetime-local"
             value={fromStr}
             onChange={(e) => setFromStr(e.target.value)}
-            className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-none focus:border-accent-line"
+            className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-hidden focus:border-accent-line"
           />
         </label>
         <div className="grid grid-cols-2 gap-2 mt-2">
@@ -414,7 +414,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
               value={hours}
               onChange={(e) => setHours(e.target.value)}
               inputMode="numeric"
-              className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-none focus:border-accent-line"
+              className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-hidden focus:border-accent-line"
             />
           </label>
           <label className="block">
@@ -423,7 +423,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
               value={minRevisit}
               onChange={(e) => setMinRevisit(e.target.value)}
               inputMode="numeric"
-              className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-none focus:border-accent-line"
+              className="mono mt-0.5 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-hidden focus:border-accent-line"
             />
           </label>
         </div>

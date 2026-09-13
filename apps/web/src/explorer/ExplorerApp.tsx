@@ -273,7 +273,7 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
                 ? 'Search the stored graph by any property…'
                 : 'Filter by callsign / name / id…'
             }
-            className="flex-1 min-w-0 bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 placeholder:text-txt-4 focus:border-accent-line outline-none"
+            className="flex-1 min-w-0 bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 placeholder:text-txt-4 focus:border-accent-line outline-hidden"
           />
           <div className={`flex items-center gap-1 ${source === 'ontology' ? 'hidden' : ''}`}>
             {WINDOWS.map((w, i) => (
@@ -311,7 +311,7 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
       <div className="flex-1 min-h-0 overflow-auto">
         {source === 'ontology' ? (
           <table className="w-full border-collapse">
-            <thead className="sticky top-0 bg-bg-1 z-[1]">
+            <thead className="sticky top-0 bg-bg-1 z-1">
               <tr className="text-txt-3 mono text-[10px] uppercase tracking-[0.4px]">
                 <th className="text-left font-medium px-3 py-1.5">Object</th>
                 <th className="text-left font-medium px-2 py-1.5">Kind</th>
@@ -356,7 +356,7 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
         ) : (
         <table className="w-full border-collapse">
 
-          <thead className="sticky top-0 bg-bg-1 z-[1]">
+          <thead className="sticky top-0 bg-bg-1 z-1">
             <tr className="text-txt-3 mono text-[10px] uppercase tracking-[0.4px]">
               <th className="text-left font-medium px-3 py-1.5">Label</th>
               <th className="text-left font-medium px-2 py-1.5">Type</th>

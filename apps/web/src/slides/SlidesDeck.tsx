@@ -59,7 +59,7 @@ export function SlidesDeck({
 
   return (
     <div
-      className="fixed inset-0 z-[var(--z-modal)] bg-bg-0 flex flex-col slides-deck"
+      className="fixed inset-0 z-(--z-modal) bg-bg-0 flex flex-col slides-deck"
       role="dialog"
       aria-modal="true"
       aria-label="Briefing deck"
@@ -88,7 +88,7 @@ export function SlidesDeck({
             type="button"
             onClick={() => go(-1)}
             disabled={i === 0}
-            className="mono text-[10px] uppercase tracking-[0.1em] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line disabled:opacity-40"
+            className="mono text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line disabled:opacity-40"
           >
             Prev
           </button>
@@ -96,14 +96,14 @@ export function SlidesDeck({
             type="button"
             onClick={() => go(1)}
             disabled={i === last}
-            className="mono text-[10px] uppercase tracking-[0.1em] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line disabled:opacity-40"
+            className="mono text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line disabled:opacity-40"
           >
             Next
           </button>
           <button
             type="button"
             onClick={() => window.print()}
-            className="mono text-[10px] uppercase tracking-[0.1em] px-2 py-0.5 rounded-sm border border-accent-line text-accent bg-accent-dim"
+            className="mono text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-sm border border-accent-line text-accent bg-accent-dim"
           >
             Print / PDF
           </button>

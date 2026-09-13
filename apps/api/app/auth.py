@@ -4,13 +4,18 @@ Auth is OFF until at least one credential source is configured, so a bare
 localhost dev box stays open. It turns ON (and is then ENFORCED on every
 non-public route) when either is set:
 
-  * ``API_KEY``  — a static shared secret, supplied via ``X-API-Key`` header or
-    ``?key=`` query. For server/MCP callers and CI.
+  * ``API_KEY``  — a static shared secret, supplied via the ``X-API-Key``
+    header (or ``?key=`` on a WebSocket upgrade only). For server/MCP callers and CI.
   * Supabase     — ``SUPABASE_JWT_SECRET`` (preferred) or ``SUPABASE_URL`` +
     ``SUPABASE_ANON_KEY``. Callers then present a Supabase **access token** —
     the JWT the browser receives after signing in — via ``Authorization:
     Bearer <jwt>`` (or ``?key=<jwt>`` on WS upgrades, which can't set headers).
     This is "the API key you get from Supabase".
+
+``?key=`` is accepted ONLY on WebSocket upgrades (``require_ws_key``). On an
+HTTP request it would land in proxy access logs and browser history, and no
+HTTP client of this API needs it (the web app sends headers via ``apiFetch``),
+so HTTP ignores it. ``RedactKeyFilter`` scrubs it from uvicorn's access log.
 
 Token validation is LOCAL HS256 when the JWT secret is set (no round-trip,
 mirrors the gateway Worker's check); otherwise a call to GoTrue's
@@ -29,6 +34,8 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
+import re
 import secrets
 import time
 
@@ -64,8 +71,6 @@ def log_auth_mode(s: Settings) -> None:
     """Emit a clear one-line startup banner describing the auth posture so an
     operator can never be surprised that a box is serving unauthenticated
     (issue #8). Called once from the app lifespan."""
-    import logging
-
     log = logging.getLogger("app.auth")
     if _auth_enabled(s):
         log.info("auth ENABLED — non-public routes require a credential")
@@ -107,8 +112,16 @@ def _verify_hs256(token: str, secret: str) -> bool:
         if not hmac.compare_digest(_b64url_decode(sig), expected):
             return False
         claims = json.loads(_b64url_decode(payload)) or {}
+        now = time.time()
         exp = claims.get("exp")
-        if exp and float(exp) < time.time():
+        if exp and float(exp) < now:
+            return False
+        nbf = claims.get("nbf")
+        if nbf and float(nbf) > now:
+            return False
+        # Supabase session tokens carry aud "authenticated" (string or list).
+        aud = claims.get("aud")
+        if aud != "authenticated" and not (isinstance(aud, list) and "authenticated" in aud):
             return False
         # Only a signed-in USER session passes. The public anon key is a validly
         # signed JWT too (role "anon") — without this it would be accepted as a
@@ -222,14 +235,10 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if path in PUBLIC_PATHS or any(path.startswith(p) for p in PUBLIC_PREFIXES):
             return await call_next(request)
-        static_supplied = request.headers.get("x-api-key") or request.query_params.get("key")
-        # The Supabase token may arrive as a Bearer header, ?key= (WS), or in
-        # X-API-Key — accept any, then validate. Static-key match is tried first.
-        token = (
-            _bearer(request.headers)
-            or request.query_params.get("key")
-            or request.headers.get("x-api-key")
-        )
+        # HTTP only (BaseHTTPMiddleware never sees a WS scope): headers, never
+        # ?key=. The Supabase token may be a Bearer header or in X-API-Key.
+        static_supplied = request.headers.get("x-api-key")
+        token = _bearer(request.headers) or static_supplied
         # Return a response directly: an HTTPException raised inside a
         # BaseHTTPMiddleware is NOT seen by FastAPI's exception handlers
         # (they sit deeper in the ASGI stack), so it would surface as a 500.
@@ -280,7 +289,33 @@ async def require_api_key(
     s = get_settings()
     if not _auth_enabled(s):
         return
-    static_supplied = x_api_key or request.query_params.get("key")
-    token = _bearer(request.headers) or request.query_params.get("key") or x_api_key
-    if not await _authorized(static_supplied, token, s):
+    token = _bearer(request.headers) or x_api_key
+    if not await _authorized(x_api_key, token, s):
         raise HTTPException(status_code=401, detail="unauthorized")
+
+
+class RedactKeyFilter(logging.Filter):
+    """Scrub ``key=<value>`` query values from access-log records (uvicorn
+    passes the request path+query as a positional log arg)."""
+
+    _RE = re.compile(r"([?&]key=)[^&\s\"]*")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                self._RE.sub(r"\1[redacted]", a) if isinstance(a, str) else a
+                for a in record.args
+            )
+        if isinstance(record.msg, str):
+            record.msg = self._RE.sub(r"\1[redacted]", record.msg)
+        return True
+
+
+def install_access_log_redaction() -> None:
+    # HTTP requests log on uvicorn.access; the WS handshake line (the path that
+    # really carries ?key=) logs on uvicorn.error. Logger filters do not inherit.
+    for name in ("uvicorn.access", "uvicorn.error"):
+        lg = logging.getLogger(name)
+        if not any(isinstance(f, RedactKeyFilter) for f in lg.filters):
+            lg.addFilter(RedactKeyFilter())
+

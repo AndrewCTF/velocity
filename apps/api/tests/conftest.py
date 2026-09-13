@@ -29,6 +29,11 @@ os.environ.setdefault("OSINT_PROFILE", "full")
 # test_security_hardening.py re-checks the closed behavior with the flag forced
 # off, so this default does not hide the guard.
 os.environ.setdefault("ALLOW_UNAUTHENTICATED", "1")
+# op.python refuses the rlimits-only tier unless opted in (G13). CI hosts without
+# a working bubblewrap ran the op.python tests at that tier; opt in so they still
+# run there. test_python_exec_unsandboxed_gate.py clears the flag to check the
+# refusal, so this default does not hide the guard.
+os.environ.setdefault("WORKFLOWS_PYTHON_UNSANDBOXED", "1")
 # The FR24 tier (app/adsb_fr24.py) is a REAL bbox-grid pull. The feed tests stub
 # the readsb HTTP fetch, but this tier does not go through that stub, so leaving
 # it on put ~2000 live aircraft into the slice store mid-assertion. Off for the

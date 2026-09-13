@@ -115,7 +115,7 @@ export function SelectionInferenceBlock({
               disabled={busy || installed.length === 0}
               onChange={(e) => void persist(selectionEnabled, e.target.value || null)}
               aria-label="Selection-inference model"
-              className="w-full mono text-[10px] bg-bg-2 border border-line rounded-sm px-1.5 py-1 text-txt-1 outline-none focus:border-accent-line"
+              className="w-full mono text-[10px] bg-bg-2 border border-line rounded-sm px-1.5 py-1 text-txt-1 outline-hidden focus:border-accent-line"
             >
               <option value="">none selected</option>
               {installed.map((m) => (

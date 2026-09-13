@@ -293,7 +293,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className="bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 focus:border-accent-line outline-none"
+            className="bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 focus:border-accent-line outline-hidden"
           >
             {OBJECT_TYPES.map((o) => (
               <option key={o.v} value={o.v}>
@@ -331,7 +331,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
                 aria-label="start date"
-                className="flex-1 min-w-0 mono bg-bg-0 border border-line rounded-sm px-1.5 py-1 text-[11px] text-txt-0 focus:border-accent-line outline-none"
+                className="flex-1 min-w-0 mono bg-bg-0 border border-line rounded-sm px-1.5 py-1 text-[11px] text-txt-0 focus:border-accent-line outline-hidden"
               />
               <span className="mono text-[10px] text-txt-3">→</span>
               <input
@@ -339,7 +339,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                 value={end}
                 onChange={(e) => setEnd(e.target.value)}
                 aria-label="end date"
-                className="flex-1 min-w-0 mono bg-bg-0 border border-line rounded-sm px-1.5 py-1 text-[11px] text-txt-0 focus:border-accent-line outline-none"
+                className="flex-1 min-w-0 mono bg-bg-0 border border-line rounded-sm px-1.5 py-1 text-[11px] text-txt-0 focus:border-accent-line outline-hidden"
               />
             </div>
           ) : (
@@ -372,7 +372,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
               if (e.key === 'Enter') runSearch();
             }}
             placeholder="callsign / name / id…"
-            className="bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 placeholder:text-txt-4 focus:border-accent-line outline-none"
+            className="bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 placeholder:text-txt-4 focus:border-accent-line outline-hidden"
           />
         </div>
 
@@ -432,7 +432,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                       if (r) setRegion(slot, { center: r.center, radiusKm: km });
                     }}
                     aria-label={`Region ${slot} radius km`}
-                    className="w-14 mono bg-bg-0 border border-line rounded-sm px-1.5 py-0.5 text-[11px] text-txt-0 focus:border-accent-line outline-none"
+                    className="w-14 mono bg-bg-0 border border-line rounded-sm px-1.5 py-0.5 text-[11px] text-txt-0 focus:border-accent-line outline-hidden"
                   />
                   <span className="mono text-[10px] text-txt-3">km</span>
                   <button
@@ -482,7 +482,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 focus:border-accent-line outline-none"
+            className="bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 focus:border-accent-line outline-hidden"
           />
         </div>
 

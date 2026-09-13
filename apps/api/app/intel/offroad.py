@@ -17,6 +17,7 @@ too coarse.
 
 from __future__ import annotations
 
+import asyncio
 import heapq
 import io
 import math
@@ -42,6 +43,14 @@ def decode_terrarium(png_bytes: bytes) -> np.ndarray:
     arr = np.asarray(img, dtype=np.float32)
     r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
     return (r * 256.0 + g + b / 256.0) - _TERRARIUM_OFFSET
+
+
+def _stitch(raw: list[list[bytes]]) -> np.ndarray:
+    """Decode every terrarium tile and stitch the mosaic. One thread hop for the
+    whole mosaic rather than one per tile."""
+    return _subsample(
+        np.vstack([np.hstack([decode_terrarium(b) for b in cols]) for cols in raw])
+    )
 
 
 def _subsample(elev: np.ndarray, max_side: int = _MAX_GRID) -> np.ndarray:
@@ -198,18 +207,20 @@ async def plan_offroad(
         raise ValueError("points too far apart for off-road planning (tactical range only)")
 
     client = get_client()
-    rows: list[np.ndarray] = []
+    raw: list[list[bytes]] = []
     for ty in ys:
-        cols: list[np.ndarray] = []
+        cols: list[bytes] = []
         for tx in xs:
             url = f"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{tx}/{ty}.png"
             r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
             if r.status_code != 200:
                 raise ValueError(f"DEM tile {z}/{tx}/{ty} -> {r.status_code}")
-            cols.append(decode_terrarium(r.content))
-        rows.append(np.hstack(cols))
-    elev = np.vstack(rows)
-    elev = _subsample(elev)
+            cols.append(r.content)
+        raw.append(cols)
+    # PNG decode of up to _MAX_TILES_PER_SIDE**2 tiles plus the stitch is real
+    # CPU on a loop that also drives the 1 s snapshot cycle and the WS
+    # broadcast. Fetch on the loop, decode off it.
+    elev = await asyncio.to_thread(_stitch, raw)
 
     # Geo extents of the stitched mosaic (NW corner of first tile → SE of last).
     nw_lon, nw_lat = _tile_to_lonlat(xs[0], ys[0], z)
@@ -235,7 +246,10 @@ async def plan_offroad(
 
     start = to_rc(from_lat, from_lon)
     goal = to_rc(to_lat, to_lon)
-    path, stats = astar_grid(elev, start, goal, meters_per_cell)
+    # A pure-Python 8-connected A* over up to _MAX_GRID**2 cells: the single
+    # most expensive thing in this module, and the reason a route request used
+    # to stall every connected viewer's map.
+    path, stats = await asyncio.to_thread(astar_grid, elev, start, goal, meters_per_cell)
     if not path:
         return {
             "route": [], "reachable": False, "grid": [h, w],

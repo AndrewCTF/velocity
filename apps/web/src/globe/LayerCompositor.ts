@@ -234,6 +234,7 @@ export const HAZARD_POINT_LAYER_IDS: ReadonlySet<string> = new Set([
   'deepstate.news',
   'space.satnogs.observations',
   'space.satnogs.stations',
+  'sigint.pskreporter',
   'env.sondes',
   'rf.kiwisdr',
   'infra.mines',

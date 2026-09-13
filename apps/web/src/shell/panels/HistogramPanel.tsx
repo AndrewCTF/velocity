@@ -71,7 +71,7 @@ export function HistogramPanel({ viewer }: { viewer?: Cesium.Viewer | null }): J
           <button
             type="button"
             onClick={clearAll}
-            className="h-5 rounded-sm px-[7px] text-[12px] text-txt-3 hover:bg-[var(--hover)] hover:text-txt-0"
+            className="h-5 rounded-sm px-[7px] text-[12px] text-txt-3 hover:bg-(--hover) hover:text-txt-0"
           >
             Clear {clauses.length}
           </button>
@@ -110,7 +110,7 @@ export function HistogramPanel({ viewer }: { viewer?: Cesium.Viewer | null }): J
                   <div
                     key={b.value}
                     className={`flex min-h-[20px] items-center gap-2 px-[14px] py-[2px] ${
-                      on ? 'bg-accent-dim shadow-[inset_0_0_0_1px_var(--accent-line)]' : 'hover:bg-[var(--hover)]'
+                      on ? 'bg-accent-dim shadow-[inset_0_0_0_1px_var(--accent-line)]' : 'hover:bg-(--hover)'
                     }`}
                   >
                     <button

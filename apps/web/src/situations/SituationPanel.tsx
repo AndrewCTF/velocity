@@ -214,7 +214,7 @@ function SummaryTab({
             <input
               value={sit.name}
               onChange={(e) => void update(sit.id, { name: e.target.value })}
-              className="mt-1 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 focus:outline-none focus:border-accent-line"
+              className="mt-1 w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 focus:outline-hidden focus:border-accent-line"
             />
           </label>
           <div>
@@ -256,7 +256,7 @@ function SummaryTab({
           onChange={(e) => void update(sit.id, { summary: e.target.value })}
           rows={5}
           placeholder="What is happening, why it matters…"
-          className="w-full bg-bg-2 border border-line rounded-sm px-2 py-1.5 text-[11px] text-txt-1 leading-snug resize-y focus:outline-none focus:border-accent-line"
+          className="w-full bg-bg-2 border border-line rounded-sm px-2 py-1.5 text-[11px] text-txt-1 leading-snug resize-y focus:outline-hidden focus:border-accent-line"
         />
       </Widget>
 
@@ -389,7 +389,7 @@ function ReportingTab({
           onChange={(e) => void update(sit.id, { report: e.target.value })}
           rows={6}
           placeholder="Narrative / after-action notes…"
-          className="w-full bg-bg-2 border border-line rounded-sm px-2 py-1.5 text-[11px] text-txt-1 leading-snug resize-y focus:outline-none focus:border-accent-line"
+          className="w-full bg-bg-2 border border-line rounded-sm px-2 py-1.5 text-[11px] text-txt-1 leading-snug resize-y focus:outline-hidden focus:border-accent-line"
         />
       </Widget>
       <ExportCard sit={sit} />

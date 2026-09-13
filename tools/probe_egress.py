@@ -53,12 +53,53 @@ _PLACEHOLDER = re.compile(
 
 _URL_RE = re.compile(r'https?://[A-Za-z0-9._~:/?#\[\]@!$&\'()*+,;=%{}-]+')
 
+# Concrete stand-ins for the f-string placeholders that survive extraction.
+# WHY THIS EXISTS: upstream_urls() picks the least-templated URL per host, but
+# when a host's ONLY reference is templated the probe used to GET the template
+# verbatim — literally asking for https://api.adsbdb.com/v0/callsign/{cs} and
+# https://rdap.org/ip/{ip}. Those 400, and 68 hosts landed in "reached-4xx5xx"
+# on the 2026-08-20 run partly for that reason, which made the bucket unusable
+# for its actual job: telling "the host is fine, my probe URL was junk" apart
+# from "our production URL is genuinely broken" (GDACS and ReliefWeb were the
+# real ones, and they were invisible in the noise).
+_SUBSTITUTIONS: dict[str, str] = {
+    "{cs}": "BAW1", "{callsign}": "BAW1",
+    "{icao24}": "4ca7b5", "{hex}": "4ca7b5", "{icao}": "4ca7b5",
+    "{reg}": "G-EUUU", "{registration}": "G-EUUU",
+    "{type_code}": "A320", "{type}": "A320",
+    "{ip}": "8.8.8.8", "{v}": "8.8.8.8", "{resource}": "8.8.8.8",
+    "{d}": "example.org", "{domain}": "example.org", "{host}": "example.org",
+    "{a}": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", "{addr}": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+    "{c}": "bitcoin", "{chain}": "bitcoin",
+    "{iso3}": "UKR", "{iso2}": "UA", "{country}": "UKR",
+    "{lat}": "50", "{lon}": "8", "{y}": "50", "{x}": "8", "{z}": "6",
+    "{level}": "ADM1", "{limit}": "5", "{n}": "1", "{num}": "1",
+    "{u}": "example", "{user}": "example", "{username}": "example",
+    "{e}": "test@example.org", "{email}": "test@example.org",
+    "{q}": "test", "{query}": "test", "{name}": "test", "{s}": "0",
+    "{cik10}": "0000320193", "{cik}": "320193",
+    "{id}": "1", "{eventid}": "1", "{sequence}": "1",
+    "{group}": "stations", "{quadkey}": "0",
+}
+
+_TEMPLATE_LEFT = re.compile(r"[{}]")
+
+
+def substitute(url: str) -> str:
+    """Fill known placeholders. Unknown ones are left so probe() can flag them."""
+    for k, v in _SUBSTITUTIONS.items():
+        if k in url:
+            url = url.replace(k, v)
+    return url
+
 
 def upstream_urls() -> list[dict[str, str]]:
     """One concrete URL per external host referenced anywhere in the backend.
 
     Prefers the URL with the fewest templated segments, so the probe asks for
-    something the host can actually route.
+    something the host can actually route. Whatever placeholders survive are
+    filled by substitute(); anything still templated after that is reported as
+    template-only rather than fired at the host verbatim.
     """
     best: dict[str, tuple[str, tuple[int, int, int], str]] = {}
     for f in sorted(APP.rglob("*.py")):
@@ -78,30 +119,59 @@ def upstream_urls() -> list[dict[str, str]]:
     ]
 
 
-def _get(url: str, ua: str, timeout: float = 15.0) -> int | str:
+def _get(url: str, ua: str, timeout: float = 15.0) -> tuple[int | str, str, str]:
+    """(status, final_url, body_snippet).
+
+    The body matters: CelesTrak answers a repeat pull inside its 2h window with
+    403 and "GP data has not updated since your last successful download",
+    which is a conditional GET, not a refusal. A probe that reads only the
+    status code files that as BLOCKED and sends somebody hunting for a proxy.
+
+    The final URL matters too. urllib follows redirects silently, so every 3xx
+    was invisible: the 2026-08-20 run has ZERO rows with a 3xx across all 319
+    hosts, and wsprnet.org was filed BLOCKED/403 while actually 302-ing to a 200
+    carrying 34 943 bytes. The app follows redirects as well now, so the two
+    agree — but "we got there via a redirect" is still a fact worth printing.
+    """
     req = urllib.request.Request(
         url, headers={"User-Agent": ua, "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9"}
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310
-            return int(r.status)
+            body = r.read(2048).decode("utf-8", "replace")
+            return int(r.status), r.geturl(), body
     except urllib.error.HTTPError as e:
-        return int(e.code)
+        try:
+            body = e.read(2048).decode("utf-8", "replace")
+        except Exception:  # noqa: BLE001
+            body = ""
+        return int(e.code), getattr(e, "url", url), body
     except urllib.error.URLError as e:
         reason = getattr(e, "reason", e)
         if isinstance(reason, (socket.timeout, TimeoutError)) or "timed out" in str(reason).lower():
-            return "timeout"
+            return "timeout", url, ""
         if isinstance(reason, ssl.SSLError):
-            return "tls-fail"
-        return "conn-fail"
+            return "tls-fail", url, ""
+        return "conn-fail", url, ""
     except Exception as e:  # noqa: BLE001
-        return type(e).__name__
+        return type(e).__name__, url, ""
 
 
-def classify(code: int | str, browser: int | str | None) -> str:
+# Bodies that mean "you already have this", not "go away". Matched only on a
+# 403, and deliberately a short list of phrases seen on the wire rather than a
+# clever heuristic.
+_NOT_MODIFIED_BODY = ("has not updated since", "not modified", "no new data")
+
+
+def classify(code: int | str, browser: int | str | None, body: str = "") -> str:
     if isinstance(code, str):
         return code
     if code in (403, 451):
+        # "You already have this" is not a refusal. Checked BEFORE the UA retry,
+        # because the UA has nothing to do with it — measured on celestrak.org,
+        # which answers our UA and a Chrome UA identically.
+        if any(ph in body.lower() for ph in _NOT_MODIFIED_BODY):
+            return "not-modified"
         # A 403 that a browser UA clears is bot filtering, not this address.
         if isinstance(browser, int) and 200 <= browser < 400:
             return "ua-blocked"
@@ -115,23 +185,74 @@ def classify(code: int | str, browser: int | str | None) -> str:
     return "reached-4xx5xx"
 
 
+def _addr_families(host: str) -> tuple[bool, bool]:
+    """(has_A, has_AAAA). Both False means the name does not resolve at all."""
+    v4 = v6 = False
+    try:
+        for fam, *_ in socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP):
+            if fam == socket.AF_INET:
+                v4 = True
+            elif fam == socket.AF_INET6:
+                v6 = True
+    except socket.gaierror:
+        pass
+    return v4, v6
+
+
 def probe(item: dict[str, str]) -> dict[str, object]:
     host = item["host"]
-    try:
-        socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
-    except socket.gaierror as e:
-        return {**item, "cls": "dns-fail", "status": 0,
-                "browser_status": None, "detail": str(e)[:60]}
+    url = substitute(item["url"])
+
+    # A URL still carrying a placeholder cannot be probed honestly. Say so and
+    # keep it OUT of the reached/unreached arithmetic rather than letting it
+    # inflate reached-4xx5xx, which is what made that bucket meaningless.
+    if _TEMPLATE_LEFT.search(url):
+        return {**item, "url": url, "cls": "template-only", "status": 0,
+                "browser_status": None,
+                "detail": "unsubstituted placeholder — add it to _SUBSTITUTIONS"}
+
+    # A URL whose only reference is in source_catalog.py is METADATA — the
+    # "phone book" of providers the platform knows about, most of which the
+    # backend never fetches. Probing those and reporting the result next to real
+    # upstreams is how rx.linkfanel.net got written up as a broken feed on
+    # 2026-08-21: its catalog url_pattern is https://, the TLS handshake there
+    # resets, and the actual KIWISDR_URL the route uses is http:// and returns
+    # 866 stations. The probe was measuring a documentation field.
+    if item.get("where") == "routes/source_catalog.py":
+        return {**item, "url": url, "cls": "catalog-only", "status": 0,
+                "browser_status": None,
+                "detail": "listed in the source catalog; not fetched by the backend"}
+
+    v4, v6 = _addr_families(host)
+    if not v4 and not v6:
+        return {**item, "url": url, "cls": "dns-fail", "status": 0,
+                "browser_status": None, "detail": "no A or AAAA record"}
+    if not v4:
+        # The app pins outbound sockets to IPv4 (upstream._transport,
+        # local_address="0.0.0.0") because host IPv6 is broken here, so an
+        # AAAA-only upstream is unreachable FOR US whatever a dual-stack client
+        # sees. No host currently hits this; it is here because that failure is
+        # indistinguishable from a plain timeout in every other report.
+        return {**item, "url": url, "cls": "ipv4-none", "status": 0,
+                "browser_status": None,
+                "detail": "AAAA-only; the app pins IPv4 (upstream._transport)"}
+
     t0 = time.perf_counter()
-    code = _get(item["url"], OUR_UA)
-    browser = _get(item["url"], BROWSER_UA) if code in (403, 451) else None
-    return {
+    code, final_url, body = _get(url, OUR_UA)
+    browser = None
+    if code in (403, 451) and not any(ph in body.lower() for ph in _NOT_MODIFIED_BODY):
+        browser = _get(url, BROWSER_UA)[0]
+    row: dict[str, object] = {
         **item,
-        "cls": classify(code, browser),
+        "url": url,
+        "cls": classify(code, browser, body),
         "status": code if isinstance(code, int) else 0,
         "browser_status": browser,
         "detail": f"{(time.perf_counter() - t0) * 1000:.0f}ms",
     }
+    if final_url and final_url != url:
+        row["redirected_to"] = final_url[:200]
+    return row
 
 
 def egress_identity() -> dict[str, object]:
@@ -147,8 +268,15 @@ def egress_identity() -> dict[str, object]:
         return {"error": f"{type(e).__name__}: {e}"[:80]}
 
 
-ORDER = ["BLOCKED", "timeout", "tls-fail", "conn-fail", "dns-fail", "ua-blocked",
-         "throttled", "needs-key", "reached-4xx5xx", "ok"]
+# template-only is reported but never counted as reached or unreached: it is a
+# gap in the PROBE, and printing it is the difference between a measurement and
+# a silent truncation.
+ORDER = ["BLOCKED", "timeout", "tls-fail", "conn-fail", "dns-fail", "ipv4-none",
+         "ua-blocked", "not-modified", "throttled", "needs-key",
+         "reached-4xx5xx", "ok", "template-only", "catalog-only"]
+
+# Classes that mean "the host answered us".
+REACHED = ("ok", "reached-4xx5xx", "needs-key", "throttled", "not-modified")
 
 
 def main() -> int:
@@ -172,8 +300,12 @@ def main() -> int:
     counts: dict[str, int] = {}
     for r in rows:
         counts[str(r["cls"])] = counts.get(str(r["cls"]), 0) + 1
-    reached = sum(counts.get(c, 0) for c in ("ok", "reached-4xx5xx", "needs-key", "throttled"))
-    print(f"**Reached {reached} of {len(rows)}.**\n")
+    reached = sum(counts.get(c, 0) for c in REACHED)
+    skipped = counts.get("template-only", 0) + counts.get("catalog-only", 0)
+    probed = len(rows) - skipped
+    note = (f" ({skipped} not probed: catalog metadata or an unsubstituted "
+            f"placeholder)") if skipped else ""
+    print(f"**Reached {reached} of {probed}.**{note}\n")
     print("| class | n |")
     print("|---|---|")
     for c in ORDER:

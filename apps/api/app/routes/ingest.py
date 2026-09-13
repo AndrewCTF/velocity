@@ -32,14 +32,15 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
+from app.audit import audit_mutation
 from app.config import get_settings
 from app.foundry import binding as binding_mod
 from app.foundry.store import MAX_UPLOAD_BYTES, FoundryError, FoundryStore
 from app.keys import UserCtx
 
-router = APIRouter(tags=["ingest"])
+router = APIRouter(tags=["ingest"], dependencies=[Depends(audit_mutation)])
 log = logging.getLogger("app.routes.ingest")
 
 # The token authenticates the SENDER, not a user, so the ontology write is

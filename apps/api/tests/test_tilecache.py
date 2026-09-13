@@ -104,3 +104,24 @@ def test_no_eviction_when_cap_disabled(tmp_path: Path) -> None:
     (d / "0.png").write_bytes(b"x" * 5000)
     tc._evict_sync()
     assert (d / "0.png").exists()
+
+
+def test_path_cannot_escape_cache_root(tmp_path: Path) -> None:
+    """A source that walks out of the root is refused before anything is read or
+    written; the nested ``cdse-s2/<date>`` key the sat route uses still resolves."""
+    import pytest
+
+    tc = TileCache(tmp_path / "cache")
+    (tmp_path / "secret.png").write_bytes(b"not a tile")
+
+    async def loader() -> bytes | None:
+        return b"PNG"
+
+    with pytest.raises(ValueError):
+        asyncio.run(tc.get("../..", 0, 0, 0, "png", 60, loader))
+    with pytest.raises(ValueError):
+        tc._path("..", 0, 0, 0, "png")
+    assert tc._path("cdse-s2/2026-09-01", 3, 1, 2, "jpg") == (
+        tmp_path / "cache" / "cdse-s2" / "2026-09-01" / "3" / "1" / "2.jpg"
+    )
+    assert (tmp_path / "secret.png").read_bytes() == b"not a tile"

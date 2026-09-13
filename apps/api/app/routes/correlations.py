@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.correlate.bus import bus
 from app.correlate.types import Alert
@@ -55,7 +55,9 @@ bus.on_publish(_on_alert)
 
 
 @router.get("/api/correlations/{eid:path}")
-async def correlations_for(eid: str, limit: int = 50) -> dict[str, Any]:
+async def correlations_for(
+    eid: str, limit: int = Query(50, ge=1, le=500)
+) -> dict[str, Any]:
     hits = _index.get(eid, ())
     # Newest first; cap to `limit`.
     related = [a.to_json() for a in reversed(hits)][:limit]

@@ -21,7 +21,13 @@ import sys
 import traceback
 
 _CPU_SECONDS = 30
-_ADDRESS_SPACE_BYTES = 1 << 30  # 1 GiB
+# 4 GiB, not 1. RLIMIT_AS bounds VIRTUAL address space, and numpy's OpenBLAS
+# reserves far more of that than it ever touches: at 1 GiB `import numpy` died
+# with "Memory allocation still failed after 10 retries", so the single most
+# obvious thing to do in a data-transform block did not work. Measured on this
+# box 2026-08-29: 1 GiB fails, 2 GiB and up succeed. 4 GiB leaves headroom for
+# an array the block actually allocates while still bounding a runaway.
+_ADDRESS_SPACE_BYTES = 4 << 30
 _MAX_OPEN_FILES = 64
 _MAX_OUTPUT_ROWS = 50_000
 
@@ -65,7 +71,7 @@ def main() -> None:
     try:
         exec(compile(code, "<workflow-python-block>", "exec"), namespace)  # noqa: S102
     except MemoryError:
-        _fail("memory limit exceeded (1 GiB)")
+        _fail("memory limit exceeded (4 GiB)")
         return
     except BaseException:  # noqa: BLE001 - includes SystemExit from user code
         _fail(traceback.format_exc(limit=8))
@@ -79,7 +85,7 @@ def main() -> None:
     try:
         result = fn(rows, memory)
     except MemoryError:
-        _fail("memory limit exceeded (1 GiB)")
+        _fail("memory limit exceeded (4 GiB)")
         return
     except BaseException:  # noqa: BLE001 - includes SystemExit from user code
         _fail(traceback.format_exc(limit=8))

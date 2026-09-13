@@ -96,6 +96,19 @@ REL_TYPES: dict[str, RelType] = {
     "sends_to": _r("sends to", "received from", ("wallet",), ("tx",)),
     "receives_from": _r("receives from", "sent to", ("wallet",), ("tx",)),
     "officer_of": _r("officer of", "has officer", ("person",), ("org",)),
+    # LittleSis edges (app/osint/sources/corp.py) are a whole vocabulary of their
+    # own — donations, board seats, family, "generic relationship". One symmetric
+    # verb carries them all; the upstream's own sentence rides on the link props
+    # so the specific tie is not lost to the generalisation.
+    "affiliated_with": _r(
+        "affiliated with", "affiliated with", ("person", "org"), ("person", "org")
+    ),
+    # Hudson Rock (app/osint/sources/stealer.py): the machine, not the person,
+    # is what was compromised, so the edge points from the stealer indicator at
+    # the selector that was found in its logs.
+    "compromised_in": _r(
+        "found in stealer log", "stealer log for", ("threat",), ("email", "username", "domain")
+    ),
     "sanctioned_as": _r("sanctioned as", "sanction on", ("org", "person"), ("threat",)),
     "same_as": _r("same as", "same as"),
     "posted_by": _r("posted by", "posted", dst=("username",)),

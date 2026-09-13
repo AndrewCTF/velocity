@@ -94,6 +94,9 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   'deepstate.fires': 'sensor',
   'deepstate.radiation': 'sensor',
   // Amateur ground segment: a received pass and a sonde's own beacon.
+  // A reception report is a station ASSERTING it decoded a signal, and the
+  // position is a grid square rather than a fix — claim, not sensor.
+  'sigint.pskreporter': 'claim',
   'space.satnogs.observations': 'sensor',
   'env.sondes': 'sensor',
 

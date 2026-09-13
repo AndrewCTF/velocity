@@ -19,7 +19,16 @@ changing BOTH the guard and this file.
 - Internal consumers call `global_snapshot()`, never the `adsb_global()` route
   handler in-process. → `tests/test_invariants.py`
 - Global snapshot carries **≥8 000 aircraft** (~13 k normal): OpenSky breadth
-  (1 pull/UTC-day, cached) + airplanes.live grid overlay (densify only).
+  (1 pull/UTC-day, cached) + the adsb.lol planet-radius firehose
+  (`/v2/point/0/0/20000`, measured 11 441 on 2026-08-21) + grid overlay
+  (densify only). airplanes.live is BANNED at the application level from this
+  egress — its 403 body carries a contact address, not a challenge — so it is
+  last in `_HEAD_HOSTS` and gone from `_FIREHOSE_URLS`. It is NOT deleted — a
+  ban is per-deployment, so the operator switches it off with
+  `ADSB_DISABLED_HOSTS=api.airplanes.live` (read by `head_hosts()` /
+  `firehose_urls()`, never returns an empty list) and a deploy they have not
+  banned keeps the tier. Draft outreach: `docs/outreach/airplanes-live-access.md`.
+  → `tests/test_adsb_disabled_hosts.py`
   → `OSINT_LIVE_PROBE=1` in `tests/test_invariants.py`
 - The snapshot union is FRESHEST-OBSERVATION-wins (`seen_at - seen_pos_s`), not
   merge-order — a cached tier must never clobber a fresher fix — and a fix that
@@ -93,7 +102,12 @@ Browser-tier pacing and the headful lever are in `tools/CLAUDE.md`.
 
 ## Auth
 
-WS handlers call `require_ws_key` BEFORE `accept`.
+WS handlers call `require_ws_key` BEFORE `accept`. `?key=` is honoured ONLY
+there: on HTTP it lands in proxy logs and browser history, so HTTP reads headers
+only, and `RedactKeyFilter` scrubs `key=` from `uvicorn.access` AND
+`uvicorn.error` (where the WS handshake line logs). HS256 session tokens must
+carry `aud` "authenticated" and a past `nbf`.
+→ `tests/test_auth_query_key_and_jwt.py`
 
 `POST /api/ingest/{dataset_id}` is the ONE route with no session dependency — an
 external sender has no session, so a per-dataset token is the whole gate. Only
@@ -102,6 +116,69 @@ logged or echoed after the response that mints it, the body is capped BEFORE it
 is parsed (Content-Length AND a running total, since chunked declares neither),
 and an unknown dataset and an unarmed one answer with the identical 404 so the
 route cannot enumerate dataset ids. → `tests/test_ingest_webhook.py`
+
+`/api/foundry` fails CLOSED on a keyless deployment — the router carries
+`Depends(require_compute_enabled)`, NOT a `ratelimit._COMPUTE_PREFIXES` entry.
+The prefix list also drives the inbound limiter, which buckets by the second
+path segment, so a prefix entry would put all 55 Foundry routes in one 60/min
+bucket shared with `BuildsView`'s 5 s build poll. Auth posture identical, blast
+radius not. → `tests/test_security_hardening.py` (both the fail-closed case and
+`test_foundry_is_not_a_compute_prefix`, which pins the reasoning)
+
+Every response carries `nosniff` / `X-Frame-Options: DENY` /
+`Referrer-Policy: no-referrer` from `SecurityHeadersMiddleware` — pure ASGI (the
+ADS-B blob path must not gain a buffering wrapper), fill-if-absent (so
+`/api/evidence`'s stricter CSP wins), and NO HSTS (the front proxy terminates
+TLS; the app cannot truthfully assert it). List routes bound `limit` with
+`Query(..., ge=1, le=N)`. → `tests/test_security_hardening.py`
+
+The rate limiter believes `X-Forwarded-For` ONLY from a peer inside
+`TRUSTED_PROXIES` (default `127.0.0.1,::1` — the CF Worker → Caddy → uvicorn
+shape, where an empty default would collapse every prod client into one loopback
+bucket). Unconditional trust let any caller mint a fresh bucket per request.
+Behind the prod compose nginx the peer is a bridge address, so
+`docker-compose.prod.yml` sets `TRUSTED_PROXIES` to its fixed `front` subnet.
+Besides the compute cap, EVERY `/api/` path shares a per-client
+`API_RATELIMIT_PER_MIN` (default 3000; health/status/config exempt; 0 disables).
+→ `tests/test_security_hardening.py`, `tests/test_api_ratelimit.py`
+
+The 14 mutating routes on `/api/workflows` and `/api/ai/models` carry
+`Depends(require_operator)`. It passes unconditionally when Supabase is
+unconfigured (static key or open mode = one user, who is the operator) and
+requires the `admin` role when Supabase can tell two humans apart. It does NOT
+widen `current_principal_or_local`'s `analyst` default — the clearance-gated
+routes read that. → `tests/test_security_hardening.py`, whose anti-rot walk
+goes over the ROUTERS: `app.routes` hides leaves behind `_IncludedRouter` and an
+app-level walk passes vacuously.
+
+`op.python` runs inside a `bwrap` jail when bubblewrap works here: no network
+(default; `WORKFLOWS_PYTHON_NET=1` restores it), read-only system, private
+/tmp, minimal env. The bind list is SURGICAL — `sys.prefix` and `py_runner.py`
+sit inside the repo next to `apps/api/.env`, so binding any parent of them hands
+every key on the box to block code. bubblewrap is probed by RUNNING it with the
+real bind list (`_JAIL_BINDS`, shared with the spawn), because it installs fine
+on kernels with userns disabled and a cut-down probe reports "absent" on a box
+that has it. `sandbox_tier()` is reported in the block help, never assumed.
+At the `rlimits-only` tier (including the prod container on kernels with
+`apparmor_restrict_unprivileged_userns=1`) `op.python` answers 503 unless
+`WORKFLOWS_PYTHON_UNSANDBOXED=1`: unjailed, the child shares the API's uid and
+reads its secrets from `/proc/<pid>/environ`. The test conftest sets the opt-in
+so no-bwrap CI still exercises op.python.
+→ `tests/test_python_exec_sandbox.py`, `tests/test_python_exec_unsandboxed_gate.py`
+
+Outbound URLs go through ONE classifier, `app/netguard.is_non_public_ip`
+(mapped/6to4/Teredo unwrapped, CGNAT blocked). `op.http`/drone/device are
+operator-gated and keep the LAN reachable (link-local/IMDS refused). Alert-rule
+`sink_url` is NOT operator-gated, so it is public-only unless its host is in
+`WORKFLOWS_HTTP_ALLOW_HOSTS`, checked at create AND again at delivery.
+→ `tests/test_sink_ssrf.py`
+
+Uploads stream through `app/uploads.py` with a cap (foundry = `store.MAX_UPLOAD_BYTES`,
+shared with ingest; recon = `recon_upload_max_bytes`); over the cap is 413 and
+nothing is left on disk. Every mutating route on workflows, foundry, evidence,
+ai_models, ingest and alert_rules carries `Depends(audit_mutation)` (written
+before the handler: an attempt, not an outcome), and MCP tool calls audit with
+argument NAMES only. → `tests/test_upload_caps.py`, `tests/test_audit_mutations.py`
 
 ## Connections (operator-configured sources)
 
@@ -153,8 +230,22 @@ The style rules it enforces are in `apps/web/CLAUDE.md`.
   `.env` auth resolves and you get a wall of 401s. Command and baseline are in
   `/CLAUDE.md`.
 - Upstreams: adsb.lol 451s non-browser UAs; airplanes.live throttles with
-  HTTP 200+text; firehose URLs dead from datacenter egress; OpenSky is the
-  breadth source; CelesTrak 403-rate-limits bursts (2 h cache).
+  HTTP 200+text AND is now app-level banned (see above); firehose URLs dead
+  from datacenter egress; OpenSky is the breadth source.
+- **CelesTrak does not rate-limit bursts** (this line said so until 2026-08-21
+  and it was wrong). It answers a repeat pull inside its 2 h publish window with
+  **403 plus the body `GP data has not updated since your last successful
+  download of GROUP=<g> at <ts>`** — a conditional GET wearing a 403, keyed by
+  (source IP, GROUP), identical for our UA and a browser UA. `routes/space.py`
+  reads that body and serves its on-disk last-good copy; treating it as an
+  outage is what emptied the satellite layer on every restart.
+  → `tests/test_space_gp_not_modified.py`
+- **The shared client follows redirects** (`upstream.py`, httpx ships this OFF).
+  Do not turn it off to "fix" something: with it off, plain-`http://` GDELT died
+  on its 301 and took the whole conflict layer to zero silently, and a 3xx with
+  an empty body scored as a healthy upstream. The four callers that legitimately
+  opt out re-check SSRF on every hop and pass `follow_redirects=False`
+  per-request. → `tests/test_feed_honesty.py`
 - Wikidata SPARQL (country leadership): query-shape traps are documented in
   `intel/country_profile.py` — a global rdfs:label join or `P279*` with a
   non-constant class 504s; label service needs a language fallback chain;

@@ -100,6 +100,39 @@ const LOOKUPS: readonly { readonly group: string; readonly items: readonly Looku
         path: '/api/cyber/shodan/{ip}',
         args: [{ name: 'ip', label: 'IPv4', placeholder: '8.8.8.8', initial: '8.8.8.8' }],
       },
+      {
+        id: 'ransomware-search',
+        label: 'Ransomware victims · leak sites',
+        hint: 'Free-text search across every tracked leak site. Fuzzy: it matches the crews own blurbs too, so read the domain on each hit before believing it.',
+        path: '/api/osint/ransomware-search',
+        args: [{ name: 'name', label: 'Name', placeholder: 'Acme Corp', initial: 'hospital' }],
+      },
+      {
+        id: 'ransomware-group',
+        label: 'Ransomware crew profile',
+        hint: 'One crews leak-site addresses, tooling and known TTPs.',
+        path: '/api/osint/ransomware-group',
+        args: [{ name: 'name', label: 'Group', placeholder: 'qilin', initial: 'qilin' }],
+      },
+    ],
+  },
+  {
+    group: 'Media provenance',
+    items: [
+      {
+        id: 'yt-video',
+        label: 'Video status · YouTube',
+        hint: 'Who posted it, when, and whether it is still up. A live thumbnail beside a dead watch page means the upload existed and was taken down.',
+        path: '/api/osint/video',
+        args: [
+          {
+            name: 'target',
+            label: 'Video id or url',
+            placeholder: 'dQw4w9WgXcQ',
+            initial: 'dQw4w9WgXcQ',
+          },
+        ],
+      },
     ],
   },
   {
@@ -153,12 +186,19 @@ const LOOKUPS: readonly { readonly group: string; readonly items: readonly Looku
       {
         id: 'telegram',
         label: 'Channel posts · Telegram',
-        hint: 'Public channel previews. Claim tier: a post is somebody asserting something.',
+        hint: 'Public channel previews, 19 allowlisted channels. Each post carries a t.me permalink so a claim can be checked at source. Claim tier: a post is somebody asserting something.',
         path: '/api/news/telegram',
         args: [
-          { name: 'channel', label: 'Channel', placeholder: 'intelslava', initial: 'intelslava' },
+          { name: 'channel', label: 'Channel', placeholder: 'Faytuks', initial: 'Faytuks' },
           { name: 'limit', label: 'Limit', placeholder: '20', initial: '20' },
         ],
+      },
+      {
+        id: 'telegram-channels',
+        label: 'Channel list · Telegram',
+        hint: 'Which channels the backend will scrape. The allowlist is the security boundary on the scraper, so it is published rather than duplicated here.',
+        path: '/api/news/telegram/channels',
+        args: [],
       },
       {
         id: 'meteoalarm',

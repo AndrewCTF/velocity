@@ -186,7 +186,7 @@ export function KVRow({
         {k}
       </span>
       <span
-        className={`mono text-right min-w-0 break-words ${warn ? 'text-alert-fg' : 'text-txt-0'}`}
+        className={`mono text-right min-w-0 wrap-break-word ${warn ? 'text-alert-fg' : 'text-txt-0'}`}
         {...(title && { title })}
       >
         {v}

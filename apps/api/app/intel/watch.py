@@ -699,7 +699,7 @@ async def _deliver_sinks(
     rule_id = str(rule.get("id"))
 
     try:
-        control.check_url(url)
+        await asyncio.to_thread(control.check_sink_url, url)
     except Exception as exc:  # noqa: BLE001 — bad sink config, log + stop
         await alert_rules_local.record_delivery(
             rule_id=rule_id, entity_id=cand.entity_id, transition=transition,
@@ -718,7 +718,7 @@ async def _deliver_sinks(
     try:
         res = await control.send(
             "POST", url, headers={"content-type": "application/json"},
-            json_body=body, timeout_s=10.0,
+            json_body=body, timeout_s=10.0, public_only=True,
         )
         ok = res.error is None and (res.status is not None and res.status < 400)
         await alert_rules_local.record_delivery(

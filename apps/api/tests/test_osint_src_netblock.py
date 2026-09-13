@@ -19,26 +19,33 @@ def _patch(monkeypatch, table: dict[str, Any]) -> None:
     monkeypatch.setattr(N, "fetch_json", fake_fetch_json)
 
 
-# ── bgpview_ip ───────────────────────────────────────────────────────────────
+# ── bgpview_ip / bgpview_asn (RIPEstat-backed since 2026-08-21) ──────────────
+#
+# api.bgpview.io went NXDOMAIN — no A record from the system resolver or from
+# 1.1.1.1. These fixtures are RIPEstat bodies captured live, because a fixture
+# in the shape of a host that no longer resolves proves nothing. The function
+# and route names stay `bgpview_*`: they are a frontend contract and an ontology
+# provenance string.
 
 
 async def test_bgpview_ip_shape(monkeypatch) -> None:
     _patch(monkeypatch, {
-        "https://api.bgpview.io/ip/8.8.8.8": {
+        "https://stat.ripe.net/data/prefix-overview/data.json": {
             "data": {
-                "prefixes": [
-                    {
-                        "prefix": "8.8.8.0/24",
-                        "asn": {"asn": 15169, "name": "GOOGLE", "country_code": "US"},
-                    }
-                ]
+                "resource": "8.8.8.0/24",
+                "related_prefixes": [],
+                "asns": [{"asn": 15169, "holder": "GOOGLE - Google LLC"}],
             }
         },
     })
     out = await N.bgpview_ip("8.8.8.8")
     assert out["ip"] == "8.8.8.8"
     assert out["prefixes"] == ["8.8.8.0/24"]
-    assert out["asns"] == [{"asn": "AS15169", "name": "GOOGLE", "country": "US"}]
+    # RIPEstat's prefix-overview carries one `holder` string and no country, so
+    # country is empty rather than guessed. An empty field beats a wrong one.
+    assert out["asns"] == [
+        {"asn": "AS15169", "name": "GOOGLE - Google LLC", "country": ""}
+    ]
 
 
 async def test_bgpview_ip_invalid() -> None:
@@ -51,43 +58,44 @@ async def test_bgpview_ip_invalid() -> None:
 async def test_bgpview_ip_upstream_down(monkeypatch) -> None:
     _patch(monkeypatch, {})
     out = await N.bgpview_ip("8.8.8.8")
-    assert out["note"] == "bgpview unavailable"
-
-
-# ── bgpview_asn ──────────────────────────────────────────────────────────────
+    assert out["note"] == "ripestat unavailable"
 
 
 async def test_bgpview_asn_shape(monkeypatch) -> None:
     _patch(monkeypatch, {
-        "https://api.bgpview.io/asn/15169/prefixes": {
-            "data": {"ipv4_prefixes": [{"prefix": "8.8.8.0/24"}], "ipv6_prefixes": []}
+        "https://stat.ripe.net/data/as-overview/data.json": {
+            "data": {"resource": "15169", "holder": "GOOGLE - Google LLC"}
         },
-        "https://api.bgpview.io/asn/15169/peers": {
-            "data": {"ipv4_peers": [{"asn": 3356}], "ipv6_peers": []}
+        "https://stat.ripe.net/data/announced-prefixes/data.json": {
+            "data": {"prefixes": [{"prefix": "8.8.8.0/24"}]}
         },
-        "https://api.bgpview.io/asn/15169": {
+        "https://stat.ripe.net/data/asn-neighbours/data.json": {
             "data": {
-                "name": "GOOGLE",
-                "description_short": "Google LLC",
-                "country_code": "US",
+                "neighbours": [
+                    {"asn": 3356, "type": "left"},
+                    {"asn": 6939, "type": "right"},
+                ]
             }
         },
     })
     out = await N.bgpview_asn("AS15169")
     assert out["asn"] == "AS15169"
-    assert out["name"] == "GOOGLE"
-    assert out["description"] == "Google LLC"
-    assert out["country"] == "US"
+    assert out["name"] == "GOOGLE - Google LLC"
     assert out["prefixes"] == ["8.8.8.0/24"]
-    assert out["peers"] == ["AS3356"]
-    assert out["upstreams"] == []
+    assert out["peers"] == ["AS3356", "AS6939"]
+    # The reason for the swap that is also an upgrade: RIPEstat labels direction,
+    # so `upstreams` is populated. Under BGPView's free API it was a hardcoded
+    # empty list with an apology in the comment next to it.
+    assert out["upstreams"] == ["AS3356"]
 
 
 async def test_bgpview_asn_accepts_bare_number(monkeypatch) -> None:
     _patch(monkeypatch, {
-        "https://api.bgpview.io/asn/15169/prefixes": {"data": {}},
-        "https://api.bgpview.io/asn/15169/peers": {"data": {}},
-        "https://api.bgpview.io/asn/15169": {"data": {"name": "GOOGLE"}},
+        "https://stat.ripe.net/data/as-overview/data.json": {
+            "data": {"holder": "GOOGLE - Google LLC"}
+        },
+        "https://stat.ripe.net/data/announced-prefixes/data.json": {"data": {}},
+        "https://stat.ripe.net/data/asn-neighbours/data.json": {"data": {}},
     })
     out = await N.bgpview_asn("15169")
     assert out["asn"] == "AS15169"
@@ -97,6 +105,14 @@ async def test_bgpview_asn_invalid() -> None:
     out = await N.bgpview_asn("not-an-asn")
     assert out["prefixes"] == []
     assert "note" in out
+
+
+async def test_bgpview_asn_upstream_down(monkeypatch) -> None:
+    """All three RIPEstat calls dead must say so, not answer a confident blank."""
+    _patch(monkeypatch, {})
+    out = await N.bgpview_asn("AS15169")
+    assert out["note"] == "ripestat unavailable"
+    assert out["peers"] == []
 
 
 # ── ripestat_network ─────────────────────────────────────────────────────────

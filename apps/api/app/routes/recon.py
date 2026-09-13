@@ -36,6 +36,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from app.auth import _bearer, _jwt_claims
 from app.config import get_settings
+from app.uploads import write_capped
 
 router = APIRouter(tags=["recon"], prefix="/api/recon")
 log = logging.getLogger("app.recon")
@@ -84,11 +85,8 @@ def _owner_key(request: Request) -> str:
     ApiKeyMiddleware; extract the Supabase ``sub`` from a bearer token when one is
     present, else fall back to the shared ``local`` identity (keyless / static-key
     single-operator box — same convention as the local ontology graph)."""
-    token = (
-        _bearer(request.headers)
-        or request.query_params.get("key")
-        or request.headers.get("x-api-key")
-    )
+    # Headers only, matching ApiKeyMiddleware: an unvalidated ?key= must not pick the owner.
+    token = _bearer(request.headers) or request.headers.get("x-api-key")
     claims = _jwt_claims(token or "") or {}
     return str(claims.get("sub") or "local")
 
@@ -576,13 +574,18 @@ async def create_job(
     inp = work / "images"  # Pi3X SfM + train_gs read <work>/images/
     inp.mkdir(parents=True, exist_ok=True)
     saved = 0
-    for uf in files:
-        name = Path(uf.filename or f"f{saved}").name
-        if not name:
-            continue
-        with open(inp / name, "wb") as out:  # noqa: ASYNC230 — one-shot write of the recon input chip, blocking is fine
-            shutil.copyfileobj(uf.file, out)
-        saved += 1
+    used = 0
+    cap = get_settings().recon_upload_max_bytes
+    try:
+        for uf in files:
+            name = Path(uf.filename or f"f{saved}").name
+            if not name:
+                continue
+            used = await write_capped(uf, inp / name, cap, used)
+            saved += 1
+    except HTTPException:
+        shutil.rmtree(work, ignore_errors=True)  # no partial job dir left behind
+        raise
     if saved == 0:
         raise HTTPException(400, "no files received")
     _JOBS[job_id] = _new_job_record(job_id, _owner_key(request))

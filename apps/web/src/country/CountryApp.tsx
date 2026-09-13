@@ -182,7 +182,7 @@ export function CountryApp(): JSX.Element {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search 249 countries…"
             aria-label="Search countries"
-            className="w-full bg-bg-2 border border-line-2 rounded-sm px-2 py-1.5 text-[12px] text-txt-0 placeholder:text-txt-4 outline-none focus:border-accent"
+            className="w-full bg-bg-2 border border-line-2 rounded-sm px-2 py-1.5 text-[12px] text-txt-0 placeholder:text-txt-4 outline-hidden focus:border-accent"
           />
         </div>
         <div className="flex-1 overflow-auto py-1">
@@ -196,7 +196,7 @@ export function CountryApp(): JSX.Element {
           {listError && <div className="mono text-[10px] text-alert-fg px-3 py-2">Failed to load: {listError}</div>}
           {grouped.map(([region, rows]) => (
             <div key={region} className="mb-1">
-              <div className="px-3 pt-2 pb-1 text-[9.5px] uppercase tracking-[0.6px] text-txt-4 flex justify-between sticky top-0 bg-bg-1 z-[5]">
+              <div className="px-3 pt-2 pb-1 text-[9.5px] uppercase tracking-[0.6px] text-txt-4 flex justify-between sticky top-0 bg-bg-1 z-5">
                 <span>{region}</span>
                 <span className="mono">{rows.length}</span>
               </div>

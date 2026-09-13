@@ -42,8 +42,19 @@ from app.config import get_settings
 from app.intel.ontology import Link, Object, get_registry
 from app.keys import UserCtx, current_user_or_local
 from app.osint import connectors as C
+from app.osint import pivots as P
 from app.osint.fetch import classify_target
-from app.osint.sources import corp, crypto, infra, netblock, social, threat_feeds
+from app.osint.sources import (
+    corp,
+    crypto,
+    infra,
+    netblock,
+    ransomware,
+    social,
+    stealer,
+    threat_feeds,
+    video,
+)
 from app.upstream import get_client
 
 router = APIRouter(tags=["osint"], prefix="/api/osint")
@@ -58,6 +69,8 @@ _MAX_PEERS = 15
 _MAX_TX = 25
 _MAX_SANCTIONS = 10
 _MAX_OFFICERS = 15
+_MAX_AFFILIATES = 20
+_MAX_RANSOM_VICTIMS = 15
 
 
 # ── GET connector endpoints (keyless, no auth) ──────────────────────────────────
@@ -274,12 +287,102 @@ async def libravatar(target: str = Query(..., max_length=253)) -> dict[str, Any]
     return await social.libravatar_exists(target)
 
 
+# ── OSINT Techniques 11th ed. wave (ch. 23-35) ─────────────────────────────────
+
+@router.get("/stealer")
+async def stealer_exposure(target: str = Query(..., max_length=253)) -> dict[str, Any]:
+    """Infostealer-log exposure for an email, a handle, or a domain.
+
+    Routes on the target's own shape rather than taking a ``kind``: the three
+    upstream endpoints answer different questions and a caller holding a
+    selector should not have to say which one it is.
+    """
+    detected = classify_target(target)
+    kind = detected[0] if detected else ""
+    if kind == "email":
+        return await stealer.hudsonrock_email(detected[1])  # type: ignore[index]
+    if kind == "domain":
+        return await stealer.hudsonrock_domain(detected[1])  # type: ignore[index]
+    if kind == "username":
+        return await stealer.hudsonrock_username(detected[1])  # type: ignore[index]
+    raise HTTPException(400, "target must be an email address, a username, or a domain")
+
+
+@router.get("/littlesis")
+async def littlesis(name: str = Query(..., max_length=120)) -> dict[str, Any]:
+    return await corp.littlesis_search(name)
+
+
+@router.get("/littlesis-relationships")
+async def littlesis_relationships(
+    entity_id: str = Query(..., max_length=16),
+) -> dict[str, Any]:
+    return await corp.littlesis_relationships(entity_id)
+
+
+@router.get("/ransomware")
+async def ransomware_domain(target: str = Query(..., max_length=253)) -> dict[str, Any]:
+    """Ransomware leak-site posts naming this domain, exact-matched."""
+    return await ransomware.ransomware_domain(target)
+
+
+@router.get("/ransomware-search")
+async def ransomware_search(name: str = Query(..., max_length=120)) -> dict[str, Any]:
+    return await ransomware.ransomware_search(name)
+
+
+@router.get("/ransomware-group")
+async def ransomware_group(name: str = Query(..., max_length=120)) -> dict[str, Any]:
+    return await ransomware.ransomware_group(name)
+
+
+@router.get("/video")
+async def video_status(target: str = Query(..., max_length=2048)) -> dict[str, Any]:
+    """Is this YouTube video live, who posted it, and did it ever exist."""
+    return await video.youtube_video(target)
+
+
+@router.get("/pivots")
+async def pivots(
+    target: str = Query(..., max_length=2048),
+    kind: str | None = Query(None, max_length=16),
+) -> dict[str, Any]:
+    """The manual-pivot links for this selector (see ``app/osint/pivots.py``).
+
+    Pure string formatting — no upstream is called, so this answers instantly
+    and cannot fail because a source is down. ``kind`` is required for the
+    selectors a bare string cannot be classified into (``person``, ``company``,
+    ``image``); everything else is detected.
+    """
+    k = (kind or "").strip().lower()
+    if not k:
+        detected = classify_target(target)
+        if detected is None:
+            raise HTTPException(
+                400,
+                "target could not be classified; pass kind= (one of "
+                + ", ".join(P.KINDS) + ")",
+            )
+        k = detected[0]
+        target = detected[1]
+    elif k not in P.KINDS:
+        raise HTTPException(400, "kind must be one of " + ", ".join(P.KINDS))
+    groups = P.pivots_for(k, target)
+    return {
+        "target": target,
+        "kind": k,
+        "groups": groups,
+        "count": sum(len(g["links"]) for g in groups),
+    }
+
+
 # ── investigate: fan out + persist into the ontology ────────────────────────────
 
 class InvestigateRequest(BaseModel):
     target: str = Field(..., min_length=1, max_length=253)
-    # Company names aren't machine-classifiable from a bare string (they don't
-    # look like a domain/ip/wallet/…), so the frontend opts in explicitly.
+    # Company and person names aren't machine-classifiable from a bare string
+    # (they don't look like a domain/ip/wallet/…), so the caller opts in
+    # explicitly: kind="company" or kind="person".
     kind: str | None = None
 
 
@@ -317,18 +420,24 @@ class _Graph:
             ).normalised()  # derive kind from the id prefix now (domain/ip/…)
         return id_
 
-    def link(self, src: str, dst: str, rel: str) -> None:
-        self.links[(src, dst, rel)] = Link(src=src, dst=dst, rel=rel)
+    def link(
+        self, src: str, dst: str, rel: str, props: dict[str, Any] | None = None
+    ) -> None:
+        self.links[(src, dst, rel)] = Link(
+            src=src, dst=dst, rel=rel, props=props or {}
+        )
 
 
 async def _investigate_domain(g: _Graph, d: str) -> dict[str, Any]:
     (
         dns_r, whois_r, certs_r, threat_r,
         wayback_r, hackertarget_r, anubis_r, columbus_r, certspotter_r, urlscan_r,
+        steal_r, ransom_r,
     ) = await asyncio.gather(
         C.lookup_dns(d), C.lookup_whois(d), C.lookup_certs(d), C.lookup_threat(d),
         infra.wayback_urls(d), infra.hackertarget_hosts(d), infra.anubis_subdomains(d),
         infra.columbus_subdomains(d), infra.certspotter_issuances(d), infra.urlscan_domain(d),
+        stealer.hudsonrock_domain(d), ransomware.ransomware_domain(d),
     )
     root = g.obj("domain:" + d, "Domain", "rdap+dns", {
         "name": d,
@@ -408,6 +517,36 @@ async def _investigate_domain(g: _Graph, d: str) -> dict[str, Any]:
         })
         g.link(tid, root, "indicates_threat")
 
+    # Credentials for this domain sitting in infostealer logs. The count is the
+    # finding; the urls say WHERE they were saved. Passwords never leave
+    # sources/stealer.py, so nothing secret lands in the graph.
+    if steal_r.get("checked") and steal_r.get("total"):
+        sid = g.obj("threat:stealer:" + d, "ThreatIndicator", "hudsonrock", {
+            "indicator": d,
+            "credentials_total": steal_r.get("total"),
+            "employees": steal_r.get("employees"),
+            "users": steal_r.get("users"),
+            "third_parties": steal_r.get("third_parties"),
+            "last_employee_compromised": steal_r.get("last_employee_compromised"),
+            "last_user_compromised": steal_r.get("last_user_compromised"),
+            "urls": steal_r.get("urls"),
+        })
+        g.link(sid, root, "compromised_in")
+
+    # Leak-site claims. A crew posting a victim is the earliest public record
+    # that an org was breached, so it is a threat indicator on the domain, not
+    # a property of it. `searched` is kept so a zero can be read as "the search
+    # ran and matched nothing" rather than "the search did not run".
+    if ransom_r.get("checked") and ransom_r.get("count"):
+        rid = g.obj("threat:ransomware:" + d, "ThreatIndicator", "ransomware.live", {
+            "indicator": d,
+            "victim_posts": ransom_r.get("count"),
+            "groups": ransom_r.get("groups"),
+            "victims": ransom_r.get("victims"),
+            "country_counts": ransom_r.get("country_counts"),
+        })
+        g.link(rid, root, "indicates_threat")
+
     return {
         "resolved_ips": len(dns_r.get("ips", [])),
         "subdomains": certs_r.get("subdomain_count", 0),
@@ -417,6 +556,10 @@ async def _investigate_domain(g: _Graph, d: str) -> dict[str, Any]:
         "certs": len(certspotter_r.get("certs") or []),
         "contacted_ips": len(urlscan_r.get("ips") or []),
         "threat_pulses": threat_r.get("pulse_count", 0),
+        "stealer_checked": bool(steal_r.get("checked")),
+        "stealer_credentials": steal_r.get("total", 0),
+        "ransomware_checked": bool(ransom_r.get("checked")),
+        "ransomware_posts": ransom_r.get("count", 0),
     }
 
 
@@ -511,11 +654,37 @@ async def _investigate_ip(g: _Graph, ip_addr: str) -> dict[str, Any]:
     return {"threat_pulses": threat_r.get("pulse_count", 0)}
 
 
+def _mint_stealer(g: _Graph, root: str, res: dict[str, Any]) -> int:
+    """Mint a stealer-log indicator for a selector, if it is in the corpus.
+
+    Returns the number of compromised machines, which is 0 for a checked-clean
+    target — a real finding, so the caller reports it either way. No credential
+    material reaches here: ``sources/stealer.py`` drops it at the boundary.
+    """
+    if not res.get("checked") or not res.get("infected"):
+        return 0
+    indicator = str(res.get("indicator") or "")
+    tid = g.obj(
+        "threat:stealer:" + indicator, "ThreatIndicator", "hudsonrock",
+        {
+            "indicator": indicator,
+            "computer_count": res.get("computer_count"),
+            "stealer_families": res.get("stealer_families"),
+            "corporate_services": res.get("corporate_services"),
+            "user_services": res.get("user_services"),
+            "computers": res.get("computers"),
+        },
+    )
+    g.link(tid, root, "compromised_in")
+    return int(res.get("computer_count") or 0)
+
+
 async def _investigate_email(g: _Graph, e: str) -> dict[str, Any]:
     """Mint an email node + its Gravatar-linked person/accounts + breach flag."""
-    grav, breach, rep, libra = await asyncio.gather(
+    grav, breach, rep, libra, steal = await asyncio.gather(
         C.lookup_gravatar(e), C.lookup_hibp(e),
         threat_feeds.emailrep(e), social.libravatar_exists(e),
+        stealer.hudsonrock_email(e),
     )
     root = g.obj("email:" + e, "Email", "person-osint", {
         "address": e,
@@ -558,20 +727,25 @@ async def _investigate_email(g: _Graph, e: str) -> dict[str, Any]:
                     {"indicator": e, **threat_props})
         g.link(tid, root, "indicates_threat")
 
+    stealer_machines = _mint_stealer(g, root, steal)
+
     return {
         "gravatar": grav.get("found", False),
         "linked_accounts": len(grav.get("accounts", [])) if grav.get("found") else 0,
         "breach_count": breach.get("breach_count", 0),
         "emailrep_malicious": bool(rep.get("malicious")),
         "has_avatar": bool(libra.get("has_avatar")),
+        # 0 here means "checked, clean", not "not checked" — see stealer_checked.
+        "stealer_checked": bool(steal.get("checked")),
+        "stealer_machines": stealer_machines,
     }
 
 
 async def _investigate_username(g: _Graph, u: str) -> dict[str, Any]:
     """Mint a username node + a person + its presence across the curated sites."""
-    gh, gl, sites, reddit = await asyncio.gather(
+    gh, gl, sites, reddit, steal = await asyncio.gather(
         C.lookup_github_user(u), C.lookup_gitlab_user(u), C.lookup_username_sites(u),
-        social.pullpush_reddit(u),
+        social.pullpush_reddit(u), stealer.hudsonrock_username(u),
     )
     root = g.obj("username:" + u, "Username", "person-osint", {
         "handle": u,
@@ -598,6 +772,8 @@ async def _investigate_username(g: _Graph, u: str) -> dict[str, Any]:
                     {"address": str(gh["email"]).lower()})
         g.link(pid, eid, "has_email")
 
+    stealer_machines = _mint_stealer(g, root, steal)
+
     present = sites.get("present_on", [])
     return {
         "github": gh.get("found", False),
@@ -605,6 +781,8 @@ async def _investigate_username(g: _Graph, u: str) -> dict[str, Any]:
         "present_on": present,
         "site_count": len(present),
         "reddit_submissions": reddit.get("count", 0),
+        "stealer_checked": bool(steal.get("checked")),
+        "stealer_machines": stealer_machines,
     }
 
 
@@ -740,12 +918,108 @@ async def _investigate_asn(g: _Graph, asn: str) -> dict[str, Any]:
     }
 
 
+async def _investigate_person(g: _Graph, name: str) -> dict[str, Any]:
+    """Mint a ``person:<slug>`` root from a free-text NAME + who they connect to.
+
+    The counterpart to ``_investigate_company``: same opt-in reason (a bare name
+    is not machine-classifiable), same id scheme as the person nodes minted from
+    a username or a company's officer list, so a name typed here collides onto
+    the node a Gravatar or an OpenOwnership officer already created rather than
+    forking a second copy of the same human.
+
+    Screening (sanctions) plus association (LittleSis, Aleph, Wikidata). The
+    people-search engines that dominate ch. 25 are captcha'd and cannot be
+    connectors — they are in the pivot catalog instead.
+    """
+    ls_r, sanc_r, al_r, wd_r = await asyncio.gather(
+        corp.littlesis_search(name), corp.opensanctions_search(name),
+        corp.aleph_search(name), corp.wikidata_search(name),
+    )
+    entities = wd_r.get("entities") or []
+    top_entity = entities[0] if entities else {}
+    ls_entities = ls_r.get("entities") or []
+    # littlesis_search puts an exact name match first; only adopt it as THIS
+    # person when it really is one, or a namesake's edges get attributed here.
+    top_ls = next(
+        (
+            e for e in ls_entities
+            if e.get("kind") == "Person"
+            and str(e.get("name", "")).casefold() == name.strip().casefold()
+        ),
+        {},
+    )
+
+    root = g.obj("person:" + _slug(name), "Person", "person-osint", {
+        "name": name.strip(),
+        "wikidata_qid": top_entity.get("qid"),
+        "wikidata_description": top_entity.get("description"),
+        "littlesis_id": top_ls.get("id"),
+        "littlesis_url": top_ls.get("url"),
+        "blurb": top_ls.get("blurb"),
+    })
+
+    sanctioned = 0
+    for match in (sanc_r.get("matches") or [])[:_MAX_SANCTIONS]:
+        topics = [str(t).lower() for t in (match.get("topics") or [])]
+        if not any("sanction" in t or "pep" in t for t in topics):
+            continue
+        tid = g.obj(
+            "threat:" + _slug(match.get("id") or match.get("name") or ""),
+            "ThreatIndicator", "opensanctions",
+            {"indicator": match.get("name"), "schema": match.get("schema"),
+             "topics": match.get("topics"), "datasets": match.get("datasets")},
+        )
+        g.link(root, tid, "sanctioned_as")
+        sanctioned += 1
+
+    affiliates = 0
+    if top_ls.get("id"):
+        rels = await corp.littlesis_relationships(str(top_ls["id"]))
+        for rel in (rels.get("relationships") or [])[:_MAX_AFFILIATES]:
+            other = rel.get("counterparty") or {}
+            nm, other_kind = other.get("name"), other.get("kind")
+            if not nm:
+                continue
+            # A LittleSis org lands on the same ``ext:organization:`` id that
+            # rdap registrants, extracted documents and aircraft operators use.
+            if other_kind == "Organization":
+                oid = g.obj("ext:organization:" + _slug(nm), "Organization", "littlesis",
+                            {"name": nm, "littlesis_id": other.get("id")})
+            else:
+                oid = g.obj("person:" + _slug(nm), "Person", "littlesis",
+                            {"name": nm, "littlesis_id": other.get("id")})
+            # The verb generalises; the upstream's own sentence rides along so
+            # "gave money to" is not flattened into "affiliated with" and lost.
+            g.link(root, oid, "affiliated_with", {
+                "description": rel.get("description"),
+                "role": rel.get("role"),
+                "amount": rel.get("amount"),
+                "start_date": rel.get("start_date"),
+                "end_date": rel.get("end_date"),
+                "source": "littlesis",
+            })
+            affiliates += 1
+
+    screening = {
+        "sanctions_matches": sanctioned,
+        "littlesis_matches": ls_r.get("count", 0),
+        "affiliates": affiliates,
+        "aleph_matches": al_r.get("count", 0),
+        "wikidata_matches": wd_r.get("count", 0),
+    }
+    # Same reason as _investigate_company: a 0 here is "checked, clean", which
+    # is the finding, so it bypasses g.obj()'s drop-falsy filter.
+    g.objs[root].props.update(screening)
+    return screening
+
+
 async def _investigate_company(g: _Graph, name: str) -> dict[str, Any]:
     """Mint an ``ext:organization:<slug>`` root + filings/sanctions/officers context."""
-    sec_r, sanc_r, oc_r, oo_r, al_r, wd_r = await asyncio.gather(
+    sec_r, sanc_r, oc_r, oo_r, al_r, wd_r, ransom_r = await asyncio.gather(
         corp.sec_edgar_company(name), corp.opensanctions_search(name),
         corp.opencorporates_search(name), corp.openownership_search(name),
         corp.aleph_search(name), corp.wikidata_search(name),
+        ransomware.ransomware_search(name),
     )
     companies = oc_r.get("companies") or []
     top_company = companies[0] if companies else {}
@@ -785,12 +1059,31 @@ async def _investigate_company(g: _Graph, name: str) -> dict[str, Any]:
         g.link(pid, root, "officer_of")
         officers += 1
 
+    # The company search is free text, so a leak-site hit here is a LEAD, not a
+    # confirmed match on this org — the upstream matches the crews' own blurbs
+    # too. It is minted with the query that produced it so the reader can judge.
+    ransom_posts = 0
+    if ransom_r.get("count"):
+        rid = g.obj(
+            "threat:ransomware:" + _slug(name), "ThreatIndicator", "ransomware.live",
+            {
+                "indicator": name.strip(),
+                "match": "free-text name search, not an exact-domain match",
+                "victim_posts": ransom_r.get("count"),
+                "groups": ransom_r.get("groups"),
+                "victims": (ransom_r.get("victims") or [])[:_MAX_RANSOM_VICTIMS],
+            },
+        )
+        g.link(rid, root, "indicates_threat")
+        ransom_posts = int(ransom_r.get("count") or 0)
+
     screening = {
         "sanctions_matches": sanctioned,
         "opencorporates_matches": oc_r.get("count", 0),
         "officers": officers,
         "aleph_matches": al_r.get("count", 0),
         "wikidata_matches": wd_r.get("count", 0),
+        "ransomware_posts": ransom_posts,
     }
     # These are due-diligence counts, not identity fields: a 0 means "checked,
     # clean" and is the whole point of a durable screening record, so it must
@@ -811,13 +1104,18 @@ async def investigate(
 ) -> InvestigateResponse:
     g = _Graph(ts=time.time())
 
-    if req.kind == "company":
+    if req.kind in ("company", "person"):
         name = req.target.strip()
         if not name:
             raise HTTPException(status_code=400, detail="target must not be empty")
-        summary = await _investigate_company(g, name)
-        kind = "org"
-        root = "ext:organization:" + _slug(name)
+        if req.kind == "person":
+            summary = await _investigate_person(g, name)
+            kind = "person"
+            root = "person:" + _slug(name)
+        else:
+            summary = await _investigate_company(g, name)
+            kind = "org"
+            root = "ext:organization:" + _slug(name)
     else:
         detected = classify_target(req.target)
         if detected is None:
@@ -827,6 +1125,15 @@ async def investigate(
                        "wallet address, or ASN",
             )
         kind, canonical = detected
+        if kind == "phone":
+            # docs/osint-sources-plan.md: no keyless phone source with graph
+            # value exists, and none of ch. 26's is machine-readable. Rather
+            # than mint an empty node, point at the surface that does answer.
+            raise HTTPException(
+                status_code=400,
+                detail="phone numbers are pivot-only: use GET /api/osint/pivots"
+                       "?target=…&kind=phone",
+            )
         if kind == "domain":
             summary = await _investigate_domain(g, canonical)
             root = "domain:" + canonical

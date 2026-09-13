@@ -44,7 +44,14 @@ class TileCache:
         self._last_evict = 0.0
 
     def _path(self, source: str, z: int, x: int, y: int, ext: str) -> Path:
-        return self.root / source / str(z) / str(x) / f"{y}.{ext}"
+        # Every caller passes int z/x/y and a literal source/ext today, so this
+        # cannot fire; it keeps a future string-typed caller from writing a tile
+        # outside the cache. String ops only: no syscall on the hot read path.
+        root = os.path.normpath(self.root)
+        path = os.path.normpath(os.path.join(root, source, str(z), str(x), f"{y}.{ext}"))
+        if not path.startswith(root + os.sep):
+            raise ValueError("tile path escapes the cache root")
+        return Path(path)
 
     def _lock_for(self, key: str) -> asyncio.Lock:
         lock = self._locks.get(key)

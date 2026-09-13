@@ -12,6 +12,7 @@ import { Badge } from '../shell/instruments.js';
 import { Markdown } from '../shell/Markdown.js';
 import type { SelectionBriefResponse } from '../settings/localAi/types.js';
 import { Icon } from '../normal/Icon.js';
+import { AiLabel } from '../shell/aiLabel.js';
 
 // The backend is gaining an `enrichment` field on the selection-brief response
 // ("full" | "partial" | "skipped"); older backends omit it. Read it through a
@@ -200,9 +201,21 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
         <div className="mt-1.5 space-y-1.5">
           {loading && !data && <p className="mono text-[10px] text-txt-3">assessing…</p>}
           {err && <p className="mono text-[10px] text-alert">{err}</p>}
-          {data && (
+          {data && data.ok === false && (
+            <p className="mono text-[10px] text-warn">
+              {data.detail ?? 'Assessment withheld: it cited evidence that was not provided.'}
+            </p>
+          )}
+          {data && data.ok !== false && (
             <>
               <Markdown text={data.text} />
+              <AiLabel />
+              {data.grounded === false && (
+                <p className="mono text-[10px] text-txt-3">
+                  Unsourced: this assessment cited no object ids, so nothing in it can be
+                  traced back to a specific contact.
+                </p>
+              )}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="mono text-[10px] text-txt-2 break-all min-w-0">{data.model}</span>
                 <span className="mono text-[10px] text-txt-3">{data.backend}</span>

@@ -22,6 +22,7 @@ sits within the match radius.
 
 from __future__ import annotations
 
+import asyncio
 import math
 from io import BytesIO
 from typing import Any
@@ -144,6 +145,15 @@ def _estimate_shape(rr: np.ndarray, cc: np.ndarray) -> tuple[float, float, float
     # Geographic bearing: north = -row, east = +col. atan2(east, north), fold to 0-180.
     heading = np.degrees(np.arctan2(dcol, -drow)) % 180.0
     return major_px, minor_px, float(heading)
+
+
+def _decode_and_detect(img: bytes, k: float, max_area: int) -> tuple[Any, list[dict[str, Any]]]:
+    """Decode and detect in one hop, so the frame crosses the thread boundary
+    once instead of twice."""
+    from PIL import Image  # noqa: PLC0415
+
+    arr = np.asarray(Image.open(BytesIO(img)).convert("L"))
+    return arr, detect_targets(arr, k=k, max_area=max_area)
 
 
 def detect_targets(
@@ -310,10 +320,10 @@ async def detect_dark_vessels(
             "features": [],
             "summary": {"aoi": aoi, "date": date, "error": "no SAR imagery"},
         }
-    from PIL import Image
-
-    arr = np.asarray(Image.open(BytesIO(img)).convert("L"))
-    targets = detect_targets(arr, k=k, max_area=max_area)
+    # Decode + CFAR detect over a frame up to _MAX_DIM square. Off the loop:
+    # this event loop also drives the 1 s snapshot cycle and the WS broadcast,
+    # so an inline detect freezes the live map for every connected viewer.
+    arr, targets = await asyncio.to_thread(_decode_and_detect, img, k, max_area)
 
     # AIS coverage for the AOI from the observation store (keyless feeds).
     lon0, lat0, lon1, lat1 = aoi_box

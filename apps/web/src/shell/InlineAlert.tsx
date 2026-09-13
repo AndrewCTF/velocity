@@ -34,7 +34,7 @@ export function InlineAlert({
       role={role ?? (tone === 'alert' ? 'alert' : 'status')}
       className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-[11px] leading-snug ${TONE[tone]} ${className}`}
     >
-      {icon != null && <span className="flex-none mt-[1px]">{icon}</span>}
+      {icon != null && <span className="flex-none mt-px">{icon}</span>}
       <div className="min-w-0">{children}</div>
     </div>
   );

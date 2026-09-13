@@ -151,7 +151,7 @@ function PostureCaveat({ classification }: { classification: string }): JSX.Elem
       level={classification}
       note="keyless OSINT"
       tone="neutral"
-      noteClassName="hidden min-[1920px]:inline-flex"
+      noteClassName="max-[1920px]:hidden"
     />
   );
 }
@@ -313,7 +313,7 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
 // teal selection accent. See tokens.css.
 const SEV_COLOR: Record<string, string> = {
   info: 'text-txt-2',
-  low: 'text-[var(--sev-low)]',
+  low: 'text-(--sev-low)',
   medium: 'text-warn',
   high: 'text-alert',
   critical: 'text-alert',
@@ -342,7 +342,7 @@ function BasemapPicker({
       title={current.title}
       aria-label="Basemap"
       data-testid="basemap-picker"
-      className="mono text-[10px] tracking-[0.6px] uppercase bg-transparent border border-line rounded-sm px-1.5 py-1 text-txt-2 hover:border-accent-line hover:text-txt-1 focus:outline-none focus:border-accent-line cursor-pointer"
+      className="mono text-[10px] tracking-[0.6px] uppercase bg-transparent border border-line rounded-sm px-1.5 py-1 text-txt-2 hover:border-accent-line hover:text-txt-1 focus:outline-hidden focus:border-accent-line cursor-pointer"
     >
       {BASEMAP_OPTIONS.map((o) => (
         <option key={o.value} value={o.value} title={o.title}>
@@ -402,7 +402,7 @@ function AlertTicker({ onOpen }: { onOpen?: () => void }): JSX.Element {
     <button
       type="button"
       onClick={onOpen}
-      className="relative w-full flex items-center gap-2 truncate text-left pl-3 focus:outline-none group"
+      className="relative w-full flex items-center gap-2 truncate text-left pl-3 focus:outline-hidden group"
       aria-live="polite"
       aria-label={total > 0 ? `Open alerts panel (${total} alerts)` : 'Open alerts panel'}
       title="Open alerts panel (press A)"

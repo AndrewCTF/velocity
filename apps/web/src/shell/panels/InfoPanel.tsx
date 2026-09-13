@@ -167,7 +167,7 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
             return (
               <div
                 key={f.id}
-                className="flex min-h-[38px] items-center gap-2 px-[14px] py-1 hover:bg-[var(--hover)]"
+                className="flex min-h-[38px] items-center gap-2 px-[14px] py-1 hover:bg-(--hover)"
                 title={f.note ?? undefined}
               >
                 <span className={`h-[6px] w-[6px] shrink-0 rounded-full ${tone?.dot}`} />
@@ -216,7 +216,7 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           return (
             <div
               key={c.id}
-              className="flex min-h-[38px] items-center gap-2 px-[14px] py-1 hover:bg-[var(--hover)]"
+              className="flex min-h-[38px] items-center gap-2 px-[14px] py-1 hover:bg-(--hover)"
               title={c.region}
             >
               <Icon name="route" className="h-3 w-3 shrink-0 text-txt-3" />
@@ -355,7 +355,7 @@ function SpaceWeather(): JSX.Element {
         </p>
       ) : (
         <>
-          <div className="flex h-[var(--g-row-2)] items-center gap-2 px-[14px]">
+          <div className="flex h-(--g-row-2) items-center gap-2 px-[14px]">
             <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">Planetary Kp</span>
             <span
               className={`mono shrink-0 text-[12px] tabular-nums ${stormy ? 'text-warn-fg' : 'text-txt-0'}`}
@@ -363,7 +363,7 @@ function SpaceWeather(): JSX.Element {
               {wx?.kp ? wx.kp.kp.toFixed(1) : '—'}
             </span>
           </div>
-          <div className="flex h-[var(--g-row-2)] items-center gap-2 px-[14px]">
+          <div className="flex h-(--g-row-2) items-center gap-2 px-[14px]">
             <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">GOES X-ray</span>
             <span className="mono shrink-0 text-[12px] tabular-nums text-txt-0">
               {wx?.xray?.current_class ?? '—'}

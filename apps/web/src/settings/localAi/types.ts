@@ -127,12 +127,22 @@ export interface LocalAiConfig {
 }
 
 export interface SelectionBriefResponse {
+  // false when the backend WITHHELD the prose. The brief is not an error and
+  // not an outage: the model cited object ids that were not in the evidence,
+  // which is a fabricated provenance trail, so the text is never sent. `detail`
+  // carries the reason to show instead. See apps/api/app/routes/ai_selection.py.
   ok: boolean;
   text: string;
   model: string;
   backend: string;
   latency_ms: number;
   cached: boolean;
+  withheld?: 'unknown-citations';
+  detail?: string;
+  unknown_citations?: string[];
+  // true when the prose cited at least one id and every id it cited was real.
+  // Absent on older backends; false means unsourced, not false.
+  grounded?: boolean;
 }
 
 // Custom download field is restricted to the unsloth org — enforced both here

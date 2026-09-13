@@ -64,7 +64,7 @@ interface Density {
   binWidthSec: number;
   detections: number[];
   alerts: number[];
-  gaps: number[];
+  gaps: number[] | null; // null = unmeasured (see gaps_status), never rendered
 }
 
 interface LaneEvent {
@@ -83,7 +83,13 @@ interface Lane {
 }
 
 export function Timeline({ viewer }: Props = {}): JSX.Element {
-  const { playing, multiplier, togglePlay, setMultiplier } = useTime();
+  // Per-field selectors, matching TimeDock and GlobeCanvas. Destructuring the
+  // whole store re-renders this component - the strip, the lanes, the density
+  // histogram - on any useTime change, not just the four fields it reads.
+  const playing = useTime((s) => s.playing);
+  const multiplier = useTime((s) => s.multiplier);
+  const togglePlay = useTime((s) => s.togglePlay);
+  const setMultiplier = useTime((s) => s.setMultiplier);
   const [stamp, setStamp] = useState(() => isoStamp(Date.now()));
   const [density, setDensity] = useState<Density | null>(null);
   const [lanes, setLanes] = useState<Lane[]>([]);
@@ -666,7 +672,7 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
                   ? `Replay a specific UTC day · history available from ${earliestAvailableDay}`
                   : `Replay a specific UTC day (retained back to ${minDay})`
               }
-              className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-none focus:border-accent-line disabled:opacity-40 [color-scheme:dark]"
+              className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-hidden focus:border-accent-line disabled:opacity-40 scheme-dark"
             />
             {replayDayBeforeAvailable && (
               <span

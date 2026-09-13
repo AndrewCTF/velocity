@@ -101,7 +101,7 @@ export function FloatingPanel({
 
   return (
     <div
-      className="absolute z-[var(--z-overlay)] pointer-events-auto flex flex-col rounded-md border border-line-2 overflow-hidden shadow-2xl"
+      className="absolute z-(--z-overlay) pointer-events-auto flex flex-col rounded-md border border-line-2 overflow-hidden shadow-2xl"
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, background: 'rgba(9,12,18,0.97)' }}
       role="dialog"
       aria-label={title}

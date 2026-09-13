@@ -153,7 +153,7 @@ export function Console({
   // strip inside a panel.
   const sections = Children.toArray(leftBody).filter(
     (n): n is React.ReactElement<{ 'aria-label'?: string }> =>
-      isValidElement(n) && typeof n.props['aria-label'] === 'string',
+      isValidElement<{ 'aria-label'?: string }>(n) && typeof n.props['aria-label'] === 'string',
   );
   const sectioned = sections.length > 1;
   const [section, setSection] = useState(0);

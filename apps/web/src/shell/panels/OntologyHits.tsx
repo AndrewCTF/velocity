@@ -71,7 +71,7 @@ export function OntologyHits({ q, limit = 6 }: { q: string; limit?: number }): J
             <button
               type="button"
               onClick={() => select(o.id)}
-              className="w-full text-left px-[14px] py-[5px] hover:bg-[var(--hover)]"
+              className="w-full text-left px-[14px] py-[5px] hover:bg-(--hover)"
             >
               <span className="block text-[12px] text-txt-1 truncate">{label(o)}</span>
               <span className="block mono text-[10px] text-txt-3 truncate">

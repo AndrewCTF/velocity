@@ -317,3 +317,109 @@ async def wikidata_search(name: str) -> dict[str, Any]:
         if isinstance(r, dict)
     ]
     return {"query": q, "entities": entities[:25], "count": len(entities)}
+
+
+# ── LittleSis ────────────────────────────────────────────────────────────────
+
+_LS = "https://littlesis.org/api"
+_MAX_LS_ENTITIES = 15
+_MAX_LS_RELS = 40
+
+# "https://littlesis.org/person/416189-Mark_Kelly" → ("person", "Mark Kelly").
+_LS_URL_RE = re.compile(r"littlesis\.org/(person|org)/(\d+)-([^/?#]+)")
+
+
+def _ls_counterparty(url: str) -> dict[str, str]:
+    """Read the other end of a relationship out of its own url.
+
+    LittleSis embeds the counterparty's type, id and name in the link it
+    returns, so one relationships call answers "who is this connected to"
+    without a second fetch per edge.
+    """
+    m = _LS_URL_RE.search(url or "")
+    if not m:
+        return {"id": "", "kind": "", "name": ""}
+    return {
+        "id": m.group(2),
+        "kind": "Person" if m.group(1) == "person" else "Organization",
+        "name": m.group(3).replace("_", " "),
+    }
+
+
+async def littlesis_search(name: str) -> dict[str, Any]:
+    """Search LittleSis, the who-knows-whom register of US power (keyless, CC BY-SA).
+
+    Complements the sanctions/registry sources already here: those answer "is
+    this entity listed", LittleSis answers "who is it connected to and how".
+    """
+    q = _clean_name(name)
+    if not q:
+        return {"query": name, "entities": [], "count": 0, "note": "empty name"}
+    data = await fetch_json(f"{_LS}/entities/search?q={quote(q)}", 900.0)
+    rows = (data or {}).get("data")
+    if not isinstance(rows, list):
+        return {"query": q, "entities": [], "count": 0, "note": "littlesis unavailable"}
+    entities = []
+    for r in rows[:_MAX_LS_ENTITIES]:
+        if not isinstance(r, dict):
+            continue
+        a = r.get("attributes") or {}
+        entities.append({
+            "id": str(a.get("id") or r.get("id") or ""),
+            "name": str(a.get("name", "")),
+            "kind": str(a.get("primary_ext", "")),   # "Person" | "Org"
+            "blurb": str(a.get("blurb") or "")[:300],
+            "website": str(a.get("website") or ""),
+            "url": f"https://littlesis.org/entities/{a.get('id') or r.get('id')}",
+        })
+    # LittleSis relevance is loose (a query for one person returns better-known
+    # neighbours above the exact match), so surface an exact name match first.
+    # The upstream order is otherwise preserved.
+    ql = q.casefold()
+    entities.sort(
+        key=lambda e: (
+            e["name"].casefold() != ql,
+            not e["name"].casefold().startswith(ql),
+        )
+    )
+    return {"query": q, "entities": entities, "count": len(entities)}
+
+
+async def littlesis_relationships(entity_id: str) -> dict[str, Any]:
+    """The edges LittleSis holds for one entity id, with the counterparty named."""
+    eid = str(entity_id or "").strip()
+    if not eid.isdigit():
+        return {"entity_id": entity_id, "relationships": [], "count": 0,
+                "note": "entity_id must be a LittleSis numeric id"}
+    data = await fetch_json(f"{_LS}/entities/{eid}/relationships", 900.0)
+    rows = (data or {}).get("data")
+    if not isinstance(rows, list):
+        return {"entity_id": eid, "relationships": [], "count": 0,
+                "note": "littlesis unavailable"}
+    rels = []
+    for r in rows[:_MAX_LS_RELS]:
+        if not isinstance(r, dict):
+            continue
+        a = r.get("attributes") or {}
+        # Either end of an edge can be the entity we asked about; the
+        # counterparty is whichever end is NOT it. Picking `related` blindly
+        # returns the query subject back as its own counterparty.
+        ends = [
+            _ls_counterparty(str(r.get("entity") or "")),
+            _ls_counterparty(str(r.get("related") or "")),
+        ]
+        other = next(
+            (e for e in ends if e["name"] and e["id"] != eid),
+            next((e for e in ends if e["name"]), ends[0]),
+        )
+        rels.append({
+            "id": str(a.get("id") or ""),
+            "description": str(a.get("description") or "")[:300],
+            "role": str(a.get("description1") or a.get("description2") or ""),
+            "amount": a.get("amount"),
+            "start_date": str(a.get("start_date") or ""),
+            "end_date": str(a.get("end_date") or ""),
+            "counterparty": other,
+        })
+    return {"entity_id": eid, "relationships": rels, "count": len(rels),
+            "total_pages": int(((data or {}).get("meta") or {}).get("pageCount") or 0)}

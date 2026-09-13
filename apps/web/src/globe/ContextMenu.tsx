@@ -38,7 +38,7 @@ export function ContextMenu(): JSX.Element | null {
     <div
       role="menu"
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-[var(--z-dropdown)] rounded-sm border border-line-2 bg-bg-1/95 backdrop-blur shadow-xl py-1"
+      className="fixed z-(--z-dropdown) rounded-sm border border-line-2 bg-bg-1/95 backdrop-blur-sm shadow-xl py-1"
       style={{ left, top, width: W }}
     >
       <div className="px-3 py-1 mono text-[10px] tracking-[0.6px] uppercase text-txt-3 border-b border-line">

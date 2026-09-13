@@ -1,3 +1,9 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+overrides:
+  # get-pixels (via @macrostrat/cesium-martini) lists `request` for its
+  # node-only entry; the browser field maps to dom-pixels.js, so request and
+  # its form-data@2 / tough-cookie / qs / uuid subtree never ship. Drop it.
+  get-pixels>request: '-'

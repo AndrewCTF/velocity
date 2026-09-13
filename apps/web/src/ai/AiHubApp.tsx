@@ -120,7 +120,7 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="investigate · query the snapshot · correlate · locate the emitter"
               aria-label="Ask the analyst agent"
-              className="flex-1 mono text-[12px] text-txt-1 placeholder:text-txt-3 bg-bg-2 border border-line rounded-sm px-2.5 py-1.5 outline-none focus:border-accent-line"
+              className="flex-1 mono text-[12px] text-txt-1 placeholder:text-txt-3 bg-bg-2 border border-line rounded-sm px-2.5 py-1.5 outline-hidden focus:border-accent-line"
             />
             <button
               type="submit"

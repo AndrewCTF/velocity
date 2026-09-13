@@ -197,7 +197,7 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
                   </div>
                   {!byLengthOnly && m.matched.length > 0 && (
                     <p className="mt-1 text-[10px] text-ok/90 leading-snug flex items-start gap-1">
-                      <Check size={11} strokeWidth={2} aria-hidden className="mt-[1px] shrink-0" />
+                      <Check size={11} strokeWidth={2} aria-hidden className="mt-px shrink-0" />
                       <span>{m.matched.map((f) => FEATURE_DEFS[f].label).join(' · ')}</span>
                     </p>
                   )}

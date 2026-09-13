@@ -52,7 +52,7 @@ export function AoiSelector({ onPick }: Props): JSX.Element {
       </button>
       {open && (
         <div
-          className="absolute z-[var(--z-dropdown)] top-full mt-1 left-0 w-[520px] max-w-[92vw] bg-bg-1 border border-line rounded-md"
+          className="absolute z-(--z-dropdown) top-full mt-1 left-0 w-[520px] max-w-[92vw] bg-bg-1 border border-line rounded-md"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.5)',
@@ -64,7 +64,7 @@ export function AoiSelector({ onPick }: Props): JSX.Element {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="filter chokepoints…"
-              className="mono flex-1 bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 placeholder:text-txt-3 focus:outline-none focus:border-accent-line"
+              className="mono flex-1 bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 placeholder:text-txt-3 focus:outline-hidden focus:border-accent-line"
             />
             <button
               type="button"

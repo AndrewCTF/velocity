@@ -15,6 +15,7 @@ handled later in the recon stage, not here.
 
 from __future__ import annotations
 
+import asyncio
 import math
 from io import BytesIO
 from typing import Any
@@ -102,7 +103,9 @@ async def fetch_aligned_stack(
     for layer in layers:
         img = await cdse.fetch_image(layer, bbox, width, height, date)
         if img:
-            arrays[layer] = _to_array(img)
+            # PIL decode of a width*height frame per layer, off the loop that
+            # also drives the 1 s snapshot cycle and the WS broadcast.
+            arrays[layer] = await asyncio.to_thread(_to_array, img)
     return {"aoi": aoi, "date": date, "bbox": bbox, "size": [width, height], "arrays": arrays}
 
 

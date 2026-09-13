@@ -238,6 +238,20 @@ def test_intel_agent_errors_stream_not_raise(client: TestClient, monkeypatch: py
     assert '"type": "error"' in r.text or '"type":"error"' in r.text
 
 
+def test_intel_agent_error_frame_hides_exception_text(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _boom(q, bbox, ctx, clearance, compartments):  # noqa: ANN001
+        raise RuntimeError("sqlite at /srv/secret/intel.db is locked")
+        yield  # pragma: no cover — makes this an async generator
+
+    monkeypatch.setattr(agent_mod, "run_agent", _boom)
+    r = client.get("/api/intel/agent", params={"q": "trigger error"})
+    assert r.status_code == 200
+    assert '"type": "error"' in r.text
+    assert "/srv/secret" not in r.text and "RuntimeError" not in r.text
+
+
 def test_intel_agent_rejects_empty_query(client: TestClient) -> None:
     assert client.get("/api/intel/agent", params={"q": "x"}).status_code == 422
 

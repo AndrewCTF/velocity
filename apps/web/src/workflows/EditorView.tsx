@@ -962,7 +962,7 @@ export function EditorView(): JSX.Element {
                             onNodeClick(n.id);
                           }
                         }}
-                        className="cursor-pointer focus:outline-none"
+                        className="cursor-pointer focus:outline-hidden"
                         data-testid={`block-node-${n.id}`}
                       >
                         <rect

@@ -137,7 +137,11 @@ function routeFetch(): void {
   mockedFetch.mockImplementation(async (url: string) => {
     const u = url.toString();
     if (u.includes('/summary')) return jsonResponse(SUMMARY);
-    if (u.includes('/datasets/upload')) return jsonResponse({ ...DATASET_1, auto_sync: [] });
+    // Both the new-dataset upload and the version upload (/datasets/{id}/upload)
+    // answer with the dataset. The version route used to fall through to the
+    // dataset LIST, so UploadModal rendered `row_count` of undefined after the
+    // test ended; vitest 5 reports that as an unhandled error.
+    if (/\/datasets\/([^/]+\/)?upload/.test(u)) return jsonResponse({ ...DATASET_1, auto_sync: [] });
     if (u.includes('/datasets') && u.includes('/rollback')) return jsonResponse({ ...DATASET_1, auto_sync: [] });
     if (u.includes('/datasets') && u.includes('/docs')) return jsonResponse(DATASET_DOCS);
     if (u.includes('/datasets') && u.includes('/checks/results')) return jsonResponse(CHECK_RESULTS);
