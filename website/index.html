@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="canonical" href="https://projectvelocity.org/" />
 <title>Velocity · The situation console you run yourself</title>
 <meta name="crawford-signature" content=".hero-ctas kbd, .term, .cmds" data-device="the real command in mono: the compose command in the hero button, the live agent transcript, the install block" />
 <meta name="description" content="Every public aircraft, ship, satellite and hazard feed on one globe, recorded to your own disk. Self-hosted, no account, no API key, no seven-day cutoff." />
@@ -629,7 +630,7 @@ QUOTES.forEach(([who,txt])=>{
 const fc=document.getElementById('footCols');
 Object.entries(FOOT).forEach(([h,links],i)=>{
  const c=document.createElement('div');c.className='foot-col reveal';c.style.transitionDelay=(i*0.07)+'s';
- c.innerHTML=`<h4>${h}</h4>`+links.map(([l,h])=>`<a href="${h}" rel="noopener">${l}</a>`).join('');
+ c.innerHTML=`<h4>${h}</h4>`;links.forEach(([l,href])=>{const a=document.createElement('a');a.href=href;a.rel='noopener';a.textContent=l;c.appendChild(a)});
  fc.appendChild(c);
 });
 
