@@ -27,6 +27,12 @@
   /* the install command is wider than a phone: let the table scroll inside its box instead of pushing the page sideways */
   .press-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .press-table code { white-space: pre-wrap; word-break: break-word; }
+  /* every link a thumb can reach: caption downloads, the repo link, the contact link, the bar */
+  .press-grid figcaption a, .press-main figcaption a, .press-table a, .press-block p a { display: inline-flex; align-items: center; min-height: 44px; }
+  .press-grid figcaption, .press-main figcaption { line-height: 1.3; }
+  .nav .btn-sm { min-height: 44px; }
+  .nav .brand { min-height: 44px; display: inline-flex; align-items: center; }
+  .sec-head .datarule { margin-bottom: 44px; }
   .press-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; align-items: start; }
   .press-grid figure { margin: 0; }
   .press-grid img, .press-grid video { width: 100%; height: auto; display: block; border-radius: 6px; }
