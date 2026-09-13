@@ -66,6 +66,10 @@ code,kbd,pre{font-family:var(--f2)}
 .nav-search svg{stroke:#fff;display:block}
 .nav-links a{color:#fff;font-size:13.5px;font-weight:600;font-family:var(--f2);letter-spacing:.4px;padding:0 15px;min-height:44px;display:inline-flex;align-items:center;border-radius:999px;transition:background .25s}
 .nav-links a:hover{background:rgba(255,255,255,.14)}
+.nav-toggle{display:none;width:44px;height:44px;border-radius:50%;flex-direction:column;align-items:center;justify-content:center;gap:5px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.6);flex:none}
+.nav-toggle span{display:block;width:18px;height:2px;background:#fff;transition:transform .25s var(--ease)}
+.nav-toggle[aria-expanded="true"] span:first-child{transform:translateY(3.5px) rotate(45deg)}
+.nav-toggle[aria-expanded="true"] span:last-child{transform:translateY(-3.5px) rotate(-45deg)}
 
 /* hero */
 .hero{position:relative;height:calc(100vh + 48px);min-height:680px;overflow:hidden;background:var(--plate)}
@@ -79,7 +83,7 @@ code,kbd,pre{font-family:var(--f2)}
 .hero-content::before{content:"";position:absolute;left:50%;top:50%;width:min(1180px,100%);height:88%;transform:translate(-50%,-50%);background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(13,14,16,.78) 0%,rgba(13,14,16,.7) 40%,rgba(13,14,16,.4) 70%,rgba(13,14,16,0) 100%);pointer-events:none;z-index:-1}
 .hero-line{font-family:var(--f1);font-weight:400;font-size:clamp(42px,5.6vw,84px);letter-spacing:-.02em;line-height:1.04;color:#fff;max-width:920px;
   opacity:0;transform:translateY(28px);animation:rise .9s var(--ease) forwards}
-.hero-sub{font-size:clamp(16px,1.3vw,20px);line-height:1.5;color:#fff;max-width:640px;opacity:0;transform:translateY(20px);animation:rise .9s .15s var(--ease) forwards}
+.hero-sub{font-size:clamp(16px,1.3vw,20px);line-height:1.5;color:#fff;max-width:640px;text-wrap:balance;opacity:0;transform:translateY(20px);animation:rise .9s .15s var(--ease) forwards}
 .hero-sub+.hero-sub{margin-top:-14px}
 .hero-ctas{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:10px;opacity:0;animation:fadein .8s .4s forwards}
 .hero-ctas .btn{border-color:#fff}
@@ -138,7 +142,7 @@ code,kbd,pre{font-family:var(--f2)}
 .slide-veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(30,33,36,.28),rgba(30,33,36,0) 40%,rgba(30,33,36,.2))}
 .slide-card{position:absolute;left:24px;top:24px;z-index:2;width:min(600px,80%);background:rgba(20,22,25,.62);backdrop-filter:blur(8px);padding:24px;color:#fff;border-radius:4px}
 .slide-tag{font-family:var(--f2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;opacity:.75;margin-bottom:12px}
-.slide-title{font-size:clamp(18px,2vw,26px);line-height:1.25;display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.slide-title{font-size:clamp(18px,2vw,26px);line-height:1.25;min-height:44px;display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
 .slide-title .arr{font-size:26px;transition:transform .25s var(--ease)}
 .slide:hover .slide-title .arr{transform:translate(5px,-5px)}
 .slide-bar{height:72px;flex:none;display:flex;align-items:center;justify-content:space-between}
@@ -285,7 +289,16 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
 .search-hint{color:rgba(255,255,255,.8);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:var(--f2);margin-top:14px}
 
 @media(max-width:1200px){.row{padding:30px 24px 32px;gap:16px 28px}.soft-title{padding:70px 24px 20px}}
-@media(max-width:1100px){.nav-links{display:none}}
+@media(max-width:1100px){
+  .nav-links{display:none}
+  .nav-toggle{display:flex}
+  /* the open menu is the whole screen, the way every reference site does it on a phone; the bar stays on top of it */
+  .nav .brand,.nav-right{position:relative;z-index:2}
+  .nav.open .nav-links{display:flex;flex-direction:column;align-items:stretch;justify-content:center;position:fixed;inset:0;transform:none;border-radius:0;border:0;box-shadow:none;padding:100px 24px 40px;background:rgba(13,14,16,.97);gap:4px;z-index:1}
+  .nav.open .nav-links a{min-height:56px;font-size:24px;border-radius:6px;padding:0 14px}
+  .nav.open .nav-div{display:none}
+  .nav.open .nav-search{align-self:flex-start;margin:4px 0 0 4px}
+}
 @media(max-width:960px){
   .gh-btn{width:auto;padding:0 20px}
   .walk-grid{grid-template-columns:1fr}
@@ -295,10 +308,55 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
   .row-vid{display:none}
 }
 @media(max-width:640px){
+  .wrap{padding:0 16px}
+  .nav{left:16px;right:16px}
+  .hero{min-height:620px}
+  .argue{padding:80px 0 64px}
+  .argue-head{margin-bottom:40px}
+  .argue-foot{gap:28px;margin-top:28px}
+  /* the comparison table as stacked rows: five columns do not fit a phone, and a clipped cell is a lost argument */
+  .cmp thead{display:none}
+  .cmp,.cmp tbody{display:block}
+  .cmp tr{display:block;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .cmp tr.you{border-left:3px solid var(--ink);background:#fafaf8}
+  .cmp td{display:flex;justify-content:space-between;gap:16px;white-space:normal;padding:5px 0;border:0;text-align:right}
+  .cmp td:first-child{display:block;text-align:left;font-size:17px;padding:0 0 8px}
+  .cmp tr.you td:first-child{border-left:0}
+  .cmp td:not(:first-child)::before{font-size:13px;color:var(--muted);text-align:left;flex:none}
+  .cmp td:nth-child(2)::before{content:"History"}
+  .cmp td:nth-child(3)::before{content:"Self-hosted"}
+  .cmp td:nth-child(4)::before{content:"Account or key"}
+  .cmp td:nth-child(5)::before{content:"Archive owner"}
+  .updates{padding:10px 0 64px}
   .updates .wrap{padding:0 16px}
-  .slide{padding:20px 14px 0}
+  .updates-head{margin-bottom:14px}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:6px;margin:0 -16px;padding:0 16px}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:none;font-size:15px;padding:0 14px}
+  .see-all{display:none}
+  .slide{padding:14px 14px 0;height:auto;min-height:0}
+  .slide-media{flex:none;aspect-ratio:4/5}
+  .slide-card{left:12px;right:12px;top:auto;bottom:12px;width:auto;padding:16px 18px}
+  .slide-title{font-size:17px}
+  .slide-title .arr{font-size:22px}
+  .slide-bar{height:64px}
   .stage-dots{display:none}
   .stage-btn{width:44px;height:44px}
+  .walk{padding:10px 0 64px}
+  .walk-head{margin-bottom:28px}
+  .soft{padding:10px 0 60px}
+  .soft-title{padding:56px 16px 12px}
+  .row{padding:26px 16px 28px}
+  .start{padding:80px 0 64px}
+  .start-grid{gap:40px}
+  .cmds{padding:64px 18px 20px;font-size:13px}
+  .copy{top:12px;right:12px}
+  .ctas{grid-template-columns:1fr;gap:12px;padding:16px 0 64px}
+  .cta{padding:22px 20px;font-size:22px;align-items:center}
+  .cta .arr{width:48px;height:48px}
+  .partners{padding:80px 0 64px}
+  .foot-grid{gap:40px;padding-bottom:48px}
+  .foot-cols{display:grid;grid-template-columns:1fr 1fr;gap:26px 20px;max-width:none}
   .hero-note{bottom:70px}
 }
 @media(hover:none){.row-vid{display:none}}
@@ -313,7 +371,7 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
     <svg width="23" height="23" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor"><path d="M7 11 16 25.5 25 11" stroke-width="2.8" stroke-linejoin="miter"/><rect x="3.9" y="4.9" width="6.2" height="6.2" stroke-width="2"/></g><rect x="21.9" y="4.9" width="6.2" height="6.2" fill="currentColor"/></svg>
     VELOCITY
   </a>
-  <div class="nav-pill nav-links">
+  <div class="nav-pill nav-links" id="navLinks">
     <a href="#argument">Why</a>
     <a href="#updates">Feeds</a>
     <a href="#walk">Walkthrough</a>
@@ -326,6 +384,7 @@ footer::after{content:"";position:absolute;top:100%;left:0;right:0;height:120px;
     </button>
   </div>
   <div class="nav-right">
+    <button class="nav-toggle" id="navToggle" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Open menu"><span></span><span></span></button>
     <a class="gh-btn" href="https://github.com/AndrewCTF/velocity" target="_blank" rel="noopener noreferrer"><span>GitHub</span></a>
   </div>
 </nav>
@@ -587,6 +646,7 @@ function render(dir){
  tag.textContent=s.tag;ttl.textContent=s.title;
  card.classList.remove('anim');void card.offsetWidth;card.classList.add('anim');
  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===cur));
+const at=tabsEl.children[cur];if(at&&tabsEl.scrollWidth>tabsEl.clientWidth)tabsEl.scrollTo({left:Math.max(0,at.offsetLeft-16),behavior:noMotion?'auto':'smooth'});
  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===cur));
 }
 function go(i){const dir=Math.sign(i-cur)||1;cur=(i+SLIDES.length)%SLIDES.length;render(dir);restart()}
@@ -598,7 +658,7 @@ document.getElementById('slide').addEventListener('mouseleave',restart);
 document.addEventListener('keydown',e=>{
  if(e.key==='ArrowLeft')go(cur-1);
  if(e.key==='ArrowRight')go(cur+1);
- if(e.key==='Escape')closeOverlays();
+ if(e.key==='Escape'){closeOverlays();setMenu(false)}
 });
 render();restart();
 
@@ -674,6 +734,13 @@ const tio=new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting){typ
 tio.observe(term);
 
 /* overlays */
+/* mobile menu: the same six links, opened from the bar */
+const nav=document.getElementById('nav'),navT=document.getElementById('navToggle');
+function setMenu(o){nav.classList.toggle('open',o);navT.setAttribute('aria-expanded',String(o));navT.setAttribute('aria-label',o?'Close menu':'Open menu');document.body.style.overflow=o?'hidden':''}
+navT.onclick=e=>{e.stopPropagation();setMenu(!nav.classList.contains('open'))};
+document.querySelectorAll('#navLinks a').forEach(a=>a.addEventListener('click',()=>setMenu(false)));
+document.addEventListener('click',e=>{if(nav.classList.contains('open')&&!nav.contains(e.target))setMenu(false)});
+
 const overlays=[document.getElementById('searchOverlay')];
 function closeOverlays(){overlays.forEach(o=>o.classList.remove('open'));document.body.style.overflow=''}
 function openOverlay(o){closeOverlays();o.classList.add('open');document.body.style.overflow='hidden';
