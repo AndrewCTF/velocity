@@ -84,17 +84,27 @@ async function bearerToken(): Promise<string | null> {
   }
 }
 
+// True once the backend has answered 401: the only case where signing in would
+// change what the map shows. A down backend is not a reason to ask for a login.
+// ponytail: module flag, read on the next render; make it a store if a surface
+// needs to react the instant it flips.
+let unauthorized = false;
+export function backendRejectedAuth(): boolean {
+  return unauthorized;
+}
+
 export async function apiFetch(
   url: string,
   init: RequestInit = {},
 ): Promise<Response> {
   const token = await bearerToken();
   const resolvedUrl = backendUrl(url);
-  if (!token && !API_KEY) return fetch(resolvedUrl, init);
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (API_KEY) headers.set('X-API-Key', API_KEY);
-  return fetch(resolvedUrl, { ...init, headers });
+  const r = await fetch(resolvedUrl, token || API_KEY ? { ...init, headers } : init);
+  if (r?.status === 401) unauthorized = true;
+  return r;
 }
 
 // For WebSocket URLs, append ?key=… (browsers can't set headers on the upgrade

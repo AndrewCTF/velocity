@@ -8,7 +8,8 @@ import { apiFetch } from './http.js';
 // came ~35 s after page load, the old 15 × 2 s ceiling gave up at ~29 s and the
 // page stranded on "config error" until a manual reload). 5xx / network
 // failures are exactly the ones a backend boot self-heals, so retry those
-// FOREVER (the caller shows "loading config…" meanwhile); only a 4xx (bad
+// FOREVER (the map renders on keyless defaults meanwhile, with a "connecting to
+// backend…" label, and upgrades in place when this resolves); only a 4xx (bad
 // route/auth — won't self-heal) fails fast.
 export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
   const DELAY_MS = 2000;

@@ -38,7 +38,7 @@ interface Props {
   registry: LayerRegistry;
   onViewerReady?: (viewer: Cesium.Viewer | null) => void;
   // Imagery stack:
-  //  - '2d-dark' (default): proxied Carto Dark Matter, no terrain, no buildings.
+  //  - '2d-dark' (default): proxied Esri dark canvas, no terrain, no buildings.
   //                         Works without any ion token.
   //  - '3d-sat':            Cesium World Imagery + World Terrain + OSM Buildings.
   //                         Requires ionToken; with runtime google flag, also
@@ -103,14 +103,30 @@ function applyGoogleGate(
   }
 }
 
-// Dark, English-everywhere basemap proxied through the backend. The backend
-// caches Carto @2x tiles and supports deep zoom; a previous bundled z0-6 tile
-// pack booted offline but became blurry when the camera got close.
+// Dark, English-labelled basemap proxied through the backend, which composites
+// Esri's keyless dark canvas (base + labels) and disk-caches it. Carto was the
+// source until it started watermarking keyless tiles "API KEY REQUIRED".
 function buildDarkBasemap(): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
     url: backendUrl('/tiles/basemap/{z}/{x}/{y}.png'),
-    maximumLevel: 22,
+    maximumLevel: 16, // Esri's canvas stops at 16; Cesium upsamples past it
   });
+  // When the proxy is unreachable (backend down, booting, or a static frontend
+  // with no API behind it) the globe went untextured. Esri's base tiles are
+  // keyless and CORS-open, so fetch them straight from Esri tile by tile (no
+  // labels: those need the server-side composite). A 503 is the commercial tier
+  // refusing this source on purpose: never bypass that.
+  const direct = new Cesium.UrlTemplateImageryProvider({
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    maximumLevel: 16,
+    credit: 'Esri, HERE, Garmin, (c) OpenStreetMap contributors',
+  });
+  const viaProxy = provider.requestImage.bind(provider);
+  provider.requestImage = (x, y, level, request) =>
+    viaProxy(x, y, level, request)?.catch((err: { statusCode?: number }) => {
+      if (err?.statusCode === 503) throw err;
+      return direct.requestImage(x, y, level) ?? Promise.reject(err);
+    });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
 
@@ -426,6 +442,18 @@ export function GlobeCanvas({
     viewer.scene.requestRender();
   }, [overlayOpacity]);
 
+  // Keys arrive from /api/config, which can land after the viewer is built
+  // (the map no longer waits on it). Declared before construction so the first
+  // build already sees them; a late token must NOT remount the viewer, so it is
+  // applied here and the swap effect below (deps include ionToken) upgrades the
+  // imagery stack in place.
+  useEffect(() => {
+    Cesium.Ion.defaultAccessToken = ionToken;
+    // Global Photorealistic 3D Tiles fetch via the Google Map Tiles API key
+    // (not ion). Without this, createGooglePhotorealistic3DTileset() can't init.
+    if (googleApiKey) Cesium.GoogleMaps.defaultApiKey = googleApiKey;
+  }, [ionToken, googleApiKey]);
+
   // One-time viewer construction. Always starts on the dark basemap so the
   // app boots without an ion token; if the initial imageryMode is '3d-sat'
   // and a token is present, the swap effect below upgrades the stack.
@@ -436,11 +464,6 @@ export function GlobeCanvas({
     // Build + decode every entity icon before the compositor starts polling,
     // so the first (13k+ entity) render frame doesn't stall decoding icons.
     prewarmIcons();
-
-    Cesium.Ion.defaultAccessToken = ionToken;
-    // Global Photorealistic 3D Tiles fetch via the Google Map Tiles API key
-    // (not ion). Without this, createGooglePhotorealistic3DTileset() can't init.
-    if (googleApiKey) Cesium.GoogleMaps.defaultApiKey = googleApiKey;
 
     const viewerOpts: Cesium.Viewer.ConstructorOptions = {
       animation: false,
@@ -896,11 +919,10 @@ export function GlobeCanvas({
       viewerRef.current = null;
       setViewerState(null);
     };
-    // Intentionally exclude imageryMode/enableGoogle3D/googleApiKey — the stack
-    // is handled by the swap effect below and the Google key is read once at
-    // construction, so toggling never remounts the viewer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ionToken, registry, onViewerReady]);
+    // imageryMode/enableGoogle3D and the keys are deliberately absent: the stack
+    // is handled by the swap effect below and the keys by their own effect
+    // above, so none of them ever remounts the viewer.
+  }, [registry, onViewerReady]);
 
   // Swap the imagery stack in place whenever imageryMode (or its inputs)
   // changes. This effect intentionally does NOT recreate the viewer.

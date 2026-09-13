@@ -71,7 +71,7 @@ undo and why it was made.
   applies. Kill servers by port: `scripts/kill-port.sh <port>`. Details and the
   jemalloc trap: `scripts/CLAUDE.md`.
 - Keyless is a product requirement, not a dev convenience: ADS-B grid, Baltic
-  AIS, MyShipTracking, ShipXplorer, USGS quakes, Carto basemap, and CelesTrak
+  AIS, MyShipTracking, ShipXplorer, USGS quakes, Esri dark-canvas basemap, and CelesTrak
   all keep working with no API key. FIRMS degrades gracefully without MAP_KEY.
 
 ## Subagents
