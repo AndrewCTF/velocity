@@ -168,7 +168,7 @@ function RailResizer({
       title="Drag to resize · double-click to reset · arrow keys when focused"
       // 11px target with a 2px negative margin: the same 7px of visible chrome,
       // a hit area a pointer can actually land on.
-      className={`group absolute top-0 bottom-0 ${side === 'left' ? 'right-0 -mr-[2px]' : 'left-0 -ml-[2px]'} w-[11px] cursor-col-resize z-30 flex items-center justify-center hover:bg-accent-line/40 focus-visible:bg-accent-line/50 focus:outline-none`}
+      className={`group absolute top-0 bottom-0 ${side === 'left' ? 'right-0 mr-[-2px]' : 'left-0 ml-[-2px]'} w-[11px] cursor-col-resize z-30 flex items-center justify-center hover:bg-accent-line/40 focus-visible:bg-accent-line/50 focus:outline-hidden`}
     >
       {/* grip dots — subtle until hover/focus, then clearly a handle */}
       <span
@@ -263,7 +263,7 @@ export function ConsoleShell({
           : 'Unclassified // Open-source intelligence'}
       </div>
       <header
-        className="row-start-2 border-b border-line-2 bg-bg-1 relative z-30 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="row-start-2 border-b border-line-2 bg-bg-1 relative z-30 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
         style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}
       >
         {top}
@@ -285,7 +285,7 @@ export function ConsoleShell({
             wrapper + pointer-events-auto pill so it never blocks globe drag.
             On desktop it floats between the rails (left 296 / right 336). */}
         <div
-          className={`absolute top-1.5 z-[15] flex justify-center pointer-events-none ${isMobile ? 'inset-x-2' : ''}`}
+          className={`absolute top-1.5 z-15 flex justify-center pointer-events-none ${isMobile ? 'inset-x-2' : ''}`}
           style={isMobile ? undefined : { left: (iconRail ? iconRailW : leftW) + 10, right: rightW + 10 }}
         >
           <MapHealthStrip />
@@ -295,7 +295,7 @@ export function ConsoleShell({
             globe band, below the health strip, rail-aware so it tracks resize. */}
         {overlayLeft && (
           <div
-            className="absolute z-[16] pointer-events-none"
+            className="absolute z-16 pointer-events-none"
             style={{ left: isMobile ? 8 : leftW + 10, top: 34 }}
           >
             {overlayLeft}
@@ -309,7 +309,7 @@ export function ConsoleShell({
               // Icon-rail mode: 44px column, overflow-visible so its flyout floats
               // over the map; no resizer. z above the map + AppSurface.
               <aside
-                className="absolute left-0 top-0 bottom-0 border-r border-line-2 flex flex-col z-[var(--z-rail)]"
+                className="absolute left-0 top-0 bottom-0 border-r border-line-2 flex flex-col z-(--z-rail)"
                 aria-label="Tools"
                 style={{ background: RAIL_BG, width: iconRailW }}
               >
@@ -522,7 +522,7 @@ function MapHealthStrip(): JSX.Element {
 
   return (
     <div
-      className="pointer-events-auto inline-flex items-center gap-3 h-[20px] px-2.5 rounded-sm border border-line-2 bg-bg-1/90 backdrop-blur-sm"
+      className="pointer-events-auto inline-flex items-center gap-3 h-[20px] px-2.5 rounded-sm border border-line-2 bg-bg-1/90 backdrop-blur-xs"
       role="status"
       aria-label="Map health"
       style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.35)' }}

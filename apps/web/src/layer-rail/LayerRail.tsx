@@ -228,7 +228,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
         onChange={(e) => setFilter(e.target.value)}
         placeholder="Filter layers…"
         aria-label="Filter layers"
-        className="w-full bg-[rgba(255,255,255,0.04)] border border-line rounded-sm px-2 py-1 text-[11px] text-txt-1 placeholder:text-txt-4 focus:outline-none focus:border-accent-line"
+        className="w-full bg-[rgba(255,255,255,0.04)] border border-line rounded-sm px-2 py-1 text-[11px] text-txt-1 placeholder:text-txt-4 focus:outline-hidden focus:border-accent-line"
       />
 
       {/* Mission presets — one click for a clean task picture. */}
@@ -396,7 +396,7 @@ function CountBadge({
   if (count === 0 && feedStatus === 'green') {
     return (
       <span
-        className="mono micro text-ok tabular-nums border border-line rounded-sm px-1 py-[1px]"
+        className="mono micro text-ok tabular-nums border border-line rounded-sm px-1 py-px"
         title="feed live, no contacts"
       >
         live
@@ -405,7 +405,7 @@ function CountBadge({
   }
   return (
     <span
-      className="mono micro text-txt-2 tabular-nums border border-line rounded-sm px-1 py-[1px]"
+      className="mono micro text-txt-2 tabular-nums border border-line rounded-sm px-1 py-px"
       title="live count"
     >
       <span className="text-txt-1">{count.toLocaleString()}</span>

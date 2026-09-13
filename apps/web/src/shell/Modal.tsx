@@ -1,7 +1,7 @@
 // Modal / Drawer / useConfirm — the shell's behavioral dialog primitives.
 // instruments.tsx stays hook-free presentational vocabulary; anything that
 // portals, traps focus, or owns open-state lives here. Token-driven chrome
-// only; z-[var(--z-modal)] (600) stacks above the AppSurface (--z-overlay 400)
+// only; z-(--z-modal) (600) stacks above the AppSurface (--z-overlay 400)
 // so a dialog opened from a full-surface app is never buried.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -41,7 +41,7 @@ function DialogShell({
     };
   }, [onClose]);
   return createPortal(
-    <div className="fixed inset-0 z-[var(--z-modal)]">
+    <div className="fixed inset-0 z-(--z-modal)">
       <button
         type="button"
         aria-label="Close dialog"
@@ -101,7 +101,7 @@ export function Modal({
     <DialogShell
       onClose={onClose}
       label={typeof title === 'string' ? title : 'Dialog'}
-      panelClass="absolute left-1/2 top-[12vh] -translate-x-1/2 max-w-[calc(100vw-32px)] max-h-[76vh] flex flex-col rounded-md border border-line-2 bg-bg-1 shadow-2xl outline-none"
+      panelClass="absolute left-1/2 top-[12vh] -translate-x-1/2 max-w-[calc(100vw-32px)] max-h-[76vh] flex flex-col rounded-md border border-line-2 bg-bg-1 shadow-2xl outline-hidden"
       panelStyle={{ width }}
     >
       <DialogHeader title={title} onClose={onClose} />
@@ -146,7 +146,7 @@ export function Drawer({
     <DialogShell
       onClose={onClose}
       label={typeof title === 'string' ? title : 'Drawer'}
-      panelClass={`absolute right-0 top-[68px] bottom-0 max-w-[calc(100vw-44px)] flex flex-col border-l border-line-2 bg-bg-1 shadow-2xl outline-none ${
+      panelClass={`absolute right-0 top-[68px] bottom-0 max-w-[calc(100vw-44px)] flex flex-col border-l border-line-2 bg-bg-1 shadow-2xl outline-hidden ${
         reduced ? '' : 'transition-transform duration-200 ease-out'
       } ${entered || reduced ? 'translate-x-0' : 'translate-x-full'}`}
       panelStyle={{ width: size }}

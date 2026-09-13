@@ -419,7 +419,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
           requestAnimationFrame(() => inputRef.current?.focus());
         }}
         aria-label="Open analyst agent"
-        className="on-dark fixed bottom-3 right-3 z-[var(--z-dock)] flex items-center gap-2 mono text-[13px] px-4 py-2.5 rounded-md border border-accent-line text-accent"
+        className="on-dark fixed bottom-3 right-3 z-(--z-dock) flex items-center gap-2 mono text-[13px] px-4 py-2.5 rounded-md border border-accent-line text-accent"
         style={{ background: 'rgba(9,12,18,0.95)' }}
       >
         <span className="w-2 h-2 bg-accent rotate-45" /> Agent
@@ -430,7 +430,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   // `on-dark`: this panel pins its own near-black background regardless of the
   // colour scheme, so its text ramp has to stay the dark one (see tokens.css).
   const containerCls = isMobile
-    ? 'on-dark fixed inset-0 z-[var(--z-overlay)] flex flex-col'
+    ? 'on-dark fixed inset-0 z-(--z-overlay) flex flex-col'
     : 'on-dark map-banner flex flex-col';
   const containerStyle = isMobile
     ? { background: 'rgba(9,12,18,0.98)' }
@@ -485,7 +485,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
       {(expanded || isMobile) && (
         <div ref={logRef} className="flex-1 overflow-y-auto px-3 py-3 min-h-0">
           {(running || result || error || ranQuery) && (
-            <div className="mono text-[11px] text-txt-1 flex gap-2 leading-[1.5] mb-2">
+            <div className="mono text-[11px] text-txt-1 flex gap-2 leading-normal mb-2">
               <span className="text-txt-3">analyst ▸</span>
               <span>{ranQuery || q}</span>
             </div>
@@ -517,7 +517,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                   // distinct rule + verb so it never reads like a read-only tool.
                   <div
                     key={r.id}
-                    className={`rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-[1.5] border ${
+                    className={`rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-normal border ${
                       r.action.ok ? 'border-warn-line bg-warn-bg' : 'border-alert-line bg-alert-bg'
                     }`}
                   >
@@ -539,7 +539,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                   // option (or typing) re-runs with the answer.
                   <div
                     key={r.id}
-                    className="rounded-sm my-1 px-3 py-2 text-[11px] leading-[1.5]"
+                    className="rounded-sm my-1 px-3 py-2 text-[11px] leading-normal"
                     style={{ border: '1px solid var(--accent-line)', background: 'var(--accent-dim)' }}
                   >
                     <div className="mono text-[10px] tracking-[0.7px] uppercase text-accent-fg mb-1">
@@ -567,7 +567,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                   // styling as an action row so it reads as a governed write.
                   <div
                     key={r.id}
-                    className="rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-[1.5] border border-warn-line bg-warn-bg"
+                    className="rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-normal border border-warn-line bg-warn-bg"
                   >
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="mono text-warn-fg">Proposed · {r.proposal.action}</span>
@@ -608,7 +608,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                     </div>
                   </div>
                 ) : (
-                  <div key={`${r.id}-${r.tool}`} className="text-[10.5px] leading-[1.5]">
+                  <div key={`${r.id}-${r.tool}`} className="text-[10.5px] leading-normal">
                     <div className="grid items-baseline gap-2" style={{ gridTemplateColumns: '14px 1fr auto' }}>
                       <span aria-hidden className={`mono text-center ${r.status === 'ok' ? 'text-ok' : 'text-accent'}`}>
                         {r.status === 'ok' ? '✓' : '⟳'}
@@ -765,7 +765,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
           placeholder="investigate · query the snapshot · correlate · locate the emitter"
           aria-label="Analyst console prompt"
           disabled={running}
-          className="flex-1 mono text-[11px] text-txt-1 placeholder:text-txt-3 bg-transparent border-none outline-none disabled:opacity-60"
+          className="flex-1 mono text-[11px] text-txt-1 placeholder:text-txt-3 bg-transparent border-none outline-hidden disabled:opacity-60"
         />
         {running ? (
           <Btn size="sm" onClick={() => abortRef.current?.abort()}>stop</Btn>

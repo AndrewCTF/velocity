@@ -8,30 +8,30 @@
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-const BODY = 'text-[length:var(--fs-dense)] text-txt-1 leading-snug';
+const BODY = 'text-(length:--fs-dense) text-txt-1 leading-snug';
 
 // Headings compressed onto the 3-step token scale (nothing below the 10px
 // floor): h1/h2 → body size, h3/h4 → dense, h5/h6 → caption eyebrow.
 const components: Components = {
   h1: ({ children }) => (
-    <h1 className="text-[length:var(--fs-body)] font-semibold text-txt-0 mt-2 mb-1 first:mt-0">{children}</h1>
+    <h1 className="text-(length:--fs-body) font-semibold text-txt-0 mt-2 mb-1 first:mt-0">{children}</h1>
   ),
   h2: ({ children }) => (
-    <h2 className="text-[length:var(--fs-body)] font-semibold text-txt-0 mt-2 mb-1 first:mt-0">{children}</h2>
+    <h2 className="text-(length:--fs-body) font-semibold text-txt-0 mt-2 mb-1 first:mt-0">{children}</h2>
   ),
   h3: ({ children }) => (
-    <h3 className="text-[length:var(--fs-dense)] font-semibold text-txt-0 mt-1.5 mb-0.5 first:mt-0">{children}</h3>
+    <h3 className="text-(length:--fs-dense) font-semibold text-txt-0 mt-1.5 mb-0.5 first:mt-0">{children}</h3>
   ),
   h4: ({ children }) => (
-    <h4 className="text-[length:var(--fs-dense)] font-semibold text-txt-0 mt-1.5 mb-0.5 first:mt-0">{children}</h4>
+    <h4 className="text-(length:--fs-dense) font-semibold text-txt-0 mt-1.5 mb-0.5 first:mt-0">{children}</h4>
   ),
   h5: ({ children }) => (
-    <h5 className="text-[length:var(--fs-caption)] font-semibold uppercase tracking-[0.06em] text-txt-2 mt-1.5 mb-0.5 first:mt-0">
+    <h5 className="text-(length:--fs-caption) font-semibold uppercase tracking-[0.06em] text-txt-2 mt-1.5 mb-0.5 first:mt-0">
       {children}
     </h5>
   ),
   h6: ({ children }) => (
-    <h6 className="text-[length:var(--fs-caption)] font-semibold uppercase tracking-[0.06em] text-txt-2 mt-1.5 mb-0.5 first:mt-0">
+    <h6 className="text-(length:--fs-caption) font-semibold uppercase tracking-[0.06em] text-txt-2 mt-1.5 mb-0.5 first:mt-0">
       {children}
     </h6>
   ),
@@ -45,7 +45,7 @@ const components: Components = {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="text-accent underline decoration-accent-line underline-offset-2 hover:text-accent-fg break-words"
+      className="text-accent underline decoration-accent-line underline-offset-2 hover:text-accent-fg wrap-break-word"
     >
       {children}
     </a>
@@ -53,12 +53,12 @@ const components: Components = {
   // Inline code = mono chip on --bg-3; the same `code` component also renders
   // inside fenced blocks, where the parent <pre> resets the chip styling.
   code: ({ children }) => (
-    <code className="mono text-[length:var(--fs-caption)] bg-bg-3 text-txt-0 px-1 py-px rounded-sm break-words">
+    <code className="mono text-(length:--fs-caption) bg-bg-3 text-txt-0 px-1 py-px rounded-sm wrap-break-word">
       {children}
     </code>
   ),
   pre: ({ children }) => (
-    <pre className="mono text-[length:var(--fs-caption)] bg-bg-3 text-txt-0 rounded-sm p-2 my-1.5 overflow-x-auto leading-snug [&>code]:bg-transparent [&>code]:p-0 [&>code]:break-normal">
+    <pre className="mono text-(length:--fs-caption) bg-bg-3 text-txt-0 rounded-sm p-2 my-1.5 overflow-x-auto leading-snug [&>code]:bg-transparent [&>code]:p-0 [&>code]:break-normal">
       {children}
     </pre>
   ),
@@ -69,7 +69,7 @@ const components: Components = {
   // GFM tables scroll inside their own container — never widen the panel.
   table: ({ children }) => (
     <div className="overflow-x-auto my-1.5">
-      <table className="border-collapse text-[length:var(--fs-caption)]">{children}</table>
+      <table className="border-collapse text-(length:--fs-caption)">{children}</table>
     </div>
   ),
   th: ({ children }) => (

@@ -257,7 +257,7 @@ export function AlertRulesSection(): JSX.Element {
           value={form.label}
           onChange={(e) => set('label', e.target.value)}
           placeholder="Label (e.g. Strait of Hormuz watch)"
-          className="w-full mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+          className="w-full mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
         />
 
         <div className="flex gap-1.5">
@@ -266,21 +266,21 @@ export function AlertRulesSection(): JSX.Element {
             value={form.lat}
             onChange={(e) => set('lat', e.target.value)}
             placeholder="lat"
-            className="w-1/3 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+            className="w-1/3 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
           <input
             type="number"
             value={form.lon}
             onChange={(e) => set('lon', e.target.value)}
             placeholder="lon"
-            className="w-1/3 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+            className="w-1/3 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
           <input
             type="number"
             value={form.radius_nm}
             onChange={(e) => set('radius_nm', e.target.value)}
             placeholder="radius (nm)"
-            className="w-1/3 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+            className="w-1/3 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
         </div>
 
@@ -355,7 +355,7 @@ export function AlertRulesSection(): JSX.Element {
             placeholder={
               form.channel === 'discord' ? 'Discord webhook URL' : 'Webhook URL'
             }
-            className="w-full mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+            className="w-full mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
         )}
 
@@ -365,21 +365,21 @@ export function AlertRulesSection(): JSX.Element {
             value={form.icao24}
             onChange={(e) => set('icao24', e.target.value)}
             placeholder="icao24 (optional)"
-            className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+            className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
           <input
             type="text"
             value={form.mmsi}
             onChange={(e) => set('mmsi', e.target.value)}
             placeholder="mmsi (optional)"
-            className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+            className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
           <input
             type="text"
             value={form.callsign}
             onChange={(e) => set('callsign', e.target.value)}
             placeholder="callsign (optional)"
-            className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+            className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
         </div>
 

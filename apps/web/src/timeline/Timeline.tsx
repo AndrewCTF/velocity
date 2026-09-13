@@ -672,7 +672,7 @@ export function Timeline({ viewer }: Props = {}): JSX.Element {
                   ? `Replay a specific UTC day · history available from ${earliestAvailableDay}`
                   : `Replay a specific UTC day (retained back to ${minDay})`
               }
-              className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-none focus:border-accent-line disabled:opacity-40 [color-scheme:dark]"
+              className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-hidden focus:border-accent-line disabled:opacity-40 scheme-dark"
             />
             {replayDayBeforeAvailable && (
               <span

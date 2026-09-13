@@ -184,7 +184,7 @@ export function Omnibar({
 
   return (
     <div
-      className="fixed inset-0 z-[var(--z-modal)] flex items-start justify-center pt-[12vh]"
+      className="fixed inset-0 z-(--z-modal) flex items-start justify-center pt-[12vh]"
       onMouseDown={() => setOpen(false)}
       role="dialog"
       aria-label="Command palette"
@@ -217,7 +217,7 @@ export function Omnibar({
             }
           }}
           placeholder="Jump to entity, layer, or workspace…  (callsign / MMSI / name / lat,lon)"
-          className="w-full bg-bg-2 border-b border-line-2 px-3 py-2.5 text-[13px] text-txt-0 placeholder:text-txt-3 mono focus:outline-none"
+          className="w-full bg-bg-2 border-b border-line-2 px-3 py-2.5 text-[13px] text-txt-0 placeholder:text-txt-3 mono focus:outline-hidden"
           aria-label="Command palette input"
         />
         <div className="max-h-[52vh] overflow-y-auto py-1">

@@ -601,7 +601,7 @@ export function CopControl({
   if (!viewer) return null;
 
   return (
-    <div className="absolute bottom-3 right-3 map-foot-item-2 z-[var(--z-dock)] flex flex-col items-end gap-1.5">
+    <div className="absolute bottom-3 right-3 map-foot-item-2 z-(--z-dock) flex flex-col items-end gap-1.5">
       {open && (
         <div className="mono text-[10px] w-[212px] max-w-[92vw] border border-line rounded-sm bg-bg-1/95 text-txt-1 shadow-xl p-2 flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
@@ -740,7 +740,7 @@ export function AuthNotice(): JSX.Element | null {
   // No data reached the globe yet — the auth-gated hosted case. Make the real
   // reason explicit with a one-click path to sign in.
   return (
-    <div className="absolute inset-x-0 top-10 z-[var(--z-dock)] flex justify-center px-3 pointer-events-none">
+    <div className="absolute inset-x-0 top-10 z-(--z-dock) flex justify-center px-3 pointer-events-none">
       <div className="pointer-events-auto bg-bg-1/95 border border-accent-line rounded-md px-4 py-3 shadow-xl max-w-sm text-center">
         <p className="text-txt-0 text-[13px] font-semibold">Sign in to load live data</p>
         <p className="text-txt-2 text-[11px] mt-1 leading-snug">
@@ -804,7 +804,7 @@ export function ModeSurface({ viewer, registry }: { viewer: Cesium.Viewer | null
   const c = cfg[mode];
   return (
     <div
-      className={`on-dark absolute z-[var(--z-overlay)] flex flex-col border border-line-2 rounded-md shadow-2xl overflow-hidden ${c.box}`}
+      className={`on-dark absolute z-(--z-overlay) flex flex-col border border-line-2 rounded-md shadow-2xl overflow-hidden ${c.box}`}
       style={{ background: 'rgba(9,12,18,0.97)', ...(c.railDocked && { left: railLeft }) }}
     >
       <div className="flex items-center justify-between px-3 h-9 flex-none border-b border-line-2 bg-bg-1">

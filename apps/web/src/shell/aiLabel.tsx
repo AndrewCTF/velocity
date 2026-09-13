@@ -25,7 +25,7 @@ export function AiLabel({ className = '' }: { className?: string }): JSX.Element
   return (
     <p
       data-ai-label
-      className={`mono text-[10px] leading-[1.5] text-txt-3 border-l-2 border-warn-line pl-1.5 ${className}`}
+      className={`mono text-[10px] leading-normal text-txt-3 border-l-2 border-warn-line pl-1.5 ${className}`}
     >
       {AI_LABEL}
     </p>

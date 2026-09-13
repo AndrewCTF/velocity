@@ -159,7 +159,7 @@ export function MapTab({ dataset }: { dataset: Dataset }): JSX.Element {
         </svg>
         {hover && (
           <div
-            className="fixed z-10 pointer-events-none rounded-sm border border-line-2 bg-bg-2 px-2 py-1.5 text-[10px] mono text-txt-1 shadow-[var(--sh-2)]"
+            className="fixed z-10 pointer-events-none rounded-sm border border-line-2 bg-bg-2 px-2 py-1.5 text-[10px] mono text-txt-1 shadow-(--sh-2)"
             style={{ left: hover.clientX + 10, top: hover.clientY + 10 }}
             data-testid="map-tooltip"
           >

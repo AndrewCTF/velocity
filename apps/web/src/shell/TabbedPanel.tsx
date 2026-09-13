@@ -97,7 +97,7 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel, variant = 'tabs' }: P
           aria-label={ariaLabel ?? 'Panel tabs'}
           // overflow-x-auto + hidden scrollbar: with 7 tabs the strip can exceed the
           // rail width, so it scrolls horizontally instead of CLIPPING the last tabs.
-          className="flex items-stretch flex-none border-b border-line-2 bg-bg-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex items-stretch flex-none border-b border-line-2 bg-bg-1 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
         >
           {tabs.map((t) => {
             const isActive = t.id === active?.id;
@@ -131,7 +131,7 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel, variant = 'tabs' }: P
                 {isActive && (
                   <span
                     aria-hidden="true"
-                    className="absolute left-0 right-0 bottom-[-1px] h-[2px] bg-accent"
+                    className="absolute left-0 right-0 -bottom-px h-[2px] bg-accent"
                   />
                 )}
               </button>
@@ -212,7 +212,7 @@ function MenuChooser({
             aria-hidden="true"
             tabIndex={-1}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 z-[var(--z-dropdown)] cursor-default"
+            className="fixed inset-0 z-(--z-dropdown) cursor-default"
           />
           <ul
             role="listbox"
@@ -220,7 +220,7 @@ function MenuChooser({
             onKeyDown={(e) => {
               if (e.key === 'Escape') setOpen(false);
             }}
-            className="absolute left-0 right-0 top-full z-[var(--z-dropdown)] max-h-[60vh] overflow-y-auto border-b border-x border-line-2 bg-bg-1 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.8)]"
+            className="absolute left-0 right-0 top-full z-(--z-dropdown) max-h-[60vh] overflow-y-auto border-b border-x border-line-2 bg-bg-1 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.8)]"
           >
             {tabs.map((t) => {
               const isActive = t.id === active?.id;

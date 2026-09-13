@@ -116,7 +116,7 @@ function CatalogCard({
           value={quant}
           onChange={(e) => setQuant(e.target.value)}
           aria-label={`Quant for ${entry.label}`}
-          className="mono text-[10px] bg-bg-2 border border-line rounded-sm px-1.5 py-1 text-txt-1 outline-none focus:border-accent-line"
+          className="mono text-[10px] bg-bg-2 border border-line rounded-sm px-1.5 py-1 text-txt-1 outline-hidden focus:border-accent-line"
         >
           {entry.quants.map((qq) => (
             <option key={qq.q} value={qq.q}>
@@ -213,7 +213,7 @@ function CustomRepoField({
           placeholder="unsloth/Some-Model-GGUF"
           spellCheck={false}
           autoComplete="off"
-          className="flex-[2] mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 outline-none focus:border-accent-line"
+          className="flex-2 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 outline-hidden focus:border-accent-line"
         />
         <input
           value={quant}
@@ -221,7 +221,7 @@ function CustomRepoField({
           placeholder="quant (e.g. UD-Q4_K_XL)"
           spellCheck={false}
           autoComplete="off"
-          className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 outline-none focus:border-accent-line"
+          className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 outline-hidden focus:border-accent-line"
         />
         <Btn size="sm" tone="accent" disabled={!valid} onClick={() => void submit()}>
           Fetch

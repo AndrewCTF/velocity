@@ -118,7 +118,7 @@ export function AppSurface({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
     // shell the map column already excludes both, so the app opened 44px inside
     // the map well and left a dead 36px strip of globe down its left edge with
     // the map legend clipped to `ai / ve / da / GP`.
-    <div className="absolute inset-0 z-[var(--z-overlay)] flex flex-col bg-bg-0">
+    <div className="absolute inset-0 z-(--z-overlay) flex flex-col bg-bg-0">
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line-2 bg-bg-1 px-3">
         <span className="font-label text-[12px] uppercase tracking-[0.9px] text-txt-0">
           {APP_META[app].label}

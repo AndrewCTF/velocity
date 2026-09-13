@@ -218,7 +218,7 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                   type="checkbox"
                   checked={autoElaborate}
                   onChange={(e) => setAutoElaborate(e.target.checked)}
-                  className="accent-[var(--accent)]"
+                  className="accent-(--accent)"
                 />
                 <Sparkles className="h-3 w-3 text-accent" strokeWidth={1.75} aria-hidden />
                 Auto-elaborate everything

@@ -36,7 +36,7 @@ const ECHELONS: Echelon[] = [
 ];
 
 const selectCls =
-  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono focus:outline-none focus:border-accent-line';
+  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono focus:outline-hidden focus:border-accent-line';
 
 export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Element {
   const units = useCop((s) => s.units);

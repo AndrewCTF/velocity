@@ -45,7 +45,7 @@ const KINDS: readonly { id: AnnoKind; icon: typeof MapPin; label: string }[] = [
 ];
 
 const selectCls =
-  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-none focus:border-accent-line';
+  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-hidden focus:border-accent-line';
 
 export function AnnotationPanel(): JSX.Element {
   const annos = useAnnotations((s) => s.annotations);
@@ -259,7 +259,7 @@ export function AnnotationPanel(): JSX.Element {
               step={1}
               value={style.width}
               onChange={(e) => draft.setStyle({ width: Number(e.target.value) })}
-              className="w-full accent-[var(--accent)]"
+              className="w-full accent-(--accent)"
             />
           </label>
           <label className="flex flex-col gap-0.5">
@@ -271,7 +271,7 @@ export function AnnotationPanel(): JSX.Element {
               step={5}
               value={Math.round(style.fillOpacity * 100)}
               onChange={(e) => draft.setStyle({ fillOpacity: Number(e.target.value) / 100 })}
-              className="w-full accent-[var(--accent)]"
+              className="w-full accent-(--accent)"
             />
           </label>
           <label className="flex flex-col gap-0.5">
@@ -295,7 +295,7 @@ export function AnnotationPanel(): JSX.Element {
               step={1}
               value={style.fontSize}
               onChange={(e) => draft.setStyle({ fontSize: Number(e.target.value) })}
-              className="w-full accent-[var(--accent)]"
+              className="w-full accent-(--accent)"
             />
           </label>
         </div>

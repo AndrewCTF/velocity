@@ -89,7 +89,7 @@ export function CorroborationCard({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="mono h-[20px] shrink-0 rounded-sm px-[7px] text-[12px] text-txt-2 hover:bg-[var(--hover)]"
+            className="mono h-[20px] shrink-0 rounded-sm px-[7px] text-[12px] text-txt-2 hover:bg-(--hover)"
           >
             check
           </button>
@@ -136,7 +136,7 @@ export function CorroborationCard({
         d.nearby.slice(0, 5).map((r, i) => (
           <div
             key={`${r.day ?? i}-${r.distance_km}-${i}`}
-            className="flex min-h-[20px] items-baseline gap-2 px-[14px] py-[1px] text-[12px]"
+            className="flex min-h-[20px] items-baseline gap-2 px-[14px] py-px text-[12px]"
           >
             <span className="mono w-[52px] shrink-0 tabular-nums text-txt-3">
               {r.distance_km} km

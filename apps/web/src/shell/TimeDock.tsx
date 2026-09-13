@@ -176,7 +176,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           type="button"
           onClick={togglePlay}
           title="Play or pause (space)"
-          className="mx-[2px] flex h-5 items-center gap-1 rounded-sm bg-accent px-3 text-[12px] text-[var(--on-accent)] hover:brightness-110"
+          className="mx-[2px] flex h-5 items-center gap-1 rounded-sm bg-accent px-3 text-[12px] text-(--on-accent) hover:brightness-110"
         >
           <Icon name={playing ? 'pause' : 'play'} className="h-3 w-3" />
           {playing ? 'Pause' : 'Play'}
@@ -200,7 +200,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           aria-pressed={live}
           title="Return to live"
           className={`ml-[2px] h-5 rounded-sm px-[10px] text-[12px] ${
-            live ? 'bg-bg-3 text-txt-1' : 'bg-alert text-[var(--on-alert)]'
+            live ? 'bg-bg-3 text-txt-1' : 'bg-alert text-(--on-alert)'
           }`}
         >
           Live
@@ -214,7 +214,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
               onClick={() => setMultiplier(s)}
               aria-pressed={multiplier === s}
               className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 ${
-                multiplier === s ? 'bg-accent text-[var(--on-accent)]' : 'text-txt-2 hover:bg-[var(--hover)]'
+                multiplier === s ? 'bg-accent text-(--on-accent)' : 'text-txt-2 hover:bg-(--hover)'
               }`}
             >
               {s}x
@@ -229,7 +229,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
               onClick={() => setWindowSec(w.sec)}
               aria-pressed={windowSec === w.sec}
               className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 ${
-                windowSec === w.sec ? 'bg-accent text-[var(--on-accent)]' : 'text-txt-2 hover:bg-[var(--hover)]'
+                windowSec === w.sec ? 'bg-accent text-(--on-accent)' : 'text-txt-2 hover:bg-(--hover)'
               }`}
             >
               {w.label}
@@ -262,7 +262,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           {/* The label rides OVER the left of the track rather than taking a
               gutter out of it, so a mark at 30% of the hour lines up with the
               30% tick above it and the 30% density bar below it. */}
-          <span className="mono pointer-events-none absolute inset-y-0 left-0 z-[1] flex items-center gap-[5px] bg-bg-1/90 pl-[10px] pr-[7px] text-[10px] uppercase tracking-[0.5px] text-txt-3">
+          <span className="mono pointer-events-none absolute inset-y-0 left-0 z-1 flex items-center gap-[5px] bg-bg-1/90 pl-[10px] pr-[7px] text-[10px] uppercase tracking-[0.5px] text-txt-3">
             <i
               className="h-[6px] w-[6px] shrink-0 rounded-full"
               style={{ background: lane.color || 'var(--warn)' }}
@@ -329,7 +329,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           style={{ left: `${playPct}%` }}
         >
           <span
-            className={`mono absolute top-[2px] whitespace-nowrap rounded-[1px] bg-mag px-[5px] text-[10px] text-[var(--on-mag)] ${
+            className={`mono absolute top-[2px] whitespace-nowrap rounded-[1px] bg-mag px-[5px] text-[10px] text-(--on-mag) ${
               playPct > 88 ? 'right-[3px]' : playPct < 6 ? 'left-[3px]' : '-translate-x-1/2'
             }`}
           >
@@ -365,7 +365,7 @@ function TBtn({
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="mono flex h-5 min-w-5 items-center gap-[3px] rounded-sm px-[6px] text-[11px] text-txt-1 hover:bg-[var(--hover)] hover:text-txt-0"
+      className="mono flex h-5 min-w-5 items-center gap-[3px] rounded-sm px-[6px] text-[11px] text-txt-1 hover:bg-(--hover) hover:text-txt-0"
     >
       {children}
     </button>

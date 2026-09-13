@@ -119,7 +119,7 @@ export function LayersPanel({
             className={`mono h-[20px] rounded-sm px-[7px] text-[12px] ${
               all === v
                 ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                : 'text-txt-2 hover:bg-[var(--hover)]'
+                : 'text-txt-2 hover:bg-(--hover)'
             }`}
           >
             {label}
@@ -150,7 +150,7 @@ export function LayersPanel({
               className={`mono h-[20px] rounded-sm px-[6px] text-[12px] ${
                 on
                   ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                  : 'text-txt-3 hover:bg-[var(--hover)]'
+                  : 'text-txt-3 hover:bg-(--hover)'
               }`}
             >
               {m.short}
@@ -219,7 +219,7 @@ export function LayersPanel({
                   type="button"
                   onClick={() => toggleRow(registry, row)}
                   aria-pressed={en}
-                  className="flex h-[var(--g-row-2)] w-full items-center gap-2 px-[14px] text-left hover:bg-[var(--hover)]"
+                  className="flex h-(--g-row-2) w-full items-center gap-2 px-[14px] text-left hover:bg-(--hover)"
                 >
                   <Icon
                     name={row.icon}

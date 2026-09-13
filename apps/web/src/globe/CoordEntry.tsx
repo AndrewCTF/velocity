@@ -90,7 +90,7 @@ export function CoordEntry({ viewer, onPlace, placeholder, fly = true }: Props) 
           }}
           placeholder={placeholder ?? 'lat,lon · place · airport / port · IATA/ICAO'}
           aria-label="coordinate or place name"
-          className="flex-1 mono bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-none focus:border-accent-line"
+          className="flex-1 mono bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-hidden focus:border-accent-line"
         />
         <button
           type="button"

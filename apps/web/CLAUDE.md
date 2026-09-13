@@ -55,8 +55,8 @@ the decision deliberately by changing BOTH the guard and this file.
   surface that means to be dark must be OPAQUE: `bg-black/40` over a white panel
   is a mid grey, which is how the City viewport reached 2.42:1.
 - A hue is a FILL or it is INK, never both. `bg-accent` is `--accent`;
-  `text-accent` resolves to `--accent-fg` (tailwind.config.js splits
-  `textColor`), and text ON a solid fill uses `--on-accent` / `--on-mag` /
+  `text-accent` resolves to `--accent-fg` (the `@theme` block in `index.css`
+  sets `--text-color-accent` etc.), and text ON a solid fill uses `--on-accent` / `--on-mag` /
   `--on-alert` / `--on-ok` / `--on-warn`, which each scheme states for itself.
   A literal `text-white` on a fill measured 2.14:1 on Night watch's amber.
   → `theme/contrast.test.ts` holds every fill/ink and `-fg`/substrate pair to AA

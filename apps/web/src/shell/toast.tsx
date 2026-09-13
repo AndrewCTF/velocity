@@ -66,7 +66,7 @@ export function ToastHost(): JSX.Element {
     <div
       aria-live="polite"
       aria-atomic="false"
-      className="fixed bottom-3 right-3 z-[var(--z-toast)] flex flex-col gap-2 pointer-events-none"
+      className="fixed bottom-3 right-3 z-(--z-toast) flex flex-col gap-2 pointer-events-none"
     >
       {items.map((it) => (
         <ToastRow key={it.id} item={it} />

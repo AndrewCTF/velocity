@@ -368,7 +368,7 @@ export function SimulationOverlay({
 
   return (
     <div
-      className="absolute z-[var(--z-overlay)] w-[300px] overflow-y-auto pointer-events-auto border-r border-line-2 bg-[var(--panel-bg)]"
+      className="absolute z-(--z-overlay) w-[300px] overflow-y-auto pointer-events-auto border-r border-line-2 bg-(--panel-bg)"
       // Docked left by default, filling the map area (below the 68px top bars,
       // above the 158px timeline) like the other left flyouts. Drag → floats.
       style={
@@ -596,7 +596,7 @@ export function SimulationOverlay({
             step={1}
             value={Math.min(clock.simTime, clock.duration)}
             onChange={(e) => ctrlRef.current?.seek(Number(e.target.value))}
-            className="w-full accent-[var(--accent)]"
+            className="w-full accent-(--accent)"
           />
           <div className="flex items-center gap-1.5 mt-2">
             <Btn size="sm" onClick={() => ctrlRef.current?.togglePlay()}>
@@ -732,7 +732,7 @@ function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full mt-1 accent-[var(--accent)]"
+        className="w-full mt-1 accent-(--accent)"
       />
     </label>
   );

@@ -142,14 +142,14 @@ export function SearchField({ viewer }: Props): JSX.Element {
         onFocus={() => setOpen(true)}
         onKeyDown={onKey}
         placeholder="search airport / port / callsign / MMSI / ICAO24 / lat,lon  (press /)"
-        className="mono w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-1 placeholder:text-txt-3 focus:outline-none focus:border-accent-line"
+        className="mono w-full bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-1 placeholder:text-txt-3 focus:outline-hidden focus:border-accent-line"
         aria-label="Unified search"
         aria-autocomplete="list"
         aria-expanded={open}
       />
       {open && results.length > 0 && (
         <div
-          className="absolute z-[var(--z-dropdown)] top-full mt-1 left-0 w-[420px] max-w-[92vw] bg-bg-1 border border-line rounded-md max-h-[60vh] overflow-y-auto"
+          className="absolute z-(--z-dropdown) top-full mt-1 left-0 w-[420px] max-w-[92vw] bg-bg-1 border border-line rounded-md max-h-[60vh] overflow-y-auto"
           style={{
             boxShadow:
               'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.5)',
@@ -178,7 +178,7 @@ export function SearchField({ viewer }: Props): JSX.Element {
         </div>
       )}
       {open && q.trim() && results.length === 0 && (
-        <div className="absolute z-[var(--z-dropdown)] top-full mt-1 left-0 w-[420px] max-w-[92vw] bg-bg-1 border border-line rounded-md px-3 py-2 micro">
+        <div className="absolute z-(--z-dropdown) top-full mt-1 left-0 w-[420px] max-w-[92vw] bg-bg-1 border border-line rounded-md px-3 py-2 micro">
           No match
         </div>
       )}

@@ -326,7 +326,7 @@ export function CityApp(): JSX.Element {
             </Btn>
             {citySplatMsg && (
               <div
-                className="mono text-[9px] text-txt-3 mt-1.5 leading-tight break-words"
+                className="mono text-[9px] text-txt-3 mt-1.5 leading-tight wrap-break-word"
                 data-testid="city-splat-status"
               >
                 {citySplatMsg}

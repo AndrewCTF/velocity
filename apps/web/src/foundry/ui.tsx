@@ -91,7 +91,7 @@ export function StatTile({
 
 // ── form controls ────────────────────────────────────────────────────────────
 export const controlCls =
-  'bg-bg-0 border border-line rounded-sm px-2 py-[5px] text-[11px] text-txt-0 mono w-full outline-none focus:border-accent-line transition-colors placeholder:text-txt-4';
+  'bg-bg-0 border border-line rounded-sm px-2 py-[5px] text-[11px] text-txt-0 mono w-full outline-hidden focus:border-accent-line transition-colors placeholder:text-txt-4';
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }): JSX.Element {
   return (
@@ -190,10 +190,10 @@ export function LogView({ lines, className = '' }: { lines: string[]; className?
             const err = /error|fail|exceed|reject/i.test(line);
             return (
               <tr key={i}>
-                <td className="select-none text-right align-top pr-2 pl-2 py-[1px] mono text-[10px] text-txt-4 tabular-nums w-[1%] whitespace-nowrap border-r border-line">
+                <td className="select-none text-right align-top pr-2 pl-2 py-px mono text-[10px] text-txt-4 tabular-nums w-[1%] whitespace-nowrap border-r border-line">
                   {i + 1}
                 </td>
-                <td className={`pl-2 pr-2 py-[1px] mono text-[10.5px] whitespace-pre-wrap ${err ? 'text-alert-fg' : 'text-txt-2'}`}>
+                <td className={`pl-2 pr-2 py-px mono text-[10.5px] whitespace-pre-wrap ${err ? 'text-alert-fg' : 'text-txt-2'}`}>
                   {line}
                 </td>
               </tr>
@@ -210,7 +210,7 @@ export function LogView({ lines, className = '' }: { lines: string[]; className?
 export function Th({ children, align = 'left', className = '' }: { children?: ReactNode; align?: 'left' | 'right' | 'center'; className?: string }): JSX.Element {
   const a = align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
   return (
-    <th className={`${a} font-medium px-2.5 py-1.5 sticky top-0 bg-bg-2 z-[1] ${className}`}>{children}</th>
+    <th className={`${a} font-medium px-2.5 py-1.5 sticky top-0 bg-bg-2 z-1 ${className}`}>{children}</th>
   );
 }
 

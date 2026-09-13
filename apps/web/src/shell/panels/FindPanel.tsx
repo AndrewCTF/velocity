@@ -175,7 +175,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
             }}
             placeholder="Name, callsign, MMSI or 54.31, 18.71"
             aria-label="Find objects"
-            className="mono min-w-0 flex-1 bg-transparent text-[12px] text-txt-0 outline-none placeholder:text-txt-3"
+            className="mono min-w-0 flex-1 bg-transparent text-[12px] text-txt-0 outline-hidden placeholder:text-txt-3"
           />
           {q && (
             <button
@@ -193,7 +193,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           <button
             type="button"
             onClick={submit}
-            className="flex h-[24px] items-center gap-[5px] rounded-sm border border-accent-line bg-accent-dim px-[8px] text-[12px] text-accent-fg hover:bg-[var(--hover)]"
+            className="flex h-[24px] items-center gap-[5px] rounded-sm border border-accent-line bg-accent-dim px-[8px] text-[12px] text-accent-fg hover:bg-(--hover)"
           >
             <Icon name="around" className="h-3 w-3" />
             Search {radiusKm} km
@@ -204,7 +204,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
             onClick={() => {
               if (center && viewer) flyToPosition(viewer, center.lon, center.lat, 200_000, 0.8);
             }}
-            className="flex h-[24px] items-center gap-[5px] rounded-sm border border-line-2 px-[8px] text-[12px] text-txt-1 hover:bg-[var(--hover)] disabled:opacity-40"
+            className="flex h-[24px] items-center gap-[5px] rounded-sm border border-line-2 px-[8px] text-[12px] text-txt-1 hover:bg-(--hover) disabled:opacity-40"
           >
             <Icon name="pin" className="h-3 w-3" />
             Fly here
@@ -229,7 +229,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
               toast.ok('Search saved. New matches land in the Inbox.');
             }}
             title="Save this search as an Inbox subscription. You are notified when new objects match."
-            className="flex h-[24px] items-center gap-[5px] rounded-sm border border-line-2 px-[8px] text-[12px] text-txt-1 hover:bg-[var(--hover)]"
+            className="flex h-[24px] items-center gap-[5px] rounded-sm border border-line-2 px-[8px] text-[12px] text-txt-1 hover:bg-(--hover)"
           >
             <Icon name="bookmark" className="h-3 w-3" />
             Save search
@@ -241,7 +241,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
                 setAnchor(null);
                 setHits(null);
               }}
-              className="flex h-[24px] items-center gap-[5px] rounded-sm px-[8px] text-[12px] text-txt-3 hover:bg-[var(--hover)] hover:text-txt-0"
+              className="flex h-[24px] items-center gap-[5px] rounded-sm px-[8px] text-[12px] text-txt-3 hover:bg-(--hover) hover:text-txt-0"
             >
               <Icon name="x" className="h-3 w-3" />
               Use the map centre
@@ -264,7 +264,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
               className={`mono h-[20px] rounded-sm px-[7px] text-[12px] ${
                 radiusKm === r
                   ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                  : 'text-txt-2 hover:bg-[var(--hover)]'
+                  : 'text-txt-2 hover:bg-(--hover)'
               }`}
             >
               {r} km
@@ -287,7 +287,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
               className={`mono h-[20px] rounded-sm px-[7px] text-[12px] ${
                 type === t.id
                   ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                  : 'text-txt-2 hover:bg-[var(--hover)]'
+                  : 'text-txt-2 hover:bg-(--hover)'
               }`}
             >
               {t.label}
@@ -309,7 +309,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
               className={`mono h-[20px] rounded-sm px-[7px] text-[12px] ${
                 sinceS === w.s
                   ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                  : 'text-txt-2 hover:bg-[var(--hover)]'
+                  : 'text-txt-2 hover:bg-(--hover)'
               }`}
             >
               {w.label}
@@ -414,7 +414,7 @@ function Section({
             select(h.id);
             if (viewer) flyToPosition(viewer, h.lon, h.lat, 120_000, 0.8);
           }}
-          className="flex w-full min-h-[38px] items-center gap-2 px-[14px] py-1 text-left hover:bg-[var(--hover)]"
+          className="flex w-full min-h-[38px] items-center gap-2 px-[14px] py-1 text-left hover:bg-(--hover)"
         >
           {/* The thumbnail the old row never carried. */}
           <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-sm bg-bg-0 text-txt-2">

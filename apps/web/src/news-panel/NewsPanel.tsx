@@ -211,7 +211,7 @@ export function NewsPanel(): JSX.Element {
               if (e.key === 'Enter') void runFactCheck();
             }}
             placeholder='e.g. "the war will end soon"'
-            className="flex-1 min-w-0 mono text-[11px] bg-bg-1 border border-line rounded-sm px-1.5 py-1 text-txt-1 placeholder:text-txt-2/60 focus:outline-none focus:border-accent-line"
+            className="flex-1 min-w-0 mono text-[11px] bg-bg-1 border border-line rounded-sm px-1.5 py-1 text-txt-1 placeholder:text-txt-2/60 focus:outline-hidden focus:border-accent-line"
           />
           <Btn
             tone="accent"
