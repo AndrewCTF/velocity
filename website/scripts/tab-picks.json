@@ -1,0 +1,11 @@
+{
+ "air": "air-37243529",
+ "maritime": "maritime-4911815",
+ "space": {
+  "id": "space-nasa-jsc2022m000172",
+  "gamma": 1.15
+ },
+ "hazards": "hazards-13438865",
+ "signals": "signals-32067530",
+ "infra": "infrastructure-35907888"
+}

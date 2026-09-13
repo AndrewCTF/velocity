@@ -1,0 +1,9 @@
+[
+ {"slot":"air","queries":["jet airliner landing dusk","airplane taking off runway","airplane wing above clouds sunset"],"want":["plane","aircraft","jet","airliner","wing","airport"],"take":3},
+ {"slot":"maritime","queries":["container ship at sea aerial","cargo ship ocean drone","tanker ship sailing aerial"],"want":["ship","vessel","cargo","tanker","container"],"take":3},
+ {"slot":"space","queries":["satellite orbiting earth","earth from space station","planet earth from orbit night lights"],"want":["earth","space","orbit","satellite","planet"],"take":3},
+ {"slot":"hazards","queries":["wildfire aerial smoke","volcano eruption lava night","hurricane clouds from space"],"want":["fire","wildfire","volcano","lava","hurricane","storm","smoke"],"take":3},
+ {"slot":"signals","queries":["radar dish rotating","radio telescope antenna array","satellite dish antenna dusk"],"want":["radar","antenna","dish","telescope"],"take":3},
+ {"slot":"infrastructure","queries":["container port cranes aerial night","oil refinery night aerial","power plant cooling towers aerial"],"want":["port","crane","refinery","power plant","industrial","harbor","harbour","pipeline"],"take":3},
+ {"slot":"archive","queries":["data center server room corridor","server rack blinking lights dark","data storage servers"],"want":["server","data center","datacenter","rack","storage"],"take":3}
+]
