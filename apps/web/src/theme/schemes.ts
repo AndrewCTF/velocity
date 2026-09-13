@@ -41,52 +41,52 @@ export interface Scheme {
 export const SCHEMES: readonly Scheme[] = [
   {
     id: 'dark',
-    label: 'Warm ink',
-    hint: 'The default. A warm dark grey, lifted off black so panels read as material.',
+    label: 'Carbon',
+    hint: "The default. IBM Carbon's Gray 100: neutral greys, blue 60 for interaction.",
     family: 'dark',
-    swatch: { bg: '#111418', panel: '#252a31', accent: '#2d72d2' },
+    swatch: { bg: '#161616', panel: '#262626', accent: '#0f62fe' },
   },
   {
     id: 'midnight',
-    label: 'Midnight',
-    hint: 'Cool blue-black. The operations-room look, colder than the default.',
+    label: 'Primer dark',
+    hint: "GitHub Primer's dark theme. Cool blue-black, the operations-room look.",
     family: 'dark',
-    swatch: { bg: '#0b0f1a', panel: '#1a2233', accent: '#4c8dff' },
+    swatch: { bg: '#010409', panel: '#161b22', accent: '#1f6feb' },
   },
   {
     id: 'slate',
     label: 'Slate',
-    hint: 'Neutral graphite with a teal accent, so blue stays a data colour.',
+    hint: 'Radix slate with a teal accent, so blue stays a data colour.',
     family: 'dark',
-    swatch: { bg: '#14161a', panel: '#23272e', accent: '#16a394' },
+    swatch: { bg: '#111113', panel: '#212225', accent: '#12a594' },
   },
   {
     id: 'amber',
     label: 'Night watch',
-    hint: 'Warm amber substrate for a darkened room. Threat hues stay distinct.',
+    hint: 'Radix sand with an amber accent for a darkened room. Threat hues stay distinct.',
     family: 'dark',
-    swatch: { bg: '#0f0d0a', panel: '#201c15', accent: '#e0a838' },
+    swatch: { bg: '#111110', panel: '#222221', accent: '#ffc53d' },
   },
   {
     id: 'contrast',
     label: 'High contrast',
-    hint: 'Near-black with a bright ramp and visible hairlines. Every tier clears AAA.',
+    hint: "GitHub Primer's high-contrast dark. Visible hairlines; every tier clears AAA.",
     family: 'dark',
-    swatch: { bg: '#000000', panel: '#141414', accent: '#3d8bfd' },
+    swatch: { bg: '#010409', panel: '#151b23', accent: '#409eff' },
   },
   {
     id: 'light',
     label: 'Daylight',
-    hint: 'Cool white. For a bright room or a projector.',
+    hint: "IBM Carbon's White theme. For a bright room or a projector.",
     family: 'light',
-    swatch: { bg: '#f6f7f9', panel: '#edeff2', accent: '#215db0' },
+    swatch: { bg: '#f4f4f4', panel: '#f4f4f4', accent: '#0f62fe' },
   },
   {
     id: 'paper',
     label: 'Paper',
-    hint: 'Warm light, print-adjacent, where Daylight reads clinical.',
+    hint: 'Radix sand light with indigo. Warm and print-adjacent, where Daylight reads clinical.',
     family: 'light',
-    swatch: { bg: '#f7f3e9', panel: '#f2ede1', accent: '#1c5e8c' },
+    swatch: { bg: '#f1f0ef', panel: '#f9f9f8', accent: '#3e63dd' },
   },
 
   // ── Blueprint ─────────────────────────────────────────────────────────────
@@ -95,9 +95,9 @@ export const SCHEMES: readonly Scheme[] = [
   // pins the whole metric scale, and the README records the ramp as "Blueprint
   // 5.1.16 dark, with zero tokens outside it".
   //
-  // The default scheme is close to that but not held to it — it has drifted a
-  // hover, a magenta and a couple of threat hues off-ramp. These four ARE held
-  // to it: `theme/blueprint.ts` carries the published swatches extracted from
+  // The other seven schemes are built on other published systems (IBM Carbon,
+  // GitHub Primer, Radix Colors) and are not held to this ramp. These four ARE
+  // held to it: `theme/blueprint.ts` carries the published swatches extracted from
   // the package, and the guard fails on any token that is not one of them,
   // apart from two exemptions it names.
   //
