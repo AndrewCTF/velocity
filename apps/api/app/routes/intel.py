@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from typing import Any
 
@@ -31,6 +32,8 @@ from app.intel.geo import BBox, bbox_from_radius
 from app.intel.incident_store import incident_store
 from app.keys import UserCtx, current_user
 from app.security import current_principal
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["intel"])
 
@@ -467,8 +470,11 @@ async def intel_agent(
             # the client with no extra plumbing.
             async for ev in agent.run_agent(q, bbox, ctx, clearance, compartments):
                 yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-        except Exception as exc:  # noqa: BLE001
-            err = {"type": "error", "text": f"{type(exc).__name__}: {exc}"}
+        except Exception:  # noqa: BLE001
+            # The detail stays in the server log: exception text carries paths,
+            # upstream URLs and driver errors that a client must not see.
+            log.exception("intel agent run failed")
+            err = {"type": "error", "text": "the agent run failed; see the server log"}
             yield f"data: {json.dumps(err)}\n\n"
 
     return StreamingResponse(

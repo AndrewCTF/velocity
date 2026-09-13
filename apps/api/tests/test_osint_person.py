@@ -285,6 +285,20 @@ def test_out_of_range_pairs_are_not_coordinates() -> None:
     assert normalise_coordinate("") is None
 
 
+def test_coordinate_rejects_whitespace_runs_in_linear_time() -> None:
+    """The DMS regex used to let three adjacent ``\\s*`` share one whitespace run:
+    "1" + 4 000 tabs took 55 s to reject (cubic), and the agent tool passes
+    targets unbounded. The rewrite must reject it at once and still read the
+    separators it always accepted."""
+    for bad in ("1" + "\t" * 20_000 + "x", "1N" + " " * 20_000 + "x", "9" + "\t" * 20_000):
+        t0 = time.perf_counter()
+        assert normalise_coordinate(bad) is None
+        assert time.perf_counter() - t0 < 0.5
+    assert normalise_coordinate("41 53 23 N 12 29 32 E") == "41.889722,12.492222"
+    assert normalise_coordinate("41°N,\t12°E") == "41.0,12.0"
+    assert normalise_coordinate("38.8977 \t -77.0365") == "38.897700,-77.036500"
+
+
 # ── ch. 43: ransomware leak-site claims in the domain fan-out ────────────────
 
 

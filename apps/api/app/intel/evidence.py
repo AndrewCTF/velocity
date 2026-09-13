@@ -36,6 +36,7 @@ import asyncio
 import contextlib
 import hashlib
 import json
+import re
 import socket
 import time
 import uuid
@@ -119,6 +120,9 @@ def override_evidence_dir(path: str | None) -> None:
     _DIR_OVERRIDE = path
 
 
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+
+
 def _blob_dir(settings: Settings) -> Path:
     return Path(_DIR_OVERRIDE or settings.evidence_dir)
 
@@ -128,7 +132,15 @@ def blob_path(settings: Settings, sha256: str) -> Path:
 
     Sharding by the first two hex chars keeps any single directory small even
     with hundreds of thousands of captures (256 buckets).
+
+    Raises ``ValueError`` unless ``sha256`` is 64 lowercase hex chars. The hash
+    reaching here is ``props.sha256`` off an ontology object, and
+    ``POST /api/ontology/object`` lets a caller write any props onto an
+    ``evidence:`` id, so without this a ``../`` value reads any file on the box
+    (``/dev/zero`` exhausts memory) and ``blob_exists`` becomes a file oracle.
     """
+    if not _SHA256_RE.fullmatch(sha256 or ""):
+        raise ValueError("not a sha256 hex digest")
     return _blob_dir(settings) / sha256[:2] / sha256
 
 
@@ -154,7 +166,10 @@ def _write_blob(settings: Settings, sha256: str, data: bytes) -> None:
 
 
 def read_blob(settings: Settings, sha256: str) -> bytes | None:
-    path = blob_path(settings, sha256)
+    try:
+        path = blob_path(settings, sha256)
+    except ValueError:
+        return None
     if not path.exists():
         return None
     return path.read_bytes()
@@ -175,7 +190,10 @@ def verify_blob(settings: Settings, sha256: str) -> bool:
 def blob_exists(settings: Settings, sha256: str) -> bool:
     """Cheap presence check (stat, no read). Used by the manifest so exporting a
     large case is not O(all bytes); the explicit /verify route re-hashes."""
-    return blob_path(settings, sha256).exists()
+    try:
+        return blob_path(settings, sha256).exists()
+    except ValueError:
+        return False
 
 
 class EvidenceError(Exception):

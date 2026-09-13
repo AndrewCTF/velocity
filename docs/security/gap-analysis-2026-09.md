@@ -58,6 +58,9 @@ with the reason given) or **residual** (still open, with the reason given).
 | G15 | Audit trail covers 3 route modules | `audit()` called from `routes/extract.py`, `routes/countries.py` and `routes/osint.py` only; workflows, foundry, evidence, model download/delete, ingest and MCP mutations leave no record | 8.15 Logging; 8.16 Monitoring activities; 5.28 Collection of evidence | PO.5 | V16.2, V16.3 | DE.CM-03 | **fixed** `691af80`: `Depends(audit_mutation)` on 6 routers (50+ mutating routes), MCP tool calls audited; `tests/test_audit_mutations.py` guard |
 | G16 | No disclosure, incident or backup process | no `SECURITY.md`, no incident runbook, no backup/restore for the `osint_data` volume | 5.24 Incident management planning; 5.26 Response to incidents; 5.5 Contact with authorities; 5.30 ICT readiness for business continuity; 8.13 Information backup | RV.1, RV.2, RV.3, PO.1 | — | GV.PO, RS.MA, RC.RP | **fixed** `2c1d335`: `SECURITY.md` (disclosure, patch SLAs, update cadence), `scripts/backup-data.sh` (restore round trip verified), GitHub private vulnerability reporting enabled, `docs/security/incident-response.md` runbook (detect, contain, eradicate, recover, learn) |
 | G17 | No secret scanning | no gitleaks, pre-commit or GitHub push protection config; `.env` correctly untracked (`git log --all` shows no `*.env`) | 8.12 Data leakage prevention; 5.17 | PS.1 | V13.3 | PR.DS | **fixed** (repo setting): GitHub secret scanning and push protection enabled via `gh api` on 2026-09-13; 0 open alerts at enablement |
+| G18 | Evidence blob path taken from forgeable ontology props (CodeQL py/path-injection, first scan) | `intel/evidence.py:178` built a file path from `props.sha256`, which `POST /api/ontology/object` lets a caller set on an `evidence:` id; `../../../../dev/zero` via `/verify` exhausts memory and `/manifest` works as a file-existence oracle | 8.28; 8.3 Information access restriction | PW.5, PW.7 | V5.3 | PR.DS | **fixed**: `blob_path` accepts only 64 lowercase hex characters; `test_evidence.py::test_blob_path_rejects_traversal_from_forged_props`. Residual: evidence objects' ontology props remain writable through the generic object route, a chain-of-custody integrity question for the operator |
+| G19 | Cubic-time coordinate regex on agent-supplied input (CodeQL py/polynomial-redos) | `osint/fetch.py:254` DMS regex: "1" plus 4,000 tabs took 55 s; routes cap input at 253 characters but the agent tool (`intel/agent.py:258`) passes it without a cap | 8.6; 8.28 | PW.5 | V2.4 | PR.PS | **fixed**: separators rewritten without overlapping quantifiers (same for `_DD_RE` and `search.py` `LATLON_RE`); a 400k-string fuzz run gives identical matches; `test_osint_person.py::test_coordinate_rejects_whitespace_runs_in_linear_time` (20,000-tab input in about 1 ms) |
+| G20 | Agent stream returned raw exception text (CodeQL py/stack-trace-exposure) | `routes/intel.py:475` put `str(exc)` in the SSE error frame | 8.28; 8.12 | PW.5 | V16.5 | PR.DS | **fixed**: generic frame to the client, `log.exception` on the server; `test_ai_routes_e2e.py::test_intel_agent_error_frame_hides_exception_text` |
 
 ## Already in place (credit where due)
 
@@ -77,13 +80,24 @@ with the reason given) or **residual** (still open, with the reason given).
 | npm dependencies | 652 | 566 | same |
 | Python advisories (lock) | 34 in 6 packages | "No known vulnerabilities found" | `uv export --frozen --no-emit-project` then `uvx pip-audit --no-deps --disable-pip` |
 | Python lock packages | stale lock, not used by CI or the image | 114 resolved, `uv lock --check` clean | `uv lock --check` |
-| API tests | 2587 passed, 2 skipped | 2628 passed, 2 skipped (+41 security tests) | `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q` |
+| API tests | 2587 passed, 2 skipped | 2632 passed, 2 skipped (+45 security tests) | `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q` |
 | Web tests | 784 | 789 | `pnpm --filter @osint/web test` |
 | Update automation | none | Dependabot (5 ecosystems) + CI audit job + CodeQL + GitHub alerts | `.github/` |
 
 Framework coverage after the wave:
 - **CSF 2.0:** Govern (SECURITY.md, decisions record), Identify (audits in CI), Protect (auth, SSRF, CSP, container), Detect (audit trail, CodeQL, secret scanning), Respond (disclosure path), Recover (backup/restore).
 - **SSDF:** PO.1/PO.5, PS.1–PS.3, PW.4–PW.9, RV.1–RV.3 each map to at least one fixed row above.
+
+## CodeQL first scan (PR #87)
+
+43 alerts: 3 true positives, fixed as G18–G20. The other 40 were false positives, dismissed on GitHub with a stated reason:
+- recon ids validated by regex at `recon.py:300` and `:678`;
+- tile z/x/y are ints (hardened anyway);
+- HMAC JWT verification and Gravatar/Libravatar MD5 are not password hashing;
+- the adsb URL substring reads operator config;
+- test assertions;
+- foundry SQL errors are the user's own query feedback;
+- loopback-only sidecar messages.
 
 ## Operator decisions (recorded in `docs/decisions.md`)
 

@@ -109,16 +109,19 @@ _ASN_MAX = 4_294_967_295
 _PHONE_RE = re.compile(r"^\+?[0-9(][0-9 ()\-.]{5,20}$")
 
 # Decimal degrees: "38.8977,-77.0365" / "38.8977 -77.0365" / "38.8977, -77.0365".
+# Every separator is written "\s*<mark>\s*|\s+", never "\s*[<mark>\s]\s*": the
+# second lets three adjacent \s* share one run of whitespace, and a DMS target of
+# "1" plus 4 000 tabs took 55 s to reject (the agent passes targets unbounded).
 _DD_RE = re.compile(
-    r"^\s*([+-]?\d{1,3}(?:\.\d+)?)\s*[,\s]\s*([+-]?\d{1,3}(?:\.\d+)?)\s*$"
+    r"^\s*([+-]?\d{1,3}(?:\.\d+)?)(?:\s*,\s*|\s+)([+-]?\d{1,3}(?:\.\d+)?)\s*$"
 )
 # Degrees/minutes/seconds, the form ch. 27 spends the most time on:
 # 41°53'23.2"N 12°29'32.2"E. Minutes and seconds are optional so 41°N 12°E works.
 _DMS_ONE = (
-    r"(\d{1,3})\s*[°d:\s]\s*(?:(\d{1,2})\s*['m:\s]\s*)?"
-    r"(?:(\d{1,2}(?:\.\d+)?)\s*(?:\"|''|s)?\s*)?\s*([NSEWnsew])"
+    r"(\d{1,3})(?:\s*[°d:]\s*|\s+)(?:(\d{1,2})(?:\s*['m:]\s*|\s+))?"
+    r"(?:(\d{1,2}(?:\.\d+)?)\s*(?:(?:\"|''|s)\s*)?)?([NSEWnsew])"
 )
-_DMS_RE = re.compile(rf"^\s*{_DMS_ONE}\s*[, ]\s*{_DMS_ONE}\s*$")
+_DMS_RE = re.compile(rf"^\s*{_DMS_ONE}(?:\s*,\s*|[^\S ]* \s*){_DMS_ONE}\s*$")
 
 
 def normalise_url(target: str) -> str | None:

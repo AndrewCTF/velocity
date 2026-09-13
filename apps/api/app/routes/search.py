@@ -26,7 +26,9 @@ from app.upstream import cache, get_client
 
 router = APIRouter(tags=["search"])
 
-LATLON_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*[,/\s]\s*(-?\d+(?:\.\d+)?)\s*$")
+# "\s*[,/]\s*|\s+", not "\s*[,/\s]\s*": same language, but no whitespace run that
+# three quantifiers can split in O(n^2) ways (see osint/fetch.py _DD_RE).
+LATLON_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)(?:\s*[,/]\s*|\s+)(-?\d+(?:\.\d+)?)\s*$")
 ICAO24_RE = re.compile(r"^[0-9a-f]{6}$", re.IGNORECASE)
 MMSI_RE = re.compile(r"^\d{9}$")
 
