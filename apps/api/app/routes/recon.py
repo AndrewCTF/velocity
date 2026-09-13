@@ -31,14 +31,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from app.auth import _bearer, _jwt_claims
+from app.auth import _bearer
 from app.config import get_settings
+from app.keys import user_id_for_token
 from app.uploads import write_capped
 
-router = APIRouter(tags=["recon"], prefix="/api/recon")
 log = logging.getLogger("app.recon")
 
 # ── paths (env-overridable; default to the repo's GPU lab) ───────────────────
@@ -80,15 +80,30 @@ def _scrub(text: str) -> str:
     return text
 
 
-def _owner_key(request: Request) -> str:
-    """Owner id for scoping recon jobs (issue #15). The request already passed
-    ApiKeyMiddleware; extract the Supabase ``sub`` from a bearer token when one is
-    present, else fall back to the shared ``local`` identity (keyless / static-key
-    single-operator box — same convention as the local ontology graph)."""
+async def _resolve_owner(request: Request) -> None:
+    """Router dependency: the owner id for scoping recon jobs (issue #15), put on
+    ``request.state`` for ``_owner_key``. The ``sub`` of a VERIFIED Supabase
+    session, else the shared ``local`` identity (keyless / static-key
+    single-operator box — same convention as the local ontology graph).
+
+    Verified, not decoded (ASVS V9.1.1): the middleware authorizes a static
+    ``X-API-Key`` before it looks at the bearer, so reading ``sub`` from an
+    unchecked token let the key holder attach a forged bearer naming any user
+    and read that user's jobs."""
     # Headers only, matching ApiKeyMiddleware: an unvalidated ?key= must not pick the owner.
     token = _bearer(request.headers) or request.headers.get("x-api-key")
-    claims = _jwt_claims(token or "") or {}
-    return str(claims.get("sub") or "local")
+    request.state.recon_owner = await user_id_for_token(token) or "local"
+
+
+def _owner_key(request: Request) -> str:
+    """The owner ``_resolve_owner`` verified for this request (``local`` if the
+    dependency did not run: that identity sees only unowned jobs)."""
+    return str(getattr(getattr(request, "state", None), "recon_owner", "local"))
+
+
+router = APIRouter(
+    tags=["recon"], prefix="/api/recon", dependencies=[Depends(_resolve_owner)]
+)
 
 
 def _drop_job(job_id: str) -> None:

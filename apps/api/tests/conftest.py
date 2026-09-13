@@ -252,3 +252,19 @@ def _reset_auth_state() -> Iterator[None]:
     yield
     auth.reset_state()
     security.reset_state()
+
+
+@pytest.fixture(autouse=True)
+def _stub_session_liveness(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``auth._session_live`` asks GoTrue whether a locally verified session is
+    still active whenever SUPABASE_URL + SUPABASE_ANON_KEY are set. Tests mint
+    tokens for a project that does not exist, so without this the call would go
+    to the network and fail closed. The suite stays hermetic by answering
+    "active"; ``tests/test_asvs_fix_a_auth.py`` overrides this fixture by name
+    to exercise the real hook."""
+    from app import auth
+
+    async def _active(token: str, s: Settings) -> bool:
+        return True
+
+    monkeypatch.setattr(auth, "_session_live", _active)

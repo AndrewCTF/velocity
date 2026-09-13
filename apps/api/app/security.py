@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from fastapi import Depends, HTTPException, Request
 
 from app import auth as _auth
-from app.auth import _jwt_claims, _valid_supabase_token
+from app.auth import _banned, _jwt_claims, _valid_supabase_token
 from app.config import Settings, get_settings
 from app.keys import UserCtx, _client, _headers, current_user, current_user_or_local
 
@@ -162,19 +162,6 @@ _ACTIVE_TTL = 60.0
 def reset_state() -> None:
     _cache.clear()
     _active_until.clear()
-
-
-def _banned(body: dict) -> bool:
-    raw = body.get("banned_until")
-    if not raw:
-        return False
-    try:
-        from datetime import UTC, datetime  # noqa: PLC0415
-
-        until = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        return until > datetime.now(UTC)
-    except ValueError:
-        return True  # unparseable ban marker: treat as banned (fail closed)
 
 
 async def _session_active(token: str, s: Settings) -> bool:

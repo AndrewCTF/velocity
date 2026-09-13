@@ -54,6 +54,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.auth import (
     ApiKeyMiddleware,
+    WsSubprotocolMiddleware,
     check_credential_strength,
     install_access_log_redaction,
     log_auth_mode,
@@ -623,30 +624,66 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def _install_security_event_logging(app: FastAPI) -> None:
-    """Every 401/403 a route raises becomes one WARNING line on ``app.security``
-    (ASVS V16.3.1 / V16.3.2): client, method, path, status and the refusal's
-    own detail. The middleware's 401/429 log themselves in ``auth`` and
-    ``ratelimit``. The credential is never in the line."""
+    """Every 400/401/403/413/422/429 a route raises becomes one line on
+    ``app.security`` (ASVS V16.3.1 / V16.3.2 / V16.3.3): client, the principal
+    (a verified user id, ``api-key``, ``mcp-internal`` or ``local``; V16.2.1),
+    method, path, status and the refusal's own detail. A request-validation
+    failure logs the offending field NAMES only, never their values. The
+    middleware's 401/429 log themselves in ``auth`` and ``ratelimit``. The
+    credential is never in the line."""
     import logging as _logging  # noqa: PLC0415
 
-    from fastapi.exception_handlers import http_exception_handler  # noqa: PLC0415
+    from fastapi.exception_handlers import (  # noqa: PLC0415
+        http_exception_handler,
+        request_validation_exception_handler,
+    )
+    from fastapi.exceptions import RequestValidationError  # noqa: PLC0415
     from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: PLC0415
     from starlette.requests import Request as StarletteRequest  # noqa: PLC0415
 
+    from app.audit import _actor  # noqa: PLC0415
     from app.ratelimit import client_key  # noqa: PLC0415
 
     sec = _logging.getLogger("app.security")
+    words = {
+        400: "rejected", 401: "unauthorized", 403: "forbidden", 413: "rejected",
+        422: "rejected", 429: "throttled",
+    }
+
+    def _who(request: StarletteRequest) -> tuple[str, str]:
+        client = client_key(request.client.host if request.client else "", request.headers)
+        try:
+            principal = _actor(request).user_id  # type: ignore[arg-type]
+        except Exception:  # noqa: BLE001 — a log line never breaks the response
+            principal = "-"
+        return client, principal
 
     @app.exception_handler(StarletteHTTPException)
     async def _logged(request: StarletteRequest, exc: StarletteHTTPException):  # type: ignore[no-untyped-def]
-        if exc.status_code in (401, 403, 429):
-            who = client_key(request.client.host if request.client else "", request.headers)
-            word = {401: "unauthorized", 403: "forbidden", 429: "throttled"}[exc.status_code]
-            sec.warning(
-                "%s client=%s method=%s path=%s reason=%s",
-                word, who, request.method, request.url.path, str(exc.detail)[:160],
+        if exc.status_code in words:
+            who, principal = _who(request)
+            line = "%s client=%s principal=%s method=%s path=%s status=%s reason=%s"
+            args = (
+                words[exc.status_code], who, principal, request.method, request.url.path,
+                exc.status_code, str(exc.detail)[:160],
             )
+            if exc.status_code in (400, 413):
+                sec.info(line, *args)
+            else:
+                sec.warning(line, *args)
         return await http_exception_handler(request, exc)
+
+    @app.exception_handler(RequestValidationError)
+    async def _logged_validation(request: StarletteRequest, exc: RequestValidationError):  # type: ignore[no-untyped-def]
+        who, principal = _who(request)
+        fields = sorted({
+            ".".join(str(p) for p in (e.get("loc") or ())) for e in exc.errors()
+        })
+        sec.info(
+            "rejected client=%s principal=%s method=%s path=%s status=422 fields=%s",
+            who, principal, request.method, request.url.path, ",".join(fields)[:300],
+        )
+        return await request_validation_exception_handler(request, exc)
 
 
 def create_app() -> FastAPI:
@@ -672,6 +709,9 @@ def create_app() -> FastAPI:
     # reaches token validation. No-op on non-compute paths and when the limit
     # is 0.
     app.add_middleware(ComputeRateLimitMiddleware)
+    # WS credential in Sec-WebSocket-Protocol (ASVS V14.2.1): selects the
+    # non-secret "velocity.v1" on accept and exposes the key to route handlers.
+    app.add_middleware(WsSubprotocolMiddleware)
     # Added last → outermost. The global ADS-B snapshot is a multi-MB JSON
     # body once per second per client; gzip cuts it ~10x on the wire.
     # compresslevel 5 trades a little ratio for much less CPU than default 9.

@@ -8,6 +8,8 @@ for Phase 1 a per-process dict is fine — single-analyst, one container.
 from __future__ import annotations
 
 import asyncio
+import logging
+import ssl
 import time
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
@@ -257,6 +259,46 @@ async def _refuse_downgrade(response: httpx.Response) -> None:
         )
 
 
+_sec_log = logging.getLogger("app.security")
+# host -> when its TLS failure was last logged; one line per host per interval,
+# so a feed polling a broken host every second does not flood the log.
+_tls_logged_at: OrderedDict[str, float] = OrderedDict()
+_TLS_LOG_INTERVAL_S = 300.0
+
+
+def _tls_cause(exc: BaseException) -> ssl.SSLError | None:
+    seen: BaseException | None = exc
+    for _ in range(6):  # walk __cause__/__context__ a few hops, never loop
+        if seen is None:
+            return None
+        if isinstance(seen, ssl.SSLError):
+            return seen
+        seen = seen.__cause__ or seen.__context__
+    return None
+
+
+def _log_tls_failure(host: str, exc: BaseException) -> None:
+    """An upstream certificate/handshake failure is a security event (possible
+    interception), not just a source-health blip: WARNING on ``app.security``,
+    host and error class only, never the URL (it can carry a key). ASVS V16.3.4."""
+    cause = _tls_cause(exc)
+    if cause is None and not (
+        isinstance(exc, httpx.ConnectError) and "SSL" in str(exc).upper()
+    ):
+        return
+    now = time.time()
+    if now - _tls_logged_at.get(host, 0.0) < _TLS_LOG_INTERVAL_S:
+        return
+    _tls_logged_at[host] = now
+    _tls_logged_at.move_to_end(host)
+    while len(_tls_logged_at) > _MAX_SOURCE_HOSTS:
+        _tls_logged_at.popitem(last=False)
+    _sec_log.warning(
+        "upstream tls failure host=%s err=%s",
+        host, type(cause).__name__ if cause is not None else type(exc).__name__,
+    )
+
+
 class _InstrumentedClient(httpx.AsyncClient):
     """The shared client, plus one row per request in the health registry.
 
@@ -297,6 +339,7 @@ class _InstrumentedClient(httpx.AsyncClient):
         except Exception as exc:
             try:
                 record_failure(host, f"{type(exc).__name__}: {exc}")
+                _log_tls_failure(host, exc)
             except Exception:  # noqa: BLE001 — diagnostics never break a fetch
                 pass
             raise

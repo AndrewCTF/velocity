@@ -25,6 +25,12 @@ coverage/
 .playwright-mcp/
 graphify-out/
 scratchpad/
+# Env files carry secrets and no image needs one (settings come from the
+# runtime environment or /run/secrets). ASVS V13.3.1.
+.env
+**/.env
+**/.env.*
+!**/.env.example
 tmp/
 test_images/
 .wrangler/

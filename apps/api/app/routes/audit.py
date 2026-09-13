@@ -82,3 +82,20 @@ async def get_audit(
         raise HTTPException(status_code=502, detail="audit store unavailable")
     rows = r.json()
     return rows if isinstance(rows, list) else []
+
+
+@router.get("/api/audit/verify")
+async def verify_audit_chain(
+    p: Principal = Depends(current_principal_or_local),
+) -> dict[str, Any]:
+    """Tamper evidence for the LOCAL ``audit_log`` (ASVS V16.4.2): walks its
+    SHA-256 hash chain and names the first row that no longer matches. Same
+    role gate as the read. The Supabase ``action_log`` is append-only at the
+    database and is not chained here."""
+    import asyncio  # noqa: PLC0415
+
+    from app.audit import verify_local_chain_sync  # noqa: PLC0415
+
+    if _multi_user(get_settings()) and not (p.has_role("auditor") or p.has_role("admin")):
+        raise HTTPException(status_code=403, detail="requires auditor or admin role")
+    return await asyncio.get_running_loop().run_in_executor(None, verify_local_chain_sync)

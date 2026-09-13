@@ -5,11 +5,14 @@ localhost dev box stays open. It turns ON (and is then ENFORCED on every
 non-public route) when either is set:
 
   * ``API_KEY``  — a static shared secret, supplied via the ``X-API-Key``
-    header (or ``?key=`` on a WebSocket upgrade only). For server/MCP callers and CI.
+    header (or, on a WebSocket upgrade only, the ``key.<credential>``
+    subprotocol or ``?key=``; see ``WsSubprotocolMiddleware``). For server/MCP
+    callers and CI.
   * Supabase     — ``SUPABASE_JWT_SECRET`` (preferred) or ``SUPABASE_URL`` +
     ``SUPABASE_ANON_KEY``. Callers then present a Supabase **access token** —
     the JWT the browser receives after signing in — via ``Authorization:
-    Bearer <jwt>`` (or ``?key=<jwt>`` on WS upgrades, which can't set headers).
+    Bearer <jwt>`` (on WS upgrades, which can't set headers, the ``key.<jwt>``
+    subprotocol or ``?key=<jwt>``).
     This is "the API key you get from Supabase".
 
 ``?key=`` is accepted ONLY on WebSocket upgrades (``require_ws_key``). On an
@@ -17,12 +20,13 @@ HTTP request it would land in proxy access logs and browser history, and no
 HTTP client of this API needs it (the web app sends headers via ``apiFetch``),
 so HTTP ignores it. ``RedactKeyFilter`` scrubs it from uvicorn's access log.
 
-Token validation is LOCAL HS256 when the JWT secret is set (no round-trip,
-mirrors the gateway Worker's check); otherwise a call to GoTrue's
-``/auth/v1/user`` with the anon key. Either way a successful check is cached
-per-token until the token's own ``exp`` (capped at 60 s, so a revoked session
-stops within a minute on the GoTrue path) and the 1 Hz ADS-B poll validates at
-most once a minute, not once per request.
+Token validation is LOCAL when it can be: ES256/RS256 against the project JWKS
+(SUPABASE_URL set), HS256 when the JWT secret is set; otherwise a call to
+GoTrue's ``/auth/v1/user`` with the anon key. A locally verified token is still
+re-checked with GoTrue (``_session_live``) when URL + anon key are set. Either
+way a successful check is cached per-token until the token's own ``exp``
+(capped at 60 s, so a revoked session stops within a minute) and the 1 Hz
+ADS-B poll validates at most once a minute, not once per request.
 
 Three credential kinds, and where each is accepted
 (``docs/security/auth-and-sessions.md`` has the full table):
@@ -195,11 +199,36 @@ def _aud_has(claims: dict, value: str) -> bool:
     return aud == value or (isinstance(aud, list) and value in aud)
 
 
+def _signed_in_at(claims: dict) -> float | None:
+    """When the user actually authenticated: the earliest ``amr[].timestamp``
+    (Supabase keeps it across refreshes, unlike ``iat``). None when absent."""
+    amr = claims.get("amr")
+    stamps: list[float] = []
+    if isinstance(amr, list):
+        for entry in amr:
+            ts = entry.get("timestamp") if isinstance(entry, dict) else None
+            if isinstance(ts, int | float) and not isinstance(ts, bool):
+                stamps.append(float(ts))
+    return min(stamps) if stamps else None
+
+
 def _user_claims_ok(
-    claims: dict, *, issuer: str = "", max_lifetime_s: float = 86_400
+    claims: dict,
+    *,
+    issuer: str = "",
+    max_lifetime_s: float = 86_400,
+    session_max_age_s: float = 0,
+    require_aal2: bool = False,
 ) -> bool:
     """The claim rules every USER session obeys, whichever path verified it."""
     if not _times_ok(claims, max_lifetime_s):
+        return False
+    if session_max_age_s > 0:
+        # Absolute session lifetime (V7.3.2): refreshes renew iat, not this.
+        signed_in = _signed_in_at(claims)
+        if signed_in is None or time.time() - signed_in > session_max_age_s:
+            return False
+    if require_aal2 and claims.get("aal") != "aal2":
         return False
     sub = claims.get("sub")
     if not isinstance(sub, str) or not sub:
@@ -216,14 +245,11 @@ def _user_claims_ok(
     return claims.get("role") == "authenticated"
 
 
-def _verify_hs256(
-    token: str, secret: str, *, issuer: str = "", max_lifetime_s: float = 86_400
-) -> bool:
-    """A Supabase USER session signed with the project secret."""
+def _verify_hs256(token: str, secret: str, **rules: object) -> bool:
+    """A Supabase USER session signed with the project secret. ``rules`` are
+    ``_user_claims_ok``'s keyword arguments (issuer, max_lifetime_s, …)."""
     claims = _signed_claims(token, secret)
-    return claims is not None and _user_claims_ok(
-        claims, issuer=issuer, max_lifetime_s=max_lifetime_s
-    )
+    return claims is not None and _user_claims_ok(claims, **rules)  # type: ignore[arg-type]
 
 
 def _verify_internal(token: str, secret: str) -> bool:
@@ -265,24 +291,56 @@ def _locked(key: str, s: Settings) -> int | None:
     return _failures.retry_after(key, limit=lim) if lim > 0 else None
 
 
-def record_auth_failure(key: str, s: Settings, reason: str, path: str = "") -> None:
+def credential_kind(credential: str | None) -> str:
+    """What sort of credential was presented, by shape only (never its value):
+    a three-segment JWT is a ``session`` attempt, anything else ``static``."""
+    if not credential:
+        return "none"
+    return "session" if credential.count(".") == 2 else "static"
+
+
+def record_auth_failure(
+    key: str, s: Settings, reason: str, path: str = "", kind: str = ""
+) -> None:
     """Count one failed credential for ``key`` and log it (never the credential)."""
     if s.auth_failure_limit_per_min > 0:
         _failures.record(key, limit=s.auth_failure_limit_per_min)
-    log.warning("auth failure client=%s path=%s reason=%s", key, path, reason)
+    log.warning(
+        "auth failure client=%s path=%s reason=%s kind=%s", key, path, reason, kind or "-"
+    )
 
 
 # ── per-token validation cache ───────────────────────────────────────────────
 
 _token_ok_until: dict[str, float] = {}  # user token -> wall-clock expiry
 _internal_ok_until: dict[str, float] = {}  # internal token -> wall-clock expiry
+_live_until: dict[str, float] = {}  # user token -> expiry of a GoTrue "active"
+# client -> wall-clock time its static-key success was last logged. The static
+# key has no validation cache, and the 1 Hz ADS-B poll must not log every second.
+_static_logged_at: dict[str, float] = {}
+# JWKS url -> (expiry, {kid: jwk}); and when a refetch for an unknown kid last ran.
+_jwks_cache: dict[str, tuple[float, dict[str, dict]]] = {}
+_jwks_refetched_at: dict[str, float] = {}
+JWKS_TTL_S = 600.0
+JWKS_REFETCH_MIN_S = 30.0
 
 
 def reset_state() -> None:
     """Drop cached validations and failure counts (tests; also safe at runtime)."""
     _token_ok_until.clear()
     _internal_ok_until.clear()
+    _live_until.clear()
+    _static_logged_at.clear()
+    _jwks_cache.clear()
+    _jwks_refetched_at.clear()
     _failures.clear()
+
+
+def _bounded_put(d: dict[str, float], key: str, until: float, cap: int, now: float) -> None:
+    d[key] = until
+    if len(d) > cap:  # bound: drop already-expired entries
+        for k in [k for k, v in d.items() if v <= now]:
+            d.pop(k, None)
 
 
 async def _gotrue_user(token: str, s: Settings) -> tuple[int, dict]:
@@ -315,8 +373,147 @@ async def _gotrue_status(token: str, s: Settings) -> int:
     return (await _gotrue_user(token, s))[0]
 
 
+def _banned(body: dict) -> bool:
+    raw = body.get("banned_until")
+    if not raw:
+        return False
+    try:
+        from datetime import UTC, datetime  # noqa: PLC0415
+
+        until = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        return until > datetime.now(UTC)
+    except ValueError:
+        return True  # unparseable ban marker: treat as banned (fail closed)
+
+
+async def _session_live(token: str, s: Settings) -> bool:
+    """Is the session behind a locally verified token still active in GoTrue
+    (not signed out, banned or deleted)? Cached per token for at most 60 s.
+
+    Applies to EVERY user validation, not only operator routes (ASVS V7.4.1 /
+    V7.4.2): a signature proves the token was issued, not that the session still
+    exists. Fails closed when GoTrue is unreachable. A JWT-secret-only deployment
+    has no GoTrue URL, so there the token's own ``exp`` (<= JWT_MAX_LIFETIME_S)
+    is the only revocation: a documented residual in
+    docs/security/auth-and-sessions.md. The test conftest stubs this hook."""
+    if not (s.session_liveness_check and s.supabase_url and s.supabase_anon_key):
+        return True
+    now = time.time()
+    hit = _live_until.get(token)
+    if hit and hit > now:
+        return True
+    status, body = await _gotrue_user(token, s)
+    ok = status == 200 and not _banned(body)
+    if ok:
+        _bounded_put(_live_until, token, now + TOKEN_CACHE_TTL_S, 4096, now)
+    else:
+        _live_until.pop(token, None)
+    return ok
+
+
+# ── asymmetric session tokens (ES256 / RS256 via the project JWKS) ───────────
+
+_ASYMMETRIC = {"ES256": "EC", "RS256": "RSA"}
+
+
+def _allowed_algs(s: Settings) -> set[str]:
+    return {a.strip().upper() for a in s.supabase_jwt_algorithms.split(",") if a.strip()}
+
+
+def _jwt_header(token: str) -> dict:
+    try:
+        head = json.loads(_b64url_decode(token.split(".")[0]))
+        return head if isinstance(head, dict) else {}
+    except Exception:  # noqa: BLE001 — malformed token
+        return {}
+
+
+def jwks_url(s: Settings) -> str:
+    return (s.supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json") if s.supabase_url else ""
+
+
+async def _fetch_jwks(url: str) -> dict | None:
+    """The JWKS document, or None when unreachable. IPv4-pinned like GoTrue."""
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(8.0, connect=5.0),
+            transport=httpx.AsyncHTTPTransport(local_address="0.0.0.0", retries=1),
+        ) as c:
+            r = await c.get(url)
+        if r.status_code != 200:
+            return None
+        body = r.json()
+        return body if isinstance(body, dict) else None
+    except Exception:  # noqa: BLE001 — JWKS down → no key → refuse (fail closed)
+        return None
+
+
+async def _jwks_key(kid: str, s: Settings) -> dict | None:
+    url = jwks_url(s)
+    now = time.time()
+    hit = _jwks_cache.get(url)
+    keys = hit[1] if hit and hit[0] > now else None
+    # Unknown kid: the project may have rotated; refetch, but not on every
+    # forged kid (at most once per JWKS_REFETCH_MIN_S).
+    stale = keys is None or (
+        kid not in keys and now - _jwks_refetched_at.get(url, 0.0) >= JWKS_REFETCH_MIN_S
+    )
+    if stale:
+        _jwks_refetched_at[url] = now
+        doc = await _fetch_jwks(url)
+        if doc is not None:
+            keys = {
+                str(k["kid"]): k
+                for k in doc.get("keys", [])
+                if isinstance(k, dict) and k.get("kid")
+            }
+            _jwks_cache[url] = (now + JWKS_TTL_S, keys)
+    return (keys or {}).get(kid)
+
+
+async def _verify_jwks(token: str, alg: str, s: Settings) -> dict | None:
+    """Claims of an ES256/RS256 token signed by a key in the project JWKS, or
+    None. The key's type must match the header ``alg`` and PyJWT is told that
+    one algorithm only, so neither the HS256 secret nor a public key can be
+    used under the other scheme (no algorithm confusion). Claim rules are
+    applied by the caller, in one place."""
+    kid = _jwt_header(token).get("kid")
+    if not isinstance(kid, str) or not kid:
+        return None
+    jwk = await _jwks_key(kid, s)
+    if jwk is None or jwk.get("kty") != _ASYMMETRIC[alg]:
+        return None
+    if jwk.get("alg") not in (None, alg) or jwk.get("use") not in (None, "sig"):
+        return None
+    try:
+        import jwt  # noqa: PLC0415 — pyjwt, a declared dependency
+
+        key = jwt.PyJWK(jwk, algorithm=alg).key
+        claims = jwt.decode(
+            token,
+            key=key,
+            algorithms=[alg],
+            options={
+                "verify_signature": True,
+                "verify_exp": False,
+                "verify_nbf": False,
+                "verify_iat": False,
+                "verify_aud": False,
+                "verify_iss": False,
+            },
+        )
+    except Exception:  # noqa: BLE001 — bad signature / malformed key or token
+        return None
+    return claims if isinstance(claims, dict) else None
+
+
 async def _valid_supabase_token(token: str, s: Settings) -> bool:
-    """True for a valid Supabase USER session. Never true for the internal token."""
+    """True for a valid Supabase USER session. Never true for the internal token.
+
+    Signature, by header ``alg`` (each must be in SUPABASE_JWT_ALGORITHMS):
+    ES256/RS256 against the project JWKS when SUPABASE_URL is set; HS256 with the
+    project secret; with neither, GoTrue vouches. Then the shared claim rules,
+    then (local verification only) the GoTrue liveness check."""
     if not token:
         return False
     now = time.time()
@@ -325,9 +522,28 @@ async def _valid_supabase_token(token: str, s: Settings) -> bool:
         return True
 
     issuer = expected_issuer(s)
-    if s.supabase_jwt_secret:
-        ok = _verify_hs256(
-            token, s.supabase_jwt_secret, issuer=issuer, max_lifetime_s=s.jwt_max_lifetime_s
+    rules = {
+        "issuer": issuer,
+        "max_lifetime_s": s.jwt_max_lifetime_s,
+        "session_max_age_s": s.session_max_age_s,
+        "require_aal2": s.require_mfa_all_users,
+    }
+    allowed = _allowed_algs(s)
+    alg = str(_jwt_header(token).get("alg") or "")
+    if alg in _ASYMMETRIC and s.supabase_url:
+        if alg not in allowed:
+            return False
+        claims = await _verify_jwks(token, alg, s)
+        ok = (
+            claims is not None
+            and _user_claims_ok(claims, **rules)
+            and await _session_live(token, s)
+        )
+    elif s.supabase_jwt_secret:
+        ok = (
+            "HS256" in allowed
+            and _verify_hs256(token, s.supabase_jwt_secret, **rules)
+            and await _session_live(token, s)
         )
     elif s.supabase_url and s.supabase_anon_key:
         # GoTrue vouches for the signature and the session; the claim rules are
@@ -335,7 +551,7 @@ async def _valid_supabase_token(token: str, s: Settings) -> bool:
         claims = _jwt_claims(token)
         ok = (
             claims is not None
-            and _user_claims_ok(claims, issuer=issuer, max_lifetime_s=s.jwt_max_lifetime_s)
+            and _user_claims_ok(claims, **rules)
             and await _gotrue_status(token, s) == 200
         )
     else:
@@ -343,10 +559,7 @@ async def _valid_supabase_token(token: str, s: Settings) -> bool:
 
     if ok:
         exp = (_jwt_claims(token) or {}).get("exp")
-        _token_ok_until[token] = min(now + TOKEN_CACHE_TTL_S, float(exp))
-        if len(_token_ok_until) > 4096:  # bound: drop already-expired entries
-            for k in [k for k, v in _token_ok_until.items() if v <= now]:
-                _token_ok_until.pop(k, None)
+        _bounded_put(_token_ok_until, token, min(now + TOKEN_CACHE_TTL_S, float(exp)), 4096, now)
     return ok
 
 
@@ -378,14 +591,34 @@ async def _authorized(
     s: Settings,
     *,
     allow_internal: bool = True,
+    who: str = "",
+    path: str = "",
 ) -> bool:
     """True if the static key matches, the token is a valid user session, or
-    (HTTP only) it is the backend's internal service token."""
+    (HTTP only) it is the backend's internal service token.
+
+    A success is logged once per validation-cache miss with the credential kind
+    and never the credential (ASVS V16.3.1); the static key, which has no cache,
+    at most once a minute per client. ``who``/``path`` only feed that line."""
+    now = time.time()
     if s.api_key and secrets.compare_digest(static_supplied or "", s.api_key):
+        if now - _static_logged_at.get(who, 0.0) >= TOKEN_CACHE_TTL_S:
+            _bounded_put(_static_logged_at, who, now, 4096, now - TOKEN_CACHE_TTL_S)
+            log.info("auth success client=%s path=%s kind=static", who, path)
         return True
-    if allow_internal and _valid_internal_token(token or "", s):
-        return True
-    return await _valid_supabase_token(token or "", s)
+    tok = token or ""
+    if allow_internal and tok:
+        miss = _internal_ok_until.get(tok, 0.0) <= now
+        if _valid_internal_token(tok, s):
+            if miss:
+                log.info("auth success client=%s path=%s kind=internal", who, path)
+            return True
+    miss = _token_ok_until.get(tok, 0.0) <= now
+    ok = await _valid_supabase_token(tok, s)
+    if ok and miss:
+        sub = (_jwt_claims(tok) or {}).get("sub")
+        log.info("auth success client=%s path=%s kind=session sub=%s", who, path, sub)
+    return ok
 
 
 def _too_many(retry: int) -> JSONResponse:
@@ -448,13 +681,84 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         if retry is not None:
             log.warning("auth lockout client=%s path=%s reason=too-many-failures", who, path)
             return _too_many(retry)
-        if not await _authorized(static_supplied, token, s):
+        if not await _authorized(static_supplied, token, s, who=who, path=path):
             if token:
-                record_auth_failure(who, s, "bad-credential", path)
+                record_auth_failure(who, s, "bad-credential", path, credential_kind(token))
             else:
                 log.warning("auth failure client=%s path=%s reason=no-credential", who, path)
             return JSONResponse({"detail": "unauthorized"}, status_code=401)
         return await call_next(request)
+
+
+# ── WebSocket credential (ASVS V14.2.1) ─────────────────────────────────────
+#
+# A browser cannot set headers on a WebSocket upgrade, so the credential used to
+# ride in ``?key=``, where the operator's TLS proxy logs it. The scheme now:
+#
+#   client:  new WebSocket(url, ["velocity.v1", "key." + credential])
+#   request: Sec-WebSocket-Protocol: velocity.v1, key.<credential>
+#   server:  accepts with Sec-WebSocket-Protocol: velocity.v1   (never the key)
+#
+# ``<credential>`` is the Supabase access token or the static API key, verbatim
+# (both are RFC 7230 token characters; a static key that is not cannot use this
+# carrier). Precedence: Authorization / X-API-Key header, then the ``key.``
+# subprotocol, then ``?key=`` (kept for older clients).
+
+WS_PROTOCOL = "velocity.v1"
+WS_KEY_PREFIX = "key."
+
+
+def _subprotocol_credential(headers) -> str | None:  # type: ignore[no-untyped-def]
+    raw = (headers.get("sec-websocket-protocol") or "") if headers is not None else ""
+    for item in raw.split(","):
+        item = item.strip()
+        if item.startswith(WS_KEY_PREFIX) and len(item) > len(WS_KEY_PREFIX):
+            return item[len(WS_KEY_PREFIX):]
+    return None
+
+
+def ws_credential(ws) -> str | None:  # type: ignore[no-untyped-def]
+    """The credential a WS upgrade presented, by the precedence above. Routes
+    that resolve a user from the socket should call this."""
+    return (
+        _bearer(ws.headers)
+        or ws.headers.get("x-api-key")
+        or _subprotocol_credential(ws.headers)
+        or ws.query_params.get("key")
+    )
+
+
+class WsSubprotocolMiddleware:
+    """Pure ASGI. For a WS upgrade offering ``velocity.v1``: (1) a browser fails
+    the handshake unless the server selects an offered subprotocol, and the
+    routes call a bare ``ws.accept()``, so select ``velocity.v1`` on the accept
+    message; (2) copy a ``key.<credential>`` entry into ``Authorization`` when
+    none was sent, so routes reading ``_bearer(ws.headers)`` resolve the same
+    user ``require_ws_key`` authorized. The ``key.`` entry is never echoed."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send):  # type: ignore[no-untyped-def]
+        if scope.get("type") != "websocket" or WS_PROTOCOL not in (scope.get("subprotocols") or []):
+            await self.app(scope, receive, send)
+            return
+        headers = list(scope.get("headers") or [])
+        names = {k.lower() for k, _ in headers}
+        cred = next(
+            (p[len(WS_KEY_PREFIX):] for p in scope["subprotocols"] if p.startswith(WS_KEY_PREFIX)),
+            "",
+        )
+        if cred and b"authorization" not in names and b"x-api-key" not in names:
+            headers.append((b"authorization", f"Bearer {cred}".encode("latin-1", "replace")))
+            scope = {**scope, "headers": headers}
+
+        async def _send(message):  # type: ignore[no-untyped-def]
+            if message.get("type") == "websocket.accept" and not message.get("subprotocol"):
+                message = {**message, "subprotocol": WS_PROTOCOL}
+            await send(message)
+
+        await self.app(scope, receive, _send)
 
 
 async def require_ws_key(ws: WebSocket) -> bool:
@@ -462,12 +766,12 @@ async def require_ws_key(ws: WebSocket) -> bool:
     s = get_settings()
     if not _auth_enabled(s):
         return True
-    static_supplied = ws.headers.get("x-api-key") or ws.query_params.get("key")
-    token = (
-        _bearer(ws.headers)
+    static_supplied = (
+        ws.headers.get("x-api-key")
+        or _subprotocol_credential(ws.headers)
         or ws.query_params.get("key")
-        or ws.headers.get("x-api-key")
     )
+    token = ws_credential(ws)
     client = getattr(ws, "client", None)
     who = client_key(client.host if client else "", ws.headers)
     path = getattr(getattr(ws, "url", None), "path", "") or ""
@@ -475,10 +779,10 @@ async def require_ws_key(ws: WebSocket) -> bool:
         log.warning("auth lockout client=%s path=%s reason=too-many-failures", who, path)
         return False
     # No internal token here: the MCP self-hop is HTTP, and a WS is a user's.
-    if await _authorized(static_supplied, token, s, allow_internal=False):
+    if await _authorized(static_supplied, token, s, allow_internal=False, who=who, path=path):
         return True
     if token:
-        record_auth_failure(who, s, "bad-credential", path)
+        record_auth_failure(who, s, "bad-credential", path, credential_kind(token))
     return False
 
 
@@ -519,19 +823,22 @@ async def require_api_key(
             detail="too many failed credentials from this client; retry later",
             headers={"Retry-After": str(retry)},
         )
-    if not await _authorized(x_api_key, token, s):
+    path = getattr(getattr(request, "url", None), "path", "")
+    if not await _authorized(x_api_key, token, s, who=who, path=path):
         if token:
-            record_auth_failure(
-                who, s, "bad-credential", getattr(getattr(request, "url", None), "path", "")
-            )
+            record_auth_failure(who, s, "bad-credential", path, credential_kind(token))
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
 class RedactKeyFilter(logging.Filter):
-    """Scrub ``key=<value>`` query values from access-log records (uvicorn
-    passes the request path+query as a positional log arg)."""
+    """Scrub credential-named query values (``key=``, ``token=``, ``apikey=``,
+    ``map_key=``, …) from access-log records (uvicorn passes the request
+    path+query as a positional log arg)."""
 
-    _RE = re.compile(r"([?&]key=)[^&\s\"]*")
+    _RE = re.compile(
+        r"([?&](?:key|token|access_token|api_key|apikey|map_key|secret)=)[^&\s\"]*",
+        re.IGNORECASE,
+    )
 
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.args, tuple):
