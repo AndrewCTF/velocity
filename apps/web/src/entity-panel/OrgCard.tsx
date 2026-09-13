@@ -92,7 +92,7 @@ export function OrgCard({ name }: { name: string | null | undefined }): JSX.Elem
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="mono h-[20px] shrink-0 rounded-sm px-[7px] text-[12px] text-txt-2 hover:bg-[var(--hover)]"
+            className="mono h-[20px] shrink-0 rounded-sm px-[7px] text-[12px] text-txt-2 hover:bg-(--hover)"
           >
             resolve
           </button>
@@ -202,7 +202,7 @@ function Sect({ label, children }: { label: string; children: React.ReactNode })
 
 function Line({ k, v }: { k: string; v: string }): JSX.Element {
   return (
-    <div className="flex min-h-[20px] items-baseline gap-2 px-[14px] py-[1px] text-[12px]">
+    <div className="flex min-h-[20px] items-baseline gap-2 px-[14px] py-px text-[12px]">
       <span className="min-w-0 flex-1 truncate text-txt-1">{k}</span>
       <span className="mono shrink-0 tabular-nums text-txt-2">{v}</span>
     </div>

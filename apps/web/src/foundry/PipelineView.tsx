@@ -105,7 +105,7 @@ function StepRow({
       <select
         value={step.type}
         onChange={(e) => onChange(defaultStep(e.target.value as StepType))}
-        className="mono text-[11px] bg-bg-0 border border-line rounded-sm px-1 py-1 text-accent w-[84px] shrink-0 outline-none focus:border-accent-line"
+        className="mono text-[11px] bg-bg-0 border border-line rounded-sm px-1 py-1 text-accent w-[84px] shrink-0 outline-hidden focus:border-accent-line"
       >
         {STEP_TYPES.map((t) => (
           <option key={t} value={t}>
@@ -530,7 +530,7 @@ export function PipelineView(): JSX.Element {
                       transform={`translate(${n.x},${n.y})`}
                       onClick={() => select(n.id)}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(n.id); } }}
-                      className="cursor-pointer focus:outline-none"
+                      className="cursor-pointer focus:outline-hidden"
                       data-testid={`lineage-node-${n.id}`}
                     >
                       {n.type === 'dataset' ? (

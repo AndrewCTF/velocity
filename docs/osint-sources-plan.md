@@ -195,9 +195,51 @@ Owns `app/routes/osint.py`, `apps/web/src/osint/InvestigatePanel.tsx`, and
   Shadowserver (vetted), DeHashed, Intelligence X, Companies House. Add later behind
   BYOK if the operator wants a specific one — the connector pattern is identical.
 - **Phone / MAC input kinds**: no verified keyless source with graph value → deferred.
+  Still true, and re-measured 2026-08-29 (NANPA unreachable from this egress,
+  every other ch. 26 source captcha'd or paid). Amended that day: `phone` IS now
+  a `classify_target` kind, but purely so the manual-pivot catalog
+  (`app/osint/pivots.py`, `GET /api/osint/pivots`) can answer for one. It has no
+  connector and mints no graph node, and `POST /api/osint/investigate` 400s a
+  phone with a pointer to the pivots route. MAC stays deferred entirely.
+  See `docs/decisions.md#selector-pivots-stealer-logs-and-the-phone-kind-2026-08-29`.
 - **Unverified small/new services** (Frostbyte, digga.dev, oti-labs, HoneyLabs, IPOK,
   isMalicious, SikkerAPI, Validin, ODIN, DFIR-Platform, etc.): not built until an
   endpoint is confirmed — too flaky for a batch.
 - Twitter/X unofficial scrapers (TwitterAPI.io, GetXAPI, SocialData, Xquik): ToS/
   stability risk, all key+paid → skipped.
 </content>
+
+
+## 2026-08-29 addition — OSINT Techniques 11th ed. wave
+
+Three keyless sources, each probed live before it was written:
+
+| Connector | Endpoint | Auth | Answers |
+| --- | --- | --- | --- |
+| `stealer.hudsonrock_email` | `cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-email` | none | was this address on an info-stealer'd machine |
+| `stealer.hudsonrock_username` | `…/search-by-username` | none | same, for a handle |
+| `stealer.hudsonrock_domain` | `…/search-by-domain` | none | how much of a domain's user/employee estate is in stealer logs |
+| `corp.littlesis_search` | `littlesis.org/api/entities/search` | none (CC BY-SA) | person/org in the US power-network register |
+| `corp.littlesis_relationships` | `littlesis.org/api/entities/{id}/relationships` | none | who that entity is tied to, and how |
+
+Plus `app/osint/pivots.py`: 170 manual-pivot URL templates over ten selector
+kinds, no network at all. Everything dropped from the book's lists, and every
+endpoint probed and rejected, is recorded in
+`docs/decisions.md#selector-pivots-stealer-logs-and-the-phone-kind-2026-08-29`.
+
+
+## 2026-08-29 wave 2 — coordinates, ransomware, video
+
+| Connector | Endpoint | Auth | Answers |
+| --- | --- | --- | --- |
+| `ransomware.ransomware_domain` | `api.ransomware.live/v2/searchvictims/{q}` | none | leak-site posts naming this domain, exact-matched |
+| `ransomware.ransomware_search` | same | none | free-text victim search (fuzzy: matches crew blurbs too) |
+| `ransomware.ransomware_group` | `api.ransomware.live/v2/group/{name}` | none | one crew's leak sites, tooling and TTPs |
+| `video.youtube_video` | `youtube.com/oembed` + `img.youtube.com` | none | is the video live, who posted it, did it ever exist |
+
+New `classify_target` kind: **`coordinate`** (decimal degrees or DMS, either
+axis order). New pivot kinds: `coordinate` (ch. 27), `document` (ch. 28),
+`video` (ch. 30). Catalog 170 -> 206 entries over 13 kinds.
+
+Rate limits, the no-match-is-an-object trap and the placeholder-domain trap are
+in `docs/decisions.md#coordinates-ransomware-leak-sites-and-video-provenance-2026-08-29-wave-2`.

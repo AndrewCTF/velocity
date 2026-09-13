@@ -244,7 +244,29 @@ class _InstrumentedClient(httpx.AsyncClient):
 
     All bookkeeping is inside try/except: a bug in this file must never be able
     to abort an upstream call, and this client carries the 1 Hz ADS-B path.
+
+    Redirects are FOLLOWED by default (httpx ships False). Measured 2026-08-21:
+    with them off, `data.gdeltproject.org` — reached over plain http:// by
+    intel/conflict.py, which then calls raise_for_status() — died on the 301 to
+    https and took the whole conflict layer to zero silently, and wsprnet.org was
+    filed BLOCKED/403 in the egress audit when it actually 302s to a 200 carrying
+    34 943 bytes. The default is set HERE rather than in get_client() so the
+    tests, which build this class directly over a MockTransport, exercise the
+    production shape; a per-call fix would have been 136 edits and the 137th feed
+    would forget again.
+
+    This does NOT weaken the SSRF boundary. Every path that fetches a
+    user-supplied URL already opts out explicitly and re-checks each hop itself:
+    workflows/control.py builds its own client, news/images.py:189 and
+    intel/evidence.py:398 pass follow_redirects=False per request, and
+    intel/sanctions.py:356 threads it through a parameter. httpx per-request
+    kwargs override the client default, so all four are untouched.
+    → tests/test_feed_honesty.py::test_a_redirect_chain_is_scored_by_its_destination
     """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("follow_redirects", True)
+        super().__init__(*args, **kwargs)
 
     async def send(self, request: httpx.Request, **kwargs: Any) -> httpx.Response:
         host = request.url.host
@@ -259,6 +281,11 @@ class _InstrumentedClient(httpx.AsyncClient):
             raise
         try:
             ms = (time.perf_counter() - t0) * 1000.0
+            # No 3xx branch on purpose: with follow_redirects on, httpx resolves
+            # the chain INSIDE super().send() and hands back the final response,
+            # so a 3xx only reaches here when a caller opted out — and those
+            # callers walk the hops themselves. A redirect loop raises
+            # TooManyRedirects into the except above.
             if response.status_code >= 400:
                 record_failure(host, f"HTTP {response.status_code}", response.status_code)
             else:

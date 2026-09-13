@@ -1641,7 +1641,7 @@ function sevClass(s: string): string {
       return 'text-warn';
     case 'low':
       // --sev-low ≡ txt-1, kept distinct from the teal selection accent.
-      return 'text-[var(--sev-low)]';
+      return 'text-(--sev-low)';
     default:
       return 'text-txt-2';
   }

@@ -94,7 +94,7 @@ export function WorldPanel({
           return (
             <div
               key={t}
-              className="flex h-[var(--g-row-2)] items-center gap-2 px-[14px]"
+              className="flex h-(--g-row-2) items-center gap-2 px-[14px]"
               title={m.blurb}
             >
               <span
@@ -139,7 +139,7 @@ export function WorldPanel({
           </p>
         ) : (
           live.slice(0, 6).map((l) => (
-            <div key={l.id} className="flex h-[var(--g-row-2)] items-center gap-2 px-[14px]">
+            <div key={l.id} className="flex h-(--g-row-2) items-center gap-2 px-[14px]">
               <span
                 className={`mono w-[21px] shrink-0 text-[12px] ${
                   l.tier === 'claim' ? 'text-warn' : 'text-txt-3'
@@ -162,13 +162,13 @@ export function WorldPanel({
       <Findings registry={registry} />
 
       <Section label="Sources">
-        <div className="flex h-[var(--g-row-2)] items-center gap-2 px-[14px]">
+        <div className="flex h-(--g-row-2) items-center gap-2 px-[14px]">
           <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">Reporting</span>
           <span className="mono shrink-0 text-[12px] tabular-nums text-txt-0">
             {feeds.length === 0 ? '—' : `${green} of ${feeds.length}`}
           </span>
         </div>
-        <div className="flex h-[var(--g-row-2)] items-center gap-2 px-[14px]">
+        <div className="flex h-(--g-row-2) items-center gap-2 px-[14px]">
           <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">
             {stalest ? `Oldest fix · ${stalest.label}` : 'Oldest fix'}
           </span>
@@ -249,7 +249,7 @@ function Findings({ registry }: { registry: LayerRegistry }): JSX.Element {
         const on = registry.isEnabled(f.id);
         return (
           <div key={f.id} className="px-[14px]">
-            <div className="flex h-[var(--g-row-2)] items-center gap-2">
+            <div className="flex h-(--g-row-2) items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">{f.label}</span>
               <span
                 className={`mono shrink-0 text-[12px] tabular-nums ${
@@ -265,7 +265,7 @@ function Findings({ registry }: { registry: LayerRegistry }): JSX.Element {
                 className={`mono h-[20px] shrink-0 rounded-sm px-[6px] text-[12px] ${
                   on
                     ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                    : 'text-txt-3 hover:bg-[var(--hover)]'
+                    : 'text-txt-3 hover:bg-(--hover)'
                 }`}
               >
                 {on ? 'shown' : 'show'}

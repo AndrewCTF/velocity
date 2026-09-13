@@ -17,11 +17,11 @@ jobs:
   web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: 10.33.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -36,11 +36,41 @@ jobs:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
+          version: "0.12.13"
           python-version: "3.12"
-          cache: pip
-      - run: pip install -e ".[dev]"
-      - run: ruff check .
-      - run: pytest -q
+      # `uv lock --check` currently fails here (uv.lock is drifted from
+      # pyproject.toml — see the report for this wave). `--locked` fails LOUD
+      # on that instead of `--frozen` silently installing the stale set, which
+      # is the point of switching off pip: this must go red until the lock is
+      # regenerated, not ship an image quietly missing dependencies.
+      - run: uv sync --locked --extra dev
+      - run: uv run --locked ruff check .
+      - run: uv run --locked pytest -q
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+      - name: Audit Python dependencies
+        working-directory: apps/api
+        # --locked, not --frozen: an out-of-date lock must fail this step, not
+        # silently audit a dependency set that isn't what actually ships.
+        run: |
+          uv export --locked --no-hashes --no-emit-project > req.txt
+          uvx pip-audit -r req.txt --no-deps --disable-pip

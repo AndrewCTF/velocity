@@ -159,7 +159,7 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
   if (!viewer) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[6] mono select-none">
+    <div className="pointer-events-none absolute inset-0 z-6 mono select-none">
       {/* mobile live readout — pinned top-center, always on-screen (the desktop
           side/bottom HUD below is rail-offset and off-screen on phones). Updates
           with the camera via the same `center`/`headingDeg` state. */}

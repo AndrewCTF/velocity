@@ -150,6 +150,19 @@ class Settings(BaseSettings):
     # union for deploys without a sidecar; the local .env sets ADSB_SIDECAR_ONLY=1.
     adsb_sidecar_only: bool = False
 
+    # Upstream hosts to drop from the ADS-B tiers on THIS deployment.
+    # Comma-separated hostnames, matched against the host part of _HEAD_HOSTS
+    # and _FIREHOSE_URLS. Empty by default, which keeps every tier wired.
+    #
+    # This exists because a ban is per-deployment, not per-codebase.
+    # api.airplanes.live answers 403 to this egress on every verb with a body
+    # asking the project to email contact@airplanes.live; a deploy they have not
+    # banned should still get the largest ADS-B dataset there is. Hard-coding
+    # one egress's outage into the source list is the mistake the 2026-08-21
+    # entry in docs/decisions.md is about. So the code keeps the host and the
+    # operator switches it off here.
+    adsb_disabled_hosts: str = ""
+
     # ── outbound proxy pool (app.upstream_proxy) ──
     # Comma-separated proxy URLs the shared upstream client rotates over, e.g.
     # "http://user:pass@host:8080,socks5://host:1080". EMPTY = off, which is the
@@ -253,8 +266,28 @@ class Settings(BaseSettings):
     # rules, airplanes.live 200+text throttle, CelesTrak 403 bursts); this bounds
     # /mcp request rate independently of the compute cap. 0 disables it.
     mcp_ratelimit_per_min: int = 120  # MCP_RATELIMIT_PER_MIN (0 = off)
+    # General per-client cap on EVERY /api/ path (one bucket per client), on top
+    # of the compute and /mcp caps. Generous on purpose: a globe session is the
+    # 1 Hz ADS-B poll (60/min) plus many 5-30 s layer polls plus imagery tile
+    # bursts under /api/imagery. It bounds floods, not normal use. Health,
+    # status and config are exempt. Behind a proxy, TRUSTED_PROXIES must name it
+    # or every client shares one bucket. 0 disables.
+    api_ratelimit_per_min: int = 3000  # API_RATELIMIT_PER_MIN (0 = off)
+    # Peer addresses whose X-Forwarded-For header the rate limiter is allowed to
+    # believe. Comma-separated IPs or CIDRs. Defaults to loopback because that is
+    # the real deployment shape here (CF Worker -> Caddy -> uvicorn on the same
+    # box, so the peer IS 127.0.0.1) and because a header from anywhere else is
+    # attacker-controlled: trusting it unconditionally let any caller mint a
+    # fresh limiter bucket per request just by varying the header.
+    # Empty string = never believe the header, bucket strictly by peer address.
+    trusted_proxies: str = "127.0.0.1,::1"  # TRUSTED_PROXIES
+
     # Hard ceiling on concurrently-running recon jobs; further POSTs get 429.
     recon_max_active_jobs: int = 4  # RECON_MAX_ACTIVE_JOBS
+    # Total bytes one recon job may upload (all its images/video together).
+    # Video input is large, so the default is generous; over it → 413 and the
+    # job dir is removed. 0 disables the cap.
+    recon_upload_max_bytes: int = 4_000_000_000  # RECON_UPLOAD_MAX_BYTES
 
     # ── recon job retention (issue #14) ──
     # Recon jobs (in-memory records + on-disk artifact dirs under .recon_jobs/)
@@ -372,20 +405,18 @@ class Settings(BaseSettings):
     # Installed-model root. "" → ./data/models (same relative-to-CWD idiom as
     # history_db_path/ontology_db_path above); created 0700 on first use.
     local_models_dir: str = ""  # LOCAL_MODELS_DIR
-    # Gotham-style "selection inference": a separate, faster model pick used
-    # for the AI-assessment brief when an entity is selected on the globe.
-    # Installed-model key (see app.localllm.manager); "" → unconfigured.
-    llm_selection_model: str = ""  # LLM_SELECTION_MODEL
+    # Gotham-style "selection inference": the AI-assessment brief shown when an
+    # entity is selected on the globe. WHICH model runs it is the manager's
+    # active "selection"-role pick (app.localllm.manager.set_active), reached
+    # via llm.chat(tier="selection") — never a config value, so this is only
+    # the on/off switch.
     llm_selection_enabled: bool = False  # LLM_SELECTION_ENABLED
-    # Pin the selection model resident (load-on-startup, exempt from the
-    # router's LRU eviction) instead of loading it cold on first selection.
-    llm_selection_hot: bool = False  # LLM_SELECTION_HOT
     # Multi-model news-verification ensemble (A2): comma-separated installed
-    # model KEYS to fan a claim out to via `chat(local_model_key=...)`, the
-    # minimum number of models that must respond for a verdict to count, and
+    # model KEYS to fan a claim out to via `chat(local_model_key=...)`, plus
     # the wall-clock budget for the whole ensemble round. "" → unconfigured.
+    # The ensemble minimum is not a knob: app.news.verify requires two
+    # verifiers outright (`len(chosen) >= 2`, verify.py).
     news_verify_models: str = ""  # NEWS_VERIFY_MODELS
-    news_verify_min_models: int = 2  # NEWS_VERIFY_MIN_MODELS
     # 300 s: two swapping ~4B verifiers cover ~12 stories in 90 s (measured
     # 2026-07-21); the stage runs only in the background refresher, so a
     # larger budget buys coverage, not latency.

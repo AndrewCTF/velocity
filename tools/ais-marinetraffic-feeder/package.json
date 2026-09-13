@@ -6,5 +6,5 @@
   "type": "commonjs",
   "bin": { "ais-marinetraffic-feeder": "index.js" },
   "scripts": { "start": "node index.js" },
-  "dependencies": { "playwright": "^1.47.0" }
+  "dependencies": { "playwright": "^1.63.0" }
 }

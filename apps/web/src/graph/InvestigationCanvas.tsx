@@ -545,7 +545,7 @@ export function InvestigationCanvas(): JSX.Element {
             onChange={(e) => setSaveName(e.target.value)}
             placeholder="name…"
             maxLength={120}
-            className="flex-1 min-w-0 bg-bg-2 border border-line-2 rounded-sm px-2 py-1 mono text-[10px] text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+            className="flex-1 min-w-0 bg-bg-2 border border-line-2 rounded-sm px-2 py-1 mono text-[10px] text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
           <Btn size="sm" disabled={saving || !saveName.trim() || objects.size === 0} onClick={saveInvestigation}>
             {saving ? '…' : 'Save'}
@@ -636,7 +636,7 @@ function SeedSearch(): JSX.Element {
           }}
           placeholder="callsign / MMSI / name / place…"
           maxLength={120}
-          className="flex-1 min-w-0 bg-bg-2 border border-line-2 rounded-sm px-2 py-1 mono text-[10px] text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-none"
+          className="flex-1 min-w-0 bg-bg-2 border border-line-2 rounded-sm px-2 py-1 mono text-[10px] text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
         />
         <Btn size="sm" tone="accent" disabled={busy || !text.trim()} onClick={run}>
           {busy ? '…' : 'Seed'}

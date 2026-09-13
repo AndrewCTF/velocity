@@ -129,7 +129,7 @@ export function AuthForm({ mode }: { mode: Mode }): JSX.Element {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mb-4 w-full rounded-sm border border-line bg-bg-2 px-2 py-1.5 font-mono text-xs text-txt-0 outline-none focus:border-accent-line"
+              className="mb-4 w-full rounded-sm border border-line bg-bg-2 px-2 py-1.5 font-mono text-xs text-txt-0 outline-hidden focus:border-accent-line"
             />
           </>
         )}
@@ -154,7 +154,7 @@ export function AuthForm({ mode }: { mode: Mode }): JSX.Element {
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mb-5 w-full rounded-sm border border-line bg-bg-2 px-2 py-1.5 font-mono text-xs text-txt-0 outline-none focus:border-accent-line"
+              className="mb-5 w-full rounded-sm border border-line bg-bg-2 px-2 py-1.5 font-mono text-xs text-txt-0 outline-hidden focus:border-accent-line"
             />
           </>
         )}

@@ -142,8 +142,14 @@ def test_create_identity_only_rule_persists_no_aoi(client: TestClient) -> None:
     assert client.delete(f"/api/alerts/rules/{rule_id}").status_code == 204
 
 
-def test_crud_keyless_local_store(client: TestClient) -> None:
+def test_crud_keyless_local_store(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # Local SQLite CRUD path (no Supabase): create, list, delete round-trip.
+    from app.workflows import control
+
+    # Hermetic: the public-only sink check resolves the host (G7).
+    monkeypatch.setattr(
+        control.socket, "getaddrinfo", lambda *a, **k: [(2, 1, 0, "", ("162.159.135.232", 0))]
+    )
     r = client.post(
         "/api/alerts/rules",
         json={

@@ -9,7 +9,7 @@ import { useWatchboxes, type WatchRule } from './watchboxStore.js';
 
 const RULES: WatchRule[] = ['enter', 'exit', 'loiter'];
 const selectCls =
-  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-none focus:border-accent-line';
+  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-hidden focus:border-accent-line';
 
 export function WatchboxPanel(): JSX.Element {
   const wbs = useWatchboxes((s) => s.watchboxes);

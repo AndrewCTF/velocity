@@ -156,8 +156,19 @@ describe('scheme registry', () => {
     }
   });
 
-  // tailwind.config.js maps the TEXT utilities onto these lightened tiers, so
-  // they carry body text on the panel substrate and must clear AA there.
+  // The @theme block in index.css maps the TEXT utilities onto these lightened
+  // tiers (`--text-color-accent: var(--accent-fg)`), so they carry body text on
+  // the panel substrate and must clear AA there. That mapping is what makes
+  // `text-accent` ink rather than fill; without it the tiers below guard nothing.
+  it('text-accent/warn/alert/ok resolve to the -fg tier, not the fill', () => {
+    const index = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
+    for (const hue of ['accent', 'warn', 'alert', 'ok']) {
+      expect(index, `index.css: text-${hue} must map to --${hue}-fg`).toMatch(
+        new RegExp(`--text-color-${hue}:\\s*var\\(--${hue}-fg\\);`),
+      );
+    }
+  });
+
   it.each(SCHEMES.map((s) => [s.id] as const))('%s: the -fg text tiers clear AA', (id) => {
     const t = parseBlockResolved(selectorFor(id));
     for (const tier of ['--accent-fg', '--warn-fg', '--alert-fg', '--ok-fg']) {

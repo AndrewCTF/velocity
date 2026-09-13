@@ -195,6 +195,12 @@ async def fetch_browse(url: str) -> bytes | None:
     return r.content
 
 
+def _to_png(Image: Any, raw: bytes) -> bytes:  # noqa: N803 - the PIL module, passed in
+    buf = BytesIO()
+    Image.open(BytesIO(raw)).convert("RGB").save(buf, format="PNG")
+    return buf.getvalue()
+
+
 async def best_chip(aoi: BBox, max_try: int = 8) -> tuple[bytes, dict[str, Any]] | None:
     """Coarse keyless browse chip (~11 m/px) if one is materialised. Prefer
     `multiview_chips` for real ≤1 m 3D."""
@@ -209,11 +215,12 @@ async def best_chip(aoi: BBox, max_try: int = 8) -> tuple[bytes, dict[str, Any]]
         if not raw:
             continue
         try:
-            buf = BytesIO()
-            Image.open(BytesIO(raw)).convert("RGB").save(buf, format="PNG")
+            # Decode + RGB convert + PNG re-encode, off the loop that also
+            # drives the 1 s snapshot cycle and the WS broadcast.
+            png = await asyncio.to_thread(_to_png, Image, raw)
         except Exception:  # noqa: BLE001
             continue
-        return buf.getvalue(), {
+        return png, {
             "provider": "eusi", "catalogID": s.get("catalogID"), "sensor": s.get("sensor"),
             "gsd_m": _f(s.get("productResolution")),
             "cloud_pct": _f(s.get("stripCloudCoverage")),

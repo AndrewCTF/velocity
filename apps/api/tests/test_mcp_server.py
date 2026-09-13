@@ -6,6 +6,8 @@ absent: it returns a structured, agent-readable error/fallback instead.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app import llm
@@ -62,3 +64,51 @@ async def test_deep_analyze_degrades_without_llm(monkeypatch: pytest.MonkeyPatch
 @pytest.mark.asyncio
 async def test_ollama_tags_empty_on_dead_host() -> None:
     assert await llm._ollama_tags(_DEAD, 2.0) == []
+
+
+# ── protocol-level isError (2026-08-29) ─────────────────────────────────────
+# The _get/_post/_delete helpers never raise: a dead backend or a non-2xx
+# becomes {"error": ..., "detail": ...}. That is deliberate. What was NOT
+# deliberate is that the same dict reached the agent with the protocol's
+# isError unset, so a driving agent saw a successful call whose body happened to
+# describe a failure — and agents act on isError.
+
+
+@pytest.mark.asyncio
+async def test_a_structured_error_reaches_the_transport_as_a_tool_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    monkeypatch.setenv("API_BASE", _DEAD)
+    tool = M.mcp._tool_manager.get_tool("get_situation")
+    assert tool is not None
+    with pytest.raises(ToolError) as exc:
+        await tool.run({})
+    # The raise costs structuredContent, so the payload rides in the message:
+    # the agent keeps every field it had AND learns the call failed.
+    body = json.loads(str(exc.value).split(M._ERROR_PREFIX, 1)[1])
+    assert body["error"] == "backend_unreachable"
+    assert "hint" in body
+
+
+@pytest.mark.asyncio
+async def test_a_successful_tool_is_untouched(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _ok(path: str, **kw: object) -> dict[str, object]:
+        return {"aircraft": {"total": 3}}
+
+    monkeypatch.setattr(M, "_get", _ok)
+    tool = M.mcp._tool_manager.get_tool("get_situation")
+    assert tool is not None
+    out = await tool.run({})
+    assert "error" not in str(out)
+
+
+def test_the_module_level_name_is_still_the_raw_function() -> None:
+    """Two callers, two contracts, one definition: the transport gets the
+    raising wrapper, everything in-process (these tests, the REST-parity
+    checks, the shape helpers) keeps the non-raising dict."""
+    registered = M.mcp._tool_manager.get_tool("get_situation")
+    assert registered is not None
+    assert registered.fn is not M.get_situation
+    assert getattr(registered.fn, "__wrapped__", None) is M.get_situation

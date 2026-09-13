@@ -67,7 +67,7 @@ export function LeftIconRail({
         {on && <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-accent rounded-r-sm" />}
         {isFloating && <span className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" />}
         {it.badge != null && it.badge > 0 && (
-          <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-[3px] rounded-sm bg-alert text-[var(--on-alert)] text-[10px] leading-[14px] text-center font-semibold">
+          <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-[3px] rounded-sm bg-alert text-(--on-alert) text-[10px] leading-[14px] text-center font-semibold">
             {it.badge > 99 ? '99+' : it.badge}
           </span>
         )}
@@ -82,7 +82,7 @@ export function LeftIconRail({
       <div
         className={`${expanded ? 'w-44' : 'w-11'} h-full min-h-0 overflow-y-auto overflow-x-hidden flex flex-col ${
           expanded ? 'items-stretch' : 'items-center'
-        } bg-[var(--panel-bg)] py-1`}
+        } bg-(--panel-bg) py-1`}
       >
         {primary.map(btn)}
         {more.length > 0 && <div className={`my-1 h-px ${expanded ? 'w-full' : 'w-6'} bg-line-2`} />}
@@ -108,7 +108,7 @@ export function LeftIconRail({
       {/* flyout floats over the map to the right of the rail (design §6.1) */}
       {active && (
         <div
-          className="absolute left-full top-0 h-full w-[300px] bg-[var(--panel-bg)] border-r border-line-2 flex flex-col z-[var(--z-rail)] shadow-[6px_0_22px_-12px_rgba(0,0,0,0.6)]"
+          className="absolute left-full top-0 h-full w-[300px] bg-(--panel-bg) border-r border-line-2 flex flex-col z-(--z-rail) shadow-[6px_0_22px_-12px_rgba(0,0,0,0.6)]"
         >
           <div className="flex items-center justify-between px-3 h-8 shrink-0 border-b border-line-2">
             <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-0 flex items-center gap-1.5">

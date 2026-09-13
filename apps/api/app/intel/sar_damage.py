@@ -17,6 +17,7 @@ Copernicus EMS before any damage claim. Output is labelled "SAR change
 
 from __future__ import annotations
 
+import asyncio
 from io import BytesIO
 from typing import Any
 
@@ -55,6 +56,14 @@ def log_ratio(pre: np.ndarray, post: np.ndarray) -> np.ndarray:
     return np.clip(r / s, -1.0, 1.0)
 
 
+def _change_arrays(pre_b: bytes, post_b: bytes) -> tuple[Any, Any, Any]:
+    """The whole CPU segment in one call, so it crosses the thread boundary once
+    rather than three times."""
+    pre = _to_gray(pre_b)
+    post = _to_gray(post_b)
+    return pre, post, log_ratio(pre, post)
+
+
 async def detect_damage(
     aoi: str,
     date_pre: str,
@@ -76,9 +85,11 @@ async def detect_damage(
     post_b = await cdse.fetch_image("S1_GRD_VV", bbox, width, height, date_post)
     if not pre_b or not post_b:
         return {"aoi": aoi, "error": "missing S1 imagery for one of the dates"}
-    pre = _to_gray(pre_b)
-    post = _to_gray(post_b)
-    change = log_ratio(pre, post)
+    # PIL decode + numpy percentile/clip over a width*height frame is real CPU,
+    # and this loop also drives the 1 s ADS-B/AIS snapshot cycle and the WS
+    # broadcast: run it inline and one SAR request freezes the live map for
+    # everyone connected. Same discipline as routes/adsb.py and intel/lod1.py.
+    pre, post, change = await asyncio.to_thread(_change_arrays, pre_b, post_b)
     drop = change < -thresh  # collapse candidates (backscatter loss)
     rise = change > thresh
     return {

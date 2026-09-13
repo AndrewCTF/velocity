@@ -157,7 +157,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
         <span className="font-label uppercase tracking-[0.8px] text-[11px] text-txt-1">
           Inbox{' '}
           {unread > 0 && (
-            <span className="ml-1 mono text-[10px] px-1.5 py-0.5 rounded-sm bg-alert text-[var(--on-alert)] font-semibold">
+            <span className="ml-1 mono text-[10px] px-1.5 py-0.5 rounded-sm bg-alert text-(--on-alert) font-semibold">
               {unread}
             </span>
           )}
@@ -314,7 +314,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
             return (
               <li
                 key={a.id}
-                className={`relative ${atCursor ? 'bg-bg-2 outline outline-1 -outline-offset-1 outline-accent/40' : ''}`}
+                className={`relative ${atCursor ? 'bg-bg-2 outline-solid outline-1 -outline-offset-1 outline-accent/40' : ''}`}
                 aria-current={atCursor ? 'true' : undefined}
               >
                 <span className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: SEV_BAR[a.severity] }} />

@@ -1,10 +1,86 @@
-@import './theme/tokens.css';
-@import './shell/console.css';
-@import './theme/reflow.css';
+@import './theme/tokens.css' layer(base);
+@import './shell/console.css' layer(base);
+@import './theme/reflow.css' layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Design tokens as Tailwind theme colours. The palettes themselves live in
+   theme/tokens.css (one block per colour scheme); these only point at them.
+   Tailwind 4 applies an `/NN` opacity modifier with color-mix(), which works on
+   a var() holding an opaque hex. Tailwind 3 could not decompose that, which is
+   why the v3 config wrapped every token in its own color-mix helper: without it
+   `bg-bg-1/95` compiled to fully transparent across 85 call sites. */
+@theme {
+  --color-bg-0: var(--bg-0);
+  --color-bg-1: var(--bg-1);
+  --color-bg-2: var(--bg-2);
+  --color-bg-3: var(--bg-3);
+  --color-bg-4: var(--bg-4);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-txt-0: var(--txt-0);
+  --color-txt-1: var(--txt-1);
+  --color-txt-2: var(--txt-2);
+  --color-txt-3: var(--txt-3);
+  --color-txt-4: var(--txt-4);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-line: var(--accent-line);
+  --color-accent-fg: var(--accent-fg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-line: var(--warn-line);
+  --color-warn-fg: var(--warn-fg);
+  --color-alert: var(--alert);
+  --color-alert-bg: var(--alert-bg);
+  --color-alert-line: var(--alert-line);
+  --color-alert-fg: var(--alert-fg);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-line: var(--ok-line);
+  --color-ok-fg: var(--ok-fg);
+  --color-mag: var(--mag);
+  --color-mag-dim: var(--mag-dim);
+  --color-mag-line: var(--mag-line);
+  --color-mag-fg: var(--mag-fg);
+  --color-sev-low: var(--sev-low);
+
+  /* A hue is a FILL or it is INK, never both (apps/web/CLAUDE.md, colour
+     schemes). `bg-accent` is --accent; the TEXT utility for the same name
+     resolves to the lightened --*-fg tier, which is the one chosen to carry
+     body text at AA. Measured under v3: text-accent on the panel substrate was
+     3.46:1 under the default scheme and 2.63:1 under Paper before this split.
+     Guarded by theme/contrast.test.ts. */
+  --text-color-accent: var(--accent-fg);
+  --text-color-warn: var(--warn-fg);
+  --text-color-alert: var(--alert-fg);
+  --text-color-ok: var(--ok-fg);
+
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-sans: Inter, 'IBM Plex Sans', system-ui, sans-serif;
+  --font-label: Inter, 'IBM Plex Sans', system-ui, sans-serif;
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+}
+
+/* Tailwind 3 preflight behaviour that Tailwind 4 dropped, kept so the upgrade
+   changes no rendered pixel: a bare `border` was gray-200 (v4: currentcolor),
+   and buttons showed the pointer cursor (v4: the UA default arrow). */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb;
+  }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
 
 @layer base {
   /* App-wide keyboard focus ring for the dense "Professional" console. Until now

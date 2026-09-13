@@ -53,6 +53,27 @@ from app.keys import UserCtx
 from app.workflows import control, python_exec
 from app.workflows.store import WorkflowError
 
+
+def _python_sandbox_help() -> str:
+    """Say which sandbox tier is actually in force, never assume one.
+
+    The help string is read by the operator authoring the block, and "it is
+    sandboxed" is a claim they would act on — deciding whether to paste in code
+    they have not read. A box without a working bubblewrap gets the honest
+    weaker answer instead.
+    """
+    return {
+        "bwrap-nonet": "isolated (no network, no filesystem outside a private /tmp).",
+        "bwrap": "isolated filesystem, network ALLOWED (WORKFLOWS_PYTHON_NET=1).",
+        "rlimits-only": (
+            "resource limits ONLY - bubblewrap is unavailable here, so block code "
+            "can read this machine's files and reach the network. Refused unless "
+            "WORKFLOWS_PYTHON_UNSANDBOXED=1"
+            + (" (set: run only code you trust)." if python_exec._unsandboxed_allowed()
+               else ".")
+        ),
+    }[python_exec.sandbox_tier()]
+
 log = logging.getLogger(__name__)
 
 Row = dict[str, Any]
@@ -639,6 +660,8 @@ async def _run_op_python(
         out_rows, out_memory = await python_exec.run_python_block(
             code, rows, dict(ctx.memory), timeout_s=float(timeout_s)
         )
+    except python_exec.PythonSandboxUnavailable as exc:
+        raise WorkflowError(503, str(exc)) from exc  # host capability, not bad input
     except python_exec.PythonExecError as exc:
         raise WorkflowError(422, str(exc)) from exc
     ctx.memory.clear()
@@ -984,8 +1007,9 @@ _register(
                 "Python code",
                 required=True,
                 help="Must define run(rows: list[dict], memory: dict) -> list[dict]"
-                " | {'rows': [...], 'memory': {...}}. Runs in a resource-limited"
-                " subprocess on your own machine (BYO-compute, not a hostile-tenant sandbox).",
+                " | {'rows': [...], 'memory': {...}}. Runs on your own machine in"
+                f" a subprocess under CPU, memory and wall-clock limits. Sandbox:"
+                f" {_python_sandbox_help()}",
             ),
             ConfigField("timeout_s", "int", "Timeout (s, max 60)", default=30),
         ],

@@ -18,6 +18,8 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
+from app.audit import audit_mutation
+from app.auth import require_compute_enabled
 from app.config import get_settings
 from app.foundry import binding as binding_mod
 from app.foundry import builds as builds_mod
@@ -25,12 +27,29 @@ from app.foundry import connections as connections_mod
 from app.foundry import geo as geo_mod
 from app.foundry import ingest, sqlrun
 from app.foundry import seed as seed_mod
+from app.foundry import store as foundry_store_mod
 from app.foundry import transforms as tf_mod
 from app.foundry.store import FoundryError, FoundryStore
 from app.intel.ontology import _KNOWN_KINDS
 from app.keys import UserCtx, current_user_or_local
+from app.uploads import read_capped
 
-router = APIRouter(tags=["foundry"])
+# Foundry fails CLOSED on an unauthenticated deployment (issue #8), the same
+# posture /api/workflows already has. This surface runs an operator SQL console,
+# accepts dataset uploads, and stores the MQTT/Kafka/SQL connection config that
+# points at the operator's own infrastructure — on a keyless `docker compose up`
+# every one of those answered anyone who could reach the port.
+#
+# Gated with require_compute_enabled rather than by adding "/api/foundry" to
+# ratelimit._COMPUTE_PREFIXES. The prefix is the single source of truth for BOTH
+# the auth gate and the inbound limiter, and the limiter buckets by the second
+# path segment: every Foundry route would then share one 60/min bucket with
+# BuildsView's 5 s build poll (12/min on its own), so the fix would have
+# throttled the operator's own console. The auth posture is identical either way.
+router = APIRouter(
+    tags=["foundry"],
+    dependencies=[Depends(require_compute_enabled), Depends(audit_mutation)],
+)
 
 
 def _store() -> FoundryStore:
@@ -266,7 +285,7 @@ def _parse_type_pins(types: str) -> dict[str, str]:
 async def _read_upload(
     file: UploadFile, pins: dict[str, str] | None = None
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-    content = await file.read()
+    content = await read_capped(file, foundry_store_mod.MAX_UPLOAD_BYTES)
     try:
         rows, schema = ingest.parse_upload(file.filename or "upload.json", content)
         if pins:

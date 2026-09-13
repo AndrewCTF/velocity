@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import maplibregl, { type Map as MapLibreMap, type LngLatBoundsLike } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { Map as MapLibreMap, LngLatBoundsLike } from 'maplibre-gl';
+import type * as GeoJSON from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { LayerDescriptor } from '@osint/shared';
 import type { LayerRegistry } from '../registry/LayerRegistry.js';

@@ -253,3 +253,93 @@ def test_a_failing_upstream_turns_its_status_feed_degraded(client, monkeypatch) 
     assert feed["status"] == "degraded"
     assert "503" in feed["detail"]
     assert status_mod._measured("earthquake.usgs.gov")[0] is False
+
+
+# ── redirects ────────────────────────────────────────────────────────────────
+#
+# The 2026-08-20 wave killed "200 with an empty body reads as healthy". The same
+# overclaim survived one layer down: httpx ships follow_redirects=False, and the
+# registry scores failure on `status_code >= 400`, so a 301 carrying an EMPTY
+# body was recorded as a clean success. Measured 2026-08-21: wsprnet.org was
+# filed BLOCKED/403 in the egress audit while actually 302-ing to a 200 with
+# 34 943 bytes, and intel/conflict.py's plain-http GDELT base died on its 301.
+
+
+@pytest.mark.asyncio
+async def test_a_redirect_chain_is_scored_by_its_destination() -> None:
+    """One row, keyed by the ORIGINAL host, carrying the FINAL status.
+
+    The key must stay the requested host (wsprnet.org, not www.wsprnet.org) or
+    /api/status/sources grows a row per redirect target and no row matches the
+    upstream anyone configured.
+    """
+
+    def hop(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "moved.example":
+            return httpx.Response(
+                301, headers={"location": "https://www.moved.example/feed.json"}
+            )
+        return httpx.Response(200, json={"ok": True})
+
+    async with _client(hop) as c:
+        r = await c.get("https://moved.example/feed.json")
+
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+    rows = {row["host"]: row for row in upstream.source_health()}
+    assert rows["moved.example"]["state"] == "ok"
+    assert rows["moved.example"]["last_status"] == 200
+    # One LOGICAL request => one row. The hop is not its own upstream.
+    assert "www.moved.example" not in rows
+
+
+@pytest.mark.asyncio
+async def test_a_feed_behind_a_redirect_answers_with_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end at the layer that broke: fg.fetch_json through a 301.
+
+    Before 2026-08-21 this raised HTTPException(502, "upstream 301") and the
+    layer went empty, or — for callers using raise_for_status over plain http,
+    which is intel/conflict.py's GDELT base — died on the scheme upgrade with
+    nothing in the logs. Flip follow_redirects back off and this test fails,
+    which is the whole point of it.
+    """
+
+    def hop(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "feed.example":
+            return httpx.Response(
+                301, headers={"location": "https://www.feed.example/data.json"}
+            )
+        return httpx.Response(200, json={"features": [1, 2, 3]})
+
+    client = _client(hop)
+    monkeypatch.setattr(upstream, "_CLIENT", client)
+    try:
+        payload = await fg.fetch_json("https://feed.example/data.json")
+    finally:
+        await client.aclose()
+
+    assert payload == {"features": [1, 2, 3]}
+    rows = {row["host"]: row for row in upstream.source_health()}
+    assert rows["feed.example"]["state"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_a_redirect_loop_is_recorded_as_a_failure() -> None:
+    """TooManyRedirects is an httpx.HTTPError, so the existing except catches it."""
+
+    def loop(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"location": str(request.url)})
+
+    async with _client(loop) as c:
+        with pytest.raises(httpx.TooManyRedirects):
+            await c.get("https://loop.example/feed.json")
+
+    rows = {row["host"]: row for row in upstream.source_health()}
+    assert rows["loop.example"]["state"] == "failing"
+
+
+def test_the_shared_client_follows_redirects() -> None:
+    """The default lives on the class, so tests exercise the production shape."""
+    assert upstream._InstrumentedClient().follow_redirects is True

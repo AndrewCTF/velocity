@@ -20,11 +20,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app import llamacpp_sidecar
+from app.audit import audit_mutation
 from app.config import get_settings
 from app.keys import UserCtx, current_user_or_local
 from app.localllm import binary, catalog, hardware, manager, state
+from app.security import require_operator
 
-router = APIRouter(tags=["ai-models"])
+router = APIRouter(tags=["ai-models"], dependencies=[Depends(audit_mutation)])
 
 
 async def _probe_health(url: str) -> bool:
@@ -97,7 +99,7 @@ class DownloadIn(BaseModel):
     quant: str = Field(pattern=manager.QUANT_PATTERN, min_length=1, max_length=32)
 
 
-@router.post("/api/ai/models/download", status_code=202)
+@router.post("/api/ai/models/download", status_code=202, dependencies=[Depends(require_operator)])
 async def post_download(
     body: DownloadIn, _ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -115,7 +117,7 @@ async def get_download(
     return job
 
 
-@router.delete("/api/ai/models/{key}")
+@router.delete("/api/ai/models/{key}", dependencies=[Depends(require_operator)])
 async def delete_model(key: str, _ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, Any]:
     await asyncio.to_thread(manager.delete_model, key)
     return {"ok": True}
@@ -126,7 +128,7 @@ class ActiveIn(BaseModel):
     key: str | None = None
 
 
-@router.post("/api/ai/models/active")
+@router.post("/api/ai/models/active", dependencies=[Depends(require_operator)])
 async def post_active(
     body: ActiveIn, _ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -142,7 +144,7 @@ class HotIn(BaseModel):
     hot: bool
 
 
-@router.post("/api/ai/models/hot")
+@router.post("/api/ai/models/hot", dependencies=[Depends(require_operator)])
 async def post_hot(body: HotIn, _ctx: UserCtx = Depends(current_user_or_local)) -> dict[str, Any]:
     hot = await asyncio.to_thread(manager.set_hot, body.key, body.hot)
     # Same as set_active: pinning a model hot is a request for it to be resident,
@@ -155,7 +157,7 @@ class EngineIn(BaseModel):
     engine: Literal["auto", "llamacpp", "vllm", "ollama"]
 
 
-@router.post("/api/ai/engine")
+@router.post("/api/ai/engine", dependencies=[Depends(require_operator)])
 async def post_engine(
     body: EngineIn, _ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:

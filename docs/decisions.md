@@ -988,6 +988,221 @@ safety rule: **GET-only is NOT the safety boundary on this app.**
 skip list is `ratelimit.is_compute_path` plus four named mutating GETs, and every
 skip is reported with its reason rather than dropped.
 
+## Four things that looked like blocks and were not, and one that was (2026-08-21)
+
+The 2026-08-20 wave made upstream health measurable and the first measurement
+said 19 of 99 hosts were failing. This entry is what happened when each failure
+was actually opened up. **Exactly one was a block. Four were our own bugs
+wearing a 4xx, and a fifth "finding" was the probe misreading a documentation
+string — retracted below, and the most instructive of the lot.** The lesson is
+not "the audit was wrong": the audit is what made any of this visible. It is
+that *reachability*, *correctness of the call we make*, and *whether we make
+that call at all* are three different questions, and the instrument only asked
+the first.
+
+Baseline for every measurement below: dev egress, Proton VPN exit
+159.26.115.35, SG, AS208172.
+
+**1. Redirects. The shared client never followed them.** httpx ships
+`follow_redirects=False`, and `_InstrumentedClient.send` scored failure on
+`status_code >= 400`, so **a 301 carrying an empty body was recorded as a clean
+success** — the exact "empty but green" overclaim the previous entry exists to
+kill, surviving one layer down. Blast radius was 52 `fg.fetch_*` call sites plus
+84 bare `get_client().get/post/stream` sites; about twenty opted in.
+
+Two concrete casualties. `intel/conflict.py` sets
+`_GDELT_BASE = "http://data.gdeltproject.org/gdeltv2"` — plain HTTP — and calls
+`raise_for_status()`, which raises on a 3xx with a redirect location: **the
+GDELT conflict layer had been returning zero features on every pull, silently.**
+Proven by A/B on the single keyword, same process, same egress, with the TTL
+cache invalidated between runs (without that step both runs read 0 and the
+second one is just the first one's cached empty — worth knowing before anyone
+re-measures this):
+
+    follow_redirects=False  _latest_ts -> HTTPStatusError: Redirect response '301'
+                            conflict_events -> 0 features
+    follow_redirects=True   latest=20260821141500, zip 200, 101 714 bytes,
+                            58 war rows in one slice
+                            conflict_events -> 565 features
+
+And `wsprnet.org`, filed `BLOCKED` / 403 in the egress audit, actually 302s to
+`https://www.wsprnet.org/olddb` and serves **34 943 bytes**.
+
+The fix is `kwargs.setdefault("follow_redirects", True)` in
+`_InstrumentedClient.__init__` — on the class, not in `get_client()`, so the
+tests (which build the client directly over a `MockTransport`) exercise the
+production shape. **The scorer needed no 3xx branch**, and that is the point:
+with follow on, httpx resolves the chain *inside* `send()` and returns the final
+response, so `>= 400` sees the truth and a loop raises `TooManyRedirects` into
+the existing `except`. A `300 <= code < 400` branch instead would have converted
+GDELT from silently-empty to loudly-failing without making it work.
+
+**This does not weaken the SSRF boundary**, which was checked rather than
+assumed. All four paths that fetch a user-supplied URL already opt out
+per-request and re-validate each hop themselves: `intel/evidence.py:398`
+(chain-of-custody walks hops), `workflows/control.py` (own client, plus
+`check_url` and `_pin_http_url`, which pins the resolved IP), `news/images.py`
+(per-hop `_resolve_public`), and `browser_fetch.py` (`_is_public_url` before the
+sidecar). httpx per-request kwargs override the client default, so all four are
+untouched. The risk is the *next* route, which is what the guard is for.
+
+**2. CelesTrak's 403 is a conditional GET.** Body, verbatim:
+
+    GP data has not updated since your last successful download of GROUP=active
+    at 2026-08-21 13:05:49 UTC. Data is updated once every 2 hours.
+
+Keyed by (source IP, GROUP), and **identical for our UA and a browser UA** — so
+the comment in `routes/space.py` claiming CelesTrak "is more willing to serve a
+browser UA" was also wrong, and `apps/api/CLAUDE.md`'s "CelesTrak
+403-rate-limits bursts" was wrong. `space.py` turned it into
+`HTTPException(502)` and the satellite layer went empty.
+
+**This is the mechanism behind the documented "restart the backend ONCE and
+wait".** The 2 h TTL cache is in-process, so every restart threw away our own
+copy and re-asked, earning a 403 for the rest of the window. Not rate limiting —
+us discarding data and requesting it again.
+
+Fixed by reading the body: on 403 + that string, serve the last good copy and
+`record_success(host, 0.0, 304)` so `/api/status/sources` says **304** and
+explains itself. The `fail` counter still moves, which is honest about the wire.
+Any *other* 403 still fails, and a not-modified with no cached copy still 502s —
+never invent data.
+
+The last-good copy is on **disk** (`data/celestrak/<group>.tle`, atomic
+tmp+`os.replace`), because an in-process cache cannot survive the restart that
+causes the problem. Deliberately NOT `app.tilecache`: that is an LRU under a
+byte budget shared with imagery, and these files must not be evicted by a map
+pan. **One caller is not an abstraction** — generalise when a second
+reference-class feed wants it, not before.
+
+Scope, stated because it is the dangerous part: this is for **reference-class**
+feeds whose payload carries its own epoch. A TLE embeds its epoch in
+`TLE_LINE1` cols 19-32 and the client propagates from it, so a 4 h-old element
+set is the input SGP4 expects, not a stale reading. It must never extend to the
+ADS-B or AIS position stores: those are last-write-wins, and the 2026-07-15
+post-mortem below is exactly what happens when a cached tier serves into one.
+The response carries `stale` and `age_s` regardless — the age of the DATA.
+
+**3. Two URLs were simply wrong, and read as blocks.**
+`www.gdacs.org/.../geteventlist/MAP` answers **400**; the path parameter is
+`EVENTS4APP`, which answers 200 with the identical shape the parser already
+expects — verified against a live body before switching. **0 -> 100 features.**
+`api.reliefweb.int/v1` answers **410** and says so: *"The API version 'v1' has
+been decommissioned. Please use version 'v2' instead."* v2 needs a pre-approved
+`appname` (400 without one, 403 with an arbitrary one), so that one is an
+operator registration, recorded, not guessed.
+
+**4. `api.bgpview.io` is NXDOMAIN** — no A record from the system resolver or
+from 1.1.1.1. Re-pointed at RIPEstat, which was **already a substrate in the
+same file**. The swap is also an upgrade: RIPEstat's `asn-neighbours` labels
+direction (`type: left`), so `upstreams` is populated instead of being a
+hardcoded empty list with an apology beside it. Function and route names stay
+`bgpview_*` — they are a frontend contract and an ontology provenance string,
+and renaming them to advertise a backend swap would break `routeCoverage` for
+no gain.
+
+**5. RETRACTED, and the retraction is the more useful finding.** This entry
+first claimed `rx.linkfanel.net` was AAAA-only and therefore unreachable behind
+`upstream._transport`'s IPv4 pin. **That was wrong on every count**, and it was
+wrong in exactly the way this whole entry is about.
+
+What is actually true: the host has an A record (82.64.25.168) as well as a
+AAAA; `getent hosts` printed only the first line and that was read as the whole
+answer. Its **`https://` resets the TLS handshake** while its `http://` answers
+200. And the backend never asks it for `https://` anyway —
+`source_catalog.py`'s `KIWISDR_URL` is `http://rx.linkfanel.net/kiwisdr_com.js`
+and `/api/sdr/kiwisdr` returns **866 stations**. There was no defect.
+
+The `https://` URL that was probed is the entry's `url_pattern` — a
+**documentation field in the source catalog**, describing a provider the
+platform knows about. `upstream_urls()` regexes every `http(s)://` literal out
+of every `.py` under `apps/api/app`, so roughly fifty catalog metadata strings
+sit in the results next to genuine upstreams with nothing distinguishing them.
+That is the same mistake as firing template strings, one level up: **the probe
+cannot tell a URL the app CALLS from a URL the app MENTIONS.**
+
+Fixed by giving those rows a `catalog-only` class, excluded from the
+reached/unreached arithmetic and named in the summary rather than dropped. The
+`ipv4-none` check stays because that failure really is indistinguishable from a
+plain timeout in every other report — but no host currently hits it, and this
+entry should not have said one did.
+
+Recorded rather than quietly deleted because the failure mode is the point: the
+correction came from re-reading the resolver output and the actual call site,
+not from the probe, which had happily produced a clean-looking row for a field
+nobody fetches.
+
+**The one real block.** `api.airplanes.live` answers 403 with
+
+    {"error": "Please contact us at contact@airplanes.live. Your email MUST
+     include any links, a description of the project, and any information you
+     deem appropriate."}
+
+on `/v2/all-with-pos`, `/v2/point/...` and `/v2/mil` alike. That is an
+app-level ban with a contact address, not a WAF and not a rate limit. No tier
+opens it and none should be pointed at it: **the engineering action is to stop
+calling it, and the remediation is an email.** Removed from `_FIREHOSE_URLS`;
+moved to LAST in `_HEAD_HOSTS` rather than deleted, because this is self-hosted
+software, the ban is scoped to whoever asked, and `_HEAD_HOSTS` has no
+dead-skip — at index 0 it was the deterministic primary for a third of ~120
+cells and each paid a round trip into a wall every fan-out.
+
+Follow-up the same day: "last in the list" still cost ~9 failed requests per
+boot, so the host moved behind a per-deployment switch —
+`ADSB_DISABLED_HOSTS`, read by `head_hosts()` and `firehose_urls()`, which
+filter but never return empty so a config typo degrades the tier instead of
+blanking the map. This deployment sets it; the codebase does not, because the
+ban belongs to whoever asked and not to everyone who runs this software. The
+outreach the 403 asks for is drafted at
+`docs/outreach/airplanes-live-access.md` and has NOT been sent — that is the
+owner's call, not the code's.
+
+`api.adsb.lol/v2/all-with-pos` was also removed: **404**, a verb that does not
+exist, which is egress-independent. `api.adsb.lol/v2/point/0/0/20000` — measured
+11 441 aircraft — was promoted to first, having been **last** behind three dead
+entries. adsb.fi's snapshot stays last rather than deleted: its 403 is the
+per-path WAF shape and `_try_firehose` returns on first success, so it costs
+zero requests while the entry above works. Measured after: **12 561 aircraft in
+2.0 s on the first try**, ≥8 000 floor intact.
+
+**Scraping: the browser tier got its first callers, and the measurement said no
+to most of them.** `tools/browser-fetch` had been built, supervised, selftested
+and called by nothing. Over the seven register feeds that answer httpx with 403:
+
+    en.mercopress.com   403 -> browser 200, 10 items   -> flagged
+    tass.com            403 -> browser 200, 100 items  -> flagged
+    riotimesonline.com  403 -> browser 200, 0 items    -> not flagged
+    tvn24 / dawn / politico.eu / washingtontimes  403 -> browser 403, headful too
+
+and, tested because they were the obvious candidates and rejected because the
+measurement said so: ISW, LiveUAMap, planespotters, reddit and LiveATC are **403
+to headless AND headful Chrome** — the address-level case no tier opens. Wiring
+them anyway would have spent a browser launch per feed per cycle to re-learn a
+permanent no, which is the auto-escalation ladder rejected on 2026-08-01. So the
+mechanism is a per-`Source` `browser: bool` flag set from a measurement, and it
+is set on exactly two feeds — both of which were already in the register and
+both of which had been contributing nothing.
+
+**Rejected here:** a robots.txt/crawl-delay framework (`paced()` in the sidecar
+already is the politeness, and it is guarded by `selftest.js`; ~200 lines to
+model a policy space of ~25 hand-picked hosts); a feed scheduler in
+`foundry/scheduler.py` (it runs transform builds — feeds would need an invented
+"fetch transform" kind to replace `fg.cached`, which already paces every feed);
+reinstating the circuit breaker (removed deliberately, and the fix for "we keep
+calling dead hosts" turned out to be deleting the dead hosts); and "fixing"
+`/api/health` to reflect upstream health — it is the Docker liveness probe, so
+a dead upstream would restart the container, which is worse than the defect.
+`/api/status/sources` is the honest surface and already exists.
+
+**Guards:** `apps/api/tests/test_feed_honesty.py` (redirect chain scored by its
+destination, one row keyed by the original host, loop is a failure, the client
+default itself), `test_space_gp_not_modified.py` (last-good across a simulated
+restart, registry reads 304/ok, a real 403 still fails, no cached copy still
+502s), `test_sigint_pskreporter.py`, `test_telegram_parser.py`,
+`test_news_browser_tier.py`, `test_osint_src_netblock.py` (fixtures replaced
+with real RIPEstat bodies — a fixture shaped like a host that no longer resolves
+proves nothing).
+
 ## Every backend route needs a UI address or a stated exception (2026-08-08)
 
 The operator's report was that the backend had grown a lot of capability the
@@ -1030,6 +1245,17 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2628 + 2 skipped — 2026-09-13, security-hardening-2026-09, security gap wave
+- 2587 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, citable-replay wave
+- 2581 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, AI-label wave
+- 2578 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, honesty wave
+- 2570 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, grounding-gate wave
+- 2562 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, ground-truth wave
+- 2559 + 2 skipped — 2026-08-29, osint-book-intel-2026-08, hardening wave
+- 2531 + 2 skipped — 2026-08-29, osint-book-intel-2026-08, OSINT-book wave 2
+- 2501 + 2 skipped — 2026-08-29, osint-book-intel-2026-08, OSINT-book wave 1
+- 2450 + 2 skipped — 2026-08-21, egress-reachability-2026-08, four non-blocks
+- 2401 + 2 skipped — 2026-08-20, feed-honesty-2026-08, measured source health
 - 2400 + 2 skipped — 2026-08-20, feed-honesty-2026-08, measured source health
 - 2393 + 2 skipped — 2026-08-08, gotham-parity-2026-08, connection wire coverage
 - 2390 + 2 skipped — 2026-08-08, gotham-parity-2026-08, SQL connection coverage
@@ -1944,3 +2170,650 @@ contact was exactly 40×20 m (2×1 px) and the L/B of 2.0 is a pixel-grid artefa
 A single-pixel beam caps confidence at medium rather than marking it unresolved,
 because a destroyer's 20 m beam IS one pixel at 20 m/px.
 → `tests/test_vessel_class.py`
+
+---
+
+## Selector pivots, stealer logs, and the phone kind (2026-08-29)
+
+Branch `osint-book-intel-2026-08`. Source: *OSINT Techniques* 11th ed. (Bazzell
+& Edison, rev. 2025.04.02), chapters 16 and 23-35. Baseline 2450 → 2501.
+
+**What the book actually adds, given what was already here.** The digital-OSINT
+layer already ran 41 keyless connector routes over nine selector kinds, so the
+book's value was never "more connectors of the same sort". Three real gaps:
+
+1. **The book's own signature artefact had no home.** Its per-chapter tables are
+   URL templates — given a selector, the twenty-five places a human opens. Most
+   cannot ever be a connector: captcha, paywall, or a page that renders only in
+   JavaScript. They are still where the intel is. `app/osint/pivots.py` holds
+   170 of them across ten kinds as a static table; `GET /api/osint/pivots`
+   renders them. It touches no network, which is why a phone number, which no
+   keyless source answers, still gets a useful answer from this platform.
+2. **Two selectors the platform could not accept at all**: a telephone number
+   and a free-text person name.
+3. **Infostealer logs**: zero coverage, and the one keyless, reachable data
+   source the book names for it.
+
+**Phone is classified but deliberately has no connector.** This does not revoke
+`docs/osint-sources-plan.md` ("Phone / MAC input kinds: no verified keyless
+source with graph value → deferred") — that measurement still holds. Probed
+2026-08-29: NANPA's CO-code API is unreachable from this egress (curl exit
+`000`), and every other source in ch. 26 is captcha'd or a paid API. So
+`classify_target` learns the shape, the pivot catalog answers, and
+`POST /api/osint/investigate` returns **400 naming `/api/osint/pivots`** rather
+than minting an empty node. A classifiable target that mints nothing and says
+nothing reads as a broken route; a 400 that names the surface that does answer
+does not. MAC stays deferred entirely.
+
+**The phone/ASN collision, and which way it falls.** A bare digit run matches
+both `_PHONE_RE` and `_ASN_RE`. `normalise_phone` claims only three shapes: a
+leading `+` with 8-15 digits, punctuation plus 7-15 digits, or a bare 10 or 11
+digits. So `15169` stays `AS15169`, and the one thing phone does take from ASN
+is a bare 10-digit 32-bit ASN like `4200000000` — deliberate, because every
+source this platform reads writes an ASN with its `AS` prefix, and
+`normalise_asn` still accepts `AS4200000000`. Phone is checked BEFORE asn in
+`classify_target` for exactly this reason.
+
+**Credential material never enters the graph.** Hudson Rock returns
+`top_passwords` and `top_logins` for every compromised machine — live secrets
+belonging to third parties. `app/osint/sources/stealer.py` copies out a fixed
+field list and drops everything else, so the credentials are gone at the
+connector boundary rather than by anyone remembering to delete them later. They
+never reach the ontology, a case export, or a model prompt.
+`test_osint_src_stealer.py::test_credentials_never_leave_the_connector` is the
+guard, and the panel says so on the card.
+
+**"Checked, clean" is a finding.** Hudson Rock distinguishes a clean target
+(`stealers: []` plus a "is not associated" message) from an unreachable
+upstream, so the connector reports `checked` and `infected` separately and the
+card renders "checked · not in the corpus" rather than nothing. Same reasoning
+as the company-screening zeros above: a due-diligence record whose zeros are
+hidden is worthless. Its domain endpoint ships `1970-01-01T00:00:00.000Z` for
+"no employee was ever compromised"; that sentinel is normalised to empty,
+because rendering it claims a 1970 breach that did not happen.
+
+**A namesake's network is not this person's.** LittleSis relevance is loose — a
+search for one person returns better-known neighbours above the exact match, so
+taking `data[0]` blindly attributes one person's donors and board seats to
+another. `littlesis_search` sorts the exact name match first, and both
+`_investigate_person` and the panel card require an exact, case-insensitive name
+match on a `Person` before adopting any tie.
+
+**New relation verbs** (`intel/ontology_schema.py`): `affiliated_with`
+(symmetric, person/org — LittleSis edges are a whole vocabulary of donations,
+board seats and family, and one verb carries them all, with the upstream's own
+sentence on the link props so the specific tie is not lost) and
+`compromised_in` (threat → email/username/domain). No new `ObjectKind` was
+needed: `person`, `org` and `threat` already existed.
+
+**Excluded after probing, so nobody re-adds them blind** (all measured
+2026-08-29 from this egress):
+
+- `psbdmp.ws` API — connection failure (`000`). The web page still answers, so
+  it is a pivot link, not a connector.
+- `mail-api.proton.me` — 400, `Missing x-pm-appversion header`. Pivot link only.
+- `api.opencorporates.com` — 401 `Invalid Api Token`. Now key-gated; the
+  existing connector already degrades and the web search stays a pivot.
+- `aleph.occrp.org/api` and `api.opensanctions.org` — both now answer **401**.
+  Two existing connectors are therefore returning honest zeros for every query.
+  Not touched in this wave; recorded here so the next reader does not mistake
+  the zeros for a bug in the new person fan-out.
+- `sec_edgar_fulltext` was planned and then dropped: `sec_edgar_company`
+  already queries `efts.sec.gov/LATEST/search-index`.
+- MCP tools for the new routes were planned and dropped: there is no
+  REST↔MCP parity guard, and the entire 41-route osint layer has zero MCP
+  tools, so adding three would be an inconsistency rather than an addition.
+
+### Wikidata 403s HTTP/1.1 and serves HTTP/2 (found 2026-08-29, NOT fixed)
+
+`corp.wikidata_search` has been returning `"wikidata unavailable"` for every
+query. It is not the User-Agent, which was the obvious guess and is wrong.
+Measured, same host, same UA, same URL:
+
+```
+httpx.AsyncClient(http2=False) → 403  "Please respect our robot policy ..."
+httpx.AsyncClient(http2=True)  → 200  {"searchinfo": ...}
+curl (negotiates h2 via ALPN)  → 200
+```
+
+The shared client (`app/upstream.py`) is HTTP/1.1, so every Wikimedia call from
+it fails, and `curl` disagrees with the app for a reason that has nothing to do
+with headers. **Left unfixed on purpose**: `fetch_json` has no per-call http2
+escape hatch, and flipping the shared client to HTTP/2 changes the transport
+for every upstream in the platform — that is a deliberate decision with its own
+blast radius, not a side effect of an OSINT wave. Whoever takes it should
+measure the other upstreams first.
+
+---
+
+## Coordinates, ransomware leak sites, and video provenance (2026-08-29, wave 2)
+
+Second pass over *OSINT Techniques* 11th ed. on the same branch, covering the
+chapters wave 1 left: 27 (online maps), 28 (documents), 30 (videos), 43
+(ransomware). Baseline 2501 → 2531; catalog 170 → 206 pivots over 13 kinds.
+
+**The coordinate selector is the one this platform most obviously lacked.** It
+runs a Cesium globe and had no way to take a lat/lon as an OSINT target, so ch.
+27's whole toolkit — Google/Bing/Yandex/Apple, Street View, Mapillary, KartaView,
+Zoom Earth, EO Browser, SunCalc, AcreValue — had no address. `normalise_coordinate`
+takes decimal degrees and the DMS form that map sites and image EXIF hand you,
+**in either order** (`12°E 41°N` is the same point as `41°N 12°E`; half the
+sources write longitude first). Canonical form is 6 decimals, ~11 cm, so the
+same point always renders the same url.
+
+Coordinate is checked BEFORE phone in `classify_target` for the same class of
+reason phone goes before asn: `38.8977 -77.0365` is digits, dots, a space and a
+hyphen, which is exactly the phone shape.
+
+**The catalog gained `{lat}`/`{lon}` placeholders.** No mapping site takes the
+pair as one opaque string and several want longitude first, so the `coordinate`
+kind uses two tokens instead of `{q}`. `placeholders_for(kind)` states which
+tokens a kind may use and the guard checks every template against it, plus a
+test that no rendered url anywhere keeps a literal brace.
+
+### ransomware.live: three answers that look alike (all measured 2026-08-29)
+
+A crew that has not been paid publishes its victim, and that post is usually the
+earliest public record an org was breached. Wiring it turned up three upstream
+behaviours that a naive connector collapses into one:
+
+1. **A no-match is an object, not an empty list**:
+   `{"error": "No victims found for keyword ..."}`. That is a clean result and
+   is reported `checked: True, count: 0` — "no crew has posted this org" is a
+   finding worth recording.
+2. **`/searchvictims` is rate limited to one request per minute**, and says so
+   with `{"message": "1 per 1 minute"}` **and HTTP 429**. `fetch_json` collapses
+   every non-200 to `None`, so this connector reads the status itself (the way
+   `social._head_ok` does for a non-JSON body). A rate limit is reported
+   `checked: False` — reporting it as clean would hand out an all-clear nobody
+   asked for, on the single question where a false negative matters most.
+3. **It keeps its own cache, not the shared one.** `TtlCache` stores whatever
+   the loader returns, so a 429 would be cached for the same six hours as a real
+   answer and one unlucky request would blind that target for a working day.
+   Only an ANSWER is cached here; a 429 or an outage is not.
+
+**The search is fuzzy and matches the crews' own blurbs**, so a query for "cnn"
+returns a Ghanaian beverage manufacturer whose description mentions CNN Money.
+`ransomware_domain` therefore filters on the record's own `domain` field rather
+than the ranking — same lesson as the LittleSis namesake filter. The company
+fan-out keeps the free-text search but mints the node with
+`"match": "free-text name search, not an exact-domain match"` on it, because
+there it genuinely is a lead rather than a confirmation.
+
+**Placeholder domains are refused.** `killsec` files unattributed victims under
+literal `example.com`; measured, it had three such posts, none of them about
+example.com. An exact match there would report somebody else's breach as yours,
+so a small placeholder set is rejected before the fetch.
+
+### YouTube: the three-way answer ch. 30 is actually after
+
+`/oembed` is keyless and returns title and channel for a live video, 400 for one
+that is gone. The thumbnail CDN keeps serving after the watch page dies. Taken
+together they separate **live**, **removed but provably real** (the thumbnail is
+often the only surviving image of it), and **never existed** — a distinction a
+single found/not-found flag destroys. The placeholder YouTube serves for a
+missing thumbnail is a ~1 KB grey JPEG, so size is checked as well as status: if
+the CDN ever starts 200-ing the placeholder, nothing else would tell them apart.
+
+### Not built, and why
+
+- **A ransomware map layer.** Every victim record carries a country, and
+  `country_counts` is returned ready for one, but a country centroid is not a
+  position and this platform's layers are positional. Minting 6 000 victims at
+  country centroids would put fake precision on the globe. The counts are on the
+  node; a choropleth is a deliberate decision for whoever wants one.
+- **`ransomwatch`** (raw GitHub, 2.3 MB `posts.json`) — same data, no search, a
+  full download per query. ransomware.live's rate limit is cheaper than that.
+- **CORE academic API** — answered 429 on the first request from this egress;
+  left as a pivot link rather than shipped as a flaky connector.
+
+## Three surfaces that were open, and one that was only untidy (2026-08-29, hardening wave)
+
+The 2026-08-08 entry asked whether every backend route had a UI address, and the
+2026-08-20 entry asked whether the answer a route gives is true. This one asks a
+third question about the same 373 routes: **who is allowed to ask.**
+
+**Foundry answered anyone.** `ratelimit._COMPUTE_PREFIXES` is the single source
+of truth for "this route spends money or hardware", and `ApiKeyMiddleware`
+reuses it to fail those paths closed on a box with no credential configured
+(issue #8). `/api/workflows` is in that list. `/api/foundry` never was — so on a
+fresh keyless `docker compose up`, the operator SQL console
+(`POST /api/foundry/sql`), dataset upload, and the MQTT/Kafka/SQL connection
+config that points at the operator's own infrastructure all answered anyone who
+could reach the port. The Foundry surface is 55 routes; every one of them
+depends on `current_user_or_local`, which degrades to a shared `local` identity
+with no credential check when neither Supabase nor `API_KEY` is set.
+
+**Fixed at the router, not in the prefix list.** `router = APIRouter(tags=
+["foundry"], dependencies=[Depends(require_compute_enabled)])`. The auth posture
+is identical to a `_COMPUTE_PREFIXES` entry; what differs is the blast radius.
+That predicate also drives the inbound limiter, which buckets by the SECOND path
+segment — so every Foundry route would have shared one 60/min per-client bucket,
+and `BuildsView` alone polls `/api/foundry/builds` every 5 s (12/min). The
+hardening would have throttled the operator's own console. `require_compute_
+enabled` exists for exactly this shape and its docstring says so; this is its
+second caller after `POST /api/ai/local`.
+→ `tests/test_security_hardening.py::test_foundry_fails_closed_when_keyless_and_not_opted_in`,
+`::test_foundry_is_not_a_compute_prefix` (the second one pins the reasoning, so
+a later "cleanup" that moves Foundry into the prefix list fails loudly).
+
+Upgrade note: a keyless deployment loses the Foundry app until it sets `API_KEY`
+/ Supabase, or `ALLOW_UNAUTHENTICATED=1` on a box the operator trusts.
+
+**The whole tree set no security response headers.** A grep for
+`X-Content-Type-Options` / `Content-Security-Policy` / `X-Frame-Options` /
+`Strict-Transport-Security` across `apps/api/app` returned exactly one hit:
+`routes/evidence.py`, on the blob it serves. Several routes hand back
+operator-supplied bytes (dataset exports, report bundles, evidence blobs), and a
+browser that sniffs one of those into `text/html` runs it on this origin.
+`SecurityHeadersMiddleware` now sets `nosniff`, `X-Frame-Options: DENY` and
+`Referrer-Policy: no-referrer` on every response.
+
+Three deliberate calls inside that:
+
+- **No HSTS.** The TLS that would make the assertion true terminates in the
+  Caddy/Worker layer in front (see the prod-topology notes). An app asserting
+  HSTS over plain `http` teaches a browser something false about an origin it
+  does not control.
+- **Never overwrite.** The middleware fills a header only when it is absent, so
+  `/api/evidence`'s much stricter `default-src 'none'; sandbox` still wins for
+  the untrusted captured content it serves. Hardening that clobbers stronger
+  hardening is a regression wearing the right words.
+- **Pure ASGI, not `BaseHTTPMiddleware`.** Same reason `SelectiveGZipMiddleware`
+  is: this sits on the path of a multi-MB ADS-B blob served once a second per
+  client, and `BaseHTTPMiddleware` would wrap every one of those in a buffering
+  stream to append three constant headers.
+→ `tests/test_security_hardening.py::test_security_headers_on_every_response`
+
+**Four list routes had no ceiling.** `/api/alerts`, `/api/jamming/alerts`,
+`/api/alerts/deliveries` and `/api/correlations/{eid}` took `limit: int = 50`
+with no `le=`, while the rest of the tree uses `Query(..., ge=1, le=N)`. Now
+`Query(50, ge=1, le=500)`, matching the house style.
+→ `tests/test_security_hardening.py::test_list_limits_are_bounded`
+
+**Not a finding, though it was reported as one.** `routes/events.py`'s
+`limit: int = 150` is on `_load_eonet`, an internal cached loader that the
+`/eonet` route AND the `/all` aggregate both call directly — never through the
+route handler, precisely so a `Query(...)` default cannot leak into an
+in-process call. It has no HTTP surface and needs no bound. Recorded because a
+grep for `limit: int =` finds it and the next audit will report it again.
+
+Baseline 2531 → 2537.
+
+### The rate limiter believed whatever the caller said it was (2026-08-29)
+
+`ComputeRateLimitMiddleware._client_key` read `X-Forwarded-For`'s first hop
+unconditionally and fell back to the peer address only when the header was
+absent. The header is caller-supplied on a direct connection, so any client got
+a fresh sliding-window bucket per request for the cost of incrementing a number
+in a header — against the one traffic shape the limiter exists to bound
+(runaway loops and abuse of paid inference / GPU time), it bounded nothing.
+
+XFF is now believed only when the peer address is inside `TRUSTED_PROXIES`.
+That defaults to `127.0.0.1,::1` rather than to empty, because the deployment
+shape here is CF Worker → Caddy → uvicorn on the same box: with an empty
+default every production client would collapse into one shared loopback bucket
+and throttle each other. An unparseable entry is dropped rather than raised — a
+typo in this setting must narrow trust, never take the app down.
+
+The bucket table's GC had the same shape of problem one level down: it dropped
+only DRAINED buckets, which is not a bound against keys arriving faster than the
+60 s window drains them. `_evict()` now falls back to dropping the
+least-recently-used keys once the drained sweep is not enough. It is a method
+rather than an inline block so the guard can exercise the real eviction instead
+of a copy of it.
+→ `tests/test_security_hardening.py::test_xff_is_ignored_from_an_untrusted_peer`,
+`::test_xff_is_honoured_from_a_trusted_proxy`,
+`::test_trusted_proxies_typo_narrows_trust_rather_than_crashing`,
+`::test_bucket_table_stays_bounded_when_every_bucket_is_fresh`
+
+Baseline 2537 → 2541.
+
+### require_role existed and gated nothing, and could not be bolted on as-is (2026-08-29)
+
+`security.require_role` has been in the tree since the clearance model landed.
+`grep -rl require_role apps/api/app` returned exactly one file: the one that
+defines it. So once a credential WAS configured there was no tier between
+"holds the key" and "runs arbitrary `op.python` as the API's own user,
+dispatches a control/actuation block, deletes a model."
+
+**The obvious fix does not work, and the reason is worth writing down.** Roles
+are only ever populated from the Supabase `profiles` row
+(`security.current_principal`), and `Principal` defaults to `("analyst",)`. So
+`Depends(require_role("admin"))` on `/api/workflows` would have:
+
+- 401'd a static-`API_KEY` deployment, because `require_role` resolves through
+  `current_principal` → `current_user`, which demands a valid Supabase token;
+- 403'd a keyless box, because `current_principal_or_local` hands back the
+  least-privilege `local` identity.
+
+Both are the operator's own console. A hardening change whose first act is to
+lock the operator out is not a hardening change.
+
+**The rule shipped instead:** a deployment with no multi-user identity has
+exactly one user, and that user is the operator. `security.require_operator`
+passes unconditionally when Supabase is unconfigured — holding the static key,
+or having deliberately set `ALLOW_UNAUTHENTICATED=1`, IS the operator
+credential, and there is no second person to separate from. With Supabase
+configured there IS a second person, so `admin` is required and an analyst gets
+403.
+
+Two things it deliberately does NOT do:
+
+- It does not widen `current_principal_or_local`'s roles to `admin`. That
+  least-privilege `analyst` default is what the clearance-gated routes
+  (`/api/audit`, `/api/extract`, `/api/collab`, `/api/intel`) read; granting
+  blanket admin there would relax five surfaces in order to harden two.
+- It does not replace the compute-path gate. `/api/workflows` and
+  `/api/ai/models` are already in `ratelimit._COMPUTE_PREFIXES`, so a keyless
+  box refuses them outright until the operator opts in. The two compose.
+
+Applied to the 14 mutating routes on the two routers, not to the router, so the
+read routes the console polls stay open.
+
+**The guard's first draft was worthless and the reason generalizes.** It walked
+`app.routes` looking for paths under `/api/workflows`. `create_app` registers
+each router through an `_IncludedRouter` wrapper that exposes no leaf paths, so
+the walk matched ZERO routes and the assertion passed vacuously — a green test
+proving nothing, which is the failure mode the whole audit discipline exists to
+catch. Fixed by walking the routers themselves, and by asserting the walk saw
+at least 14 gated and 6 open routes so an empty walk fails loudly. Verified by
+deleting one gate and watching the test fail, then restoring it.
+→ `tests/test_security_hardening.py::test_operator_gate_passes_when_there_is_only_one_user`,
+`::test_operator_gate_403s_an_analyst_once_supabase_can_tell_users_apart`,
+`::test_operator_gate_admits_an_admin_on_a_multi_user_deployment`,
+`::test_every_mutating_actuation_route_carries_the_operator_gate`
+
+Baseline 2541 → 2545.
+
+## op.python gets a real jail, and says so when it does not have one (2026-08-29)
+
+`op.python` ran the operator's code in a separate process under RLIMIT_CPU 30 s,
+RLIMIT_AS, RLIMIT_NOFILE 64, a parent-enforced wall timeout, a 5 MB stdout cap
+and a process-group kill. Every one of those bounds an ACCIDENT — a runaway
+loop, a memory balloon. None of them bounds INTENT. Measured before the change:
+a block containing `open('apps/api/.env').read()` returned every API key on the
+box, and `socket.create_connection(...)` sent them anywhere. The child also
+inherited the API process's entire environment.
+
+That is remote code execution for anyone allowed to run a workflow, which the
+same-day `require_operator` change narrows but does not remove: the operator's
+own box should not hand its credentials to a block just because the block asked.
+
+**What ships.** `python_exec._child_argv()` wraps the runner in `bwrap`:
+`--unshare-net --unshare-ipc --unshare-uts --unshare-pid --die-with-parent`, a
+read-only `/usr` `/lib` `/lib64` `/bin` `/sbin`, a private `/tmp` tmpfs,
+`--chdir /tmp`, and a minimal `env` rather than this process's. Network OFF by
+default (operator decision this session); `WORKFLOWS_PYTHON_NET=1` puts it back
+and additionally binds `/etc/resolv.conf`, `/etc/ssl` and `/etc/hosts`, without
+which an "allowed" network is unusable. A block that needs to reach out should
+use `op.http`, which carries the SSRF guard, the per-run dispatch budget and the
+preview dry-run that a raw socket in here honours none of.
+
+Measured on this box, `bwrap-nonet` tier: `.env` read → FileNotFoundError,
+repo read → FileNotFoundError, socket → `[Errno 101] Network is unreachable`,
+DNS → gaierror, write to `/usr` → `[Errno 30] Read-only file system`, write to
+`/tmp` → fine, environment → the six names we pass. With
+`WORKFLOWS_PYTHON_NET=1`: DNS resolves, `.env` still unreadable.
+
+**Three things that are easy to get wrong here, all of them found by doing it.**
+
+- **The bind list must be surgical.** `sys.prefix` (the venv) and
+  `py_runner.py` both live inside the repo, and so does `apps/api/.env`.
+  Binding `apps/api` for convenience would carry every credential into the jail
+  and silently undo the whole change. A guard asserts directly on the argv that
+  no bound path is a parent of the `.env`.
+- **Probe by RUNNING it, with the real bind list.** bubblewrap installs cleanly
+  on kernels with unprivileged user namespaces disabled, where every invocation
+  fails at exec time; finding that out as an opaque block failure on the
+  operator's first run is the wrong place. The first probe here was also a
+  cut-down one (`/usr`, `/proc`, `/dev`, `/tmp`) and reported NO bubblewrap on a
+  box that has a working one — without `/lib64` the dynamic loader is missing
+  and even `/usr/bin/true` fails. The probe and the spawn now share
+  `_JAIL_BINDS`, because a probe testing a different sandbox than the one that
+  runs proves nothing about the one that runs.
+- **Report the tier, never assume it.** `sandbox_tier()` returns
+  `bwrap-nonet` / `bwrap` / `rlimits-only`, and the block's own help text says
+  which is in force — including the honest "resource limits ONLY … run only code
+  you trust" on a box without a working bubblewrap. "It is sandboxed" is a claim
+  an operator acts on when deciding whether to paste in code they have not read.
+
+**RLIMIT_AS went 1 GiB → 4 GiB in the same change**, which is a usability fix
+wearing security clothes. RLIMIT_AS bounds VIRTUAL address space and numpy's
+OpenBLAS reserves far more of it than it ever touches, so `import numpy` — the
+single most obvious thing to do in a data-transform block — died with "Memory
+allocation still failed after 10 retries". Measured: 1 GiB fails, 2 GiB and up
+succeed; 4 GiB leaves room for an array the block actually allocates while a
+9 GiB `bytearray` still dies with "memory limit exceeded".
+
+**Upgrade note:** an existing `op.python` block that opens a socket now fails.
+Set `WORKFLOWS_PYTHON_NET=1`, or move the fetch into an `op.http` block.
+
+→ `tests/test_python_exec_sandbox.py` — nine guards driving the REAL
+`run_python_block` against the REAL bind list (a mocked-argv test would stay
+green while the jail leaked), skipped with a stated reason where bubblewrap does
+not work.
+
+Baseline 2545 → 2555.
+
+## Five CPU paths that ran on the event loop, and one boot sequence left alone (2026-08-29)
+
+Everything hot on this platform was already off the loop — `routes/adsb.py`,
+`routes/maritime.py` and `history.py` offload every comparable operation, and
+the ADS-B world payload is a pre-gzipped blob served with ETag/304. Five modules
+never got that treatment, and all five sit on request paths:
+
+- `intel/sar_damage.py` — PIL decode of two frames plus a numpy
+  percentile/clip, inline in `async def detect_damage`.
+- `intel/sar_vessels.py` — `np.asarray(Image.open(...))` on a frame up to
+  `_MAX_DIM` (2500 px) plus the CFAR detect, inline in
+  `async def detect_dark_vessels` (reachable from `routes/sar.py`).
+- `intel/offroad.py` — PNG decode of up to `_MAX_TILES_PER_SIDE ** 2` DEM tiles,
+  the `hstack`/`vstack` stitch, and a pure-Python 8-connected A* over up to
+  `_MAX_GRID ** 2` cells, all inline in `async def plan_offroad` (reachable from
+  `routes/route.py`).
+- `fusion/ingest.py` — a PIL decode per layer in `fetch_aligned_stack`.
+- `eusi.py` — decode, RGB convert and PNG re-encode in `best_chip`.
+
+None of the five contained a single `to_thread`/`run_in_executor` call. The loop
+they were running on also drives the 1 s ADS-B/AIS snapshot cycle and the WS
+broadcast, so one SAR detect or one route request stalled the live map for every
+connected viewer. Each CPU segment now crosses to a thread ONCE (a helper per
+site, rather than three hops for three consecutive numpy calls).
+
+**The lifespan chain was considered and deliberately left serial.** `main.py`
+awaits fourteen subsystems one after another before `yield`, and several carry
+capped waits that stack (`adsb_sidecar` 60 s, `llamacpp_sidecar` 300 s + 60 s,
+`vllm_sidecar` 120 s). Two of the orderings are load-bearing and say so in
+comments — warp before the browser/ADS-B sidecars for the SOCKS port, ADS-B
+sidecar before `start_snapshot()`. Of what remains, the only pair with real
+timeouts is llamacpp and vLLM, and those two contend for the same VRAM: starting
+them concurrently trades a boot-time saving for a memory spike on the one
+resource this box has already been bitten by (see the 2026-07-28 entry, 23 GB of
+VRAM). The rest are no-ops when their feature is disabled. Churning the most
+incident-heavy sequence in the repo for a saving that only materialises with two
+GPU engines enabled at once is the wrong trade. Recorded so the next audit does
+not re-derive it.
+
+### `history.py` re-ran its schema on every connection (2026-08-29)
+
+`_connect()` issued `PRAGMA auto_vacuum`, `journal_mode`, `journal_size_limit`,
+`CREATE TABLE IF NOT EXISTS`, two `CREATE INDEX IF NOT EXISTS` and a `commit()`
+on EVERY call, from 16 call sites including the flush that fires every
+`_FLUSH_INTERVAL_S` and every read query. Being idempotent is what made it easy
+to leave there. The schema work is now memoized per path, re-armed whenever the
+file is missing so "already set up" can never outlive the database it describes
+(a fresh boot, a new shard, a test that removed it).
+
+`PRAGMA synchronous` was set nowhere in the repo, so a WAL-mode store was still
+paying `FULL`'s fsync per commit. Now `NORMAL`, which under WAL is the
+documented-safe setting: a power loss can cost the last transactions, never the
+database. This is a position recorder flushing every few seconds, so the
+exposure is seconds of track.
+
+Measured on this box, ext4 (NOT /tmp, which is tmpfs here and hides the fsync
+difference entirely — the first run of this benchmark reported 9% for that
+reason), 60 flushes × 500 rows, median of 5: **228 ms → 215 ms, about 5%.**
+Modest, and it is steady-state overhead on the shared executor pool that the
+hot-blob builders also draw from, not request latency.
+
+### `Timeline.tsx` subscribed to a whole store (2026-08-29)
+
+`const { playing, multiplier, togglePlay, setMultiplier } = useTime()` re-renders
+the strip, the lanes and the density histogram on any `useTime` change, not just
+the four fields it reads. Per-field selectors now, matching `TimeDock.tsx` and
+`GlobeCanvas.tsx` — it was the only consumer in the tree doing it the other way.
+
+## Three ways the platform answered an agent without telling it the truth (2026-08-29)
+
+The 2026-08-20 wave made FEEDS honest. This is the same question asked of the
+API's own answers, from the two wave-2 persona findings that were still open.
+
+**An MCP error looked like a success.** `_get`/`_post`/`_delete` never raise —
+an unreachable backend or a non-2xx becomes `{"error": ..., "detail": ...}`, so
+a driving agent gets a parseable failure instead of a stack trace. That part is
+right. What was wrong is that the same dict reached the agent with the
+protocol's `isError` unset, and agents act on `isError`: several will feed the
+body forward as data.
+
+Registration is wrapped ONCE (`mcp.tool` is rebound before the 85 `@mcp.tool()`
+decorators run) rather than editing 85 functions. A top-level non-empty
+`"error"` key is the documented contract, so it is the signal; anything else
+passes through untouched.
+
+Two details worth keeping:
+
+- The raise costs `structuredContent` — the low-level server builds an error
+  result from the message alone (`_make_error_result(str(e))`) — so the message
+  carries the same dict as JSON behind a `tool_error: ` prefix. The agent keeps
+  every field it had AND learns the call failed.
+- The wrapper is REGISTERED but the module-level name stays the original
+  function. Seven existing tests and the REST-parity checks call these names
+  in-process and depend on the non-raising dict; two callers, two contracts, one
+  definition.
+
+**An unsupported filter was silently dropped.** FastAPI ignores query params a
+route does not declare, which is the right default nearly everywhere and exactly
+wrong on `/api/intel/aircraft` and `/api/intel/vessels`, the two routes agents
+drive. `?vessel_type=tanker&flag=RU` returned the whole unfiltered feed with a
+200, and the caller reasoned over it as the filtered answer. Both now carry
+`Depends(reject_unknown_query_params)`, which reads the known set off the
+route's own `dependant` at request time — a hand-listed allowlist would go stale
+the first time someone adds a filter — and 422s naming both the rejected
+parameter and what the route does filter on, so the caller can retry.
+
+**A first boot printed a loader error before uvicorn said anything.**
+`scripts/run-api.sh` set `LD_PRELOAD=libjemalloc.so.2` unconditionally, and
+jemalloc is a declared prerequisite in neither the README nor the Makefile. On a
+box without it, glibc prints `ERROR: ld.so: object 'libjemalloc.so.2' from
+LD_PRELOAD cannot be preloaded` ahead of the API's first line — which a
+first-time self-hoster reasonably reads as "already broken". It is probed with
+`ldconfig -p` now and prints which allocator it took, naming the apt package in
+the fallback line.
+
+→ `tests/test_mcp_server.py::test_a_structured_error_reaches_the_transport_as_a_tool_error`,
+`::test_a_successful_tool_is_untouched`,
+`::test_the_module_level_name_is_still_the_raw_function`,
+`tests/test_security_hardening.py::test_the_agent_query_routes_reject_a_filter_they_do_not_support`
+
+### Not a finding: XML parsing (checked 2026-08-29)
+
+An audit flagged the eight modules parsing XML with stdlib `ElementTree` rather
+than `defusedxml`, with `foundry/ingest.py`'s operator-uploaded KML/KMZ as the
+live risk. Measured on this tree, both halves are already covered:
+
+- The KMZ decompression bomb is bounded — `parse_kmz` reads
+  `MAX_UPLOAD_BYTES + 1` from the member and 413s past it, so the archive can
+  claim any ratio it likes.
+- Billion laughs is rejected by the interpreter. A 426-byte seven-level entity
+  bomb through `parse_kml` came back in 0.02 s with `limit on input
+  amplification factor (from DTD and entities) breached` (Python 3.14.4,
+  expat 2.7.4).
+
+So `defusedxml` would be a new dependency buying nothing here. Recorded because
+a grep finds the eight `ElementTree` imports and the next audit will report them
+again. If this platform ever runs on an older expat, the cheap fix is rejecting
+a `DOCTYPE` before parsing, not the dependency.
+
+Baseline 2555 → 2559.
+
+### The fourteen apps had no address a newcomer could read (2026-08-29)
+
+`AppSwitcher` renders every app but the active one icon-only — a deliberate call
+(the labelled segmented control overflowed the 42 px bar once Foundry, Workflows
+and City landed) with the name and hint on `title` hover. `Onboarding.tsx`
+introduces four concepts. Between them, the ten apps that carry what the README
+actually stakes the product on — Investigate, Reports, Evidence, Foundry,
+Workflows, Country, Markets — were discoverable only by hovering unlabelled
+icons one at a time, which never happens on touch and rarely happens at all.
+
+Not fixed with a longer tour. `APP_META` already carries a one-line `hint` for
+all fourteen, and the Omnibar already renders an action's hint as its subtitle
+and already lists something on an empty query. It listed UI *modes* only, so the
+apps were not reachable from the command bar at all. They are now listed there
+with their hints, and the empty-query view shows workspaces AND apps — opening
+the command bar is a tour of what the product contains instead of a blank prompt
+you have to already know the answer to. The list is `max-h-[52vh]
+overflow-y-auto`, so eighteen rows was already handled.
+
+→ `command-bar/Omnibar.appList.test.tsx` (every `AppId` is listed, with its
+hint). Web unit tests 777 → 778.
+
+### Correction: what the event-loop offload was actually worth (measured 2026-08-29)
+
+The entry above says an inline SAR detect or route request "stalls the live map
+for every connected viewer." That was reasoning about a mechanism, not a
+measurement, and the measurement is smaller. Taken on this box after the change,
+timing the segments that are now on a thread:
+
+| segment | size | cost |
+| --- | --- | --- |
+| `sar_vessels._decode_and_detect` | 2500×2500 (`_MAX_DIM`) | **140 ms** |
+| `sar_damage._change_arrays` | 1024×768 (route default) | **14 ms** |
+| `offroad.astar_grid` | 171×171 real plan | **31 ms** |
+| `offroad._stitch` | 4 terrarium tiles | **27 ms** |
+
+So the worst single stall was ~140 ms, not seconds. On a snapshot cycle whose
+own budget is 1 s and whose measured `cycle_ms.total` is ~219 ms, a 140 ms
+stall is worth removing — it is more than half the cycle's existing work — but
+"freezes the map" was an overclaim and is withdrawn.
+
+The off-road case is smaller still in context: a real plan
+(33.60,46.40 → 33.85,46.75, grid 171×171) took **6.55 s wall**, of which the two
+CPU segments were **58 ms, 1%**. The rest is DEM tile fetching, which was always
+awaited. The offload there buys correctness of shape, not a visible win.
+
+What IS measured live: with the offload in place, an off-road plan running 6.9 s
+left `/api/health` at p50 1.7 ms / p95 47.7 ms over 25 samples taken during it,
+and `/api/status/perf` loop lag p95 moved 232 → 287 ms across the request while
+`cycle_ms.total` stayed ~219 ms. The server kept serving throughout.
+
+Recorded rather than quietly edited: the original claim is the kind this repo's
+first operating rule exists to stop, and it was written by the same pass that
+added the fix.
+
+## Security gap analysis against ISO 27001 / CSF 2.0 / SSDF / ASVS 5.0 (2026-09-13)
+
+The full report, with evidence and status for each gap, is `docs/security/gap-analysis-2026-09.md`. The
+behaviour changes an operator will notice:
+
+- **`?key=` works on WebSocket upgrades only.** HTTP callers must send `X-API-Key` or
+  `Authorization: Bearer`. The web app already did. A script that used `?key=` over HTTP now gets 401.
+- **Alert-rule webhooks must be public** unless the host is in `WORKFLOWS_HTTP_ALLOW_HOSTS`. Any analyst
+  can create a rule, so a LAN sink was an analyst-reachable SSRF. `op.http` keeps its LAN default,
+  because it is operator-gated and LAN control servers are its purpose (`docs/workflows-control-blocks.md`).
+- **`op.python` refuses to run without a jail** (503) unless `WORKFLOWS_PYTHON_UNSANDBOXED=1`. This
+  was measured in the prod container: bwrap cannot map uids when the kernel restricts unprivileged
+  user namespaces, even under `--privileged`. Granting `CAP_SYS_ADMIN` plus unconfined
+  seccomp/apparmor would give back more than the jail protects, so the container fails closed instead.
+- **Production compose** needs `VELOCITY_VERSION` (no `:latest`) and binds nginx to `127.0.0.1:8080`,
+  so TLS terminates at a host proxy. It runs the api read-only with all capabilities dropped.
+- **Web CSP ships in every production build.** It is placed after `Cesium.js`, whose bundled Knockout
+  evals at load. A third-party camera `hls_url` or a pasted splat URL on a new origin is refused until
+  it is proxied through the backend.
+- **Lockfiles are authoritative.** CI and the API image install with `uv sync --locked`, and Dependabot
+  opens weekly PRs. The CI `security` job fails on a high npm advisory or any known Python vulnerability.
+
+Accepted, not changed: a single `API_KEY` holder is the operator (`security.py:155`); use Supabase to
+separate roles. TypeScript stays on 6.0.3 because typescript-eslint 8.70 peers `<6.1`, though TS 7
+itself type-checks clean.

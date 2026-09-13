@@ -137,3 +137,181 @@ describe('OsintEntityPanel — new ontology kinds', () => {
     expect(screen.queryByText('Threat-intel (AlienVault OTX)')).not.toBeInTheDocument();
   });
 });
+
+// ── OSINT Techniques 11th ed. wave: stealer logs and LittleSis ───────────────
+//
+// A separate describe with its own routing table: these two cards have to be
+// asserted against payloads the shared table above deliberately answers `{note}`
+// for, and the clean-vs-unchecked distinction is the whole point of the card.
+
+describe('OsintEntityPanel — stealer logs and affiliations', () => {
+  function route(table: Record<string, unknown>) {
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      for (const [prefix, body] of Object.entries(table)) {
+        if (u.startsWith(prefix)) return jsonResponse(body);
+      }
+      return jsonResponse({ note: 'no data' });
+    });
+  }
+
+  it('renders an infostealer hit for an email, without any credential material', async () => {
+    route({
+      '/api/osint/stealer': {
+        indicator: 'victim@example.com',
+        checked: true,
+        infected: true,
+        computer_count: 2,
+        stealer_families: ['Lumma', 'RedLine'],
+        corporate_services: 8,
+        user_services: 370,
+        computers: [
+          {
+            date_compromised: '2026-08-27T19:02:40.000Z',
+            computer_name: 'DESKTOP-U1NSLMA',
+            operating_system: 'Windows 10 Pro',
+          },
+        ],
+      },
+    });
+    render(<OsintEntityPanel id="email:victim@example.com" />);
+
+    expect(await screen.findByText('Infostealer logs · Hudson Rock')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('Lumma · RedLine')).toBeInTheDocument();
+    expect(screen.getByText(/DESKTOP-U1NSLMA/)).toBeInTheDocument();
+  });
+
+  it('renders a clean check as a finding, and an unchecked target as nothing', async () => {
+    route({
+      '/api/osint/stealer': {
+        indicator: 'clean@example.com',
+        checked: true,
+        infected: false,
+        computer_count: 0,
+        computers: [],
+      },
+    });
+    const { unmount } = render(<OsintEntityPanel id="email:clean@example.com" />);
+    expect(await screen.findByText('checked · not in the corpus')).toBeInTheDocument();
+    unmount();
+
+    // checked:false means the upstream was unreachable, which is NOT clean.
+    route({ '/api/osint/stealer': { indicator: 'x@example.com', checked: false, note: 'down' } });
+    render(<OsintEntityPanel id="email:x@example.com" />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('Infostealer logs · Hudson Rock')).not.toBeInTheDocument();
+  });
+
+  it('renders domain estate exposure with its own shape', async () => {
+    route({
+      '/api/osint/stealer': {
+        indicator: 'cnn.com',
+        checked: true,
+        total: 6486,
+        employees: 0,
+        users: 6460,
+        third_parties: 26,
+        last_user_compromised: '2026-08-26T20:39:30.000Z',
+        urls: [{ url: 'https://edition.cnn.com/account/register', type: 'User', occurrence: 2447 }],
+      },
+    });
+    render(<OsintEntityPanel id="domain:cnn.com" />);
+
+    expect(await screen.findByText('Infostealer logs · Hudson Rock')).toBeInTheDocument();
+    expect(screen.getByText('6486')).toBeInTheDocument();
+    expect(screen.getByText('6460')).toBeInTheDocument();
+    expect(screen.getByText('2026-08-26')).toBeInTheDocument();
+    expect(screen.getByText('https://edition.cnn.com/account/register')).toBeInTheDocument();
+  });
+
+  it('shows LittleSis ties for a person, and ignores a namesake', async () => {
+    route({
+      '/api/osint/littlesis-relationships': {
+        relationships: [
+          {
+            id: '1',
+            role: 'Campaign Contribution',
+            counterparty: { id: '9', kind: 'Organization', name: 'Acme Corp' },
+          },
+        ],
+      },
+      '/api/osint/littlesis': {
+        entities: [{ id: '42', name: 'Jane Roe', kind: 'Person', blurb: 'An investor', url: 'https://littlesis.org/entities/42' }],
+      },
+    });
+    render(<OsintEntityPanel id="person:Jane Roe" />);
+
+    expect(await screen.findByText('Affiliations · LittleSis')).toBeInTheDocument();
+    expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    expect(screen.getByText('Campaign Contribution')).toBeInTheDocument();
+  });
+
+  it('adopts no ties when the top LittleSis hit is a different person', async () => {
+    route({
+      '/api/osint/littlesis': {
+        entities: [{ id: '43', name: 'Somebody Else', kind: 'Person' }],
+      },
+    });
+    render(<OsintEntityPanel id="person:Jane Roe" />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('Affiliations · LittleSis')).not.toBeInTheDocument();
+  });
+});
+
+// ── ch. 43: ransomware leak-site claims ─────────────────────────────────────
+
+describe('OsintEntityPanel — ransomware leak sites', () => {
+  function route(table: Record<string, unknown>) {
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      for (const [prefix, body] of Object.entries(table)) {
+        if (u.startsWith(prefix)) return jsonResponse(body);
+      }
+      return jsonResponse({ note: 'no data' });
+    });
+  }
+
+  it('renders victim posts and the crews that made them', async () => {
+    route({
+      '/api/osint/ransomware': {
+        query: 'victim.example',
+        checked: true,
+        count: 2,
+        searched: 4,
+        groups: ['incransom', 'qilin'],
+        victims: [
+          { victim: 'Victim Co', group: 'qilin', country: 'ID', attackdate: '2025-01-05T00:00:00+00:00' },
+        ],
+      },
+    });
+    render(<OsintEntityPanel id="domain:victim.example" />);
+
+    expect(await screen.findByText('Ransomware leak sites')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('incransom · qilin')).toBeInTheDocument();
+    expect(screen.getByText(/Victim Co · qilin · ID/)).toBeInTheDocument();
+  });
+
+  it('renders a checked-clean search as a finding', async () => {
+    route({
+      '/api/osint/ransomware': { query: 'clean.example', checked: true, count: 0, searched: 0, groups: [] },
+    });
+    render(<OsintEntityPanel id="domain:clean.example" />);
+    expect(await screen.findByText('checked · no crew has posted this domain')).toBeInTheDocument();
+  });
+
+  it('renders nothing when the check was rate limited, rather than an all-clear', async () => {
+    route({
+      '/api/osint/ransomware': {
+        query: 'x.example',
+        checked: false,
+        count: 0,
+        note: 'ransomware.live rate limited (1 request per minute)',
+      },
+    });
+    render(<OsintEntityPanel id="domain:x.example" />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('Ransomware leak sites')).not.toBeInTheDocument();
+  });
+});

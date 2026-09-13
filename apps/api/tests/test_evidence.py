@@ -399,3 +399,31 @@ def test_screenshot_and_feed_freeze_routes(client: TestClient) -> None:
     assert r2.status_code == 200, r2.text
     frozen = json.loads(ev.read_blob(get_settings(), r2.json()["props"]["sha256"]))
     assert frozen["entity_id"] == "vessel:123"
+
+
+def test_blob_path_rejects_traversal_from_forged_props(
+    client: TestClient, tmp_path
+) -> None:
+    """``props.sha256`` is writable by anyone through ``POST /api/ontology/object``,
+    and every blob read keys off it. A ``../`` value must not reach the disk:
+    before the hex check this read an arbitrary file (``/dev/zero`` = OOM) and
+    the manifest answered whether any path on the box exists."""
+    outside = tmp_path / "outside.bin"
+    outside.write_bytes(b"server secret")
+    # blob_path = <tmp_path>/evidence/<sha[:2]>/<sha> → "../<tmp>/outside.bin"
+    forged = f"../{tmp_path.name}/outside.bin"
+    assert ev.read_blob(get_settings(), forged) is None
+    assert ev.blob_exists(get_settings(), forged) is False
+    with pytest.raises(ValueError):
+        ev.blob_path(get_settings(), forged)
+
+    fake = "ab" * 32
+    r = client.post(
+        "/api/ontology/object",
+        json={"id": f"evidence:{fake}", "kind": "evidence",
+              "props": {"kind": "evidence", "sha256": forged}},
+    )
+    assert r.status_code == 200, r.text
+    man = client.post("/api/evidence/manifest", json={"evidence_ids": [fake]}).json()
+    assert [i["blob_present"] for i in man["items"]] == [False]
+    assert client.get(f"/api/evidence/{fake}/blob").status_code == 404

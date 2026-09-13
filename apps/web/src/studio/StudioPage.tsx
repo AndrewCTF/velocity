@@ -265,7 +265,7 @@ export function StudioPage(): JSX.Element {
                   ✓ {prog.n_gaussians.toLocaleString()} gaussians
                 </div>
               )}
-              {prog.error && <div className="mono text-[10px] text-alert mt-2 break-words">{prog.error}</div>}
+              {prog.error && <div className="mono text-[10px] text-alert mt-2 wrap-break-word">{prog.error}</div>}
               {prog.log_tail.length > 0 && (
                 <pre className="mono text-[10px] text-txt-3 mt-2 max-h-32 overflow-auto whitespace-pre-wrap leading-tight">
                   {prog.log_tail.join('\n')}

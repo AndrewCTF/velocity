@@ -9,13 +9,11 @@ Sentinel-1 backscatter-drop (real but noisy). No invented geometry.
 from __future__ import annotations
 
 import asyncio
-import urllib.parse
-import urllib.request
 from typing import Any
 
 from app.imagery import cdse
 from app.intel import sar_damage
-from app.upstream import cache
+from app.upstream import cache, get_client
 
 DEFAULT_H = 18.0
 MAXB = 9000
@@ -56,7 +54,7 @@ DAMAGE_DATES = {
 _TTL = 12 * 3600.0
 
 
-def _overpass_query(q: str) -> dict[str, Any]:
+async def _overpass_query(q: str) -> dict[str, Any]:
     """POST an Overpass QL query, retrying across public mirrors.
 
     The main instance returns HTTP 429 under load (and times out), which used to
@@ -64,9 +62,6 @@ def _overpass_query(q: str) -> dict[str, Any]:
     list with a short backoff so a single throttled endpoint doesn't sink the
     request; raise only if EVERY mirror fails.
     """
-    import json
-    import time as _time
-
     from app.config import get_settings
 
     # The public Overpass mirrors forbid commercial/heavy use. On a commercial
@@ -80,27 +75,29 @@ def _overpass_query(q: str) -> dict[str, Any]:
     else:
         endpoints = [s.overpass_url] if s.overpass_url else _OVERPASS_ENDPOINTS
 
-    data = urllib.parse.urlencode({"data": q}).encode()
     last_err: Exception | None = None
     for i, endpoint in enumerate(endpoints):
-        req = urllib.request.Request(
-            endpoint, data=data, headers={"User-Agent": "osint-research/1.0"}
-        )
         try:
-            # 40s per mirror keeps the worst case (all 3 mirrors) within an
-            # interactive budget; 180s × 3 was past any usable click-to-result.
-            return json.loads(urllib.request.urlopen(req, timeout=40).read())
+            # Shared IPv4-pinned client. 40s per mirror keeps the worst case (all
+            # 3 mirrors) within an interactive budget; 180s x 3 was past any
+            # usable click-to-result.
+            r = await get_client().post(
+                endpoint, data={"data": q}, headers={"User-Agent": "osint-research/1.0"},
+                timeout=40.0,
+            )
+            r.raise_for_status()
+            return r.json()
         except Exception as e:  # 429, timeout, transient DNS — try the next mirror
             last_err = e
             if i < len(endpoints) - 1:
-                _time.sleep(1.5)
+                await asyncio.sleep(1.5)
     raise RuntimeError(f"all Overpass mirrors failed: {last_err}")
 
 
-def _fetch_footprints(bbox: tuple[float, float, float, float]) -> list[dict[str, Any]]:
+async def _fetch_footprints(bbox: tuple[float, float, float, float]) -> list[dict[str, Any]]:
     lon0, lat0, lon1, lat1 = bbox
     q = f'[out:json][timeout:120];(way["building"]({lat0},{lon0},{lat1},{lon1}););out geom;'
-    d = _overpass_query(q)
+    d = await _overpass_query(q)
     out = []
     for e in d.get("elements", []):
         g = e.get("geometry")
@@ -173,7 +170,7 @@ async def build_bbox(bbox: tuple[float, float, float, float]) -> dict[str, Any]:
     key = "lod1:bbox:" + ",".join(f"{c:.4f}" for c in bbox)
 
     async def load() -> dict[str, Any]:
-        blds = await asyncio.to_thread(_fetch_footprints, bbox)
+        blds = await _fetch_footprints(bbox)
         blds.sort(key=lambda b: _ring_area_m2(b["ring"], bbox[1]), reverse=True)
         blds = blds[:MAXB]
         feats = [
@@ -212,7 +209,7 @@ async def build(aoi: str) -> dict[str, Any]:
     pre, post = DAMAGE_DATES.get(aoi, ("2024-08-20", "2024-11-25"))
 
     async def load() -> dict[str, Any]:
-        blds = await asyncio.to_thread(_fetch_footprints, bbox)
+        blds = await _fetch_footprints(bbox)
         blds.sort(key=lambda b: _ring_area_m2(b["ring"], bbox[1]), reverse=True)
         blds = blds[:MAXB]
 

@@ -35,8 +35,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
-import ipaddress
 import json
+import re
 import socket
 import time
 import uuid
@@ -47,6 +47,7 @@ from urllib.parse import unquote, urlsplit
 from app.config import Settings, get_settings
 from app.intel.ontology import Object, get_registry
 from app.keys import UserCtx
+from app.netguard import is_non_public_ip
 from app.upstream import get_client
 
 EVIDENCE_KIND = "evidence"
@@ -61,7 +62,16 @@ METHOD_URL = "url"
 METHOD_FILE = "file_upload"
 METHOD_SCREENSHOT = "screenshot"
 METHOD_FEED_FREEZE = "feed_freeze"
-_METHODS = frozenset({METHOD_URL, METHOD_FILE, METHOD_SCREENSHOT, METHOD_FEED_FREEZE})
+# A window of the OWNED ARCHIVE rather than a moment of the live feed: what
+# arrived, departed and stayed inside a box between two times. It is a distinct
+# method because the custody story is different — a feed freeze attests to what
+# the platform was being told right now, this attests to what the platform
+# RECORDED over a span, which is the thing a stateless viewer cannot produce at
+# all and the thing a skeptic will actually ask about.
+METHOD_REPLAY_WINDOW = "replay_window"
+_METHODS = frozenset(
+    {METHOD_URL, METHOD_FILE, METHOD_SCREENSHOT, METHOD_FEED_FREEZE, METHOD_REPLAY_WINDOW}
+)
 
 # Response headers worth notarizing on a URL capture (provenance, not the whole
 # noisy set). Server/date/content-type place the capture; the security/caching
@@ -110,6 +120,9 @@ def override_evidence_dir(path: str | None) -> None:
     _DIR_OVERRIDE = path
 
 
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+
+
 def _blob_dir(settings: Settings) -> Path:
     return Path(_DIR_OVERRIDE or settings.evidence_dir)
 
@@ -119,7 +132,15 @@ def blob_path(settings: Settings, sha256: str) -> Path:
 
     Sharding by the first two hex chars keeps any single directory small even
     with hundreds of thousands of captures (256 buckets).
+
+    Raises ``ValueError`` unless ``sha256`` is 64 lowercase hex chars. The hash
+    reaching here is ``props.sha256`` off an ontology object, and
+    ``POST /api/ontology/object`` lets a caller write any props onto an
+    ``evidence:`` id, so without this a ``../`` value reads any file on the box
+    (``/dev/zero`` exhausts memory) and ``blob_exists`` becomes a file oracle.
     """
+    if not _SHA256_RE.fullmatch(sha256 or ""):
+        raise ValueError("not a sha256 hex digest")
     return _blob_dir(settings) / sha256[:2] / sha256
 
 
@@ -145,7 +166,10 @@ def _write_blob(settings: Settings, sha256: str, data: bytes) -> None:
 
 
 def read_blob(settings: Settings, sha256: str) -> bytes | None:
-    path = blob_path(settings, sha256)
+    try:
+        path = blob_path(settings, sha256)
+    except ValueError:
+        return None
     if not path.exists():
         return None
     return path.read_bytes()
@@ -166,7 +190,10 @@ def verify_blob(settings: Settings, sha256: str) -> bool:
 def blob_exists(settings: Settings, sha256: str) -> bool:
     """Cheap presence check (stat, no read). Used by the manifest so exporting a
     large case is not O(all bytes); the explicit /verify route re-hashes."""
-    return blob_path(settings, sha256).exists()
+    try:
+        return blob_path(settings, sha256).exists()
+    except ValueError:
+        return False
 
 
 class EvidenceError(Exception):
@@ -317,28 +344,7 @@ async def capture_bytes(
 
 def _ip_is_blocked(ip: str) -> bool:
     """Block any non-public address (SSRF guard). Unparseable → blocked."""
-    try:
-        addr = ipaddress.ip_address(ip)
-    except ValueError:
-        return True
-    # Unwrap IPv4-in-IPv6 encodings to their embedded IPv4 before classifying.
-    # Older CPython (the pinned python:3.12-slim container) does NOT delegate a
-    # mapped literal like ::ffff:169.254.169.254 to the is_* flags, so it would
-    # otherwise read as public and slip past the guard to reach cloud metadata.
-    if isinstance(addr, ipaddress.IPv6Address):
-        embedded = addr.ipv4_mapped or addr.sixtofour
-        if embedded is None and addr.teredo is not None:
-            embedded = addr.teredo[1]  # Teredo client IPv4
-        if embedded is not None:
-            addr = embedded
-    return (
-        addr.is_private
-        or addr.is_loopback
-        or addr.is_link_local
-        or addr.is_reserved
-        or addr.is_multicast
-        or addr.is_unspecified
-    )
+    return is_non_public_ip(ip)
 
 
 def _validate_public_host_sync(host: str) -> None:
@@ -500,6 +506,87 @@ async def capture_feed_freeze(
         filename=f"{entity_id.replace(':', '_')}.json",
         title=f"Live state: {entity_id}",
         extra_props={"entity_id": entity_id, "entity_snapshot": snapshot},
+        settings=settings,
+    )
+
+
+async def capture_replay_window(
+    ctx: UserCtx,
+    *,
+    bbox: tuple[float, float, float, float],
+    at_a: float,
+    at_b: float,
+    window_sec: int,
+    kind: str | None,
+    diff: dict[str, Any],
+    source_context: str | None = None,
+    settings: Settings | None = None,
+) -> Object:
+    """Notarize what changed inside a box between two moments of our own archive.
+
+    The competitor case, stated plainly because it is the whole argument for
+    this function: a stateless fusion globe can serialize its camera, its layer
+    set and one tracked target into a share URL. It cannot answer "is this a
+    different four vessels than last Tuesday", because it never held last
+    Tuesday. We do, so the answer exists — and once it exists it should leave
+    the building as something a skeptic can re-check, not as a screenshot.
+
+    The DIFF IS COMPUTED BY THE CALLER FROM THE ARCHIVE, never accepted from the
+    client. That is the difference between evidence and an assertion: a
+    feed-freeze notarizes a snapshot the client handed us, which is fine for
+    "this is what my console showed", but a window that claims six vessels left
+    a terminal has to be something the platform derived from its own store or it
+    proves nothing.
+
+    Canonical JSON with sorted keys, so the same window over the same archive
+    always yields the same hash and `GET /api/evidence/{sha}/verify` can be run
+    by someone who does not trust us.
+    """
+    payload = {
+        "bbox": list(bbox),
+        "at_a": at_a,
+        "at_b": at_b,
+        "window_sec": window_sec,
+        "kind": kind,
+        "diff": diff,
+    }
+    canon = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    # Take the TRUE counts off the diff, never len() of the lists. window_diff
+    # caps the id arrays at `limit` while its own `counts` stay honest, so
+    # measuring the arrays produced an artifact that said "500 stayed" about a
+    # window where 979 did. An exhibit that silently truncates is worse than no
+    # exhibit: it is wrong in a way that looks precise. `truncated` is recorded
+    # alongside so a reader can tell a capped list from a complete one.
+    true_counts = diff.get("counts") if isinstance(diff.get("counts"), dict) else None
+    counts = {
+        k: int((true_counts or {}).get(k, len(diff.get(k) or [])))
+        for k in ("arrived", "departed", "stayed")
+    }
+    truncated = {
+        k: counts[k] > len(diff.get(k) or []) for k in ("arrived", "departed", "stayed")
+    }
+    return await capture_bytes(
+        ctx,
+        data=canon,
+        media_type="application/json",
+        capture_method=METHOD_REPLAY_WINDOW,
+        source_context=source_context,
+        filename="replay-window.json",
+        title=(
+            f"Replay window: {counts['arrived']} arrived, "
+            f"{counts['departed']} departed, {counts['stayed']} stayed"
+        ),
+        extra_props={
+            "bbox": list(bbox),
+            "at_a": at_a,
+            "at_b": at_b,
+            "window_sec": window_sec,
+            "entity_kind": kind,
+            "counts": counts,
+            # True when the stored id list is shorter than the count it reports.
+            "truncated": truncated,
+            "diff": diff,
+        },
         settings=settings,
     )
 

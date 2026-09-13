@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import time
 from typing import Any
 
@@ -319,6 +320,33 @@ async def _gather_context(kind: str, eid: str, props: dict[str, Any]) -> tuple[d
     return {}, "skipped"
 
 
+# An object id in the evidence has the same shape the citation contract asks the
+# model to bracket: a kind, a colon, an identifier. Harvest them from the exact
+# strings that went INTO the prompt, so the allowed set is the evidence itself
+# rather than a second guess at what the evidence probably contained.
+_EVIDENCE_ID_RE = re.compile(r"\b([a-z_]+:[A-Za-z0-9_.\-]+)")
+
+
+def _allowed_ids(kind: str, eid: str, *payloads: str) -> set[str]:
+    """Every object id the model was actually shown, plus the subject itself.
+
+    The subject is added in both the prefixed and raw-prefixed forms because the
+    globe sends "<kind>:<raw>" and some callers send a bare id; a brief that
+    cites its own subject must never read as a fabrication over a formatting
+    difference.
+    """
+    ids: set[str] = set()
+    raw = eid.split(":", 1)[1].strip() if ":" in eid else eid.strip()
+    k = kind.strip().lower()
+    if raw:
+        ids.add(f"{k}:{raw}")
+    if eid.strip():
+        ids.add(eid.strip())
+    for payload in payloads:
+        ids.update(_EVIDENCE_ID_RE.findall(payload or ""))
+    return ids
+
+
 async def _safe_context(kind: str, eid: str, props: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """`_gather_context` under a hard timeout; on timeout or any error the
     brief runs on the raw props alone and the status reports "skipped"."""
@@ -359,7 +387,9 @@ async def post_selection_brief(
         # style rider stays last among the riders (the guarded ordering in
         # docs/decisions.md), and the injection guard remains the final word.
         # Turns "cite the concrete numbers and ids" from an instruction nobody
-        # can check into a bracket form we can verify against the real ids below.
+        # can check into a bracket form verified against the real ids below --
+        # see the unknown_citations gate after the call. This comment described
+        # a check that did not exist until 2026-08-30.
         system = llm.with_prose_style(
             llm.with_citations(
                 "You are a senior OSINT watch analyst briefing a watch floor. "
@@ -380,6 +410,7 @@ async def post_selection_brief(
             )
         )
         user = f"{body.kind} {body.id}:\n{props_json}"
+        context_json = ""
         if context:
             context_json = json.dumps(context, default=str, separators=(",", ":"))
             user += f"\n\nENRICHMENT:\n{context_json}"
@@ -400,8 +431,40 @@ async def post_selection_brief(
         if not res.ok:
             # Never surface the raw backend error string to a client (copy rule).
             raise HTTPException(status_code=502, detail="AI assessment unavailable")
+
+        # The grounding gate. llm.is_grounded has existed, with a docstring
+        # saying "the caller can then decline to render", and no caller, since
+        # it was written; this is that caller.
+        #
+        # Two failures, deliberately treated differently:
+        #   cites an id we never supplied -> WITHHOLD. This is the dangerous one.
+        #     It looks like provenance, it survives a skim, and an analyst who
+        #     checks it finds nothing. Serving it labelled would still put a
+        #     fabricated trail in front of someone whose job is checking things.
+        #   cites nothing at all -> SERVE, flagged `grounded: false`. Unsourced
+        #     prose is weaker, not false, and refusing it would delete a useful
+        #     brief over a formatting habit.
+        allowed = _allowed_ids(body.kind, body.id, props_json, context_json)
+        fabricated = llm.unknown_citations(res.text, allowed)
+        if fabricated:
+            return {
+                "ok": False,
+                "withheld": "unknown-citations",
+                "detail": (
+                    "Assessment withheld: it cited "
+                    + ", ".join(fabricated[:3])
+                    + (" and others" if len(fabricated) > 3 else "")
+                    + ", which are not in the evidence for this selection."
+                ),
+                "unknown_citations": fabricated[:8],
+                "model": res.model,
+                "backend": res.backend,
+                "latency_ms": round((time.monotonic() - started) * 1000),
+                "enrichment": enrichment_status,
+            }
         return {
             "ok": True,
+            "grounded": llm.is_grounded(res.text, allowed),
             "text": res.text,
             "model": res.model,
             "backend": res.backend,

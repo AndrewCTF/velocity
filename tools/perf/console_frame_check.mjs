@@ -31,7 +31,11 @@ const browser = await chromium.launch({
 });
 const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
 await ctx.addInitScript(() => {
-  localStorage.setItem('velocity.onboarded', '1');
+  // 'velocity.onboarded.v1' — Onboarding.tsx:8 versioned the key; the old
+  // unversioned one stopped suppressing the tour, so every run since was
+  // measuring the console with the WELCOME modal open over it.
+  localStorage.setItem('velocity.onboarded.v1', '1');
+  localStorage.setItem('velocity.aiSetupSeen', '1'); // AppRouter.tsx:163 AiSetupGate
   localStorage.setItem('velocity.openModeDismissed', '1');
 });
 const page = await ctx.newPage();
@@ -68,7 +72,15 @@ const panels = await page.evaluate(() => {
   const dockText = (dock?.textContent || '').trim();
   // Provenance has to be visible on the rows themselves, not only in the filter.
   const marks = document.querySelectorAll('section abbr[title^="Sensor"], section abbr[title^="Registry"], section abbr[title^="Filing"], section abbr[title^="Claim"]');
-  return { dockChars: dockText.length, tierMarks: marks.length };
+  // TierMark renders a 21px aria-hidden spacer instead of an <abbr> when
+  // rowTier() came back undefined (shell/panels/LayersPanel.tsx:49). THAT is the
+  // invariant - a visible row with no tier - and it is what to count. The old
+  // check asserted `marks >= 20`, a floor calibrated against the folder
+  // open-state of 2026-08-05; when a default changed and 16 rows rendered it
+  // failed while every one of the 16 still stated its tier. A gate that fails
+  // for a reason unrelated to the thing it guards trains people to ignore it.
+  const tierless = document.querySelectorAll('section span[aria-hidden="true"].w-\\[21px\\]');
+  return { dockChars: dockText.length, tierMarks: marks.length, tierless: tierless.length };
 });
 
 const results = [
@@ -86,8 +98,8 @@ const results = [
   },
   {
     name: 'every visible layer row states its provenance tier',
-    ok: panels.tierMarks >= 20,
-    got: `${panels.tierMarks} tier marks rendered`,
+    ok: panels.tierless === 0 && panels.tierMarks > 0,
+    got: `${panels.tierMarks} rows state a tier, ${panels.tierless} render the no-tier spacer`,
   },
   { name: 'no console errors', ok: consoleErrors.length === 0, got: `${consoleErrors.length}` },
 ];

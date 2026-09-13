@@ -31,6 +31,7 @@ Domains covered:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -539,14 +540,95 @@ async def insecam_directory() -> dict[str, Any]:
 
 
 # ── Telegram channel scraper ─────────────────────────────────────────────
+#
+# t.me/s/<channel> is the public web preview Telegram serves to logged-out
+# visitors — no key, no account, no API. Measured 200 from this egress
+# 2026-08-21. Every channel below was probed live and returned at least one
+# message before it was added; a channel that renders empty (private, or
+# preview disabled) is silently useless, so an unprobed entry is a lie.
+#
+# This list is an ALLOWLIST and must stay one. The route 400s on anything not in
+# it, which is what stops `channel` from being a free-form fetch target — i.e.
+# the difference between a scraper and an SSRF-adjacent open proxy.
 TELEGRAM_CHANNELS = [
+    # ── original six ──
     "PikudHaOref_all",
     "intelslava",
     "warmonitors",
     "clashreport",
     "sentdefender",
     "middleeast_spectator",
+    # ── added 2026-08-21, each verified live (message count at probe time) ──
+    "Faytuks",             # 20 — conflict newswire, English
+    "Osinttechnical",      # 20 — OSINT imagery/geolocation
+    "war_monitor",         # 20 — multi-theatre conflict monitor
+    "AuroraIntel",         # 17 — Middle East incident reporting
+    "DDGeopolitics",       # 19 — geopolitics aggregation
+    "UkraineNow",          # 21 — Ukraine, English
+    "Ukr_G_M",             #  8 — Ukrainian general monitoring
+    "idf_telegram",        # 20 — IDF official
+    "Rybar",               # 16 — Russian mil-blogger, state-aligned
+    "grey_zone",           # 16 — Wagner-adjacent, state-aligned
+    "SputnikInt",          # 20 — Russian state media
+    "Tass_agency",         # 27 — Russian state media
+    "insiderpaper",        # 20 — breaking-news aggregator
 ]
+
+# Deliberately NOT added, each probed and empty (private or preview disabled):
+# rybar_force, GeoConfirmed, NOELreports, IntelRepublic, ukrainenowenglish,
+# Militarylandnet, disclosetv, Global_Intelligence, bellingcatofficial.
+# Re-probe before assuming any of them is available.
+
+# One message container. Splitting on this and parsing WITHIN each block is what
+# keeps text/date/link/views aligned: the previous parser collected texts and
+# <time> stamps as two flat lists and zipped them by index, which silently
+# mispairs the moment a message has no text (photo-only) or the page carries a
+# <time> outside a message.
+_TG_BLOCK = re.compile(r'<div class="tgme_widget_message[ _"][^>]*data-post="([^"]+)"', re.I)
+_TG_TEXT = re.compile(
+    r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', re.DOTALL
+)
+_TG_TIME = re.compile(r'<time[^>]*datetime="([^"]+)"')
+_TG_VIEWS = re.compile(r'tgme_widget_message_views">([^<]+)')
+_TG_TAG = re.compile(r"<[^>]+>")
+_TG_BR = re.compile(r"<br\s*/?>", re.I)
+
+
+def _parse_telegram(html: str, channel: str, limit: int) -> list[dict[str, str]]:
+    """Public-preview HTML -> messages. Pure, so it is testable against a fixture.
+
+    No media extraction: the live bodies probed on 2026-08-21 carried only emoji
+    images under background-image, and tgme_widget_message_photo_wrap did not
+    appear at all. Writing an extractor against a shape never observed is how you
+    ship a parser that returns nothing forever.
+    """
+    bounds = [(m.group(1), m.start()) for m in _TG_BLOCK.finditer(html)]
+    out: list[dict[str, str]] = []
+    for i, (post_id, start) in enumerate(bounds):
+        stop = bounds[i + 1][1] if i + 1 < len(bounds) else len(html)
+        block = html[start:stop]
+        raw = _TG_TEXT.search(block)
+        if raw is None:
+            continue  # photo-only message: no text to carry
+        text = _TG_TAG.sub("", _TG_BR.sub("\n", raw.group(1))).strip()
+        if not text:
+            continue
+        msg: dict[str, str] = {
+            "text": text[:500],
+            # A permalink is what makes a scraped line checkable by a human,
+            # which is the whole point of an OSINT feed.
+            "url": f"https://t.me/{post_id}",
+        }
+        when = _TG_TIME.search(block)
+        if when:
+            msg["datetime"] = when.group(1)
+        views = _TG_VIEWS.search(block)
+        if views:
+            msg["views"] = views.group(1).strip()
+        out.append(msg)
+        if len(out) >= limit:
+            break
+    return out
 
 
 @router.get("/api/news/telegram")
@@ -558,22 +640,9 @@ async def telegram_channels(
         raise HTTPException(400, f"Channel must be one of: {', '.join(TELEGRAM_CHANNELS)}")
 
     async def load() -> dict[str, Any]:
-        import re
-
         url = f"https://t.me/s/{channel}"
         html = await fg.fetch_text(url)
-        messages: list[dict[str, str]] = []
-        for block in re.findall(
-            r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>',
-            html,
-            re.DOTALL,
-        )[:limit]:
-            text = re.sub(r"<[^>]+>", "", block).strip()
-            if text:
-                messages.append({"text": text[:500]})
-        dates = re.findall(r'<time[^>]*datetime="([^"]+)"', html)
-        for i, d in enumerate(dates[:len(messages)]):
-            messages[i]["datetime"] = d
+        messages = _parse_telegram(html, channel, limit)
         return {
             "channel": channel,
             "count": len(messages),
@@ -582,6 +651,12 @@ async def telegram_channels(
         }
 
     return await fg.cached(f"telegram:{channel}:{limit}", 120.0, load)
+
+
+@router.get("/api/news/telegram/channels")
+async def telegram_channel_list() -> dict[str, Any]:
+    """The allowlist, so the UI can offer it instead of hardcoding a copy."""
+    return {"count": len(TELEGRAM_CHANNELS), "channels": TELEGRAM_CHANNELS}
 
 
 # ── GDELT DOC 2 API ──────────────────────────────────────────────────────

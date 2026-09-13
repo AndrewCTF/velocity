@@ -76,6 +76,8 @@ ObjectKind = Literal[
     "ds_fire", "ds_radiation", "ds_event",
     "satnogs_obs", "satnogs_stn", "sonde",
     "mine", "osm_military", "wikimapia", "sdr_station",
+    # 2026-08-21 — PSKReporter. An emitter heard by an independent station.
+    "radio_report",
     "object",
 ]
 
@@ -97,6 +99,8 @@ _KNOWN_KINDS: frozenset[str] = frozenset(
         "ds_fire", "ds_radiation", "ds_event",
         "satnogs_obs", "satnogs_stn", "sonde",
         "mine", "osm_military", "wikimapia", "sdr_station",
+        # 2026-08-21 — PSKReporter. An emitter heard by an independent station.
+        "radio_report",
         "object",
     )
 )

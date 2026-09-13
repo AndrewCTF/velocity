@@ -1,9 +1,18 @@
 """GET /api/timeline/density — bucketed activity histogram.
 
-Backed by the in-memory Observation store. Returns three series — detections
-(aircraft + vessel + quake observations), alerts (from the bus's recent
-buffer), and gaps (placeholder until per-MMSI gap tracking lands) — bucketed
-into N equal-width bins over the last `windowSec` seconds.
+Backed by the in-memory Observation store. Returns detections (aircraft +
+vessel + quake observations) and alerts (from the bus's recent buffer),
+bucketed into N equal-width bins over the last `windowSec` seconds.
+
+`gaps` is NOT one of them. It used to be `[0] * bins`, described in this
+docstring as a placeholder and returned unconditionally, which made an absent
+measurement and a measured zero indistinguishable on the wire: any caller
+reading the array saw "no AIS gaps in this window" and had no way to learn
+that nothing had looked. The console never rendered it, but the API is not
+only read by the console. So it is `null` now, with `gaps_status` saying why —
+the same posture `/api/status/sources` takes with its `unmeasured` list, and
+the same rule `tests/test_feed_honesty.py` holds the feeds to: a thing may be
+empty, it may not be empty and silent about why.
 """
 
 from __future__ import annotations
@@ -36,7 +45,6 @@ async def density(
     bin_width = window_sec / bins
     detections = [0] * bins
     alerts = [0] * bins
-    gaps = [0] * bins
 
     for o in store.window(seconds=window_sec):
         idx = int((o.t - (now - window_sec)) / bin_width)
@@ -55,7 +63,13 @@ async def density(
         "binWidthSec": bin_width,
         "detections": detections,
         "alerts": alerts,
-        "gaps": gaps,
+        # Not measured, and saying so beats a zero that reads as an observation.
+        # Per-MMSI gap tracking is what would fill this; until it exists the
+        # honest value is null. AisGapCard already gets real gaps per vessel
+        # from the dossier, so nothing user-facing regressed when this stopped
+        # pretending.
+        "gaps": None,
+        "gaps_status": "unmeasured",
     }
 
 

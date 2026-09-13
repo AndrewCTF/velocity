@@ -297,7 +297,7 @@ function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapsho
   };
 
   return (
-    <div className="relative w-full aspect-[256/159] overflow-hidden rounded-[3px] border border-white/[0.07] bg-[#05070b]">
+    <div className="relative w-full aspect-256/159 overflow-hidden rounded-[3px] border border-white/[0.07] bg-[#05070b]">
       <canvas
         ref={canvasRef}
         width={512}
@@ -309,7 +309,7 @@ function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapsho
         onClick={exportBurned}
         aria-label="Export this frame with detections burned in (PNG)"
         title="Export this frame with detections burned in (PNG)"
-        className="absolute top-1 left-1 z-[2] inline-flex items-center gap-1 mono text-[9px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-[2px] text-txt-1 bg-black/70 border border-white/20 cursor-pointer"
+        className="absolute top-1 left-1 z-2 inline-flex items-center gap-1 mono text-[9px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-[2px] text-txt-1 bg-black/70 border border-white/20 cursor-pointer"
       >
         <Download size={11} strokeWidth={1.75} aria-hidden />
         Frame

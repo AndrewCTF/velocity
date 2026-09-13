@@ -173,7 +173,7 @@ export function UploadModal({
             }}
             role="button"
             tabIndex={0}
-            className="rounded-md border border-dashed border-line-2 bg-bg-1 hover:border-accent-line px-4 py-5 text-center cursor-pointer transition-colors focus:outline-none focus:border-accent-line"
+            className="rounded-md border border-dashed border-line-2 bg-bg-1 hover:border-accent-line px-4 py-5 text-center cursor-pointer transition-colors focus:outline-hidden focus:border-accent-line"
           >
             <div className="text-[11px] text-txt-1">
               {file ? file.name : 'Drop CSV / JSON / NDJSON / GeoJSON / KML, or click to browse'}

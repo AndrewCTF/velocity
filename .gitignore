@@ -102,3 +102,6 @@ docs/superpowers/
 
 # Runtime local databases (SQLite, tile cache) — never committed
 /data/
+
+# Security framework PDFs: fetched on demand, see docs/security/references/README.md
+docs/security/references/*.pdf

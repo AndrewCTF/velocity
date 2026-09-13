@@ -424,21 +424,26 @@ def _build_global_grid() -> list[tuple[float, float]]:
 _GLOBAL_GRID: list[tuple[float, float]] = _build_global_grid()
 
 
-# Hosts we rotate across grid cells. ADSB.lol is the most reliable
-# aggregator, so it's deliberately placed at index 1 (the second try after
-# whichever airplanes.live cell is the deterministic primary). When
-# airplanes.live rate-limits us, adsb.lol picks up the slack with the lowest
-# miss rate.
+# Hosts we rotate across grid cells.
 #
 # The per-host primary is chosen deterministically by md5(lat,lon) so the
 # same cell always lands on the same host across polls (good for the
 # upstream's own cache locality). On 429/403/timeout we just walk down the
 # list — no breaker, no long-term memory of failures. A host that 429'd one
 # cell may still serve the next once its sliding rate-limit window advances.
+#
+# airplanes.live is LAST, not first, and not deleted. Measured 2026-08-21 from
+# the dev egress it 403s every verb (see the ban note under _FIREHOSE_URLS), and
+# unlike the firehose this list has no dead-skip — at index 0 it was the
+# deterministic primary for roughly a third of ~120 cells and each one paid a
+# full round trip into a wall on every fan-out. Last position costs nothing
+# here while the other two answer, and keeps the tier for a deploy the ban does
+# not cover: this is self-hosted software and the ban is scoped to whoever
+# asked. adsb.lol stays ahead of adsb.fi as the most reliable aggregator.
 _HEAD_HOSTS: list[str] = [
-    "https://api.airplanes.live",
     "https://api.adsb.lol",
     "https://opendata.adsb.fi/api",
+    "https://api.airplanes.live",
 ]
 
 
@@ -449,35 +454,87 @@ _HEAD_HOSTS: list[str] = [
 # knows about in one response — when one of them answers, we skip the grid
 # entirely and ship 10-15k features instead of 3k.
 #
-# The order matters: airplanes.live first because its dataset is the largest
-# and it explicitly publishes /v2/all-with-pos as the firehose verb;
-# adsb.lol second (same verb, ADSBExchange-compatible payload); adsb.fi
-# last via its dedicated /v2/snapshot endpoint. On 429 / 403 / 451 / 5xx we
-# walk to the next; if all firehoses fail we fall through to the per-cell
-# grid below, so a temporary rate-limit blip on every host doesn't blank
-# the map (the existing snapshot retain-fraction guard further smooths
-# this).
+# ORDER IS MEASURED, 2026-08-21, not theorised. What this list used to say was
+# "airplanes.live first because its dataset is the largest"; probed from the dev
+# egress every entry ahead of the last one was dead:
+#
+#   api.airplanes.live/v2/all-with-pos   403  policy ban (see below)
+#   api.adsb.lol/v2/all-with-pos         404  the verb does not exist
+#   opendata.adsb.fi/api/v2/snapshot     403  per-path WAF
+#   api.adsb.lol/v2/point/0/0/20000      200  11,441 aircraft, 6.4 MB
+#
+# So every global snapshot paid three failed round trips before the one that
+# works, and api.adsb.lol read `failing` in /api/status/sources because of a verb
+# it never had, while its point verb served the whole planet on the next line.
+#
+# REMOVED — api.airplanes.live/v2/all-with-pos. Its 403 body is not a WAF and not
+# a rate limit; it is an app-level ban carrying a contact address:
+#   {"error": "Please contact us at contact@airplanes.live. Your email MUST
+#    include any links, a description of the project, and any information you
+#    deem appropriate."}
+# Measured 403 on /v2/all-with-pos, /v2/point/... and /v2/mil alike, so it is
+# API-wide from here. No tier opens that — not a proxy, not WARP, not real
+# Chrome — and polling a host every 30 s after it asked to be emailed is the
+# opposite of how this repo treats upstreams. OPERATOR ACTION: email them; if
+# they restore access, put the entry back at the front, where its dataset earns
+# it. Do not "fix" this with headers or an address.
+#
+# REMOVED — api.adsb.lol/v2/all-with-pos. A 404 is the server saying the route
+# does not exist; that is egress-independent and cannot come back.
+#
+# adsb.fi's snapshot stays LAST rather than being deleted: its 403 is the
+# per-PATH WAF shape (the same host's /v2/lat/{lat}/lon/{lon}/dist/{d} answers
+# 200), which docs/decisions.md#getting-past-cloudflare documents as address- and
+# time-dependent. _try_firehose returns on the first success, so while the entry
+# above works this one costs zero requests, and a deploy on a different egress
+# still gets it. On 429 / 403 / 451 / 5xx we walk to the next; if all fail we
+# fall through to the per-cell grid, so a blip never blanks the map.
 _FIREHOSE_URLS: tuple[str, ...] = (
-    "https://api.airplanes.live/v2/all-with-pos",
-    "https://api.adsb.lol/v2/all-with-pos",
-    "https://opendata.adsb.fi/api/v2/snapshot",
     # adsb.lol full-snapshot quirk: a /v2/point at the globe centre with a
-    # planet-spanning radius returns EVERY aircraft adsb.lol knows (~8-9k),
-    # keyless and — unlike /v2/point grid cells and the /v2/all* verbs — NOT
-    # Cloudflare/451-blocked from a datacenter egress (measured 8,473 from the
-    # droplet while the all-with-pos verbs 404 and the aircraft.json mirrors
-    # ReadError). It's the reliable breadth partner to OpenSky's ~9k; unioned by
-    # icao24 the two push the snapshot back toward ~13k. Tried after the real
-    # firehose verbs so a residential deploy still prefers them.
+    # planet-spanning radius returns EVERY aircraft adsb.lol knows, keyless and
+    # — unlike the /v2/all* verbs and the aircraft.json mirrors — NOT
+    # Cloudflare/451-blocked from a datacenter egress. Measured 8,473 from the
+    # droplet and 11,441 from the dev egress on 2026-08-21. It is the reliable
+    # breadth partner to OpenSky's ~9k; unioned by icao24 the two push the
+    # snapshot back toward ~13k.
     "https://api.adsb.lol/v2/point/0/0/20000",
+    "https://opendata.adsb.fi/api/v2/snapshot",
 )
+
+
+def _disabled_hosts() -> set[str]:
+    """Hostnames the operator has switched off for this deployment."""
+    raw = get_settings().adsb_disabled_hosts or ""
+    return {h.strip().lower() for h in raw.split(",") if h.strip()}
+
+
+def _host_of(url: str) -> str:
+    return url.split("//", 1)[-1].split("/", 1)[0].lower()
+
+
+def head_hosts() -> list[str]:
+    """_HEAD_HOSTS minus anything disabled here. Never returns empty: a config
+    typo must degrade the tier, not delete it."""
+    off = _disabled_hosts()
+    if not off:
+        return _HEAD_HOSTS
+    kept = [u for u in _HEAD_HOSTS if _host_of(u) not in off]
+    return kept or _HEAD_HOSTS
+
+
+def firehose_urls() -> tuple[str, ...]:
+    """_FIREHOSE_URLS minus anything disabled here."""
+    off = _disabled_hosts()
+    if not off:
+        return _FIREHOSE_URLS
+    return tuple(u for u in _FIREHOSE_URLS if _host_of(u) not in off)
 
 
 def _primary_host_idx(lat: float, lon: float) -> int:
     """Deterministic (lat,lon) → primary host index. Stable across polls."""
     key = f"{lat:.4f}:{lon:.4f}".encode()
     h = hashlib.md5(key, usedforsecurity=False).digest()
-    return h[0] % len(_HEAD_HOSTS)
+    return h[0] % len(head_hosts())
 
 
 # Anchor fallback — coarse continental hub list. Only fires when the full
@@ -535,8 +592,9 @@ async def _fetch_anchor_fallback(
     async def hit_anchor(lat: float, lon: float) -> list[dict[str, Any]]:
         primary_idx = _primary_host_idx(lat, lon)
         async with _UPSTREAM_SEMAPHORE:
-            for offset in range(len(_HEAD_HOSTS)):
-                host = _HEAD_HOSTS[(primary_idx + offset) % len(_HEAD_HOSTS)]
+            hosts = head_hosts()
+            for offset in range(len(hosts)):
+                host = hosts[(primary_idx + offset) % len(hosts)]
                 url = f"{host}/v2/point/{lat}/{lon}/250"
                 try:
                     r = await client.get(url, timeout=cell_timeout)
@@ -662,8 +720,9 @@ async def _fetch_cell(
     async def load_cell() -> list[dict[str, Any]]:
         client = get_client()
         async with _UPSTREAM_SEMAPHORE:
-            for offset in range(len(_HEAD_HOSTS)):
-                host = _HEAD_HOSTS[(primary_idx + offset) % len(_HEAD_HOSTS)]
+            hosts = head_hosts()
+            for offset in range(len(hosts)):
+                host = hosts[(primary_idx + offset) % len(hosts)]
                 url = f"{host}/v2/point/{lat}/{lon}/250"
                 try:
                     r = await client.get(url, timeout=cell_timeout)
@@ -721,7 +780,7 @@ async def _try_firehose() -> list[dict[str, Any]] | None:
     HTTP-200 text/plain rate-limit body the same way it does in the grid."""
     client = get_client()
     timeout = httpx.Timeout(8.0, connect=2.0)
-    for url in _FIREHOSE_URLS:
+    for url in firehose_urls():
         try:
             async with _UPSTREAM_SEMAPHORE:
                 r = await client.get(url, timeout=timeout)
@@ -1706,6 +1765,18 @@ async def _do_global_fanout() -> dict[str, Any]:
     # floor (Chromium crash / cold start), so the map can't go empty.
     if get_settings().adsb_sidecar_only:
         sidecar: dict[Any, dict[str, Any]] = {}
+        # Same per-cycle observer map the multi-tier union below builds. This
+        # path used to skip both it and _stamp_sources entirely and return
+        # early, so on a sidecar-only deployment EVERY contact reached the
+        # client with no `sources`, no `source_count` and no `confidence` —
+        # measured 2026-08-30 as 8,081 of 8,588 features, 94%, which
+        # /api/status/provenance then honestly reported as `unattributed`
+        # rather than guessing. The reader was right; this writer was missing.
+        # One tier means every contact here is single-source, and saying that
+        # plainly is the point: "8.5k contacts, none corroborated" is a real
+        # answer about this deployment, and "we cannot speak to 94% of them"
+        # is not.
+        sidecar_seen: dict[Any, set[str]] = {}
         _t0 = time.monotonic()
         feeds0 = await _await_within(
             asyncio.ensure_future(_readsb_feeds()), time.monotonic() + _FANOUT_BUDGET_S
@@ -1716,7 +1787,10 @@ async def _do_global_fanout() -> dict[str, Any]:
             # place, and global_snapshot() copies them. Without this a consumer
             # could copy a set that is half cycle N and half cycle N+1.
             async with _SNAPSHOT_LOCK:
-                await asyncio.to_thread(_merge_raw_into, sidecar, feeds0)
+                # Tier name matches the multi-tier path's, because it is the
+                # same source (_readsb_feeds); a different label here would
+                # split one tier into two in the provenance rollup.
+                await asyncio.to_thread(_merge_raw_into, sidecar, feeds0, sidecar_seen, "feeds")
         _t2 = time.monotonic()
         # Split the fan-out's wall time into "waiting for the feed" and "turning
         # it into features". Only the second is loop-blocking CPU, and telling
@@ -1725,6 +1799,7 @@ async def _do_global_fanout() -> dict[str, Any]:
         _CYCLE_MS["fanout_wait"] = round((_t1 - _t0) * 1000, 1)
         _CYCLE_MS["fanout_cpu"] = round((_t2 - _t1) * 1000, 1)
         if len(sidecar) >= _SIDECAR_ONLY_FLOOR:
+            _stamp_sources(sidecar, sidecar_seen)
             return {"type": "FeatureCollection", "features": list(sidecar.values())}
         # sidecar thin/down → fall through to the full multi-tier union.
 
@@ -2659,7 +2734,7 @@ async def _union_verb(verb: str, source: str | None = None) -> dict[str, Any]:
         except ValueError:
             return []
 
-    results = await asyncio.gather(*(_one(h) for h in _HEAD_HOSTS))
+    results = await asyncio.gather(*(_one(h) for h in head_hosts()))
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
     for ac_list in results:
@@ -2726,7 +2801,7 @@ async def _lol_lookup(
         return await cache.get_or_fetch(cache_key, ttl, lambda: _union_verb(verb))
 
     async def load() -> dict[str, Any]:
-        for host in _HEAD_HOSTS:
+        for host in head_hosts():
             url = f"{host}/v2/{verb}"
             try:
                 r = await get_client().get(url)

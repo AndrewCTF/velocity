@@ -12,7 +12,7 @@ export interface EvidenceProps {
   sha256: string;
   size_bytes: number;
   media_type: string;
-  capture_method: 'url' | 'file_upload' | 'screenshot' | 'feed_freeze';
+  capture_method: 'url' | 'file_upload' | 'screenshot' | 'feed_freeze' | 'replay_window';
   source_url?: string | null;
   source_context?: string | null;
   filename?: string | null;
@@ -63,6 +63,19 @@ interface EvidenceState {
   captureFeedFreeze: (
     entityId: string,
     snapshot: Record<string, unknown>,
+    context?: string,
+    situationId?: string,
+  ) => Promise<EvidenceObject | null>;
+  /** Freeze what changed inside a box between two moments of the OWNED archive.
+   *  The diff is computed server-side from our own store, so this is evidence
+   *  the platform derived rather than a snapshot the browser asserted -- see
+   *  apps/api/app/intel/evidence.py capture_replay_window. */
+  captureReplayWindow: (
+    bbox: { lamin: number; lomin: number; lamax: number; lomax: number },
+    atA: number,
+    atB?: number,
+    windowSec?: number,
+    kind?: string | null,
     context?: string,
     situationId?: string,
   ) => Promise<EvidenceObject | null>;
@@ -197,6 +210,37 @@ export const useEvidence = create<EvidenceState>((set) => ({
       set({ busy: false });
     }
   },
+  captureReplayWindow: async (bbox, atA, atB, windowSec, kind, context, situationId) => {
+    set({ busy: true, error: null });
+    try {
+      const r = await apiFetch('/api/evidence/capture/replay-window', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...bbox,
+          at_a: atA,
+          at_b: atB ?? null,
+          window_sec: windowSec ?? 600,
+          kind: kind ?? null,
+          context: context || null,
+          situation_id: situationId || null,
+        }),
+      });
+      if (!r.ok) {
+        set({ error: `replay freeze failed (${r.status})` });
+        return null;
+      }
+      const obj = (await r.json()) as EvidenceObject;
+      await insertFront(set, obj);
+      return obj;
+    } catch {
+      set({ error: 'replay freeze failed (network)' });
+      return null;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
   attach: async (sha, situationId, note) => {
     try {
       const r = await apiFetch(`/api/evidence/${encodeURIComponent(sha)}/attach`, {

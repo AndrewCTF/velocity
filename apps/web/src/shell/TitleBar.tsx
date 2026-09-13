@@ -444,7 +444,7 @@ export function TitleBar({
               aria-expanded={menu === m}
               aria-haspopup="menu"
               className={`h-[30px] rounded-sm px-[9px] text-[12px] ${
-                menu === m ? 'bg-[var(--hover)] text-txt-0' : 'text-txt-1 hover:bg-[var(--hover)]'
+                menu === m ? 'bg-(--hover) text-txt-0' : 'text-txt-1 hover:bg-(--hover)'
               }`}
             >
               {m}
@@ -455,7 +455,7 @@ export function TitleBar({
                 role="menu"
                 aria-label={m}
                 style={{ position: 'fixed', left: anchor.left, top: anchor.top }}
-                className="z-[var(--z-dropdown)] max-h-[70vh] w-[264px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-[var(--sh-pop)]"
+                className="z-(--z-dropdown) max-h-[70vh] w-[264px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-(--sh-pop)"
               >
                 {MENU_ITEMS[m].map((it) => {
                   const why = it.disabled?.(ctx) ?? null;
@@ -476,7 +476,7 @@ export function TitleBar({
                       } ${
                         why
                           ? 'cursor-not-allowed text-txt-3'
-                          : 'text-txt-1 hover:bg-[var(--hover)] hover:text-txt-0'
+                          : 'text-txt-1 hover:bg-(--hover) hover:text-txt-0'
                       }`}
                     >
                       <Icon
@@ -503,7 +503,7 @@ export function TitleBar({
           setLauncher((v) => !v);
         }}
         aria-expanded={launcher}
-        className="ml-2 flex h-6 items-center gap-[6px] rounded-sm px-2 text-[12px] text-txt-1 hover:bg-[var(--hover)]"
+        className="ml-2 flex h-6 items-center gap-[6px] rounded-sm px-2 text-[12px] text-txt-1 hover:bg-(--hover)"
       >
         <Icon name="grid" className="h-3 w-3" />
         {APP_META[activeApp]?.label ?? 'Apps'}
@@ -547,7 +547,7 @@ export function TitleBar({
         <div
           ref={popRef}
           style={{ position: 'fixed', left: anchor.left, top: anchor.top }}
-          className="z-[var(--z-dropdown)] max-h-[70vh] w-[260px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-[var(--sh-pop)]"
+          className="z-(--z-dropdown) max-h-[70vh] w-[260px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-(--sh-pop)"
           role="menu"
         >
           <Group label="Pinned">
@@ -617,7 +617,7 @@ export function TitleBar({
           type="button"
           onClick={onOpenInbox}
           title="Inbox: alerts triaged into unread, working and done"
-          className="flex h-6 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-[var(--hover)]"
+          className="flex h-6 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-(--hover)"
         >
           <Icon name="inbox" className="h-3 w-3" />
           {inbox > 0 && <span className="mono text-accent-fg">{inbox}</span>}
@@ -627,7 +627,7 @@ export function TitleBar({
         type="button"
         onClick={onOpenAlerts}
         title="Alerts: the live rule-hit ticker"
-        className="flex h-6 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-[var(--hover)]"
+        className="flex h-6 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-(--hover)"
       >
         <Icon name="bell" className="h-3 w-3" />
         {alerts > 0 && <span className="mono text-alert-fg">{alerts}</span>}
@@ -639,7 +639,7 @@ export function TitleBar({
         type="button"
         onClick={onOpenSettings}
         title="Settings: dashboard, aircraft motion and API keys"
-        className="flex h-6 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-[var(--hover)]"
+        className="flex h-6 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-(--hover)"
       >
         <Icon name="settings" className="h-3 w-3" />
         Settings
@@ -664,7 +664,7 @@ function SignInChip(): JSX.Element | null {
     return (
       <Link
         to="/login"
-        className="flex h-6 shrink-0 items-center rounded-sm border border-accent-line px-2 text-[12px] text-accent-fg hover:bg-[var(--hover)]"
+        className="flex h-6 shrink-0 items-center rounded-sm border border-accent-line px-2 text-[12px] text-accent-fg hover:bg-(--hover)"
       >
         Sign in
       </Link>
@@ -675,7 +675,7 @@ function SignInChip(): JSX.Element | null {
       type="button"
       onClick={() => void signOut()}
       title={user.email ?? user.id}
-      className="flex h-6 shrink-0 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-[var(--hover)]"
+      className="flex h-6 shrink-0 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-(--hover)"
     >
       <Icon name="user" className="h-3 w-3" />
       <span className="max-w-[110px] truncate">{user.email ?? user.id.slice(0, 8)}</span>
@@ -711,7 +711,7 @@ function AppRow({
   return (
     <div
       className={`group flex h-[26px] items-center gap-2 px-[14px] text-[12px] ${
-        active ? 'bg-accent-dim text-accent-fg' : 'text-txt-1 hover:bg-[var(--hover)]'
+        active ? 'bg-accent-dim text-accent-fg' : 'text-txt-1 hover:bg-(--hover)'
       }`}
     >
       <button

@@ -1,6 +1,7 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import cesium from 'vite-plugin-cesium';
+import { buildCsp } from './csp';
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -16,35 +17,40 @@ declare const process: { env: Record<string, string | undefined> };
 const apiTarget = process.env['VITE_API_URL'] ?? 'http://127.0.0.1:8000';
 const wsTarget = apiTarget.replace(/^http/, 'ws');
 
-// Hardened local/desktop profile: VELOCITY_DESKTOP=1 injects a strict CSP that
-// locks the WebView to same-origin + the local backend, so nothing can phone
-// home. NOT applied to the normal (hosted) build — index.html is shared, and a
-// hosted deploy talks to a same-origin API + cross-origin Supabase that this
-// CSP would otherwise block. Tauri (Phase 1) sets the same CSP at the shell.
-const hardened = process.env['VELOCITY_DESKTOP'] === '1';
-const CSP = [
-  "default-src 'self'",
-  // local backend + Cesium's data:/blob: wasm decoders (NOT external — these are
-  // in-bundle). Without data:/blob: here, Cesium's WASM (draco/ktx2) fetch is
-  // CSP-blocked → its texture-decode workers die → blank/untextured globe.
-  "connect-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000 http://localhost:8000 ws://localhost:8000 data: blob:",
-  "img-src 'self' data: blob: http://localhost:8081 http://127.0.0.1:8081", // tiles same-origin + local tileserver-gl rasterizer (dark vector)
-  "style-src 'self' 'unsafe-inline'", // Cesium widgets inject inline styles
-  "font-src 'self'",
-  "worker-src 'self' blob:", // Cesium + splat viewer web workers
-  // blob: needed: Cesium workers importScripts() a blob: child script.
-  "script-src 'self' 'wasm-unsafe-eval' blob:",
-].join('; ');
+// Every production build carries a CSP (csp.ts says what each source is for).
+// VELOCITY_DESKTOP=1 adds the Tauri loopback backend and IPC bridge. Build
+// only: the dev server's HMR client needs inline script and eval.
+const desktop = process.env['VELOCITY_DESKTOP'] === '1';
 
-function cspPlugin() {
+function cspPlugin(): Plugin {
+  let env: Record<string, string> = {};
   return {
-    name: 'velocity-local-csp',
-    transformIndexHtml(html: string): string {
-      if (!hardened) return html;
-      return html.replace(
-        '</head>',
-        `    <meta http-equiv="Content-Security-Policy" content="${CSP}" />\n  </head>`,
-      );
+    name: 'velocity-csp',
+    apply: 'build',
+    configResolved(config) {
+      env = config.env as Record<string, string>;
+    },
+    transformIndexHtml: {
+      // After vite-plugin-cesium has added its tags.
+      order: 'post',
+      handler(html: string): string {
+        const content = buildCsp({
+          desktop,
+          apiUrl: env['VITE_API_URL'],
+          supabaseUrl: env['VITE_SUPABASE_URL'],
+        });
+        const meta = `<meta http-equiv="Content-Security-Policy" content="${content}" />`;
+        // A meta CSP governs only what the parser meets AFTER it, so placement
+        // is policy. It goes directly after vite-plugin-cesium's prebuilt
+        // Cesium.js and before everything else: that bundle's Knockout copy
+        // runs `(0, eval)("this")` at load, which would otherwise need
+        // 'unsafe-eval' for the whole app. Cesium.js is a static same-origin
+        // file; the app bundle, workers, and anything injected later are all
+        // under the policy, and a later eval from Cesium is still refused.
+        const cesiumTag = /<script src="[^"]*\/Cesium\.js"><\/script>/;
+        if (cesiumTag.test(html)) return html.replace(cesiumTag, (tag) => `${tag}\n    ${meta}`);
+        return html.replace(/<head>/, `<head>\n    ${meta}`);
+      },
     },
   };
 }

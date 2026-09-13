@@ -178,7 +178,7 @@ export function SanctionsCard({
 
 function Row({ k, v }: { k: string; v: string | null }): JSX.Element {
   return (
-    <div className="flex min-h-[20px] items-baseline gap-2 px-[14px] py-[1px] text-[12px]">
+    <div className="flex min-h-[20px] items-baseline gap-2 px-[14px] py-px text-[12px]">
       <span className="min-w-0 flex-1 truncate text-txt-3">{k}</span>
       <span className={`mono shrink-0 tabular-nums ${v ? 'text-txt-1' : 'text-txt-3'}`}>
         {v ?? '—'}

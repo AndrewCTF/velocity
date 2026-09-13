@@ -235,18 +235,29 @@ def _clamped_retention_hours() -> int:
     return hours
 
 
+# Paths whose schema/auto_vacuum setup has already run in this process.
+_SCHEMA_READY: set[str] = set()
+
+
 def _connect(path: str | None = None) -> sqlite3.Connection:
     """Open the WRITE connection: the legacy file, or today's shard when roots
     are configured. Pass *path* to open one specific shard."""
     if path is None:
         path = str(_shard_path_for(time.time())) if sharded() else _resolved_db_path()
+    # The schema work below is idempotent, which made it easy to leave running on
+    # EVERY open — and this module opens a connection at 16 call sites, including
+    # the flush that fires every _FLUSH_INTERVAL_S and every read query. Do it
+    # once per path instead. Re-armed when the file is missing (a fresh boot, a
+    # new shard, a test that removed it), so "already set up" can never outlive
+    # the database it describes.
+    first_open = path not in _SCHEMA_READY or not Path(path).exists()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(path, check_same_thread=False)
     # auto_vacuum only takes on a FRESH db (or after a full VACUUM), and must be
     # set before the first table is created — so issue it here, ahead of the
     # CREATE TABLE below. On an existing store it is a no-op until the next full
     # VACUUM converts it; the maintenance pass falls back to full VACUUM then.
-    if get_settings().history_incremental_vacuum:
+    if first_open and get_settings().history_incremental_vacuum:
         con.execute("PRAGMA auto_vacuum=INCREMENTAL")
     con.execute("PRAGMA journal_mode=WAL")
     # A WAL only checkpoints past its OLDEST live reader. The recorder writes
@@ -257,6 +268,14 @@ def _connect(path: str | None = None) -> sqlite3.Connection:
     # 48.6 GB — 98 % of it redundant page versions pinned by readers. The limit
     # bounds the file whatever the read pattern does.
     con.execute(f"PRAGMA journal_size_limit={_WAL_SIZE_LIMIT_BYTES}")
+    # NORMAL, not the default FULL. Under WAL that is the documented-safe
+    # setting: a power loss can cost the last transactions but the database is
+    # never corrupted. This store is a position recorder that flushes every
+    # _FLUSH_INTERVAL_S, so the exposure is seconds of track, and FULL was
+    # paying an fsync per commit for it.
+    con.execute("PRAGMA synchronous=NORMAL")
+    if not first_open:
+        return con
     con.execute(
         """
         CREATE TABLE IF NOT EXISTS positions (
@@ -273,6 +292,7 @@ def _connect(path: str | None = None) -> sqlite3.Connection:
     con.execute("CREATE INDEX IF NOT EXISTS idx_id_t  ON positions (id, t)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_t     ON positions (t)")
     con.commit()
+    _SCHEMA_READY.add(path)
     return con
 
 

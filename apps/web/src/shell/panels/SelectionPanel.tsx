@@ -183,7 +183,7 @@ function Row({
 }): JSX.Element {
   return (
     <div
-      className="flex min-h-[20px] items-baseline gap-2 px-[14px] py-[1px] text-[12px]"
+      className="flex min-h-[20px] items-baseline gap-2 px-[14px] py-px text-[12px]"
       {...(title ? { title } : {})}
     >
       <span className="min-w-0 flex-1 truncate text-txt-3">{k}</span>
@@ -235,7 +235,7 @@ function Act({
       type="button"
       onClick={onClick}
       {...(title ? { title } : {})}
-      className={`flex h-[22px] items-center gap-[5px] rounded-sm border px-[7px] text-[12px] hover:bg-[var(--hover)] ${
+      className={`flex h-[22px] items-center gap-[5px] rounded-sm border px-[7px] text-[12px] hover:bg-(--hover) ${
         on ? 'border-accent-line text-accent-fg' : 'border-line-2 text-txt-1'
       }`}
     >
@@ -457,7 +457,7 @@ export function SelectionPanel({
           </span>
           {subtitle && <span className="block truncate text-[12px] text-txt-3">{subtitle}</span>}
         </span>
-        <span className="shrink-0 rounded-sm bg-accent-dim px-[7px] py-[1px] text-[12px] text-accent-fg">
+        <span className="shrink-0 rounded-sm bg-accent-dim px-[7px] py-px text-[12px] text-accent-fg">
           {kind || 'contact'}
         </span>
       </div>
@@ -638,7 +638,7 @@ export function SelectionPanel({
       )}
       {emerg && emerg !== 'none' && (
         <div className="mx-[14px] my-1 flex items-start gap-2 rounded-sm border border-alert-line bg-alert-bg px-2 py-1 text-[12px] text-alert-fg">
-          <Icon name="warning" className="mt-[1px] h-3 w-3 shrink-0" />
+          <Icon name="warning" className="mt-px h-3 w-3 shrink-0" />
           <span>Emergency squawk reported: {emerg}</span>
         </div>
       )}
@@ -743,7 +743,7 @@ export function SelectionPanel({
           {srcs.map((sname) => (
             <span
               key={sname}
-              className="rounded-sm border border-line-2 bg-bg-2 px-[6px] py-[1px] text-[12px] text-txt-2"
+              className="rounded-sm border border-line-2 bg-bg-2 px-[6px] py-px text-[12px] text-txt-2"
             >
               {sname}
             </span>

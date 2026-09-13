@@ -11,13 +11,15 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.audit import audit_mutation
 from app.keys import UserCtx, current_user_or_local
+from app.security import require_operator
 from app.workflows import blocks as blocks_mod
 from app.workflows import engine
 from app.workflows.python_exec import MAX_TIMEOUT_S
 from app.workflows.store import WorkflowError, WorkflowStore
 
-router = APIRouter(tags=["workflows"])
+router = APIRouter(tags=["workflows"], dependencies=[Depends(audit_mutation)])
 
 
 def _store() -> WorkflowStore:
@@ -87,7 +89,7 @@ async def list_blocks(ctx: UserCtx = Depends(current_user_or_local)) -> list[dic
 # ── preview (unsaved spec) ──────────────────────────────────────────────────
 
 
-@router.post("/api/workflows/preview")
+@router.post("/api/workflows/preview", dependencies=[Depends(require_operator)])
 async def preview_workflow(
     body: PreviewSpecIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -122,7 +124,7 @@ async def list_schedules(
     return await _store().list_schedules(workflow_id)
 
 
-@router.post("/api/workflows/schedules")
+@router.post("/api/workflows/schedules", dependencies=[Depends(require_operator)])
 async def create_schedule(
     body: ScheduleIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -133,7 +135,7 @@ async def create_schedule(
     return await store.create_schedule(body.workflow_id, body.interval_s, body.enabled)
 
 
-@router.put("/api/workflows/schedules/{schedule_id}")
+@router.put("/api/workflows/schedules/{schedule_id}", dependencies=[Depends(require_operator)])
 async def update_schedule(
     schedule_id: str, body: ScheduleIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -143,7 +145,7 @@ async def update_schedule(
     return updated
 
 
-@router.delete("/api/workflows/schedules/{schedule_id}")
+@router.delete("/api/workflows/schedules/{schedule_id}", dependencies=[Depends(require_operator)])
 async def delete_schedule(
     schedule_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, bool]:
@@ -159,7 +161,7 @@ async def list_workflows(ctx: UserCtx = Depends(current_user_or_local)) -> list[
     return await _store().list_workflows()
 
 
-@router.post("/api/workflows")
+@router.post("/api/workflows", dependencies=[Depends(require_operator)])
 async def create_workflow(
     body: WorkflowIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -182,7 +184,7 @@ async def get_workflow(
     return wf
 
 
-@router.put("/api/workflows/{workflow_id}")
+@router.put("/api/workflows/{workflow_id}", dependencies=[Depends(require_operator)])
 async def update_workflow(
     workflow_id: str, body: WorkflowIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -195,7 +197,7 @@ async def update_workflow(
     return updated
 
 
-@router.delete("/api/workflows/{workflow_id}")
+@router.delete("/api/workflows/{workflow_id}", dependencies=[Depends(require_operator)])
 async def delete_workflow(
     workflow_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, bool]:
@@ -203,7 +205,7 @@ async def delete_workflow(
     return {"ok": True}
 
 
-@router.post("/api/workflows/{workflow_id}/run")
+@router.post("/api/workflows/{workflow_id}/run", dependencies=[Depends(require_operator)])
 async def run_workflow_now(
     workflow_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
@@ -230,7 +232,7 @@ async def get_memory(
     return {"memory": await _store().get_memory(workflow_id)}
 
 
-@router.put("/api/workflows/{workflow_id}/memory")
+@router.put("/api/workflows/{workflow_id}/memory", dependencies=[Depends(require_operator)])
 async def put_memory(
     workflow_id: str, body: MemoryIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:

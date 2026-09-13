@@ -104,6 +104,25 @@ _ETH_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 _ASN_RE = re.compile(r"^(?:as)?(\d+)$", re.IGNORECASE)
 _ASN_MAX = 4_294_967_295
 
+# A phone target is punctuation + digits and NOTHING else, which is what keeps
+# it from eating a url or a hostname that merely contains digits.
+_PHONE_RE = re.compile(r"^\+?[0-9(][0-9 ()\-.]{5,20}$")
+
+# Decimal degrees: "38.8977,-77.0365" / "38.8977 -77.0365" / "38.8977, -77.0365".
+# Every separator is written "\s*<mark>\s*|\s+", never "\s*[<mark>\s]\s*": the
+# second lets three adjacent \s* share one run of whitespace, and a DMS target of
+# "1" plus 4 000 tabs took 55 s to reject (the agent passes targets unbounded).
+_DD_RE = re.compile(
+    r"^\s*([+-]?\d{1,3}(?:\.\d+)?)(?:\s*,\s*|\s+)([+-]?\d{1,3}(?:\.\d+)?)\s*$"
+)
+# Degrees/minutes/seconds, the form ch. 27 spends the most time on:
+# 41°53'23.2"N 12°29'32.2"E. Minutes and seconds are optional so 41°N 12°E works.
+_DMS_ONE = (
+    r"(\d{1,3})(?:\s*[°d:]\s*|\s+)(?:(\d{1,2})(?:\s*['m:]\s*|\s+))?"
+    r"(?:(\d{1,2}(?:\.\d+)?)\s*(?:(?:\"|''|s)\s*)?)?([NSEWnsew])"
+)
+_DMS_RE = re.compile(rf"^\s*{_DMS_ONE}(?:\s*,\s*|[^\S ]* \s*){_DMS_ONE}\s*$")
+
 
 def normalise_url(target: str) -> str | None:
     """Canonicalise a URL; None unless it carries a scheme OR a path/query.
@@ -179,14 +198,85 @@ def normalise_asn(target: str) -> str | None:
     return f"AS{n}"
 
 
+def normalise_phone(target: str) -> str | None:
+    """Canonicalise a telephone number to digits (``+`` kept for international).
+
+    Accepted shapes, and only these:
+
+      * a leading ``+`` with 8-15 digits — an explicit international number;
+      * separator punctuation plus 7-15 digits — ``618-462-0000``, ``(618) 462
+        0000``. The punctuation is the caller SAYING "this is a number";
+      * a bare 10 or 11 digits — NANP length, the one unpunctuated form common
+        enough to be worth claiming.
+
+    A bare 5-9 or 12-15 digit run stays ambiguous and is NOT a phone, which is
+    what leaves ``15169`` to ``normalise_asn``. The one collision this does
+    accept is a bare 10-digit 32-bit ASN: ``4200000000`` classifies as a phone.
+    That is deliberate — every source this platform reads writes an ASN with
+    its ``AS`` prefix, and ``normalise_asn`` still takes ``AS4200000000``.
+    """
+    t = (target or "").strip()
+    if not _PHONE_RE.match(t):
+        return None
+    plus = t.startswith("+")
+    digits = re.sub(r"\D", "", t)
+    n = len(digits)
+    if plus:
+        return f"+{digits}" if 8 <= n <= 15 else None
+    if re.search(r"[ ()\-.]", t):
+        return digits if 7 <= n <= 15 else None
+    return digits if n in (10, 11) else None
+
+def _dms_to_dd(deg: str, minutes: str | None, seconds: str | None, hemi: str) -> float:
+    v = float(deg) + float(minutes or 0) / 60.0 + float(seconds or 0) / 3600.0
+    return -v if hemi.upper() in ("S", "W") else v
+
+
+def normalise_coordinate(target: str) -> str | None:
+    """Canonicalise a lat/lon pair to ``"<lat>,<lon>"`` at 6 decimals, else None.
+
+    Two input forms, both from ch. 27: decimal degrees, and the degrees/minutes/
+    seconds form that map sites and image EXIF hand you. A DMS pair may be given
+    in either order (``12°E 41°N`` is the same point as ``41°N 12°E``) because
+    half the sources write longitude first; decimal degrees is always lat,lon,
+    which is the convention every mapping url in the catalog uses.
+
+    Six decimals is ~11 cm — past the precision of anything this platform
+    ingests, and short enough that the same point always renders the same url.
+    """
+    t = (target or "").strip()
+    if not t:
+        return None
+
+    m = _DMS_RE.match(t)
+    if m:
+        a = _dms_to_dd(m.group(1), m.group(2), m.group(3), m.group(4))
+        b = _dms_to_dd(m.group(5), m.group(6), m.group(7), m.group(8))
+        lat, lon = (a, b) if m.group(4).upper() in ("N", "S") else (b, a)
+    else:
+        m = _DD_RE.match(t)
+        if not m:
+            return None
+        # A bare "38.9,-77.0" is only a coordinate if both halves are in range;
+        # otherwise it is some other pair of numbers and not ours to claim.
+        lat, lon = float(m.group(1)), float(m.group(2))
+
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+        return None
+    return f"{lat:.6f},{lon:.6f}".replace(".000000", ".0")
+
 def classify_target(target: str) -> tuple[str, str] | None:
     """Detect a target's kind. Returns (kind, canonical).
 
-    Order (specific → loose): ip → email (contains a domain) → wallet → asn →
-    file (hash) → url → domain → username. Wallet/asn/hash have a distinctive
-    enough shape to go before url/domain (a bech32 address is all lower-alnum
-    and would otherwise be eaten by username); url needs a scheme or a
-    path/query so it can't eat a bare domain; username stays the loosest.
+    Order (specific → loose): ip → email (contains a domain) → wallet →
+    coordinate → phone → asn → file (hash) → url → domain → username. Wallet/asn/hash have a
+    distinctive enough shape to go before url/domain (a bech32 address is all
+    lower-alnum and would otherwise be eaten by username); url needs a scheme or
+    a path/query so it can't eat a bare domain; username stays the loosest.
+    Phone goes before asn on purpose: a bare 10-digit run matches ``_ASN_RE``
+    too, and ``normalise_phone`` documents which way that collision falls.
+    Coordinate goes before phone for the same reason: ``38.8977 -77.0365`` is
+    digits, dots, a space and a hyphen, which is exactly the phone shape.
     """
     ip = normalise_ip(target)
     if ip is not None:
@@ -197,6 +287,12 @@ def classify_target(target: str) -> tuple[str, str] | None:
     wallet = normalise_wallet(target)
     if wallet is not None:
         return ("wallet", wallet)
+    coord = normalise_coordinate(target)
+    if coord is not None:
+        return ("coordinate", coord)
+    phone = normalise_phone(target)
+    if phone is not None:
+        return ("phone", phone)
     asn = normalise_asn(target)
     if asn is not None:
         return ("asn", asn)

@@ -28,6 +28,16 @@ class Source:
     region: str
     category: str = "general"
     tier: int = 1
+    # Route this feed through the real-Chrome tier (tools/browser-fetch :8095)
+    # instead of httpx. Set it ONLY for a host measured 403 to bare httpx AND to
+    # a full browser User-Agent with browser headers — i.e. where nothing cheaper
+    # works. browser_fetch.py:11-16 is explicit that the common mistake is
+    # spending a browser on a host that answers plain httpx, and an automatic
+    # "on 403, escalate" ladder was rejected on 2026-08-01
+    # (docs/decisions.md#getting-past-cloudflare) precisely because those hosts
+    # cannot be fixed by any tier and the ladder just re-learns that every TTL.
+    # So this is per-source config, decided once from a measurement.
+    browser: bool = False
 
 
 @dataclass
@@ -200,6 +210,9 @@ def parse_feed_bytes(raw: bytes, source: Source) -> list[Article]:
 async def _fetch_one(source: Source, timeout_s: float) -> list[Article]:
     """Fetch + parse a single feed; tolerate any failure (log + return [])."""
     try:
+        if source.browser:
+            body = await _fetch_via_browser(source, timeout_s)
+            return parse_feed_bytes(body, source) if body else []
         client = get_client()
         r = await client.get(source.url, timeout=timeout_s, follow_redirects=True)
         if r.status_code != 200:
@@ -209,6 +222,25 @@ async def _fetch_one(source: Source, timeout_s: float) -> list[Article]:
     except Exception as exc:  # noqa: BLE001 — one bad feed must not kill the batch
         log.debug("news feed %s failed: %s", source.name, exc)
         return []
+
+
+async def _fetch_via_browser(source: Source, timeout_s: float) -> bytes | None:
+    """One feed through the real-Chrome tier. None when it is off or unhealthy.
+
+    Degrades to "this feed contributed nothing this cycle", exactly like an httpx
+    failure does, so an operator who never enables BROWSER_FETCH_ENABLED sees the
+    behaviour they had before rather than an error.
+    """
+    from app import browser_fetch  # noqa: PLC0415 — optional tier, keep it lazy
+
+    r = await browser_fetch.fetch(source.url, timeout_s=max(timeout_s, 30.0))
+    if r is None:
+        log.debug("news feed %s: browser tier unavailable", source.name)
+        return None
+    if r.status_code != 200:
+        log.debug("news feed %s -> browser HTTP %s", source.name, r.status_code)
+        return None
+    return r.content
 
 
 def _published_sort_key(a: Article) -> str:

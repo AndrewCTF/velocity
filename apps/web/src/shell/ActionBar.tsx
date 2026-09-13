@@ -112,7 +112,7 @@ export function ActionBar(): JSX.Element {
           className={`flex h-6 items-center gap-[6px] rounded-sm border px-[9px] text-[12px] ${
             clauses.length > 0
               ? 'border-accent-line bg-accent-dim text-accent-fg'
-              : 'border-line-2 text-txt-1 hover:bg-[var(--hover)]'
+              : 'border-line-2 text-txt-1 hover:bg-(--hover)'
           }`}
         >
           <Icon name="filter" className="h-3 w-3" />
@@ -124,7 +124,7 @@ export function ActionBar(): JSX.Element {
           <div
             role="menu"
             aria-label="Contact type"
-            className="absolute bottom-[30px] left-0 z-[var(--z-dropdown)] max-h-[60vh] w-[240px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-[var(--sh-pop)]"
+            className="absolute bottom-[30px] left-0 z-(--z-dropdown) max-h-[60vh] w-[240px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-(--sh-pop)"
           >
             {TYPE_FACETS.map(({ facet, group, labels }) => (
               <div key={facet}>
@@ -148,7 +148,7 @@ export function ActionBar(): JSX.Element {
                       // qualified one or two items announce identically.
                       aria-label={clauseLabel(facet, value)}
                       onClick={() => toggleClause(facet, value, 'only')}
-                      className="flex w-full items-center gap-2 px-[10px] py-[5px] text-left text-[12px] text-txt-1 hover:bg-[var(--hover)] hover:text-txt-0"
+                      className="flex w-full items-center gap-2 px-[10px] py-[5px] text-left text-[12px] text-txt-1 hover:bg-(--hover) hover:text-txt-0"
                     >
                       <Icon
                         name="check"
@@ -190,7 +190,7 @@ export function ActionBar(): JSX.Element {
         onClick={() => select(null)}
         title={selected ? `Deselect ${selected}` : 'Nothing is selected.'}
         className={`h-6 rounded-sm border border-line-2 px-[9px] text-[12px] ${
-          selected ? 'text-txt-1 hover:bg-[var(--hover)]' : 'cursor-not-allowed text-txt-3'
+          selected ? 'text-txt-1 hover:bg-(--hover)' : 'cursor-not-allowed text-txt-3'
         }`}
       >
         Clear selection
@@ -202,7 +202,7 @@ export function ActionBar(): JSX.Element {
         title={clauses.length > 0 ? 'Drop every contact-type filter' : 'No filters are set.'}
         className={`flex h-6 items-center gap-[6px] rounded-sm px-[11px] text-[12px] ${
           clauses.length > 0
-            ? 'bg-accent text-[var(--on-accent)] hover:brightness-110'
+            ? 'bg-accent text-(--on-accent) hover:brightness-110'
             : 'cursor-not-allowed border border-line-2 text-txt-3'
         }`}
       >

@@ -26,6 +26,7 @@ import { flyToPosition } from '../globe/camera.js';
 import { Markdown } from '../shell/Markdown.js';
 import { useAgent } from '../state/agent.js';
 import { useAppView } from '../state/appView.js';
+import { AiLabel } from '../shell/aiLabel.js';
 import {
   useWatchOfficerBriefs,
   useWatchOfficerStatus,
@@ -217,7 +218,7 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                   type="checkbox"
                   checked={autoElaborate}
                   onChange={(e) => setAutoElaborate(e.target.checked)}
-                  className="accent-[var(--accent)]"
+                  className="accent-(--accent)"
                 />
                 <Sparkles className="h-3 w-3 text-accent" strokeWidth={1.75} aria-hidden />
                 Auto-elaborate everything
@@ -327,6 +328,7 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                             {elab.text && (
                               <div className="text-[11px] text-txt-1 leading-snug">
                                 <Markdown text={elab.text} />
+                                <AiLabel className="mt-1.5" />
                               </div>
                             )}
                             {elab.disabled && (

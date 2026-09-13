@@ -188,7 +188,7 @@ function AcarsRow({ m }: { m: AcarsMsg }): JSX.Element {
         {typeof m.freq === 'number' && <span className="text-txt-3">{m.freq.toFixed(3)}</span>}
       </div>
       {m.text && (
-        <pre className="mono text-[10px] text-txt-1 leading-tight mt-1 whitespace-pre-wrap break-words">
+        <pre className="mono text-[10px] text-txt-1 leading-tight mt-1 whitespace-pre-wrap wrap-break-word">
           {m.text}
         </pre>
       )}

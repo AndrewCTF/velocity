@@ -1,6 +1,10 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ConsoleShell } from './ConsoleShell.js';
+
+function Boom(): never {
+  throw new Error('inspector blew up');
+}
 
 describe('ConsoleShell', () => {
   it('renders all five zones with semantic landmarks', () => {
@@ -65,5 +69,33 @@ describe('ConsoleShell', () => {
     expect(rail.classList.contains('hidden')).toBe(false);
     const grid = document.querySelector('.csl') as HTMLElement;
     expect(grid.style.gridTemplateRows).toContain('158px');
+  });
+
+  // The inspector is the pane behind click-an-entity, the highest-traffic
+  // interaction in the console. It rendered `right` raw while its own mobile
+  // sibling was wrapped, so one malformed payload black-screened it with no
+  // way back. The rest of the shell must survive a throwing inspector.
+  describe('a throwing inspector', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('degrades to the panel fallback and leaves the rest of the shell up', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(
+        <ConsoleShell
+          top={<div>top-zone</div>}
+          left={<div>left-zone</div>}
+          globe={<div>globe-zone</div>}
+          right={<Boom />}
+          bottom={<div>bottom-zone</div>}
+        />,
+      );
+      expect(screen.getByText('panel error')).toBeInTheDocument();
+      // The exception text is a stack fragment, not copy: it must not render.
+      expect(screen.queryByText(/inspector blew up/)).toBeNull();
+      expect(screen.getByText('top-zone')).toBeInTheDocument();
+      expect(screen.getByText('left-zone')).toBeInTheDocument();
+      expect(screen.getByText('globe-zone')).toBeInTheDocument();
+      expect(screen.getByText('bottom-zone')).toBeInTheDocument();
+    });
   });
 });

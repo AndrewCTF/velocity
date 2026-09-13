@@ -87,7 +87,7 @@ function TopBar(): JSX.Element | null {
   const is2D = loc.pathname.startsWith('/2d');
   const isStudio = loc.pathname.startsWith('/studio');
   return (
-    <div className="absolute top-1 right-2 z-[var(--z-dock)] flex items-center gap-2">
+    <div className="absolute top-1 right-2 z-(--z-dock) flex items-center gap-2">
       <button
         type="button"
         onClick={() => setSettingsOpen(true)}
@@ -136,7 +136,7 @@ function PredictedMotionBadge(): JSX.Element | null {
   if (!loc.pathname.startsWith('/2d')) return null;
   return (
     <div
-      className="absolute bottom-2 right-2 z-[var(--z-dock)] mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5"
+      className="absolute bottom-2 right-2 z-(--z-dock) mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5"
       title="aircraft positions estimated between ADS-B fixes"
     >
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
