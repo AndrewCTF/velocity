@@ -40,6 +40,13 @@ the decision deliberately by changing BOTH the guard and this file.
 - Poll on an absolute wall-clock grid (`scheduleNext`), not `ttl - elapsed`.
 - Satellite SGP4 via `SampledPositionProperty` is real physics, exempt from the
   no-synthesis rule; propagation stays chunked.
+- Replay appends samples, it does not rebuild: a half-hour chunk change (24-entry
+  cache) appends each contact's decoded fixes to its `SampledPositionProperty`
+  and NEVER calls `removeAll()`; an id absent from the new chunk is aged out,
+  not dropped from the map. readsb's 16-byte heatmap entries decode in a Web
+  Worker (`globe/heatmapWorker.ts`) off the render path.
+  → `globe/HistoryPlayback.test.ts`, `globe/heatmapChunk.test.ts`,
+  `shell/TimeDock.test.tsx`
 
 ## Colour schemes
 

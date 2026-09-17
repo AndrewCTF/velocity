@@ -1245,6 +1245,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2810 + 2 skipped — 2026-09-13, release-basemap-schemes-2026-09, release-gate wave
 - 2804 + 2 skipped — 2026-09-13, compliance-2026-09, ASVS L2 wave
 - 2628 + 2 skipped — 2026-09-13, security-hardening-2026-09, security gap wave
 - 2587 + 2 skipped — 2026-08-30, osint-book-intel-2026-08, citable-replay wave
@@ -2888,3 +2889,167 @@ All 253 Level 1 + 2 requirements are in `docs/security/asvs-l2-assessment.md` wi
 
 Not claimed: ISO/IEC 27001 certification. Certification is of an organisation's ISMS by an accredited
 body; this repository carries the controls and evidence (`docs/security/isms/`), self-assessed.
+
+## One wedged tar1090 source froze every aircraft on the globe (2026-09-13)
+
+Operator report: "above the strait of hormuz, planes refresh time is too slow."
+Probed the backend first. `/api/adsb/global` every ~3.5 s for 90 s showed runs of
+**4 pulls (12-20 s) with zero position changes worldwide**, and `verify.sh --live`
+read `0% of 16791 common ids refreshed seen_pos_s over 8s` during one of them. The
+`:8090` log had 24 `evaluate timeout - reinit` lines, one source every 1-1.5 min.
+
+Cause: the 2026-07-27 change pumped the sources concurrently with `allSettled`
+but still `await`ed all of them before `rebuildCache()`, so a 15 s
+`READ_TIMEOUT_MS` plus the ~5 s reinit held the whole union. `allSettled` stops
+one rejection failing the batch; it does not stop one slow member delaying it.
+Each source now reads on its own loop and a separate ≤1 s tick rebuilds the union
+when any source landed.
+
+After, same three tiers live, 5 min: longest zero-change run **1 pull**, with 6
+source timeouts inside the window. `/health` sampled each second during an
+adsb.lol stall held its age at 21-28 s while the union's `rev` kept climbing and
+the other two sources stayed at age 0. Hormuz aircraft with no update in the window
+16% → 6%. The single zero pulls that remain are the tar1090 sources' own ~7 s
+store refresh landing out of phase with the sampler, not a stall.
+
+Not fixed and not ours: Hormuz's oldest decile of fixes is ~9x staler than
+CONUS's (p90 `seen_pos_s` 106 s vs 12 s) because the Gulf has few volunteer
+receivers. → `apps/api/tests/test_adsb_feeder_stuck_source.py` (stub Playwright,
+one source that hangs; fails on the old loop with "union never built").
+Harness: `tools/perf/adsb_region_refresh.py`.
+
+### The same day: adsb.lol went dark every ~80 s because its tab ran out of heap
+
+The per-source loops stopped one source freezing the others, but adsb.lol still
+timed out 44 times against 12-13 for each of the other two, 71-90 s after every
+reload. A single adsb.lol tab with the sidecar's flags grew its JS heap 133 → 492 MB
+in 55 s and then crashed at `--max-old-space-size=512`. Without the cap it never
+hung (3 ms reads) and swung between 640 MB and 1.17 GB.
+
+The site's `config.js` sets `useRouteAPI = true`: tar1090 queues every callsign for
+an external route lookup and `g.route_cache` measured length **12,345,679** after
+40 s (adsbexchange: 0, heap 204 MB against 653). `noRoutesFn` turns it off after
+load, which cut growth to ~1.3 MB/s. It still climbs, and so does every other tab
+(adsbexchange ~0.7 MB/s); calling tar1090's `reaper()` by hand changed nothing, it
+already runs. So the cap went to `HEAP_MB=1024` and a page past `RECYCLE_FRAC=0.6`
+of it is replaced by one opened BESIDE it, swapped in once it has filled.
+
+10 min after, three sources live: 0 read timeouts, 7 recycles at 629-734 MB, and
+`/health` sampled each second never showed any source older than 2 s (before: adsb.lol
+sat at 21-28 s once per ~80 s). → `test_adsb_feeder_stuck_source.py` (a bloated
+page recycles with the source's age ≤ 1 s throughout; fails with the recycle call
+removed; a page under the threshold is left alone).
+
+## 2026-09-17: Timescale archive, tar1090 replay chunks, clearance on reads, write-back through proposals
+
+Branch `palantir-stack-2026-09`. Every number below was measured on this box on
+2026-09-17; the adversarial review is `docs/reviews/palantir-stack-2026-09-17.md`.
+
+**The position archive moved from SQLite to Postgres + TimescaleDB.**
+`history_pg.py` implements the same reads `history.py` exposed; the flush goes
+through asyncpg COPY into a compressed hypertable (`positions`, 6 hour chunks,
+columnar compression segmented by id) with a continuous hourly aggregate
+(`positions_hourly`) behind `coverage()` and `timeseries()`. The backend switch
+is `HISTORY_BACKEND=auto|sqlite|timescale` (`auto` picks Timescale exactly when
+`HISTORY_PG_DSN` is set); SQLite remains the keyless fallback and logs one boot
+warning naming the switch. Coverage answers come from the aggregate; the old
+SQLite scan took 73 s over 78M fixes. `scripts/history_migrate_sqlite_to_pg.py`
+is resumable by the target's `max(t)`: the full run copied 55,352,047 rows
+(2026-08-09 11:35 UTC to 2026-09-13 15:14 UTC) at ~120k rows/s into 12 chunks,
+and the 11,300,810,752-byte SQLite file became an 839,786,496-byte hypertable
+(13.46x smaller overall, 11.29x columnar). Retention and the byte budget drop
+whole chunks; nothing on the pg path VACUUMs. CI runs the pg tests against a
+real timescale service container; `docker-compose.yml` and
+`docker-compose.prod.yml` ship the service (prod: user `70:70`, `cap_drop ALL`,
+`TIMESCALE_PASSWORD` from `.env`), dev uses `scripts/dev-timescale.sh`.
+→ `apps/api/tests/test_history_pg.py`,
+`apps/api/tests/test_history_backend_switch.py`
+
+**Replay now reads further back than our own archive.** The 3D console's Play
+button drives `viewer.clock` through a chunk pipeline modelled on tar1090's
+replay: half-hour chunk keys, a 24-entry cache, samples appended to each
+contact's `SampledPositionProperty`, and a Web Worker decoding readsb's 16-byte
+heatmap entries client-side. Aircraft older than our own archive come from
+public tar1090 `globe_history` heatmap chunks the backend proxies and caches
+(`GET /api/history/upstream/chunk|tracks|coverage`, cache under `data/heatmap/`,
+`HEATMAP_HOSTS`, `HEATMAP_CACHE_GB`). The coverage sweep
+(`docs/heatmap-coverage-sweep-2026-09-17.csv`) found adsb.fi has all 990 days
+since 2024-01-01 and adsb.lol 689 of 990. The sweep got this egress 403'd by
+adsb.fi's Cloudflare, so adsb.lol is the first host, adsb.fi fills gaps when
+reachable, and airplanes.live stays off by default (it blocked this egress
+before). One adsb.lol chunk decoded live: 2024-06-01 12:00 UTC, 180 slices of
+10 s, 3,953 aircraft tracks over Europe. Vessels have no public equivalent, so
+they replay from the own archive only. Probe coverage gently: the 990-request
+sweep is what triggered the block. → `apps/api/tests/test_adsb_heatmap.py`,
+`apps/web/src/globe/HistoryPlayback.test.ts`,
+`apps/web/src/globe/heatmapChunk.test.ts`,
+`apps/web/src/shell/TimeDock.test.tsx`
+
+**Clearance is one predicate, on reads and writes.** `intel/ontology.visible_to`
+filters local SQLite reads (`get`, `list_by_kind`, `search`, links, assertions)
+and the situations, maps and evidence routes by the caller's level and
+compartments. Keyless callers are clearance 0. A write above clearance or onto
+a hidden row answers 403 on the ontology, situations and maps routes; the
+overwrite gate is not optional because `upsert` replaces props wholesale and
+`promote` returns the merged row (a read wearing a write). `situation` is a
+first-class `ObjectKind`. → `apps/api/tests/test_clearance_local_reads.py`
+
+**Entity-resolution merge review.** `merge_candidates` are scored (reason weight
+plus name similarity) and surfaced by `GET /api/resolve/candidates`;
+`POST /api/resolve/candidates/{a}/{b}/approve|reject` is operator-only, and an
+approve writes `same_as` + `merged_from` + an audit row. The Inbox carries a
+"Merge review" section. `resolve()` itself never auto-merges. The `resolve.py`
+column changes rode in commit `314087b`. → `apps/api/tests/test_resolve_review.py`
+
+**Foundry connectors and governed actions.** `sql` connections store a table +
+`cursor_column` and pull deltas by cursor into a dataset (bound SQL, identifiers
+validated); documents (eml/docx/txt/md, pdf via pypdf) upload as text rows with
+sha256; `GET /api/foundry/connectors` is the catalog. The write-back action is
+operator-only: an http target goes through the workflow control
+SSRF/allow-list/dry-run path, or a parameterised insert through a Foundry sql
+connection; the audit row carries the payload sha256, never the payload. MCP
+gains `propose_action` / `list_proposals` / `approve_proposal` /
+`reject_proposal` (89 MCP tools now). Citations are a hard contract:
+`LLM_REQUIRE_CITATIONS=1` (default) withholds a brief that cites none of its own
+ids. Local `llm_calls` store plus `GET /api/ai/calls` and
+`GET /api/ai/guardrails`. → `apps/api/tests/test_writeback_action.py`,
+`apps/api/tests/test_citations_hard.py`,
+`apps/api/tests/test_foundry_connectors.py`
+
+**Projection from the contact's own track.** `GET /api/history/project` returns a
+2-sigma cone plus chokepoint ETAs; fewer than 3 fixes answers `insufficient`.
+`scripts/backtest_projection.py` ran against the 11 GB archive with the API down:
+vessel 30 min hit-rate 0.595 (n=46), aircraft 10 min 0.587 (n=54), vessel 60 min
+0.667 (n=13). Three slices, not a calibrated forecast.
+→ `apps/api/tests/test_project.py`
+
+**Release plumbing.** Every SQLite store carries a `schema_version` table and
+the app reports it from `GET /api/status/version`.
+`scripts/release/offline-bundle.sh` does a `docker save` of the pinned images
+plus compose, an env template and SHA256SUMS; `publish.yml` already attaches
+SBOM + provenance attestations. → `apps/api/tests/test_schema_version.py`
+
+**REVOKED (2026-08-30): a brief that cites nothing is no longer served flagged.**
+`docs/honesty-wave-2026-08-30.md` decided that a brief which cites no id is
+served with `grounded: false`. The flag was a field in a JSON body and nothing
+downstream refused to render the prose, so a claim an analyst cannot trace went
+in front of them anyway. A brief that cites nothing is now withheld as
+`uncited`, the same as one that cites an id not in its evidence;
+`LLM_REQUIRE_CITATIONS=0` restores the old flag-and-serve behaviour.
+→ `apps/api/tests/test_citations_hard.py`
+
+**REVOKED: the action routes required a Supabase session.** `/api/actions/*`
+was `Depends(current_user)`, which can only resolve against Supabase, so every
+governed action 401'd on the keyless default deployment while the store
+underneath (`intel/actions.py` → `action_log_local`) had had a keyless sink
+since the 2026-07-07 ontology decision. The routes are now
+`current_user_or_local`: keyless is the shared `local` identity, and with
+Supabase configured this IS `current_user` with the unchanged owner scoping in
+`_may_decide`. Write-back authority is carried by the action's `operator_only`
+flag, not a role on `UserCtx`. → `apps/api/tests/test_writeback_action.py`
+
+**Review.** `docs/reviews/palantir-stack-2026-09-17.md`. The three HIGH findings
+are fixed: write gates on situations and maps, the replay source chosen from the
+archive's `oldest_ts` (never the SQLite shard list), and a truncated heatmap
+cache treated as a miss rather than served. Public copy carries no comparison to
+other vendors; guard `apps/web/src/copy/noComparison.test.ts`.
