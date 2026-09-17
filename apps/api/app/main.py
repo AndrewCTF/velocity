@@ -128,7 +128,9 @@ from app.routes import orgs as orgs_routes
 from app.routes import osint as osint_routes
 from app.routes import places as places_routes
 from app.routes import primary as primary_routes
+from app.routes import projection as projection_routes
 from app.routes import recon as recon_routes
+from app.routes import resolve as resolve_routes
 from app.routes import route as route_routes
 from app.routes import routing as routing_routes
 from app.routes import sanctions as sanctions_routes
@@ -790,8 +792,10 @@ def create_app() -> FastAPI:
     # read pixels. See app/intel/ground.py for honest coverage caveats.
     app.include_router(ground_routes.router)
     app.include_router(intel_routes.router)
+    app.include_router(resolve_routes.router)
     app.include_router(news_routes_mod.router)
     app.include_router(history_routes.router)
+    app.include_router(projection_routes.router)
     app.include_router(export_routes.router)
     app.include_router(evidence_routes.router)
     app.include_router(keys_routes.router)

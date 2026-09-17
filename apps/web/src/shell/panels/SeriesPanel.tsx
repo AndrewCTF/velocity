@@ -27,7 +27,7 @@ export function SeriesPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.
   return (
     <div className="space-y-3 p-3">
       {id ? (
-        <ArchiveSeriesCard id={id} kind={kind} />
+        <ArchiveSeriesCard id={id} kind={kind} viewer={viewer ?? null} />
       ) : (
         <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
           <Icon name="chart-line" className="h-6 w-6 text-txt-3" />

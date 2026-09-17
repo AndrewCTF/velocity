@@ -482,7 +482,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
 
       <TrackCard kind={snap?.kind ?? ''} points={track} />
 
-      <ArchiveSeriesCard id={id} kind={snap?.kind ?? ''} />
+      <ArchiveSeriesCard id={id} kind={snap?.kind ?? ''} viewer={viewer ?? null} />
 
       <ConnectionsCard
         entityId={id}
