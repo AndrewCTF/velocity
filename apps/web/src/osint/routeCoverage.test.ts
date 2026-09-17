@@ -25,7 +25,11 @@ const API_ROUTES = join(HERE, '../../../api/app/routes');
 const EXEMPT: Record<string, string> = {
   // Infrastructure the browser reaches without naming the path.
   '/api/health': 'liveness probe for the process supervisor, not the UI',
-  '/api/audit/verify': 'audit hash-chain check for an auditor or operator script, not the UI',
+  // /api/audit/verify used to be exempt here ("auditor script, not the UI");
+  // the Reports → Audit tab (src/reports/AuditPanel.tsx) now renders its
+  // verify chip, so the route has a UI address and left this list. /api/audit
+  // itself is called by the same panel and by the SourcesPanel endpoint
+  // browser, so it never needed an entry.
   // Write/side-effect routes driven by an agent or a server-side caller.
   '/api/evidence/manifest': 'POST: written by the case exporter server-side',
   '/api/imagery/task': 'POST: commercial tasking, gated off in the keyless build',
