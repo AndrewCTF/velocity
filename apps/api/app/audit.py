@@ -30,6 +30,7 @@ from typing import Any
 
 from fastapi import Request
 
+from app import schema_version
 from app.config import get_settings
 from app.keys import UserCtx, _client, _headers
 from app.ratelimit import client_key
@@ -83,6 +84,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS ix_audit_log_ts ON audit_log(ts DESC);
 """
 
+#: Bumped by a change that alters the shape of this file (see app/schema_version.py).
+SCHEMA_VERSION = 1
+
 # Append-only, like the Supabase action_log (ASVS V16.4.2). These stop an
 # accidental or careless UPDATE/DELETE from the app or an operator's sqlite3
 # shell; they cannot stop a process that owns the file from dropping them. The
@@ -116,6 +120,7 @@ def _local_connect() -> sqlite3.Connection:
             con.execute(f"ALTER TABLE audit_log ADD COLUMN {col} TEXT")
     con.execute(_TRIGGER_NO_UPDATE)
     con.execute(_TRIGGER_NO_DELETE)
+    schema_version.ensure(con, "audit", SCHEMA_VERSION)
     con.commit()
     return con
 

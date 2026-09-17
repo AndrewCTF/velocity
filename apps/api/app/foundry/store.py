@@ -23,6 +23,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from app import schema_version
 from app.config import Settings, get_settings
 
 # ── DB path injection (for tests) ─────────────────────────────────────────────
@@ -141,6 +142,9 @@ CREATE TABLE IF NOT EXISTS monitor_events (
 CREATE INDEX IF NOT EXISTS idx_monitor_events_monitor ON monitor_events(monitor_id);
 """
 
+#: Bumped by a change that alters the shape of this file (see app/schema_version.py).
+SCHEMA_VERSION = 1
+
 # Bounding (docs/foundry-plan.md): per-dataset row cap + version retention.
 MAX_ROWS_PER_DATASET = 200_000
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -179,6 +183,7 @@ def _connect(settings: Settings | None = None) -> sqlite3.Connection:
     if path not in _initialized_paths:
         con.executescript(_SCHEMA)
         _ensure_migrations(con)
+        schema_version.ensure(con, "foundry", SCHEMA_VERSION)
         con.commit()
         _initialized_paths.add(path)
     return con

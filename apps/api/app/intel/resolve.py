@@ -32,6 +32,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from app import schema_version
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
@@ -90,6 +91,10 @@ def _resolved_db_path() -> str:
     return str(legacy.parent / "resolve.db")
 
 
+#: Bumped by a change that alters the shape of this file (see app/schema_version.py).
+SCHEMA_VERSION = 1
+
+
 def _connect() -> sqlite3.Connection:
     path = _resolved_db_path()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -144,6 +149,7 @@ def _connect() -> sqlite3.Connection:
     ):
         if col not in cols:
             con.execute(f"ALTER TABLE merge_candidates ADD COLUMN {col} {decl}")
+    schema_version.ensure(con, "resolve", SCHEMA_VERSION)
     con.commit()
     return con
 

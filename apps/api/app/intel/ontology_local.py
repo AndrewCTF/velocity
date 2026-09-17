@@ -33,6 +33,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app import schema_version
 from app.config import Settings, get_settings
 from app.intel import classification as clf
 from app.intel.ontology import (
@@ -125,6 +126,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS objects_fts USING fts5(
 );
 """
 
+#: Bumped by a change that alters the shape of this file (see app/schema_version.py).
+SCHEMA_VERSION = 1
+
 # The FTS index is maintained from Python (``_fts_write_sync`` below) rather
 # than by SQLite triggers, because what belongs in it is the FLATTENED prop
 # VALUES — a trigger only ever sees the raw JSON blob in the ``props`` column
@@ -143,6 +147,7 @@ def _connect(settings: Settings | None = None) -> sqlite3.Connection:
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA busy_timeout=5000")
     con.executescript(_SCHEMA)
+    schema_version.ensure(con, "ontology", SCHEMA_VERSION)
     con.commit()
     return con
 
