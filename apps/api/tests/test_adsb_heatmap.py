@@ -36,10 +36,10 @@ def _entry(hex_u32: int, lat_i: int, lon_i: int, alt_i: int, gs_i: int) -> bytes
     return struct.pack("<IIIhh", hex_u32, lat_i, lon_i, alt_i, gs_i)
 
 
-def _separator(ts_ms: int) -> bytes:
+def _separator(ts_ms: int, interval_ms: int = 30_000) -> bytes:
     """Slice separator: the ms timestamp splits across the lat field (hi 32
-    bits) and the lon field (lo 32), with the interval in ms as alt."""
-    return _entry(_SEP_HEX, (ts_ms >> 32) & 0xFFFFFFFF, ts_ms & 0xFFFFFFFF, 30_000, 0)
+    bits) and the lon field (lo 32), with the slice interval in ms as alt."""
+    return _entry(_SEP_HEX, (ts_ms >> 32) & 0xFFFFFFFF, ts_ms & 0xFFFFFFFF, interval_ms, 0)
 
 
 def _callsign(hex_u32: int, squawk: int, callsign: str) -> bytes:
@@ -72,6 +72,18 @@ def _synthetic_chunk() -> bytes:
             _fix(h, 9.5, 52.0, 1_450, 455),  # eastward move -> derived track ~90
         ]
     )
+
+
+def _chunk_with_interval(interval_ms: int, slices: int = 2) -> bytes:
+    """A chunk whose separators all carry `interval_ms` as the slice
+    interval - the adsb.lol shape (10 s slices, 180 per half hour) when
+    `interval_ms` is 10_000."""
+    h = 0x3C6444
+    parts: list[bytes] = []
+    for k in range(slices):
+        parts.append(_separator(_TS0 + k * interval_ms, interval_ms))
+        parts.append(_fix(h, 8.5 + k, 52.0, 1_400 + 50 * k, 450))
+    return b"".join(parts)
 
 
 def _url(host: str, day: date, index: int) -> str:
@@ -176,6 +188,18 @@ def test_tracks_from_chunk_shape_bbox_and_callsign() -> None:
     kept = adsb_heatmap.tracks_from_chunk(decoded, bbox=(8.0, 49.5, 10.5, 52.5))
     assert [tr["id"] for tr in kept["tracks"]] == ["aircraft:3c6444", "aircraft:~123456"]
     assert adsb_heatmap.tracks_from_chunk(decoded, bbox=(0.0, 0.0, 1.0, 1.0))["tracks"] == []
+
+
+def test_chunk_interval_ms_reads_first_separator() -> None:
+    # A 10 s-slice chunk (the adsb.lol shape) reports 10000, not 30000.
+    assert adsb_heatmap.chunk_interval_ms(_chunk_with_interval(10_000)) == 10_000
+    # A 30 s-slice chunk keeps the default.
+    assert adsb_heatmap.chunk_interval_ms(_synthetic_chunk()) == 30_000
+    # No separator at all, or a separator without a positive interval: the
+    # 30 s default, never a crash or 0.
+    assert adsb_heatmap.chunk_interval_ms(_fix(0x3C6444, 8.5, 52.0, 1_400, 450)) == 30_000
+    assert adsb_heatmap.chunk_interval_ms(_separator(_TS0, 0)) == 30_000
+    assert adsb_heatmap.chunk_interval_ms(b"") == 30_000
 
 
 def test_chunk_index_and_key() -> None:
@@ -425,6 +449,47 @@ def test_tracks_route_shape_and_bbox(client: TestClient, monkeypatch: pytest.Mon
         params={"day": "2024-06-01", "index": 24, "min_lon": 8.0},
     )
     assert partial.status_code == 422
+
+
+def test_chunk_route_reports_the_chunks_interval(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A 10 s-slice chunk (adsb.lol shape) reports 10000, not the old
+    # hard-coded 30000.
+    blob10 = _chunk_with_interval(10_000)
+    monkeypatch.setattr(adsb_heatmap, "fetch_chunk", _fake_fetch((blob10, "adsb.lol")))
+    r = client.get("/api/history/upstream/chunk", params={"day": "2024-06-01", "index": 24})
+    assert r.status_code == 200
+    assert r.headers["x-heatmap-interval"] == "10000"
+
+    # A 30 s-slice chunk keeps reporting 30000.
+    monkeypatch.setattr(
+        adsb_heatmap, "fetch_chunk", _fake_fetch((_synthetic_chunk(), "globe.adsb.fi"))
+    )
+    r = client.get("/api/history/upstream/chunk", params={"day": "2024-06-01", "index": 24})
+    assert r.status_code == 200
+    assert r.headers["x-heatmap-interval"] == "30000"
+
+
+def test_tracks_route_reports_interval_and_slice_count(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    blob10 = _chunk_with_interval(10_000, slices=3)
+    monkeypatch.setattr(adsb_heatmap, "fetch_chunk", _fake_fetch((blob10, "adsb.lol")))
+    body = client.get(
+        "/api/history/upstream/tracks", params={"day": "2024-06-01", "index": 24}
+    ).json()
+    assert body["interval_ms"] == 10_000
+    assert body["slice_count"] == 3
+
+    monkeypatch.setattr(
+        adsb_heatmap, "fetch_chunk", _fake_fetch((_synthetic_chunk(), "globe.adsb.fi"))
+    )
+    body = client.get(
+        "/api/history/upstream/tracks", params={"day": "2024-06-01", "index": 24}
+    ).json()
+    assert body["interval_ms"] == 30_000
+    assert body["slice_count"] == 2
 
 
 def test_coverage_route_rejects_bad_ranges(client: TestClient) -> None:

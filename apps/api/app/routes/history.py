@@ -200,7 +200,10 @@ async def get_diff(
 # only, LRU by atime under heatmap_cache_gb). chunk = the raw bytes;
 # tracks = the same chunk shaped like /api/history/tracks so the replay
 # owner treats upstream history exactly like owned history; coverage =
-# which days the enabled hosts actually have, for the day picker.
+# which days the enabled hosts actually have, for the day picker. The
+# slice interval (X-Heatmap-Interval / interval_ms) and slice_count come
+# from the chunk's own first separator, not a hard-coded 30 s: adsb.lol
+# serves 10 s slices (180 per half hour), the rest 30 s (60).
 
 
 def _parse_day(day: str) -> date:
@@ -221,7 +224,9 @@ async def get_upstream_chunk(
     Served from the on-disk cache when present, else proxied from the
     enabled keyless aggregators in config order; the chunk is only
     cached once its half hour has closed, so the live one never goes
-    stale on disk."""
+    stale on disk. X-Heatmap-Interval is the chunk's own slice interval
+    (its first separator's alt field): 30000 on most hosts, 10000 on
+    adsb.lol's 10 s slices."""
     d = _parse_day(day)
     if d > datetime.now(UTC).date():
         raise HTTPException(422, f"day {d.isoformat()} is in the future")
@@ -234,7 +239,7 @@ async def get_upstream_chunk(
         media_type="application/octet-stream",
         headers={
             "X-Heatmap-Host": host,
-            "X-Heatmap-Interval": "30000",
+            "X-Heatmap-Interval": str(adsb_heatmap.chunk_interval_ms(raw)),
             "Cache-Control": "private, max-age=86400",
         },
     )
@@ -251,7 +256,9 @@ async def get_upstream_tracks(
 ) -> dict:
     """The chunk decoded into the /api/history/tracks shape (derived
     tracks included), so scrubbing treats upstream history exactly like
-    owned history. The bbox keeps a track if ANY of its points is inside."""
+    owned history. The bbox keeps a track if ANY of its points is inside.
+    interval_ms + slice_count report the chunk's own slice cadence (from
+    its first separator: 30000/60 on most hosts, 10000/180 on adsb.lol)."""
     d = _parse_day(day)
     given = [v is not None for v in (min_lon, min_lat, max_lon, max_lat)]
     if any(given) and not all(given):
@@ -269,7 +276,8 @@ async def get_upstream_tracks(
     out["host"] = host
     out["slice_from"] = start.timestamp()
     out["slice_to"] = start.timestamp() + 30 * 60
-    out["interval_ms"] = decoded.get("interval_ms", 30_000)
+    out["interval_ms"] = adsb_heatmap.chunk_interval_ms(raw)
+    out["slice_count"] = len(decoded["slices"])
     return out
 
 

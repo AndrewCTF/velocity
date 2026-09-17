@@ -3,9 +3,10 @@
 Public keyless aggregators (globe.adsb.fi reaches 2024-01-01, adsb.lol has
 gaps) serve readsb's 30-minute heatmap chunks at
 `globe_history/YYYY/MM/DD/heatmap/NN.bin.ttf`, where NN is 2*hourUTC +
-floor(minuteUTC/30) zero-padded. A chunk is packed `<iiihh` entries: a
-slice-separator every 30 s carries the slice timestamp, and in between are
-positions, callsigns, and squawks.
+floor(minuteUTC/30) zero-padded. A chunk is packed `<iiihh` entries:
+slice-separators carry the slice timestamp, and in between are positions,
+callsigns, and squawks. The separator's alt field is the slice interval in
+ms — 30 s on most hosts, 10 s on adsb.lol (180 slices per half hour).
 
 This module proxies those chunks with a browser User-Agent, gzip-caches
 them under the data dir (LRU by atime, under `heatmap_cache_gb`), decodes
@@ -264,6 +265,26 @@ def _fmt_hex(hex_u32: int) -> str:
 def _addr_type(hex_u32: int) -> str:
     kind = (hex_u32 >> 27) & 0x1F
     return _ADDR_TYPE_NAMES[kind] if kind < len(_ADDR_TYPE_NAMES) else "unknown"
+
+
+def chunk_interval_ms(buf: bytes) -> int:
+    """The slice interval in ms the chunk reports, from its FIRST separator.
+
+    A readsb separator entry (hex == `_SEPARATOR_HEX`, the 16-byte
+    little-endian `<iiihh` layout of `decode_chunk`) carries the slice
+    timestamp split across the lat/lon fields and the slice interval in ms
+    in the alt field. Hosts that serve 10 s slices (adsb.lol: 180 slices
+    per half hour) carry 10000; the 30 s default covers a separator with
+    no positive interval and a chunk with no separator at all.
+    """
+    interval_ms = _DEFAULT_INTERVAL_MS
+    for i in range(len(buf) // _ENTRY_LEN):
+        hex_i, _, _, alt_i, _ = _ENTRY.unpack_from(buf, i * _ENTRY_LEN)
+        if (hex_i & 0xFFFFFFFF) == _SEPARATOR_HEX:
+            if alt_i > 0:
+                interval_ms = alt_i
+            break
+    return interval_ms
 
 
 def _bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
