@@ -1245,6 +1245,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2026-09-13: 2813 passed + 2 skipped in ~207 s (branch release-basemap-schemes-2026-09, adsb-feeder stall + heap fix); displaced 2026-09-17 by 2996 + 21 (palantir-stack waves; the 17 Timescale tests skip without HISTORY_PG_TEST_DSN).
 - 2810 + 2 skipped — 2026-09-13, release-basemap-schemes-2026-09, release-gate wave
 - 2804 + 2 skipped — 2026-09-13, compliance-2026-09, ASVS L2 wave
 - 2628 + 2 skipped — 2026-09-13, security-hardening-2026-09, security gap wave

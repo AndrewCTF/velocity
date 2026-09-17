@@ -28,6 +28,8 @@
  *   READ_MS      how often to re-read each page's store (default 5000)
  *   READ_TIMEOUT_MS  per-source read cap; a slower page is reinitialised (15000)
  *   VIEW_W/VIEW_H    viewport px — coupled to ZOOM, see the note below (683x450)
+ *   HEAP_MB / RECYCLE_FRAC  renderer heap cap (1024) and the share of it at
+ *                    which a page is replaced beside the old one (0.6)
  *   BLOCK_IMAGES     '0' to load images; default off, we only read the store
  *   HIDE_LAYERS      '0' to keep drawing the map; default ON. Measured 2026-07-29:
  *                    drawing costs 180%% CPU against 29%% with layers hidden, and
@@ -61,6 +63,15 @@ const MIN_PLANES = parseInt(process.env.MIN_PLANES || '500', 10);
 const READ_MS = parseInt(process.env.READ_MS || '5000', 10);
 const NUDGE_MS = parseInt(process.env.NUDGE_MS || '30000', 10);
 const READ_TIMEOUT_MS = parseInt(process.env.READ_TIMEOUT_MS || '15000', 10);
+// Per-renderer JS heap cap, and the share of it at which a source's page is
+// replaced by a fresh one opened BESIDE it (the old page keeps serving until the
+// new one has filled). Every tar1090 tab's heap climbs for as long as it is open
+// (measured 2026-09-13 at 512 MB: adsbexchange ~0.7 MB/s, adsb.lol ~1.3 MB/s with
+// its route lookup off, ~6.5 MB/s with it on). At the cap the renderer hangs,
+// the read times out and the source goes dark for ~20 s while it reloads, which
+// is what adsb.lol did every ~80 s. Recycling below the cap keeps the gap at 0.
+const HEAP_MB = parseInt(process.env.HEAP_MB || '1024', 10);
+const RECYCLE_FRAC = parseFloat(process.env.RECYCLE_FRAC || '0.6');
 // Image loading. We need tar1090's PARSED AIRCRAFT STORE, never its pixels, and
 // aircraft silhouettes plus basemap tiles are pure decode + texture cost on a
 // tab nobody looks at.
@@ -106,6 +117,19 @@ function readFn() {
     });
   }
   return out;
+}
+
+function heapFn() {
+  try { return performance.memory.usedJSHeapSize / 1048576; } catch (e) { return null; }
+}
+
+// adsb.lol's config.js sets useRouteAPI = true: every callsign is queued for a
+// route lookup against an external API, and g.route_cache is a sparse array that
+// measured length 12,345,679 after 40 s. We never read routes. Turning it off
+// took the tab's heap growth from ~6.5 MB/s to ~1.3 MB/s. A no-op on sites
+// that do not declare it.
+function noRoutesFn() {
+  try { useRouteAPI = false; return true; } catch (e) { return false; }
 }
 
 function zoomFn({ z, c }) {
@@ -159,7 +183,10 @@ function launchOpts() {
       // is per renderer and well above what the plane store needs (~13k small
       // objects); it turns a slow leak into a renderer restart instead of an
       // 8.9 GB host-memory climb (measured 2026-07-27).
-      '--js-flags=--max-old-space-size=512',
+      `--js-flags=--max-old-space-size=${HEAP_MB}`,
+      // Without it performance.memory is bucketed and cached for minutes, and
+      // the recycle check below would read a stale number.
+      '--enable-precise-memory-info',
       '--disable-extensions',
       '--disable-background-networking',
       '--disable-component-update',
@@ -207,6 +234,7 @@ async function openPage(url) {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     // Wait for Cloudflare to clear + tar1090 globals to exist.
     await page.waitForFunction('typeof OLMap !== "undefined" && typeof g !== "undefined"', { timeout: 60000 });
+    await page.evaluate(noRoutesFn);
     // Zoom to the whole world ONCE — this single move makes tar1090 fetch +
     // decode + parse every aircraft into g.planesOrdered. Do NOT keep re-moving
     // it (that resets the load); a slow keep-alive nudge refreshes it later.
@@ -246,11 +274,36 @@ async function initPage(url) {
     const existing = pages.get(url);
     if (existing && existing.page) { try { await existing.page.context().close(); } catch (e) {} }
     const page = await openPage(url);
-    pages.set(url, { page, aircraft: [], lastGood: Date.now() });
+    pages.set(url, { page, aircraft: [], lastGood: Date.now(), reads: 0 });
   } catch (e) {
     log('init failed for', url, '-', e.message);
-    pages.set(url, { page: null, aircraft: [], lastGood: 0 });
+    pages.set(url, { page: null, aircraft: [], lastGood: 0, reads: 0 });
   }
+}
+
+// Replace a page whose heap is heading for the cap. The replacement opens in the
+// background while the old page keeps being read, and is swapped in only once
+// it has filled, so the source never goes dark. Only the heap read (≤2 s) is
+// awaited by the read loop; the replacement page opens in the background.
+async function maybeRecycle(url, slot) {
+  if (slot.recycling) return;
+  const heap = await Promise.race([
+    slot.page.evaluate(heapFn),
+    new Promise((f) => setTimeout(() => f(null), 2000)),
+  ]).catch(() => null);
+  if (typeof heap !== 'number' || heap < HEAP_MB * RECYCLE_FRAC) return;
+  slot.recycling = true;
+  log('recycle', url, '- heap', Math.round(heap), 'MB');
+  openPage(url).then(async (fresh) => {
+    const cur = pages.get(url);
+    if (cur !== slot || !slot.page) { try { await fresh.context().close(); } catch (e) {} return; }
+    const old = slot.page;
+    slot.page = fresh;
+    slot.reads = 0;
+    slot.recycling = false;
+    try { await old.context().close(); } catch (e) {}
+    log('recycled', url);
+  }).catch((e) => { slot.recycling = false; log('recycle failed', url, '-', e.message); });
 }
 
 async function pump(url) {
@@ -272,6 +325,7 @@ async function pump(url) {
     if (Array.isArray(ac) && ac.length >= MIN_PLANES) {
       slot.aircraft = ac;
       slot.lastGood = Date.now();
+      if (++slot.reads % 10 === 0) await maybeRecycle(url, slot);
     } else if (Date.now() - slot.lastGood > 150000) {
       // Truly stalled for >2.5 min — rebuild the page (rare; keeps stream open
       // the rest of the time per "don't open/close constantly").
@@ -422,19 +476,33 @@ async function main() {
   await ensureBrowser();
   await Promise.allSettled(GLOBE_URLS.map((url) => initPage(url)));
 
-  // Read loop — just read each page's store on a cadence (no map moves here).
-  // The sources are independent contexts, so pump them CONCURRENTLY: serially
-  // the cycle cost sum(t_i) and one slow tab delayed every other source's
-  // freshness. allSettled, never all — one blocked source must not stall the
-  // union, which is what the per-slot lastGood carry-forward exists to survive.
+  // Read loops — one PER SOURCE, each reading its page's store on a cadence (no
+  // map moves here). A shared `await allSettled(pumps)` still waited on the
+  // slowest source before rebuilding: an evaluate timeout (READ_TIMEOUT_MS) plus
+  // its reinit froze the WHOLE union ~20 s, and one source hit that every
+  // 1-1.5 min (measured 2026-09-13: 24 timeouts in the log, 12-20 s windows with
+  // zero position changes worldwide). Now a stuck source only ages its own slot
+  // (lastGood carry-forward) and the others keep landing.
+  const dirty = { v: false };
+  for (const url of GLOBE_URLS) {
+    (async () => {
+      for (;;) {
+        const t0 = Date.now();
+        await pump(url).catch(() => {});
+        dirty.v = true;
+        const ms = Date.now() - t0;
+        pumpMsLast = ms;
+        // Book the next read against a wall-clock grid so a slow read does not
+        // push the cadence out by its own duration.
+        await new Promise((f) => setTimeout(f, Math.max(0, READ_MS - ms)));
+      }
+    })();
+  }
+  // Publish on its own tick: at most one union rebuild per READ_MS no matter how
+  // many sources landed, so the per-pump serialisation cost stays where it was.
   for (;;) {
-    const t0 = Date.now();
-    await Promise.allSettled(GLOBE_URLS.map((url) => pump(url)));
-    rebuildCache();
-    pumpMsLast = Date.now() - t0;
-    // Book the next read against a wall-clock grid so a slow cycle does not
-    // push the cadence out by its own duration.
-    await new Promise((f) => setTimeout(f, Math.max(0, READ_MS - pumpMsLast)));
+    await new Promise((f) => setTimeout(f, Math.min(READ_MS, 1000)));
+    if (dirty.v) { dirty.v = false; rebuildCache(); }
   }
 }
 
