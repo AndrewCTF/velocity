@@ -1,0 +1,41 @@
+# CodeRabbit (https://coderabbit.ai) review configuration.
+# The GitHub App itself is installed on the repository by an owner from
+# https://github.com/apps/coderabbitai; this file only shapes what it does.
+language: en-US
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - master
+  path_instructions:
+    - path: "apps/api/**"
+      instructions: >-
+        FastAPI backend. Every mutating route must carry Depends(audit_mutation)
+        and, where it changes operator state, Depends(require_operator). Outbound
+        URLs go through app/netguard.is_non_public_ip. Secrets (DSNs, API keys,
+        tokens) must never reach logs or responses. Read apps/api/CLAUDE.md for
+        the guarded invariants before suggesting a refactor of guarded code.
+    - path: "apps/web/**"
+      instructions: >-
+        React + Cesium console. Never removeAll()+add() in adapters (upsert by
+        id); no synthesized aircraft motion on the default path; every rendered
+        button must have a handler; dashboard copy carries no em dashes and
+        never compares the product to other vendors. See apps/web/CLAUDE.md.
+    - path: "**/*.test.*"
+      instructions: >-
+        Tests are guards for operator decisions. Flag a test that passes
+        vacuously or that was weakened to make a change pass.
+  path_filters:
+    - "!**/*.lock"
+    - "!**/uv.lock"
+    - "!docs/media/**"
+    - "!graphify-out/**"
+chat:
+  auto_reply: true

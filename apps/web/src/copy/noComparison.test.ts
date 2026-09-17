@@ -49,7 +49,15 @@ describe('no brand comparison in user-facing copy', () => {
 
   it('the website copy never compares the product to Palantir or Gotham', () => {
     const html = readFileSync(join(REPO, 'website', 'index.html'), 'utf8');
-    const body = html.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    // Strip comments until nothing changes: a single pass can leave a comment
+    // that was assembled by the removal of another (CodeQL js/incomplete-
+    // multi-character-sanitization), and this guard reads the result.
+    let body = html;
+    for (;;) {
+      const next = body.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      if (next === body) break;
+      body = next;
+    }
     const hits = body.split('\n').filter((l) => BRAND.test(l));
     expect(hits).toEqual([]);
   });

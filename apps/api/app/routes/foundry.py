@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from typing import Any, Literal
 
@@ -48,6 +49,8 @@ from app.uploads import read_capped
 # path segment: every Foundry route would then share one 60/min bucket with
 # BuildsView's 5 s build poll (12/min on its own), so the fix would have
 # throttled the operator's own console. The auth posture is identical either way.
+log = logging.getLogger(__name__)
+
 router = APIRouter(
     tags=["foundry"],
     dependencies=[Depends(require_compute_enabled), Depends(audit_mutation)],
@@ -463,7 +466,11 @@ async def upload_document(
                 "links": len(links),
             }
         except Exception as exc:  # noqa: BLE001 - extraction is best-effort
-            result["extracted"] = {"error": str(exc)[:200]}
+            # The class name only: an exception message can carry a stack
+            # fragment, a path or a model's raw output (CodeQL
+            # py/stack-trace-exposure). The detail goes to the log.
+            log.warning("foundry documents: extraction failed (%s)", exc.__class__.__name__)
+            result["extracted"] = {"error": f"extraction failed ({exc.__class__.__name__})"}
     return result
 
 
