@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 import time
 from collections.abc import AsyncIterator, Iterator
@@ -132,8 +133,15 @@ async def _clean_hypertable(_timescale_env: None) -> AsyncIterator[None]:
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _aircraft(icao24: str, lon: float, lat: float, track: float = 0.0,
-              ts: float | None = None, alt_m: float = 10_000.0) -> dict:
+
+def _aircraft(
+    icao24: str,
+    lon: float,
+    lat: float,
+    track: float = 0.0,
+    ts: float | None = None,
+    alt_m: float = 10_000.0,
+) -> dict:
     return {
         "type": "Feature",
         "geometry": {"type": "Point", "coordinates": [lon, lat]},
@@ -149,8 +157,14 @@ def _aircraft(icao24: str, lon: float, lat: float, track: float = 0.0,
     }
 
 
-def _vessel(mmsi: str, lon: float, lat: float, cog: float = 45.0,
-            ts: float | None = None, speed: float = 12.5) -> dict:
+def _vessel(
+    mmsi: str,
+    lon: float,
+    lat: float,
+    cog: float = 45.0,
+    ts: float | None = None,
+    speed: float = 12.5,
+) -> dict:
     return {
         "id": f"vessel:{mmsi}",
         "lon": lon,
@@ -188,13 +202,12 @@ async def _seeded(records: list[tuple]) -> AsyncIterator:
     """COPY raw records straight in, for cases that need a timestamp the
     recorder would never produce (days old, or side by side in one chunk)."""
     pool = await history_pg._ensure_pool()
-    await pool.copy_records_to_table(
-        "positions", records=records, columns=history_pg._COLUMNS
-    )
+    await pool.copy_records_to_table("positions", records=records, columns=history_pg._COLUMNS)
     yield pool
 
 
 # ── schema ────────────────────────────────────────────────────────────────────
+
 
 async def test_schema_applies_twice_without_error() -> None:
     """The backend re-applies the schema file on every boot, so applying it to
@@ -204,10 +217,13 @@ async def test_schema_applies_twice_without_error() -> None:
     async with pool.acquire() as con:
         await history_pg.apply_schema(con)
         await history_pg.apply_schema(con)
-        assert await con.fetchval(
-            "SELECT compression_enabled FROM timescaledb_information.hypertables "
-            "WHERE hypertable_name = 'positions'"
-        ) is True
+        assert (
+            await con.fetchval(
+                "SELECT compression_enabled FROM timescaledb_information.hypertables "
+                "WHERE hypertable_name = 'positions'"
+            )
+            is True
+        )
 
 
 async def test_chunk_interval_and_compression_policy_follow_the_settings(
@@ -236,6 +252,7 @@ async def test_chunk_interval_and_compression_policy_follow_the_settings(
 
 
 # ── round trip ────────────────────────────────────────────────────────────────
+
 
 async def test_ingest_flush_query_round_trip_both_kinds() -> None:
     """The archive's whole job: a fix goes in through the public ingest API and
@@ -306,12 +323,10 @@ async def test_track_by_id_and_series() -> None:
     """
     now = time.time()
     for i in range(3):
-        H.ingest_vessels([
-            _vessel("987654321", lon=1.0 + i * 0.1, lat=2.0, ts=now + i, speed=12.5)
-        ])
-        H.ingest_aircraft([
-            _aircraft("ser001", lon=3.0 + i * 0.1, lat=4.0, ts=now + i, alt_m=9500.0)
-        ])
+        H.ingest_vessels([_vessel("987654321", lon=1.0 + i * 0.1, lat=2.0, ts=now + i, speed=12.5)])
+        H.ingest_aircraft(
+            [_aircraft("ser001", lon=3.0 + i * 0.1, lat=4.0, ts=now + i, alt_m=9500.0)]
+        )
     await _flush()
 
     res = await H.query_track_by_id(
@@ -343,20 +358,29 @@ async def test_window_diff_arrived_departed_stayed() -> None:
     a_at, b_at = now - 3600, now
     rows = []
     for entity, ts_list in (
-        ("vessel:aaa", [a_at]),              # departed
-        ("vessel:bbb", [a_at, b_at]),        # stayed
-        ("vessel:ccc", [b_at]),              # arrived
+        ("vessel:aaa", [a_at]),  # departed
+        ("vessel:bbb", [a_at, b_at]),  # stayed
+        ("vessel:ccc", [b_at]),  # arrived
     ):
         for ts in ts_list:
-            rows.append((
-                history_pg._ts(ts), history_pg.KIND_VESSEL, entity,
-                5_000_000, 5_000_000, 0, None, None, None, None, None,
-                history_pg.SOURCE_LIVE,
-            ))
+            rows.append(
+                (
+                    history_pg._ts(ts),
+                    history_pg.KIND_VESSEL,
+                    entity,
+                    5_000_000,
+                    5_000_000,
+                    0,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    history_pg.SOURCE_LIVE,
+                )
+            )
     async with _seeded(rows):
-        res = await H.window_diff(
-            "vessel", bbox, a_at - 60, a_at + 60, b_at - 60, b_at + 60
-        )
+        res = await H.window_diff("vessel", bbox, a_at - 60, a_at + 60, b_at - 60, b_at + 60)
     assert {r["id"] for r in res["arrived"]} == {"vessel:ccc"}
     assert {r["id"] for r in res["departed"]} == {"vessel:aaa"}
     assert {r["id"] for r in res["stayed"]} == {"vessel:bbb"}
@@ -376,14 +400,62 @@ async def test_timeseries_counts_distinct_ids_per_bucket() -> None:
     now = time.time()
     bucket = 300
     rows = [
-        (history_pg._ts(now), history_pg.KIND_AIRCRAFT, "aircraft:a1",
-         50_000_000, 5_000_000, 0, None, None, None, None, None, 0),
-        (history_pg._ts(now + 1), history_pg.KIND_AIRCRAFT, "aircraft:a1",
-         50_000_001, 5_000_000, 0, None, None, None, None, None, 0),
-        (history_pg._ts(now), history_pg.KIND_AIRCRAFT, "aircraft:a2",
-         51_000_000, 6_000_000, 0, None, None, None, None, None, 0),
-        (history_pg._ts(now - 400), history_pg.KIND_VESSEL, "vessel:v1",
-         52_000_000, 7_000_000, 0, None, None, None, None, None, 0),
+        (
+            history_pg._ts(now),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:a1",
+            50_000_000,
+            5_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
+        (
+            history_pg._ts(now + 1),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:a1",
+            50_000_001,
+            5_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
+        (
+            history_pg._ts(now),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:a2",
+            51_000_000,
+            6_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
+        (
+            history_pg._ts(now - 400),
+            history_pg.KIND_VESSEL,
+            "vessel:v1",
+            52_000_000,
+            7_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
     ]
     async with _seeded(rows):
         res = await H.count_timeseries(bucket, now - 700, now + 10)
@@ -401,10 +473,22 @@ async def test_timeseries_hourly_bucket_reads_the_rollup() -> None:
     now = time.time()
     rows = []
     for i in range(4):
-        rows.append((
-            history_pg._ts(now - 60 - i), history_pg.KIND_AIRCRAFT, f"aircraft:h{i % 2}",
-            50_000_000, 5_000_000, 0, None, None, None, None, None, 0,
-        ))
+        rows.append(
+            (
+                history_pg._ts(now - 60 - i),
+                history_pg.KIND_AIRCRAFT,
+                f"aircraft:h{i % 2}",
+                50_000_000,
+                5_000_000,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                0,
+            )
+        )
     async with _seeded(rows) as pool:
         await _refresh_rollup(pool)
         res = await H.count_timeseries(3600, now - 7200, now + 10)
@@ -416,19 +500,53 @@ async def test_coverage_shape_and_totals() -> None:
     counts that sum to the row count for a window covering every row."""
     now = time.time()
     rows = [
-        (history_pg._ts(now - 3600), history_pg.KIND_AIRCRAFT, "aircraft:cov1",
-         50_000_000, 5_000_000, 0, None, None, None, None, None, 0),
-        (history_pg._ts(now - 7200), history_pg.KIND_AIRCRAFT, "aircraft:cov2",
-         51_000_000, 6_000_000, 0, None, None, None, None, None, 0),
-        (history_pg._ts(now - 1800), history_pg.KIND_VESSEL, "vessel:cov1",
-         52_000_000, 7_000_000, 0, None, None, None, None, None, 0),
+        (
+            history_pg._ts(now - 3600),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:cov1",
+            50_000_000,
+            5_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
+        (
+            history_pg._ts(now - 7200),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:cov2",
+            51_000_000,
+            6_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
+        (
+            history_pg._ts(now - 1800),
+            history_pg.KIND_VESSEL,
+            "vessel:cov1",
+            52_000_000,
+            7_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
     ]
     async with _seeded(rows) as pool:
         await _refresh_rollup(pool)
         res = await H.coverage(window_hours=24, bucket_hours=1)
-    assert set(res) >= {
-        "recording_since", "oldest_ts", "total_bytes", "row_count", "buckets"
-    }
+    assert set(res) >= {"recording_since", "oldest_ts", "total_bytes", "row_count", "buckets"}
     assert res["row_count"] == 3
     assert res["oldest_ts"] == res["recording_since"]
     assert abs(res["oldest_ts"] - (now - 7200)) < 1.0
@@ -441,10 +559,22 @@ async def test_distinct_ids_per_bucket_in_a_box() -> None:
     now = time.time()
     rows = []
     for i in range(3):
-        rows.append((
-            history_pg._ts(now + i), history_pg.KIND_VESSEL, f"vessel:c{i % 2}",
-            5_000_000, 5_000_000, 0, None, None, None, None, None, 0,
-        ))
+        rows.append(
+            (
+                history_pg._ts(now + i),
+                history_pg.KIND_VESSEL,
+                f"vessel:c{i % 2}",
+                5_000_000,
+                5_000_000,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                0,
+            )
+        )
     async with _seeded(rows):
         out = await H.distinct_ids_per_bucket(
             "vessel", (0.0, 0.0, 10.0, 10.0), now - 10, now + 60, 600.0
@@ -454,12 +584,15 @@ async def test_distinct_ids_per_bucket_in_a_box() -> None:
 
 # ── retention and budget ──────────────────────────────────────────────────────
 
+
 async def _chunk_count() -> int:
     pool = await history_pg._ensure_pool()
-    return int(await pool.fetchval(
-        "SELECT count(*) FROM timescaledb_information.chunks "
-        "WHERE hypertable_name = 'positions'"
-    ))
+    return int(
+        await pool.fetchval(
+            "SELECT count(*) FROM timescaledb_information.chunks "
+            "WHERE hypertable_name = 'positions'"
+        )
+    )
 
 
 async def test_prune_drops_old_chunks_and_keeps_recent_rows() -> None:
@@ -470,10 +603,34 @@ async def test_prune_drops_old_chunks_and_keeps_recent_rows() -> None:
     now = time.time()
     old = now - 10 * 86400
     rows = [
-        (history_pg._ts(old), history_pg.KIND_AIRCRAFT, "aircraft:old001",
-         50_000_000, 5_000_000, 0, None, None, None, None, None, 0),
-        (history_pg._ts(now), history_pg.KIND_AIRCRAFT, "aircraft:new001",
-         50_100_000, 5_100_000, 0, None, None, None, None, None, 0),
+        (
+            history_pg._ts(old),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:old001",
+            50_000_000,
+            5_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
+        (
+            history_pg._ts(now),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:new001",
+            50_100_000,
+            5_100_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
     ]
     async with _seeded(rows):
         before = await _chunk_count()
@@ -491,8 +648,22 @@ async def test_prune_drops_old_chunks_and_keeps_recent_rows() -> None:
 
 async def test_prune_zero_hours_is_a_no_op() -> None:
     now = time.time()
-    rows = [(history_pg._ts(now), history_pg.KIND_AIRCRAFT, "aircraft:keep",
-             50_000_000, 5_000_000, 0, None, None, None, None, None, 0)]
+    rows = [
+        (
+            history_pg._ts(now),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:keep",
+            50_000_000,
+            5_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        )
+    ]
     async with _seeded(rows):
         assert await history_pg.prune(0) == 0
         assert await _chunk_count() == 1
@@ -507,10 +678,22 @@ async def test_enforce_budget_drops_the_oldest_chunk_never_the_newest() -> None:
     for day in range(4):
         ts = now - (4 - day) * 86400
         for i in range(200):
-            rows.append((
-                history_pg._ts(ts + i), history_pg.KIND_AIRCRAFT, f"aircraft:b{day}_{i}",
-                50_000_000 + i, 5_000_000 + i, 0, 10_000, None, "CS", None, None, 0,
-            ))
+            rows.append(
+                (
+                    history_pg._ts(ts + i),
+                    history_pg.KIND_AIRCRAFT,
+                    f"aircraft:b{day}_{i}",
+                    50_000_000 + i,
+                    5_000_000 + i,
+                    0,
+                    10_000,
+                    None,
+                    "CS",
+                    None,
+                    None,
+                    0,
+                )
+            )
     async with _seeded(rows):
         chunks_before = await _chunk_count()
         assert chunks_before >= 4
@@ -535,10 +718,34 @@ async def test_maintenance_runs_both_halves_without_vacuum() -> None:
     there is no VACUUM anywhere on the path."""
     now = time.time()
     rows = [
-        (history_pg._ts(now - 10 * 86400), history_pg.KIND_AIRCRAFT, "aircraft:m1",
-         50_000_000, 5_000_000, 0, None, None, None, None, None, 0),
-        (history_pg._ts(now), history_pg.KIND_AIRCRAFT, "aircraft:m2",
-         50_000_000, 5_000_000, 0, None, None, None, None, None, 0),
+        (
+            history_pg._ts(now - 10 * 86400),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:m1",
+            50_000_000,
+            5_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
+        (
+            history_pg._ts(now),
+            history_pg.KIND_AIRCRAFT,
+            "aircraft:m2",
+            50_000_000,
+            5_000_000,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+        ),
     ]
     async with _seeded(rows):
         dropped = await history_pg.maintenance(48, 0)
@@ -546,6 +753,7 @@ async def test_maintenance_runs_both_halves_without_vacuum() -> None:
 
 
 # ── stats ─────────────────────────────────────────────────────────────────────
+
 
 async def test_stats_reports_the_timescale_backend() -> None:
     """`/api/history/stats` is a synchronous handler, so the numbers come from
@@ -590,3 +798,80 @@ async def test_a_dead_database_degrades_rather_than_raising(
     H._buffer.clear()
     assert await history_pg.flush_rows(rows) == 0
     await history_pg.stop()
+
+
+# ── flush resilience (W1-2) and pool lifecycle (W1-1) ───────────────────────
+
+
+async def test_one_malformed_fix_skips_itself_not_the_batch(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """W1-2: one garbage upstream fix used to sink the whole 3 s COPY batch —
+    asyncpg rejects the batch when a value overflows its column, and a field
+    that cannot even convert escaped the executor entirely. Now the bad fixes
+    skip themselves (counted, one log line per batch) and the good ones land."""
+    now = time.time()
+    extra = H._encode_extra({"callsign": "CSMAL1", "baro_alt_m": 10_000})
+    # entity ids are namespaced the way `history.ingest_aircraft` buffers them.
+    good = ("aircraft", "aircraft:mal001", now, 10.0, 52.0, 90.0, extra)
+    wild_lat = ("aircraft", "aircraft:mal002", now, 10.0, 1e9, 90.0, extra)  # lat_e6 overflows int4
+    broken_t = ("aircraft", "aircraft:mal003", "garbage", 10.0, 52.0, 90.0, extra)
+
+    with caplog.at_level(logging.INFO, logger="app.history_pg"):
+        written = await history_pg.flush_rows([good, wild_lat, broken_t])
+    assert written == 1, "the good fix must survive its two malformed neighbours"
+
+    pool = await history_pg._ensure_pool()
+    assert (
+        int(await pool.fetchval("SELECT count(*) FROM positions WHERE id = 'aircraft:mal001'")) == 1
+    )
+    assert (
+        int(
+            await pool.fetchval(
+                "SELECT count(*) FROM positions WHERE id IN ('aircraft:mal002', 'aircraft:mal003')"
+            )
+        )
+        == 0
+    ), "the malformed fixes never reached the table"
+
+    skips = [r.getMessage() for r in caplog.records if "flush skipped" in r.getMessage()]
+    assert skips == ["history_pg: flush skipped 2/3 malformed fix(es)"]
+
+
+async def test_failed_schema_apply_releases_its_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """W1-1: a schema apply that raises (a role that can connect but not own
+    the hypertable) used to leak the pool it opened — the module global is
+    installed only after a clean apply, so every retry of _ensure_pool
+    opened a fresh connection set until Postgres masked the original error
+    with 'too many clients'. Each failure must close what it opened."""
+    import asyncpg
+
+    await history_pg._ensure_pool()  # bring it up (schema applied), then tear down
+    await history_pg.stop()
+
+    async def _failing_apply(con):
+        raise asyncpg.InsufficientPrivilegeError(
+            "current user cannot execute add_compression_policy", "42501"
+        )
+
+    monkeypatch.setattr(history_pg, "apply_schema", _failing_apply)
+    try:
+        for attempt in range(1, 4):
+            with pytest.raises(asyncpg.InsufficientPrivilegeError):
+                await history_pg._ensure_pool()
+            assert history_pg._pool is None, f"failed attempt {attempt} installed a pool"
+        admin = await asyncpg.connect(_ADMIN_DSN)
+        try:
+            live = int(
+                await admin.fetchval(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE application_name = 'velocity-history'"
+                )
+            )
+        finally:
+            await admin.close()
+        assert live == 0, f"{live} velocity-history connection(s) leaked by failed applies"
+    finally:
+        monkeypatch.undo()

@@ -123,6 +123,7 @@ def dsn_label(dsn: str) -> str:
 
 # ── schema ────────────────────────────────────────────────────────────────────
 
+
 def split_sql(text: str) -> list[str]:
     """Split a schema file into individual statements.
 
@@ -244,6 +245,7 @@ async def apply_schema(con: asyncpg.Connection) -> None:
 
 # ── pool lifecycle ────────────────────────────────────────────────────────────
 
+
 async def _ensure_pool() -> asyncpg.Pool:
     """Return the live pool, creating it (and the schema) on first use.
 
@@ -281,8 +283,24 @@ async def _ensure_pool() -> asyncpg.Pool:
             },
         )
         if not _schema_applied:
-            async with pool.acquire() as con:
-                await apply_schema(con)
+            try:
+                async with pool.acquire() as con:
+                    await apply_schema(con)
+            except Exception as exc:  # noqa: BLE001 — any apply failure releases the pool
+                # The module global is installed only after a clean apply, so
+                # without this close every retry of _ensure_pool would leak a
+                # fresh set of connections until Postgres says 'too many
+                # clients' and masks the original error.
+                log.warning(
+                    "history_pg: schema apply failed (%s) against %s, releasing pool",
+                    type(exc).__name__,
+                    dsn_label(dsn),
+                )
+                try:
+                    await pool.close()
+                except Exception:  # noqa: BLE001 — the apply error is the one that matters
+                    log.debug("history_pg: pool close after failed apply", exc_info=True)
+                raise
             _schema_applied = True
         _pool = pool
         _pool_loop = loop
@@ -323,6 +341,7 @@ async def stop() -> None:
 
 # ── row conversion ────────────────────────────────────────────────────────────
 
+
 def _i(value: Any) -> int | None:
     """Coerce to int for an integer column, or None. ``copy_records_to_table``
     is type-strict: a float handed to a smallint raises and drops the whole
@@ -343,6 +362,19 @@ def _clamp_small(value: int | None) -> int | None:
     if value is None:
         return None
     if value < -32768 or value > 32767:
+        return None
+    return value
+
+
+def _clamp_int4(value: int | None) -> int | None:
+    """Keep an int4 column inside its range instead of raising on garbage.
+
+    asyncpg rejects the ENTIRE COPY batch when one value overflows its
+    column, so one wild upstream lat/alt must cost one row, never the batch.
+    """
+    if value is None:
+        return None
+    if value < -2_147_483_648 or value > 2_147_483_647:
         return None
     return value
 
@@ -391,22 +423,40 @@ def _record(row: tuple[Any, ...]) -> tuple[Any, ...] | None:
     The buffer row is ``(kind, id, t, lon, lat, track, encoded_extra)`` and the
     encoding of that last field is `history._encode_extra`'s business, so the
     decode is borrowed from there rather than reimplemented.
+
+    Never raises: a malformed fix is a skipped row, not a batch-killer. The
+    int4 columns are clamped to their range — an out-of-range value would make
+    asyncpg reject the entire COPY batch — and a field that cannot even be
+    converted is skipped rather than escaping into the flush loop.
     """
     from app.history import _decode_extra  # noqa: PLC0415 — avoids an import cycle
 
-    kind, entity_id, t, lon, lat, track, extra_blob = row
+    try:
+        kind, entity_id, t, lon, lat, track, extra_blob = row
+    except ValueError:  # a row is always a 7-tuple; anything else is garbage
+        return None
     kind_i = _KIND_TO_INT.get(str(kind))
     if kind_i is None:
         return None
     extra = _decode_extra(extra_blob)
+    try:
+        t_dt = _dt.datetime.fromtimestamp(float(t), tz=_dt.UTC)
+        lat_e6 = _clamp_int4(_i(float(lat) * 1e6))
+        lon_e6 = _clamp_int4(_i(float(lon) * 1e6))
+        track_dd = _clamp_small(_i(float(track) * 10.0))
+        alt_m = _clamp_int4(_i(extra.get("baro_alt_m")))
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+    if lat_e6 is None or lon_e6 is None:
+        return None
     return (
-        _dt.datetime.fromtimestamp(float(t), tz=_dt.UTC),
+        t_dt,
         kind_i,
         str(entity_id),
-        _i(float(lat) * 1e6),
-        _i(float(lon) * 1e6),
-        _clamp_small(_i(float(track) * 10.0)),
-        _i(extra.get("baro_alt_m")),
+        lat_e6,
+        lon_e6,
+        track_dd,
+        alt_m,
         _speed_dm(extra),
         _text(extra.get("callsign") or extra.get("name")),
         _squawk(extra.get("squawk")),
@@ -416,8 +466,18 @@ def _record(row: tuple[Any, ...]) -> tuple[Any, ...] | None:
 
 
 _COLUMNS = [
-    "t", "kind", "id", "lat_e6", "lon_e6", "track_dd",
-    "alt_m", "speed_dm", "callsign", "squawk", "category", "source",
+    "t",
+    "kind",
+    "id",
+    "lat_e6",
+    "lon_e6",
+    "track_dd",
+    "alt_m",
+    "speed_dm",
+    "callsign",
+    "squawk",
+    "category",
+    "source",
 ]
 
 
@@ -432,6 +492,8 @@ async def flush_rows(rows: list[tuple[Any, ...]]) -> int:
     Never raises: a flush failure must not take the recorder's event loop with
     it, and the buffer it was handed is already detached, so the cost of a
     failure is bounded to that batch (same contract as `history._flush_sync`).
+    One malformed fix costs one row — it is skipped at conversion and counted
+    in a single log line per batch, never dropped with the good ones.
     """
     if not rows:
         return 0
@@ -439,12 +501,21 @@ async def flush_rows(rows: list[tuple[Any, ...]]) -> int:
     # on) PER ROW, and this runs on the recorder's event loop next to the 1 s
     # ADS-B tick. At the archive's measured steady rate (~55 M fixes over 39
     # days) it is nothing; at firehose scale it is not, and the SQLite path
-    # always did its whole write in an executor. Keep that property.
+    # always did its whole write in an executor. Keep that property — and keep
+    # the call INSIDE the try, so a conversion error can only lose its batch,
+    # never escape into the flush loop.
     loop = asyncio.get_running_loop()
-    records = await loop.run_in_executor(None, _records_for, rows)
-    if not records:
-        return 0
     try:
+        records = await loop.run_in_executor(None, _records_for, rows)
+        skipped = len(rows) - len(records)
+        if skipped:
+            log.info(
+                "history_pg: flush skipped %d/%d malformed fix(es)",
+                skipped,
+                len(rows),
+            )
+        if not records:
+            return 0
         pool = await _ensure_pool()
         async with pool.acquire() as con:
             await con.copy_records_to_table("positions", records=records, columns=_COLUMNS)
@@ -452,12 +523,14 @@ async def flush_rows(rows: list[tuple[Any, ...]]) -> int:
     except Exception as exc:  # noqa: BLE001
         log.warning(
             "history_pg: flush failed (%s) against %s",
-            type(exc).__name__, dsn_label(get_settings().history_pg_dsn),
+            type(exc).__name__,
+            dsn_label(get_settings().history_pg_dsn),
         )
         return 0
 
 
 # ── read helpers ──────────────────────────────────────────────────────────────
+
 
 def _ts(t: float) -> _dt.datetime:
     return _dt.datetime.fromtimestamp(float(t), tz=_dt.UTC)
@@ -487,12 +560,15 @@ def _degraded(what: str, exc: Exception, payload: dict[str, Any]) -> dict[str, A
     partial outage look like a quiet window (issue #16)."""
     log.warning(
         "history_pg: %s failed (%s) against %s",
-        what, type(exc).__name__, dsn_label(get_settings().history_pg_dsn),
+        what,
+        type(exc).__name__,
+        dsn_label(get_settings().history_pg_dsn),
     )
     return {**payload, "degraded": True, "error": f"{type(exc).__name__}"}
 
 
 # ── queries ───────────────────────────────────────────────────────────────────
+
 
 async def query_tracks(
     kind: str | None,
@@ -549,12 +625,14 @@ async def query_tracks(
             id_order.append(row_id)
         pts: list[list[float]] = tracks[row_id]["points"]
         if len(pts) < max_points_per_id:
-            pts.append([
-                (row["lon_e6"] or 0) / 1e6,
-                (row["lat_e6"] or 0) / 1e6,
-                _epoch(row["t"]),
-                (row["track_dd"] or 0) / 10.0,
-            ])
+            pts.append(
+                [
+                    (row["lon_e6"] or 0) / 1e6,
+                    (row["lat_e6"] or 0) / 1e6,
+                    _epoch(row["t"]),
+                    (row["track_dd"] or 0) / 10.0,
+                ]
+            )
     return {"tracks": [tracks[eid] for eid in id_order]}
 
 
@@ -580,7 +658,10 @@ async def query_track_by_id(
         rows = await pool.fetch(
             "SELECT t, lon_e6, lat_e6, track_dd, alt_m, speed_dm, callsign "
             "FROM positions WHERE id = $1 AND t BETWEEN $2 AND $3 ORDER BY t LIMIT $4",
-            entity_id, _ts(t_from), _ts(t_to), limit,
+            entity_id,
+            _ts(t_from),
+            _ts(t_to),
+            limit,
         )
     except Exception as exc:  # noqa: BLE001
         return _degraded("query_track_by_id", exc, {"tracks": []})
@@ -625,26 +706,25 @@ async def count_timeseries(bucket_sec: int, t_from: float, t_to: float) -> dict[
             rows = await pool.fetch(
                 "SELECT extract(epoch FROM bucket) AS bkt, kind, ids AS n "
                 "FROM positions_hourly WHERE bucket >= $1 AND bucket <= $2 ORDER BY bucket",
-                _ts(t_from), _ts(t_to),
+                _ts(t_from),
+                _ts(t_to),
             )
         else:
             rows = await pool.fetch(
                 "SELECT floor(extract(epoch FROM t) / $1) * $1 AS bkt, kind, "
                 "count(DISTINCT id) AS n FROM positions "
                 "WHERE t >= $2 AND t <= $3 GROUP BY 1, 2 ORDER BY 1",
-                float(bucket_sec), _ts(t_from), _ts(t_to),
+                float(bucket_sec),
+                _ts(t_from),
+                _ts(t_to),
             )
     except Exception as exc:  # noqa: BLE001
-        return _degraded(
-            "timeseries", exc, {"bucket_sec": bucket_sec, "buckets": []}
-        )
+        return _degraded("timeseries", exc, {"bucket_sec": bucket_sec, "buckets": []})
 
     by_bucket: dict[int, dict[str, Any]] = {}
     for row in rows:
         bkt = int(row["bkt"])
-        b = by_bucket.setdefault(
-            bkt, {"t": bkt, "aircraft": 0, "vessel": 0, "total": 0}
-        )
+        b = by_bucket.setdefault(bkt, {"t": bkt, "aircraft": 0, "vessel": 0, "total": 0})
         name = _INT_TO_KIND.get(int(row["kind"]))
         n = int(row["n"])
         if name:
@@ -680,13 +760,20 @@ async def coverage(window_hours: int, bucket_hours: int) -> dict[str, Any]:
             rows = await con.fetch(
                 "SELECT floor(extract(epoch FROM bucket) / $1) * $1 AS bkt, sum(n) AS n "
                 "FROM positions_hourly WHERE bucket >= $2 GROUP BY 1 ORDER BY 1",
-                float(bucket_sec), _ts(t_from),
+                float(bucket_sec),
+                _ts(t_from),
             )
     except Exception as exc:  # noqa: BLE001
         return _degraded(
-            "coverage", exc,
-            {"recording_since": None, "oldest_ts": None, "total_bytes": 0,
-             "row_count": 0, "buckets": []},
+            "coverage",
+            exc,
+            {
+                "recording_since": None,
+                "oldest_ts": None,
+                "total_bytes": 0,
+                "row_count": 0,
+                "buckets": [],
+            },
         )
     oldest_ts = _epoch(oldest) if oldest is not None else None
     return {
@@ -713,8 +800,7 @@ async def ids_in_window(
     lo_lon, lo_lat, hi_lon, hi_lat = _bbox_e6(bbox)
     params: list[Any] = [_ts(t_from), _ts(t_to), lo_lon, hi_lon, lo_lat, hi_lat]
     where = (
-        "t >= $1 AND t <= $2 AND lon_e6 >= $3 AND lon_e6 <= $4 "
-        "AND lat_e6 >= $5 AND lat_e6 <= $6"
+        "t >= $1 AND t <= $2 AND lon_e6 >= $3 AND lon_e6 <= $4 AND lat_e6 >= $5 AND lat_e6 <= $6"
     )
     if kind:
         params.append(_KIND_TO_INT.get(kind, -1))
@@ -730,9 +816,7 @@ async def ids_in_window(
         log.warning("history_pg: ids_in_window failed (%s)", type(exc).__name__)
         return {}
     return {
-        str(r["id"]): (
-            _epoch(r["t"]), (r["lon_e6"] or 0) / 1e6, (r["lat_e6"] or 0) / 1e6
-        )
+        str(r["id"]): (_epoch(r["t"]), (r["lon_e6"] or 0) / 1e6, (r["lat_e6"] or 0) / 1e6)
         for r in rows
     }
 
@@ -757,8 +841,14 @@ async def distinct_ids_per_bucket(
             "WHERE kind = $3 AND t >= $1 AND t < $4 "
             "AND lon_e6 >= $5 AND lon_e6 <= $6 AND lat_e6 >= $7 AND lat_e6 <= $8 "
             "GROUP BY 1 ORDER BY 1",
-            _ts(t_from), float(bucket_sec), _KIND_TO_INT.get(kind, -1), _ts(t_to),
-            lo_lon, hi_lon, lo_lat, hi_lat,
+            _ts(t_from),
+            float(bucket_sec),
+            _KIND_TO_INT.get(kind, -1),
+            _ts(t_to),
+            lo_lon,
+            hi_lon,
+            lo_lat,
+            hi_lat,
         )
     except Exception as exc:  # noqa: BLE001
         log.warning("history_pg: distinct_ids_per_bucket failed (%s)", type(exc).__name__)
@@ -767,6 +857,7 @@ async def distinct_ids_per_bucket(
 
 
 # ── retention and byte budget ─────────────────────────────────────────────────
+
 
 async def prune(retention_hours: int) -> int:
     """Drop whole chunks that end before the retention cutoff. Returns the
@@ -790,9 +881,7 @@ async def prune(retention_hours: int) -> int:
         log.warning("history_pg: prune failed (%s)", type(exc).__name__)
         return 0
     if rows:
-        log.info(
-            "history_pg: dropped %d chunk(s) older than %dh", len(rows), retention_hours
-        )
+        log.info("history_pg: dropped %d chunk(s) older than %dh", len(rows), retention_hours)
     return len(rows)
 
 
@@ -832,7 +921,8 @@ async def enforce_budget(max_bytes: int) -> int:
                         "history_pg: archive is %d bytes, over the %d-byte budget, and "
                         "only the newest chunk is left — raise HISTORY_BUDGET_GB. "
                         "Nothing has been thinned.",
-                        size, max_bytes,
+                        size,
+                        max_bytes,
                     )
                     break
                 gone = await con.fetch(
@@ -844,7 +934,8 @@ async def enforce_budget(max_bytes: int) -> int:
                 dropped += len(gone)
                 log.info(
                     "history_pg: dropped %d chunk(s) to stay under the %d-byte budget",
-                    len(gone), max_bytes,
+                    len(gone),
+                    max_bytes,
                 )
     except Exception as exc:  # noqa: BLE001
         log.warning("history_pg: enforce_budget failed (%s)", type(exc).__name__)
@@ -861,6 +952,7 @@ async def maintenance(retention_hours: int, max_bytes: int) -> int:
 
 # ── stats ─────────────────────────────────────────────────────────────────────
 
+
 async def refresh_stats() -> None:
     """Recompute the cached stats snapshot.
 
@@ -874,9 +966,7 @@ async def refresh_stats() -> None:
         pool = await _ensure_pool()
         async with pool.acquire() as con:
             size = int(await con.fetchval("SELECT hypertable_size('positions')") or 0)
-            rows = int(
-                await con.fetchval("SELECT coalesce(sum(n), 0) FROM positions_hourly") or 0
-            )
+            rows = int(await con.fetchval("SELECT coalesce(sum(n), 0) FROM positions_hourly") or 0)
             if rows == 0:
                 rows = int(await con.fetchval("SELECT approximate_row_count('positions')") or 0)
             oldest = await con.fetchval("SELECT t FROM positions ORDER BY t LIMIT 1")
@@ -884,7 +974,8 @@ async def refresh_stats() -> None:
                 await con.fetchval(
                     "SELECT count(*) FROM timescaledb_information.chunks "
                     "WHERE hypertable_name = 'positions'"
-                ) or 0
+                )
+                or 0
             )
             comp = await con.fetchrow(
                 "SELECT number_compressed_chunks, "
@@ -895,7 +986,8 @@ async def refresh_stats() -> None:
     except Exception as exc:  # noqa: BLE001
         log.warning(
             "history_pg: stats refresh failed (%s) against %s",
-            type(exc).__name__, dsn_label(get_settings().history_pg_dsn),
+            type(exc).__name__,
+            dsn_label(get_settings().history_pg_dsn),
         )
         return
     _stats = {

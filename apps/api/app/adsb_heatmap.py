@@ -134,13 +134,24 @@ def _has_separator(body: bytes) -> bool:
 def _read_cache(path: Path) -> bytes | None:
     """The gzipped chunk on disk, or None when missing/corrupt.
 
-    Touches atime on a hit so the LRU eviction in `enforce_cache_budget`
-    keeps what the operator actually replays.
+    Corrupt is a MISS, not an error: a gzip cut short raises EOFError (not
+    OSError), and a wrong-shape payload decompresses just fine — both are
+    deleted and re-fetched from the hosts, never surfaced as a 500 that
+    retries on the same poisoned file forever. Touches atime on a hit so
+    the LRU eviction in `enforce_cache_budget` keeps what the operator
+    actually replays.
     """
     try:
         with gzip.open(path, "rb") as fh:
             blob = fh.read()
-    except OSError:
+    except Exception:  # noqa: BLE001 — truncation is EOFError, a bad stream zlib.error
+        if path.exists():
+            log.info("heatmap cache: %s is unreadable, deleting and refetching", path.name)
+        path.unlink(missing_ok=True)
+        return None
+    if len(blob) % _ENTRY_LEN != 0 or not _has_separator(blob):
+        log.info("heatmap cache: %s is not a chunk shape, deleting and refetching", path.name)
+        path.unlink(missing_ok=True)
         return None
     try:
         os.utime(path, None)
@@ -150,9 +161,13 @@ def _read_cache(path: Path) -> bytes | None:
 
 
 def _write_cache(path: Path, body: bytes) -> None:
+    """Atomically: a kill or ENOSPC mid-write must not leave a partial .gz
+    behind — a truncated gzip is a 500 on every retry of that chunk."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with gzip.open(path, "wb") as fh:
+    tmp = path.with_name(path.name + ".tmp")
+    with gzip.open(tmp, "wb") as fh:
         fh.write(body)
+    tmp.replace(path)
     enforce_cache_budget(int(get_settings().heatmap_cache_gb * 1024**3))
 
 
@@ -201,7 +216,14 @@ async def fetch_chunk(day: date, index: int) -> tuple[bytes, str] | None:
             )
             continue
         if _chunk_end(day, index).timestamp() < time.time() - _CACHE_GRACE_S:
-            await asyncio.to_thread(_write_cache, cache_path(day, index), body)
+            try:
+                await asyncio.to_thread(_write_cache, cache_path(day, index), body)
+            except OSError:
+                # A cache-write failure (ENOSPC, read-only dir) must never
+                # fail a chunk the host already served — it is served anyway.
+                log.info(
+                    "heatmap chunk %s: cache write failed, serving anyway", chunk_key(day, index)
+                )
         return body, host
     return None
 

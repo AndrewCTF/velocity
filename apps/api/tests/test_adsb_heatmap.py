@@ -257,6 +257,73 @@ def test_fetch_chunk_disabled_hosts_skip_the_domain(
     assert not any("globe.adsb.fi" in c for c in fake.calls)  # the .fi mirror was never asked
 
 
+# ── cache integrity (W2-1) ───────────────────────────────────────────────────
+
+
+def test_chunk_route_404s_when_cache_is_truncated(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A gzip cut short by a kill or ENOSPC mid-write used to 500 the route
+    FOREVER: EOFError is not an OSError, so the poisoned file was never
+    deleted and never re-fetched. Now it is a cache miss — the file goes,
+    the hosts are re-asked, and 404 is the only answer when they lack it."""
+    _patch_data_dir(monkeypatch, tmp_path)
+    fake = _FakeClient()
+    monkeypatch.setattr(adsb_heatmap, "get_client", lambda: fake)
+    day, index = date(2024, 6, 1), 24
+    path = adsb_heatmap.cache_path(day, index)
+    path.parent.mkdir(parents=True)
+    full = gzip.compress(_synthetic_chunk())
+    path.write_bytes(full[: len(full) // 2])  # truncated mid-stream
+
+    r = client.get("/api/history/upstream/chunk", params={"day": "2024-06-01", "index": 24})
+    assert r.status_code == 404, "a poisoned cache is a miss, not a 500"
+    assert not path.exists(), "the poisoned file is deleted, not retried"
+    assert len(fake.calls) == 2, "both hosts were re-asked for the chunk"
+
+
+def test_wrong_shape_cache_file_is_refetched_from_hosts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A valid gzip that is not a chunk (no separator / bad length) is a
+    cache miss too: it is deleted and the hosts asked, and the good body
+    they serve replaces it in the cache."""
+    _patch_data_dir(monkeypatch, tmp_path)
+    fake = _FakeClient()
+    monkeypatch.setattr(adsb_heatmap, "get_client", lambda: fake)
+    blob = _synthetic_chunk()
+    day, index = date(2024, 6, 1), 24
+    path = adsb_heatmap.cache_path(day, index)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(gzip.compress(b"x" * 32))  # a valid gzip, not a chunk
+
+    fake.routes = {_url("adsb.lol", day, index): (200, blob)}
+    out = asyncio.run(adsb_heatmap.fetch_chunk(day, index))
+    assert out == (blob, "adsb.lol")
+    with gzip.open(path, "rb") as fh:
+        assert fh.read() == blob, "the poison is replaced by the good fetch"
+
+
+def test_cache_write_failure_keeps_a_good_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cache write that raises (ENOSPC, read-only dir) must not fail a
+    chunk the host already served — the fetch still returns the body."""
+    _patch_data_dir(monkeypatch, tmp_path)
+    fake = _FakeClient()
+    monkeypatch.setattr(adsb_heatmap, "get_client", lambda: fake)
+    blob = _synthetic_chunk()
+    day, index = date(2024, 6, 1), 24
+    fake.routes = {_url("globe.adsb.fi", day, index): (200, blob)}
+
+    def _boom(path, body):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(adsb_heatmap, "_write_cache", _boom)
+    out = asyncio.run(adsb_heatmap.fetch_chunk(day, index))
+    assert out == (blob, "globe.adsb.fi")
+
+
 # ── cache budget ─────────────────────────────────────────────────────────────
 
 
