@@ -20,7 +20,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.config import get_settings
-from app.intel import resolve
+from app.intel import promotion, resolve
 from app.routes import adsb as adsb_routes
 
 router = APIRouter(tags=["status"])
@@ -453,6 +453,10 @@ async def status_provenance() -> dict[str, Any]:
         out["resolution"] = resolve.stats()
     except Exception:  # noqa: BLE001 — diagnostics must never 500
         out["resolution"] = {"error": "unavailable"}
+    # Is the graph actually filling? The mint counters live in promotion.py
+    # (the only writer) and report the last COMPLETED watch-officer cycle
+    # plus the process lifetime total.
+    out["ontology"] = promotion.mints_state()
     return out
 
 
