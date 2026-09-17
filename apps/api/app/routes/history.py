@@ -1,16 +1,17 @@
 """GET /api/history/* — historical position playback.
 
-These routes expose the SQLite position store (app.history) over HTTP so the
+These routes expose the position store (app.history: SQLite or TimescaleDB) over HTTP so the
 3D globe can scrub through past tracks or replay an event window.
 """
 
 from __future__ import annotations
 
 import time
+from datetime import UTC, date, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 
-from app import history
+from app import adsb_heatmap, history
 from app.routes.search import ICAO24_RE, MMSI_RE
 
 router = APIRouter(tags=["history"])
@@ -190,3 +191,105 @@ async def get_diff(
         b + window_sec,
         limit,
     )
+
+
+# ── Upstream ADS-B heatmap replay (tar1090 globe_history, keyless) ──
+# The globe can scrub any half hour back to 2024 even for fixes it never
+# recorded: the public aggregators keep readsb's 30-minute heatmap chunks,
+# and app/adsb_heatmap.py proxies + gzip-caches them (closed half hours
+# only, LRU by atime under heatmap_cache_gb). chunk = the raw bytes;
+# tracks = the same chunk shaped like /api/history/tracks so the replay
+# owner treats upstream history exactly like owned history; coverage =
+# which days the enabled hosts actually have, for the day picker.
+
+
+def _parse_day(day: str) -> date:
+    """A query day -> date, 422 when fromisoformat rejects it."""
+    try:
+        return date.fromisoformat(day)
+    except ValueError as exc:
+        raise HTTPException(422, f"day {day!r} is not a YYYY-MM-DD date") from exc
+
+
+@router.get("/api/history/upstream/chunk")
+async def get_upstream_chunk(
+    day: str = Query(..., description="UTC day, YYYY-MM-DD"),
+    index: int = Query(..., ge=0, le=47, description="Half hour of the UTC day, 0..47"),
+) -> Response:
+    """The raw tar1090/readsb 30-minute heatmap chunk for one half hour.
+
+    Served from the on-disk cache when present, else proxied from the
+    enabled keyless aggregators in config order; the chunk is only
+    cached once its half hour has closed, so the live one never goes
+    stale on disk."""
+    d = _parse_day(day)
+    if d > datetime.now(UTC).date():
+        raise HTTPException(422, f"day {d.isoformat()} is in the future")
+    result = await adsb_heatmap.fetch_chunk(d, index)
+    if result is None:
+        raise HTTPException(404, "no upstream host has that chunk")
+    raw, host = result
+    return Response(
+        content=raw,
+        media_type="application/octet-stream",
+        headers={
+            "X-Heatmap-Host": host,
+            "X-Heatmap-Interval": "30000",
+            "Cache-Control": "private, max-age=86400",
+        },
+    )
+
+
+@router.get("/api/history/upstream/tracks")
+async def get_upstream_tracks(
+    day: str = Query(..., description="UTC day, YYYY-MM-DD"),
+    index: int = Query(..., ge=0, le=47, description="Half hour of the UTC day, 0..47"),
+    min_lon: float | None = Query(None, ge=-180, le=180),
+    min_lat: float | None = Query(None, ge=-90, le=90),
+    max_lon: float | None = Query(None, ge=-180, le=180),
+    max_lat: float | None = Query(None, ge=-90, le=90),
+) -> dict:
+    """The chunk decoded into the /api/history/tracks shape (derived
+    tracks included), so scrubbing treats upstream history exactly like
+    owned history. The bbox keeps a track if ANY of its points is inside."""
+    d = _parse_day(day)
+    given = [v is not None for v in (min_lon, min_lat, max_lon, max_lat)]
+    if any(given) and not all(given):
+        raise HTTPException(422, "bbox is all four of min_lon/min_lat/max_lon/max_lat or none")
+    bbox: tuple[float, float, float, float] | None = None
+    if all(given):
+        bbox = (float(min_lon), float(min_lat), float(max_lon), float(max_lat))
+    result = await adsb_heatmap.fetch_chunk(d, index)
+    if result is None:
+        raise HTTPException(404, "no upstream host has that chunk")
+    raw, host = result
+    decoded = adsb_heatmap.decode_chunk(raw)
+    out = adsb_heatmap.tracks_from_chunk(decoded, bbox=bbox)
+    start = datetime(d.year, d.month, d.day, tzinfo=UTC) + timedelta(minutes=30 * index)
+    out["host"] = host
+    out["slice_from"] = start.timestamp()
+    out["slice_to"] = start.timestamp() + 30 * 60
+    out["interval_ms"] = decoded.get("interval_ms", 30_000)
+    return out
+
+
+@router.get("/api/history/upstream/coverage")
+async def get_upstream_coverage(
+    from_: str = Query(..., alias="from", description="First UTC day, YYYY-MM-DD (inclusive)"),
+    to: str = Query(..., description="Last UTC day, YYYY-MM-DD (inclusive)"),
+) -> dict:
+    """Which days in the range at least one enabled host has heatmap chunks
+    for - the replay day picker asks this before offering a day. Probes are
+    16-byte, cached 24 h per (day, host), and capped at 366 days."""
+    try:
+        d_from = date.fromisoformat(from_)
+    except ValueError as exc:
+        raise HTTPException(422, f"from {from_!r} is not a YYYY-MM-DD date") from exc
+    try:
+        d_to = date.fromisoformat(to)
+    except ValueError as exc:
+        raise HTTPException(422, f"to {to!r} is not a YYYY-MM-DD date") from exc
+    try:
+        return await adsb_heatmap.coverage(d_from, d_to)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc

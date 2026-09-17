@@ -1,13 +1,26 @@
-"""Historical position store — SQLite-backed, async-safe.
+"""Historical position store — SQLite or TimescaleDB, async-safe.
 
-Buffers aircraft + vessel position fixes in memory and flushes them to SQLite
-on a background task every ~3 s so the hot 1 s ADS-B tick is never blocked.
+Buffers aircraft + vessel position fixes in memory and flushes them to the
+archive on a background task every ~3 s so the hot 1 s ADS-B tick is never
+blocked.
 
-Schema
-------
+Schema (SQLite)
+---------------
     positions(kind TEXT, id TEXT, t REAL, lon REAL, lat REAL, track REAL, extra TEXT)
     INDEX on (id, t) — fast per-id range scans
     INDEX on (t)     — fast global time-range scans + prune
+
+Backends
+--------
+``settings.history_backend`` selects the store — see `_backend()`. The default
+"auto" picks Postgres + TimescaleDB when ``HISTORY_PG_DSN`` is set and SQLite
+otherwise, so a keyless box with no database keeps recording exactly as before.
+
+The buffer, the change-based dedup in `_buffer_point` and the 3 s flush loop are
+SHARED: only the write at the end of a flush, the retention pass, and the read
+queries change. The Timescale half lives in `app/history_pg.py`; every public
+function here keeps its signature and its return shape whichever backend
+answers, so `routes/history.py` and the frontend never learn which one it was.
 """
 
 from __future__ import annotations
@@ -60,6 +73,10 @@ _RATE_LIMIT_SECS: float = 5.0        # minimum gap between writes for same id
 _RATE_LIMIT_DEG: float = 0.01        # OR ~1 km movement triggers immediate write
 _MAX_BUFFERED_IDS: int = 60_000      # FIFO-evict beyond this to keep RAM bounded
 _PRUNE_INTERVAL_S: float = 3600.0    # enforce retention at most once per hour
+# How often the flush loop refreshes history_pg's stats snapshot. /api/history/stats
+# is a SYNCHRONOUS handler and asyncpg is not, so the numbers are pulled here and
+# served from cache; stats() reports their age rather than implying they are live.
+_PG_STATS_INTERVAL_S: float = 30.0
 _WAL_SIZE_LIMIT_BYTES: int = 512 * 1024**2  # truncate the WAL back to <=512 MB
 # Coverage aggregates the whole archive (83 M rows measured -> 73 s), so it
 # cannot be recomputed per poll: the replay bar asks every 5 s, and a query
@@ -109,6 +126,30 @@ def _resolved_db_path() -> str:
     if _db_path_override is not None:
         return _db_path_override
     return get_settings().history_db_path
+
+
+# ── backend selection ─────────────────────────────────────────────────────────
+
+def _backend() -> str:
+    """``"sqlite"`` or ``"timescale"`` — which store answers.
+
+    * ``HISTORY_BACKEND=sqlite`` forces SQLite even with a DSN configured, so an
+      operator can move back without unsetting anything.
+    * ``auto`` (the default) picks Timescale exactly when ``HISTORY_PG_DSN`` is
+      set. Keyless is a product requirement: a box with no database must keep
+      recording, so "no DSN" is a normal state, not an error.
+    * ``HISTORY_BACKEND=timescale`` with no DSN has nothing to connect to. It
+      falls back to SQLite rather than failing the boot — `start()` says so out
+      loud once, because a silent fallback is how an operator ends up looking
+      for their archive in the wrong place.
+
+    Called per query, so it must stay this cheap and must NOT log.
+    """
+    settings = get_settings()
+    mode = (settings.history_backend or "auto").strip().lower()
+    if mode == "sqlite":
+        return "sqlite"
+    return "timescale" if (settings.history_pg_dsn or "").strip() else "sqlite"
 
 
 # ── storage roots and daily shards ────────────────────────────────────────────
@@ -539,6 +580,20 @@ async def _maintenance_pass() -> None:
     settings = get_settings()
     hours = _clamped_retention_hours()
     size_cap = _size_cap_bytes(settings)
+    if _backend() == "timescale":
+        # Retention on Timescale is drop_chunks, and the byte budget drops whole
+        # oldest chunks — so there is no row delete to reclaim and NO VACUUM on
+        # this path at all. The decimate pass is SQLite-only for the same
+        # reason: columnar compression is what buys the space here, and thinning
+        # rows would fight it.
+        from app import history_pg  # noqa: PLC0415 — optional backend, lazy import
+
+        dropped = await history_pg.maintenance(hours, size_cap)
+        if dropped:
+            log.info(
+                "history: dropped %d chunk(s) (>%dh / >%d bytes)", dropped, hours, size_cap
+            )
+        return
     deleted = 0
     # Tiered resolution (opt-in): thin OLD data first so the byte cap then bounds a
     # denser, coarser tail rather than dropping whole recent slices.
@@ -579,12 +634,24 @@ async def _flush_loop() -> None:
     enforce retention (prune) at most once per _PRUNE_INTERVAL_S."""
     global _buffer, _rows_written
     next_prune = time.time() + _PRUNE_INTERVAL_S
+    next_stats = 0.0  # refresh the pg snapshot on the first pass, not 30 s in
     while True:
         await asyncio.sleep(_FLUSH_INTERVAL_S)
         loop = asyncio.get_running_loop()
+        timescale = _backend() == "timescale"
         if _buffer:
             rows, _buffer = _buffer, []
-            _rows_written += await loop.run_in_executor(None, _flush_sync, rows)
+            if timescale:
+                from app import history_pg  # noqa: PLC0415 — optional backend
+
+                _rows_written += await history_pg.flush_rows(rows)
+            else:
+                _rows_written += await loop.run_in_executor(None, _flush_sync, rows)
+        if timescale and time.time() >= next_stats:
+            next_stats = time.time() + _PG_STATS_INTERVAL_S
+            from app import history_pg  # noqa: PLC0415 — optional backend
+
+            await history_pg.refresh_stats()
         if time.time() >= next_prune:
             next_prune = time.time() + _PRUNE_INTERVAL_S
             await _maintenance_pass()
@@ -657,6 +724,12 @@ async def query_tracks(
 
         {"tracks": [{"id": str, "kind": str, "points": [[lon,lat,t,track], ...]}, ...]}
     """
+    if _backend() == "timescale":
+        from app import history_pg  # noqa: PLC0415 — optional backend
+
+        return await history_pg.query_tracks(
+            kind, bbox, t_from, t_to, limit_ids, max_points_per_id
+        )
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None, _query_sync, kind, bbox, t_from, t_to, limit_ids, max_points_per_id
@@ -727,6 +800,12 @@ async def query_track_by_id(
     Returns the same shape as ``query_tracks`` (a ``tracks`` list), but always
     with at most one entry, so callers can share a renderer.
     """
+    if _backend() == "timescale":
+        from app import history_pg  # noqa: PLC0415 — optional backend
+
+        return await history_pg.query_track_by_id(
+            entity_id, t_from, t_to, limit, include_series
+        )
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None, _query_by_id_sync, entity_id, t_from, t_to, limit, include_series
@@ -762,6 +841,10 @@ def _timeseries_sync(bucket_sec: int, t_from: float, t_to: float) -> dict[str, A
 
 
 async def count_timeseries(bucket_sec: int, t_from: float, t_to: float) -> dict[str, Any]:
+    if _backend() == "timescale":
+        from app import history_pg  # noqa: PLC0415 — optional backend
+
+        return await history_pg.count_timeseries(bucket_sec, t_from, t_to)
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _timeseries_sync, bucket_sec, t_from, t_to)
 
@@ -849,8 +932,18 @@ async def coverage(window_hours: int, bucket_hours: int) -> dict[str, Any]:
         now = time.time()
         if cached is not None and cached[0] == key and now - cached[1] < _COVERAGE_TTL_S:
             return cached[2]
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, _coverage_sync, window_hours, bucket_hours)
+        if _backend() == "timescale":
+            # The TTL + lock stay: they are cheap, and they bound a burst of
+            # replay-bar polls on either store. On Timescale the scan they were
+            # protecting against is gone — coverage reads the hourly rollup.
+            from app import history_pg  # noqa: PLC0415 — optional backend
+
+            result = await history_pg.coverage(window_hours, bucket_hours)
+        else:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                None, _coverage_sync, window_hours, bucket_hours
+            )
         # Don't cache a degraded answer: a transient error would otherwise stick
         # for the whole TTL.
         if not result.get("degraded"):
@@ -1075,6 +1168,27 @@ def _reclaim() -> None:
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
 
+async def _start_timescale() -> None:
+    """Open the Timescale pool, reporting a failure as ours.
+
+    The recorder keeps buffering either way and every entry point retries the
+    connection, so a database that is not up yet is a delay, not an outage —
+    but it must be a delay someone can see in the log, attributed to history and
+    naming host:port/db rather than the DSN.
+    """
+    from app import history_pg  # noqa: PLC0415 — optional backend
+
+    try:
+        await history_pg.start()
+    except Exception as exc:  # noqa: BLE001 — a boot task must not die silently
+        log.warning(
+            "history: Timescale unavailable at boot (%s) against %s — buffering "
+            "and retrying on the next flush",
+            type(exc).__name__,
+            history_pg.dsn_label(get_settings().history_pg_dsn),
+        )
+
+
 def start() -> None:
     """Start the background flush task. No-op when history_enabled=False."""
     global _flush_task
@@ -1084,6 +1198,33 @@ def start() -> None:
         return
     if _flush_task is not None and not _flush_task.done():
         return  # already running
+    if _backend() == "timescale":
+        # Fire-and-forget: a database that is slow or down at boot must not hold
+        # the app's lifespan open. Every history_pg entry point waits for the
+        # pool itself, so a read that arrives first blocks on the connection
+        # rather than quietly answering "no data". The task carries its own
+        # exception sink: unhandled, asyncio would format the failure at GC time
+        # under no logger of ours, and the DSN could end up in that traceback.
+        asyncio.ensure_future(_start_timescale())
+        _flush_task = asyncio.ensure_future(_flush_loop())
+        return
+    mode = (settings.history_backend or "auto").strip().lower()
+    if mode == "timescale":
+        log.warning(
+            "history: HISTORY_BACKEND=timescale but HISTORY_PG_DSN is empty — "
+            "recording to SQLite at %s instead. Set the DSN or the archive is "
+            "not where you think it is.",
+            _resolved_db_path(),
+        )
+    else:
+        # ONE line at boot, on the keyless path everyone runs. It is the only
+        # place an operator is told which of the two stores their history is
+        # going into, and "auto with no DSN" is a supported configuration, not a
+        # fault — hence a single warning rather than a repeated one.
+        log.warning(
+            "history: no HISTORY_PG_DSN configured — using the SQLite backend. "
+            "Set HISTORY_PG_DSN to record into Postgres + TimescaleDB."
+        )
     # Ensure the DB + schema exist immediately so the first query works even
     # before the first flush.
     try:
@@ -1114,7 +1255,16 @@ async def stop() -> None:
         except asyncio.CancelledError:
             pass
         _flush_task = None
-    # Final drain
+    # Final drain — into whichever store the recorder was writing to, BEFORE the
+    # pool closes, or the last seconds of track go nowhere.
+    if _backend() == "timescale":
+        from app import history_pg  # noqa: PLC0415 — optional backend
+
+        if _buffer:
+            rows, _buffer = _buffer, []
+            await history_pg.flush_rows(rows)
+        await history_pg.stop()
+        return
     if _buffer:
         rows, _buffer = _buffer, []
         _flush_sync(rows)
@@ -1126,10 +1276,44 @@ def stats() -> dict[str, Any]:
     ``retention_hours`` is the *effective* (clamped) time-prune window, so the
     frontend can bound the replay date-picker to what's actually retained
     rather than the raw, possibly-out-of-range setting.
+
+    ``backend`` names the store the rest of the payload describes: the storage
+    keys mean different things on each ("shards" and a file path on SQLite,
+    chunks and compression on Timescale), and a caller that cannot tell them
+    apart will read one as the other.
     """
     settings = get_settings()
+    if _backend() == "timescale":
+        from app import history_pg  # noqa: PLC0415 — optional backend
+
+        snap = history_pg.stats_snapshot()
+        return {
+            "enabled": settings.history_enabled,
+            "backend": "timescale",
+            # host:port/db, NEVER the DSN — it can carry a password, and this
+            # payload is served to the browser.
+            "pg": history_pg.dsn_label(settings.history_pg_dsn),
+            "buffered": len(_buffer),
+            "rows_written": _rows_written,
+            "task_running": _flush_task is not None and not _flush_task.done(),
+            "retention_hours": _clamped_retention_hours(),
+            "retention_max_hours": int(settings.history_retention_max_hours),
+            "max_bytes": int(settings.history_max_bytes),
+            "budget_bytes": _size_cap_bytes(settings),
+            "chunk_hours": int(settings.history_pg_chunk_hours),
+            "compress_after_hours": int(settings.history_pg_compress_after_hours),
+            # Sharding is a SQLite-only workaround; say so rather than omit it,
+            # so a caller reading `sharded` gets an answer either way.
+            "sharded": False,
+            "roots": [],
+            "shards": [],
+            "min_interval_s": settings.history_min_interval_s,
+            "min_move_deg": settings.history_min_move_deg,
+            **snap,
+        }
     return {
         "enabled": settings.history_enabled,
+        "backend": "sqlite",
         "db_path": _resolved_db_path(),
         "buffered": len(_buffer),
         "rows_written": _rows_written,
@@ -1204,6 +1388,12 @@ async def distinct_ids_per_bucket(
     bucket_sec: float,
 ) -> list[tuple[float, int]]:
     """Async wrapper for `_distinct_ids_per_bucket_sync`."""
+    if _backend() == "timescale":
+        from app import history_pg  # noqa: PLC0415 — optional backend
+
+        return await history_pg.distinct_ids_per_bucket(
+            kind, bbox, t_from, t_to, bucket_sec
+        )
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None, _distinct_ids_per_bucket_sync, kind, bbox, t_from, t_to, bucket_sec
@@ -1269,9 +1459,15 @@ async def window_diff(
     continuous truth: asking "who was at 14:00:00" against a store that records
     a fix every few seconds would answer "nobody" most of the time.
     """
-    loop = asyncio.get_running_loop()
-    a = await loop.run_in_executor(None, _ids_in_window_sync, kind, bbox, a_from, a_to)
-    b = await loop.run_in_executor(None, _ids_in_window_sync, kind, bbox, b_from, b_to)
+    if _backend() == "timescale":
+        from app import history_pg  # noqa: PLC0415 — optional backend
+
+        a = await history_pg.ids_in_window(kind, bbox, a_from, a_to)
+        b = await history_pg.ids_in_window(kind, bbox, b_from, b_to)
+    else:
+        loop = asyncio.get_running_loop()
+        a = await loop.run_in_executor(None, _ids_in_window_sync, kind, bbox, a_from, a_to)
+        b = await loop.run_in_executor(None, _ids_in_window_sync, kind, bbox, b_from, b_to)
 
     a_ids, b_ids = set(a), set(b)
 

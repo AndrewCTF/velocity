@@ -158,6 +158,22 @@ def _isolate_history_db(tmp_path: Path) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_resolve_db(tmp_path: Path) -> Iterator[None]:
+    """Point the entity-resolution alias graph at a per-test temp file.
+
+    ``intel/resolve`` shared ``history.db`` until the archive moved to
+    TimescaleDB (2026-09-17); on a box with no ``data/history.db`` it now opens
+    ``./data/resolve.db``, which the suite must never create or prune in the
+    repo. Same reasoning as ``_isolate_history_db`` above.
+    """
+    from app.intel import resolve
+
+    resolve.override_db_path(str(tmp_path / "resolve.db"))
+    yield
+    resolve.override_db_path(None)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_workflows_db(tmp_path: Path) -> Iterator[None]:
     """Point the Workflows store at a per-test temp file (mirrors foundry)."""
     from app.workflows import store as workflows_store

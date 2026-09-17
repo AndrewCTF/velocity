@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -54,10 +55,39 @@ def override_db_path(path: str | None) -> None:
     _db_path_override = path
 
 
+#: The shipped default of ``Settings.history_db_path``. An operator who pointed
+#: history somewhere else did so deliberately, and the alias graph keeps
+#: following it — only the DEFAULT path is the one we stop sharing.
+_DEFAULT_HISTORY_DB = "./data/history.db"
+
+
 def _resolved_db_path() -> str:
+    """Where the alias graph lives.
+
+    It used to be ``history.db`` unconditionally (see the module docstring:
+    "one file to back up / prune"). Once the position archive can move to
+    Postgres + TimescaleDB, that file stops being written at all — so a store
+    that is still SQLite needs a path of its own, or resolution quietly follows
+    the archive out of existence.
+
+    The rule, in order:
+
+    1. a test override wins;
+    2. a non-default ``history_db_path`` is honoured verbatim — the operator
+       aimed history at that file and the alias graph goes with it;
+    3. an EXISTING ``./data/history.db`` keeps being used, because that is where
+       an installed box's alias graph already is and moving it would strand it;
+    4. otherwise a fresh, separate ``./data/resolve.db``.
+    """
     if _db_path_override is not None:
         return _db_path_override
-    return get_settings().history_db_path
+    configured = get_settings().history_db_path
+    if configured != _DEFAULT_HISTORY_DB:
+        return configured
+    legacy = Path(configured)
+    if legacy.exists():
+        return str(legacy)
+    return str(legacy.parent / "resolve.db")
 
 
 def _connect() -> sqlite3.Connection:
@@ -101,6 +131,19 @@ def _connect() -> sqlite3.Connection:
         )
         """
     )
+    # A candidate row used to carry no score or review state at all — added
+    # idempotently (PRAGMA table_info idiom, see app/audit.py:113) so an
+    # existing merge_candidates table from before this wave gains the review
+    # queue's columns without losing its rows.
+    cols = {r[1] for r in con.execute("PRAGMA table_info(merge_candidates)")}
+    for col, decl in (
+        ("score", "REAL NOT NULL DEFAULT 0"),
+        ("status", "TEXT NOT NULL DEFAULT 'open'"),
+        ("decided_by", "TEXT"),
+        ("decided_at", "REAL"),
+    ):
+        if col not in cols:
+            con.execute(f"ALTER TABLE merge_candidates ADD COLUMN {col} {decl}")
     con.commit()
     return con
 
@@ -145,11 +188,43 @@ def _mint(kind: str, ordered: list[tuple[str, str]]) -> str:
     return f"entity:{kind}:{strongest_type}:{strongest_val}"
 
 
+def _display_name(con: sqlite3.Connection, canonical_id: str) -> str | None:
+    row = con.execute(
+        "SELECT display_name FROM entities WHERE canonical_id=?", (canonical_id,)
+    ).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def _conflict_score(con: sqlite3.Connection, a: str, b: str, reason: str) -> float:
+    """How likely ``a`` and ``b`` are the SAME real entity, for operator triage.
+
+    Two different canonicals attached to one presented id (``multiple_canonicals``)
+    is the strongest signal something really did collide — 0.7. A contradicting
+    STRONG id (``conflicting_imo`` / ``conflicting_icao24`` — the only reasons
+    this prefix names, see ``resolve()``) more often means two genuinely
+    different real-world objects that happen to share a weaker id, so it scores
+    lower — 0.3. Everything else (an already-aliased id pointing elsewhere) is
+    weakest — 0.2. A name-similarity bonus (0 when either side has no known
+    display name) can push either band up, never past 1.0.
+    """
+    if reason == "multiple_canonicals":
+        base = 0.7
+    elif reason.startswith("conflicting_"):
+        base = 0.3
+    else:
+        base = 0.2
+    na, nb = _display_name(con, a), _display_name(con, b)
+    name_ratio = SequenceMatcher(None, na, nb).ratio() if na and nb else 0.0
+    return max(0.0, min(1.0, base + 0.3 * name_ratio))
+
+
 def _record_conflict(con: sqlite3.Connection, a: str, b: str, reason: str, ts: float) -> None:
     lo, hi = sorted((a, b))
+    score = _conflict_score(con, a, b, reason)
     con.execute(
-        "INSERT OR IGNORE INTO merge_candidates (id_a, id_b, reason, ts) VALUES (?,?,?,?)",
-        (lo, hi, reason, ts),
+        "INSERT OR IGNORE INTO merge_candidates (id_a, id_b, reason, ts, score) "
+        "VALUES (?,?,?,?,?)",
+        (lo, hi, reason, ts, score),
     )
 
 
@@ -298,13 +373,111 @@ def aliases_of(canonical_id: str) -> list[dict[str, str]]:
         con.close()
 
 
+def list_candidates(status: str = "open", limit: int = 100) -> list[dict[str, Any]]:
+    """The scored merge-review queue the Inbox polls, highest score first.
+
+    ``status`` filters to one review state (``open`` / ``approved`` /
+    ``rejected``); falsy filters to none, returning every candidate.
+    """
+    con = _connect()
+    try:
+        if status:
+            rows = con.execute(
+                "SELECT id_a, id_b, reason, score, ts, status FROM merge_candidates "
+                "WHERE status=? ORDER BY score DESC, ts DESC LIMIT ?",
+                (status, limit),
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT id_a, id_b, reason, score, ts, status FROM merge_candidates "
+                "ORDER BY score DESC, ts DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        out: list[dict[str, Any]] = []
+        for id_a, id_b, reason, score, ts, st in rows:
+            a_row = con.execute(
+                "SELECT kind, display_name FROM entities WHERE canonical_id=?", (id_a,)
+            ).fetchone()
+            b_row = con.execute(
+                "SELECT kind, display_name FROM entities WHERE canonical_id=?", (id_b,)
+            ).fetchone()
+            out.append(
+                {
+                    "id_a": id_a,
+                    "id_b": id_b,
+                    "reason": reason,
+                    "score": score,
+                    "ts": ts,
+                    "status": st,
+                    "a_kind": a_row[0] if a_row else None,
+                    "a_name": a_row[1] if a_row else None,
+                    "b_kind": b_row[0] if b_row else None,
+                    "b_name": b_row[1] if b_row else None,
+                }
+            )
+        return out
+    finally:
+        con.close()
+
+
+def decide(id_a: str, id_b: str, verdict: str, who: str) -> dict[str, Any]:
+    """An operator's call on one candidate. Never called by ``resolve()`` itself
+    — this is the ONLY path a merge candidate can turn into an actual merge.
+
+    ``approve`` repoints every alias of ``id_b`` (the loser) onto ``id_a`` (the
+    winner) and drops the loser's ``entities`` row; ``reject`` only marks the
+    candidate so it stops surfacing in the open queue. The candidate is looked
+    up by the unordered pair (``merge_candidates`` stores it sorted), but
+    ``id_a``/``id_b`` as GIVEN decide who wins — the caller's, not the table's,
+    order.
+    """
+    if verdict not in ("approve", "reject"):
+        raise ValueError("verdict must be 'approve' or 'reject'")
+    lo, hi = sorted((id_a, id_b))
+    now = time.time()
+    con = _connect()
+    try:
+        row = con.execute(
+            "SELECT status FROM merge_candidates WHERE id_a=? AND id_b=?", (lo, hi)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"no merge candidate for {id_a} / {id_b}")
+        new_status = "approved" if verdict == "approve" else "rejected"
+        con.execute(
+            "UPDATE merge_candidates SET status=?, decided_by=?, decided_at=? "
+            "WHERE id_a=? AND id_b=?",
+            (new_status, who, now, lo, hi),
+        )
+        if verdict == "approve":
+            winner, loser = id_a, id_b
+            con.execute(
+                "UPDATE aliases SET canonical_id=? WHERE canonical_id=?", (winner, loser)
+            )
+            con.execute("DELETE FROM entities WHERE canonical_id=?", (loser,))
+        con.commit()
+        return {"id_a": id_a, "id_b": id_b, "verdict": verdict, "status": new_status}
+    finally:
+        con.close()
+
+
 def stats() -> dict[str, Any]:
-    """Diagnostics for /api/intel/sources + the data_sources MCP tool."""
+    """Diagnostics for /api/intel/sources + the data_sources MCP tool, plus the
+    merge-review queue's open/approved/rejected counts (/api/status/provenance)."""
     con = _connect()
     try:
         entities = con.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         aliases = con.execute("SELECT COUNT(*) FROM aliases").fetchone()[0]
         conflicts = con.execute("SELECT COUNT(*) FROM merge_candidates").fetchone()[0]
-        return {"entities": entities, "aliases": aliases, "merge_candidates": conflicts}
+        by_status = {"open": 0, "approved": 0, "rejected": 0}
+        for st, cnt in con.execute(
+            "SELECT status, COUNT(*) FROM merge_candidates GROUP BY status"
+        ).fetchall():
+            by_status[st] = cnt
+        return {
+            "entities": entities,
+            "aliases": aliases,
+            "merge_candidates": conflicts,
+            **by_status,
+        }
     finally:
         con.close()

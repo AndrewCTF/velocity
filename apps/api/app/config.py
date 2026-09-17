@@ -769,11 +769,16 @@ class Settings(BaseSettings):
     # ── Upstream ADS-B heatmap replay (tar1090 globe_history, keyless) ──
     # Public aggregators serve readsb's 30-minute heatmap chunks
     # (globe_history/YYYY/MM/DD/heatmap/NN.bin.ttf) back to 2024. Hosts are tried
-    # in order; adsb.fi reaches 2024-01-01, adsb.lol has gaps. airplanes.live is
+    # in order. Measured 2026-09-17 (docs/heatmap-coverage-sweep-2026-09-17.csv):
+    # adsb.fi has every day since 2024-01-01, adsb.lol 689 of 990; but adsb.fi
+    # sits behind Cloudflare and answered 403 to every client from this egress
+    # after a 990-request HEAD sweep, while adsb.lol kept serving (10 s slices,
+    # ~13 MB per half hour). adsb.lol is therefore first; adsb.fi fills its
+    # gaps when the egress is not blocked. Probe coverage gently. airplanes.live is
     # deliberately NOT listed by default: api.airplanes.live blocked this egress
     # once (apps/api/CLAUDE.md), and 9 MB chunks every few seconds is the load
     # pattern that did it. ADSB_DISABLED_HOSTS is honoured by domain suffix.
-    heatmap_hosts: str = "globe.adsb.fi,adsb.lol"  # HEATMAP_HOSTS
+    heatmap_hosts: str = "adsb.lol,globe.adsb.fi"  # HEATMAP_HOSTS
     # On-disk cache of fetched chunks (data/heatmap/YYYY/MM/DD/NN.bin.ttf.gz),
     # immutable once the half hour has closed; LRU by atime under this budget.
     heatmap_cache_gb: float = 4.0  # HEATMAP_CACHE_GB
