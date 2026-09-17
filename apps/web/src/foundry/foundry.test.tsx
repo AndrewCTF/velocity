@@ -15,10 +15,10 @@ import { apiFetch } from '../transport/http.js';
 
 const mockedFetch = vi.mocked(apiFetch);
 
-function jsonResponse(body: unknown, ok = true): Response {
+function jsonResponse(body: unknown, ok = true, status?: number): Response {
   return {
     ok,
-    status: ok ? 200 : 500,
+    status: status ?? (ok ? 200 : 500),
     statusText: ok ? 'OK' : 'Error',
     json: async () => body,
   } as unknown as Response;
@@ -155,44 +155,51 @@ const DATASET_DOCS = {
   dead_letter_present: false,
 };
 
+// The default routing, split out so a test can intercept one URL and let every
+// other request fall through to it (datasets/detail fetches need real shapes).
+function routeResponse(u: string): Response {
+  if (u.includes('/summary')) return jsonResponse(SUMMARY);
+  // Both the new-dataset upload and the version upload (/datasets/{id}/upload)
+  // answer with the dataset. The version route used to fall through to the
+  // dataset LIST, so UploadModal rendered `row_count` of undefined after the
+  // test ended; vitest 5 reports that as an unhandled error.
+  if (/\/datasets\/([^/]+\/)?upload/.test(u)) return jsonResponse({ ...DATASET_1, auto_sync: [] });
+  // POST /datasets/{id}/documents appends ONE row as a new version, so the
+  // answer is the bumped dataset (same shape an upload returns).
+  if (u.includes('/datasets') && u.includes('/documents'))
+    return jsonResponse({ ...DATASET_1, latest_version: 2, row_count: 101, auto_sync: [] });
+  if (u.includes('/datasets') && u.includes('/rollback')) return jsonResponse({ ...DATASET_1, auto_sync: [] });
+  if (u.includes('/datasets') && u.includes('/docs')) return jsonResponse(DATASET_DOCS);
+  if (u.includes('/datasets') && u.includes('/checks/results')) return jsonResponse(CHECK_RESULTS);
+  if (u.includes('/foundry/checks')) return jsonResponse(CHECKS);
+  if (u.includes('/datasets') && u.includes('/rows')) return jsonResponse({ schema: DATASET_1.schema, rows: [{ mmsi: 1 }], total: 1, version: 1 });
+  if (u.includes('/datasets') && u.includes('/versions')) return jsonResponse([{ version: 1, row_count: 100, source: 'upload', created_at: '2026-07-01T00:00:00Z' }]);
+  if (u.includes('/datasets') && u.includes('/stats')) return jsonResponse([{ name: 'mmsi', type: 'int', nulls: 0, distinct: 100, min: 1, max: 999 }]);
+  if (u.includes('/transforms') && u.includes('/preview')) return jsonResponse({ schema: [{ name: 'mmsi', type: 'int' }], rows: [{ mmsi: 1 }], quarantined: 0, quarantine_sample: [] });
+  if (u.match(/\/datasets\/[^/]+$/)) return jsonResponse(DATASET_1);
+  if (u.includes('/datasets')) return jsonResponse(DATASETS);
+  if (u.includes('/transforms')) return jsonResponse(TRANSFORMS);
+  if (u.includes('/builds')) return jsonResponse(BUILDS);
+  if (u.includes('/lineage')) return jsonResponse(LINEAGE);
+  if (u.includes('/bindings')) return jsonResponse(BINDINGS);
+  if (u.includes('/schedules')) return jsonResponse(SCHEDULES);
+  if (u.includes('/kinds')) return jsonResponse({ kinds: KINDS });
+  if (u.includes('/foundry/connectors')) return jsonResponse(CONNECTORS);
+  if (u.includes('/foundry/connections')) {
+    return jsonResponse({
+      connections: [],
+      availability: {
+        mqtt: { available: true, detail: 'built in' },
+        kafka: { available: false, detail: 'unavailable: pip install aiokafka' },
+        sql: { available: true, detail: 'sqlalchemy' },
+      },
+    });
+  }
+  return jsonResponse({});
+}
+
 function routeFetch(): void {
-  mockedFetch.mockImplementation(async (url: string) => {
-    const u = url.toString();
-    if (u.includes('/summary')) return jsonResponse(SUMMARY);
-    // Both the new-dataset upload and the version upload (/datasets/{id}/upload)
-    // answer with the dataset. The version route used to fall through to the
-    // dataset LIST, so UploadModal rendered `row_count` of undefined after the
-    // test ended; vitest 5 reports that as an unhandled error.
-    if (/\/datasets\/([^/]+\/)?upload/.test(u)) return jsonResponse({ ...DATASET_1, auto_sync: [] });
-    if (u.includes('/datasets') && u.includes('/rollback')) return jsonResponse({ ...DATASET_1, auto_sync: [] });
-    if (u.includes('/datasets') && u.includes('/docs')) return jsonResponse(DATASET_DOCS);
-    if (u.includes('/datasets') && u.includes('/checks/results')) return jsonResponse(CHECK_RESULTS);
-    if (u.includes('/foundry/checks')) return jsonResponse(CHECKS);
-    if (u.includes('/datasets') && u.includes('/rows')) return jsonResponse({ schema: DATASET_1.schema, rows: [{ mmsi: 1 }], total: 1, version: 1 });
-    if (u.includes('/datasets') && u.includes('/versions')) return jsonResponse([{ version: 1, row_count: 100, source: 'upload', created_at: '2026-07-01T00:00:00Z' }]);
-    if (u.includes('/datasets') && u.includes('/stats')) return jsonResponse([{ name: 'mmsi', type: 'int', nulls: 0, distinct: 100, min: 1, max: 999 }]);
-    if (u.includes('/transforms') && u.includes('/preview')) return jsonResponse({ schema: [{ name: 'mmsi', type: 'int' }], rows: [{ mmsi: 1 }], quarantined: 0, quarantine_sample: [] });
-    if (u.match(/\/datasets\/[^/]+$/)) return jsonResponse(DATASET_1);
-    if (u.includes('/datasets')) return jsonResponse(DATASETS);
-    if (u.includes('/transforms')) return jsonResponse(TRANSFORMS);
-    if (u.includes('/builds')) return jsonResponse(BUILDS);
-    if (u.includes('/lineage')) return jsonResponse(LINEAGE);
-    if (u.includes('/bindings')) return jsonResponse(BINDINGS);
-    if (u.includes('/schedules')) return jsonResponse(SCHEDULES);
-    if (u.includes('/kinds')) return jsonResponse({ kinds: KINDS });
-    if (u.includes('/foundry/connectors')) return jsonResponse(CONNECTORS);
-    if (u.includes('/foundry/connections')) {
-      return jsonResponse({
-        connections: [],
-        availability: {
-          mqtt: { available: true, detail: 'built in' },
-          kafka: { available: false, detail: 'unavailable: pip install aiokafka' },
-          sql: { available: true, detail: 'sqlalchemy' },
-        },
-      });
-    }
-    return jsonResponse({});
-  });
+  mockedFetch.mockImplementation(async (url: string) => routeResponse(url.toString()));
 }
 
 describe('FoundryApp', () => {
@@ -377,5 +384,166 @@ describe('FoundryApp', () => {
     const sqlTableRow = screen.getByText('SQL table (cursor pull)').closest('tr');
     expect(sqlTableRow).not.toBeNull();
     expect(within(sqlTableRow as HTMLElement).getByText('available')).toBeInTheDocument();
+  });
+
+  // ── the two sources that used to be API-only: table mode + documents ──────
+  // Field labels carry their hint text, so these queries anchor on the label's
+  // own prefix rather than the full string.
+
+  async function openConnectionEditor(): Promise<HTMLElement> {
+    render(<FoundryApp viewer={null} />);
+    fireEvent.click(screen.getByTestId('foundry-nav-connections'));
+    await waitFor(() => expect(mockedFetch.mock.calls.some((c) => c[0].toString().includes('/foundry/connections'))).toBe(true));
+    fireEvent.click(screen.getAllByRole('button', { name: 'New connection' })[0]!);
+    const dialog = await screen.findByRole('dialog');
+    // the target-dataset select is populated from the store, so wait for it
+    await waitFor(() => expect(within(dialog).getByRole('option', { name: 'ships' })).toBeInTheDocument());
+    return dialog;
+  }
+
+  function fillSqlTableForm(dialog: HTMLElement, table: string): void {
+    fireEvent.change(within(dialog).getByLabelText(/^Name/), { target: { value: 'erp' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Kind/), { target: { value: 'sql' } });
+    fireEvent.change(within(dialog).getByLabelText(/^DSN environment variable/), { target: { value: 'OSINT_SQL_DSN_ERP' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Target dataset/), { target: { value: 'ds-1' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'table' }));
+    fireEvent.change(within(dialog).getByLabelText(/^Table/), { target: { value: table } });
+    fireEvent.change(within(dialog).getByLabelText(/^Cursor column/), { target: { value: 'id' } });
+  }
+
+  it('posts a sql table-mode connection with table, cursor column and batch', async () => {
+    const dialog = await openConnectionEditor();
+    fireEvent.change(within(dialog).getByLabelText(/^Name/), { target: { value: 'erp' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Kind/), { target: { value: 'sql' } });
+
+    const toggle = within(dialog).getByRole('group', { name: 'query · table' });
+    fireEvent.click(within(toggle).getByRole('button', { name: 'query' }));
+    expect(within(dialog).getByLabelText(/^Query/)).toBeInTheDocument();
+    fireEvent.click(within(toggle).getByRole('button', { name: 'table' }));
+    expect(within(dialog).queryByLabelText(/^Query/)).toBeNull();
+
+    fireEvent.change(within(dialog).getByLabelText(/^DSN environment variable/), { target: { value: 'OSINT_SQL_DSN_ERP' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Target dataset/), { target: { value: 'ds-1' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Table/), { target: { value: 'flight_logs' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Cursor column/), { target: { value: 'id' } });
+    // batch defaults to the backend's own 5000
+    expect((within(dialog).getByLabelText(/^Batch/) as HTMLInputElement).value).toBe('5000');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    const isCreate = (c: unknown[]): boolean =>
+      c[0]!.toString().endsWith('/api/foundry/connections') && (c[1] as RequestInit | undefined)?.method === 'POST';
+    await waitFor(() => expect(mockedFetch.mock.calls.some(isCreate)).toBe(true));
+    const call = mockedFetch.mock.calls.find(isCreate)!;
+    const body = JSON.parse((call[1] as RequestInit).body as string) as {
+      kind: string;
+      dataset_id: string;
+      config: Record<string, unknown>;
+    };
+    expect(body.kind).toBe('sql');
+    expect(body.dataset_id).toBe('ds-1');
+    expect(body.config).toEqual({
+      dsn_env: 'OSINT_SQL_DSN_ERP',
+      table: 'flight_logs',
+      cursor_column: 'id',
+      batch: 5000,
+      interval_s: 300,
+    });
+  });
+
+  it('rejects a table name that is not a bare identifier, and never POSTs it', async () => {
+    const dialog = await openConnectionEditor();
+    fillSqlTableForm(dialog, 'flight logs');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect(
+      await within(dialog).findByText(
+        'table must be a bare SQL identifier (letters/digits/underscore, not starting with a digit)',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      mockedFetch.mock.calls.some(
+        (c) => c[0]!.toString().endsWith('/api/foundry/connections') && (c[1] as RequestInit | undefined)?.method === 'POST',
+      ),
+    ).toBe(false);
+  });
+
+  it('Add document posts the multipart to the documents route and re-reads the dataset', async () => {
+    render(<FoundryApp viewer={null} />);
+    fireEvent.click(screen.getByTestId('foundry-nav-datasets'));
+    await waitFor(() => expect(screen.getByText('ships')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('ships'));
+
+    const input = (await screen.findByTestId('dataset-doc-input')) as HTMLInputElement;
+    expect(input.accept).toBe('.eml,.docx,.txt,.md,.pdf');
+    const versionsBefore = mockedFetch.mock.calls.filter((c) => c[0].toString().includes('/datasets/ds-1/versions')).length;
+    fireEvent.change(input, {
+      target: { files: [new File(['Tail N101 diverted to KORD.'], 'case.txt', { type: 'text/plain' })] },
+    });
+
+    await waitFor(() =>
+      expect(mockedFetch.mock.calls.some((c) => c[0].toString().includes('/datasets/ds-1/documents'))).toBe(true),
+    );
+    const call = mockedFetch.mock.calls.find((c) => c[0].toString().includes('/datasets/ds-1/documents'))!;
+    expect((call[1] as RequestInit).method).toBe('POST');
+    const form = (call[1] as RequestInit).body as FormData;
+    expect((form.get('file') as File).name).toBe('case.txt');
+
+    // the append wrote a new version, so the detail pane re-reads it
+    await waitFor(() => {
+      const versionsAfter = mockedFetch.mock.calls.filter((c) => c[0].toString().includes('/datasets/ds-1/versions')).length;
+      expect(versionsAfter).toBeGreaterThan(versionsBefore);
+    });
+    expect(await screen.findByTestId('document-status')).toHaveTextContent('Added case.txt · v2 · 101 rows');
+  });
+
+  it('reports a rejected document as a sentence that keeps the HTTP code', async () => {
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      if (u.includes('/datasets/ds-1/documents')) {
+        return jsonResponse({ detail: 'extracting a .pdf needs the optional pypdf extra: pip install pypdf' }, false, 415);
+      }
+      return routeResponse(u);
+    });
+    render(<FoundryApp viewer={null} />);
+    fireEvent.click(screen.getByTestId('foundry-nav-datasets'));
+    await waitFor(() => expect(screen.getByText('ships')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('ships'));
+    const input = (await screen.findByTestId('dataset-doc-input')) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['%PDF-1.4'], 'scan.pdf', { type: 'application/pdf' })] } });
+
+    const status = await screen.findByTestId('document-status');
+    await waitFor(() => expect(status).toHaveTextContent('(HTTP 415)'));
+    expect(status).toHaveTextContent('pypdf');
+    expect(status).toHaveTextContent('Could not add the document');
+  });
+
+  it('summarises a table-mode connection with the cursor it has reached', async () => {
+    const base = {
+      dataset_id: 'ds-1',
+      kind: 'sql',
+      enabled: true,
+      running: false,
+      last_ok: null,
+      last_error: null,
+      rows_total: 3,
+    };
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      if (u.includes('/foundry/connections')) {
+        return jsonResponse({
+          connections: [
+            { ...base, id: 'conn-1', name: 'erp', config: { dsn_env: 'OSINT_SQL_DSN_ERP', table: 'flight_logs', cursor_column: 'id', cursor_value: 3, interval_s: 30 } },
+            { ...base, id: 'conn-2', name: 'erp_fresh', config: { dsn_env: 'OSINT_SQL_DSN_ERP', table: 'flight_logs', cursor_column: 'id', interval_s: 30 } },
+          ],
+          availability: { sql: { available: true, detail: 'sqlalchemy' } },
+        });
+      }
+      return routeResponse(u);
+    });
+    render(<FoundryApp viewer={null} />);
+    fireEvent.click(screen.getByTestId('foundry-nav-connections'));
+    expect(await screen.findByText('table · flight_logs · cursor id = 3')).toBeInTheDocument();
+    // the cursor is written by the runner, so a connection that has not pulled
+    // yet reports no value: the lone dash, never a zero
+    expect(screen.getByText('table · flight_logs · cursor id = —')).toBeInTheDocument();
   });
 });

@@ -82,8 +82,48 @@ function ConnectorCatalog({ rows }: { rows: ConnectorEntry[] }): JSX.Element | n
 const KIND_HINT: Record<Connection['kind'], string> = {
   mqtt: 'Subscribe to a topic on your broker',
   kafka: 'Consume a topic from your cluster',
-  sql: 'Poll a read-only query against your database',
+  sql: 'Poll a read-only query, or cursor pull one named table',
 };
+
+// The two sql sub-modes the backend accepts under one kind (foundry/connections.py):
+// `query` re-reads the whole answer every cycle; `table` pulls only the rows whose
+// cursor column is past the last persisted value.
+type SqlMode = 'query' | 'table';
+
+// Mirrors the backend's boundary check (`valid_identifier`) so a value that can
+// never be a bare identifier is caught here instead of after a round trip.
+const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function identifierError(field: string, value: string): string | null {
+  if (IDENT_RE.test(value)) return null;
+  return `${field} must be a bare SQL identifier (letters/digits/underscore, not starting with a digit)`;
+}
+
+// Two states, both visible, the active one carrying the accent. Not a <label>
+// wrapper: a label around buttons hijacks the click for its first labelable
+// descendant.
+function SqlModeToggle({ mode, onChange }: { mode: SqlMode; onChange: (m: SqlMode) => void }): JSX.Element {
+  return (
+    <div role="group" aria-label="query · table" className="flex items-center gap-1.5">
+      {(['query', 'table'] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          aria-pressed={mode === m}
+          onClick={() => onChange(m)}
+          className={[
+            'mono text-[11px] px-2 py-1 rounded-sm border transition-colors',
+            mode === m
+              ? 'border-accent-line bg-accent-dim text-accent-fg'
+              : 'border-line-2 text-txt-2 hover:border-accent-line hover:text-txt-0',
+          ].join(' ')}
+        >
+          {m}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function ConnectionEditor({
   open,
@@ -105,6 +145,10 @@ function ConnectionEditor({
   const [servers, setServers] = useState('');
   const [dsnEnv, setDsnEnv] = useState('');
   const [query, setQuery] = useState('');
+  const [sqlMode, setSqlMode] = useState<SqlMode>('query');
+  const [table, setTable] = useState('');
+  const [cursorColumn, setCursorColumn] = useState('');
+  const [batch, setBatch] = useState('5000');
   const [intervalS, setIntervalS] = useState('300');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -112,10 +156,27 @@ function ConnectionEditor({
   const config = (): Record<string, unknown> => {
     if (kind === 'mqtt') return { url, topic };
     if (kind === 'kafka') return { bootstrap_servers: servers, topic };
+    if (sqlMode === 'table') {
+      return {
+        dsn_env: dsnEnv,
+        table,
+        cursor_column: cursorColumn,
+        batch: Number(batch) || 5000,
+        interval_s: Number(intervalS) || 300,
+      };
+    }
     return { dsn_env: dsnEnv, query, interval_s: Number(intervalS) || 300 };
   };
 
   const save = async (): Promise<void> => {
+    const badIdentifier =
+      kind === 'sql' && sqlMode === 'table'
+        ? identifierError('table', table) ?? identifierError('cursor_column', cursorColumn)
+        : null;
+    if (badIdentifier) {
+      setError(badIdentifier);
+      return;
+    }
     setSaving(true);
     setError(null);
     const r = await apiFetch('/api/foundry/connections', {
@@ -135,14 +196,17 @@ function ConnectionEditor({
     setServers('');
     setDsnEnv('');
     setQuery('');
+    setTable('');
+    setCursorColumn('');
     onSaved();
     onClose();
   };
 
+  const sqlReady = sqlMode === 'table' ? !!(dsnEnv && table && cursorColumn) : !!(dsnEnv && query);
   const ready =
     name.trim() !== '' &&
     datasetId !== '' &&
-    (kind === 'mqtt' ? url && topic : kind === 'kafka' ? servers && topic : dsnEnv && query);
+    (kind === 'mqtt' ? !!(url && topic) : kind === 'kafka' ? !!(servers && topic) : sqlReady);
 
   return (
     <Modal
@@ -220,15 +284,33 @@ function ConnectionEditor({
             >
               <input value={dsnEnv} onChange={(e) => setDsnEnv(e.target.value.toUpperCase())} placeholder="OSINT_SQL_DSN_WAREHOUSE" className={controlCls} />
             </Field>
-            <Field label="Query" hint="read only; the whole answer becomes one new version">
-              <textarea
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                rows={3}
-                placeholder="SELECT id, name, lat, lon FROM sites"
-                className={`${controlCls} font-mono`}
-              />
-            </Field>
+            <div className="space-y-1">
+              <span className="block text-[10px] uppercase tracking-[0.4px] text-txt-3">Mode</span>
+              <SqlModeToggle mode={sqlMode} onChange={setSqlMode} />
+            </div>
+            {sqlMode === 'query' ? (
+              <Field label="Query" hint="read only; the whole answer becomes one new version">
+                <textarea
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  rows={3}
+                  placeholder="SELECT id, name, lat, lon FROM sites"
+                  className={`${controlCls} font-mono`}
+                />
+              </Field>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Table" hint="one named table">
+                  <input value={table} onChange={(e) => setTable(e.target.value)} placeholder="flight_logs" className={controlCls} />
+                </Field>
+                <Field label="Cursor column" hint="monotonic, e.g. an id or a timestamp">
+                  <input value={cursorColumn} onChange={(e) => setCursorColumn(e.target.value)} placeholder="id" className={controlCls} />
+                </Field>
+                <Field label="Batch" hint="rows per cycle">
+                  <input value={batch} onChange={(e) => setBatch(e.target.value)} type="number" className={controlCls} />
+                </Field>
+              </div>
+            )}
             <Field label="Interval (seconds)" hint="minimum 30">
               <input value={intervalS} onChange={(e) => setIntervalS(e.target.value)} inputMode="numeric" className={controlCls} />
             </Field>
@@ -243,6 +325,13 @@ function summarise(c: Connection): string {
   const cfg = c.config;
   if (c.kind === 'mqtt') return `${String(cfg['url'] ?? '')} · ${String(cfg['topic'] ?? '')}`;
   if (c.kind === 'kafka') return `${String(cfg['bootstrap_servers'] ?? '')} · ${String(cfg['topic'] ?? '')}`;
+  if (cfg['table']) {
+    // The cursor value is written by the runner every cycle, so a connection
+    // that has not pulled yet reports no value — the lone dash, not a zero.
+    const cursor = cfg['cursor_value'];
+    const reported = cursor === undefined || cursor === null || cursor === '' ? '—' : String(cursor);
+    return `table · ${String(cfg['table'])} · cursor ${String(cfg['cursor_column'] ?? '')} = ${reported}`;
+  }
   return `$${String(cfg['dsn_env'] ?? '')} · every ${String(cfg['interval_s'] ?? 300)}s`;
 }
 
