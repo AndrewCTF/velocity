@@ -4,7 +4,14 @@ import { labelFor } from './adapters/labelStyle.js';
 import { apiFetch } from '../transport/http.js';
 import { haversineKm } from './draw.js';
 import { createHeatmapDecoder, type HeatmapDecoder } from './heatmapWorker.js';
-import { chunkKeyForMs, chunkStartMs, nextChunk, CHUNK_MS, type DecodedHeatmapChunk } from './heatmapChunk.js';
+import {
+  chunkKeyForMs,
+  chunkStartMs,
+  dayUtc,
+  nextChunk,
+  CHUNK_MS,
+  type DecodedHeatmapChunk,
+} from './heatmapChunk.js';
 
 // Historical playback — the one transport that actually drives the Cesium
 // clock, built on tar1090's chunk mechanism (docs plan "Wave 0").
@@ -380,7 +387,20 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
         try {
           const r = await apiFetch('/api/history/stats');
           if (!r.ok) return { ms: 0, day: null };
-          const s = (await r.json()) as { shards?: { day: string }[] };
+          // Two backends, two shapes (apps/api/app/history.py stats()):
+          //   sqlite    — an explicit shard day list, no oldest_ts.
+          //   timescale — literally "shards": [], plus oldest_ts (MIN(t) as
+          //               epoch seconds; null while the archive is empty).
+          // Keying this off `shards` alone made the Timescale case read
+          // "everything is own archive" and silently killed upstream replay,
+          // so prefer the backend-neutral oldest_ts and keep the shard list
+          // as the SQLite fallback.
+          const s = (await r.json()) as { shards?: { day: string }[]; oldest_ts?: number | null };
+          const oldestTs = typeof s.oldest_ts === 'number' && s.oldest_ts > 0 ? s.oldest_ts : null;
+          if (oldestTs !== null) {
+            const ms = oldestTs * 1000;
+            return { ms, day: dayUtc(ms) };
+          }
           const days = (s.shards ?? [])
             .map((x) => x.day)
             .filter((d) => d !== 'legacy')
@@ -580,13 +600,16 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     // Runs from TimeDock's effect cleanup, which can fire after the viewer is
     // already destroyed (HMR teardown / globe ErrorBoundary). A destroyed
     // viewer disposes its data sources for us and throws on access — bail.
+    // The Worker is ours, not the viewer's: terminate it BEFORE the bail or
+    // the thread (and its bundled module graph) outlives the component on
+    // exactly the teardown path this early return covers.
+    decoder.terminate();
     if (viewer.isDestroyed()) return;
     if (active) clear();
     if (onTickRemover) {
       onTickRemover();
       onTickRemover = null;
     }
-    decoder.terminate();
     viewer.dataSources.remove(ds, true);
   }
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Cesium from 'cesium';
 
 // Mock apiFetch at the transport boundary (repo eslint guard + established
@@ -10,7 +10,7 @@ vi.mock('../transport/http.js', () => ({
 
 import { apiFetch } from '../transport/http.js';
 import { installHistoryPlayback } from './HistoryPlayback.js';
-import { chunkKeyForMs, chunkStartMs, nextChunk } from './heatmapChunk.js';
+import { chunkKeyForMs, chunkStartMs, nextChunk, CHUNK_MS } from './heatmapChunk.js';
 
 const mockedFetch = vi.mocked(apiFetch);
 
@@ -26,7 +26,7 @@ function jsonResponse(body: unknown): Response {
 // maximumRenderTimeChange, isDestroyed. dataSources.add captures the real
 // Cesium.CustomDataSource the module creates so the test can inspect the
 // entities it built, without needing any export beyond installHistoryPlayback().
-function fakeViewer(): {
+function fakeViewer(opts: { destroyed?: boolean } = {}): {
   viewer: Cesium.Viewer;
   getDs: () => Cesium.CustomDataSource;
   // Fires every registered onTick listener with the (mutated) viewer.clock,
@@ -65,7 +65,7 @@ function fakeViewer(): {
     camera: { computeViewRectangle: () => undefined },
     clock,
     scene: { requestRender: () => {}, maximumRenderTimeChange: 0 },
-    isDestroyed: () => false,
+    isDestroyed: () => opts.destroyed ?? false,
   } as unknown as Cesium.Viewer;
   return {
     viewer,
@@ -307,5 +307,126 @@ describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk bounda
     expect(ds.entities.getById('hist:aircraft:OLD111'), 'a new loadAt() jump must clear the prior window').toBeUndefined();
     expect(ds.entities.getById('hist:aircraft:NEW222')).toBeDefined();
     expect(ds.entities.values.length).toBe(1);
+  });
+});
+
+describe('HistoryPlayback: replay source routing reads stats.oldest_ts, not stats.shards (W3-1)', () => {
+  // Timescale's history.stats() answers with `shards: []` (sharding is a
+  // SQLite-only workaround) plus `oldest_ts` = MIN(t) as epoch seconds.
+  // Resolving the own-archive floor from `shards` alone read every half hour
+  // as "own archive", so the upstream (tar1090 heatmap) replay path never ran
+  // on the backend this branch adds — the picker still offered 2024 days.
+  const oldestMs = Date.UTC(2026, 0, 2, 12, 0, 0); // an exact UTC half hour
+  const HALF_HOUR_MS = CHUNK_MS;
+
+  /** One separator + one position row (32 bytes), the tar1090 heatmap shape
+   *  heatmapChunk.ts decodes: hex `abcdef` at 33N/35E, timestamped at tsMs. */
+  function upstreamChunk(tsMs: number): Response {
+    const w = new Int32Array(8);
+    w[0] = 0x0e7f7c9d; // separator marker
+    w[1] = Math.floor(tsMs / 2 ** 32); // slice epoch ms, high word
+    w[2] = tsMs % 2 ** 32; // slice epoch ms, low word
+    w[3] = 30_000; // slice interval ms
+    w[4] = 0x00abcdef; // hex
+    w[5] = Math.round(33.0 * 1e6); // lat
+    w[6] = Math.round(35.0 * 1e6); // lon
+    w[7] = 0; // alt/gs
+    return { ok: true, status: 200, statusText: 'OK', arrayBuffer: async () => w.buffer } as unknown as Response;
+  }
+
+  function mockTimescaleStats(calls: string[]): void {
+    mockedFetch.mockReset();
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      calls.push(u);
+      if (u === '/api/history/stats') {
+        return jsonResponse({ backend: 'timescale', oldest_ts: oldestMs / 1000, shards: [] });
+      }
+      if (u.startsWith('/api/history/upstream/chunk')) return upstreamChunk(oldestMs - HALF_HOUR_MS);
+      if (u.startsWith('/api/history/tracks')) return jsonResponse({ tracks: [] });
+      return jsonResponse({});
+    });
+  }
+
+  it('a half hour BEFORE oldest_ts fetches the upstream chunk and leaves aircraft out of the own fetch', async () => {
+    const calls: string[] = [];
+    mockTimescaleStats(calls);
+
+    const { viewer, getDs } = fakeViewer();
+    const controller = installHistoryPlayback(viewer);
+    const info = await controller.loadAt(oldestMs - HALF_HOUR_MS, oldestMs);
+
+    const upstream = calls.filter((u) => u.startsWith('/api/history/upstream/chunk'));
+    expect(upstream, 'the upstream chunk was never requested').toHaveLength(1);
+    expect(upstream[0]).toContain('index=');
+    // Vessels are always the own archive; the own fetch must not also ask for
+    // aircraft on a chunk whose aircraft come from upstream.
+    expect(calls.some((u) => u.startsWith('/api/history/tracks') && u.includes('kind=vessel'))).toBe(true);
+    expect(info?.source).toBe('upstream');
+    expect(getDs().entities.getById('hist:aircraft:abcdef'), 'decoded upstream aircraft missing').toBeDefined();
+  });
+
+  it('a half hour starting AT oldest_ts stays on the own archive with no upstream call', async () => {
+    const calls: string[] = [];
+    mockTimescaleStats(calls);
+
+    const { viewer } = fakeViewer();
+    const controller = installHistoryPlayback(viewer);
+    const info = await controller.loadAt(oldestMs, oldestMs + HALF_HOUR_MS);
+
+    expect(calls.some((u) => u.startsWith('/api/history/tracks'))).toBe(true);
+    expect(calls.filter((u) => u.startsWith('/api/history/upstream/chunk'))).toHaveLength(0);
+    expect(info?.source).toBe('none');
+  });
+});
+
+describe('HistoryPlayback: destroy() tears down the decode Worker (W3-3)', () => {
+  // Stand-in for the DOM Worker so `createHeatmapDecoder()` takes its real
+  // (non-jsdom-fallback) branch and its terminate() becomes observable.
+  class FakeWorker {
+    static instances: FakeWorker[] = [];
+    terminated = false;
+    onmessage: ((ev: MessageEvent) => void) | null = null;
+    onerror: ((ev: ErrorEvent) => void) | null = null;
+    constructor() {
+      FakeWorker.instances.push(this);
+    }
+    postMessage(): void {}
+    terminate(): void {
+      this.terminated = true;
+    }
+  }
+
+  beforeEach(() => {
+    FakeWorker.instances = [];
+    mockedFetch.mockReset();
+    vi.stubGlobal('Worker', FakeWorker);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('terminates the Worker when the viewer is ALREADY destroyed (HMR teardown / ErrorBoundary)', () => {
+    // destroy() bails early on a destroyed viewer so it never touches the
+    // viewer's data sources; pre-fix that early return also skipped
+    // decoder.terminate(), so the Worker thread and its bundled module graph
+    // outlived the component on exactly the teardown path it exists for.
+    const { viewer } = fakeViewer({ destroyed: true });
+    const controller = installHistoryPlayback(viewer);
+    expect(FakeWorker.instances).toHaveLength(1);
+
+    controller.destroy();
+
+    expect(FakeWorker.instances[0]!.terminated).toBe(true);
+  });
+
+  it('still terminates the Worker on the ordinary teardown path', () => {
+    const { viewer } = fakeViewer();
+    const controller = installHistoryPlayback(viewer);
+
+    controller.destroy();
+
+    expect(FakeWorker.instances[0]!.terminated).toBe(true);
   });
 });
