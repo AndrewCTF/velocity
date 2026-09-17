@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.config import get_settings
+from app.intel import resolve
 from app.routes import adsb as adsb_routes
 
 router = APIRouter(tags=["status"])
@@ -445,6 +446,10 @@ async def status_provenance() -> dict[str, Any]:
         }
     except Exception:  # noqa: BLE001 — diagnostics must never 500
         out["aircraft"] = {"error": "unavailable"}
+    try:
+        out["resolution"] = resolve.stats()
+    except Exception:  # noqa: BLE001 — diagnostics must never 500
+        out["resolution"] = {"error": "unavailable"}
     return out
 
 

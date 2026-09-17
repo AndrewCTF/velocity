@@ -16,7 +16,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from app import audit as audit_mod
-from app.routes import ai_models, alert_rules, evidence, foundry, ingest, workflows
+from app.routes import ai_models, alert_rules, evidence, foundry, ingest, resolve, workflows
 
 _MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 _ROUTERS = {
@@ -26,6 +26,7 @@ _ROUTERS = {
     "ai_models": ai_models.router,
     "ingest": ingest.router,
     "alert_rules": alert_rules.router,
+    "resolve": resolve.router,
 }
 
 
