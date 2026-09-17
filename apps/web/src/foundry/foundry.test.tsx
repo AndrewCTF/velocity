@@ -123,6 +123,28 @@ const CHECKS = [{ id: 'chk-1', dataset_id: 'ds-1', name: 'min-rows', type: 'row_
 const CHECK_RESULTS = [{ check_id: 'chk-1', name: 'min-rows', type: 'row_count_min', severity: 'warn', passed: true }];
 const DATASET_1 = DATASETS[0]!;
 
+const CONNECTORS = [
+  { kind: 'mqtt', title: 'MQTT topic', needs: 'built in', available: true, docs: 'Subscribe to a topic on your broker.' },
+  { kind: 'kafka', title: 'Kafka topic', needs: 'aiokafka', available: false, docs: 'Consume a topic from your cluster.' },
+  { kind: 'sql', title: 'SQL query', needs: 'sqlalchemy', available: true, docs: 'Poll a read-only query on an interval.' },
+  {
+    kind: 'sql-table',
+    title: 'SQL table (cursor pull)',
+    needs: 'sqlalchemy',
+    available: true,
+    docs: 'Point at a table and a cursor column; each cycle pulls only the new rows.',
+  },
+  { kind: 'ingest-token', title: 'Push endpoint', needs: 'built in', available: true, docs: 'Mint a per-dataset token.' },
+  { kind: 'upload', title: 'File upload', needs: 'built in', available: true, docs: 'CSV / JSON / NDJSON / GeoJSON / KML.' },
+  {
+    kind: 'document',
+    title: 'Document',
+    needs: 'built in (.eml/.docx/.txt/.md); pypdf for .pdf',
+    available: true,
+    docs: 'An .eml / .docx / .txt / .md / .pdf becomes one text row. pdf: unavailable: pip install pypdf.',
+  },
+];
+
 const DATASET_DOCS = {
   dataset: { id: 'ds-1', name: 'ships', description: 'demo', kind: 'raw', row_count: 100, latest_version: 1, created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z' },
   schema: [{ name: 'mmsi', type: 'int' }],
@@ -158,6 +180,17 @@ function routeFetch(): void {
     if (u.includes('/bindings')) return jsonResponse(BINDINGS);
     if (u.includes('/schedules')) return jsonResponse(SCHEDULES);
     if (u.includes('/kinds')) return jsonResponse({ kinds: KINDS });
+    if (u.includes('/foundry/connectors')) return jsonResponse(CONNECTORS);
+    if (u.includes('/foundry/connections')) {
+      return jsonResponse({
+        connections: [],
+        availability: {
+          mqtt: { available: true, detail: 'built in' },
+          kafka: { available: false, detail: 'unavailable: pip install aiokafka' },
+          sql: { available: true, detail: 'sqlalchemy' },
+        },
+      });
+    }
     return jsonResponse({});
   });
 }
@@ -329,5 +362,20 @@ describe('FoundryApp', () => {
     expect(form.get('cascade')).toBe('true');
     const types = JSON.parse(form.get('types') as string) as Record<string, string>;
     expect(types.mmsi).toBe('int');
+  });
+
+  it('renders the connector catalog on Connections, greying out an unavailable kind', async () => {
+    render(<FoundryApp viewer={null} />);
+    fireEvent.click(screen.getByTestId('foundry-nav-connections'));
+    await waitFor(() => expect(screen.getByText('SQL table (cursor pull)')).toBeInTheDocument());
+    expect(screen.getByText('Document')).toBeInTheDocument();
+
+    const kafkaRow = screen.getByText('Kafka topic').closest('tr');
+    expect(kafkaRow).not.toBeNull();
+    expect(within(kafkaRow as HTMLElement).getByText('unavailable')).toBeInTheDocument();
+
+    const sqlTableRow = screen.getByText('SQL table (cursor pull)').closest('tr');
+    expect(sqlTableRow).not.toBeNull();
+    expect(within(sqlTableRow as HTMLElement).getByText('available')).toBeInTheDocument();
   });
 });

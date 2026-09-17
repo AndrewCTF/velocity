@@ -6,7 +6,7 @@ import { Badge, Btn, Toggle } from '../shell/instruments.js';
 import { Modal, useConfirm } from '../shell/Modal.js';
 import { useFoundry } from '../state/foundry.js';
 import { useFoundryPoll } from './useFoundryPoll.js';
-import { EmptyState, Field, Select, ViewHeader, controlCls, stamp } from './ui.js';
+import { EmptyState, Field, Select, Th, ViewHeader, controlCls, rowCls, stamp, tableHeadCls } from './ui.js';
 import { Icon } from '../normal/Icon.js';
 
 // Connections — sources the OPERATOR configured, as opposed to the ~100 feeds
@@ -35,6 +35,49 @@ interface Connection {
 }
 
 type Availability = Record<string, { available: boolean; detail: string }>;
+
+interface ConnectorEntry {
+  kind: string;
+  title: string;
+  needs: string;
+  available: boolean;
+  docs: string;
+}
+
+// GET /api/foundry/connectors — every way a dataset can be filled, not just
+// the three you can configure a running connection for (upload + the push
+// endpoint below are their own routes, and `sql-table` is a config shape of
+// the `sql` kind, not a fourth thing to pick in the editor).
+function ConnectorCatalog({ rows }: { rows: ConnectorEntry[] }): JSX.Element | null {
+  if (rows.length === 0) return null;
+  return (
+    <section className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className={tableHeadCls()}>
+            <Th>Source</Th>
+            <Th>Needs</Th>
+            <Th align="center">Status</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.kind} className={rowCls}>
+              <td className="px-2.5 py-1.5 max-w-0">
+                <div className="text-[11px] text-txt-1">{r.title}</div>
+                <div className="text-[10px] text-txt-3">{r.docs}</div>
+              </td>
+              <td className="px-2.5 py-1.5 mono text-[10px] text-txt-3 whitespace-nowrap">{r.needs}</td>
+              <td className="px-2.5 py-1.5 text-center">
+                {r.available ? <Badge tone="ok">available</Badge> : <Badge tone="neutral">unavailable</Badge>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
 
 const KIND_HINT: Record<Connection['kind'], string> = {
   mqtt: 'Subscribe to a topic on your broker',
@@ -339,6 +382,7 @@ export function ConnectionsView(): JSX.Element {
   const loadDatasets = useFoundry((s) => s.loadDatasets);
   const [rows, setRows] = useState<Connection[]>([]);
   const [availability, setAvailability] = useState<Availability>({});
+  const [connectors, setConnectors] = useState<ConnectorEntry[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [editorOpen, setEditorOpen] = useState(false);
   const { confirm, confirmElement } = useConfirm();
@@ -355,8 +399,13 @@ export function ConnectionsView(): JSX.Element {
     setStatus('ready');
   }, []);
 
+  const loadConnectors = useCallback(async (): Promise<void> => {
+    const r = await apiFetch('/api/foundry/connectors').catch(() => null);
+    if (r && r.ok) setConnectors(((await r.json()) as ConnectorEntry[]) ?? []);
+  }, []);
+
   useFoundryPoll(async () => {
-    await Promise.all([load(), loadDatasets()]);
+    await Promise.all([load(), loadDatasets(), loadConnectors()]);
   });
 
   const unavailable = Object.entries(availability).filter(([, v]) => !v.available);
@@ -379,6 +428,8 @@ export function ConnectionsView(): JSX.Element {
           ) : undefined
         }
       />
+
+      <ConnectorCatalog rows={connectors} />
 
       {status === 'error' && (
         <p className="rounded-sm border border-alert-line bg-alert-dim px-2.5 py-1.5 text-[11px] text-alert">

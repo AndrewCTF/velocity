@@ -164,3 +164,229 @@ async def test_an_unset_environment_variable_is_reported_not_crashed(
     monkeypatch.delenv("OSINT_SQL_DSN_ABSENT", raising=False)
     with pytest.raises(ValueError, match="OSINT_SQL_DSN_ABSENT is not set"):
         await C._run_sql(None, {"config": {"dsn_env": "OSINT_SQL_DSN_ABSENT", "query": "SELECT 1"}})  # type: ignore[arg-type]
+
+
+# ── table mode: an incremental cursor pull, not a federated query ────────────
+# The other half of the "ERP table becomes a dataset without copying the whole
+# table every cycle" claim: config.table + config.cursor_column instead of
+# config.query. Same engine, same env-var-name DSN discipline.
+
+
+@pytest.fixture(autouse=True)
+def _no_stray_connection_tasks():  # type: ignore[no-untyped-def]
+    """Connections created through the route below are ``enabled: False`` so
+    the real supervisor never also runs them (it would race the manually
+    driven ``_run_sql`` task in these tests for the same rows). Belt and
+    braces against anything reconcile() did start."""
+    yield
+    C._tasks.clear()
+    C._fingerprints.clear()
+
+
+@pytest.fixture
+def flight_logs_db(tmp_path):  # type: ignore[no-untyped-def]
+    """Stands in for an operator's flight-logs table, with an integer id
+    cursor — the ordinary case (an autoincrement primary key or a monotonic
+    timestamp column)."""
+    path = tmp_path / "erp.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE flight_logs (id INTEGER PRIMARY KEY, tail TEXT, dest TEXT)")
+    con.executemany(
+        "INSERT INTO flight_logs (id, tail, dest) VALUES (?,?,?)",
+        [(1, "N101", "KJFK"), (2, "N102", "KLAX"), (3, "N103", "KORD")],
+    )
+    con.commit()
+    con.close()
+    return path, f"sqlite:///{path}"
+
+
+@pytest.mark.anyio
+async def test_table_cursor_pull_writes_the_delta_as_its_own_version(
+    flight_logs_db: tuple, client, monkeypatch
+) -> None:
+    """One cycle over a 3-row table: version 1 (the delta) has exactly 3 rows,
+    the persisted cursor is the max id pulled, and the dataset's schema is the
+    REFLECTED table schema, not something inferred only from the seed upload.
+    A second cycle after 2 more rows land writes version 2 with EXACTLY those
+    2 rows — never the cumulative 5 — which is the "incremental cursor pull,
+    not a copy of the whole table" claim made executable."""
+    db_path, dsn = flight_logs_db
+    monkeypatch.setenv("OSINT_SQL_DSN_ERP", dsn)
+
+    from app.config import get_settings
+    from app.foundry.store import FoundryStore
+
+    store = FoundryStore(get_settings())
+    ds = client.post(
+        "/api/foundry/datasets", json={"name": "flight_logs_ds"}
+    ).json()
+    created = client.post(
+        "/api/foundry/connections",
+        json={
+            "name": "erp",
+            "kind": "sql",
+            "dataset_id": ds["id"],
+            "config": {
+                "dsn_env": "OSINT_SQL_DSN_ERP",
+                "table": "flight_logs",
+                "cursor_column": "id",
+                "interval_s": 30,
+            },
+            # Driven manually below via C._run_sql — enabled=False keeps the
+            # real supervisor (started by the route's own reconcile() call)
+            # from ALSO running this connection and racing the manual task
+            # for the same rows.
+            "enabled": False,
+        },
+    ).json()
+    assert created["config"]["table"] == "flight_logs"
+
+    task = asyncio.create_task(C._run_sql(store, dict(created)))
+    for _ in range(200):
+        await asyncio.sleep(0.05)
+        versions = client.get(f"/api/foundry/datasets/{ds['id']}/versions").json()
+        if versions:
+            break
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+    versions = client.get(f"/api/foundry/datasets/{ds['id']}/versions").json()
+    assert len(versions) == 1, versions
+    v1 = versions[0]
+    assert v1["version"] == 1
+    assert v1["row_count"] == 3
+    assert v1["source"] == "sql:table"
+
+    ds_row = client.get(f"/api/foundry/datasets/{ds['id']}").json()
+    types = {c["name"]: c["type"] for c in ds_row["schema"]}
+    assert types == {"id": "int", "tail": "str", "dest": "str"}
+    rows = client.get(f"/api/foundry/datasets/{ds['id']}/rows").json()["rows"]
+    assert [r["tail"] for r in rows] == ["N101", "N102", "N103"]
+
+    conn_after = await store.get_connection(created["id"])
+    assert conn_after["config"]["cursor_value"] == 3
+
+    # A second cycle only picks up rows past the persisted cursor.
+    con = sqlite3.connect(db_path)
+    con.executemany(
+        "INSERT INTO flight_logs (id, tail, dest) VALUES (?,?,?)",
+        [(4, "N104", "KDEN"), (5, "N105", "KSEA")],
+    )
+    con.commit()
+    con.close()
+
+    task2 = asyncio.create_task(C._run_sql(store, dict(conn_after)))
+    for _ in range(200):
+        await asyncio.sleep(0.05)
+        versions = client.get(f"/api/foundry/datasets/{ds['id']}/versions").json()
+        if len(versions) >= 2:
+            break
+    task2.cancel()
+    await asyncio.gather(task2, return_exceptions=True)
+
+    versions = client.get(f"/api/foundry/datasets/{ds['id']}/versions").json()
+    assert len(versions) == 2, versions
+    v2 = next(v for v in versions if v["version"] == 2)
+    assert v2["row_count"] == 2, "the second cycle must write only the delta, not all 5 rows"
+    rows = client.get(f"/api/foundry/datasets/{ds['id']}/rows").json()["rows"]
+    assert [r["tail"] for r in rows] == ["N104", "N105"]
+
+    conn_final = await store.get_connection(created["id"])
+    assert conn_final["config"]["cursor_value"] == 5
+
+
+@pytest.mark.anyio
+async def test_table_cycle_never_clobbers_a_concurrent_operator_edit(
+    flight_logs_db: tuple, client, monkeypatch
+) -> None:
+    """A cycle is handed the connection dict it started with. If the stored
+    row changed by the time the pull finishes (an operator PUT landed mid-
+    cycle), persisting the cursor must not silently overwrite that edit with
+    the stale values the task was created with."""
+    _db_path, dsn = flight_logs_db
+    monkeypatch.setenv("OSINT_SQL_DSN_ERP3", dsn)
+
+    from app.config import get_settings
+    from app.foundry.store import FoundryStore
+
+    store = FoundryStore(get_settings())
+    ds = client.post("/api/foundry/datasets", json={"name": "flight_logs_edit_ds"}).json()
+    created = client.post(
+        "/api/foundry/connections",
+        json={
+            "name": "erp-edit",
+            "kind": "sql",
+            "dataset_id": ds["id"],
+            "config": {
+                "dsn_env": "OSINT_SQL_DSN_ERP3",
+                "table": "flight_logs",
+                "cursor_column": "id",
+                "interval_s": 30,
+            },
+            "enabled": False,
+        },
+    ).json()
+
+    # The operator flips it on WHILE the (stale) `created` dict below still
+    # says disabled — standing in for an edit landing mid-cycle.
+    await store.update_connection(
+        created["id"], dataset_id=ds["id"], config=created["config"], enabled=True
+    )
+
+    n = await C._run_sql_table_cycle(sqlalchemy, store, dict(created), dsn)
+    assert n == 3
+
+    after = await store.get_connection(created["id"])
+    assert after["enabled"] is True, "the cycle clobbered a concurrent operator edit"
+    # The rows are still safely versioned even though the cursor write was
+    # skipped for this cycle — reconcile() picks the connection back up.
+    versions = client.get(f"/api/foundry/datasets/{ds['id']}/versions").json()
+    assert versions and versions[0]["row_count"] == 3
+
+
+def test_a_table_name_with_a_space_is_rejected_at_the_route(client) -> None:
+    ds = client.post("/api/foundry/datasets", json={"name": "bad_table_ds"}).json()
+    r = client.post(
+        "/api/foundry/connections",
+        json={
+            "name": "bad-table",
+            "kind": "sql",
+            "dataset_id": ds["id"],
+            "config": {
+                "dsn_env": "OSINT_SQL_DSN_ERP",
+                "table": "flight logs",
+                "cursor_column": "id",
+            },
+        },
+    )
+    assert r.status_code == 422, r.text
+    assert "table" in r.json()["detail"]
+
+
+def test_a_cursor_column_with_a_semicolon_is_rejected_at_the_route(client) -> None:
+    ds = client.post("/api/foundry/datasets", json={"name": "bad_cursor_ds"}).json()
+    r = client.post(
+        "/api/foundry/connections",
+        json={
+            "name": "bad-cursor",
+            "kind": "sql",
+            "dataset_id": ds["id"],
+            "config": {
+                "dsn_env": "OSINT_SQL_DSN_ERP",
+                "table": "flight_logs",
+                "cursor_column": "id; DROP TABLE flight_logs",
+            },
+        },
+    )
+    assert r.status_code == 422, r.text
+    assert "cursor_column" in r.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_table_mode_requires_a_cursor_column(monkeypatch) -> None:
+    monkeypatch.setenv("OSINT_SQL_DSN_ERP2", "sqlite:///does-not-matter")
+    with pytest.raises(ValueError, match="cursor_column"):
+        await C._run_sql(
+            None,  # type: ignore[arg-type]
+            {"config": {"dsn_env": "OSINT_SQL_DSN_ERP2", "table": "flight_logs"}},
+        )

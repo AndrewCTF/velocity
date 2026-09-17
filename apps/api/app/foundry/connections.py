@@ -19,7 +19,25 @@ Three kinds, and the reason each is shaped the way it is:
            **The connection stores the NAME of an environment variable holding
            the DSN, never the DSN.** Credentials stay in the process
            environment, out of foundry.db, out of API responses, out of logs and
-           out of a backup of either.
+           out of a backup of either. Two sub-modes, both under ``kind: sql``:
+
+           ``query``  (``config.query`` set) the whole answer becomes one new
+                      version every cycle, unchanged since this module's first
+                      version.
+           ``table``  (``config.table`` set, plus ``cursor_column`` and
+                      optionally ``batch``) an incremental CURSOR PULL of one
+                      named table: columns are reflected with
+                      ``sqlalchemy.inspect``, rows are selected where
+                      ``cursor_column`` is past the last persisted
+                      ``cursor_value``, and each cycle's DELTA — never a copy
+                      of the table — becomes its own version
+                      (``_run_sql_table_cycle``). This is what makes "an
+                      operator's ERP table" a Foundry source without a nightly
+                      full-table pull. ``table``/``cursor_column`` are
+                      validated as bare identifiers at the route boundary
+                      (``routes/foundry.py``); the query itself is always
+                      built through ``sqlalchemy.table()``/``select()`` with a
+                      bound parameter, never an f-string.
 
 Batching, not row-at-a-time: a Foundry version is an immutable snapshot, so
 writing one per message would turn a busy topic into a million versions. Rows
@@ -241,10 +259,150 @@ def _resolve_dsn(cfg: dict[str, Any]) -> str:
     return dsn
 
 
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def valid_identifier(name: str) -> bool:
+    """True for something safe to interpolate as a bare SQL identifier via
+    ``sqlalchemy.table()``/``sqlalchemy.column()`` (never an f-string)."""
+    return bool(_IDENT_RE.match(name))
+
+
+def _sql_type_to_schema_type(sa_type: Any) -> str:
+    """Map a reflected SQLAlchemy column type to the dataset schema vocabulary
+    (``ingest.infer_schema``'s ``int|float|bool|str``), so a table-backed
+    dataset's schema reads the same as an uploaded one."""
+    import sqlalchemy  # noqa: PLC0415 - optional dependency
+
+    if isinstance(sa_type, sqlalchemy.Boolean):
+        return "bool"
+    if isinstance(sa_type, sqlalchemy.Integer):
+        return "int"
+    if isinstance(sa_type, (sqlalchemy.Float, sqlalchemy.Numeric)):
+        return "float"
+    return "str"
+
+
+def _reflect_table_schema(
+    sqlalchemy_mod: Any, engine: Any, table: str
+) -> tuple[list[dict[str, str]], list[str]]:
+    """``([{name, type}], [column names in table order])`` via
+    ``sqlalchemy.inspect``. Raises whatever the driver raises on an unknown
+    table — the caller's usual scrub-and-record path handles it."""
+    inspector = sqlalchemy_mod.inspect(engine)
+    cols_meta = inspector.get_columns(table)
+    schema = [
+        {"name": c["name"], "type": _sql_type_to_schema_type(c["type"])} for c in cols_meta
+    ]
+    return schema, [c["name"] for c in cols_meta]
+
+
+async def _run_sql_table_cycle(
+    sqlalchemy_mod: Any, store: FoundryStore, conn: dict[str, Any], dsn: str
+) -> int:
+    """One incremental pull of a named table: reflect its columns, select rows
+    where ``cursor_column`` is past the last persisted ``cursor_value``, write
+    them as ONE new version (the delta only, never the whole table), and
+    persist the new cursor on the connection's config.
+
+    Bound parameters only — ``table``/``cursor_column`` are validated as bare
+    identifiers at the route boundary (``routes/foundry.py``) and are never
+    spliced into a query string; the value side goes through SQLAlchemy Core
+    exactly like the existing query-mode path.
+    """
+    cfg = conn["config"]
+    table = str(cfg.get("table") or "")
+    cursor_column = str(cfg.get("cursor_column") or "")
+    if not cursor_column:
+        raise ValueError("a table-mode sql connection needs a cursor_column")
+    batch = max(1, min(int(cfg.get("batch") or 5000), 50_000))
+    last_cursor = cfg.get("cursor_value")
+
+    def _pull() -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+        engine = sqlalchemy_mod.create_engine(dsn)
+        try:
+            schema, col_names = _reflect_table_schema(sqlalchemy_mod, engine, table)
+            tbl = sqlalchemy_mod.table(
+                table, *(sqlalchemy_mod.column(n) for n in col_names)
+            )
+            cursor_col = tbl.c[cursor_column]
+            stmt = (
+                sqlalchemy_mod.select(*tbl.c)
+                .select_from(tbl)
+                .order_by(cursor_col)
+                .limit(batch)
+            )
+            params: dict[str, Any] = {}
+            if last_cursor is not None:
+                stmt = stmt.where(cursor_col > sqlalchemy_mod.bindparam("cursor_after"))
+                params["cursor_after"] = last_cursor
+            with engine.connect() as c:
+                result = c.execute(stmt, params)
+                rows = [dict(zip(col_names, r, strict=True)) for r in result]
+            return rows, schema
+        finally:
+            engine.dispose()
+
+    rows, schema = await asyncio.get_running_loop().run_in_executor(None, _pull)
+    if rows:
+        # Each cycle's delta is its own version — this is the whole point of a
+        # cursor pull over a table: growth by the new rows only, never a copy
+        # of the table. `source` names the mode so the dataset's version
+        # history states it without a schema/kind change this file cannot make
+        # (`foundry/store.py` is not owned here; see connections.py module doc).
+        await store.add_version(conn["dataset_id"], rows, schema, source="sql:table")
+        await binding_mod.auto_sync_dataset(store, conn["dataset_id"], _LOCAL_CTX)
+        new_cursor = rows[-1].get(cursor_column, last_cursor)
+        # JSON-safe: a timestamp/Decimal cursor column round-trips through
+        # config_json, so anything that is not already a JSON scalar is
+        # stringified rather than raising and silently re-pulling this same
+        # delta forever.
+        if not isinstance(new_cursor, (str, int, float, bool)) and new_cursor is not None:
+            new_cursor = str(new_cursor)
+        # Re-read the row rather than trust the `conn` this task started with:
+        # an operator PUT (disable, retarget the dataset, edit the query) in
+        # the meantime must not be clobbered by this cycle writing back a
+        # stale `enabled`/`dataset_id`/`config`. reconcile() cancels a task
+        # whose fingerprint changed, but that is a race against this exact
+        # write, so check it here rather than assume the cancellation always
+        # wins it.
+        fresh = await store.get_connection(conn["id"])
+        if fresh is not None and _fingerprint(fresh) == _fingerprint(conn):
+            await store.update_connection(
+                conn["id"],
+                dataset_id=fresh["dataset_id"],
+                config={**fresh["config"], "cursor_value": new_cursor},
+                enabled=fresh["enabled"],
+            )
+            # Keep the in-process copy in step so a second cycle inside the
+            # same `_run_sql` call (before the next reconcile re-reads the
+            # row) starts from the cursor just persisted, not the one it was
+            # created with.
+            cfg["cursor_value"] = new_cursor
+        # else: the connection was edited or deleted out from under this
+        # cycle; the rows are already safely versioned, and reconcile() will
+        # cancel/restart (or leave stopped) this task on its next tick.
+    return len(rows)
+
+
 async def _run_sql(store: FoundryStore, conn: dict[str, Any]) -> None:
     import sqlalchemy  # noqa: PLC0415 - optional dependency
 
     cfg = conn["config"]
+    table = str(cfg.get("table") or "")
+
+    if table:
+        # Validated before the DSN resolves so a misconfigured table-mode
+        # connection reports its own mistake, not an unrelated env var.
+        if not str(cfg.get("cursor_column") or ""):
+            raise ValueError("a table-mode sql connection needs a cursor_column")
+        dsn = _resolve_dsn(cfg)
+        interval = max(30.0, float(cfg.get("interval_s") or 300))
+        while True:
+            n = await _run_sql_table_cycle(sqlalchemy, store, conn, dsn)
+            await store.mark_connection(conn["id"], ok=True, rows_added=n)
+            await asyncio.sleep(interval)
+
     query = str(cfg.get("query") or "")
     if not query.strip():
         raise ValueError("a sql connection needs a query")
@@ -321,9 +479,12 @@ _supervisor: asyncio.Task[None] | None = None
 
 
 def _fingerprint(conn: dict[str, Any]) -> str:
-    return json.dumps(
-        [conn["kind"], conn["dataset_id"], conn["config"]], sort_keys=True
-    )
+    # `cursor_value` is written by the table-mode runner itself every cycle
+    # (the only way a cursor survives a restart); excluded here so recording
+    # progress does not read as "an edit made in the UI" and bounce the task
+    # every reconcile tick instead of only on a REAL config change.
+    cfg = {k: v for k, v in conn["config"].items() if k != "cursor_value"}
+    return json.dumps([conn["kind"], conn["dataset_id"], cfg], sort_keys=True)
 
 
 async def _cancel(conn_id: str) -> None:

@@ -24,6 +24,7 @@ from app.config import get_settings
 from app.foundry import binding as binding_mod
 from app.foundry import builds as builds_mod
 from app.foundry import connections as connections_mod
+from app.foundry import documents as documents_mod
 from app.foundry import geo as geo_mod
 from app.foundry import ingest, sqlrun
 from app.foundry import seed as seed_mod
@@ -376,16 +377,187 @@ async def upload_dataset_version(
     return ds
 
 
+@router.post(
+    "/api/foundry/datasets/{dataset_id}/documents", dependencies=[Depends(require_operator)]
+)
+async def upload_document(
+    dataset_id: str,
+    file: UploadFile = File(...),
+    extract: bool = Query(
+        False, description="best-effort LLM entity extraction, linked as ontology mentions"
+    ),
+    ctx: UserCtx = Depends(current_user_or_local),
+) -> dict[str, Any]:
+    """One document (.eml / .docx / .txt / .md / .pdf) becomes ONE row —
+    ``{doc_id, filename, sha256, title, text, pages, extracted_at}`` — appended
+    as a new version of ``dataset_id``. From there the ordinary Foundry
+    binding machinery (``POST /api/foundry/bindings``) can bind that row into
+    the ontology exactly like any other dataset; no new binding path needed.
+
+    Streamed through the same byte cap as every other Foundry upload
+    (``store.MAX_UPLOAD_BYTES``, shared with ``/api/ingest``). An unrecognised
+    extension, or ``.pdf`` when the optional ``pypdf`` extra is not installed,
+    answers 415 naming what to install rather than 500ing.
+    """
+    store = _store()
+    if await store.get_dataset(dataset_id) is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    content = await read_capped(file, foundry_store_mod.MAX_UPLOAD_BYTES)
+    try:
+        row = documents_mod.document_row(file.filename or "document", content)
+    except documents_mod.DocumentExtractError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    try:
+        result = await store.append_version(dataset_id, [row])
+    except FoundryError as exc:
+        _raise(exc)
+        raise AssertionError("unreachable") from exc  # pragma: no cover
+    result["auto_sync"] = await binding_mod.auto_sync_dataset(store, dataset_id, ctx)
+
+    if extract and row["text"].strip():
+        # Best-effort and never fails the upload: reuses routes/extract.py's
+        # LLM call + normaliser rather than a second copy of that prompt and
+        # its parsing (app/routes/extract.py:95,120). A model-unavailable
+        # HTTPException from _run_llm is caught here too — the document is
+        # already saved by this point, so extraction failing is a partial
+        # result, not an upload failure.
+        try:
+            from app.intel.ontology import Link, Object, get_registry  # noqa: PLC0415
+            from app.routes.extract import _normalise, _run_llm  # noqa: PLC0415
+
+            parsed = await _run_llm(row["text"][:40_000], ctx.token, ctx.user_id)
+            entities, links = _normalise(parsed)
+            doc_obj_id = f"foundry:document:{row['doc_id']}"
+            reg = get_registry(ctx, get_settings())
+            await reg.upsert(
+                Object(
+                    id=doc_obj_id,
+                    kind="object",
+                    props={
+                        "entity_type": "Document",
+                        "title": row["title"] or row["filename"],
+                        "preview": row["text"][:280],
+                    },
+                )
+            )
+            for e in entities:
+                await reg.upsert(
+                    Object(
+                        id=e.id,
+                        kind="object",
+                        props={"entity_type": e.entity_type, "name": e.name, **e.props},
+                    )
+                )
+                await reg.link(Link(src=doc_obj_id, dst=e.id, rel="mentions"))
+            for lk in links:
+                await reg.link(Link(src=lk.src, dst=lk.dst, rel=lk.rel))
+            result["extracted"] = {
+                "document_object": doc_obj_id,
+                "entities": len(entities),
+                "links": len(links),
+            }
+        except Exception as exc:  # noqa: BLE001 - extraction is best-effort
+            result["extracted"] = {"error": str(exc)[:200]}
+    return result
+
+
+# ── connector catalog ────────────────────────────────────────────────────────
+# What operator data can become a Foundry dataset, and what this deployment can
+# actually run right now — the connection editor greys out an unavailable kind
+# instead of letting someone configure one that only fails at run time.
+
+_CONNECTOR_CATALOG: tuple[dict[str, str], ...] = (
+    {
+        "kind": "mqtt",
+        "title": "MQTT topic",
+        "needs": "built in",
+        "docs": "Subscribe to a topic on your broker; each message becomes a row.",
+    },
+    {
+        "kind": "kafka",
+        "title": "Kafka topic",
+        "needs": "aiokafka",
+        "docs": "Consume a topic from your cluster; each message becomes a row.",
+    },
+    {
+        "kind": "sql",
+        "title": "SQL query",
+        "needs": "sqlalchemy",
+        "docs": "Poll a read-only query on an interval; the whole answer becomes one version.",
+    },
+    {
+        "kind": "sql-table",
+        "title": "SQL table (cursor pull)",
+        "needs": "sqlalchemy",
+        "docs": "Point at a table and a cursor column; each cycle pulls only the rows past the "
+                "last cursor, never the whole table again.",
+    },
+    {
+        "kind": "ingest-token",
+        "title": "Push endpoint",
+        "needs": "built in",
+        "docs": "Mint a per-dataset token; anything that can POST JSON pushes rows in "
+                "(POST /api/ingest/{dataset_id}).",
+    },
+    {
+        "kind": "upload",
+        "title": "File upload",
+        "needs": "built in",
+        "docs": "CSV / JSON / NDJSON / GeoJSON / KML, parsed and type-inferred on upload.",
+    },
+    {
+        "kind": "document",
+        "title": "Document",
+        "needs": "built in (.eml/.docx/.txt/.md); pypdf for .pdf",
+        "docs": "An .eml / .docx / .txt / .md / .pdf becomes one text row via "
+                "POST /api/foundry/datasets/{dataset_id}/documents.",
+    },
+)
+
+
+@router.get("/api/foundry/connectors")
+async def list_connectors(ctx: UserCtx = Depends(current_user_or_local)) -> list[dict[str, Any]]:
+    """The static catalog above, with each kind's live availability on this
+    deployment folded in — mqtt/ingest-token/upload are built in and always
+    available; kafka/sql/sql-table follow ``connections.availability()``;
+    document is always available for its stdlib formats (pypdf only gates
+    .pdf, noted in its ``docs`` rather than turning the whole kind off)."""
+    conn_avail = connections_mod.availability()
+    availability = {
+        "mqtt": True,
+        "kafka": conn_avail["kafka"]["available"],
+        "sql": conn_avail["sql"]["available"],
+        "sql-table": conn_avail["sql"]["available"],
+        "ingest-token": True,
+        "upload": True,
+        "document": True,
+    }
+    pdf_note = "available" if documents_mod.pdf_available() else "unavailable: pip install pypdf"
+    out = []
+    for entry in _CONNECTOR_CATALOG:
+        row = dict(entry)
+        if row["kind"] == "document":
+            row["docs"] = f"{row['docs']} pdf: {pdf_note}."
+        row["available"] = availability[row["kind"]]
+        out.append(row)
+    return out
+
+
 class ConnectionIn(BaseModel):
     """A source the operator configured. ``config`` is per-kind:
 
       mqtt   {url: "mqtt://host:1883" | "wss://host/mqtt", topic, client_id?}
       kafka  {bootstrap_servers, topic, group_id?, auto_offset_reset?}
       sql    {dsn_env, query, interval_s?}
+             or, for an incremental cursor pull of a named table instead of a
+             query: {dsn_env, table, cursor_column, batch?, interval_s?}
 
     For ``sql``, ``dsn_env`` is the NAME of an environment variable holding the
     connection string. Never the connection string: this row is returned by the
     list route and lives in foundry.db, and a password belongs in neither.
+    ``table``/``cursor_column`` must be bare SQL identifiers (validated below);
+    they are built into the query with ``sqlalchemy.table()``/``select()``,
+    never spliced into SQL text.
     """
 
     name: str = Field(..., min_length=1, max_length=80)
@@ -419,6 +591,27 @@ def _reject_inline_dsn(kind: str, config: dict[str, Any]) -> None:
         )
 
 
+def _reject_bad_table_identifiers(kind: str, config: dict[str, Any]) -> None:
+    """``table``/``cursor_column`` (the table-mode cursor pull) must be bare
+    identifiers — they are built into the query with ``sqlalchemy.table()``/
+    ``column()``, never an f-string, but a value that is not a plausible
+    identifier at all (a space, a semicolon, a schema-qualified name) is far
+    more likely a mistake than deliberate, so it is rejected here rather than
+    left for the driver to complain about at run time."""
+    if kind != "sql":
+        return
+    for field in ("table", "cursor_column"):
+        value = config.get(field)
+        if value is None:
+            continue
+        if not connections_mod.valid_identifier(str(value)):
+            raise HTTPException(
+                status_code=422,
+                detail=f"{field} must be a bare SQL identifier "
+                       "(letters/digits/underscore, not starting with a digit)",
+            )
+
+
 @router.get("/api/foundry/connections")
 async def list_connections(
     ctx: UserCtx = Depends(current_user_or_local),
@@ -440,6 +633,7 @@ async def create_connection(
     body: ConnectionIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
     _reject_inline_dsn(body.kind, body.config)
+    _reject_bad_table_identifiers(body.kind, body.config)
     store = _store()
     if await store.get_dataset(body.dataset_id) is None:
         raise HTTPException(status_code=404, detail="dataset not found")
@@ -465,6 +659,7 @@ async def update_connection(
     if existing is None:
         raise HTTPException(status_code=404, detail="connection not found")
     _reject_inline_dsn(existing["kind"], body.config)
+    _reject_bad_table_identifiers(existing["kind"], body.config)
     updated = await store.update_connection(
         connection_id,
         dataset_id=body.dataset_id,
