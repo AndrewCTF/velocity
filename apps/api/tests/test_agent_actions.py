@@ -4,8 +4,9 @@ The streaming analyst agent (``intel/agent.py``) gained three ADDITIVE tool
 families on top of its read-only ReAct loop:
 
   • AUDITED write-back actions (flag_entity / promote_incident / nominate_target /
-    add_watch) that dispatch through ``intel/actions.dispatch`` — the SAME path
-    /api/actions uses, so every write lands an ``action_log`` audit row.
+    add_watch / writeback) that dispatch through ``intel/actions.dispatch`` — the
+    SAME path /api/actions uses, so every write lands an ``action_log`` audit row.
+    ``writeback`` is OPERATOR-ONLY: the agent may propose it, never run it.
   • a ``control_view`` tool that emits a NEW ``app_var`` SSE event driving the
     operator's map (camera / selection / filter).
   • a ``request_clarification`` tool that pauses the loop for the operator.
@@ -373,3 +374,92 @@ def test_keyless_action_call_is_refused(monkeypatch: pytest.MonkeyPatch) -> None
     assert "sign-in required" in tr[0]["summary"]
     # No `action` event (nothing was performed).
     assert not any(e["type"] == "action" for e in events)
+
+
+# ── writeback (W4): proposed through the SAME HITL queue, never auto-executed ───
+
+
+def test_action_tools_are_registered_specs_and_writeback_is_operator_only() -> None:
+    """``ACTION_TOOLS`` is the agent's writable surface, so it must stay the
+    registered ``ActionSpec`` names and nothing else — no tool the agent can
+    call that the registry cannot validate, and no action silently added to the
+    agent's hands without deciding which side of the authority line it is on."""
+    from app.intel.actions import list_actions
+
+    specs = {a["name"]: a for a in list_actions()}
+    assert agent.ACTION_TOOLS <= set(specs)
+    # writeback IS offered, and it is the one carrying operator authority.
+    assert "writeback" in agent.ACTION_TOOLS
+    assert specs["writeback"]["operator_only"] is True
+    assert {n for n in agent.ACTION_TOOLS if specs[n]["operator_only"]} == {"writeback"}
+
+
+def test_catalog_offers_writeback_only_with_a_user() -> None:
+    assert "writeback" in agent._tool_catalog(with_actions=True)
+    assert "writeback" not in agent._tool_catalog(with_actions=False)
+
+
+def test_writeback_is_proposed_and_queued_never_executed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The agent may PROPOSE a writeback, and only propose.
+
+    Driven with the HITL gate wide open — approval OFF, auto-threshold 0.0, and
+    the model claiming confidence 1.0 — so this asserts the property that
+    matters: an ``operator_only`` action is never executed from an agent run at
+    ANY confidence. It lands in the operator's queue instead, owned by the
+    analyst who proposed it, and ``routes/actions.py`` re-applies
+    ``require_operator`` when the operator approves it there."""
+    from app.intel import action_proposals_local
+    from app.routes.actions import PROPOSAL_TTL_S
+
+    _stub_seed(monkeypatch)
+    params = {
+        "target": "http",
+        "url": "https://hooks.internal/ingest",
+        "payload": {"ref": "incident:1"},
+    }
+    _script_llm(
+        monkeypatch,
+        [
+            {
+                "action": "tool",
+                "tool": "writeback",
+                "args": {**params, "confidence": 1.0},
+                "say": "Writing the record out.",
+            },
+            {"action": "done", "say": "Queued for your approval."},
+        ],
+    )
+
+    dispatched: list[Any] = []
+
+    async def _never(*a: Any, **k: Any) -> Any:
+        dispatched.append(a)
+        raise AssertionError("writeback must never dispatch from an agent run")
+
+    monkeypatch.setattr(agent.actions, "dispatch", _never)
+    s = get_settings()
+    monkeypatch.setattr(s, "action_approval", False)
+    monkeypatch.setattr(s, "action_auto_threshold", 0.0)
+
+    events = asyncio.run(_drain("write that record out", None, UserCtx("analyst-1", "tok")))
+
+    # Nothing executed: no dispatch, no `action` event.
+    assert dispatched == []
+    assert not any(e["type"] == "action" for e in events)
+
+    # It is in the operator's QUEUE, shaped as a proposal the model can see.
+    proposals = [e for e in events if e["type"] == "action_proposal"]
+    assert len(proposals) == 1
+    assert proposals[0]["action"] == "writeback"
+    assert proposals[0]["confidence"] == 1.0
+    assert proposals[0]["params"] == params  # confidence is not an action param
+
+    rows = asyncio.run(action_proposals_local.list_pending(PROPOSAL_TTL_S))
+    assert [r["name"] for r in rows] == ["writeback"]
+    assert rows[0]["params"] == params
+    assert rows[0]["owner"] == "analyst-1"  # WHO proposed it survives
+
+    # And the model was told it is pending, not done — never "writeback ✓".
+    tr = [e for e in events if e["type"] == "tool_result" and e.get("tool") == "writeback"]
+    assert len(tr) == 1
+    assert "approval" in tr[0]["summary"]

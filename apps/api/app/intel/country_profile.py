@@ -34,6 +34,7 @@ import re
 from typing import Any
 
 from app.intel.gdelt_match import actor_matches_country
+from app.keys import UserCtx, multi_user
 from app.upstream import cache, get_client
 
 # Wikidata asks every client to identify itself; anonymous SPARQL bursts are
@@ -575,6 +576,7 @@ async def country_brief(
     wb: dict[str, Any] | None,
     profile: dict[str, Any] | None,
     security: dict[str, Any] | None,
+    ctx: UserCtx | None = None,
 ) -> dict[str, Any]:
     """LLM all-source brief fusing WB indicators + leadership + security counts.
 
@@ -588,6 +590,13 @@ async def country_brief(
     text is passed through :func:`_trim_incomplete_tail` first, so a
     generation that runs into ``max_tokens`` mid-sentence never leaves a
     dangling fragment directly ahead of that footer.
+
+    ``ctx`` is the requesting user (``routes/country_stats.py`` passes its
+    ``current_user_or_local`` principal). It is bound with ``llm.bind_user``
+    around the model call so every brief that reaches a model leaves exactly one
+    ``llm_calls`` row (W4). A caller that passes nothing resolves to the shared
+    ``local`` principal on a keyless deployment — and, on a multi-user one,
+    binds NOTHING rather than filing its brief under a user who did not ask.
     """
     from app import llm
 
@@ -615,6 +624,13 @@ async def country_brief(
         allowed = {e["id"] for e in events} | {f"country:{iso3u}"}
         import json as _json
 
+        # Model-call audit (W4): one llm_calls row per brief that reaches a
+        # model, attributed to the caller. With no ctx on a keyless box that is
+        # the shared ``local`` principal — the identity the route itself
+        # resolves to; on a multi-user box, no ctx means no attribution rather
+        # than a row filed under the wrong user.
+        uid = ctx.user_id if ctx is not None else (None if multi_user() else "local")
+        bound = llm.bind_user(uid, ctx.token if ctx is not None else "") if uid else None
         try:
             res = await asyncio.wait_for(
                 llm.chat(
@@ -637,6 +653,9 @@ async def country_brief(
             )
         except TimeoutError:
             return {"ok": False, "reason": "no LLM backend configured", "iso3": iso3u, "name": name}
+        finally:
+            if bound is not None:
+                llm.reset_user(bound)
         if not res.ok:
             return {
                 "ok": False,

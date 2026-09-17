@@ -13,6 +13,11 @@ surface (``/api/ai/selection`` is already in ``app.ratelimit._COMPUTE_PREFIXES``
 Cached 60s per ``(kind, id)`` in-process (reusing ``app.upstream``'s shared
 TTL cache — an entity re-clicked within the same minute gets the same brief
 without a second model call); the caller sees ``cached: true`` on a hit.
+
+Every brief that actually reaches a model also leaves ONE ``llm_calls`` row
+(W4): the resolved ``UserCtx`` is bound with ``llm.bind_user`` around the call,
+so ``GET /api/ai/calls`` can say who asked for which assessment. A cached hit
+makes no model call and so writes no row.
 """
 
 from __future__ import annotations
@@ -358,7 +363,7 @@ async def _safe_context(kind: str, eid: str, props: dict[str, Any]) -> tuple[dic
 
 @router.post("/api/ai/selection/brief")
 async def post_selection_brief(
-    body: BriefIn, _ctx: UserCtx = Depends(current_user_or_local)
+    body: BriefIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
     if not llm.selection_enabled():
         raise HTTPException(status_code=409, detail="selection inference is disabled")
@@ -415,6 +420,12 @@ async def post_selection_brief(
             context_json = json.dumps(context, default=str, separators=(",", ":"))
             user += f"\n\nENRICHMENT:\n{context_json}"
         started = time.monotonic()
+        # Model-call audit (W4): bind the requesting user for the duration of the
+        # call so llm.chat() writes ONE llm_calls row naming who asked. Keyless
+        # (the shipping default) ``current_user_or_local`` resolves to the shared
+        # ``local`` principal, so the deployment that runs its own GPU is not the
+        # one deployment with no model-call trail.
+        bound = llm.bind_user(ctx.user_id, ctx.token)
         try:
             res = await asyncio.wait_for(
                 llm.chat(
@@ -427,6 +438,8 @@ async def post_selection_brief(
             )
         except TimeoutError as e:
             raise HTTPException(status_code=502, detail="AI assessment unavailable") from e
+        finally:
+            llm.reset_user(bound)
         latency_ms = round((time.monotonic() - started) * 1000)
         if not res.ok:
             # Never surface the raw backend error string to a client (copy rule).

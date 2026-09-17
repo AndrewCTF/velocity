@@ -22,6 +22,7 @@ import asyncio
 import pytest
 
 from app import llm
+from app.keys import UserCtx
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -502,3 +503,133 @@ async def test_chat_json_forwards_label_and_tool_calls(monkeypatch: pytest.Monke
     assert res.ok
     assert seen.get("label") == "investigate"
     assert seen.get("tool_calls") == 5
+
+
+# ── the two briefs that recorded nothing (W4) ─────────────────────────────────
+# ``llm.bind_user`` had exactly one caller (routes/extract.py), so the selection
+# brief and the country brief reached a model and left no trace. Both now bind
+# the caller their route resolved, and the row is readable back through
+# GET /api/ai/calls. Keyless, that caller is the shared ``local`` principal.
+
+
+def test_one_selection_brief_writes_one_row_for_the_requesting_user(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The proof an operator can run: click an entity, then read /api/ai/calls.
+
+    Goes through the ROUTE, so the identity is whatever the
+    ``current_user_or_local`` dependency resolved (``local`` on this keyless
+    box) — with only the backend mocked, exactly as a live box runs it."""
+    import time
+
+    from app import upstream as upstream_mod
+    from app.config import Settings
+
+    monkeypatch.setattr(llm, "get_settings", lambda: Settings(supabase_url=""))
+    monkeypatch.setattr(
+        llm,
+        "_deepseek_chat",
+        _ds_returning(llm.LlmResult(text="No anomalies evident.", model="deepseek-chat")),
+    )
+    llm.set_selection_enabled(True)
+    upstream_mod.cache._data.clear()  # noqa: SLF001 — a cached hit makes no model call
+    upstream_mod.cache._locks.clear()  # noqa: SLF001
+    try:
+        r = client.post(
+            "/api/ai/selection/brief",
+            json={"kind": "aircraft", "id": "aircraft:zzzz-1", "props": {"callsign": "NOPE"}},
+        )
+        assert r.status_code == 200, r.text
+
+        # The insert is fire-and-forget on the server's loop; poll the route the
+        # operator would actually curl rather than reaching into the store.
+        rows: list[dict] = []
+        for _ in range(60):
+            got = client.get("/api/ai/calls?limit=10")
+            assert got.status_code == 200, got.text
+            rows = got.json()
+            if rows:
+                break
+            time.sleep(0.05)
+    finally:
+        llm.set_selection_enabled(None)
+        upstream_mod.cache._data.clear()  # noqa: SLF001
+        upstream_mod.cache._locks.clear()  # noqa: SLF001
+
+    assert len(rows) == 1
+    assert rows[0]["user_id"] == "local"  # the keyless principal, named
+    assert rows[0]["label"] == "ai.selection_brief"
+    # An accountability trail, not a transcript store.
+    assert "prompt" not in rows[0] and "text" not in rows[0]
+
+
+async def _country_brief_rows(
+    monkeypatch: pytest.MonkeyPatch, iso3: str, ctx: UserCtx | None
+) -> list[dict]:
+    """Run one country brief through the REAL chat (only the backend mocked) and
+    return the rows it left in the local call trail."""
+    from app import llm_calls_local
+    from app import upstream as upstream_mod
+    from app.config import Settings
+    from app.intel import country_profile
+
+    monkeypatch.setattr(llm, "get_settings", lambda: Settings(supabase_url=""))
+    monkeypatch.setattr(
+        llm,
+        "_deepseek_chat",
+        _ds_returning(llm.LlmResult(text="## Overview\nQuiet.", model="deepseek-chat")),
+    )
+    upstream_mod.cache._data.clear()  # noqa: SLF001
+    upstream_mod.cache._locks.clear()  # noqa: SLF001
+
+    out = await country_profile.country_brief(iso3, "Country", None, None, None, ctx=ctx)
+    await _drain_logs()
+    assert out["ok"] is True, out
+    return await llm_calls_local.list_calls(10)
+
+
+@pytest.mark.asyncio
+async def test_one_country_brief_writes_one_row_for_the_ctx_it_is_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The country brief binds the ctx its route passes.
+
+    Called directly here (the route half is a one-line pass-through, and both
+    briefs share one binding idiom), with the real ``chat`` and only the backend
+    mocked, so the row is written by the production observability path."""
+    rows = await _country_brief_rows(monkeypatch, "SWE", UserCtx("analyst-9", "tok"))
+
+    assert len(rows) == 1
+    assert rows[0]["user_id"] == "analyst-9"  # WHO asked, not just that someone did
+    assert rows[0]["label"] == "country.brief"
+
+
+@pytest.mark.asyncio
+async def test_one_country_brief_without_a_ctx_records_the_local_principal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A caller that passes no ctx — an internal one on the keyless box, where
+    the route would have resolved ``local`` anyway — is still recorded, under
+    that same shared principal. The alternative (silence) is the gap this
+    closes: the deployment running its own GPU kept no trail of its own calls."""
+    from app.intel import country_profile
+
+    monkeypatch.setattr(country_profile, "multi_user", lambda: False)
+    rows = await _country_brief_rows(monkeypatch, "NOR", None)
+
+    assert len(rows) == 1
+    assert rows[0]["user_id"] == "local"
+    assert rows[0]["label"] == "country.brief"
+
+
+@pytest.mark.asyncio
+async def test_one_country_brief_without_a_ctx_binds_nothing_multiuser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On a deployment that CAN tell two humans apart, an unattributed brief is
+    recorded as nothing rather than filed under ``local``. A wrong actor in an
+    audit trail is worse than a missing row: it names someone who did not ask."""
+    from app.intel import country_profile
+
+    monkeypatch.setattr(country_profile, "multi_user", lambda: True)
+    assert await _country_brief_rows(monkeypatch, "FIN", None) == []
