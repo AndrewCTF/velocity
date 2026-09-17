@@ -47,7 +47,7 @@ labelled as automated output, not sold as "AI insight."
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-2810%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-2813%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 [![ISO/IEC 27001:2022 controls mapped, self-assessed](https://img.shields.io/badge/ISO%2FIEC%2027001%3A2022-controls%20mapped%20(self--assessed)-informational.svg)](docs/security/isms/statement-of-applicability.md)
 [![OWASP ASVS 5.0 L2 self-assessed](https://img.shields.io/badge/OWASP%20ASVS%205.0-L2%20self--assessed-informational.svg)](docs/security/asvs-l2-assessment.md)
@@ -437,9 +437,9 @@ being rate-limited; the rest of the world keeps streaming from the sticky snapsh
 
 The same fusion powers the in-app **AI selection brief**: click an entity and
 `POST /api/ai/selection/brief` fuses its registry enrichment and pattern-of-life
-dossier into a selection-tier model prompt for a Gotham-style inference — every
-claim cites the dossier field it came from, and it degrades to the raw props if
-no model is configured.
+dossier into a selection-tier model prompt — every claim cites the dossier field
+it came from, an uncited answer is withheld rather than shown, and it degrades
+to the raw props if no model is configured.
 
 ### Install as a Claude Code plugin (skill + commands + agent)
 
@@ -609,7 +609,7 @@ osint/
 
 ```bash
 # from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
-OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 2810 passed + 2 skipped
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 2813 passed + 2 skipped
 pnpm -r test                          # vitest (web, shared)
 pnpm -r typecheck
 bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot
@@ -644,8 +644,8 @@ above). Legend: ✅ shipped · 🚧 in progress
   floating panels, a photo-geolocation pipeline, a City 3D Gaussian-splat viewer,
   optional local-GPU (Ollama) inference, and a first-run onboarding tour. More
   sensors and deeper analysis are ongoing.
-- 🚧 **Phase 5** — Foundry: a keyless, local, single-operator take on Palantir
-  Foundry's data-integration loop. Upload → transform (governed 13-step DSL with
+- 🚧 **Phase 5** — Foundry: a keyless, local, single-operator data-integration
+  loop. Upload → transform (governed 13-step DSL with
   lineage) → build (dependency DAG, staleness, cycle rejection) → data-health
   checks → bind into the local ontology graph. In: immutable versions +
   rollback, row-level quarantine/dead-letter, freshness/schema-drift SLAs,

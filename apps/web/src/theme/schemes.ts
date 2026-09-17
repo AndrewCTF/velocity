@@ -107,7 +107,7 @@ export const SCHEMES: readonly Scheme[] = [
   {
     id: 'bp-dark',
     label: 'Blueprint dark',
-    hint: "Palantir's published dark ramp, on the reference's own panel surface.",
+    hint: "Blueprint's published dark ramp, on the design system's own panel surface.",
     family: 'dark',
     blueprint: true,
     swatch: { bg: '#111418', panel: '#2f343c', accent: '#2d72d2' },
@@ -131,7 +131,7 @@ export const SCHEMES: readonly Scheme[] = [
   {
     id: 'bp-light',
     label: 'Blueprint light',
-    hint: "Palantir's published light surface: white panels on light grey.",
+    hint: "Blueprint's published light surface: white panels on light grey.",
     family: 'light',
     blueprint: true,
     swatch: { bg: '#edeff2', panel: '#f6f7f9', accent: '#215db0' },

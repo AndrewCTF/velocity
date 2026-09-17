@@ -51,6 +51,13 @@ services:
       # directory is missing on a volume created before this image).
       TMPDIR: /srv/data/.tmp
       TRUSTED_PROXIES: 172.28.0.0/24,127.0.0.1,::1
+      # History archive on TimescaleDB (service below). The password lives in
+      # .env as TIMESCALE_PASSWORD and reaches the API only through this DSN;
+      # the database is on the internal `front` network with no published port.
+      HISTORY_PG_DSN: postgresql://velocity:${TIMESCALE_PASSWORD:?set TIMESCALE_PASSWORD in .env}@timescale:5432/velocity
+    depends_on:
+      timescale:
+        condition: service_healthy
     # No source bind-mount and no --reload: the image is the deployable unit.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
     healthcheck:
@@ -82,6 +89,30 @@ services:
       # (history/ontology/foundry/workflows/alert-rules) and tile cache under
       # WORKDIR /srv survive `docker compose down` and image rebuilds.
       - osint_data:/srv/data
+
+  timescale:
+    # Position-history archive (compressed hypertable). Pinned by digest like
+    # nginx; no published port; data on its own named volume.
+    image: timescale/timescaledb:2.17.2-pg16@sha256:4e459e217f00cbb09920c34d245501e63427e6767a495de57ce76823ff280f12
+    runtime: runc
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 2g
+    shm_size: 1g
+    networks:
+      - front
+    environment:
+      POSTGRES_USER: velocity
+      POSTGRES_DB: velocity
+      POSTGRES_PASSWORD: ${TIMESCALE_PASSWORD:?set TIMESCALE_PASSWORD in .env}
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U velocity -d velocity"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   web-build:
     # One-shot builder: compiles the static web bundle into the shared web_dist
@@ -172,3 +203,4 @@ networks:
 volumes:
   web_dist: {}
   osint_data: {}
+  timescale_data: {}

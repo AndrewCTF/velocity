@@ -752,6 +752,32 @@ class Settings(BaseSettings):
     #    zlib-decompress; see history._encode_extra / _decode_extra.
     history_compress_extra: bool = False
 
+    # ── History backend: Postgres + TimescaleDB (operator decision 2026-09-17) ──
+    # "timescale" stores fixes in a compressed hypertable behind the same
+    # history.py public functions; "sqlite" is the legacy file store above.
+    # "auto" picks timescale when history_pg_dsn is set, else sqlite with ONE
+    # boot warning. The DSN comes from env / /run/secrets only and is never
+    # logged (RedactKeyFilter). Loopback trust auth for dev: scripts/dev-timescale.sh.
+    history_backend: str = "auto"  # HISTORY_BACKEND=auto|sqlite|timescale
+    history_pg_dsn: str = ""  # HISTORY_PG_DSN=postgresql://velocity@127.0.0.1:5433/velocity
+    # Hypertable chunk width and how old a chunk must be before Timescale's
+    # columnar compression takes it. Retention/byte budget reuse the history_*
+    # settings above (retention hours, history_budget_gb).
+    history_pg_chunk_hours: int = 6
+    history_pg_compress_after_hours: int = 12
+
+    # ── Upstream ADS-B heatmap replay (tar1090 globe_history, keyless) ──
+    # Public aggregators serve readsb's 30-minute heatmap chunks
+    # (globe_history/YYYY/MM/DD/heatmap/NN.bin.ttf) back to 2024. Hosts are tried
+    # in order; adsb.fi reaches 2024-01-01, adsb.lol has gaps. airplanes.live is
+    # deliberately NOT listed by default: api.airplanes.live blocked this egress
+    # once (apps/api/CLAUDE.md), and 9 MB chunks every few seconds is the load
+    # pattern that did it. ADSB_DISABLED_HOSTS is honoured by domain suffix.
+    heatmap_hosts: str = "globe.adsb.fi,adsb.lol"  # HEATMAP_HOSTS
+    # On-disk cache of fetched chunks (data/heatmap/YYYY/MM/DD/NN.bin.ttf.gz),
+    # immutable once the half hour has closed; LRU by atime under this budget.
+    heatmap_cache_gb: float = 4.0  # HEATMAP_CACHE_GB
+
     # ── Ontology local spine ──
     # Default (keyless) backend for the ontology: local SQLite next to
     # history.db. Objects keep a materialized props blob for frontend parity;
