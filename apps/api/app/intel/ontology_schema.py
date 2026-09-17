@@ -182,6 +182,24 @@ PROP_TYPES: dict[str, dict[str, PropType]] = {
         "narrative": "str",
         "centroid": "geo",
     },
+    # routes/situations.py::_to_object props dict — the situation IS an ontology
+    # object (``situation:<hex>``), so the Explorer should be able to facet it
+    # like any other kind. ``updated_at`` is declared ``str``, not ``ts``,
+    # because ``_to_object`` writes ``_now_iso()`` — an ISO-8601 STRING — and
+    # ``_matches`` reads ``ts`` as numeric; declaring it ``ts`` would warn on
+    # every situation this repo writes, which is exactly the false warning this
+    # module's header says not to emit.
+    "situation": {
+        "kind": "str",
+        "name": "str",
+        "severity": "str",
+        "status": "str",
+        "centroid": "geo",
+        "radius_km": "num",
+        "summary": "str",
+        "report": "str",
+        "updated_at": "str",
+    },
     # intel/evidence.py capture props.
     "evidence": {
         "sha256": "id",

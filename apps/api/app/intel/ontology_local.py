@@ -31,17 +31,22 @@ import re
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.config import Settings, get_settings
+from app.intel import classification as clf
 from app.intel.ontology import (
     Assertion,
     Link,
     Object,
     _GraphWalk,
     kind_of,
+    visible_to,
 )
 from app.keys import UserCtx
+
+if TYPE_CHECKING:  # duck-typed at runtime — see intel/ontology.visible_to
+    from app.security import Principal
 
 log = logging.getLogger(__name__)
 
@@ -239,11 +244,52 @@ class SqliteRegistry(_GraphWalk):
     list_by_kind`` plus the assertion layer (``assert_props`` /
     ``get_assertions``). All rows are scoped by ``user_id`` (parity with the
     RLS model this replaced).
+
+    Rows also carry the classification ladder (``classification`` 0..4 plus the
+    positive ``compartments`` a reader must hold). Until 2026-09-17 those
+    columns were stored and never read back: every SELECT here was
+    ``WHERE user_id=?`` alone, so a level-4 object was visible to a clearance-0
+    caller. ``principal`` (from ``get_registry(..., principal=p)``) turns them
+    on, through the ONE predicate ``_visible``. ``principal is None`` — every
+    internal writer, and the pre-existing call sites — reads exactly what it
+    read before.
     """
 
-    def __init__(self, ctx: UserCtx, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        ctx: UserCtx,
+        settings: Settings | None = None,
+        *,
+        principal: Principal | None = None,
+    ) -> None:
         self.ctx = ctx
         self.s = settings or get_settings()
+        self.principal = principal
+
+    def _visible(self, level: object, compartments: object) -> bool:
+        """May this registry's caller read a row at ``level``/``compartments``?
+
+        The whole ACL surface of this class. Everything else is where it is
+        applied. ``visible_to`` lives in ``intel/ontology.py`` so the evidence
+        routes (whose registry is built inside ``intel/evidence.py``) can filter
+        through the same function rather than a second copy of the rule.
+        """
+        return visible_to(self.principal, level, compartments)
+
+    def _clearance_sql(self, col: str = "") -> tuple[str, tuple[Any, ...]]:
+        """The level half of ``_visible`` as a SQL fragment, or nothing.
+
+        Pushed into the WHERE clause of the LIST queries so a bounded ``LIMIT``
+        is spent on rows the caller can actually read — filtering only in Python
+        would let a handful of over-clearance rows eat the whole page and make a
+        list look empty to a low-clearance analyst. The COMPARTMENT half stays
+        in Python (compartments are a JSON array; subset-testing it in SQLite
+        would be a json_each correlated subquery for no gain), so every row this
+        clause admits is still put through ``_visible``.
+        """
+        if self.principal is None:
+            return "", ()
+        return f" AND {col}classification <= ?", (clf.clamp(self.principal.clearance),)
 
     async def _run(self, fn: Any) -> Any:
         return await asyncio.get_running_loop().run_in_executor(None, fn)
@@ -342,6 +388,10 @@ class SqliteRegistry(_GraphWalk):
                 con.close()
             if row is None:
                 return None
+            # Out of clearance reads exactly like absent: the caller cannot tell
+            # a classified row from a missing one, so an id cannot be probed.
+            if not self._visible(row[3], json.loads(row[4]) if row[4] else []):
+                return None
             return _object_from_row(row)
 
         return await self._run(_sync)
@@ -353,6 +403,8 @@ class SqliteRegistry(_GraphWalk):
         nodes (situations / maps) carry their kind in props, not the column.
         """
 
+        clause, clearance = self._clearance_sql()
+
         def _sync() -> list[Object]:
             con = _connect(self.s)
             try:
@@ -360,12 +412,17 @@ class SqliteRegistry(_GraphWalk):
                     "SELECT id, kind, props, classification, compartments,"
                     " shared, created_at FROM objects"
                     " WHERE user_id=? AND json_extract(props, '$.kind') = ?"
-                    " ORDER BY created_at DESC LIMIT ?",
-                    (self.ctx.user_id, kind, int(limit)),
+                    + clause
+                    + " ORDER BY created_at DESC LIMIT ?",
+                    (self.ctx.user_id, kind, *clearance, int(limit)),
                 ).fetchall()
             finally:
                 con.close()
-            return [_object_from_row(r) for r in rows]
+            return [
+                _object_from_row(r)
+                for r in rows
+                if self._visible(r[3], json.loads(r[4]) if r[4] else [])
+            ]
 
         return await self._run(_sync)
 
@@ -401,6 +458,9 @@ class SqliteRegistry(_GraphWalk):
                     placeholders = ",".join("?" * len(kinds))
                     sql += f" AND o.kind IN ({placeholders})"
                     params.extend(kinds)
+                clause, clearance = self._clearance_sql("o.")
+                sql += clause
+                params.extend(clearance)
                 sql += " ORDER BY bm25(objects_fts) LIMIT ?"
                 params.append(int(limit))
                 try:
@@ -413,7 +473,11 @@ class SqliteRegistry(_GraphWalk):
                     return []
             finally:
                 con.close()
-            return [_object_from_row(r) for r in rows]
+            return [
+                _object_from_row(r)
+                for r in rows
+                if self._visible(r[3], json.loads(r[4]) if r[4] else [])
+            ]
 
         return await self._run(_sync)
 
@@ -539,13 +603,27 @@ class SqliteRegistry(_GraphWalk):
             marks = ",".join("?" for _ in ids)
             con = _connect(self.s)
             try:
+                # The endpoint rows are joined in (columns 13..16) so the edge
+                # can be filtered on the OBJECTS it touches, not only on its own
+                # ACL columns. Without that, _GraphWalk.traverse answers a hidden
+                # endpoint with a derived stub (``get`` returned None → "not
+                # persisted") and a level-0 edge leaks the id of a level-4
+                # object. A LEFT JOIN because an endpoint that has no row at all
+                # is a LEGITIMATE stub — the live-but-unpromoted aircraft case.
                 rows = con.execute(
                     f"""
-                    SELECT id, src, dst, rel, props, source, confidence,
-                           observed_at, valid_until, classification,
-                           compartments, shared, created_at
-                    FROM links
-                    WHERE user_id=? AND (src IN ({marks}) OR dst IN ({marks}))
+                    SELECT l.id, l.src, l.dst, l.rel, l.props, l.source,
+                           l.confidence, l.observed_at, l.valid_until,
+                           l.classification, l.compartments, l.shared,
+                           l.created_at,
+                           os.classification, os.compartments,
+                           od.classification, od.compartments
+                    FROM links l
+                    LEFT JOIN objects os
+                      ON os.user_id = l.user_id AND os.id = l.src
+                    LEFT JOIN objects od
+                      ON od.user_id = l.user_id AND od.id = l.dst
+                    WHERE l.user_id=? AND (l.src IN ({marks}) OR l.dst IN ({marks}))
                     """,
                     (self.ctx.user_id, *ids, *ids),
                 ).fetchall()
@@ -553,11 +631,30 @@ class SqliteRegistry(_GraphWalk):
                 con.close()
             out: dict[tuple[str, str, str], Link] = {}
             for r in rows:
+                if not self._edge_visible(r):
+                    continue
                 lk = _link_from_row(r)
                 out[(lk.src, lk.dst, lk.rel)] = lk
             return list(out.values())
 
         return await self._run(_sync)
+
+    def _edge_visible(self, row: tuple[Any, ...]) -> bool:
+        """The edge's own ACL AND both of its persisted endpoints'.
+
+        ``row`` is the 17-column shape ``_links_touching`` selects. An endpoint
+        with no row (``classification IS NULL``) is not hidden, it is absent.
+        """
+        if self.principal is None:
+            return True
+        if not self._visible(row[9], json.loads(row[10]) if row[10] else []):
+            return False
+        for level, comps in ((row[13], row[14]), (row[15], row[16])):
+            if level is None:
+                continue
+            if not self._visible(level, json.loads(comps) if comps else []):
+                return False
+        return True
 
     # ---- assertions ---------------------------------------------------------
 
@@ -658,6 +755,20 @@ class SqliteRegistry(_GraphWalk):
             args.append(int(limit))
             con = _connect(self.s)
             try:
+                # Assertions carry no ACL columns of their own — they are the
+                # property history OF an object, so they inherit that object's
+                # classification. A parent the caller cannot read (or that has
+                # no row, so there is nothing to inherit from) yields nothing.
+                if self.principal is not None:
+                    parent = con.execute(
+                        "SELECT classification, compartments FROM objects"
+                        " WHERE user_id=? AND id=?",
+                        (self.ctx.user_id, object_id),
+                    ).fetchone()
+                    if parent is None or not self._visible(
+                        parent[0], json.loads(parent[1]) if parent[1] else []
+                    ):
+                        return []
                 rows = con.execute(q, args).fetchall()
             finally:
                 con.close()

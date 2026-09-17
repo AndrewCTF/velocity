@@ -239,8 +239,11 @@ restarts a connection that dies later and applies an edit made in the UI.
 - The ONLY backend = local SQLite (`intel/ontology_local.py`, via
   `get_registry()`); the Supabase/PostgREST ontology backend was deleted the
   same day (operator invoked the kill criterion). Ontology/situations/maps
-  routes must keep working keyless (`current_user_or_local`).
-  → `tests/test_ontology_local.py`
+  routes must keep working keyless (`current_principal_or_local`: the local
+  principal is clearance 0, and every read goes through ONE predicate,
+  `intel/ontology.visible_to`; `principal=None` is the internal unfiltered path
+  for writers). `/api/ontology/schema` is static and stays exempt.
+  → `tests/test_ontology_local.py`, `tests/test_clearance_local_reads.py`
 - `objects.props` stays the exact last-written blob (wholesale replace,
   removals included — the frontend round-trip contract); provenance lives in
   the append-only `assertions` table, written by `upsert`'s diff /

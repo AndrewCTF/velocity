@@ -95,6 +95,11 @@ services:
     # nginx; no published port; data on its own named volume.
     image: timescale/timescaledb:2.17.2-pg16@sha256:4e459e217f00cbb09920c34d245501e63427e6767a495de57ce76823ff280f12
     runtime: runc
+    # Runs as the image's postgres uid from the start with every capability
+    # dropped (proven booting + CREATE EXTENSION timescaledb 2026-09-17); the
+    # named volume is initialised from the image's mountpoint ownership.
+    user: "70:70"
+    cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
