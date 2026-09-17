@@ -416,6 +416,22 @@ async def country_security(
     return await cache.get_or_fetch(key, _SECURITY_TTL, load)
 
 
+def _event_id(event: dict[str, Any]) -> str:
+    """A stable ``event:<sha8>`` id for one security event.
+
+    The brief's events arrive from GDELT/ACLED-shaped feeds with no id of their
+    own, so there was nothing for the model to cite and nothing to check a
+    citation against. Hashing the event's own content gives both: the same event
+    in two briefs gets the same id, and an id the model invents cannot collide
+    with one of these by accident.
+    """
+    import hashlib  # noqa: PLC0415
+    import json as _json  # noqa: PLC0415
+
+    blob = _json.dumps(event, sort_keys=True, separators=(",", ":"), default=str)
+    return "event:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:8]
+
+
 _BRIEF_SYS = (
     "You are a senior all-source intelligence analyst. Produce a concise, "
     "structured COUNTRY BRIEF in Markdown with exactly these sections, each an "
@@ -579,6 +595,11 @@ async def country_brief(
     key = f"country:brief:{iso3u}"
 
     async def load() -> dict[str, Any]:
+        # Stamp a checkable id onto every event BEFORE the payload is built, so
+        # the model sees the same ids the citation check will score it against.
+        events = [
+            {**e, "id": _event_id(e)} for e in ((security or {}).get("events") or [])[:12]
+        ]
         payload = {
             "country": name or iso3u,
             "iso3": iso3u,
@@ -586,16 +607,25 @@ async def country_brief(
             "leadership": (profile or {}).get("leadership") or [],
             "military_branches": (profile or {}).get("military_branches") or [],
             "security_counts": (security or {}).get("counts") or {},
-            "recent_security_events": ((security or {}).get("events") or [])[:12],
+            "recent_security_events": events,
             "data_notes": (security or {}).get("notes") or [],
         }
+        # Every id the model was actually shown: the events, plus the country
+        # itself so a brief may cite its own subject.
+        allowed = {e["id"] for e in events} | {f"country:{iso3u}"}
         import json as _json
 
         try:
             res = await asyncio.wait_for(
                 llm.chat(
                     [
-                        {"role": "system", "content": llm.with_prose_style(_BRIEF_SYS)},
+                        {
+                            "role": "system",
+                            # with_citations INSIDE with_prose_style: grounding is
+                            # stated first, the style rider stays LAST among the
+                            # riders (apps/api/CLAUDE.md "Model prose").
+                            "content": llm.with_prose_style(llm.with_citations(_BRIEF_SYS)),
+                        },
                         {"role": "user", "content": _json.dumps(payload, ensure_ascii=False)},
                     ],
                     tier="fast",
@@ -615,6 +645,25 @@ async def country_brief(
                 "name": name,
             }
         body = _trim_incomplete_tail(str(res.text or ""))
+        # The same hard contract the selection brief carries: a brief that cites
+        # an event id we never supplied is a fabricated provenance trail, and it
+        # survives a skim precisely because it looks like provenance. Withheld,
+        # naming what was wrong, rather than served with a caveat.
+        fabricated = llm.unknown_citations(body, allowed)
+        if fabricated:
+            return {
+                "ok": False,
+                "withheld": "unknown-citations",
+                "reason": (
+                    "Brief withheld: it cited "
+                    + ", ".join(fabricated[:3])
+                    + (" and others" if len(fabricated) > 3 else "")
+                    + ", which are not in the evidence for this country."
+                ),
+                "unknown_citations": fabricated[:8],
+                "iso3": iso3u,
+                "name": name,
+            }
         markdown = body + _sourced_footnotes(payload["recent_security_events"])
         return {
             "ok": True,

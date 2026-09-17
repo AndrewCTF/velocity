@@ -417,6 +417,10 @@ class Settings(BaseSettings):
     # is present in the environment but the operator does not want it used for
     # this run). OFF by default; flipped at runtime via POST /api/ai/local.
     llm_local_only: bool = False  # LLM_LOCAL_ONLY
+    # Citations are a hard contract (2026-09-17): a model brief that cites none
+    # of the ids it was given is withheld, not served flagged. Off only for a
+    # deployment that wants prose over provenance.
+    llm_require_citations: bool = True  # LLM_REQUIRE_CITATIONS
     api_base: str = "http://localhost:8000"  # API_BASE (MCP → backend)
 
     # ── Local model manager (app.localllm) — Unsloth GGUF catalog + engines ──

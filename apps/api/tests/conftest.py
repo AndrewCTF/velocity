@@ -221,6 +221,21 @@ def _isolate_action_log_db(tmp_path: Path) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_llm_calls_db(tmp_path: Path) -> Iterator[None]:
+    """Per-test temp file for the local model-call trail (mirrors action_log).
+
+    ``llm._post_call_row`` falls through to this sink whenever Supabase is
+    unset, which the whole suite is, so without this any test that lets a
+    ``chat()`` complete with a bound user writes ``./data/llm_calls.db`` into
+    the operator's real data dir."""
+    from app import llm_calls_local
+
+    llm_calls_local.override_db_path(str(tmp_path / "llm_calls.db"))
+    yield
+    llm_calls_local.override_db_path(None)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_action_proposals_db(tmp_path: Path) -> Iterator[None]:
     """Per-test temp file for the HITL proposal queue (mirrors action_log).
 

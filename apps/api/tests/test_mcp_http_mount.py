@@ -112,10 +112,17 @@ def test_mcp_http_handshake_lists_all_tools(keyed: str) -> None:
         # + 1 radio_reports (PSKReporter, 2026-08-21) — the first tool in the
         #   sdr/sigint half of the source catalog, which carried twelve entries
         #   and one route before it.
-        assert len(names) == 85, sorted(names)
+        # + 4 governed write-back tools (2026-09-17, W4): propose_action,
+        #   list_proposals, approve_proposal, reject_proposal — the first tools
+        #   on this server that change anything, and they change it only by
+        #   putting a proposal in front of a human.
+        assert len(names) == 89, sorted(names)
         assert {"get_situation", "intel_brief", "query_aircraft", "deep_analyze"} <= names
         assert {"disaster_alerts", "maritime_chokepoints", "space_weather"} <= names
         assert "radio_reports" in names
+        assert {
+            "propose_action", "list_proposals", "approve_proposal", "reject_proposal",
+        } <= names
         assert {
             "quakes_near", "track_history",
             "create_watch_rule", "list_watch_rules", "delete_watch_rule",

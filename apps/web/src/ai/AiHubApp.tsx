@@ -17,6 +17,7 @@ import {
   MessageSquare,
   ChevronDown,
   ChevronRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { apiFetch } from '../transport/http.js';
 import { useAgent } from '../state/agent.js';
@@ -32,6 +33,24 @@ interface LocalStatus {
   ollama_up?: boolean;
   local_only?: boolean;
   enabled?: boolean;
+}
+
+// GET /api/ai/guardrails — what the model can SEE and what it can DO here.
+// Assembled server-side from the live registries (intel/agent.py's tool maps,
+// the action catalog, Settings, the actuation kill switch), so this card cannot
+// drift from the policy it describes.
+interface Guardrails {
+  clearance?: number;
+  compartments?: string[];
+  tools?: string[];
+  action_tools?: string[];
+  control_tools?: string[];
+  operator_only_actions?: string[];
+  action_approval?: boolean;
+  action_auto_threshold?: number;
+  control_enabled?: boolean;
+  local_only?: boolean;
+  citations_required?: boolean;
 }
 
 const SUGGESTED: readonly string[] = [
@@ -155,6 +174,9 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
           </button>
         </CollapsibleSection>
 
+        {/* Guardrails — what the model may see and do, and what it left behind */}
+        <GuardrailsCard />
+
         {/* Engine & models */}
         <CollapsibleSection title="Engine & models" defaultOpen={false}>
           <p className="text-[11px] text-txt-3">
@@ -163,6 +185,118 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
           </p>
           <LocalAiSection />
         </CollapsibleSection>
+      </div>
+    </div>
+  );
+}
+
+// The guardrail surface. Two questions an operator is entitled to ask of any
+// model that is allowed near their data — what can it see, and what can it do —
+// answered from the running configuration rather than from documentation, plus
+// the count of model calls this box has actually recorded. The call count is
+// what turns "every model call is audited" from a claim into a number.
+function GuardrailsCard(): JSX.Element {
+  const [rails, setRails] = useState<Guardrails | null>(null);
+  const [calls, setCalls] = useState<number | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [g, c] = await Promise.all([
+        apiFetch('/api/ai/guardrails'),
+        apiFetch('/api/ai/calls?limit=500'),
+      ]);
+      if (!g.ok) {
+        setFailed(true);
+        return;
+      }
+      setRails((await g.json()) as Guardrails);
+      if (c.ok) setCalls(((await c.json()) as unknown[]).length);
+    } catch {
+      setFailed(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <CollapsibleSection title="Guardrails" defaultOpen={false}>
+      <p className="text-[11px] text-txt-3">
+        What the model is allowed to see, what it is allowed to do, and what it did. Read from the
+        running configuration, not from a document.
+      </p>
+      {failed && <p className="mono text-[10px] text-txt-3">guardrail status unavailable</p>}
+      {!rails && !failed && <p className="mono text-[10px] text-txt-3">reading guardrails…</p>}
+      {rails && (
+        <div className="space-y-3">
+          <GuardrailRow
+            label="Can see"
+            value={`clearance ${rails.clearance ?? 0} · ${(rails.compartments ?? []).length ? (rails.compartments ?? []).join(', ') : 'no compartments'} · ${(rails.tools ?? []).length} read tools`}
+          />
+          <GuardrailRow
+            label="Can do"
+            value={`${(rails.action_tools ?? []).length} write-back actions · ${(rails.control_tools ?? []).length} view controls · ${(rails.operator_only_actions ?? []).length} operator-only`}
+          />
+          <GuardrailRow
+            label="Under what rule"
+            value={[
+              rails.action_approval ? 'every write needs operator approval' : 'direct dispatch',
+              (rails.action_auto_threshold ?? 1.01) > 1
+                ? 'no confidence auto-runs'
+                : `auto above ${rails.action_auto_threshold}`,
+              rails.control_enabled ? 'actuation armed' : 'actuation off',
+              rails.citations_required ? 'uncited briefs withheld' : 'uncited briefs served',
+              rails.local_only ? 'local models only' : 'cloud models allowed',
+            ].join(' · ')}
+          />
+          <GuardrailRow
+            label="Audited"
+            value={
+              calls === null
+                ? 'model calls recorded locally: —'
+                : `${calls} model call${calls === 1 ? '' : 's'} recorded on this box`
+            }
+          />
+          <details>
+            <summary className="mono text-[10px] text-txt-3 cursor-pointer hover:text-accent">
+              every tool by name
+            </summary>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {[...(rails.action_tools ?? []), ...(rails.control_tools ?? []), ...(rails.tools ?? [])].map(
+                (t) => (
+                  <span
+                    key={t}
+                    className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
+                      (rails.action_tools ?? []).includes(t)
+                        ? 'border-accent-line text-accent'
+                        : 'border-line-2 text-txt-3'
+                    }`}
+                  >
+                    {t}
+                  </span>
+                ),
+              )}
+            </div>
+          </details>
+        </div>
+      )}
+    </CollapsibleSection>
+  );
+}
+
+function GuardrailRow({ label, value }: { label: string; value: string }): JSX.Element {
+  return (
+    <div className="flex items-start gap-2">
+      <ShieldCheck
+        className="h-3.5 w-3.5 mt-0.5 text-txt-3 shrink-0"
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      <div>
+        <div className="text-[11px] font-semibold text-txt-1">{label}</div>
+        <div className="mono text-[10px] text-txt-2">{value}</div>
       </div>
     </div>
   );

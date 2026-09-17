@@ -441,9 +441,16 @@ async def post_selection_brief(
         #     It looks like provenance, it survives a skim, and an analyst who
         #     checks it finds nothing. Serving it labelled would still put a
         #     fabricated trail in front of someone whose job is checking things.
-        #   cites nothing at all -> SERVE, flagged `grounded: false`. Unsourced
-        #     prose is weaker, not false, and refusing it would delete a useful
-        #     brief over a formatting habit.
+        #   cites nothing at all -> WITHHOLD as `uncited` when
+        #     `llm_require_citations` is on (the default, 2026-09-17 W4). This
+        #     line used to read "SERVE, flagged grounded: false", on the
+        #     reasoning that unsourced prose is weaker rather than false. The
+        #     reasoning was sound and the outcome was still wrong: the flag was
+        #     a field in a JSON body, the prose was a paragraph on a watch
+        #     floor, and nothing downstream refused to render it. A claim an
+        #     analyst cannot trace is not a weak finding, it is not a finding.
+        #     Set LLM_REQUIRE_CITATIONS=0 to restore the flag-and-serve
+        #     behaviour on a deployment that wants it.
         allowed = _allowed_ids(body.kind, body.id, props_json, context_json)
         fabricated = llm.unknown_citations(res.text, allowed)
         if fabricated:
@@ -462,9 +469,23 @@ async def post_selection_brief(
                 "latency_ms": round((time.monotonic() - started) * 1000),
                 "enrichment": enrichment_status,
             }
+        grounded = llm.is_grounded(res.text, allowed)
+        if not grounded and getattr(get_settings(), "llm_require_citations", True):
+            return {
+                "ok": False,
+                "withheld": "uncited",
+                "detail": (
+                    "Assessment withheld: it cited none of the evidence it was "
+                    "given, so no claim in it can be traced back to a record."
+                ),
+                "model": res.model,
+                "backend": res.backend,
+                "latency_ms": latency_ms,
+                "enrichment": enrichment_status,
+            }
         return {
             "ok": True,
-            "grounded": llm.is_grounded(res.text, allowed),
+            "grounded": grounded,
             "text": res.text,
             "model": res.model,
             "backend": res.backend,

@@ -1,10 +1,17 @@
 """Governed write-back actions — pure-logic + dispatch units (hermetic).
 
 Covers: audit-row shape, registry dispatch (unknown action → 404, bad params →
-400), the route auth gate + keyless-boot 200 contract, and a full happy-path
-dispatch of
+400), the route's keyless-boot contract, and a full happy-path dispatch of
 flag_entity / nominate_target / add_watch over a mocked PostgREST so the ontology
 mutation + side effect + audit append are all exercised without a network.
+
+The routes moved from ``current_user`` to ``current_user_or_local`` on
+2026-09-17 (W4), the same decision the ontology took on 2026-07-07: the audit
+sink underneath had had a keyless backend since then, so the only thing the
+Supabase-only dependency still achieved was a 401 on the deployment this
+platform ships as its default. The auth assertions below moved with it —
+``tests/test_multi_user_scoping.py`` keeps the multi-user owner-scoping, and
+``tests/test_writeback_action.py`` keeps the operator gate.
 """
 
 from __future__ import annotations
@@ -24,7 +31,7 @@ from app.intel.actions import (
     dispatch,
     list_actions,
 )
-from app.keys import UserCtx, current_user
+from app.keys import UserCtx, current_user_or_local
 
 # ── pure logic: audit row + catalog ────────────────────────────────────────────
 
@@ -43,7 +50,16 @@ def test_audit_row_shape() -> None:
 
 def test_catalog_lists_first_actions() -> None:
     names = {a["name"] for a in list_actions()}
-    assert names == {"flag_entity", "promote_incident", "nominate_target", "add_watch"}
+    assert names == {
+        "flag_entity",
+        "promote_incident",
+        "nominate_target",
+        "add_watch",
+        "writeback",
+    }
+    # Only the write-back to a system outside the platform carries operator
+    # authority; the four ontology verbs stay analyst-level.
+    assert {a["name"] for a in list_actions() if a["operator_only"]} == {"writeback"}
     # Each entry advertises its param schema for the UI / agent.
     flag = next(a for a in list_actions() if a["name"] == "flag_entity")
     assert "target_id" in flag["params"]
@@ -80,9 +96,15 @@ def test_dispatch_invalid_params_400() -> None:
 # ── route wiring ────────────────────────────────────────────────────────────────
 
 
-def test_actions_route_requires_auth(client: TestClient) -> None:
-    assert client.get("/api/actions").status_code == 401
-    assert client.post("/api/actions/flag_entity", json={}).status_code == 401
+def test_actions_route_serves_keyless(client: TestClient) -> None:
+    """Was ``test_actions_route_requires_auth`` (401 on both), which is what
+    ``current_user`` does when Supabase is unconfigured: it cannot resolve a
+    user, so it refuses. The action queue was therefore unreachable on a keyless
+    box while the audit sink beneath it worked fine. Now the caller is the
+    shared ``local`` identity, exactly as on the ontology routes."""
+    assert client.get("/api/actions").status_code == 200
+    # Still validated: an empty body is a 400, not a silent default.
+    assert client.post("/api/actions/flag_entity", json={}).status_code == 400
 
 
 def _fake_user() -> UserCtx:
@@ -90,7 +112,7 @@ def _fake_user() -> UserCtx:
 
 
 def test_catalog_route_ok_when_authed(client: TestClient) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     try:
         r = client.get("/api/actions")
         assert r.status_code == 200
@@ -99,9 +121,10 @@ def test_catalog_route_ok_when_authed(client: TestClient) -> None:
             "promote_incident",
             "nominate_target",
             "add_watch",
+            "writeback",
         }
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_action_200_when_supabase_unconfigured(client: TestClient) -> None:
@@ -109,7 +132,7 @@ def test_action_200_when_supabase_unconfigured(client: TestClient) -> None:
     # 2026-07-07, always available); the audit append also falls back to a
     # local SQLite sink on a keyless boot (test_actions_local.py), so a
     # missing supabase_url no longer 503s the whole action.
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     try:
         r = client.post(
             "/api/actions/flag_entity",
@@ -118,17 +141,17 @@ def test_action_200_when_supabase_unconfigured(client: TestClient) -> None:
         assert r.status_code == 200
         assert r.json()["ok"] is True
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_action_bad_params_400_via_route(client: TestClient) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     try:
         # missing target_id
         r = client.post("/api/actions/flag_entity", json={"note": "x"})
         assert r.status_code == 400
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 # ── happy-path dispatch over a mocked PostgREST ────────────────────────────────

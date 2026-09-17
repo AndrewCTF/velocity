@@ -1133,6 +1133,80 @@ async def delete_watch_rule(rule_id: str) -> dict[str, Any]:
     return await _delete(f"/api/alerts/rules/{quote(rule_id, safe='')}")
 
 
+# ── governed write-back: propose, then a human approves ──────────────────────
+# The ONLY write path an agent gets. Nothing here dispatches an action: an
+# agent proposes, the operator approves in the console, and approval executes
+# through the same audited `dispatch` a direct POST /api/actions/{name} takes.
+# Every call through this server is already audited at one seam
+# (`_audited_call_tool`, argument NAMES only), so a proposal that is never
+# approved still leaves a record that it was made.
+
+
+@mcp.tool()
+async def propose_action(
+    name: str,
+    params: dict[str, Any] | None = None,
+    confidence: float = 0.0,
+) -> dict[str, Any]:
+    """Queue a governed action for the operator to approve (POST /api/actions/proposals).
+
+    This does NOT run the action. `name` is one of the registered actions
+    (GET /api/actions lists them and their params): flag_entity,
+    promote_incident, nominate_target, add_watch, writeback. `params` is that
+    action's own param object — validated here, so a malformed proposal is
+    rejected now rather than at approval time. `confidence` (0-1) is your own
+    reported confidence and is recorded with the proposal.
+
+    `writeback` writes a record OUT to a system the operator runs (an
+    allow-listed HTTP endpoint, or a Foundry sql connection) and is
+    operator-only: send `dry_run: true` first, which validates the target and
+    the SSRF policy without sending anything.
+
+    Multi-user deployments: this server authenticates with an INTERNAL token
+    that is deliberately never a user (apps/api/CLAUDE.md, Auth), so on a
+    Supabase deployment these four tools answer 401 by design — a write-back
+    has to be attributable to a person, and the internal token is not one. They
+    are for the single-operator box, where the operator IS the one user.
+    """
+    return await _post(
+        "/api/actions/proposals",
+        {"name": name, "params": params or {}, "confidence": confidence},
+    )
+
+
+@mcp.tool()
+async def list_proposals() -> dict[str, Any]:
+    """Pending action proposals awaiting operator approval, oldest first
+    (GET /api/actions/proposals). 401 on a multi-user deployment by design —
+    see propose_action."""
+    return await _get("/api/actions/proposals")
+
+
+@mcp.tool()
+async def approve_proposal(proposal_id: str) -> dict[str, Any]:
+    """Approve and EXECUTE a queued proposal
+    (POST /api/actions/proposals/{id}/approve).
+
+    Only call this when the operator has told you to. The receipt carries the
+    audit row the execution wrote. 404 for an unknown or expired proposal
+    (the queue has a 15-minute TTL); 403 when the action is operator-only and
+    the caller is not the operator; 401 on a multi-user deployment by design —
+    see propose_action."""
+    return await _post(
+        f"/api/actions/proposals/{quote(proposal_id, safe='')}/approve", {}
+    )
+
+
+@mcp.tool()
+async def reject_proposal(proposal_id: str) -> dict[str, Any]:
+    """Drop a queued proposal without executing it
+    (POST /api/actions/proposals/{id}/reject). 401 on a multi-user deployment
+    by design — see propose_action."""
+    return await _post(
+        f"/api/actions/proposals/{quote(proposal_id, safe='')}/reject", {}
+    )
+
+
 # ── deep analysis (DeepSeek reasoner, Ollama fallback) ────────────────────────
 
 _SYS_PROMPT = (

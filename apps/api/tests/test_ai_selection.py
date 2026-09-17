@@ -13,9 +13,34 @@ from app import upstream as upstream_mod
 from app.routes import ai_selection as ais
 
 
+class _NoCitationGate:
+    """The real Settings with ``llm_require_citations`` forced off.
+
+    These tests are about the cache key, the enrichment status and the 409/413
+    contracts, and their stub prose deliberately cites nothing. Since 2026-09-17
+    (W4) an uncited brief is WITHHELD, which would turn every one of them into a
+    test of the citation gate instead of the thing it was written for. The gate
+    itself is owned by ``tests/test_selection_grounding.py`` and
+    ``tests/test_citations_hard.py``, which pin both sides of the switch.
+
+    A delegating proxy, not a stub Settings: ``_gather_context`` passes the same
+    object into the vessel enrichment path.
+    """
+
+    llm_require_citations = False
+
+    def __init__(self, real: object) -> None:
+        self._real = real
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._real, name)
+
+
 @pytest.fixture(autouse=True)
 def _isolate_selection(monkeypatch: pytest.MonkeyPatch):
     llm.set_selection_enabled(True)
+    real_settings = ais.get_settings
+    monkeypatch.setattr(ais, "get_settings", lambda: _NoCitationGate(real_settings()))
     # Fresh cache per test — the module-level TtlCache is shared with every
     # other route, so a stale entry from another test's (kind, id) pair must
     # never leak in here.
