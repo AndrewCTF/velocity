@@ -45,6 +45,10 @@ from app.auth import _bearer, require_ws_key
 from app.config import get_settings
 from app.intel.ontology import Object, get_registry
 from app.keys import UserCtx, multi_user, user_id_for_token
+from app.routes.ontology import (
+    _refuse_overwrite_of_hidden_row,
+    _refuse_write_above_clearance,
+)
 from app.security import Principal, current_principal_or_local
 
 router = APIRouter(tags=["maps"])
@@ -217,14 +221,23 @@ async def save_map(body: MapIn, p: Principal = Depends(current_principal_or_loca
     Persisted as a ``map:`` ontology object via the registry's upsert (unique on
     ``(user_id, id)``), so re-saving the same id replaces the picture rather than
     duplicating it. 503 when Supabase is unconfigured.
+
+    ``id`` makes this an id-keyed overwrite and ``props`` is replaced wholesale,
+    so the same two gates ``routes/ontology.py`` applies to its own upsert apply
+    here: a caller may not classify above their own clearance and may not land a
+    write on a row they are not cleared to read (otherwise a clearance-0 caller
+    declassifies and replaces a classified COP it cannot even GET).
     """
     s = get_settings()
     map_id = body.id or f"{_MAP_KIND}:{uuid.uuid4().hex[:12]}"
     if not map_id.startswith(f"{_MAP_KIND}:"):
         # Defend the namespace: a client must not park arbitrary objects here.
         raise HTTPException(status_code=400, detail="map id must start with 'map:'")
+    obj = _to_object(map_id, body, _now_iso())
+    _refuse_write_above_clearance(p, obj.classification, obj.compartments)
+    await _refuse_overwrite_of_hidden_row(p, map_id)
     reg = _reg(p, s)
-    stored = await reg.upsert(_to_object(map_id, body, _now_iso()))
+    stored = await reg.upsert(obj)
     sm = _from_object(stored)
     if sm is None:  # upsert echoed something unexpected — surface, don't 500 silently
         raise HTTPException(status_code=502, detail="could not save map")
@@ -249,7 +262,13 @@ async def load_map(map_id: str, p: Principal = Depends(current_principal_or_loca
 @router.delete("/api/maps/{map_id:path}", status_code=204)
 async def delete_map(map_id: str, p: Principal = Depends(current_principal_or_local)) -> None:
     """Delete a saved COP (own rows only, RLS-scoped). Idempotent-ish: a missing
-    row is a no-op 204 (PostgREST delete of zero rows still 200/204)."""
+    row is a no-op 204 (PostgREST delete of zero rows still 200/204).
+
+    The same gate as an overwrite, because delete DESTROYS the row: the store's
+    ``delete`` is not clearance-filtered, so without it a clearance-0 caller
+    erases a classified COP it cannot read.
+    """
+    await _refuse_overwrite_of_hidden_row(p, map_id)
     reg = _reg(p)
     await reg.delete(map_id)
 

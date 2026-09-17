@@ -39,6 +39,10 @@ from app.intel import case_export
 from app.intel.ontology import Link, Object, get_registry, kind_of
 from app.intel.ontology_schema import validate_link
 from app.keys import UserCtx
+from app.routes.ontology import (
+    _refuse_overwrite_of_hidden_row,
+    _refuse_write_above_clearance,
+)
 from app.security import Principal, current_principal_or_local
 
 router = APIRouter(tags=["situations"])
@@ -219,12 +223,22 @@ async def list_situations(
 async def create_situation(
     body: SituationIn, p: Principal = Depends(current_principal_or_local)
 ) -> Situation:
-    """Create (insert) or overwrite (when ``id`` is supplied) a situation."""
+    """Create (insert) or overwrite (when ``id`` is supplied) a situation.
+
+    ``id`` makes this an id-keyed overwrite, and ``props`` is replaced wholesale,
+    so the two gates ``routes/ontology.py`` applies to its own upsert apply here
+    too: a caller may not classify above their own clearance and may not land a
+    write on a row they are not cleared to read (otherwise a clearance-0 caller
+    declassifies and erases a classified situation it cannot even GET).
+    """
     sit_id = body.id or f"{_SITUATION_KIND}:{uuid.uuid4().hex[:12]}"
     if not sit_id.startswith(f"{_SITUATION_KIND}:"):
         raise HTTPException(status_code=400, detail="id must start with 'situation:'")
+    obj = _to_object(sit_id, body, _now_iso())
+    _refuse_write_above_clearance(p, obj.classification, obj.compartments)
+    await _refuse_overwrite_of_hidden_row(p, sit_id)
     reg = _reg(p)
-    stored = await reg.upsert(_to_object(sit_id, body, _now_iso()))
+    stored = await reg.upsert(obj)
     sit = _from_object(stored)
     if sit is None:
         raise HTTPException(status_code=502, detail="could not save situation")
@@ -254,7 +268,13 @@ async def get_situation_detail(
 
 @router.delete("/api/situations/{sit_id:path}", status_code=204)
 async def delete_situation(sit_id: str, p: Principal = Depends(current_principal_or_local)) -> None:
-    """Delete a situation (own rows only). A missing row is a no-op."""
+    """Delete a situation (own rows only). A missing row is a no-op.
+
+    The same gate as an overwrite: delete DESTROYS the row, and the store's
+    ``delete`` is not clearance-filtered, so it would happily erase a classified
+    situation the caller cannot read.
+    """
+    await _refuse_overwrite_of_hidden_row(p, sit_id)
     reg = _reg(p)
     await reg.delete(sit_id)
 
@@ -279,7 +299,13 @@ async def link_child(
     The one relationship-write the Situation/COA feature needs (``routes/ontology.py``
     exposes object upsert + traversal but no link route). Idempotent on
     ``(user_id, src, dst, rel)``.
+
+    Both ids are caller-supplied and both are written — ``link`` inserts the edge
+    and the promote below MERGES into ``dst`` — so a hidden endpoint is refused on
+    either side before either write lands.
     """
+    await _refuse_overwrite_of_hidden_row(p, sit_id)
+    await _refuse_overwrite_of_hidden_row(p, body.dst)
     reg = _reg(p)
     link = await reg.link(Link(src=sit_id, dst=body.dst, rel=body.rel, props=body.props))
     # Promote the child to a durable object (Move 1). Without this the child is a

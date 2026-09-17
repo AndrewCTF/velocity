@@ -338,3 +338,105 @@ def test_a_new_situation_gets_the_kind_column_and_still_lists(
 
     assert [s["id"] for s in client.get("/api/situations").json()] == [sit_id]
     assert client.get(f"/api/situations/{sit_id}").status_code == 200
+
+
+# ── 5. the write gate on the id-keyed routers (W4-1) ──────────────────────────
+# The read filter hides a classified row, but every id-keyed WRITE on the
+# situations/maps routers went straight to ``reg.upsert``/``reg.link``/
+# ``reg.delete`` with no visibility check, and ``props`` is a wholesale replace:
+# a clearance-0 caller could overwrite (and declassify) or delete a level-4
+# situation / COP it cannot even read. ``routes/ontology.py`` already had the two
+# gates (``_refuse_write_above_clearance`` / ``_refuse_overwrite_of_hidden_row``);
+# these pin that the other two routers carry them too.
+
+_HIDDEN_SIT = "situation:classified"
+_HIDDEN_MAP = "map:classified"
+
+
+async def _seed_named_hidden_rows() -> None:
+    """One level-4 situation and one level-4 COP, written with NO principal (the
+    internal, unfiltered path)."""
+    writer = _reg(None)
+    await writer.upsert(
+        Object(
+            id=_HIDDEN_SIT,
+            props={
+                "kind": "situation",
+                "name": "SECRET OP",
+                "summary": "classified fact",
+            },
+            classification=4,
+        )
+    )
+    await writer.upsert(
+        Object(
+            id=_HIDDEN_MAP,
+            props={"kind": "map", "name": "SECRET COP", "state": {}},
+            classification=4,
+        )
+    )
+
+
+def test_a_hidden_situation_cannot_be_overwritten_or_deleted(client: TestClient) -> None:
+    asyncio.run(_seed_named_hidden_rows())
+
+    r = client.post(
+        "/api/situations",
+        json={"id": _HIDDEN_SIT, "name": "pwned by clearance 0"},
+    )
+    assert r.status_code == 403, r.text
+    assert client.delete(f"/api/situations/{_HIDDEN_SIT}").status_code == 403
+
+    # The refusal is BEFORE the write: level and props survive untouched.
+    obj = asyncio.run(_reg(None).get(_HIDDEN_SIT))
+    assert obj is not None
+    assert obj.classification == 4
+    assert obj.props["name"] == "SECRET OP"
+
+
+def test_a_hidden_situation_cannot_be_linked_to_or_from(client: TestClient) -> None:
+    asyncio.run(_seed_named_hidden_rows())
+    asyncio.run(_seed())  # level-4 incident:ts-only + its level-0 neighbour
+
+    # Linking FROM a hidden situation writes the edge on src=sit_id.
+    r = client.post(f"/api/situations/{_HIDDEN_SIT}/link", json={"dst": _OPEN})
+    assert r.status_code == 403, r.text
+
+    # Linking TO a hidden child writes the edge AND ``assert_props``-merges into
+    # the dst, so the dst gate has to fire before either write.
+    r = client.post("/api/situations/situation:mine/link", json={"dst": _SECRET})
+    assert r.status_code == 403, r.text
+    assert asyncio.run(_reg(None).traverse("situation:mine", depth=1)).links == []
+
+    obj = asyncio.run(_reg(None).get(_SECRET))
+    assert obj is not None and obj.classification == 4
+
+
+def test_a_hidden_map_cannot_be_overwritten_or_deleted(client: TestClient) -> None:
+    asyncio.run(_seed_named_hidden_rows())
+
+    r = client.post("/api/maps", json={"id": _HIDDEN_MAP, "name": "pwned"})
+    assert r.status_code == 403, r.text
+    assert client.delete(f"/api/maps/{_HIDDEN_MAP}").status_code == 403
+
+    obj = asyncio.run(_reg(None).get(_HIDDEN_MAP))
+    assert obj is not None
+    assert obj.classification == 4
+    assert obj.props["name"] == "SECRET COP"
+
+
+def test_export_and_coa_answer_like_absence_for_a_hidden_situation(
+    client: TestClient,
+) -> None:
+    """Neither handler writes — so the destructive-write 403 gate does not apply —
+    but both are POST-shaped and take a caller id, so pin that they reach nothing
+    above the caller's clearance and leave the row untouched (the read filter is
+    their gate, and out-of-clearance reads answer like absence, not 403)."""
+    asyncio.run(_seed_named_hidden_rows())
+
+    r = client.post(f"/api/situations/{_HIDDEN_SIT}/export", json={"fmt": "json"})
+    assert r.status_code == 404, r.text
+    assert client.post(f"/api/situations/{_HIDDEN_SIT}/coa/propose").status_code == 404
+
+    obj = asyncio.run(_reg(None).get(_HIDDEN_SIT))
+    assert obj is not None and obj.props["name"] == "SECRET OP"
