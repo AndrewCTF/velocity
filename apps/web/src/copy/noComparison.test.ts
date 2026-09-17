@@ -28,6 +28,20 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
 }
 
+// Remove every `open … close` span from `text`; a dangling open runs to the end.
+function stripBlocks(text: string, open: string, close: string): string {
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const a = text.indexOf(open, i);
+    if (a < 0) return out + text.slice(i);
+    out += text.slice(i, a);
+    const b = text.indexOf(close, a + open.length);
+    if (b < 0) return out;
+    i = b + close.length;
+  }
+}
+
 describe('no brand comparison in user-facing copy', () => {
   it('apps/web source strings and JSX text never name Palantir or Gotham', () => {
     const hits: string[] = [];
@@ -49,15 +63,9 @@ describe('no brand comparison in user-facing copy', () => {
 
   it('the website copy never compares the product to Palantir or Gotham', () => {
     const html = readFileSync(join(REPO, 'website', 'index.html'), 'utf8');
-    // Strip comments until nothing changes: a single pass can leave a comment
-    // that was assembled by the removal of another (CodeQL js/incomplete-
-    // multi-character-sanitization), and this guard reads the result.
-    let body = html;
-    for (;;) {
-      const next = body.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-      if (next === body) break;
-      body = next;
-    }
+    // Drop comment blocks with a scanner, not a regex (CodeQL flags regex
+    // comment stripping as sanitization); this guard only reads the result.
+    const body = stripBlocks(stripBlocks(html, '<!--', '-->'), '/*', '*/');
     const hits = body.split('\n').filter((l) => BRAND.test(l));
     expect(hits).toEqual([]);
   });
