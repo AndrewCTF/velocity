@@ -404,7 +404,13 @@ async def upload_document(
         raise HTTPException(status_code=404, detail="dataset not found")
     content = await read_capped(file, foundry_store_mod.MAX_UPLOAD_BYTES)
     try:
-        row = documents_mod.document_row(file.filename or "document", content)
+        # A large docx/pdf can take seconds to sha256 + parse — keep it off
+        # the event loop the 1 s ADS-B tick and the /ws/adsb push share,
+        # for the same reason routes/evidence.py re-hashes its blobs in a
+        # thread ("a synchronous hash here would block the 1 s ADS-B poll").
+        row = await asyncio.to_thread(
+            documents_mod.document_row, file.filename or "document", content
+        )
     except documents_mod.DocumentExtractError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     try:

@@ -27,7 +27,7 @@ from app.audit import audit, audit_mutation
 from app.intel import resolve
 from app.intel.ontology import Link, get_registry, kind_of
 from app.keys import UserCtx, current_user_or_local
-from app.security import require_operator
+from app.security import Principal, current_principal_or_local, require_operator
 
 router = APIRouter(tags=["resolve"], dependencies=[Depends(audit_mutation)])
 
@@ -36,6 +36,12 @@ router = APIRouter(tags=["resolve"], dependencies=[Depends(audit_mutation)])
 async def get_candidates(
     status: str = Query("open"),
     limit: int = Query(100, ge=1, le=1000),
+    # Same principal resolution as the two POSTs (whose require_operator
+    # gate rides on this very dependency): a keyless box degrades to the
+    # local principal exactly like the ontology reads, but the route now
+    # CARRIES the dependency, so the anti-rot walk over read routes sees it
+    # and a future user-scoped change cannot quietly bypass it.
+    p: Principal = Depends(current_principal_or_local),
 ) -> list[dict[str, Any]]:
     return resolve.list_candidates(status=status, limit=limit)
 

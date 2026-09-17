@@ -245,3 +245,64 @@ def test_extract_query_param_never_fails_the_upload_when_the_model_is_unavailabl
         # If a local model IS reachable in this environment, the shape is
         # still checked rather than skipped outright.
         assert "entities" in body["extracted"]
+
+
+def test_document_extraction_runs_off_the_event_loop(
+    client: TestClient, dataset: str, monkeypatch
+) -> None:
+    """W6-2 regression: the sha256 + docx/pdf parse of an upload can take
+    seconds, and it used to run inline on the event loop the 1 s ADS-B tick
+    and the /ws/adsb push share. The route hands it to a worker thread —
+    record the thread id from inside a spy on ``document_row`` and prove it
+    is not the thread the loop runs on. Also: the offload must not change
+    what lands — the row matches a direct ``document_row`` call field for
+    field."""
+    import threading
+
+    from app.routes import foundry as F
+
+    # The loop's OWN thread, captured from inside the route (an inline
+    # call of document_row would run here; a to_thread'ed call does not).
+    # read_capped is awaited first, on the loop thread, in every variant.
+    loop_threads: set[int] = set()
+    real = D.document_row
+    real_read_capped = F.read_capped
+
+    async def read_capped_spy(file, cap: int):  # type: ignore[no-untyped-def]
+        loop_threads.add(threading.get_ident())
+        return await real_read_capped(file, cap)
+
+    monkeypatch.setattr(F, "read_capped", read_capped_spy)
+    seen: list[int] = []
+
+    def spy(filename: str, data: bytes):
+        seen.append(threading.get_ident())
+        return real(filename, data)
+
+    monkeypatch.setattr(D, "document_row", spy)
+
+    data = _make_docx(["Off the loop."])
+    expected = real("offloop.docx", data)
+    r = client.post(
+        f"/api/foundry/datasets/{dataset}/documents",
+        files={
+            "file": (
+                "offloop.docx",
+                io.BytesIO(data),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert len(seen) == 1, "the route must call document_row exactly once"
+    assert loop_threads, "read_capped spy did not run"
+    assert seen[0] not in loop_threads, (
+        "document extraction ran ON the event loop — it must be "
+        "to_thread'd, like routes/evidence.py's blob re-hash"
+    )
+
+    rows = client.get(f"/api/foundry/datasets/{dataset}/rows").json()["rows"]
+    assert len(rows) == 1, rows
+    row = rows[0]
+    for key in ("doc_id", "filename", "sha256", "title", "text", "pages"):
+        assert row[key] == expected[key], key

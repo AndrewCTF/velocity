@@ -200,6 +200,24 @@ def flight_logs_db(tmp_path):  # type: ignore[no-untyped-def]
     return path, f"sqlite:///{path}"
 
 
+@pytest.fixture
+def tied_logs_db(tmp_path):  # type: ignore[no-untyped-def]
+    """The W6-1 case (docs/reviews/palantir-stack-2026-09-17.md): three rows
+    share ONE cursor value, so a batch of 2 ends mid-way through the run of
+    equals. With the old strict ``>`` filter the cursor pinned at that value
+    and the third row was never pulled again."""
+    path = tmp_path / "tied.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE tied_logs (seq INTEGER, note TEXT)")
+    con.executemany(
+        "INSERT INTO tied_logs (seq, note) VALUES (?,?)",
+        [(1, "T1"), (1, "T2"), (1, "T3")],
+    )
+    con.commit()
+    con.close()
+    return path, f"sqlite:///{path}"
+
+
 @pytest.mark.anyio
 async def test_table_cursor_pull_writes_the_delta_as_its_own_version(
     flight_logs_db: tuple, client, monkeypatch
@@ -390,3 +408,83 @@ async def test_table_mode_requires_a_cursor_column(monkeypatch) -> None:
             None,  # type: ignore[arg-type]
             {"config": {"dsn_env": "OSINT_SQL_DSN_ERP2", "table": "flight_logs"}},
         )
+
+
+@pytest.mark.anyio
+async def test_table_cycle_pulls_every_row_sharing_the_boundary_cursor(
+    tied_logs_db: tuple, client, monkeypatch
+) -> None:
+    """W6-1 regression: three rows at seq=1, batch 2. With the old strict
+    ``>`` filter, cycle 1 pulled two rows, pinned cursor_value=1, and the
+    third row was lost FOREVER — every later cycle returned 0 rows while
+    the connection kept marking itself healthy. The fix re-fetches
+    ``>=`` the boundary and pages until a short page, so the row the batch
+    left behind surfaces in the SAME cycle; the persisted full-row hash
+    set drops exactly the rows already ingested at that value, so the next
+    cycle is a no-op — and a fresh row arriving at the still-pinned value
+    still lands (dedupe is per (cursor value, row), not per cursor value)."""
+    db_path, dsn = tied_logs_db
+    monkeypatch.setenv("OSINT_SQL_DSN_TIED", dsn)
+
+    from app.config import get_settings
+    from app.foundry.store import FoundryStore
+
+    store = FoundryStore(get_settings())
+    ds = client.post("/api/foundry/datasets", json={"name": "tied_ds"}).json()
+    created = client.post(
+        "/api/foundry/connections",
+        json={
+            "name": "tied",
+            "kind": "sql",
+            "dataset_id": ds["id"],
+            "config": {
+                "dsn_env": "OSINT_SQL_DSN_TIED",
+                "table": "tied_logs",
+                "cursor_column": "seq",
+                "batch": 2,
+                "interval_s": 30,
+            },
+            "enabled": False,
+        },
+    ).json()
+
+    # Cycle 1: the batch of 2 ends mid-tie, and the catch-up pagination
+    # inside the cycle surfaces the straggler in the SAME cycle.
+    n1 = await C._run_sql_table_cycle(sqlalchemy, store, dict(created), dsn)
+    assert n1 == 3, "the row the batch left behind must not wait for a cycle"
+    conn1 = await store.get_connection(created["id"])
+    assert conn1["config"]["cursor_value"] == 1
+    assert len(conn1["config"].get("cursor_hashes", [])) == 3, (
+        "the boundary-dedupe bookkeeping must be persisted next to the cursor"
+    )
+
+    # Nothing new since: the re-fetched boundary rows are fully deduplicated
+    # — zero rows, no second version (no duplicate re-ingest).
+    n2 = await C._run_sql_table_cycle(sqlalchemy, store, dict(conn1), dsn)
+    assert n2 == 0, "the re-fetched boundary rows must dedupe, not re-land"
+    counts = {
+        v["version"]: v["row_count"]
+        for v in client.get(f"/api/foundry/datasets/{ds['id']}/versions").json()
+    }
+    assert counts == {1: 3}, counts
+
+    # A fresh row arrives at the still-pinned value: it is not a re-fetch
+    # of an ingested row, so it lands.
+    con = sqlite3.connect(db_path)
+    con.execute("INSERT INTO tied_logs (seq, note) VALUES (1, 'T4')")
+    con.commit()
+    con.close()
+    conn2 = await store.get_connection(created["id"])
+    n3 = await C._run_sql_table_cycle(sqlalchemy, store, dict(conn2), dsn)
+    assert n3 == 1, "a NEW row at the pinned value must still be pulled"
+    conn3 = await store.get_connection(created["id"])
+    assert conn3["config"]["cursor_value"] == 1, "the boundary stays pinned"
+    assert len(conn3["config"].get("cursor_hashes", [])) == 4, (
+        "with the boundary pinned the hash set accumulates, so a row "
+        "ingested two cycles ago at this value is still recognised"
+    )
+    counts = {
+        v["version"]: v["row_count"]
+        for v in client.get(f"/api/foundry/datasets/{ds['id']}/versions").json()
+    }
+    assert counts == {1: 3, 2: 1}, counts

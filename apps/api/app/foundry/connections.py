@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import logging
 import os
@@ -301,7 +302,8 @@ async def _run_sql_table_cycle(
     sqlalchemy_mod: Any, store: FoundryStore, conn: dict[str, Any], dsn: str
 ) -> int:
     """One incremental pull of a named table: reflect its columns, select rows
-    where ``cursor_column`` is past the last persisted ``cursor_value``, write
+    where ``cursor_column`` is at or past the last persisted ``cursor_value``
+    (``>=``, see below), write
     them as ONE new version (the delta only, never the whole table), and
     persist the new cursor on the connection's config.
 
@@ -309,6 +311,15 @@ async def _run_sql_table_cycle(
     identifiers at the route boundary (``routes/foundry.py``) and are never
     spliced into a query string; the value side goes through SQLAlchemy Core
     exactly like the existing query-mode path.
+
+    The pull filter is ``>=`` the persisted cursor, not ``>``, because the
+    cursor column is operator-chosen and not guaranteed unique: a batch that
+    ends mid-way through a run of equal cursor values would otherwise pin
+    the cursor there and never pull the remaining equal rows again. The
+    re-pulled boundary rows are deduped by the ``cursor_hashes`` set — the
+    full-row digests of the rows ingested AT that exact cursor value,
+    persisted next to ``cursor_value`` — so a genuinely new row arriving at
+    a still-pinned boundary value is still picked up.
     """
     cfg = conn["config"]
     table = str(cfg.get("table") or "")
@@ -317,6 +328,13 @@ async def _run_sql_table_cycle(
         raise ValueError("a table-mode sql connection needs a cursor_column")
     batch = max(1, min(int(cfg.get("batch") or 5000), 50_000))
     last_cursor = cfg.get("cursor_value")
+    # Full-row digests of the rows already ingested at the LAST persisted
+    # cursor value; the >= filter re-fetches those rows every cycle, and
+    # only their exact re-fetch is dropped (see _row_hash). Absent on
+    # connections created before this fix, in which case the first cycle
+    # after the upgrade re-ingests the boundary rows (duplicates, not
+    # silent loss) and re-seeds the set.
+    ingested_boundary_hashes = set(cfg.get("cursor_hashes") or [])
 
     def _pull() -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
         engine = sqlalchemy_mod.create_engine(dsn)
@@ -330,20 +348,54 @@ async def _run_sql_table_cycle(
                 sqlalchemy_mod.select(*tbl.c)
                 .select_from(tbl)
                 .order_by(cursor_col)
-                .limit(batch)
             )
             params: dict[str, Any] = {}
             if last_cursor is not None:
-                stmt = stmt.where(cursor_col > sqlalchemy_mod.bindparam("cursor_after"))
+                # >=, not >: rows sharing the boundary value that did not fit
+                # the previous batch are still in the table. The dedupe for
+                # the re-fetched, already-ingested boundary rows happens in
+                # the caller, on the full-row hash.
+                stmt = stmt.where(
+                    cursor_col >= sqlalchemy_mod.bindparam("cursor_after")
+                )
                 params["cursor_after"] = last_cursor
             with engine.connect() as c:
-                result = c.execute(stmt, params)
-                rows = [dict(zip(col_names, r, strict=True)) for r in result]
+                # Page until a SHORT page comes back, not one batch per
+                # cycle: with the >= re-fetch a full page can be clogged by
+                # already-ingested boundary rows, and the rows the previous
+                # cycle's batch left behind must still surface THIS cycle —
+                # one batch per cycle is exactly how the remainder stayed
+                # hidden while the connection reported healthy. A short
+                # page means the tail of the >= window was reached, and a
+                # large backlog catches up in one go.
+                rows: list[dict[str, Any]] = []
+                offset = 0
+                while True:
+                    page = c.execute(
+                        stmt.limit(batch).offset(offset), params
+                    ).fetchall()
+                    rows.extend(dict(zip(col_names, r, strict=True)) for r in page)
+                    if len(page) < batch:
+                        break
+                    offset += len(page)
             return rows, schema
         finally:
             engine.dispose()
 
     rows, schema = await asyncio.get_running_loop().run_in_executor(None, _pull)
+    if last_cursor is not None:
+        # The >= filter re-fetched every row still at the boundary value.
+        # Drop exactly the ones ingested at that value in an earlier cycle;
+        # any row with a cursor value PAST the boundary is new by
+        # construction and always lands.
+        rows = [
+            row
+            for row in rows
+            if not (
+                row.get(cursor_column) == last_cursor
+                and _row_hash(row) in ingested_boundary_hashes
+            )
+        ]
     if rows:
         # Each cycle's delta is its own version — this is the whole point of a
         # cursor pull over a table: growth by the new rows only, never a copy
@@ -359,6 +411,21 @@ async def _run_sql_table_cycle(
         # delta forever.
         if not isinstance(new_cursor, (str, int, float, bool)) and new_cursor is not None:
             new_cursor = str(new_cursor)
+        # Carry the boundary's ingested hashes forward for the NEXT cycle:
+        # if the boundary advanced, the old value is never re-fetched again
+        # and its set is discarded; if it is pinned (the batch is still
+        # inside one run of equal cursor values), the set ACCUMULATES, so a
+        # row ingested two cycles ago at this value is still recognised as
+        # already-landed.
+        tail_cursor = rows[-1].get(cursor_column)
+        tail_hashes = {
+            _row_hash(row) for row in rows if row.get(cursor_column) == tail_cursor
+        }
+        if new_cursor == last_cursor:
+            boundary_hashes = ingested_boundary_hashes | tail_hashes
+        else:
+            boundary_hashes = tail_hashes
+        cursor_hashes = sorted(boundary_hashes)
         # Re-read the row rather than trust the `conn` this task started with:
         # an operator PUT (disable, retarget the dataset, edit the query) in
         # the meantime must not be clobbered by this cycle writing back a
@@ -371,7 +438,11 @@ async def _run_sql_table_cycle(
             await store.update_connection(
                 conn["id"],
                 dataset_id=fresh["dataset_id"],
-                config={**fresh["config"], "cursor_value": new_cursor},
+                config={
+                    **fresh["config"],
+                    "cursor_value": new_cursor,
+                    "cursor_hashes": cursor_hashes,
+                },
                 enabled=fresh["enabled"],
             )
             # Keep the in-process copy in step so a second cycle inside the
@@ -379,10 +450,22 @@ async def _run_sql_table_cycle(
             # row) starts from the cursor just persisted, not the one it was
             # created with.
             cfg["cursor_value"] = new_cursor
+            cfg["cursor_hashes"] = cursor_hashes
         # else: the connection was edited or deleted out from under this
         # cycle; the rows are already safely versioned, and reconcile() will
         # cancel/restart (or leave stopped) this task on its next tick.
     return len(rows)
+
+
+def _row_hash(row: dict[str, Any]) -> str:
+    """Stable digest of a FULL row (cursor column included), for the boundary
+    dedupe of a >= re-pull: two rows ingested at the same cursor value are
+    the same row only if every column of it is equal. `default=str` makes
+    timestamp/Decimal cursor values hash the same way they round-trip
+    through the JSON connection config (the same stringification applied to
+    the persisted cursor_value)."""
+    payload = json.dumps(row, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 async def _run_sql(store: FoundryStore, conn: dict[str, Any]) -> None:
@@ -483,7 +566,10 @@ def _fingerprint(conn: dict[str, Any]) -> str:
     # (the only way a cursor survives a restart); excluded here so recording
     # progress does not read as "an edit made in the UI" and bounce the task
     # every reconcile tick instead of only on a REAL config change.
-    cfg = {k: v for k, v in conn["config"].items() if k != "cursor_value"}
+    # `cursor_hashes` is the runner's boundary-dedupe bookkeeping, written
+    # right next to cursor_value, and is excluded the same way.
+    _runner_keys = ("cursor_value", "cursor_hashes")
+    cfg = {k: v for k, v in conn["config"].items() if k not in _runner_keys}
     return json.dumps([conn["kind"], conn["dataset_id"], cfg], sort_keys=True)
 
 

@@ -416,15 +416,18 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     return oldestPromise;
   }
 
-  async function fetchOwnChunk(startSec: number, endSec: number, kindFilter: 'vessel' | null): Promise<Track[]> {
-    const key = `own:${startSec}:${kindFilter ?? 'all'}`;
+  async function fetchOwnChunk(
+    startSec: number,
+    endSec: number,
+    kindFilter: 'aircraft' | 'vessel',
+  ): Promise<Track[]> {
+    const key = `own:${startSec}:${kindFilter}`;
     const cached = cacheGet(key);
     if (cached !== undefined) return (cached as Track[] | null) ?? [];
-    const kindQ = kindFilter ? `&kind=${kindFilter}` : '';
     const bboxQ = bboxQueryParam(widenedViewDeg(viewer));
     try {
       const r = await apiFetch(
-        `/api/history/tracks?from_ts=${startSec}&to_ts=${endSec}&limit_ids=2000${kindQ}${bboxQ}`,
+        `/api/history/tracks?from_ts=${startSec}&to_ts=${endSec}&limit_ids=2000&kind=${kindFilter}${bboxQ}`,
       );
       if (!r.ok) {
         cacheSet(key, null);
@@ -494,11 +497,23 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     let sawOwn = false;
     let sawUpstream = false;
 
-    const ownTracks = await fetchOwnChunk(startSec, endSec, aircraftFromUpstream ? 'vessel' : null);
-    for (const tr of ownTracks) {
-      for (const [lon, lat, t, trackDeg] of tr.points) {
-        upsertSample(tr.id, tr.kind, lon, lat, t, trackDeg ?? null, CHUNK_SEC);
-        sawOwn = true;
+    // One request PER KIND, each with its own id budget. Asking for both kinds
+    // in a single kind-less call starves vessels: the backend orders by id and
+    // 'aircraft:' sorts before 'vessel:', so 2,000 aircraft consume the whole
+    // limit_ids and the response carries no vessel at all (measured live
+    // 2026-09-17 — a replayed own-archive half hour drew 2,000 aircraft / 0
+    // vessels). Aircraft older than the archive come from upstream and so need
+    // no own-archive request; vessels are always the own archive.
+    const ownKinds: Array<'aircraft' | 'vessel'> = aircraftFromUpstream
+      ? ['vessel']
+      : ['aircraft', 'vessel'];
+    const ownBatches = await Promise.all(ownKinds.map((k) => fetchOwnChunk(startSec, endSec, k)));
+    for (const ownTracks of ownBatches) {
+      for (const tr of ownTracks) {
+        for (const [lon, lat, t, trackDeg] of tr.points) {
+          upsertSample(tr.id, tr.kind, lon, lat, t, trackDeg ?? null, CHUNK_SEC);
+          sawOwn = true;
+        }
       }
     }
 

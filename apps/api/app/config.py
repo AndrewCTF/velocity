@@ -421,6 +421,10 @@ class Settings(BaseSettings):
     # of the ids it was given is withheld, not served flagged. Off only for a
     # deployment that wants prose over provenance.
     llm_require_citations: bool = True  # LLM_REQUIRE_CITATIONS
+    # Audit READS as well as writes (2026-09-17). Off by default: the hash
+    # chain grows one row per GET, which a single-analyst box does not need;
+    # a multi-user or classified deployment turns it on.
+    audit_reads: bool = False  # AUDIT_READS
     api_base: str = "http://localhost:8000"  # API_BASE (MCP → backend)
 
     # ── Local model manager (app.localllm) — Unsloth GGUF catalog + engines ──

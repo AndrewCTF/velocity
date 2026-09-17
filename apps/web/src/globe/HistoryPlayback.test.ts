@@ -273,6 +273,56 @@ describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk bounda
     expect(lon1).toBeCloseTo(35.0, 3);
   });
 
+  it('an own-archive half hour asks for aircraft and vessel SEPARATELY so the id budget cannot starve vessels', async () => {
+    const { viewer, getDs } = fakeViewer();
+    const calls: string[] = [];
+    // The backend's real answer (apps/api/app/routes/history.py get_tracks):
+    // `kind=` filters to one kind; omitted, it returns ids ordered by id and
+    // 'aircraft:' sorts before 'vessel:', so once aircraft saturate
+    // limit_ids=2000 a kind-less half hour answers aircraft-ONLY — exactly the
+    // live 2026-08-20 14:30 UTC replay that drew 2,000 aircraft / 0 vessels.
+    mockedFetch.mockReset();
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      calls.push(u);
+      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
+      if (u.startsWith('/api/history/tracks')) {
+        const q = new URL(u, 'http://local').searchParams;
+        const ts = Number(q.get('from_ts')) + 60;
+        if (q.get('kind') === 'vessel') {
+          return jsonResponse({
+            tracks: [{ id: 'vessel:257123456', kind: 'vessel', points: [[10.0, 50.0, ts, 180]] }],
+          });
+        }
+        return jsonResponse({
+          tracks: [{ id: 'aircraft:af351f', kind: 'aircraft', points: [[35.0, 33.0, ts, 90]] }],
+        });
+      }
+      return jsonResponse({});
+    });
+
+    const startMs = Date.UTC(2026, 7, 20, 14, 30, 0); // the measured half hour
+    const controller = installHistoryPlayback(viewer);
+    await controller.loadAt(startMs, startMs + CHUNK_MS);
+
+    const tracksCalls = calls.filter((u) => u.startsWith('/api/history/tracks'));
+    expect(tracksCalls, 'the own archive must be asked once per kind').toHaveLength(2);
+    const aircraftCall = tracksCalls.find((u) => u.includes('kind=aircraft'));
+    const vesselCall = tracksCalls.find((u) => u.includes('kind=vessel'));
+    expect(aircraftCall, 'no kind=aircraft own-archive request').toBeDefined();
+    expect(vesselCall, 'no kind=vessel own-archive request').toBeDefined();
+    for (const call of [aircraftCall!, vesselCall!]) {
+      expect(new URL(call, 'http://local').searchParams.get('limit_ids')).toBe('2000');
+    }
+
+    const ds = getDs();
+    expect(ds.entities.getById('hist:aircraft:af351f'), 'own-archive aircraft missing').toBeDefined();
+    expect(
+      ds.entities.getById('hist:vessel:257123456'),
+      'own-archive vessel missing — starved by the aircraft id budget',
+    ).toBeDefined();
+  });
+
   it('loadAt() resets the previous window — a fresh jump does removeAll, unlike a chunk-boundary tick', async () => {
     const { viewer, getDs } = fakeViewer();
     mockedFetch.mockReset();
