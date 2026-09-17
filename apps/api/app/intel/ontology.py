@@ -31,11 +31,13 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
+from app.intel import classification as clf
 from app.intel.ontology_schema import REL_TYPES
 from app.keys import UserCtx
 
 if TYPE_CHECKING:  # runtime import lives in get_registry (module cycle)
     from app.intel.ontology_local import SqliteRegistry
+    from app.security import Principal
 
 # ── canonical object kinds ────────────────────────────────────────────────────
 # Derived from the id prefix. "object" is the catch-all for an id whose prefix we
@@ -59,10 +61,15 @@ if TYPE_CHECKING:  # runtime import lives in get_registry (module cycle)
 # (docs/roadmap-practitioners-2026-07.md) — app/intel/evidence.py mints
 # evidence:<sha256> content-addressed capture objects. Listing uses props.kind
 # (like situation), so evidence objects set it in props too.
+# "situation" joined 2026-09-17: routes/situations.py has always minted
+# `situation:<hex>` ids, so ``normalised()`` now stamps the kind COLUMN on new
+# writes instead of leaving them in the catch-all. ``props.kind`` is still
+# written and is still what ``list_by_kind`` / ``_from_object`` read, so rows
+# saved before this (kind column = "object") keep listing and loading.
 ObjectKind = Literal[
     "aircraft", "vessel", "incident", "sim",
     "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
-    "person", "username", "investigation",
+    "person", "username", "investigation", "situation",
     "url", "wallet", "tx", "file",
     "country", "resource",
     "evidence",
@@ -85,7 +92,7 @@ _KNOWN_KINDS: frozenset[str] = frozenset(
     (
         "aircraft", "vessel", "incident", "sim",
         "domain", "ip", "cert", "asn", "service", "threat", "org", "email",
-        "person", "username", "investigation",
+        "person", "username", "investigation", "situation",
         "url", "wallet", "tx", "file",
         "country", "resource",
         "evidence",
@@ -388,17 +395,55 @@ class _GraphWalk:
         )
 
 
+# ── clearance visibility (the ONE read predicate) ─────────────────────────────
+
+
+def visible_to(
+    principal: Principal | None, level: object, compartments: object
+) -> bool:
+    """May ``principal`` read a row carrying ``level``/``compartments``?
+
+    THE single read predicate for the ontology. ``SqliteRegistry`` applies it to
+    every row it returns; ``routes/evidence.py`` applies it to the rows it gets
+    back from ``intel/evidence.py`` (which builds its own registry). One
+    function so the two paths can never drift.
+
+    ``principal is None`` means "no HTTP caller" — the internal writers
+    (promotion, watch officer, evidence capture, Foundry binding, workflow
+    blocks) keep seeing everything, exactly as before. Filtering is an edge
+    concern: a route that has a principal passes it, a background task does not.
+
+    Duck-typed on ``.clearance`` / ``.compartments`` so this module never
+    imports ``app.security`` at runtime (``security`` → ``auth`` → ``config``
+    is a chain the ontology spine must stay out of).
+    """
+    if principal is None:
+        return True
+    return clf.can_read(
+        principal.clearance, list(principal.compartments), level, compartments
+    )
+
+
 # ── backend selection ─────────────────────────────────────────────────────────
 
 
-def get_registry(ctx: UserCtx, settings: Settings | None = None) -> SqliteRegistry:
+def get_registry(
+    ctx: UserCtx,
+    settings: Settings | None = None,
+    *,
+    principal: Principal | None = None,
+) -> SqliteRegistry:
     """The ontology store for this caller — the local SQLite registry.
 
     2026-07-07: the operator invoked the kill criterion and deleted the
     Supabase/PostgREST backend (docs/decisions.md) — the local spine is the
     only store. The factory stays so call sites and a future remote backend
     (if ever re-earned) keep one seam. Late import avoids a module cycle.
+
+    ``principal`` (keyword-only, default ``None``) is the clearance the reads
+    are filtered against — see ``visible_to``. Omitting it is the unfiltered
+    internal path, so every existing call site is unchanged.
     """
     from app.intel.ontology_local import SqliteRegistry
 
-    return SqliteRegistry(ctx, settings or get_settings())
+    return SqliteRegistry(ctx, settings or get_settings(), principal=principal)

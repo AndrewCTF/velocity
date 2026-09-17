@@ -48,8 +48,9 @@ const STEPS: Step[] = [
       <>
         Velocity fuses real-time <b className="text-txt-1">ADS-B aircraft</b>,{' '}
         <b className="text-txt-1">AIS vessels</b>, satellites, imagery, ground photos, ACARS
-        and digital OSINT onto one Cesium globe, with a Palantir-Gotham-style analyst
-        workflow on top. The core feeds run <span className="text-accent">keyless</span>: open
+        and digital OSINT onto one Cesium globe, records every position it sees to your
+        own disk, and keeps an analyst workflow on top: cases, custody-chained
+        evidence and a verifiable audit log. The core feeds run <span className="text-accent">keyless</span>: open
         it and aircraft, ships, quakes and satellites are already moving.
       </>
     ),

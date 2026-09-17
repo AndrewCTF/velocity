@@ -101,7 +101,14 @@ def test_selection_brief_access_path(client: TestClient, monkeypatch: pytest.Mon
     async def _chat(messages, *, tier="fast", max_tokens=1024, label="", **kw):  # noqa: ANN001, ANN003
         seen["system"] = messages[0]["content"]
         assert tier == "selection"
-        return llm.LlmResult(text="**AC1** routine. **Threat: routine**", model="m", backend="stub")
+        # Cites the subject: since 2026-09-17 (W4) an uncited brief is WITHHELD
+        # rather than served flagged, so a stub that cites nothing would make
+        # this access-path test fail on the citation gate instead of on access.
+        return llm.LlmResult(
+            text="**AC1** routine [aircraft:AC-smoke-1]. **Threat: routine**",
+            model="m",
+            backend="stub",
+        )
 
     monkeypatch.setattr(llm, "chat", _chat)
     r = client.post(

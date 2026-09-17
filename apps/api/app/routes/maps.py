@@ -44,7 +44,12 @@ from app import ws_limits
 from app.auth import _bearer, require_ws_key
 from app.config import get_settings
 from app.intel.ontology import Object, get_registry
-from app.keys import UserCtx, current_user_or_local, multi_user, user_id_for_token
+from app.keys import UserCtx, multi_user, user_id_for_token
+from app.routes.ontology import (
+    _refuse_overwrite_of_hidden_row,
+    _refuse_write_above_clearance,
+)
+from app.security import Principal, current_principal_or_local
 
 router = APIRouter(tags=["maps"])
 
@@ -176,18 +181,30 @@ def _from_object(obj: Object) -> SavedMap | None:
     )
 
 
+
+def _reg(p: Principal, settings=None, *, filtered: bool = True):  # type: ignore[no-untyped-def]
+    """The registry for this caller, clearance-filtered unless asked otherwise.
+
+    ``current_principal_or_local`` mirrors ``current_user_or_local`` exactly, so
+    ``UserCtx(p.user_id, p.token)`` is the identity these routes always scoped
+    by; what is new is that the principal's clearance now reaches the store.
+    """
+    ctx = UserCtx(user_id=p.user_id, token=p.token)
+    return get_registry(ctx, settings or get_settings(), principal=p if filtered else None)
+
+
 # ── HTTP: save / list / load / delete ───────────────────────────────────────────
 
 
 @router.get("/api/maps", response_model=list[SavedMap])
-async def list_maps(ctx: UserCtx = Depends(current_user_or_local)) -> list[SavedMap]:
+async def list_maps(p: Principal = Depends(current_principal_or_local)) -> list[SavedMap]:
     """The caller's saved COPs, newest first.
 
     ``list_by_kind`` filters on ``props->>kind = 'map'`` so other ontology
     nodes (alerts, investigations, flagged entities) never leak into the map
     picker.
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     objs = await reg.list_by_kind(_MAP_KIND, limit=_MAX_LIST)
     out: list[SavedMap] = []
     for obj in objs:
@@ -198,20 +215,29 @@ async def list_maps(ctx: UserCtx = Depends(current_user_or_local)) -> list[Saved
 
 
 @router.post("/api/maps", response_model=SavedMap, status_code=201)
-async def save_map(body: MapIn, ctx: UserCtx = Depends(current_user_or_local)) -> SavedMap:
+async def save_map(body: MapIn, p: Principal = Depends(current_principal_or_local)) -> SavedMap:
     """Save (insert) or overwrite (when ``id`` is supplied) a named COP.
 
     Persisted as a ``map:`` ontology object via the registry's upsert (unique on
     ``(user_id, id)``), so re-saving the same id replaces the picture rather than
     duplicating it. 503 when Supabase is unconfigured.
+
+    ``id`` makes this an id-keyed overwrite and ``props`` is replaced wholesale,
+    so the same two gates ``routes/ontology.py`` applies to its own upsert apply
+    here: a caller may not classify above their own clearance and may not land a
+    write on a row they are not cleared to read (otherwise a clearance-0 caller
+    declassifies and replaces a classified COP it cannot even GET).
     """
     s = get_settings()
     map_id = body.id or f"{_MAP_KIND}:{uuid.uuid4().hex[:12]}"
     if not map_id.startswith(f"{_MAP_KIND}:"):
         # Defend the namespace: a client must not park arbitrary objects here.
         raise HTTPException(status_code=400, detail="map id must start with 'map:'")
-    reg = get_registry(ctx, s)
-    stored = await reg.upsert(_to_object(map_id, body, _now_iso()))
+    obj = _to_object(map_id, body, _now_iso())
+    _refuse_write_above_clearance(p, obj.classification, obj.compartments)
+    await _refuse_overwrite_of_hidden_row(p, map_id)
+    reg = _reg(p, s)
+    stored = await reg.upsert(obj)
     sm = _from_object(stored)
     if sm is None:  # upsert echoed something unexpected — surface, don't 500 silently
         raise HTTPException(status_code=502, detail="could not save map")
@@ -219,13 +245,13 @@ async def save_map(body: MapIn, ctx: UserCtx = Depends(current_user_or_local)) -
 
 
 @router.get("/api/maps/{map_id:path}", response_model=SavedMap)
-async def load_map(map_id: str, ctx: UserCtx = Depends(current_user_or_local)) -> SavedMap:
+async def load_map(map_id: str, p: Principal = Depends(current_principal_or_local)) -> SavedMap:
     """Load one saved COP by id (RLS-scoped). 404 if absent / not a map.
 
     ``:path`` because the canonical id carries a colon (``map:ab12…``) — same
     converter ``ontology.get_object`` uses.
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     obj = await reg.get(map_id)
     sm = _from_object(obj) if obj is not None else None
     if sm is None:
@@ -234,10 +260,16 @@ async def load_map(map_id: str, ctx: UserCtx = Depends(current_user_or_local)) -
 
 
 @router.delete("/api/maps/{map_id:path}", status_code=204)
-async def delete_map(map_id: str, ctx: UserCtx = Depends(current_user_or_local)) -> None:
+async def delete_map(map_id: str, p: Principal = Depends(current_principal_or_local)) -> None:
     """Delete a saved COP (own rows only, RLS-scoped). Idempotent-ish: a missing
-    row is a no-op 204 (PostgREST delete of zero rows still 200/204)."""
-    reg = get_registry(ctx, get_settings())
+    row is a no-op 204 (PostgREST delete of zero rows still 200/204).
+
+    The same gate as an overwrite, because delete DESTROYS the row: the store's
+    ``delete`` is not clearance-filtered, so without it a clearance-0 caller
+    erases a classified COP it cannot read.
+    """
+    await _refuse_overwrite_of_hidden_row(p, map_id)
+    reg = _reg(p)
     await reg.delete(map_id)
 
 

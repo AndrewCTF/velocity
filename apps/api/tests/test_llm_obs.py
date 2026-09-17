@@ -22,6 +22,7 @@ import asyncio
 import pytest
 
 from app import llm
+from app.keys import UserCtx
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -233,7 +234,46 @@ async def test_chat_skips_logging_with_no_bound_user(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_bind_user_with_missing_token_does_not_log(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_bind_user_with_no_token_still_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Changed 2026-09-17 (W4). This asserted the opposite — no token, no row —
+    on the reasoning that the only sink was PostgREST and RLS forbids an insert
+    without the caller's own JWT. True, and it meant the keyless deployment, the
+    one that runs every model on its own GPU, was the single deployment that
+    recorded nothing about its model calls. ``current_user_or_local`` yields
+    ``UserCtx("local", "")`` there, so the token was always empty.
+
+    The row is now shaped and routed; ``_post_call_row`` decides where it can
+    go, and the test below pins that it still never attempts the remote insert
+    without a token."""
+    monkeypatch.setattr(
+        llm,
+        "_deepseek_chat",
+        _ds_returning(llm.LlmResult(text="answer", model="deepseek-chat")),
+    )
+    posted: list[tuple[dict, str]] = []
+
+    async def _fake_post(row, token):  # noqa: ANN001
+        posted.append((row, token))
+
+    monkeypatch.setattr(llm, "_post_call_row", _fake_post)
+
+    tok = llm.bind_user("local", "")
+    try:
+        res = await llm.chat([{"role": "user", "content": "hi"}])
+    finally:
+        llm.reset_user(tok)
+    await _drain_logs()
+
+    assert res.ok
+    assert len(posted) == 1
+    assert posted[0][0]["user_id"] == "local"
+    assert posted[0][1] == ""
+
+
+@pytest.mark.asyncio
+async def test_no_user_id_is_still_anonymous(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The half of the old predicate that survives: no identity, no row. A row
+    with no owner is not an audit trail, it is a log line."""
     monkeypatch.setattr(
         llm,
         "_deepseek_chat",
@@ -246,8 +286,7 @@ async def test_bind_user_with_missing_token_does_not_log(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(llm, "_post_call_row", _fake_post)
 
-    # user id but no token (or vice-versa) → treated as anonymous.
-    tok = llm.bind_user("u", "")
+    tok = llm.bind_user("", "tok")
     try:
         res = await llm.chat([{"role": "user", "content": "hi"}])
     finally:
@@ -318,18 +357,131 @@ async def test_sync_log_failure_does_not_break_call(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
-async def test_post_call_row_swallows_when_supabase_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    # With Supabase URL unset, the writer is a silent no-op (no exception, no I/O).
+async def test_post_call_row_writes_locally_when_supabase_unset(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """Was "silent no-op (no exception, no I/O)" until 2026-09-17. Still no
+    network — the row goes to the local SQLite sink instead of being dropped, so
+    a keyless box has a model-call audit trail at all."""
+    from app import llm_calls_local
     from app.config import Settings
 
+    llm_calls_local.override_db_path(str(tmp_path / "llm_calls.db"))
     monkeypatch.setattr(llm, "get_settings", lambda: Settings(supabase_url=""))
 
     def _no_client(*a, **k):  # noqa: ANN002, ANN003
         raise AssertionError("must not open an httpx client when Supabase is unset")
 
     monkeypatch.setattr(llm.httpx, "AsyncClient", _no_client)
-    # Must simply return, not raise.
-    await llm._post_call_row({"user_id": "u"}, "t")
+    try:
+        await llm._post_call_row(
+            llm.call_row(
+                llm.LlmResult(text="hi", model="qwen.gguf", backend="llamacpp"),
+                user_id="local",
+                tier="fast",
+                latency_ms=42,
+                tool_calls=0,
+                label="ai.selection_brief",
+            ),
+            "",
+        )
+        rows = await llm_calls_local.list_calls(10)
+    finally:
+        llm_calls_local.override_db_path(None)
+
+    assert len(rows) == 1
+    assert rows[0]["user_id"] == "local"
+    assert rows[0]["model_id"] == "qwen.gguf"
+    assert rows[0]["backend"] == "llamacpp"
+    assert rows[0]["label"] == "ai.selection_brief"
+    assert rows[0]["latency_ms"] == 42
+    assert rows[0]["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_post_call_row_never_inserts_remotely_without_a_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The surviving half of the old ``user_id and token`` predicate: with
+    Supabase configured, RLS needs the caller's own JWT, and writing the row to
+    the local sink instead would split one deployment's trail across two
+    stores."""
+    from app.config import Settings
+
+    monkeypatch.setattr(
+        llm,
+        "get_settings",
+        lambda: Settings(supabase_url="https://p.supabase.co", supabase_anon_key="anon"),
+    )
+
+    def _no_client(*a, **k):  # noqa: ANN002, ANN003
+        raise AssertionError("must not attempt a PostgREST insert without a token")
+
+    monkeypatch.setattr(llm.httpx, "AsyncClient", _no_client)
+
+    def _no_local(*a, **k):  # noqa: ANN002, ANN003
+        raise AssertionError("must not write locally when Supabase is the sink")
+
+    from app import llm_calls_local
+
+    monkeypatch.setattr(llm_calls_local, "append", _no_local)
+    await llm._post_call_row({"user_id": "u"}, "")
+
+
+# ── GET /api/ai/calls reads the local trail back ─────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_a_local_row_is_readable_through_the_calls_route(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """The proof an operator can actually run: one model call on a keyless box
+    leaves one row, and the route serves it."""
+    from fastapi.testclient import TestClient
+
+    from app import llm_calls_local
+    from app.config import Settings
+    from app.main import create_app
+
+    llm_calls_local.override_db_path(str(tmp_path / "llm_calls.db"))
+    monkeypatch.setattr(llm, "get_settings", lambda: Settings(supabase_url=""))
+    monkeypatch.setattr(
+        llm,
+        "_deepseek_chat",
+        _ds_returning(llm.LlmResult(text="answer", model="deepseek-chat")),
+    )
+    try:
+        tok = llm.bind_user("local", "")
+        try:
+            res = await llm.chat([{"role": "user", "content": "hi"}], label="country.brief")
+        finally:
+            llm.reset_user(tok)
+        await _drain_logs()
+        assert res.ok
+
+        with TestClient(create_app()) as c:
+            r = c.get("/api/ai/calls?limit=10")
+            assert r.status_code == 200, r.text
+            rows = r.json()
+    finally:
+        llm_calls_local.override_db_path(None)
+
+    assert len(rows) == 1
+    assert rows[0]["label"] == "country.brief"
+    assert rows[0]["user_id"] == "local"
+    # An accountability trail, not a transcript store.
+    assert "prompt" not in rows[0]
+    assert "text" not in rows[0]
+
+
+def test_the_calls_route_bounds_its_limit() -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    with TestClient(create_app()) as c:
+        assert c.get("/api/ai/calls?limit=10000000").status_code == 422
+        assert c.get("/api/ai/calls?limit=0").status_code == 422
 
 
 # ── chat_json forwards the observability tags ──────────────────────────────────
@@ -351,3 +503,133 @@ async def test_chat_json_forwards_label_and_tool_calls(monkeypatch: pytest.Monke
     assert res.ok
     assert seen.get("label") == "investigate"
     assert seen.get("tool_calls") == 5
+
+
+# ── the two briefs that recorded nothing (W4) ─────────────────────────────────
+# ``llm.bind_user`` had exactly one caller (routes/extract.py), so the selection
+# brief and the country brief reached a model and left no trace. Both now bind
+# the caller their route resolved, and the row is readable back through
+# GET /api/ai/calls. Keyless, that caller is the shared ``local`` principal.
+
+
+def test_one_selection_brief_writes_one_row_for_the_requesting_user(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The proof an operator can run: click an entity, then read /api/ai/calls.
+
+    Goes through the ROUTE, so the identity is whatever the
+    ``current_user_or_local`` dependency resolved (``local`` on this keyless
+    box) — with only the backend mocked, exactly as a live box runs it."""
+    import time
+
+    from app import upstream as upstream_mod
+    from app.config import Settings
+
+    monkeypatch.setattr(llm, "get_settings", lambda: Settings(supabase_url=""))
+    monkeypatch.setattr(
+        llm,
+        "_deepseek_chat",
+        _ds_returning(llm.LlmResult(text="No anomalies evident.", model="deepseek-chat")),
+    )
+    llm.set_selection_enabled(True)
+    upstream_mod.cache._data.clear()  # noqa: SLF001 — a cached hit makes no model call
+    upstream_mod.cache._locks.clear()  # noqa: SLF001
+    try:
+        r = client.post(
+            "/api/ai/selection/brief",
+            json={"kind": "aircraft", "id": "aircraft:zzzz-1", "props": {"callsign": "NOPE"}},
+        )
+        assert r.status_code == 200, r.text
+
+        # The insert is fire-and-forget on the server's loop; poll the route the
+        # operator would actually curl rather than reaching into the store.
+        rows: list[dict] = []
+        for _ in range(60):
+            got = client.get("/api/ai/calls?limit=10")
+            assert got.status_code == 200, got.text
+            rows = got.json()
+            if rows:
+                break
+            time.sleep(0.05)
+    finally:
+        llm.set_selection_enabled(None)
+        upstream_mod.cache._data.clear()  # noqa: SLF001
+        upstream_mod.cache._locks.clear()  # noqa: SLF001
+
+    assert len(rows) == 1
+    assert rows[0]["user_id"] == "local"  # the keyless principal, named
+    assert rows[0]["label"] == "ai.selection_brief"
+    # An accountability trail, not a transcript store.
+    assert "prompt" not in rows[0] and "text" not in rows[0]
+
+
+async def _country_brief_rows(
+    monkeypatch: pytest.MonkeyPatch, iso3: str, ctx: UserCtx | None
+) -> list[dict]:
+    """Run one country brief through the REAL chat (only the backend mocked) and
+    return the rows it left in the local call trail."""
+    from app import llm_calls_local
+    from app import upstream as upstream_mod
+    from app.config import Settings
+    from app.intel import country_profile
+
+    monkeypatch.setattr(llm, "get_settings", lambda: Settings(supabase_url=""))
+    monkeypatch.setattr(
+        llm,
+        "_deepseek_chat",
+        _ds_returning(llm.LlmResult(text="## Overview\nQuiet.", model="deepseek-chat")),
+    )
+    upstream_mod.cache._data.clear()  # noqa: SLF001
+    upstream_mod.cache._locks.clear()  # noqa: SLF001
+
+    out = await country_profile.country_brief(iso3, "Country", None, None, None, ctx=ctx)
+    await _drain_logs()
+    assert out["ok"] is True, out
+    return await llm_calls_local.list_calls(10)
+
+
+@pytest.mark.asyncio
+async def test_one_country_brief_writes_one_row_for_the_ctx_it_is_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The country brief binds the ctx its route passes.
+
+    Called directly here (the route half is a one-line pass-through, and both
+    briefs share one binding idiom), with the real ``chat`` and only the backend
+    mocked, so the row is written by the production observability path."""
+    rows = await _country_brief_rows(monkeypatch, "SWE", UserCtx("analyst-9", "tok"))
+
+    assert len(rows) == 1
+    assert rows[0]["user_id"] == "analyst-9"  # WHO asked, not just that someone did
+    assert rows[0]["label"] == "country.brief"
+
+
+@pytest.mark.asyncio
+async def test_one_country_brief_without_a_ctx_records_the_local_principal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A caller that passes no ctx — an internal one on the keyless box, where
+    the route would have resolved ``local`` anyway — is still recorded, under
+    that same shared principal. The alternative (silence) is the gap this
+    closes: the deployment running its own GPU kept no trail of its own calls."""
+    from app.intel import country_profile
+
+    monkeypatch.setattr(country_profile, "multi_user", lambda: False)
+    rows = await _country_brief_rows(monkeypatch, "NOR", None)
+
+    assert len(rows) == 1
+    assert rows[0]["user_id"] == "local"
+    assert rows[0]["label"] == "country.brief"
+
+
+@pytest.mark.asyncio
+async def test_one_country_brief_without_a_ctx_binds_nothing_multiuser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On a deployment that CAN tell two humans apart, an unattributed brief is
+    recorded as nothing rather than filed under ``local``. A wrong actor in an
+    audit trail is worse than a missing row: it names someone who did not ask."""
+    from app.intel import country_profile
+
+    monkeypatch.setattr(country_profile, "multi_user", lambda: True)
+    assert await _country_brief_rows(monkeypatch, "FIN", None) == []

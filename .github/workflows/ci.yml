@@ -41,6 +41,24 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    # A real TimescaleDB so tests/test_history_pg.py runs instead of skipping:
+    # the history backend is proven on every PR, not only on the dev box.
+    services:
+      timescale:
+        image: timescale/timescaledb:2.17.2-pg16@sha256:4e459e217f00cbb09920c34d245501e63427e6767a495de57ce76823ff280f12
+        env:
+          POSTGRES_USER: velocity
+          POSTGRES_DB: velocity
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U velocity -d velocity"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      HISTORY_PG_TEST_DSN: postgresql://velocity@127.0.0.1:5432/velocity
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0

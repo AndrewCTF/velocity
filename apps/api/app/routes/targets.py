@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
+from app.intel import classification as clf
 from app.intel.actions import audit_row
 from app.keys import UserCtx, _client, _headers, current_user
 
@@ -83,10 +84,65 @@ def _is_locked(stage: str | None, requirements: dict) -> bool:
     return bool(nxt and _unmet_for(nxt, requirements))
 
 
+# ── classification: free text, but on the ladder ──────────────────────────────
+# ``target_board.classification`` is a free-text banner ("UNCLAS//FOUO"), which
+# is human-readable and completely incomparable to ``objects.classification``,
+# the 0..4 integer the ontology and the RLS policies use
+# (``intel/classification.py``). Two changes, both additive, because the column
+# lives in Supabase and adding one would need a migration this route cannot
+# ship: a write may state the level as a LADDER INTEGER (3, or "3//FVEY"),
+# which is normalised to the canonical banner, and every response carries the
+# parsed integer next to the text — "SECRET//FVEY" and 3 now answer the same
+# ``classification_level``, which is what makes a target comparable to an
+# ontology object at all.
+
+
+_MAX_BANNER = 120
+
+
+def _level_of(text: object) -> int:
+    """The ladder level a banner string states. Garbage → UNCLASSIFIED (0).
+
+    The level is the part before the first ``//``; everything after it is
+    caveats/compartments. ``parse_level`` already knows the abbreviations, so
+    "UNCLAS//FOUO" reads 0 and "S//NOFORN" reads 3.
+    """
+    head = str(text or "").split("//", 1)[0]
+    return clf.parse_level(head)
+
+
+def _normalise_classification(value: object) -> str:
+    """What gets stored for a caller-supplied classification.
+
+    An INT (or a "3//FVEY" head) becomes the canonical banner for that level,
+    caveats preserved. Any other text is stored VERBATIM — rewriting
+    "UNCLAS//FOUO" into "UNCLASSIFIED//FOUO" would silently restate every
+    existing board, and ``_level_of`` reads both as 0 anyway.
+
+    The 120-character bound this field used to carry is enforced HERE instead:
+    a ``str | int`` union cannot take pydantic's ``max_length``, and dropping
+    the bound would let an unbounded banner reach the store.
+    """
+    if isinstance(value, bool):  # bool is an int subclass
+        return clf.label(clf.MIN_LEVEL)
+    if isinstance(value, int):
+        return clf.label(clf.clamp(value))
+    text = str(value or "").strip()[:_MAX_BANNER]
+    if not text:
+        return clf.label(clf.MIN_LEVEL)
+    head, _, tail = text.partition("//")
+    if head.strip().lstrip("-").isdigit():
+        return clf.marking(
+            clf.parse_level(head.strip()), tail.split("/") if tail else None
+        )
+    return text
+
+
 def _to_target(row: dict) -> Target:
     """Build a Target from a stored row, computing the derived ``locked`` flag.
     Tolerant of legacy rows missing the requirements/classification columns."""
     req = row.get("requirements") or {}
+    _cls = str(row.get("classification") or "UNCLAS//FOUO")
     return Target(
         id=str(row["id"]),
         entity_id=str(row["entity_id"]),
@@ -94,7 +150,8 @@ def _to_target(row: dict) -> Target:
         priority=int(row.get("priority", 3)),
         note=str(row.get("note") or ""),
         requirements={k: bool(req.get(k)) for k in REQUIREMENT_KEYS},
-        classification=str(row.get("classification") or "UNCLAS//FOUO"),
+        classification=_cls,
+        classification_level=_level_of(_cls),
         locked=_is_locked(row.get("stage"), req),
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
@@ -113,7 +170,9 @@ class TargetIn(BaseModel):
     priority: int = Field(3, ge=1, le=5)
     note: str = Field("", max_length=2000)
     requirements: dict[str, bool] = Field(default_factory=dict)
-    classification: str = Field("UNCLAS//FOUO", max_length=120)
+    # ``str | int``: the banner text this board has always used, OR a ladder
+    # integer (3), normalised by ``_normalise_classification``.
+    classification: str | int = Field("UNCLAS//FOUO")
 
 
 class TargetPatch(BaseModel):
@@ -124,7 +183,7 @@ class TargetPatch(BaseModel):
     priority: int | None = Field(None, ge=1, le=5)
     note: str | None = Field(None, max_length=2000)
     requirements: dict[str, bool] | None = None
-    classification: str | None = Field(None, max_length=120)
+    classification: str | int | None = Field(None)
     force: bool = False
 
 
@@ -136,6 +195,9 @@ class Target(BaseModel):
     note: str = ""
     requirements: dict[str, bool] = Field(default_factory=dict)
     classification: str = "UNCLAS//FOUO"
+    # The banner above, parsed onto the 0..4 ladder, so a target is
+    # comparable to an ontology object. Derived per response, NOT a column.
+    classification_level: int = 0
     locked: bool = False  # derived: advancing to the next stage is gated
     created_at: str | None = None
     updated_at: str | None = None
@@ -249,6 +311,7 @@ async def create_target(
     _validate_stage(body.stage)
     s = get_settings()
     row = {**body.model_dump(), "user_id": ctx.user_id}
+    row["classification"] = _normalise_classification(body.classification)
     # unique(user_id, entity_id): re-adding the same entity upserts instead of
     # erroring, so the board never duplicates a track. return=representation so
     # we hand back the stored row (with its id + timestamps).
@@ -294,7 +357,7 @@ async def update_target(
         if body.note is not None:
             patch["note"] = body.note
         if body.classification is not None:
-            patch["classification"] = body.classification
+            patch["classification"] = _normalise_classification(body.classification)
         if body.requirements is not None:
             patch["requirements"] = merged_req
         if not patch:

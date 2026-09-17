@@ -32,6 +32,12 @@ export interface DatasetVersion {
   created_at: string;
 }
 
+// POST /api/foundry/datasets/{id}/documents — one document file (.eml / .docx /
+// .txt / .md / .pdf) is appended as ONE row, so the answer is the updated
+// dataset (latest_version bumped, row_count grown by one) plus the auto-sync
+// list every other version write returns. The row itself is not echoed.
+export type DocumentUpload = Dataset & { auto_sync?: AutoSyncResult[] };
+
 export interface ColumnStat {
   name: string;
   type: string;

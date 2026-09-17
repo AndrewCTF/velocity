@@ -15,9 +15,16 @@ action, so it needs no ``action_log`` audit row.
   GET  /api/ontology/search-around/{id}?depth= → the id's neighbourhood graph
   GET  /api/ontology/path?a=&b=&max_depth=    → shortest chain linking a ↔ b
 
-Auth is ``current_user_or_local``: a real signed-in user when Supabase auth is
-configured, else the shared ``local`` identity. Either way the store is the
+Auth is ``current_principal_or_local``: a real signed-in user when Supabase auth
+is configured, else the shared ``local`` identity — which is a clearance-0,
+compartment-less ``Principal``, so a keyless box keeps seeing everything it
+already had (every row it ever wrote is level 0). Either way the store is the
 local SQLite spine (``get_registry``) — every route works on a keyless boot.
+The principal is passed into the registry, which is what makes the stored
+classification actually gate a read (``intel/ontology_local.SqliteRegistry``).
+``GET /api/ontology/schema`` is the one route with no principal: it is static,
+per-deployment and identical for every caller, so it has never had an auth
+dependency and gaining one would 401 it on a Supabase deployment.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ from pydantic import BaseModel, Field
 
 from app.audit import audit_mutation
 from app.config import get_settings
+from app.intel import classification as clf
 from app.intel import graph_analytics
 from app.intel.ontology import (
     _KNOWN_KINDS,
@@ -37,9 +45,11 @@ from app.intel.ontology import (
     PathResult,
     SearchAround,
     get_registry,
+    visible_to,
 )
 from app.intel.ontology_schema import schema_payload, validate_object
-from app.keys import UserCtx, current_user_or_local
+from app.keys import UserCtx
+from app.security import Principal, current_principal_or_local
 
 # Every ontology mutation leaves an audit row naming its actor (ASVS V15.3.3).
 router = APIRouter(tags=["ontology"], dependencies=[Depends(audit_mutation)])
@@ -51,6 +61,53 @@ router = APIRouter(tags=["ontology"], dependencies=[Depends(audit_mutation)])
 _CUSTODY_PROPS = frozenset(
     {"sha256", "custody", "captured_by", "captured_at", "capture_method", "size_bytes"}
 )
+
+
+def _reg(p: Principal, *, filtered: bool = True):  # type: ignore[no-untyped-def]
+    """The registry for this caller — clearance-filtered unless asked otherwise.
+
+    ``filtered=False`` is the write path's view of the store: a ceiling check has
+    to be able to see the row it is defending, and ``upsert`` must not be handed
+    a registry whose ``get`` would lie to it.
+    """
+    ctx = UserCtx(user_id=p.user_id, token=p.token)
+    return get_registry(ctx, get_settings(), principal=p if filtered else None)
+
+
+def _refuse_write_above_clearance(p: Principal, level: int, comps: list[str]) -> None:
+    """The create ceiling, same rule as ``routes/extract.py``: a caller may not
+    mint a row above their own clearance, nor tag it with a compartment they do
+    not hold. Without it the write side is a laundering path — post at level 4,
+    then read your own row back."""
+    if clf.clamp(level) > clf.clamp(p.clearance):
+        raise HTTPException(
+            status_code=403, detail="cannot classify above your clearance"
+        )
+    if not clf.holds(p.compartments, comps):
+        raise HTTPException(
+            status_code=403, detail="cannot use compartments you do not hold"
+        )
+
+
+async def _refuse_overwrite_of_hidden_row(p: Principal, object_id: str) -> None:
+    """Refuse a write that lands on a row the caller is not cleared to read.
+
+    A read filter alone is half a gate: an unfiltered ``upsert`` would let a
+    clearance-0 caller replace a level-4 object's props (and its
+    classification) wholesale, and an unfiltered ``assert_props`` MERGES and
+    then RETURNS the merged row, which hands the hidden props straight back.
+    403 rather than 404 mirrors the ``routes/extract.py`` gate; it does admit
+    that the id exists, which is the accepted trade for not silently destroying
+    classified data.
+    """
+    existing = await _reg(p, filtered=False).get(object_id)
+    if existing is not None and not visible_to(
+        p, existing.classification, existing.compartments
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="that object is classified above your clearance",
+        )
 
 
 def _refuse_custody_writes(obj: Object) -> None:
@@ -99,7 +156,7 @@ _PROMOTE_SOURCE: dict[str, str] = {
 
 @router.get("/api/ontology/object/{object_id:path}", response_model=Object)
 async def get_object(
-    object_id: str, ctx: UserCtx = Depends(current_user_or_local)
+    object_id: str, p: Principal = Depends(current_principal_or_local)
 ) -> Object:
     """Fetch one ontology object by its canonical id.
 
@@ -107,7 +164,7 @@ async def get_object(
     (``aircraft:4ca7b3``) — without it FastAPI would still match, but ``:path``
     also tolerates ids that themselves contain slashes.
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     obj = await reg.get(object_id)
     if obj is None:
         raise HTTPException(status_code=404, detail="object not found")
@@ -122,14 +179,14 @@ async def object_assertions(
     object_id: str,
     prop: str | None = Query(None, max_length=200),
     limit: int = Query(200, ge=1, le=1000),
-    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> list[Assertion]:
     """The evidenced property history of one object, newest first.
 
     Every row answers *who said this, when, how sure* (source, confidence,
     observed_at, optional derivation).
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     return await reg.get_assertions(object_id, prop=prop, limit=limit)
 
 
@@ -151,7 +208,7 @@ async def search_objects(
     q: str = Query(..., min_length=1, max_length=200),
     kind: list[str] | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
-    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> list[Object]:
     """Find ontology objects by words in their id, kind or property values.
 
@@ -160,13 +217,13 @@ async def search_objects(
     into the graph and kept, which until now had no search at all: ``get`` needs
     the exact canonical id and ``list_by_kind`` filters one props field.
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     return await reg.search(q, kinds=kind, limit=limit)
 
 
 @router.post("/api/ontology/object", response_model=ObjectSaved)
 async def upsert_object(
-    obj: Object, ctx: UserCtx = Depends(current_user_or_local)
+    obj: Object, p: Principal = Depends(current_principal_or_local)
 ) -> ObjectSaved:
     """Insert or merge one ontology object (RLS-scoped to the caller).
 
@@ -179,9 +236,19 @@ async def upsert_object(
 
     The write happens first and unconditionally: ``warnings`` describes the
     object that was stored, it does not gate storing it.
+
+    Two clearance gates run BEFORE the write, though. A caller may not classify
+    above their own clearance or use a compartment they do not hold (the
+    ``routes/extract.py`` ceiling), and may not land a write on a row they are
+    not cleared to read — ``props`` is a WHOLESALE replace, so an ungated write
+    is a way to destroy or declassify an object you cannot see.
     """
     _refuse_custody_writes(obj)
-    reg = get_registry(ctx, get_settings())
+    _refuse_write_above_clearance(p, obj.classification, obj.compartments)
+    await _refuse_overwrite_of_hidden_row(p, obj.id)
+    # Unfiltered: the gates above already decided this caller may write here, and
+    # ``upsert`` reads the prior row to diff props into assertions.
+    reg = _reg(p, filtered=False)
     saved = await reg.upsert(obj)
     return ObjectSaved(
         **saved.model_dump(),
@@ -207,7 +274,7 @@ class PromoteIn(BaseModel):
 
 @router.post("/api/ontology/promote", response_model=Object)
 async def promote_object(
-    body: PromoteIn, ctx: UserCtx = Depends(current_user_or_local)
+    body: PromoteIn, p: Principal = Depends(current_principal_or_local)
 ) -> Object:
     """Promote a live entity to a durable, evidenced ontology object (keyless).
 
@@ -236,7 +303,13 @@ async def promote_object(
             status_code=403,
             detail="evidence objects are written through /api/evidence, not the generic route",
         )
-    reg = get_registry(ctx, get_settings())
+    # ``assert_props`` MERGES into the existing row and RETURNS the merged
+    # object, so an ungated promote onto a classified id is a read as much as a
+    # write. ``PromoteIn`` carries no classification field and ``assert_props``
+    # stamps a new row at level 0, so there is no requested level to ceiling
+    # here — only the existing row to defend.
+    await _refuse_overwrite_of_hidden_row(p, body.id)
+    reg = _reg(p, filtered=False)
     return await reg.assert_props(
         body.id,
         body.props,
@@ -252,7 +325,7 @@ async def promote_object(
 async def search_around(
     object_id: str,
     depth: int = Query(1, ge=1, le=3),
-    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> SearchAround:
     """Breadth-first neighbourhood of ``object_id`` up to ``depth`` hops (1–3).
 
@@ -260,7 +333,7 @@ async def search_around(
     payload the EntityPanel ConnectionsCard and the agent compose on. The center
     is always present even if it has no persisted row yet (a derived stub).
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     return await reg.traverse(object_id, depth=depth)
 
 
@@ -268,7 +341,7 @@ async def search_around(
 async def graph_analytics_route(
     object_id: str,
     depth: int = Query(2, ge=1, le=3),
-    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> dict[str, Any]:
     """Link-analysis metrics over the ``object_id`` neighbourhood (Phase 3).
 
@@ -278,7 +351,7 @@ async def graph_analytics_route(
     network). This is the "who are the important nodes" question Gotham's graph
     explorer answers; ``search-around`` shows the graph, this scores it.
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     sa = await reg.traverse(object_id, depth=depth)
     node_ids, edges = graph_analytics.from_search_around(sa)
     result = graph_analytics.analyze(node_ids, edges)
@@ -292,7 +365,7 @@ async def ontology_path(
     a: str = Query(..., min_length=1, max_length=200),
     b: str = Query(..., min_length=1, max_length=200),
     max_depth: int = Query(4, ge=1, le=6),
-    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> PathResult:
     """Shortest UNDIRECTED chain linking object ``a`` to object ``b``.
 
@@ -302,5 +375,5 @@ async def ontology_path(
     canvas (C4) draws. ``found=False`` (empty path) when no chain exists within the
     budget, which the canvas surfaces honestly rather than as an error.
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     return await reg.path_between(a, b, max_depth=max_depth)

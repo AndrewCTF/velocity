@@ -36,8 +36,9 @@ from app import history
 from app.audit import audit_mutation
 from app.config import get_settings
 from app.intel import evidence as ev
-from app.intel.ontology import Object
+from app.intel.ontology import Object, visible_to
 from app.keys import UserCtx, current_user_or_local
+from app.security import Principal, current_principal_or_local
 from app.uploads import read_capped
 
 router = APIRouter(tags=["evidence"], dependencies=[Depends(audit_mutation)])
@@ -142,6 +143,25 @@ async def _maybe_attach(ctx: UserCtx, obj: Object, situation_id: str | None) -> 
         await ev.attach_to_situation(ctx, sha, situation_id)
     except ev.EvidenceError:
         pass
+
+
+
+def _ctx(p: Principal) -> UserCtx:
+    """The user-scoping half of the principal — the identity these routes used
+    before clearance reached them (``current_principal_or_local`` mirrors
+    ``current_user_or_local``)."""
+    return UserCtx(user_id=p.user_id, token=p.token)
+
+
+def _readable(p: Principal, obj: Object) -> bool:
+    """Is this evidence object within the caller's clearance?
+
+    The READ gate for the locker. ``intel/evidence.py`` builds its own registry
+    (it is the capture path too, and capture must not be clearance-filtered), so
+    these routes filter what comes back rather than pushing the principal down
+    — through the SAME predicate the registry uses, so the two cannot drift.
+    """
+    return visible_to(p, obj.classification, obj.compartments)
 
 
 def _capture_error(exc: ev.EvidenceError) -> HTTPException:
@@ -297,17 +317,19 @@ async def capture_replay_window(
 @router.get("/api/evidence", response_model=list[Object])
 async def list_evidence(
     limit: int = Query(200, ge=1, le=1000),
-    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> list[Object]:
-    return await ev.list_evidence(ctx, limit=limit)
+    rows = await ev.list_evidence(_ctx(p), limit=limit)
+    return [o for o in rows if _readable(p, o)]
 
 
 @router.get("/api/evidence/{sha}", response_model=EvidenceDetail)
 async def get_evidence_detail(
-    sha: str, ctx: UserCtx = Depends(current_user_or_local)
+    sha: str, p: Principal = Depends(current_principal_or_local)
 ) -> EvidenceDetail:
-    obj, custody = await ev.get_evidence(ctx, sha)
-    if obj is None:
+    obj, custody = await ev.get_evidence(_ctx(p), sha)
+    # Out of clearance answers exactly like absent, so a sha cannot be probed.
+    if obj is None or not _readable(p, obj):
         raise HTTPException(status_code=404, detail="evidence not found")
     # read + re-hash off the loop: a blob can be up to 200 MB, and a synchronous
     # hash here would block the 1 s ADS-B poll / WS push for the whole read.
@@ -319,13 +341,13 @@ async def get_evidence_detail(
 
 @router.get("/api/evidence/{sha}/blob")
 async def get_evidence_blob(
-    sha: str, ctx: UserCtx = Depends(current_user_or_local)
+    sha: str, p: Principal = Depends(current_principal_or_local)
 ) -> Response:
     """Return the original captured bytes. The hash is re-verified first, so a
     corrupted/tampered blob 409s rather than serving bad evidence."""
     settings = get_settings()
-    obj, _ = await ev.get_evidence(ctx, sha)
-    if obj is None:
+    obj, _ = await ev.get_evidence(_ctx(p), sha)
+    if obj is None or not _readable(p, obj):
         raise HTTPException(status_code=404, detail="evidence not found")
     canonical = obj.props.get("sha256", sha)
     # read + re-hash off the loop (blobs are up to 200 MB — see get_evidence_detail).
@@ -358,10 +380,10 @@ async def get_evidence_blob(
 
 @router.get("/api/evidence/{sha}/verify")
 async def verify_evidence(
-    sha: str, ctx: UserCtx = Depends(current_user_or_local)
+    sha: str, p: Principal = Depends(current_principal_or_local)
 ) -> dict[str, Any]:
-    obj, _ = await ev.get_evidence(ctx, sha)
-    if obj is None:
+    obj, _ = await ev.get_evidence(_ctx(p), sha)
+    if obj is None or not _readable(p, obj):
         raise HTTPException(status_code=404, detail="evidence not found")
     canonical = obj.props.get("sha256", sha)
     ok = await asyncio.to_thread(ev.verify_blob, get_settings(), canonical)

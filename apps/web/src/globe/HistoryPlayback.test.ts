@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Cesium from 'cesium';
 
 // Mock apiFetch at the transport boundary (repo eslint guard + established
@@ -10,6 +10,7 @@ vi.mock('../transport/http.js', () => ({
 
 import { apiFetch } from '../transport/http.js';
 import { installHistoryPlayback } from './HistoryPlayback.js';
+import { chunkKeyForMs, chunkStartMs, nextChunk, CHUNK_MS } from './heatmapChunk.js';
 
 const mockedFetch = vi.mocked(apiFetch);
 
@@ -19,12 +20,20 @@ function jsonResponse(body: unknown): Response {
 
 // Minimal viewer stub exposing only the surface HistoryPlayback.ts touches:
 // dataSources.add/get/length (hideLive/restoreLive walk the collection),
-// camera.computeViewRectangle (skip bbox filtering), clock (plain bag of
-// fields the module assigns to), scene.requestRender/maximumRenderTimeChange,
-// isDestroyed. dataSources.add captures the real Cesium.CustomDataSource the
-// module creates so the test can inspect the entities it built, without
-// needing any export beyond the existing installHistoryPlayback().
-function fakeViewer(): { viewer: Cesium.Viewer; getDs: () => Cesium.CustomDataSource } {
+// camera.computeViewRectangle (skip bbox filtering), clock (a plain bag of
+// fields the module assigns to, PLUS a fake onTick event the chunk pipeline's
+// ensureTickListener() subscribes to — see fireTick), scene.requestRender/
+// maximumRenderTimeChange, isDestroyed. dataSources.add captures the real
+// Cesium.CustomDataSource the module creates so the test can inspect the
+// entities it built, without needing any export beyond installHistoryPlayback().
+function fakeViewer(opts: { destroyed?: boolean } = {}): {
+  viewer: Cesium.Viewer;
+  getDs: () => Cesium.CustomDataSource;
+  // Fires every registered onTick listener with the (mutated) viewer.clock,
+  // then flushes the async chunk-load work it kicks off — a real Cesium
+  // onTick handler runs synchronously but ours does `void (async () => ...)`.
+  fireTick: () => Promise<void>;
+} {
   const sources: Cesium.DataSource[] = [];
   let captured: Cesium.CustomDataSource | undefined;
   const dataSources = {
@@ -39,18 +48,34 @@ function fakeViewer(): { viewer: Cesium.Viewer; getDs: () => Cesium.CustomDataSo
       return sources.length;
     },
   };
+  const listeners: Array<(clock: unknown) => void> = [];
+  const clock: Record<string, unknown> = {
+    onTick: {
+      addEventListener: (fn: (clock: unknown) => void) => {
+        listeners.push(fn);
+        return () => {
+          const idx = listeners.indexOf(fn);
+          if (idx >= 0) listeners.splice(idx, 1);
+        };
+      },
+    },
+  };
   const viewer = {
     dataSources,
     camera: { computeViewRectangle: () => undefined },
-    clock: {},
+    clock,
     scene: { requestRender: () => {}, maximumRenderTimeChange: 0 },
-    isDestroyed: () => false,
+    isDestroyed: () => opts.destroyed ?? false,
   } as unknown as Cesium.Viewer;
   return {
     viewer,
     getDs: () => {
       if (!captured) throw new Error('history CustomDataSource was never added');
       return captured;
+    },
+    fireTick: async () => {
+      for (const fn of [...listeners]) fn(viewer.clock);
+      await new Promise((resolve) => setTimeout(resolve, 0));
     },
   };
 }
@@ -183,5 +208,275 @@ describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point t
       expect(mlat).toBeGreaterThan(Math.min(lat0, lat1));
       expect(mlat).toBeLessThan(Math.max(lat0, lat1));
     }
+  });
+});
+
+describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk boundary, never removeAll', () => {
+  it('a tick that crosses into the next half hour appends to the SAME entity instead of rebuilding it', async () => {
+    const { viewer, getDs, fireTick } = fakeViewer();
+
+    const startMs = Date.UTC(2024, 5, 1, 12, 0, 0); // an exact UTC half-hour boundary
+    const { day, index } = chunkKeyForMs(startMs);
+    const nxt = nextChunk(day, index);
+    const chunk1StartSec = chunkStartMs(day, index) / 1000;
+    const chunk2StartSec = chunkStartMs(nxt.day, nxt.index) / 1000;
+
+    mockedFetch.mockReset();
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      // Very old oldest-recorded-day: every chunk this test touches is well
+      // after it, so both chunks route to the own archive — this test is
+      // about the append-not-rebuild behaviour, not source selection (that is
+      // heatmapChunk.test.ts's job for the binary decode itself).
+      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
+      if (u.startsWith('/api/history/tracks')) {
+        const fromTs = Number(new URL(u, 'http://local').searchParams.get('from_ts'));
+        const isChunk2 = Math.abs(fromTs - chunk2StartSec) < 5;
+        const lon = isChunk2 ? 40.0 : 35.0;
+        return jsonResponse({
+          tracks: [{ id: 'aircraft:ABC123', kind: 'aircraft', points: [[lon, 33.0, fromTs + 60, 90]] }],
+        });
+      }
+      return jsonResponse({});
+    });
+
+    const controller = installHistoryPlayback(viewer);
+    const endMs = startMs + 3 * 3600 * 1000;
+    await controller.loadAt(startMs, endMs);
+
+    const ds = getDs();
+    const entityBefore = ds.entities.getById('hist:aircraft:ABC123');
+    expect(entityBefore, 'entity missing after the first chunk').toBeDefined();
+    expect(ds.entities.values.length).toBe(1);
+
+    // Advance the clock into the next half hour and fire onTick, simulating
+    // continuous playback crossing the chunk boundary.
+    (viewer.clock as unknown as { currentTime: Cesium.JulianDate }).currentTime = Cesium.JulianDate.fromDate(
+      new Date(chunk2StartSec * 1000 + 60_000),
+    );
+    await fireTick();
+
+    const entityAfter = ds.entities.getById('hist:aircraft:ABC123');
+    expect(entityAfter, 'the SAME entity must persist across the chunk boundary').toBe(entityBefore);
+    expect(ds.entities.values.length, 'a chunk boundary must never removeAll()').toBe(1);
+
+    const posAtChunk2 = entityAfter!.position!.getValue(
+      Cesium.JulianDate.fromDate(new Date((chunk2StartSec + 60) * 1000)),
+    )!;
+    const [lon2] = lonLat(posAtChunk2);
+    expect(lon2).toBeCloseTo(40.0, 3);
+
+    const posAtChunk1 = entityAfter!.position!.getValue(
+      Cesium.JulianDate.fromDate(new Date((chunk1StartSec + 60) * 1000)),
+    )!;
+    const [lon1] = lonLat(posAtChunk1);
+    expect(lon1).toBeCloseTo(35.0, 3);
+  });
+
+  it('an own-archive half hour asks for aircraft and vessel SEPARATELY so the id budget cannot starve vessels', async () => {
+    const { viewer, getDs } = fakeViewer();
+    const calls: string[] = [];
+    // The backend's real answer (apps/api/app/routes/history.py get_tracks):
+    // `kind=` filters to one kind; omitted, it returns ids ordered by id and
+    // 'aircraft:' sorts before 'vessel:', so once aircraft saturate
+    // limit_ids=2000 a kind-less half hour answers aircraft-ONLY — exactly the
+    // live 2026-08-20 14:30 UTC replay that drew 2,000 aircraft / 0 vessels.
+    mockedFetch.mockReset();
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      calls.push(u);
+      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
+      if (u.startsWith('/api/history/tracks')) {
+        const q = new URL(u, 'http://local').searchParams;
+        const ts = Number(q.get('from_ts')) + 60;
+        if (q.get('kind') === 'vessel') {
+          return jsonResponse({
+            tracks: [{ id: 'vessel:257123456', kind: 'vessel', points: [[10.0, 50.0, ts, 180]] }],
+          });
+        }
+        return jsonResponse({
+          tracks: [{ id: 'aircraft:af351f', kind: 'aircraft', points: [[35.0, 33.0, ts, 90]] }],
+        });
+      }
+      return jsonResponse({});
+    });
+
+    const startMs = Date.UTC(2026, 7, 20, 14, 30, 0); // the measured half hour
+    const controller = installHistoryPlayback(viewer);
+    await controller.loadAt(startMs, startMs + CHUNK_MS);
+
+    const tracksCalls = calls.filter((u) => u.startsWith('/api/history/tracks'));
+    expect(tracksCalls, 'the own archive must be asked once per kind').toHaveLength(2);
+    const aircraftCall = tracksCalls.find((u) => u.includes('kind=aircraft'));
+    const vesselCall = tracksCalls.find((u) => u.includes('kind=vessel'));
+    expect(aircraftCall, 'no kind=aircraft own-archive request').toBeDefined();
+    expect(vesselCall, 'no kind=vessel own-archive request').toBeDefined();
+    for (const call of [aircraftCall!, vesselCall!]) {
+      expect(new URL(call, 'http://local').searchParams.get('limit_ids')).toBe('2000');
+    }
+
+    const ds = getDs();
+    expect(ds.entities.getById('hist:aircraft:af351f'), 'own-archive aircraft missing').toBeDefined();
+    expect(
+      ds.entities.getById('hist:vessel:257123456'),
+      'own-archive vessel missing — starved by the aircraft id budget',
+    ).toBeDefined();
+  });
+
+  it('loadAt() resets the previous window — a fresh jump does removeAll, unlike a chunk-boundary tick', async () => {
+    const { viewer, getDs } = fakeViewer();
+    mockedFetch.mockReset();
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
+      if (u.startsWith('/api/history/tracks')) {
+        return jsonResponse({
+          tracks: [{ id: 'aircraft:OLD111', kind: 'aircraft', points: [[1.0, 1.0, 1_700_000_000, 0]] }],
+        });
+      }
+      return jsonResponse({});
+    });
+
+    const controller = installHistoryPlayback(viewer);
+    await controller.loadAt(1_700_000_000_000, 1_700_010_800_000);
+    expect(getDs().entities.values.length).toBe(1);
+
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
+      if (u.startsWith('/api/history/tracks')) {
+        return jsonResponse({
+          tracks: [{ id: 'aircraft:NEW222', kind: 'aircraft', points: [[2.0, 2.0, 1_800_000_000, 0]] }],
+        });
+      }
+      return jsonResponse({});
+    });
+
+    await controller.loadAt(1_800_000_000_000, 1_800_010_800_000);
+    const ds = getDs();
+    expect(ds.entities.getById('hist:aircraft:OLD111'), 'a new loadAt() jump must clear the prior window').toBeUndefined();
+    expect(ds.entities.getById('hist:aircraft:NEW222')).toBeDefined();
+    expect(ds.entities.values.length).toBe(1);
+  });
+});
+
+describe('HistoryPlayback: replay source routing reads stats.oldest_ts, not stats.shards (W3-1)', () => {
+  // Timescale's history.stats() answers with `shards: []` (sharding is a
+  // SQLite-only workaround) plus `oldest_ts` = MIN(t) as epoch seconds.
+  // Resolving the own-archive floor from `shards` alone read every half hour
+  // as "own archive", so the upstream (tar1090 heatmap) replay path never ran
+  // on the backend this branch adds — the picker still offered 2024 days.
+  const oldestMs = Date.UTC(2026, 0, 2, 12, 0, 0); // an exact UTC half hour
+  const HALF_HOUR_MS = CHUNK_MS;
+
+  /** One separator + one position row (32 bytes), the tar1090 heatmap shape
+   *  heatmapChunk.ts decodes: hex `abcdef` at 33N/35E, timestamped at tsMs. */
+  function upstreamChunk(tsMs: number): Response {
+    const w = new Int32Array(8);
+    w[0] = 0x0e7f7c9d; // separator marker
+    w[1] = Math.floor(tsMs / 2 ** 32); // slice epoch ms, high word
+    w[2] = tsMs % 2 ** 32; // slice epoch ms, low word
+    w[3] = 30_000; // slice interval ms
+    w[4] = 0x00abcdef; // hex
+    w[5] = Math.round(33.0 * 1e6); // lat
+    w[6] = Math.round(35.0 * 1e6); // lon
+    w[7] = 0; // alt/gs
+    return { ok: true, status: 200, statusText: 'OK', arrayBuffer: async () => w.buffer } as unknown as Response;
+  }
+
+  function mockTimescaleStats(calls: string[]): void {
+    mockedFetch.mockReset();
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      calls.push(u);
+      if (u === '/api/history/stats') {
+        return jsonResponse({ backend: 'timescale', oldest_ts: oldestMs / 1000, shards: [] });
+      }
+      if (u.startsWith('/api/history/upstream/chunk')) return upstreamChunk(oldestMs - HALF_HOUR_MS);
+      if (u.startsWith('/api/history/tracks')) return jsonResponse({ tracks: [] });
+      return jsonResponse({});
+    });
+  }
+
+  it('a half hour BEFORE oldest_ts fetches the upstream chunk and leaves aircraft out of the own fetch', async () => {
+    const calls: string[] = [];
+    mockTimescaleStats(calls);
+
+    const { viewer, getDs } = fakeViewer();
+    const controller = installHistoryPlayback(viewer);
+    const info = await controller.loadAt(oldestMs - HALF_HOUR_MS, oldestMs);
+
+    const upstream = calls.filter((u) => u.startsWith('/api/history/upstream/chunk'));
+    expect(upstream, 'the upstream chunk was never requested').toHaveLength(1);
+    expect(upstream[0]).toContain('index=');
+    // Vessels are always the own archive; the own fetch must not also ask for
+    // aircraft on a chunk whose aircraft come from upstream.
+    expect(calls.some((u) => u.startsWith('/api/history/tracks') && u.includes('kind=vessel'))).toBe(true);
+    expect(info?.source).toBe('upstream');
+    expect(getDs().entities.getById('hist:aircraft:abcdef'), 'decoded upstream aircraft missing').toBeDefined();
+  });
+
+  it('a half hour starting AT oldest_ts stays on the own archive with no upstream call', async () => {
+    const calls: string[] = [];
+    mockTimescaleStats(calls);
+
+    const { viewer } = fakeViewer();
+    const controller = installHistoryPlayback(viewer);
+    const info = await controller.loadAt(oldestMs, oldestMs + HALF_HOUR_MS);
+
+    expect(calls.some((u) => u.startsWith('/api/history/tracks'))).toBe(true);
+    expect(calls.filter((u) => u.startsWith('/api/history/upstream/chunk'))).toHaveLength(0);
+    expect(info?.source).toBe('none');
+  });
+});
+
+describe('HistoryPlayback: destroy() tears down the decode Worker (W3-3)', () => {
+  // Stand-in for the DOM Worker so `createHeatmapDecoder()` takes its real
+  // (non-jsdom-fallback) branch and its terminate() becomes observable.
+  class FakeWorker {
+    static instances: FakeWorker[] = [];
+    terminated = false;
+    onmessage: ((ev: MessageEvent) => void) | null = null;
+    onerror: ((ev: ErrorEvent) => void) | null = null;
+    constructor() {
+      FakeWorker.instances.push(this);
+    }
+    postMessage(): void {}
+    terminate(): void {
+      this.terminated = true;
+    }
+  }
+
+  beforeEach(() => {
+    FakeWorker.instances = [];
+    mockedFetch.mockReset();
+    vi.stubGlobal('Worker', FakeWorker);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('terminates the Worker when the viewer is ALREADY destroyed (HMR teardown / ErrorBoundary)', () => {
+    // destroy() bails early on a destroyed viewer so it never touches the
+    // viewer's data sources; pre-fix that early return also skipped
+    // decoder.terminate(), so the Worker thread and its bundled module graph
+    // outlived the component on exactly the teardown path it exists for.
+    const { viewer } = fakeViewer({ destroyed: true });
+    const controller = installHistoryPlayback(viewer);
+    expect(FakeWorker.instances).toHaveLength(1);
+
+    controller.destroy();
+
+    expect(FakeWorker.instances[0]!.terminated).toBe(true);
+  });
+
+  it('still terminates the Worker on the ordinary teardown path', () => {
+    const { viewer } = fakeViewer();
+    const controller = installHistoryPlayback(viewer);
+
+    controller.destroy();
+
+    expect(FakeWorker.instances[0]!.terminated).toBe(true);
   });
 });

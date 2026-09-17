@@ -23,6 +23,12 @@ First actions:
                            same POST as ``routes/targets.py``).
   - ``add_watch``        — create a standing geofence ``alert_rules`` row (wraps the
                            same POST as ``routes/alert_rules.py``).
+  - ``writeback``        — write a record OUT to a source system the operator runs:
+                           an allow-listed HTTP endpoint (through ``op.http``'s own
+                           SSRF classifier, unchanged) or a Foundry ``sql``
+                           connection. ``operator_only``, so it travels the HITL
+                           proposal queue like every other agent-originated write
+                           and an operator signs for it.
 
 The ontology mutation always lands (SQLite, local-first — see
 ``docs/decisions.md#ontology-local-first-store-2026-07-07``). The audit append and
@@ -35,12 +41,16 @@ whole action. The module imports with no side effects.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from app.config import Settings, get_settings
 from app.intel import action_log_local, alert_rules_local
@@ -154,6 +164,86 @@ class AddWatchParams(BaseModel):
     radius_nm: float = Field(50, gt=0, le=5000)
     kinds: list[str] = Field(default_factory=list)
     min_severity: int = Field(1, ge=1, le=5)
+
+
+# An SQL identifier, and nothing that could be a fragment of a statement. Same
+# deliberately-strict stance as ``foundry/connections.valid_dsn_env``: the cost
+# of being wrong in the permissive direction is an injection into someone's own
+# database, so anything with a quote, a space, a dot or a semicolon is refused
+# rather than escaped.
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+# An env-var NAME, upper case only — the identical stance, and the identical
+# pattern, as ``foundry/connections.valid_dsn_env``. Lower case, a slash, a
+# space or a scheme is far more likely to be a secret pasted into the wrong
+# field than an unusual variable name, and the cost of being wrong in that
+# direction is a bearer token stored in the proposal queue.
+_ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+
+
+class WritebackParams(BaseModel):
+    """Write one record OUT to a system the operator runs.
+
+    Two targets, both of them things the platform already knows how to reach:
+
+    ``http``
+        an endpoint of theirs, dispatched through ``workflows/control.request``
+        — the SAME classifier ``op.http`` uses, reused unchanged, so the host
+        allowlist (``WORKFLOWS_HTTP_ALLOW_HOSTS``), the link-local / cloud
+        metadata refusal, the DNS-rebinding pin and the kill switch
+        (``WORKFLOWS_CONTROL_ENABLED``) all apply here without a second copy.
+    ``connection``
+        a Foundry ``sql`` connection: the DSN is resolved from the environment
+        variable NAME the connection row stores (never a DSN in the row), and
+        the statement is a parameterised ``sqlalchemy.insert`` — the table and
+        every payload key validated as an identifier first.
+
+    ``dry_run`` builds and validates everything, including the SSRF checks, and
+    stops before the request/statement. It still writes an audit row: a rehearsal
+    an operator approved is a fact worth keeping.
+    """
+
+    target: Literal["http", "connection"]
+    # http
+    url: str = Field("", max_length=2000)
+    method: Literal["POST", "PUT", "PATCH"] = "POST"
+    # The NAME of an env var holding a bearer token, never the token (same rule
+    # as a sql connection's dsn_env, enforced by control.auth_headers).
+    auth_env: str = Field("", max_length=64)
+    # connection
+    connection_id: str = Field("", max_length=64)
+    table: str = Field("", max_length=63)
+    # The record itself. Never stored in an audit row or logged — only its
+    # sha256 is, so the receipt proves WHAT was sent without keeping a copy of
+    # it in a second store.
+    payload: dict[str, Any] = Field(default_factory=dict)
+    dry_run: bool = False
+
+    # An "after" model validator, not ``model_post_init``: pydantic wraps a
+    # ValueError raised here into a ValidationError, which ``dispatch`` turns
+    # into a 400. A raise from ``model_post_init`` propagates unwrapped and
+    # would surface as a 500.
+    @model_validator(mode="after")
+    def _check_target_shape(self) -> WritebackParams:
+        if self.target == "http":
+            if not self.url.strip():
+                raise ValueError("target 'http' needs a url")
+            if self.auth_env and not _ENV_NAME_RE.match(self.auth_env):
+                raise ValueError(
+                    "auth_env must be the NAME of an environment variable holding "
+                    "the bearer token, never the token itself"
+                )
+        else:
+            if not self.connection_id.strip():
+                raise ValueError("target 'connection' needs a connection_id")
+            if not _IDENT_RE.match(self.table):
+                raise ValueError(f"table must be a plain SQL identifier, got {self.table!r}")
+            if not self.payload:
+                raise ValueError("target 'connection' needs a non-empty payload")
+            bad = [k for k in self.payload if not _IDENT_RE.match(str(k))]
+            if bad:
+                raise ValueError(f"payload keys must be plain SQL identifiers: {bad}")
+        return self
 
 
 # ── handlers ────────────────────────────────────────────────────────────────────
@@ -330,11 +420,169 @@ async def _handle_add_watch(
     )
 
 
+# ── write-back to a source system ────────────────────────────────────────────
+
+
+def _payload_sha256(payload: dict[str, Any]) -> str:
+    """Digest of the record, canonicalised so the same record always hashes the
+    same. The audit row carries this INSTEAD of the payload: an audit store is
+    not the place for a second copy of someone's business data, and a hash still
+    answers "is this the record that was sent?"."""
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _endpoint_label(url: str) -> str:
+    """``scheme://host[:port]/path`` — the query string dropped.
+
+    A query string is where an API key ends up (``?token=…``), and this string
+    goes in the audit row's ``target_id`` and in the receipt.
+    """
+    parts = urlsplit(url.strip())
+    netloc = parts.netloc.split("@")[-1]  # drop userinfo (credentials in the URL)
+    return f"{parts.scheme}://{netloc}{parts.path}"
+
+
+async def _writeback_http(p: WritebackParams) -> tuple[str, dict[str, Any]]:
+    """Dispatch through ``op.http``'s guarded entry point, unchanged.
+
+    ``control.request`` runs ``check_url`` on every path (dry-run included), so
+    an allow-list miss or a link-local/metadata host is refused BEFORE anything
+    is sent, and ``preview=dry_run`` reuses its existing dry-run branch rather
+    than adding a second one here. Its ``WorkflowError`` (403 refused host, 422
+    malformed URL) is mapped to the same HTTP status so a refusal reads as a
+    refusal and not as a 500.
+    """
+    from app.workflows import control  # noqa: PLC0415 — avoid an import cycle
+    from app.workflows.store import WorkflowError  # noqa: PLC0415
+
+    headers = {"content-type": "application/json", **control.auth_headers(p.auth_env)}
+    try:
+        out = await control.request(
+            p.method,
+            p.url,
+            headers=headers,
+            json_body=p.payload,
+            budget=[1],
+            preview=p.dry_run,
+            timeout_s=15.0,
+        )
+    except WorkflowError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    # Scrubbed on purpose: control.request echoes the request body back on a
+    # dry run and the whole response text on a live one. Neither belongs in a
+    # receipt that is about to be persisted.
+    detail: dict[str, Any] = {
+        "target": "http",
+        "endpoint": _endpoint_label(p.url),
+        "method": p.method,
+        "dry_run": bool(out.get("dry_run")),
+        "status": out.get("status"),
+        "ok": bool(out.get("ok")),
+        "payload_sha256": _payload_sha256(p.payload),
+    }
+    if out.get("reason"):
+        detail["reason"] = out["reason"]
+    if out.get("error"):
+        detail["error"] = str(out["error"])[:200]
+    return detail["endpoint"], detail
+
+
+async def _writeback_connection(s: Settings, p: WritebackParams) -> tuple[str, dict[str, Any]]:
+    """INSERT one row into the table behind a Foundry ``sql`` connection.
+
+    The connection row holds the NAME of the env var holding the DSN and never
+    the DSN itself (``foundry/connections._resolve_dsn`` enforces that), so this
+    path cannot be pointed at an arbitrary database by whoever wrote the
+    proposal — only at one the operator has already configured on this box.
+    """
+    import asyncio  # noqa: PLC0415
+
+    from app.foundry.connections import _resolve_dsn  # noqa: PLC0415
+    from app.foundry.store import FoundryStore  # noqa: PLC0415
+
+    conn = await FoundryStore(s).get_connection(p.connection_id)
+    if conn is None:
+        raise HTTPException(status_code=404, detail="unknown connection")
+    if conn.get("kind") != "sql":
+        raise HTTPException(
+            status_code=400,
+            detail=f"writeback needs a 'sql' connection, {p.connection_id} is {conn.get('kind')!r}",
+        )
+    try:
+        dsn = _resolve_dsn(conn.get("config") or {})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    target_id = f"connection:{p.connection_id}/{p.table}"
+    detail: dict[str, Any] = {
+        "target": "connection",
+        "connection_id": p.connection_id,
+        "table": p.table,
+        "dry_run": p.dry_run,
+        "rows": 0,
+        "payload_sha256": _payload_sha256(p.payload),
+    }
+    if p.dry_run:
+        return target_id, detail
+
+    try:
+        import sqlalchemy  # noqa: PLC0415 — optional dependency
+    except Exception as exc:  # noqa: BLE001 — a broken install is also unavailable
+        raise HTTPException(
+            status_code=503,
+            detail="writeback to a sql connection needs sqlalchemy: pip install sqlalchemy",
+        ) from exc
+
+    payload = dict(p.payload)
+
+    def _insert() -> None:
+        # Fresh engine per write, disposed after — the same stance ``_run_sql``
+        # takes: a governed one-row write does not justify holding a pool open
+        # against someone else's database.
+        engine = sqlalchemy.create_engine(dsn)
+        try:
+            tbl = sqlalchemy.table(p.table, *[sqlalchemy.column(k) for k in payload])
+            with engine.begin() as c:
+                c.execute(sqlalchemy.insert(tbl).values(**payload))
+        finally:
+            engine.dispose()
+
+    try:
+        await asyncio.get_running_loop().run_in_executor(None, _insert)
+    except Exception as exc:  # noqa: BLE001 — a driver error is a 502, not a crash
+        # Never echo the exception text: SQLAlchemy puts the DSN in it, and the
+        # DSN carries the password. Same scrub rule as connections.py.
+        raise HTTPException(
+            status_code=502, detail=f"writeback insert failed: {type(exc).__name__}"
+        ) from exc
+    detail["rows"] = 1
+    return target_id, detail
+
+
+async def _handle_writeback(ctx: UserCtx, s: Settings, p: WritebackParams) -> ActionResult:
+    if p.target == "http":
+        target_id, detail = await _writeback_http(p)
+    else:
+        target_id, detail = await _writeback_connection(s, p)
+    # The audit row records the shape of the write, never the record itself.
+    audit = await _append_audit(ctx, s, "writeback", target_id, dict(detail))
+    return ActionResult(action="writeback", target_id=target_id, audit=audit, detail=detail)
+
+
 # ── registry + dispatch ──────────────────────────────────────────────────────────
 
 
 class ActionSpec(BaseModel):
-    """A registered action: name + summary + the param model + its handler."""
+    """A registered action: name + summary + the param model + its handler.
+
+    ``operator_only`` marks an action that carries OPERATOR authority rather
+    than analyst authority — ``routes/actions.py`` puts ``require_operator`` in
+    front of it, on the direct path AND on proposal approval. It is a property
+    of the action, not of the route, so a new one cannot be registered without
+    deciding which side of that line it is on.
+    """
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -342,6 +590,7 @@ class ActionSpec(BaseModel):
     summary: str
     params_model: type[BaseModel]
     handler: Callable[[UserCtx, Settings, Any], Awaitable[ActionResult]]
+    operator_only: bool = False
 
 
 _REGISTRY: dict[str, ActionSpec] = {
@@ -371,6 +620,17 @@ _REGISTRY: dict[str, ActionSpec] = {
             params_model=AddWatchParams,
             handler=_handle_add_watch,
         ),
+        ActionSpec(
+            name="writeback",
+            summary=(
+                "Write a record OUT to a source system you run: an allow-listed "
+                "HTTP endpoint or a Foundry sql connection. Operator-only, audited, "
+                "dry_run supported."
+            ),
+            params_model=WritebackParams,
+            handler=_handle_writeback,
+            operator_only=True,
+        ),
     )
 }
 
@@ -383,6 +643,7 @@ def list_actions() -> list[dict[str, Any]]:
             "summary": spec.summary,
             "params": spec.params_model.model_json_schema().get("properties", {}),
             "required": spec.params_model.model_json_schema().get("required", []),
+            "operator_only": spec.operator_only,
         }
         for spec in _REGISTRY.values()
     ]
@@ -390,6 +651,28 @@ def list_actions() -> list[dict[str, Any]]:
 
 def get_action(name: str) -> ActionSpec | None:
     return _REGISTRY.get(name)
+
+
+def _jsonable_errors(exc: ValidationError) -> list[dict[str, Any]]:
+    """``exc.errors()`` with the un-serialisable bits of ``ctx`` stringified.
+
+    A constraint failure puts a plain value in ``ctx`` (``{"ge": 1}``) and
+    serialises fine, but a validator that raises ``ValueError`` puts the
+    exception OBJECT in ``ctx["error"]`` — and FastAPI then 500s while encoding
+    the 400 it meant to send. Stringify rather than drop: the message is the
+    part that tells the caller what was wrong.
+    """
+    out: list[dict[str, Any]] = []
+    for err in exc.errors():
+        e = dict(err)
+        ctx = e.get("ctx")
+        if isinstance(ctx, dict):
+            e["ctx"] = {
+                k: (v if isinstance(v, str | int | float | bool | type(None)) else str(v))
+                for k, v in ctx.items()
+            }
+        out.append(e)
+    return out
 
 
 async def dispatch(
@@ -407,7 +690,7 @@ async def dispatch(
     try:
         params = spec.params_model(**raw_params)
     except ValidationError as exc:
-        raise HTTPException(status_code=400, detail=exc.errors()) from exc
+        raise HTTPException(status_code=400, detail=_jsonable_errors(exc)) from exc
     s = settings or get_settings()
     return await spec.handler(ctx, s, params)
 

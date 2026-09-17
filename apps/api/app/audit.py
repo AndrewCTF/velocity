@@ -30,6 +30,7 @@ from typing import Any
 
 from fastapi import Request
 
+from app import schema_version
 from app.config import get_settings
 from app.keys import UserCtx, _client, _headers
 from app.ratelimit import client_key
@@ -83,6 +84,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS ix_audit_log_ts ON audit_log(ts DESC);
 """
 
+#: Bumped by a change that alters the shape of this file (see app/schema_version.py).
+SCHEMA_VERSION = 1
+
 # Append-only, like the Supabase action_log (ASVS V16.4.2). These stop an
 # accidental or careless UPDATE/DELETE from the app or an operator's sqlite3
 # shell; they cannot stop a process that owns the file from dropping them. The
@@ -116,6 +120,7 @@ def _local_connect() -> sqlite3.Connection:
             con.execute(f"ALTER TABLE audit_log ADD COLUMN {col} TEXT")
     con.execute(_TRIGGER_NO_UPDATE)
     con.execute(_TRIGGER_NO_DELETE)
+    schema_version.ensure(con, "audit", SCHEMA_VERSION)
     con.commit()
     return con
 
@@ -319,6 +324,7 @@ async def audit(
 # routers and fails if a mutating route lacks the dependency.
 
 _MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+_READING = frozenset({"GET", "HEAD"})
 _pending: set[asyncio.Task[Any]] = set()
 
 
@@ -365,9 +371,35 @@ def _actor(request: Request) -> UserCtx:
     return UserCtx(user_id="local", token="")
 
 
+def _audit_read(request: Request) -> None:
+    """Opt-in (``audit_reads``): also record GET/HEAD on audited routers.
+
+    The row names WHAT was read — method + route template and the NAMES of any
+    path params — and never a param value or any query-string value, the same
+    no-values rule the MCP tool-call audit applies to its args. The actor is
+    resolved exactly as for writes. Off by default (``Settings.audit_reads``).
+    """
+    if not get_settings().audit_reads:
+        return
+    route = request.scope.get("route")
+    template = getattr(route, "path", request.url.path)
+    tags = getattr(route, "tags", None) or ["api"]
+    param_names = sorted(request.path_params)
+    audit_background(
+        _actor(request),
+        f"{request.method} {template}",
+        str(tags[0]),
+        "",
+        detail={"path_params": param_names} if param_names else None,
+        request=request,
+    )
+
+
 async def audit_mutation(request: Request) -> None:
     """Router dependency: audit every mutating request (see block comment)."""
     if request.method not in _MUTATING:
+        if request.method in _READING:
+            _audit_read(request)
         return
     route = request.scope.get("route")
     template = getattr(route, "path", request.url.path)

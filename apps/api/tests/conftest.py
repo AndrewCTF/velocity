@@ -158,6 +158,22 @@ def _isolate_history_db(tmp_path: Path) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_resolve_db(tmp_path: Path) -> Iterator[None]:
+    """Point the entity-resolution alias graph at a per-test temp file.
+
+    ``intel/resolve`` shared ``history.db`` until the archive moved to
+    TimescaleDB (2026-09-17); on a box with no ``data/history.db`` it now opens
+    ``./data/resolve.db``, which the suite must never create or prune in the
+    repo. Same reasoning as ``_isolate_history_db`` above.
+    """
+    from app.intel import resolve
+
+    resolve.override_db_path(str(tmp_path / "resolve.db"))
+    yield
+    resolve.override_db_path(None)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_workflows_db(tmp_path: Path) -> Iterator[None]:
     """Point the Workflows store at a per-test temp file (mirrors foundry)."""
     from app.workflows import store as workflows_store
@@ -202,6 +218,21 @@ def _isolate_action_log_db(tmp_path: Path) -> Iterator[None]:
     action_log_local.override_db_path(str(tmp_path / "action_log.db"))
     yield
     action_log_local.override_db_path(None)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_llm_calls_db(tmp_path: Path) -> Iterator[None]:
+    """Per-test temp file for the local model-call trail (mirrors action_log).
+
+    ``llm._post_call_row`` falls through to this sink whenever Supabase is
+    unset, which the whole suite is, so without this any test that lets a
+    ``chat()`` complete with a bound user writes ``./data/llm_calls.db`` into
+    the operator's real data dir."""
+    from app import llm_calls_local
+
+    llm_calls_local.override_db_path(str(tmp_path / "llm_calls.db"))
+    yield
+    llm_calls_local.override_db_path(None)
 
 
 @pytest.fixture(autouse=True)

@@ -15,16 +15,29 @@ rested on.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Query
 
+from app.config import get_settings
+from app.intel import promotion
 from app.intel import sanctions as sx
+from app.intel.ontology import get_registry
+from app.keys import UserCtx
 from app.routes import _feedgeo as fg
 from app.routes.adsb import snapshot_view
 from app.routes.maritime import vessel_snapshot
 
 router = APIRouter(prefix="/api/sanctions", tags=["sanctions"])
+
+logger = logging.getLogger("app.routes.sanctions")
+
+# Headless local identity for the best-effort ontology mint: the lookup route
+# stays auth-agnostic (a mint must not become an auth dependency), so the
+# mint writes the shared local graph exactly like the background mints do
+# (the foundry/workflows UserCtx("local", "") pattern).
+_LOCAL_CTX = UserCtx(user_id="local", token="")
 
 
 @router.get("/summary")
@@ -92,7 +105,7 @@ async def lookup(
         m = sx.match_vessel(idx, imo=imo, mmsi=mmsi, call_sign=call_sign, name=name)
     if m is None and (registration or name):
         m = sx.match_aircraft(idx, registration=registration, name=name)
-    return {
+    result = {
         "matched": m is not None,
         "match": m.as_dict() if m else None,
         "tried": tried,
@@ -103,6 +116,56 @@ async def lookup(
         "failed": idx.failed,
         "fetched_at": idx.fetched_at,
     }
+    if m is not None:
+        # A designation is Phase 2 significance (roadmap-ontology): the
+        # matched contact mints into the ontology. Best-effort — a registry
+        # error or a full per-minute mint budget must never fail the lookup.
+        await _mint_designation(m, mmsi=mmsi, registration=registration)
+    return result
+
+
+def _entity_id_for_match(m: sx.Match, mmsi: int | None, registration: str | None) -> str | None:
+    """The canonical ontology id of the contact a match rests on, or None.
+
+    Only a match that rests on an identifier mints: `vessel:<mmsi>` for a hull
+    (the query's mmsi, else the list row's own mmsi) and `aircraft:<tail>` for
+    a tail number — the two id forms the live layers already key on. A match
+    that rests on a name or call sign alone is a candidate, not an identifier
+    (test_sanctions.py: "A hull name is not an identifier"), and a hull
+    matched on IMO with no MMSI on the row has no canonical vessel:<mmsi> id
+    to mint — a parallel vessel:<imo> id space would fragment one hull into
+    two objects.
+    """
+    if m.matched_on in ("mmsi", "imo"):
+        mid = mmsi or m.designation.mmsi
+        return f"vessel:{mid}" if mid else None
+    if m.matched_on == "registration" and registration:
+        return f"aircraft:{registration}"
+    return None
+
+
+async def _mint_designation(m: sx.Match, *, mmsi: int | None, registration: str | None) -> None:
+    """Best-effort ontology mint of a designation hit (Phase 2).
+
+    Swallows every failure: the lookup is the product, the mint is the side
+    effect, and a registry problem or an exhausted per-process-minute budget
+    (MAX_INCIDENT_MINTS_PER_CYCLE, enforced inside promotion.mint_sanctions_
+    match) is a reason to skip the mint, never to fail the screen.
+    """
+    entity_id = _entity_id_for_match(m, mmsi, registration)
+    if not entity_id:
+        return
+    try:
+        reg = get_registry(_LOCAL_CTX, get_settings())
+        await promotion.mint_sanctions_match(
+            reg,
+            entity_id,
+            list_name=m.designation.list_name,
+            lists=" · ".join(m.lists) if m.lists else m.designation.list_name,
+            matched_name=m.designation.name,
+        )
+    except Exception:  # noqa: BLE001 — best-effort by contract
+        logger.debug("sanctions: ontology mint failed for %s", entity_id, exc_info=True)
 
 
 def _match_props(m: sx.Match) -> dict[str, Any]:

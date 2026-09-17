@@ -417,6 +417,14 @@ class Settings(BaseSettings):
     # is present in the environment but the operator does not want it used for
     # this run). OFF by default; flipped at runtime via POST /api/ai/local.
     llm_local_only: bool = False  # LLM_LOCAL_ONLY
+    # Citations are a hard contract (2026-09-17): a model brief that cites none
+    # of the ids it was given is withheld, not served flagged. Off only for a
+    # deployment that wants prose over provenance.
+    llm_require_citations: bool = True  # LLM_REQUIRE_CITATIONS
+    # Audit READS as well as writes (2026-09-17). Off by default: the hash
+    # chain grows one row per GET, which a single-analyst box does not need;
+    # a multi-user or classified deployment turns it on.
+    audit_reads: bool = False  # AUDIT_READS
     api_base: str = "http://localhost:8000"  # API_BASE (MCP → backend)
 
     # ── Local model manager (app.localllm) — Unsloth GGUF catalog + engines ──
@@ -751,6 +759,37 @@ class Settings(BaseSettings):
     #    this is a pure density win at write-CPU cost. A future reader must
     #    zlib-decompress; see history._encode_extra / _decode_extra.
     history_compress_extra: bool = False
+
+    # ── History backend: Postgres + TimescaleDB (operator decision 2026-09-17) ──
+    # "timescale" stores fixes in a compressed hypertable behind the same
+    # history.py public functions; "sqlite" is the legacy file store above.
+    # "auto" picks timescale when history_pg_dsn is set, else sqlite with ONE
+    # boot warning. The DSN comes from env / /run/secrets only and is never
+    # logged (RedactKeyFilter). Loopback trust auth for dev: scripts/dev-timescale.sh.
+    history_backend: str = "auto"  # HISTORY_BACKEND=auto|sqlite|timescale
+    history_pg_dsn: str = ""  # HISTORY_PG_DSN=postgresql://velocity@127.0.0.1:5433/velocity
+    # Hypertable chunk width and how old a chunk must be before Timescale's
+    # columnar compression takes it. Retention/byte budget reuse the history_*
+    # settings above (retention hours, history_budget_gb).
+    history_pg_chunk_hours: int = 6
+    history_pg_compress_after_hours: int = 12
+
+    # ── Upstream ADS-B heatmap replay (tar1090 globe_history, keyless) ──
+    # Public aggregators serve readsb's 30-minute heatmap chunks
+    # (globe_history/YYYY/MM/DD/heatmap/NN.bin.ttf) back to 2024. Hosts are tried
+    # in order. Measured 2026-09-17 (docs/heatmap-coverage-sweep-2026-09-17.csv):
+    # adsb.fi has every day since 2024-01-01, adsb.lol 689 of 990; but adsb.fi
+    # sits behind Cloudflare and answered 403 to every client from this egress
+    # after a 990-request HEAD sweep, while adsb.lol kept serving (10 s slices,
+    # ~13 MB per half hour). adsb.lol is therefore first; adsb.fi fills its
+    # gaps when the egress is not blocked. Probe coverage gently. airplanes.live is
+    # deliberately NOT listed by default: api.airplanes.live blocked this egress
+    # once (apps/api/CLAUDE.md), and 9 MB chunks every few seconds is the load
+    # pattern that did it. ADSB_DISABLED_HOSTS is honoured by domain suffix.
+    heatmap_hosts: str = "adsb.lol,globe.adsb.fi"  # HEATMAP_HOSTS
+    # On-disk cache of fetched chunks (data/heatmap/YYYY/MM/DD/NN.bin.ttf.gz),
+    # immutable once the half hour has closed; LRU by atime under this budget.
+    heatmap_cache_gb: float = 4.0  # HEATMAP_CACHE_GB
 
     # ── Ontology local spine ──
     # Default (keyless) backend for the ontology: local SQLite next to

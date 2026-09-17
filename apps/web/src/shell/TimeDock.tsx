@@ -3,23 +3,32 @@ import type * as Cesium from 'cesium';
 import { Icon } from '../normal/Icon.js';
 import { apiFetch } from '../transport/http.js';
 import { useTime } from '../state/stores.js';
+import { usePolReplay } from '../state/polReplayStore.js';
+import { installHistoryPlayback, type PlaybackController, type PlaybackInfo } from '../globe/HistoryPlayback.js';
+import { CoverageStrip, type Coverage } from '../timeline/CoverageStrip.js';
 
-// TimeDock — the transport, built from docs/mockups/console-2026-08
-// (`12-map-replay.html`) and fed by the same endpoints the old Timeline read.
+// TimeDock — THE transport. Built from docs/mockups/console-2026-08
+// (`12-map-replay.html`) and fed by the same density/events endpoints the old
+// Timeline read, PLUS the one thing that was missing entirely: this is now
+// the only place that installs HistoryPlayback and actually drives
+// `viewer.clock`. Before this, Play flipped a store flag nothing read outside
+// the 2D-only Timeline component, and seek() wrote local state alone — the
+// clock never moved and no history ever loaded (docs/decisions.md, Wave 0).
 //
-// This is not the old Timeline restyled. Three things are different, and they
-// are the reasons the old one was hard to drive:
-//
-// 1. THE SCRUB AXIS FOLLOWS THE WINDOW. The old strip requested a fixed
-//    `window_sec=72000` and derived the playhead, both seek targets and the
-//    keyboard clamp from that one response. So during a 3d or 7d replay the
-//    playhead pegged at 0 % and the strip could not reach the data that was
-//    playing. The route already accepted 72 h; nothing asked for it.
-// 2. THE CONTROLS EXIST. Skip back and forward 15 s, frame step, and a Live
-//    button are on screen. The old dock had three buttons and hid the rest
-//    behind keys nothing advertised.
-// 3. THE LABEL TELLS THE TRUTH. It states the range actually loaded rather
-//    than always printing `now − window`.
+// Four things this dock owns that the old one didn't:
+// 1. THE CLOCK IS REAL. multiplier/playing drive `viewer.clock` directly, and
+//    `installHistoryPlayback(viewer)` is installed here — the ONE transport
+//    implementation (Timeline.tsx is now a thin wrapper around this).
+// 2. DAY + TIME PICKERS DRIVE loadAt(). Replay starts at an arbitrary UTC
+//    instant and plays forward from there — own archive when it's recent
+//    enough, public tar1090 heatmap chunks (proxied, decoded client-side)
+//    for aircraft further back than this box has recorded.
+// 3. PATTERN-OF-LIFE IS WIRED HERE. EntityPanel's "Pattern of life" button
+//    (usePolReplay) used to talk to Timeline; Timeline no longer owns a
+//    controller, so this dock is the one subscriber now.
+// 4. THE LABEL TELLS THE TRUTH: which source is playing, and the speed cap
+//    while it's the upstream one (chunk pacing caps at 600x — 3600x would
+//    mean loading multiple 9 MB chunks per second).
 
 const WINDOWS = [
   { id: '1h', label: '1h', sec: 3_600 },
@@ -30,6 +39,13 @@ const WINDOWS = [
 ] as const;
 
 const SPEEDS = [1, 10, 60, 600, 3600] as const;
+const FALLBACK_MIN_DAY = '2024-01-01';
+// Fallback retention until /api/history/stats answers — matches the config
+// default (history_retention_hours = 168 -> 7 days). Only used to bound
+// CoverageStrip's window; the day-picker's own min bound comes from the
+// upstream coverage fetch below, since Wave 0 replay reaches further back
+// than the own-archive retention window.
+const DEFAULT_RETENTION_HOURS = 168;
 
 interface Density {
   from: number;
@@ -59,6 +75,42 @@ function tickLabel(ms: number): string {
   const d = new Date(ms);
   return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 }
+function isoDay(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+// Human label for the retained buffer depth (e.g. "~7d", "~36h") — ported
+// verbatim from timeline/Timeline.tsx's retentionDays().
+function retentionLabel(hours: number): string {
+  if (hours >= 48) return `~${Math.round(hours / 24)}d`;
+  return `~${Math.round(hours)}h`;
+}
+
+// Cesium is imported as a TYPE here (the viewer is only ever handed to us by
+// the caller), so JulianDate conversion is done by hand rather than via
+// Cesium.JulianDate — the same shape Timeline.tsx used to build.
+function jdToMs(jd: Cesium.JulianDate): number {
+  return (jd.dayNumber - 2440587) * 86400_000 + jd.secondsOfDay * 1000 - 0.5 * 86400_000;
+}
+function msToJulian(ms: number): Cesium.JulianDate {
+  const seconds = ms / 1000;
+  const dayNumber = 2440587 + Math.floor(seconds / 86400);
+  const secondsOfDay = seconds - (dayNumber - 2440587) * 86400 + 0.5 * 86400;
+  return { dayNumber, secondsOfDay } as Cesium.JulianDate;
+}
+
+/**
+ * Next speed along the SPEEDS ladder, clamped at both ends.
+ *
+ * Exported so the keyboard bindings are testable without mounting Cesium —
+ * moved here from timeline/Timeline.tsx (re-exported there for
+ * `timeline/transport.test.ts`, which this dock's brief does not own).
+ */
+export function stepSpeed(current: number, dir: 1 | -1): number {
+  const i = SPEEDS.indexOf(current as (typeof SPEEDS)[number]);
+  const from = i < 0 ? 0 : i;
+  const next = Math.max(0, Math.min(SPEEDS.length - 1, from + dir));
+  return SPEEDS[next] ?? SPEEDS[0];
+}
 
 export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Element {
   const playing = useTime((s) => s.playing);
@@ -77,6 +129,116 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
   const [clockMs, setClockMs] = useState<number>(() => Date.now());
   const [live, setLive] = useState(true);
   const strip = useRef<HTMLDivElement | null>(null);
+
+  // ── The real transport ───────────────────────────────────────────────────
+  const ctrlRef = useRef<PlaybackController | null>(null);
+  const [playbackInfo, setPlaybackInfo] = useState<PlaybackInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [replayDay, setReplayDay] = useState('');
+  const [replayTime, setReplayTime] = useState('00:00');
+  const [minDay, setMinDay] = useState(FALLBACK_MIN_DAY);
+  const maxDay = isoDay(Date.now());
+  // Own-archive coverage (recording_since / N GB / M fixes) + retention, for
+  // the ownership chip and the "picked day precedes real depth" warning —
+  // restored from timeline/Timeline.tsx (docs/replay-flagship-plan.md §3).
+  const [retentionHours, setRetentionHours] = useState<number>(DEFAULT_RETENTION_HOURS);
+  const [coverage, setCoverage] = useState<Coverage | null>(null);
+  // Upstream (tar1090 heatmap) reachability by day, for the second coverage
+  // row (here-is-some-feedback-cuddly-pond.md §1.2: "in a second row,
+  // upstream availability").
+  const [upstreamDays, setUpstreamDays] = useState<{ day: string; hosts: string[] }[]>([]);
+
+  useEffect(() => {
+    if (!viewer || viewer.isDestroyed()) return;
+    const ctrl = installHistoryPlayback(viewer);
+    ctrlRef.current = ctrl;
+    return () => {
+      ctrl.destroy();
+      ctrlRef.current = null;
+    };
+  }, [viewer]);
+
+  // The store's playing/multiplier drive the real clock directly — the bug
+  // this dock exists to fix. Runs whether or not a replay is loaded: while
+  // live, it pauses/resumes and paces the live clock the same way.
+  useEffect(() => {
+    if (!viewer || viewer.isDestroyed()) return;
+    viewer.clock.multiplier = multiplier;
+    viewer.clock.shouldAnimate = playing;
+  }, [viewer, multiplier, playing]);
+
+  // Earliest day upstream heatmap chunks actually cover, for the day-picker's
+  // min bound AND the second coverage row below. Falls back to 2024-01-01 on
+  // any error/degraded answer — never blocks the picker on a route the
+  // backend may not have deployed yet.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await apiFetch(`/api/history/upstream/coverage?from=${FALLBACK_MIN_DAY}&to=${maxDay}`);
+        if (!r.ok) return;
+        const j = (await r.json()) as { days?: { day: string; hosts?: string[] }[] };
+        const days = (j.days ?? []).map((d) => ({ day: d.day, hosts: d.hosts ?? [] }));
+        if (cancelled) return;
+        setUpstreamDays(days);
+        const reachable = days.filter((d) => d.hosts.length > 0).map((d) => d.day).sort();
+        if (reachable.length > 0) setMinDay(reachable[0]!);
+      } catch {
+        /* keep the 2024-01-01 fallback; the second row renders "not yet known" */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Effective (clamped) retention from /api/history/stats — bounds
+  // CoverageStrip's window the same way Timeline.tsx did. Degrades silently
+  // to DEFAULT_RETENTION_HOURS on error.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await apiFetch('/api/history/stats');
+        if (!r.ok) return;
+        const s = (await r.json()) as { retention_hours?: number };
+        if (!cancelled && typeof s.retention_hours === 'number' && s.retention_hours > 0) {
+          setRetentionHours(s.retention_hours);
+        }
+      } catch {
+        /* keep the default */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Pattern-of-life: EntityPanel's "Pattern of life" button bumps polSeq via
+  // usePolReplay → replay just that entity's recorded track (+ dwell
+  // clusters). This dock is the one subscriber now that Timeline no longer
+  // owns a controller.
+  const polSeq = usePolReplay((s) => s.seq);
+  useEffect(() => {
+    if (polSeq === 0) return;
+    const ctrl = ctrlRef.current;
+    if (!ctrl) return;
+    const { targetId, windowSec: polWindowSec } = usePolReplay.getState();
+    void (async () => {
+      if (!targetId) {
+        ctrl.clear();
+        setPlaybackInfo(null);
+        setLive(true);
+        return;
+      }
+      setLoading(true);
+      const info = await ctrl.load(polWindowSec, targetId);
+      setPlaybackInfo(info);
+      setLive(false);
+      setLoading(false);
+    })();
+  }, [polSeq]);
 
   // Both series follow the SELECTED window, which is the fix: the axis and the
   // data that is playing are now the same span.
@@ -125,9 +287,50 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
   const seek = useCallback(
     (ms: number) => {
       setLive(false);
-      setClockMs(Math.max(from, Math.min(to, ms)));
+      const clamped = Math.max(from, Math.min(to, ms));
+      setClockMs(clamped);
+      if (viewer && !viewer.isDestroyed()) {
+        viewer.clock.currentTime = msToJulian(clamped);
+        viewer.scene.requestRender();
+      }
     },
-    [from, to],
+    [from, to, viewer],
+  );
+
+  const goLive = useCallback(() => {
+    ctrlRef.current?.clear();
+    setPlaybackInfo(null);
+    setReplayDay('');
+    setLive(true);
+    const now = Date.now();
+    setClockMs(now);
+    if (viewer && !viewer.isDestroyed()) {
+      viewer.clock.currentTime = msToJulian(now);
+      viewer.scene.requestRender();
+    }
+  }, [viewer]);
+
+  // Day/time picker → loadAt(). Replays from the picked UTC instant forward
+  // to "now" (the live edge) — tar1090's own picker treats a day pick as a
+  // fresh session, so this does too, resetting any prior replay window.
+  const applyReplayStart = useCallback(
+    (day: string, time: string) => {
+      const ctrl = ctrlRef.current;
+      if (!ctrl || !day) return;
+      const startMs = Date.parse(`${day}T${time || '00:00'}:00Z`);
+      const endMs = Date.now();
+      if (!Number.isFinite(startMs) || endMs - startMs < 60_000) return;
+      setLive(false);
+      setLoading(true);
+      void ctrl.loadAt(startMs, endMs, (info) => setPlaybackInfo(info)).then((info) => {
+        setPlaybackInfo(info);
+        setLoading(false);
+        if (viewer && !viewer.isDestroyed()) {
+          setClockMs(jdToMs(viewer.clock.currentTime));
+        }
+      });
+    },
+    [viewer],
   );
 
   const onScrub = useCallback(
@@ -150,6 +353,81 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
   const peak = Math.max(1, ...bars);
   const alerts = density?.alerts ?? [];
 
+  // Ownership chip — "recording since <date> · <N> GB · <M> fixes", sourced
+  // from the /api/history/coverage response CoverageStrip already fetches
+  // (docs/replay-flagship-plan.md §3). Falls back to nothing (the source
+  // label alone) until the first successful response lands.
+  const ownershipChip =
+    coverage && coverage.recording_since
+      ? `recording since ${isoDay(coverage.recording_since * 1000)} · ${(coverage.total_bytes / 1024 ** 3).toFixed(1)} GB · ${coverage.row_count.toLocaleString()} fixes`
+      : null;
+
+  // Truth vs. what Wave 0 changed: before, a day before the own archive's
+  // real depth was an EMPTY replay with no explanation. Now aircraft still
+  // replay from the upstream archive that far back — only VESSELS (own
+  // archive only, no upstream fallback) go missing. The warning is reworded
+  // for that, not dropped: `oldest_ts` (the coverage endpoint's honest floor)
+  // still tells the operator where the own archive actually starts.
+  const earliestAvailableDay = coverage?.oldest_ts ? isoDay(coverage.oldest_ts * 1000) : null;
+  const replayDayBeforeAvailable = Boolean(
+    replayDay && earliestAvailableDay && replayDay < earliestAvailableDay,
+  );
+
+  // Cap the speed ladder at 600x while the currently-loaded chunk's aircraft
+  // are coming from the upstream (adsb.fi) archive — 3600x would mean loading
+  // several 9 MB global chunks a second. Own-archive-only chunks keep 3600x.
+  const maxMultiplier = playbackInfo?.maxMultiplier ?? 3600;
+  useEffect(() => {
+    if (multiplier > maxMultiplier) setMultiplier(maxMultiplier);
+  }, [maxMultiplier, multiplier, setMultiplier]);
+
+  // ── Keyboard transport ──────────────────────────────────────────────────
+  // Every shortcut this dock prints (space, the 15s/frame buttons' titles) has
+  // a listener — apps/web/CLAUDE.md "Controls state what they do". Ignored
+  // while typing (input/textarea/select/contenteditable).
+  useEffect(() => {
+    const typing = (t: EventTarget | null): boolean => {
+      const el = t as HTMLElement | null;
+      if (!el || typeof el.tagName !== 'string') return false;
+      if (el.isContentEditable) return true;
+      return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented || typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          seek(clockMs - (e.shiftKey ? span / 20 : span / Math.max(1, bars.length || 240)));
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          seek(clockMs + (e.shiftKey ? span / 20 : span / Math.max(1, bars.length || 240)));
+          break;
+        case ',':
+          e.preventDefault();
+          setMultiplier(Math.min(maxMultiplier, stepSpeed(multiplier, -1)));
+          break;
+        case '.':
+          e.preventDefault();
+          setMultiplier(Math.min(maxMultiplier, stepSpeed(multiplier, 1)));
+          break;
+        case 'l':
+        case 'L':
+          e.preventDefault();
+          goLive();
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [togglePlay, seek, clockMs, span, bars.length, multiplier, maxMultiplier, setMultiplier, goLive]);
+
   return (
     <div className="select-none text-[12px]">
       {/* Transport. One filled primary, a red Live, and every control the old
@@ -162,7 +440,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
         <TBtn label="Jump to start" onClick={() => seek(from)}>
           <Icon name="step-b" className="h-3 w-3" />
         </TBtn>
-        <TBtn label="Rewind" onClick={() => setMultiplier(Math.max(1, multiplier / 10))}>
+        <TBtn label="Rewind" onClick={() => setMultiplier(Math.max(1, Math.min(maxMultiplier, multiplier / 10)))}>
           <Icon name="rewind" className="h-3 w-3" />
         </TBtn>
         <TBtn label="Back 15 seconds" onClick={() => seek(clockMs - 15_000)}>
@@ -188,17 +466,14 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           15s
           <Icon name="fwd-15" className="h-3 w-3" />
         </TBtn>
-        <TBtn label="Fast forward" onClick={() => setMultiplier(Math.min(3600, multiplier * 10))}>
+        <TBtn label="Fast forward" onClick={() => setMultiplier(Math.min(maxMultiplier, multiplier * 10))}>
           <Icon name="fast-forward" className="h-3 w-3" />
         </TBtn>
         <button
           type="button"
-          onClick={() => {
-            setLive(true);
-            setClockMs(Date.now());
-          }}
+          onClick={goLive}
           aria-pressed={live}
-          title="Return to live"
+          title="Return to live (L)"
           className={`ml-[2px] h-5 rounded-sm px-[10px] text-[12px] ${
             live ? 'bg-bg-3 text-txt-1' : 'bg-alert text-(--on-alert)'
           }`}
@@ -211,9 +486,11 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
             <button
               key={s}
               type="button"
-              onClick={() => setMultiplier(s)}
+              onClick={() => setMultiplier(Math.min(maxMultiplier, s))}
+              disabled={s > maxMultiplier}
               aria-pressed={multiplier === s}
-              className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 ${
+              title={s > maxMultiplier ? `capped at ${maxMultiplier}x while replaying the upstream archive` : `${s}x`}
+              className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 disabled:opacity-40 ${
                 multiplier === s ? 'bg-accent text-(--on-accent)' : 'text-txt-2 hover:bg-(--hover)'
               }`}
             >
@@ -236,6 +513,61 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Day/time replay — pick a UTC instant to run the world back from.
+          Bounded by the earliest day the upstream heatmap actually covers. */}
+      <div className="flex h-[26px] items-center gap-[6px] border-t border-line px-[10px]">
+        <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3">replay from</span>
+        <input
+          type="date"
+          value={replayDay}
+          min={minDay}
+          max={maxDay}
+          aria-label="Replay start day"
+          title={
+            earliestAvailableDay
+              ? `Replay a UTC day · own archive (aircraft + vessels) available from ${earliestAvailableDay} · aircraft continue further back from the upstream archive`
+              : `Replay a UTC day · keyless back to ${minDay} (aircraft, upstream archive)`
+          }
+          onChange={(e) => {
+            setReplayDay(e.target.value);
+            applyReplayStart(e.target.value, replayTime);
+          }}
+          className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-hidden focus:border-accent-line scheme-dark"
+        />
+        <input
+          type="time"
+          value={replayTime}
+          aria-label="Replay start time (UTC)"
+          onChange={(e) => {
+            setReplayTime(e.target.value);
+            if (replayDay) applyReplayStart(replayDay, e.target.value);
+          }}
+          className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-hidden focus:border-accent-line scheme-dark"
+        />
+        <span className="mono text-[10px] text-txt-4">
+          {loading ? 'loading…' : playbackInfo ? playbackInfo.label : `keyless back to ${minDay}`}
+          {ownershipChip ? ` · ${ownershipChip}` : ` · ${retentionLabel(retentionHours)} own-archive buffer`}
+        </span>
+        {replayDayBeforeAvailable && (
+          <span
+            className="mono text-[10px] text-txt-4"
+            title="The byte cap already pruned own-archive positions older than this. Aircraft still replay from the upstream archive; vessels have no upstream fallback."
+          >
+            vessels unavailable before {earliestAvailableDay} (own archive only)
+          </span>
+        )}
+      </div>
+
+      {/* Coverage — two rows: the own archive's real recorded-fix density per
+          hour (CoverageStrip, existing component, unchanged), and which days
+          the upstream heatmap actually covers (here-is-some-feedback-cuddly-
+          pond.md §1.2 "in a second row, upstream availability"). Both sit
+          directly under the day/time picker, same as Timeline.tsx used to. */}
+      <div className="flex flex-col gap-[3px] border-t border-line px-[10px] py-[4px]">
+        <CoverageStrip windowHours={retentionHours} onCoverage={setCoverage} />
+        <UpstreamAvailabilityRow days={upstreamDays} />
       </div>
 
       {/* Tick ruler. */}
@@ -346,6 +678,45 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
         <span className="flex-1" />
         <span>{bars.length} bins</span>
       </div>
+    </div>
+  );
+}
+
+/** Second coverage row: which UTC days the upstream (tar1090) heatmap
+ *  archive actually has, one thin bar per day across the fetched range
+ *  (`FALLBACK_MIN_DAY`..today). "on" = at least one host reported that day —
+ *  mirrors CoverageStrip's own "draw the gap, don't hide it" rule so a day
+ *  nobody has archived reads as a stated gap, not empty background. */
+function UpstreamAvailabilityRow({ days }: { days: { day: string; hosts: string[] }[] }): JSX.Element {
+  if (days.length === 0) {
+    return (
+      <div className="mono text-[10px] text-txt-4" role="img" aria-label="Upstream archive availability: not yet known">
+        upstream archive availability: not yet known
+      </div>
+    );
+  }
+  const reachableCount = days.filter((d) => d.hosts.length > 0).length;
+  const label = `Upstream archive availability: ${reachableCount} of ${days.length} days reachable`;
+  return (
+    <div
+      className="relative h-[6px] w-full bg-bg-3 border border-line rounded-sm overflow-hidden"
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      <svg width="100%" height="100%" preserveAspectRatio="none" viewBox={`0 0 ${days.length} 100`}>
+        {days.map((d, i) => (
+          <rect
+            key={d.day}
+            x={i}
+            y={0}
+            width={1}
+            height={100}
+            fill={d.hosts.length > 0 ? 'var(--accent)' : 'var(--alert)'}
+            opacity={d.hosts.length > 0 ? 0.7 : 0.22}
+          />
+        ))}
+      </svg>
     </div>
   );
 }

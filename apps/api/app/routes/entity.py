@@ -15,6 +15,12 @@ appropriate upstream:
 - port:{wpi}         → app.places base row + WPI harbor/repair/depth detail.
 - satellite:{norad}, or a map-clicked satellite entity id (see the
   SAT_TAIL_RE note below) → CelesTrak SATCAT row (app.satcat).
+
+Every response also carries a ``registry`` block: the ontology's assertions for
+the SAME id (registry / filing / claim tiers) joined to the live sensor fix —
+who says what about this object, when, and how far from the last fix. That join
+is what turns a map tooltip into an object view (docs/gap-analysis-2026-09-13.md
+§6 rows 6-7).
 """
 
 from __future__ import annotations
@@ -22,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import math
 import re
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -31,6 +38,9 @@ from app import places, satcat
 from app.config import Settings, get_settings
 from app.correlate.store import store
 from app.intel import imagery_index
+from app.intel.ontology import get_registry
+from app.keys import UserCtx
+from app.security import Principal, current_principal_or_local
 from app.tier import commercial_request
 from app.upstream import cache, get_client
 
@@ -285,6 +295,7 @@ async def entity(
     eid: str,
     callsign: str | None = None,
     settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(current_principal_or_local),
 ) -> dict[str, Any]:
     if ":" not in eid:
         raise HTTPException(400, "expect <kind>:<id>")
@@ -296,40 +307,133 @@ async def entity(
     if kind == "aircraft":
         if not ICAO24_RE.match(raw):
             raise HTTPException(400, "aircraft id must be a 6-char ICAO24 hex")
-        return await _enrich_aircraft(raw, callsign)
-    if kind == "vessel":
+        out = await _enrich_aircraft(raw, callsign)
+    elif kind == "vessel":
         if not MMSI_RE.match(raw):
             raise HTTPException(400, "vessel id must be a numeric MMSI")
-        return await _enrich_vessel(raw, settings)
-    if kind == "quake":
+        out = await _enrich_vessel(raw, settings)
+    elif kind == "quake":
         if not QUAKE_ID_RE.match(raw):
             raise HTTPException(400, "malformed quake id")
-        return await _enrich_quake(raw)
-    if kind == "airport":
+        out = await _enrich_quake(raw)
+    elif kind == "airport":
         if not AIRPORT_CODE_RE.match(raw):
             raise HTTPException(400, "malformed airport code")
-        return await _enrich_airport(raw)
-    if kind == "port":
+        out = await _enrich_airport(raw)
+    elif kind == "port":
         if not PORT_WPI_RE.match(raw):
             raise HTTPException(400, "port id must be a numeric WPI")
-        return await _enrich_port(raw)
-    if kind == "satellite":
+        out = await _enrich_port(raw)
+    elif kind == "satellite":
         if not SAT_NORAD_RE.match(raw):
             raise HTTPException(400, "satellite id must be a numeric NORAD id")
-        return await _enrich_satellite(raw)
-    if kind in ("facility", "military"):
-        return _enrich_facility(kind, raw)
-    if kind in _FEED_SOURCES:
+        out = await _enrich_satellite(raw)
+    elif kind in ("facility", "military"):
+        out = _enrich_facility(kind, raw)
+    elif kind in _FEED_SOURCES:
         if not FEED_ID_RE.match(raw):
             raise HTTPException(400, "malformed feed object id")
-        return _enrich_feed(kind, raw)
-    # See the SAT_TAIL_RE comment above: a globe-clicked satellite entity id
-    # carries the layer descriptor as its head, not a "satellite:"/"sat:"
-    # kind — recover the NORAD id from the id's tail before giving up.
-    sat_tail = SAT_TAIL_RE.search(eid)
-    if sat_tail:
-        return await _enrich_satellite(sat_tail.group(1))
-    raise HTTPException(404, f"no enrichment for kind {kind}")
+        out = _enrich_feed(kind, raw)
+    else:
+        # See the SAT_TAIL_RE comment above: a globe-clicked satellite entity id
+        # carries the layer descriptor as its head, not a "satellite:"/"sat:"
+        # kind — recover the NORAD id from the id's tail before giving up.
+        sat_tail = SAT_TAIL_RE.search(eid)
+        if sat_tail:
+            out = await _enrich_satellite(sat_tail.group(1))
+        else:
+            raise HTTPException(404, f"no enrichment for kind {kind}")
+
+    # The T0 ↔ T2 join: everything the registry / filing / claim tiers assert
+    # about this SAME id, each row stamped with its tier and its distance from
+    # the object's newest live sensor fix. Read as the caller so the ontology's
+    # clearance filter and per-user scoping hold (same gate as
+    # /api/ontology/assertions/{id}).
+    out["registry"] = await registry_block(eid, settings, principal)
+    return out
+
+
+# ── registry / filing tier join (T0 ↔ T2) ────────────────────────────────
+# A tier is a property of the assertion's SOURCE, not of its value: the prefix
+# before the first ':' names the tier that produced the statement. Unknown
+# prefixes fall to "other" rather than being guessed into a tier.
+_TIER_BY_PREFIX: dict[str, str] = {
+    # sensor — the live observation feeds
+    "sensor": "sensor", "adsb": "sensor", "ais": "sensor", "feed": "sensor",
+    # registry — who the object is registered to
+    "registry": "registry", "opensky-registry": "registry", "gleif": "registry",
+    "sanctions": "registry", "faa": "registry", "itu": "registry",
+    # filing — a document filed about it
+    "filing": "filing", "sec": "filing", "edgar": "filing", "ted": "filing",
+    "usaspending": "filing",
+    # claim — somebody said so
+    "claim": "claim", "news": "claim", "gdelt": "claim", "telegram": "claim",
+}
+TIER_OTHER = "other"
+TIERS: tuple[str, ...] = ("sensor", "registry", "filing", "claim", TIER_OTHER)
+
+
+def source_tier(source: str) -> str:
+    """The tier label for an assertion source ('registry:gleif' → 'registry').
+
+    Both spellings the corpus uses resolve the same way: ``gleif`` and
+    ``registry:gleif`` are the registry tier, ``faa`` and ``registry:faa`` too.
+    """
+    return _TIER_BY_PREFIX.get(source.split(":", 1)[0].strip().lower(), TIER_OTHER)
+
+
+async def registry_block(
+    eid: str, settings: Settings, principal: Principal | None
+) -> dict[str, Any]:
+    """The ontology's assertions for ``eid``, tiered and lagged against the fix.
+
+    Shape: ``assertions`` (newest first, as the store returns them — the
+    frontend groups them by ``source``), ``tiers`` (source → tier label), and
+    ``degraded``. Empty + ``degraded`` on any ontology failure: a broken graph
+    must never take the live kinematics down with it.
+
+    ``lag_s`` is ``observed_at`` minus the newest live fix for the same id —
+    how far the statement sits from the sensor record — and only exists when
+    BOTH timestamps do (a filing about an object with no live fix has no lag to
+    report; report nothing rather than a zero).
+    """
+    try:
+        ctx = UserCtx(
+            user_id=principal.user_id if principal else "local",
+            token=principal.token if principal else "",
+        )
+        rows = await get_registry(ctx, settings, principal=principal).get_assertions(eid)
+    except Exception:
+        return {"assertions": [], "tiers": {}, "degraded": True}
+
+    fix = store.latest_for(eid)
+    fix_t = fix.t if fix is not None else None
+    assertions: list[dict[str, Any]] = []
+    tiers: dict[str, str] = {}
+    for a in rows:
+        tier = source_tier(a.source)
+        tiers[a.source] = tier
+        lag_s: int | None = None
+        if fix_t is not None and a.observed_at:
+            try:
+                observed_t = datetime.fromisoformat(a.observed_at).timestamp()
+            except ValueError:
+                observed_t = None
+            if observed_t is not None:
+                lag_s = round(observed_t - fix_t)
+        assertions.append(
+            {
+                "prop": a.prop,
+                "value": a.value,
+                "source": a.source,
+                "confidence": a.confidence,
+                "observed_at": a.observed_at,
+                "derivation": a.derivation,
+                "tier": tier,
+                "lag_s": lag_s,
+            }
+        )
+    return {"assertions": assertions, "tiers": tiers, "degraded": False}
 
 
 # ── aircraft ─────────────────────────────────────────────────────────────

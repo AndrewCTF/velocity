@@ -10,6 +10,78 @@ import { useReducedMotion } from '../shell/useReducedMotion.js';
 import { Badge, Btn, type BadgeTone } from '../shell/instruments.js';
 import type { Alert, AlertSeverity } from '@osint/shared';
 import { Icon } from '../normal/Icon.js';
+import { apiFetch } from '../transport/http.js';
+
+// Entity-resolution merge review (W2) — intel/resolve.py records a scored
+// merge_candidates row the moment two observations collide and NEVER
+// auto-merges (a false merge is misattribution). This is the queue an
+// operator decides from: poll the open candidates, approve or reject each.
+export interface ResolveCandidate {
+  id_a: string;
+  id_b: string;
+  reason: string;
+  score: number;
+  ts: number;
+  status: string;
+  a_kind: string | null;
+  a_name: string | null;
+  b_kind: string | null;
+  b_name: string | null;
+}
+
+const RESOLVE_POLL_MS = 30_000;
+
+function useResolveCandidates(): {
+  candidates: ResolveCandidate[];
+  decide: (c: ResolveCandidate, verdict: 'approve' | 'reject') => void;
+  error: string | null;
+} {
+  const [candidates, setCandidates] = useState<ResolveCandidate[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async (): Promise<void> => {
+    try {
+      const r = await apiFetch('/api/resolve/candidates?status=open');
+      if (!r.ok) {
+        setError(`Merge review unavailable (HTTP ${r.status})`);
+        return;
+      }
+      setCandidates((await r.json()) as ResolveCandidate[]);
+      setError(null);
+    } catch {
+      setError('Merge review unavailable (network error)');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const t = setInterval(() => void load(), RESOLVE_POLL_MS);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const decide = useCallback(
+    (c: ResolveCandidate, verdict: 'approve' | 'reject'): void => {
+      void (async () => {
+        try {
+          const r = await apiFetch(
+            `/api/resolve/candidates/${encodeURIComponent(c.id_a)}/${encodeURIComponent(c.id_b)}/${verdict}`,
+            { method: 'POST' },
+          );
+          if (!r.ok) {
+            setError(`Merge ${verdict} failed (HTTP ${r.status})`);
+            return;
+          }
+          await load();
+        } catch {
+          setError(`Merge ${verdict} failed (network error)`);
+        }
+      })();
+    },
+    [load],
+  );
+
+  return { candidates, decide, error };
+}
 
 const SEV_BADGE: Record<string, BadgeTone> = {
   critical: 'alert',
@@ -46,6 +118,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
   const savedSearches = useSavedSearches((s) => s.searches);
   const removeSaved = useSavedSearches((s) => s.remove);
   const { briefs: woBriefs, dismiss: woDismiss, ack: woAck } = useWatchOfficerBriefs();
+  const { candidates: mergeCandidates, decide: decideMerge, error: mergeError } = useResolveCandidates();
   const reduced = useReducedMotion();
   const [sev, setSev] = useState<AlertSeverity | null>(null);
   const [channel, setChannel] = useState<string | null>(null);
@@ -229,6 +302,43 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
                   <span className="mono text-[10px] tabular-nums text-txt-3 ml-auto">
                     {new Date(b.created * 1000).toISOString().slice(11, 19)}Z
                   </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Merge review — entity-resolution conflicts recorded by intel/resolve.py,
+          never auto-merged. An operator approves (repoints the loser's aliases
+          onto the winner and, for ontology object ids, records a same_as link)
+          or rejects (marks it and moves on) each scored candidate. */}
+      {(mergeCandidates.length > 0 || mergeError) && (
+        <div className="border border-line rounded-sm">
+          <div className="px-2 py-1 mono text-[10px] uppercase tracking-[0.5px] text-txt-3 border-b border-line">
+            Merge review · {mergeCandidates.length}
+          </div>
+          {mergeError && (
+            <p className="px-2 py-1.5 text-[11px] text-alert">{mergeError}</p>
+          )}
+          <ul className="divide-y divide-line">
+            {mergeCandidates.map((c) => (
+              <li key={`${c.id_a}:${c.id_b}`} className="px-2 py-1.5">
+                <div className="mono text-[10px] text-txt-1 truncate">
+                  {c.a_name ?? c.id_a} ↔ {c.b_name ?? c.id_b}
+                </div>
+                <div className="mono text-[10px] text-txt-3">
+                  {c.reason} · {Math.round(c.score * 100)}%
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <Btn size="sm" onClick={() => decideMerge(c, 'approve')}>approve</Btn>
+                  <button
+                    type="button"
+                    onClick={() => decideMerge(c, 'reject')}
+                    className="mono text-[10px] uppercase tracking-[0.4px] text-txt-3 hover:text-alert"
+                  >
+                    reject
+                  </button>
                 </div>
               </li>
             ))}

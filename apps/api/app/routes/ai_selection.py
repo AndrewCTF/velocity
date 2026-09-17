@@ -13,6 +13,11 @@ surface (``/api/ai/selection`` is already in ``app.ratelimit._COMPUTE_PREFIXES``
 Cached 60s per ``(kind, id)`` in-process (reusing ``app.upstream``'s shared
 TTL cache — an entity re-clicked within the same minute gets the same brief
 without a second model call); the caller sees ``cached: true`` on a hit.
+
+Every brief that actually reaches a model also leaves ONE ``llm_calls`` row
+(W4): the resolved ``UserCtx`` is bound with ``llm.bind_user`` around the call,
+so ``GET /api/ai/calls`` can say who asked for which assessment. A cached hit
+makes no model call and so writes no row.
 """
 
 from __future__ import annotations
@@ -358,7 +363,7 @@ async def _safe_context(kind: str, eid: str, props: dict[str, Any]) -> tuple[dic
 
 @router.post("/api/ai/selection/brief")
 async def post_selection_brief(
-    body: BriefIn, _ctx: UserCtx = Depends(current_user_or_local)
+    body: BriefIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> dict[str, Any]:
     if not llm.selection_enabled():
         raise HTTPException(status_code=409, detail="selection inference is disabled")
@@ -415,6 +420,12 @@ async def post_selection_brief(
             context_json = json.dumps(context, default=str, separators=(",", ":"))
             user += f"\n\nENRICHMENT:\n{context_json}"
         started = time.monotonic()
+        # Model-call audit (W4): bind the requesting user for the duration of the
+        # call so llm.chat() writes ONE llm_calls row naming who asked. Keyless
+        # (the shipping default) ``current_user_or_local`` resolves to the shared
+        # ``local`` principal, so the deployment that runs its own GPU is not the
+        # one deployment with no model-call trail.
+        bound = llm.bind_user(ctx.user_id, ctx.token)
         try:
             res = await asyncio.wait_for(
                 llm.chat(
@@ -427,6 +438,8 @@ async def post_selection_brief(
             )
         except TimeoutError as e:
             raise HTTPException(status_code=502, detail="AI assessment unavailable") from e
+        finally:
+            llm.reset_user(bound)
         latency_ms = round((time.monotonic() - started) * 1000)
         if not res.ok:
             # Never surface the raw backend error string to a client (copy rule).
@@ -441,9 +454,16 @@ async def post_selection_brief(
         #     It looks like provenance, it survives a skim, and an analyst who
         #     checks it finds nothing. Serving it labelled would still put a
         #     fabricated trail in front of someone whose job is checking things.
-        #   cites nothing at all -> SERVE, flagged `grounded: false`. Unsourced
-        #     prose is weaker, not false, and refusing it would delete a useful
-        #     brief over a formatting habit.
+        #   cites nothing at all -> WITHHOLD as `uncited` when
+        #     `llm_require_citations` is on (the default, 2026-09-17 W4). This
+        #     line used to read "SERVE, flagged grounded: false", on the
+        #     reasoning that unsourced prose is weaker rather than false. The
+        #     reasoning was sound and the outcome was still wrong: the flag was
+        #     a field in a JSON body, the prose was a paragraph on a watch
+        #     floor, and nothing downstream refused to render it. A claim an
+        #     analyst cannot trace is not a weak finding, it is not a finding.
+        #     Set LLM_REQUIRE_CITATIONS=0 to restore the flag-and-serve
+        #     behaviour on a deployment that wants it.
         allowed = _allowed_ids(body.kind, body.id, props_json, context_json)
         fabricated = llm.unknown_citations(res.text, allowed)
         if fabricated:
@@ -462,9 +482,23 @@ async def post_selection_brief(
                 "latency_ms": round((time.monotonic() - started) * 1000),
                 "enrichment": enrichment_status,
             }
+        grounded = llm.is_grounded(res.text, allowed)
+        if not grounded and getattr(get_settings(), "llm_require_citations", True):
+            return {
+                "ok": False,
+                "withheld": "uncited",
+                "detail": (
+                    "Assessment withheld: it cited none of the evidence it was "
+                    "given, so no claim in it can be traced back to a record."
+                ),
+                "model": res.model,
+                "backend": res.backend,
+                "latency_ms": latency_ms,
+                "enrichment": enrichment_status,
+            }
         return {
             "ok": True,
-            "grounded": llm.is_grounded(res.text, allowed),
+            "grounded": grounded,
             "text": res.text,
             "model": res.model,
             "backend": res.backend,

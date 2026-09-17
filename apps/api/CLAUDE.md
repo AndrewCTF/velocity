@@ -42,6 +42,21 @@ changing BOTH the guard and this file.
   (airplanes.live throttles with HTTP 200 + text/plain); `load_cell` RAISES on
   all-host failure. → `tests/test_invariants.py`
 
+## History archive
+
+- `HISTORY_BACKEND=auto|sqlite|timescale` picks the archive backend: `auto`
+  uses Postgres + TimescaleDB exactly when `HISTORY_PG_DSN` is set, otherwise
+  SQLite (the keyless fallback) with one boot warning naming the switch. The pg
+  path (`app/history_pg.py`) is a compressed hypertable (`positions`, 6 hour
+  chunks, columnar compression segmented by id) with a continuous hourly
+  aggregate `positions_hourly` behind `coverage()` and `timeseries()`;
+  retention and the byte budget drop whole chunks and **nothing on this path
+  ever VACUUMs**. `scripts/history_migrate_sqlite_to_pg.py` is resumable by the
+  target's `max(t)`. CI runs the pg tests against a real timescale service
+  container.
+  → `tests/test_history_pg.py`, `tests/test_history_backend_switch.py`
+  → replay chunks: `tests/test_adsb_heatmap.py`
+
 ## AIS
 
 - AIS = ShipXplorer direct httpx (needs `Referer`/`Origin`) + MyShipTracking
@@ -210,6 +225,15 @@ ai_models, ingest and alert_rules carries `Depends(audit_mutation)` (written
 before the handler: an attempt, not an outcome), and MCP tool calls audit with
 argument NAMES only. → `tests/test_upload_caps.py`, `tests/test_audit_mutations.py`
 
+- Governed actions serve keyless callers: `/api/actions/*` resolves the caller
+  with `current_user_or_local`, so a keyless box uses the shared `local`
+  identity while a Supabase box uses `current_user` plus the unchanged owner
+  scoping in `_may_decide`. A write-back carries `ActionSpec.operator_only`, so
+  it needs `require_operator` on the direct path and on proposal approval
+  alike, and the audit row stores the payload's SHA-256, never the payload; an
+  http target goes through the workflow SSRF/allow-list/dry-run path.
+  → `tests/test_writeback_action.py`
+
 ## Connections (operator-configured sources)
 
 `foundry/connections.py` runs MQTT / Kafka / SQL sources the operator points at
@@ -239,8 +263,11 @@ restarts a connection that dies later and applies an edit made in the UI.
 - The ONLY backend = local SQLite (`intel/ontology_local.py`, via
   `get_registry()`); the Supabase/PostgREST ontology backend was deleted the
   same day (operator invoked the kill criterion). Ontology/situations/maps
-  routes must keep working keyless (`current_user_or_local`).
-  → `tests/test_ontology_local.py`
+  routes must keep working keyless (`current_principal_or_local`: the local
+  principal is clearance 0, and every read goes through ONE predicate,
+  `intel/ontology.visible_to`; `principal=None` is the internal unfiltered path
+  for writers). `/api/ontology/schema` is static and stays exempt.
+  → `tests/test_ontology_local.py`, `tests/test_clearance_local_reads.py`
 - `objects.props` stays the exact last-written blob (wholesale replace,
   removals included — the frontend round-trip contract); provenance lives in
   the append-only `assertions` table, written by `upsert`'s diff /

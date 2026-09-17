@@ -1,5 +1,5 @@
 import { CheckCircle2, Table2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useFoundry,
   type Check,
@@ -12,11 +12,13 @@ import {
   type DatasetDocs,
   type DatasetVersion,
   type DeadLetterEntry,
+  type DocumentUpload,
   type RowsPage,
 } from '../state/foundry.js';
 import { Badge, Btn, Toggle } from '../shell/instruments.js';
 import { useConfirm } from '../shell/Modal.js';
 import { Modal } from '../shell/Modal.js';
+import { apiFetch } from '../transport/http.js';
 import { useFoundryNav, type DetailTab } from './nav.js';
 import { useFoundryPoll } from './useFoundryPoll.js';
 import { UploadModal } from './UploadModal.js';
@@ -286,6 +288,7 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
   const getDatasetDocs = useFoundry((s) => s.getDatasetDocs);
   const rollbackDataset = useFoundry((s) => s.rollbackDataset);
   const deleteDataset = useFoundry((s) => s.deleteDataset);
+  const loadDatasets = useFoundry((s) => s.loadDatasets);
   const error = useFoundry((s) => s.error);
   const { confirm, confirmElement } = useConfirm();
   const select = useFoundryNav((s) => s.select);
@@ -303,6 +306,9 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
   const [offset, setOffset] = useState(0);
   const [version, setVersion] = useState<number | undefined>(undefined);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [docBusy, setDocBusy] = useState(false);
+  const [docStatus, setDocStatus] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setOffset(0); setVersion(undefined); }, [dataset.id]);
   useEffect(() => {
@@ -327,6 +333,49 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
   }, [tab, dataset.id]);
 
   const refresh = (): void => { void getVersions(dataset.id).then(setVersions); };
+
+  // One document becomes ONE row appended as a new version (POST
+  // /datasets/{id}/documents), so the picker hands the raw file to the backend
+  // and the dataset is re-read afterwards rather than the row being assembled
+  // here. Multipart, so apiFetch gets no explicit content-type — the browser
+  // has to set the boundary itself.
+  const addDocument = async (file: File): Promise<void> => {
+    setDocBusy(true);
+    setDocStatus(null);
+    const form = new FormData();
+    form.append('file', file);
+    const r = await apiFetch(`/api/foundry/datasets/${dataset.id}/documents`, {
+      method: 'POST',
+      body: form,
+    }).catch(() => null);
+    setDocBusy(false);
+    if (!r) {
+      setDocStatus({ tone: 'error', text: 'Could not add the document (no answer from the backend).' });
+      return;
+    }
+    if (!r.ok) {
+      const detail = await r
+        .json()
+        .then((body: { detail?: string }) => body.detail ?? null)
+        .catch(() => null);
+      setDocStatus({
+        tone: 'error',
+        text: detail
+          ? `Could not add the document (HTTP ${r.status}): ${detail}`
+          : `Could not add the document (HTTP ${r.status}).`,
+      });
+      return;
+    }
+    const d = (await r.json().catch(() => null)) as DocumentUpload | null;
+    setDocStatus({
+      tone: 'ok',
+      text: d
+        ? `Added ${file.name} · v${d.latest_version} · ${d.row_count.toLocaleString()} rows`
+        : `Added ${file.name}`,
+    });
+    refresh();
+    void loadDatasets();
+  };
 
   const tabs: Array<{ id: DetailTab; label: string; count?: number | undefined }> = [
     { id: 'schema', label: 'Schema', count: dataset.schema.length },
@@ -365,11 +414,34 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
           <span className="mono text-[10px] text-txt-2 tabular-nums">{dataset.row_count.toLocaleString()} rows</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <input
+            ref={docInputRef}
+            type="file"
+            accept=".eml,.docx,.txt,.md,.pdf"
+            data-testid="dataset-doc-input"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void addDocument(f);
+              e.target.value = '';
+            }}
+          />
+          <Btn size="sm" disabled={docBusy} onClick={() => docInputRef.current?.click()}>
+            {docBusy ? 'adding…' : 'Add document'}
+          </Btn>
           <Btn size="sm" tone="accent" onClick={() => setUploadOpen(true)}>⇪ Upload version</Btn>
           <Btn size="sm" onClick={() => navigate('pipeline')}>Lineage ›</Btn>
           <Btn size="sm" onClick={() => void onDelete()}>Delete</Btn>
         </div>
       </div>
+      {docStatus && (
+        <p
+          data-testid="document-status"
+          className={`px-4 py-2 text-[11px] border-b border-line-2 ${docStatus.tone === 'ok' ? 'text-txt-2' : 'text-alert'}`}
+        >
+          {docStatus.text}
+        </p>
+      )}
       <div className="flex-1 min-h-0 overflow-auto p-4 space-y-3">
         {dataset.description && <p className="text-[11px] text-txt-2">{dataset.description}</p>}
         {error && <p className="text-[11px] text-alert">{error}</p>}

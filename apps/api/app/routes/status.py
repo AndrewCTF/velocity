@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
+import subprocess
+import sys
 import time
 from collections import deque
 from typing import Any
@@ -17,6 +20,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.config import get_settings
+from app.intel import promotion, resolve
 from app.routes import adsb as adsb_routes
 
 router = APIRouter(tags=["status"])
@@ -445,6 +449,14 @@ async def status_provenance() -> dict[str, Any]:
         }
     except Exception:  # noqa: BLE001 — diagnostics must never 500
         out["aircraft"] = {"error": "unavailable"}
+    try:
+        out["resolution"] = resolve.stats()
+    except Exception:  # noqa: BLE001 — diagnostics must never 500
+        out["resolution"] = {"error": "unavailable"}
+    # Is the graph actually filling? The mint counters live in promotion.py
+    # (the only writer) and report the last COMPLETED watch-officer cycle
+    # plus the process lifetime total.
+    out["ontology"] = promotion.mints_state()
     return out
 
 
@@ -646,4 +658,52 @@ async def status_doctor() -> dict[str, Any]:
             "Every capability listed here is optional. The console runs keyless; "
             "these only widen coverage."
         ),
+    }
+
+
+@router.get("/api/status/version")
+async def status_version() -> dict[str, Any]:
+    """The build's version plus the schema version of every local store.
+
+    The upgrade story in one response: which code is running (``VELOCITY_VERSION``
+    and the git sha it was built from), and what every local SQLite store
+    records itself as being at (``app/schema_version.py``). An operator can
+    therefore see an upgrade land — stores move to the new number — and, more
+    importantly, a DOWNGRADE refuses to happen at all: a store whose file
+    records a newer version than this build raises ``SchemaTooNew`` rather than
+    opening a schema it cannot read correctly. That file still reports its real
+    (newer) number here, so what this route shows is code and store
+    DISAGREEING — never a comfortable-looking 1.
+
+    Cheap by construction: four read-only primary-key lookups on one-row-per-
+    store tables, no scans of the data tables, and no store is created by
+    reading it. Deliberately a plain public route like its siblings (the auth
+    middleware gates the whole ``/api/status`` family when auth is on).
+    """
+    from app import schema_version  # noqa: PLC0415
+
+    # Never raises: a status route that 500s because the deploy shipped without
+    # git (a container with no .git, a tarball install) would be useless. Off the
+    # event loop — spawning a process is blocking, and this route is polled.
+    def _git_sha() -> str:
+        try:
+            proc = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+        except Exception:  # noqa: BLE001 — no git binary, no repo, timeout, perms
+            return "unknown"
+        sha = proc.stdout.strip()
+        return sha if proc.returncode == 0 and sha else "unknown"
+
+    git_sha = await asyncio.to_thread(_git_sha)
+
+    return {
+        "version": os.environ.get("VELOCITY_VERSION") or "dev",
+        "git_sha": git_sha,
+        "python": sys.version.split()[0],
+        "stores": schema_version.report(),
     }

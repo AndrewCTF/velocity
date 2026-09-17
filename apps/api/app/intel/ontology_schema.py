@@ -110,6 +110,12 @@ REL_TYPES: dict[str, RelType] = {
         "found in stealer log", "stealer log for", ("threat",), ("email", "username", "domain")
     ),
     "sanctioned_as": _r("sanctioned as", "sanction on", ("org", "person"), ("threat",)),
+    # Sanctions join (routes/sanctions.py, intel/promotion.py Phase 2): a
+    # designated contact points at the list's org object
+    # (org:sanctions-<list-slug>), read backwards as "the list designates it".
+    "designated_by": _r(
+        "designated by", "designates", ("aircraft", "vessel", "org", "person"), ("org",)
+    ),
     "same_as": _r("same as", "same as"),
     "posted_by": _r("posted by", "posted", dst=("username",)),
     "resolves_to": _r("resolves to", "resolved from", ("domain",), ("ip",)),
@@ -181,6 +187,24 @@ PROP_TYPES: dict[str, dict[str, PropType]] = {
         "domains": "str",
         "narrative": "str",
         "centroid": "geo",
+    },
+    # routes/situations.py::_to_object props dict — the situation IS an ontology
+    # object (``situation:<hex>``), so the Explorer should be able to facet it
+    # like any other kind. ``updated_at`` is declared ``str``, not ``ts``,
+    # because ``_to_object`` writes ``_now_iso()`` — an ISO-8601 STRING — and
+    # ``_matches`` reads ``ts`` as numeric; declaring it ``ts`` would warn on
+    # every situation this repo writes, which is exactly the false warning this
+    # module's header says not to emit.
+    "situation": {
+        "kind": "str",
+        "name": "str",
+        "severity": "str",
+        "status": "str",
+        "centroid": "geo",
+        "radius_km": "num",
+        "summary": "str",
+        "report": "str",
+        "updated_at": "str",
     },
     # intel/evidence.py capture props.
     "evidence": {

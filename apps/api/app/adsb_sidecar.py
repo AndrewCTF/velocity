@@ -48,7 +48,7 @@ TOKEN_NAME = "adsb"
 # tools/adsb-globe-feeder/index.js); everything else of the API's env stays here.
 _FEEDER_KNOBS = frozenset(
     {"VIEW_W", "VIEW_H", "CENTER", "MIN_PLANES", "NUDGE_MS", "READ_TIMEOUT_MS",
-     "BLOCK_IMAGES", "HIDE_LAYERS"}
+     "BLOCK_IMAGES", "HIDE_LAYERS", "HEAP_MB", "RECYCLE_FRAC"}
 )
 
 # tools/adsb-globe-feeder sits at the repo root (this file is apps/api/app/).

@@ -27,6 +27,10 @@ jobs:
       # The prod compose refuses to run without a pinned image tag. These
       # images are built here and never pushed, so tag them with the commit.
       VELOCITY_VERSION: ci-${{ github.sha }}
+      # The prod compose also refuses to run without a database password
+      # (docker-compose.prod.yml, timescale service). The gate's database is
+      # ephemeral and unpublished, so a per-run value is the honest choice.
+      TIMESCALE_PASSWORD: ci-${{ github.run_id }}
       ARTIFACT_DIR: smoke-artifacts
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

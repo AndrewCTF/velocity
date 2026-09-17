@@ -10,9 +10,14 @@ self-hosted and keyless like those, and then does the two things they don't.
 
 **It keeps history you own.** Flightradar24 gates replay at 7 days free,
 MarineTraffic cut its free window to 24 hours, ADS-B Exchange killed its free
-API tier outright — a self-hosted tool just doesn't have that problem. Turn on
-the archive profile and Velocity records position history to your own disk for
-as long as you give it room, with a scrubber to rewind to any past moment. No
+API tier outright, and a self-hosted tool just doesn't have that problem. The
+archive is a Postgres + TimescaleDB hypertable (`positions`, 6 hour chunks,
+columnar compression segmented by id, plus an hourly `positions_hourly`
+rollup); migrating the old SQLite file copied 55,352,047 rows at ~120k rows/s
+and the compressed hypertable measured 13.46x smaller, 11,300,810,752 bytes
+down to 839,786,496. Velocity records position history to your own disk for as
+long as you give it room, with a scrubber to rewind to any past moment, and
+SQLite remains the keyless fallback when no `HISTORY_PG_DSN` is set. No
 account, no API key, nobody who can paywall, filter or cut off your archive.
 
 **It scores what it shows you.** Anyone can upload whatever they like to a
@@ -47,7 +52,7 @@ labelled as automated output, not sold as "AI insight."
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-2810%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-2996%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 [![ISO/IEC 27001:2022 controls mapped, self-assessed](https://img.shields.io/badge/ISO%2FIEC%2027001%3A2022-controls%20mapped%20(self--assessed)-informational.svg)](docs/security/isms/statement-of-applicability.md)
 [![OWASP ASVS 5.0 L2 self-assessed](https://img.shields.io/badge/OWASP%20ASVS%205.0-L2%20self--assessed-informational.svg)](docs/security/asvs-l2-assessment.md)
@@ -136,6 +141,15 @@ header swaps from *Live* to *Replay*, and one button puts you back. Playback
 runs at 1x through 3600x. The dated day-picker and the *recording since … · GB
 · fixes* ownership chip live in the 2D console at `/2d`, which reads the same
 `/api/history/coverage` archive.
+
+The Play button drives the clock through half-hour tar1090 replay chunks with a
+24-entry cache, decoding readsb's 16-byte heatmap entries in a Web Worker and
+appending each contact's samples to its `SampledPositionProperty`. Aircraft
+reach back to 2024 through the public readsb heatmap archives the backend
+proxies and caches (`GET /api/history/upstream/chunk|tracks|coverage`); one
+decoded adsb.lol chunk (2024-06-01 12:00 UTC) held 180 slices of 10 s and 3,953
+aircraft tracks over Europe. Vessels have no public equivalent, so they replay
+only as far back as your own archive goes.
 
 > **Local (open) mode.** The compute-heavy endpoints — the LLM-backed Reports
 > tabs, recon, and OSINT enrichment — *fail closed* on a keyless box so a
@@ -318,10 +332,13 @@ A few things worth knowing up front, because I'd rather you read them here than
 be annoyed later:
 
 - It's built for one analyst. One optional API key, no accounts or roles.
-- **What persists vs what clears.** Durable on disk under `./data/`: the
-  position-history archive (SQLite at `./data/history.db`), the local ontology
-  store — ontology objects, case files, situations (`intel/ontology_local.py`,
-  `./data/ontology.db`) — plus separate SQLite files for Foundry, Workflows,
+- **What persists vs what clears.** Durable under `./data/` or the Timescale
+  service: the position-history archive (a Postgres + TimescaleDB hypertable by
+  default; SQLite at `./data/history.db` remains the keyless fallback when no
+  `HISTORY_PG_DSN` is set, with one boot warning naming the switch), the local
+  ontology store (ontology objects, case files, situations;
+  `intel/ontology_local.py`, `./data/ontology.db`), plus separate SQLite files
+  for Foundry, Workflows,
   alert rules, cached news and the Instability Index scorer (`foundry.db`,
   `workflows.db`, `alert_rules.db`, `news_history.db`, `instability.db`), and a
   keyless-local audit log (`audit_log.db` — only materializes when no
@@ -348,6 +365,9 @@ be annoyed later:
   start). `/api/history/coverage` reports the ACTUAL current depth
   (`oldest_ts`), not the configured ceiling, and the 2D console's day-picker
   and ownership chip render it, so you can see what you're really getting.
+  Depth answers now come from the hourly `positions_hourly` aggregate; the old
+  SQLite coverage scan took 73 s over 78M fixes, which is why the rollup
+  exists.
 - AIS runs keyless and global (~50k vessels tracked, MMSI-deduped across
   ShipXplorer, MyShipTracking, Digitraffic and Kystverket), but coverage is densest over
   Northern Europe and the Baltic and thins out elsewhere; an AISStream key fills
@@ -369,6 +389,30 @@ be annoyed later:
   heavy mode on.
 
 None of it needs an API key to start. Keys only add reach.
+
+## What is enforced
+
+Not promises, checks in the tree. Each line names the route or test that holds
+it:
+
+- **Clearance on reads and writes.** One predicate,
+  `intel/ontology.visible_to`, filters local reads (`get`, `list_by_kind`,
+  `search`, links, assertions) and the situations, maps and evidence routes by
+  the caller's level and compartments; keyless callers are clearance 0, and a
+  write above clearance or onto a hidden row answers 403.
+  → `apps/api/tests/test_clearance_local_reads.py`
+- **Custody-chained evidence.** Every capture is hashed with SHA-256 and
+  appended to an immutable custody log; `GET /api/evidence/{sha}/verify`
+  re-checks the bytes. → `apps/api/tests/test_evidence.py`
+- **Hash-chained audit.** Mutations append to `action_log.db`; `GET
+  /api/audit/verify` walks the chain. → `apps/api/tests/test_asvs_fix_a_logging.py`
+- **Citations withheld when ungrounded.** `LLM_REQUIRE_CITATIONS=1` (default)
+  withholds a selection or country brief that cites none of its own ids;
+  `GET /api/ai/guardrails` reports the posture. →
+  `apps/api/tests/test_citations_hard.py`
+- **Human-in-the-loop write-back.** A write-back action is operator-only and
+  runs only from a proposal the operator approves; the audit row carries the
+  payload's SHA-256, never the payload. → `apps/api/tests/test_writeback_action.py`
 
 ## What it pulls in
 
@@ -410,7 +454,7 @@ Protocol** server, so an AI agent can interrogate the same warm feeds the globe
 renders without scraping a dozen sites or flooding its own context. Ask "where
 is GPS being jammed right now?" and it answers from the live feed. Full
 architecture + `/api/intel/*` HTTP reference: [`docs/mcp-server.md`](./docs/mcp-server.md).
-It exposes 85 tools over `app.mcp_server` (a representative slice below; run
+It exposes 89 tools over `app.mcp_server` (a representative slice below; run
 `--list-tools` for the full set):
 
 | Tool | What it returns |
@@ -437,9 +481,9 @@ being rate-limited; the rest of the world keeps streaming from the sticky snapsh
 
 The same fusion powers the in-app **AI selection brief**: click an entity and
 `POST /api/ai/selection/brief` fuses its registry enrichment and pattern-of-life
-dossier into a selection-tier model prompt for a Gotham-style inference — every
-claim cites the dossier field it came from, and it degrades to the raw props if
-no model is configured.
+dossier into a selection-tier model prompt — every claim cites the dossier field
+it came from, an uncited answer is withheld rather than shown, and it degrades
+to the raw props if no model is configured.
 
 ### Install as a Claude Code plugin (skill + commands + agent)
 
@@ -572,13 +616,16 @@ enabled — or keep `lite` and use the direct feeds.
 
 - **Frontend**: Vite + React 18 + TypeScript + CesiumJS + MapLibre GL JS v5.24 + Tailwind + Zustand
 - **Backend**: FastAPI (Python 3.12) + httpx + websockets. Live *derived* state
-  is in-process (bounded observation store + disk tile cache); durable state —
-  the position-track replay archive, the ontology store (objects / case files /
-  situations) and the evidence locker's custody chain — persists to SQLite, on
-  Docker volumes in Compose, with a rolling window by default or an open-ended
-  disk-budgeted archive via `ARCHIVE_MODE`
+  is in-process (bounded observation store + disk tile cache); durable state
+  (the position-track replay archive, the ontology store: objects / case files /
+  situations, and the evidence locker's custody chain) persists to
+  Postgres + TimescaleDB or SQLite, on Docker volumes in Compose, with a
+  rolling window by default or an open-ended disk-budgeted archive via
+  `ARCHIVE_MODE`
 - **Agent access**: Model Context Protocol server (`app.mcp_server`, MCP SDK) + optional local Ollama analysis
-- **Data (Phase 2, planned)**: PostgreSQL 16 + PostGIS + TimescaleDB hypertables + Redis. SQLite backs replay + the ontology today; the observation store migrates per plan §locked-decisions #5
+- **Data**: PostgreSQL 16 + TimescaleDB backs the position archive today (6 hour
+  chunks, columnar compression, hourly `positions_hourly` rollup, SQLite as the
+  keyless fallback). PostGIS + Redis remain planned.
 - **Infra**: Docker Compose, nginx reverse proxy
 
 ## Layout
@@ -609,7 +656,7 @@ osint/
 
 ```bash
 # from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
-OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 2810 passed + 2 skipped
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 2996 passed + 21 skipped
 pnpm -r test                          # vitest (web, shared)
 pnpm -r typecheck
 bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot
@@ -625,12 +672,13 @@ above). Legend: ✅ shipped · 🚧 in progress
 
 - ✅ **Phase 0** — Foundation
 - ✅ **Phase 1** — MVP: live ADS-B / AIS / quakes / GPS-jamming layers on the globe
-- ✅ **Phase 2** — Replay + drill-in. The timeline scrubber and a disk-backed
-  history archive ship as SQLite-backed playback (48h rolling window by
-  default, or an open-ended disk-budgeted archive with `ARCHIVE_MODE`);
-  drilling into any past moment works today. A durable Postgres + PostGIS +
-  TimescaleDB store for the rest of the platform's state is a deferred scaling
-  upgrade, not a blocker
+- ✅ **Phase 2**: Replay + drill-in. The timeline scrubber and the history
+  archive ship with a Postgres + TimescaleDB backend (48h rolling window by
+  default, or an open-ended disk-budgeted archive with `ARCHIVE_MODE`), SQLite
+  as the keyless fallback, and a tar1090-style half-hour chunk replay pipeline
+  that carries aircraft back to 2024 from public readsb heatmap archives;
+  drilling into any past moment works today. PostGIS + Redis for the rest of
+  the platform's state are a deferred scaling upgrade, not a blocker
 - ✅ **Phase 3** — Fusion engine + alerts (correlation rules) + 2D mirror
 - 🚧 **Phase 4** — Advanced sensors + agent access. MCP server + intel API
   (now with a Claude Code plugin and `detail=short|long` tool variants), Sentinel-1 SAR
@@ -644,8 +692,8 @@ above). Legend: ✅ shipped · 🚧 in progress
   floating panels, a photo-geolocation pipeline, a City 3D Gaussian-splat viewer,
   optional local-GPU (Ollama) inference, and a first-run onboarding tour. More
   sensors and deeper analysis are ongoing.
-- 🚧 **Phase 5** — Foundry: a keyless, local, single-operator take on Palantir
-  Foundry's data-integration loop. Upload → transform (governed 13-step DSL with
+- 🚧 **Phase 5** — Foundry: a keyless, local, single-operator data-integration
+  loop. Upload → transform (governed 13-step DSL with
   lineage) → build (dependency DAG, staleness, cycle rejection) → data-health
   checks → bind into the local ontology graph. In: immutable versions +
   rollback, row-level quarantine/dead-letter, freshness/schema-drift SLAs,

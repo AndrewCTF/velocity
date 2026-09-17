@@ -25,7 +25,11 @@ const API_ROUTES = join(HERE, '../../../api/app/routes');
 const EXEMPT: Record<string, string> = {
   // Infrastructure the browser reaches without naming the path.
   '/api/health': 'liveness probe for the process supervisor, not the UI',
-  '/api/audit/verify': 'audit hash-chain check for an auditor or operator script, not the UI',
+  // /api/audit/verify used to be exempt here ("auditor script, not the UI");
+  // the Reports → Audit tab (src/reports/AuditPanel.tsx) now renders its
+  // verify chip, so the route has a UI address and left this list. /api/audit
+  // itself is called by the same panel and by the SourcesPanel endpoint
+  // browser, so it never needed an entry.
   // Write/side-effect routes driven by an agent or a server-side caller.
   '/api/evidence/manifest': 'POST: written by the case exporter server-side',
   '/api/imagery/task': 'POST: commercial tasking, gated off in the keyless build',
@@ -41,6 +45,10 @@ const EXEMPT: Record<string, string> = {
     'ObjectInspector builds /api/intel/dossier/${kind}/${ident} from the selection',
   // Aliases of a route that IS wired.
   '/api/adsb/lol/global': 'backwards-compatible alias of /api/adsb/global',
+  '/api/history/upstream/tracks':
+    'JSON-for-one-bbox decode of the upstream heatmap, for MCP/tests only; ' +
+    'the globe replay path (globe/HistoryPlayback.ts, globe/heatmapChunk.ts) ' +
+    'reads the binary /api/history/upstream/chunk route and decodes client-side.',
   // The one route whose caller is deliberately NOT the browser.
   '/api/ingest':
     'inbound push: an external sender calls it with a per-dataset token. ' +

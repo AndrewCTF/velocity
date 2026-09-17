@@ -6,11 +6,9 @@
 # Local dev infra — one `docker compose up` boots the whole platform.
 # nginx is the only published port; everything else is on the internal network.
 #
-# NOTE: no database / redis services. Phase 1 keeps all state in-process
-# (bounded in-memory observation store + disk tile cache). When the Phase 2
-# TimescaleDB migration lands (plan §locked-decisions #5), re-add the
-# `timescale/timescaledb-ha:pg16` + `redis:7-alpine` services alongside the
-# sqlalchemy/asyncpg/redis dependencies.
+# NOTE: one database service, `timescale`, holds the position-history archive
+# (a compressed hypertable; operator decision 2026-09-17). Everything else
+# (ontology/foundry/audit/workflows) stays in SQLite under /srv/data. No redis.
 
 services:
   api:
@@ -52,6 +50,13 @@ services:
       # For a hardened deployment (docker-compose.prod.yml) leave it UNSET so
       # compute endpoints fail closed until a credential is configured.
       ALLOW_UNAUTHENTICATED: 1
+      # History archive on TimescaleDB (service below). Trust auth on the
+      # compose-internal network only: the dev stack publishes nothing but
+      # nginx on 127.0.0.1, so there is no password to manage here.
+      HISTORY_PG_DSN: postgresql://velocity@timescale:5432/velocity
+    depends_on:
+      timescale:
+        condition: service_healthy
     volumes:
       # bind-mount source so code changes hot-reload without rebuilding the image
       - ./apps/api/app:/srv/app
@@ -71,6 +76,25 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  timescale:
+    # Position-history archive: a compressed hypertable instead of the SQLite
+    # file (operator decision 2026-09-17). Same image+digest as
+    # scripts/dev-timescale.sh so a dev box and this stack behave alike.
+    image: timescale/timescaledb:2.17.2-pg16@sha256:4e459e217f00cbb09920c34d245501e63427e6767a495de57ce76823ff280f12
+    runtime: runc
+    environment:
+      POSTGRES_USER: velocity
+      POSTGRES_DB: velocity
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - timescale_data_dev:/var/lib/postgresql/data
+    shm_size: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U velocity -d velocity"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   web:
     build:
@@ -114,3 +138,4 @@ services:
 
 volumes:
   osint_data_dev: {}
+  timescale_data_dev: {}

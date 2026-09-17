@@ -7,10 +7,23 @@ claimed the bracket form was "verified against the real ids below". A model that
 emitted [vessel:987654321] for a vessel that does not exist reached the analyst
 looking exactly like provenance.
 
-Two failures, treated differently on purpose, and both pinned here:
+Two failures, named differently on purpose, and both pinned here:
 
-  cited an id that was never in the evidence -> WITHHELD
-  cited nothing at all                       -> SERVED, grounded: false
+  cited an id that was never in the evidence -> WITHHELD "unknown-citations"
+  cited nothing at all                       -> WITHHELD "uncited"
+
+The second line said ``SERVED, grounded: false`` until 2026-09-17 (W4). The
+reasoning behind it — unsourced prose is weaker, not false, and refusing it
+would delete a useful brief over a formatting habit — was sound and the outcome
+was still wrong: ``grounded: false`` was a field in a JSON body, the prose was a
+paragraph on a watch floor, and no surface downstream declined to render it. A
+claim an analyst cannot trace is not a weak finding, it is not a finding. The
+distinction between the two failures is kept in the ``withheld`` reason, because
+"said nothing checkable" and "invented a provenance trail" are different things
+for the person reading the refusal.
+
+``Settings.llm_require_citations`` (default True) is the operator's way back to
+the old behaviour; ``tests/test_citations_hard.py`` pins both sides of it.
 
 Keyless via the shared ``client`` fixture; ``llm.chat`` is mocked so no network
 or model is touched.
@@ -78,14 +91,19 @@ def test_the_withheld_reason_does_not_dump_every_id(client, monkeypatch: pytest.
     assert "and others" in body["detail"]
 
 
-# ── the weak failure: unsourced, but not false ───────────────────────────────
+# ── the other failure: nothing checkable was said at all ─────────────────────
 
 
-def test_prose_citing_nothing_is_served_and_flagged(client, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_prose_citing_nothing_is_withheld_as_uncited(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Superseded ``test_prose_citing_nothing_is_served_and_flagged`` on
+    2026-09-17 — see this module's docstring for why the earlier decision was
+    revoked rather than merely changed."""
     body = _brief(client, monkeypatch, "Nothing anomalous; routine transit.")
-    assert body["ok"] is True
-    assert body["grounded"] is False
-    assert body["text"] == "Nothing anomalous; routine transit."
+    assert body["ok"] is False
+    assert body["withheld"] == "uncited"
+    assert "text" not in body
 
 
 # ── the good path ────────────────────────────────────────────────────────────

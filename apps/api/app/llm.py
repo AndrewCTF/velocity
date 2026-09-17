@@ -344,10 +344,18 @@ def bind_user(user_id: str | None, token: str | None) -> contextvars.Token[tuple
     """Bind the calling user so chat() can attribute its observability rows.
 
     Returns the reset token (pass to :func:`reset_user`) so a request scope can
-    restore the previous binding. A missing id/token clears the binding (anonymous
-    / static-API-key callers are not logged). Never raises.
+    restore the previous binding. A missing id clears the binding (anonymous /
+    static-API-key callers are not logged). Never raises.
+
+    A missing TOKEN no longer clears it (changed 2026-09-17, W4): on a keyless
+    box ``current_user_or_local`` yields ``UserCtx("local", "")``, so the old
+    ``user_id and token`` predicate meant the deployment that runs every model
+    locally was the one deployment that recorded nothing. The token still gates
+    the *remote* insert — ``_post_call_row`` skips PostgREST without one,
+    because RLS needs the caller's own JWT — but the local sink does not need a
+    Supabase session to accept a row about a local model.
     """
-    value = (user_id, token) if (user_id and token) else None
+    value = (user_id, token or "") if user_id else None
     return _LLM_USER.set(value)
 
 
@@ -411,13 +419,27 @@ async def _post_call_row(row: dict[str, Any], token: str) -> None:
 
     Uses the caller's OWN Supabase access token so RLS (auth.uid() = user_id)
     scopes the row to that user — the same BYOK pattern as keys.py. Any failure
-    (Supabase unset, network, 4xx/5xx) is logged at debug and dropped: this is
-    fire-and-forget telemetry and must never surface to the LLM caller.
+    (network, 4xx/5xx) is logged at debug and dropped: this is fire-and-forget
+    telemetry and must never surface to the LLM caller.
+
+    No Supabase URL → the row goes to the local SQLite sink
+    (``app/llm_calls_local.py``), the same fallback shape
+    ``intel/actions.py``'s audit takes. Until 2026-09-17 this returned
+    immediately instead, so a keyless deployment — the shipping default, and
+    the one running the models on its own GPU — kept no record of its own model
+    calls. With Supabase configured but no caller token there is still nothing
+    to do: RLS forbids the insert, and writing it locally would split one
+    deployment's audit trail across two stores.
     """
     try:
         s = get_settings()
         url = _llm_calls_url(s)
         if not url:
+            from app import llm_calls_local  # noqa: PLC0415 — avoid an import cycle
+
+            await llm_calls_local.append(row)
+            return
+        if not token:
             return
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(6.0, connect=4.0),

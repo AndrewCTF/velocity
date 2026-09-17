@@ -411,9 +411,22 @@ _ACTION_DESCRIPTIONS: dict[str, str] = {
         "target_id(str), label(str), lat, lon, radius_nm, kinds(list[str]), "
         "min_severity(int 1-5). AUDITED write-back."
     ),
+    "writeback": (
+        "Write ONE record OUT to a system the operator runs — an allow-listed "
+        "HTTP endpoint (target='http', url, method, auth_env, payload) or a "
+        "Foundry sql connection (target='connection', connection_id, table, "
+        "payload), with dry_run(bool). OPERATOR-ONLY: it is always QUEUED for "
+        "operator approval, never executed from this run. Args: target, url, "
+        "method, auth_env, connection_id, table, payload, dry_run. AUDITED "
+        "write-back."
+    ),
 }
 
 # The action names the agent may invoke — exactly the registered ActionSpecs.
+# ``writeback`` is in here too: the agent may PROPOSE it (same HITL queue as the
+# rest), while its ``ActionSpec.operator_only`` flag keeps it out of the
+# agent's own hands — the HITL gate in the dispatch loop below never auto-runs
+# an operator-only action, at any confidence.
 ACTION_TOOLS: frozenset[str] = frozenset(_ACTION_DESCRIPTIONS)
 
 # Control tools — drive the client via an app_var event (no backend mutation).
@@ -551,7 +564,12 @@ _SYS = (
     "change tracked state. Call these ONLY when the operator explicitly asks to flag / promote / "
     "nominate / watch something (verbs like 'flag', 'add to the target board', 'watch', "
     "'promote'). NEVER write back on a read-only question. Every write is logged with your "
-    "user id. If the operator did not ask for a change, do NOT call them.\n\n"
+    "user id. If the operator did not ask for a change, do NOT call them.\n"
+    "- writeback — push ONE record OUT to an operator-run system (an allow-listed HTTP "
+    "endpoint or a Foundry sql connection). Call it ONLY when the operator explicitly asks you "
+    "to send / write back / export a record, and only with values that came from a tool. It is "
+    "OPERATOR-ONLY: proposing it QUEUES it for an operator to approve, so never claim it was "
+    "done — say it is awaiting approval.\n\n"
     "On each turn reply with ONE JSON object, nothing else:\n"
     '  call a tool:    {{"action":"tool","thought":"<one line: why this tool now>",'
     '"say":"<1-2 plain sentences telling the operator what you see and what you are checking>",'
@@ -894,12 +912,22 @@ async def run_agent(
                 # queue the write-back as a PROPOSAL for the operator to approve /
                 # reject in AgentConsole (approval re-dispatches the SAME audited
                 # path below). Default threshold 1.01 → always propose.
+                #
+                # An ``operator_only`` action (writeback) is ALWAYS proposed, at
+                # any confidence and with ``action_approval`` off: the authority
+                # it carries is the operator's, and the agent runs with analyst
+                # authority. Routes execute it under ``require_operator`` on the
+                # direct path and on approval alike (routes/actions.py), so
+                # auto-running it here would be the one place that boundary
+                # could be crossed without a human signing for it.
                 from app.config import get_settings  # noqa: PLC0415
                 from app.routes.actions import propose  # noqa: PLC0415
 
                 _s = get_settings()
                 confidence = float(args.pop("confidence", 0.0) or 0.0)
-                if _s.action_approval and confidence < _s.action_auto_threshold:
+                _spec = actions.get_action(name)
+                operator_only = bool(_spec is not None and _spec.operator_only)
+                if operator_only or (_s.action_approval and confidence < _s.action_auto_threshold):
                     pid = await propose(name, args, ctx, confidence=confidence)
                     yield {
                         "type": "action_proposal", "step": step,

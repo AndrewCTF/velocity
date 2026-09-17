@@ -34,6 +34,7 @@ import re
 from typing import Any
 
 from app.intel.gdelt_match import actor_matches_country
+from app.keys import UserCtx, multi_user
 from app.upstream import cache, get_client
 
 # Wikidata asks every client to identify itself; anonymous SPARQL bursts are
@@ -416,6 +417,22 @@ async def country_security(
     return await cache.get_or_fetch(key, _SECURITY_TTL, load)
 
 
+def _event_id(event: dict[str, Any]) -> str:
+    """A stable ``event:<sha8>`` id for one security event.
+
+    The brief's events arrive from GDELT/ACLED-shaped feeds with no id of their
+    own, so there was nothing for the model to cite and nothing to check a
+    citation against. Hashing the event's own content gives both: the same event
+    in two briefs gets the same id, and an id the model invents cannot collide
+    with one of these by accident.
+    """
+    import hashlib  # noqa: PLC0415
+    import json as _json  # noqa: PLC0415
+
+    blob = _json.dumps(event, sort_keys=True, separators=(",", ":"), default=str)
+    return "event:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:8]
+
+
 _BRIEF_SYS = (
     "You are a senior all-source intelligence analyst. Produce a concise, "
     "structured COUNTRY BRIEF in Markdown with exactly these sections, each an "
@@ -559,6 +576,7 @@ async def country_brief(
     wb: dict[str, Any] | None,
     profile: dict[str, Any] | None,
     security: dict[str, Any] | None,
+    ctx: UserCtx | None = None,
 ) -> dict[str, Any]:
     """LLM all-source brief fusing WB indicators + leadership + security counts.
 
@@ -572,6 +590,13 @@ async def country_brief(
     text is passed through :func:`_trim_incomplete_tail` first, so a
     generation that runs into ``max_tokens`` mid-sentence never leaves a
     dangling fragment directly ahead of that footer.
+
+    ``ctx`` is the requesting user (``routes/country_stats.py`` passes its
+    ``current_user_or_local`` principal). It is bound with ``llm.bind_user``
+    around the model call so every brief that reaches a model leaves exactly one
+    ``llm_calls`` row (W4). A caller that passes nothing resolves to the shared
+    ``local`` principal on a keyless deployment — and, on a multi-user one,
+    binds NOTHING rather than filing its brief under a user who did not ask.
     """
     from app import llm
 
@@ -579,6 +604,11 @@ async def country_brief(
     key = f"country:brief:{iso3u}"
 
     async def load() -> dict[str, Any]:
+        # Stamp a checkable id onto every event BEFORE the payload is built, so
+        # the model sees the same ids the citation check will score it against.
+        events = [
+            {**e, "id": _event_id(e)} for e in ((security or {}).get("events") or [])[:12]
+        ]
         payload = {
             "country": name or iso3u,
             "iso3": iso3u,
@@ -586,16 +616,32 @@ async def country_brief(
             "leadership": (profile or {}).get("leadership") or [],
             "military_branches": (profile or {}).get("military_branches") or [],
             "security_counts": (security or {}).get("counts") or {},
-            "recent_security_events": ((security or {}).get("events") or [])[:12],
+            "recent_security_events": events,
             "data_notes": (security or {}).get("notes") or [],
         }
+        # Every id the model was actually shown: the events, plus the country
+        # itself so a brief may cite its own subject.
+        allowed = {e["id"] for e in events} | {f"country:{iso3u}"}
         import json as _json
 
+        # Model-call audit (W4): one llm_calls row per brief that reaches a
+        # model, attributed to the caller. With no ctx on a keyless box that is
+        # the shared ``local`` principal — the identity the route itself
+        # resolves to; on a multi-user box, no ctx means no attribution rather
+        # than a row filed under the wrong user.
+        uid = ctx.user_id if ctx is not None else (None if multi_user() else "local")
+        bound = llm.bind_user(uid, ctx.token if ctx is not None else "") if uid else None
         try:
             res = await asyncio.wait_for(
                 llm.chat(
                     [
-                        {"role": "system", "content": llm.with_prose_style(_BRIEF_SYS)},
+                        {
+                            "role": "system",
+                            # with_citations INSIDE with_prose_style: grounding is
+                            # stated first, the style rider stays LAST among the
+                            # riders (apps/api/CLAUDE.md "Model prose").
+                            "content": llm.with_prose_style(llm.with_citations(_BRIEF_SYS)),
+                        },
                         {"role": "user", "content": _json.dumps(payload, ensure_ascii=False)},
                     ],
                     tier="fast",
@@ -607,6 +653,9 @@ async def country_brief(
             )
         except TimeoutError:
             return {"ok": False, "reason": "no LLM backend configured", "iso3": iso3u, "name": name}
+        finally:
+            if bound is not None:
+                llm.reset_user(bound)
         if not res.ok:
             return {
                 "ok": False,
@@ -615,6 +664,25 @@ async def country_brief(
                 "name": name,
             }
         body = _trim_incomplete_tail(str(res.text or ""))
+        # The same hard contract the selection brief carries: a brief that cites
+        # an event id we never supplied is a fabricated provenance trail, and it
+        # survives a skim precisely because it looks like provenance. Withheld,
+        # naming what was wrong, rather than served with a caveat.
+        fabricated = llm.unknown_citations(body, allowed)
+        if fabricated:
+            return {
+                "ok": False,
+                "withheld": "unknown-citations",
+                "reason": (
+                    "Brief withheld: it cited "
+                    + ", ".join(fabricated[:3])
+                    + (" and others" if len(fabricated) > 3 else "")
+                    + ", which are not in the evidence for this country."
+                ),
+                "unknown_citations": fabricated[:8],
+                "iso3": iso3u,
+                "name": name,
+            }
         markdown = body + _sourced_footnotes(payload["recent_security_events"])
         return {
             "ok": True,

@@ -38,7 +38,12 @@ from app.config import get_settings
 from app.intel import case_export
 from app.intel.ontology import Link, Object, get_registry, kind_of
 from app.intel.ontology_schema import validate_link
-from app.keys import UserCtx, current_user_or_local
+from app.keys import UserCtx
+from app.routes.ontology import (
+    _refuse_overwrite_of_hidden_row,
+    _refuse_write_above_clearance,
+)
+from app.security import Principal, current_principal_or_local
 
 router = APIRouter(tags=["situations"])
 
@@ -108,13 +113,37 @@ class CoaCard(BaseModel):
     rationale: str = ""
 
 
+
+def _ctx(p: Principal) -> UserCtx:
+    """The user-scoping half of the principal (``current_principal_or_local``
+    mirrors ``current_user_or_local`` exactly, so this is the same identity the
+    routes used before)."""
+    return UserCtx(user_id=p.user_id, token=p.token)
+
+
+def _reg(p: Principal, *, filtered: bool = True):  # type: ignore[no-untyped-def]
+    """The registry for this caller, clearance-filtered unless asked otherwise.
+
+    ``filtered=False`` is the write path: ``upsert``/``link`` must see the row
+    they are replacing, and the caller's right to write it has already been
+    settled (a situation is created by, and belongs to, its own user).
+    """
+    return get_registry(_ctx(p), get_settings(), principal=p if filtered else None)
+
+
 # ── object ↔ situation coercion (one place, like maps.py) ────────────────────────
 
 
 def _to_object(sit_id: str, body: SituationIn, ts: str) -> Object:
     return Object(
         id=sit_id,
-        kind="object",  # structural kind stays catch-all; semantic kind is in props
+        # The stored kind COLUMN is stamped from the ``situation:`` id prefix by
+        # ``Object.normalised()`` inside ``upsert`` (2026-09-17, when "situation"
+        # became a first-class ObjectKind). This stays the catch-all so the
+        # coercion has one owner; ``props.kind`` below is what ``list_by_kind``
+        # and ``_from_object`` read, and is why rows written before that still
+        # list and load.
+        kind="object",
         props={
             "kind": _SITUATION_KIND,
             "name": body.name,
@@ -177,10 +206,10 @@ def _now_iso() -> str:
 
 @router.get("/api/situations", response_model=list[Situation])
 async def list_situations(
-    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> list[Situation]:
     """The caller's situations, newest first (filtered to props->>kind=situation)."""
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     objs = await reg.list_by_kind(_SITUATION_KIND, limit=_MAX_LIST)
     out: list[Situation] = []
     for obj in objs:
@@ -192,14 +221,24 @@ async def list_situations(
 
 @router.post("/api/situations", response_model=Situation, status_code=201)
 async def create_situation(
-    body: SituationIn, ctx: UserCtx = Depends(current_user_or_local)
+    body: SituationIn, p: Principal = Depends(current_principal_or_local)
 ) -> Situation:
-    """Create (insert) or overwrite (when ``id`` is supplied) a situation."""
+    """Create (insert) or overwrite (when ``id`` is supplied) a situation.
+
+    ``id`` makes this an id-keyed overwrite, and ``props`` is replaced wholesale,
+    so the two gates ``routes/ontology.py`` applies to its own upsert apply here
+    too: a caller may not classify above their own clearance and may not land a
+    write on a row they are not cleared to read (otherwise a clearance-0 caller
+    declassifies and erases a classified situation it cannot even GET).
+    """
     sit_id = body.id or f"{_SITUATION_KIND}:{uuid.uuid4().hex[:12]}"
     if not sit_id.startswith(f"{_SITUATION_KIND}:"):
         raise HTTPException(status_code=400, detail="id must start with 'situation:'")
-    reg = get_registry(ctx, get_settings())
-    stored = await reg.upsert(_to_object(sit_id, body, _now_iso()))
+    obj = _to_object(sit_id, body, _now_iso())
+    _refuse_write_above_clearance(p, obj.classification, obj.compartments)
+    await _refuse_overwrite_of_hidden_row(p, sit_id)
+    reg = _reg(p)
+    stored = await reg.upsert(obj)
     sit = _from_object(stored)
     if sit is None:
         raise HTTPException(status_code=502, detail="could not save situation")
@@ -208,7 +247,7 @@ async def create_situation(
 
 @router.get("/api/situations/{sit_id:path}", response_model=SituationDetail)
 async def get_situation_detail(
-    sit_id: str, ctx: UserCtx = Depends(current_user_or_local)
+    sit_id: str, p: Principal = Depends(current_principal_or_local)
 ) -> SituationDetail:
     """One situation + its 1-hop neighbourhood (linked incidents/entities/COAs).
 
@@ -216,7 +255,7 @@ async def get_situation_detail(
     their own rows (derived stubs from the id prefix), so a link to a live-but-
     unsaved ``incident:…`` still appears in the Intel tab.
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     obj = await reg.get(sit_id)
     sit = _from_object(obj) if obj is not None else None
     if sit is None:
@@ -228,9 +267,15 @@ async def get_situation_detail(
 
 
 @router.delete("/api/situations/{sit_id:path}", status_code=204)
-async def delete_situation(sit_id: str, ctx: UserCtx = Depends(current_user_or_local)) -> None:
-    """Delete a situation (own rows only). A missing row is a no-op."""
-    reg = get_registry(ctx, get_settings())
+async def delete_situation(sit_id: str, p: Principal = Depends(current_principal_or_local)) -> None:
+    """Delete a situation (own rows only). A missing row is a no-op.
+
+    The same gate as an overwrite: delete DESTROYS the row, and the store's
+    ``delete`` is not clearance-filtered, so it would happily erase a classified
+    situation the caller cannot read.
+    """
+    await _refuse_overwrite_of_hidden_row(p, sit_id)
+    reg = _reg(p)
     await reg.delete(sit_id)
 
 
@@ -247,15 +292,21 @@ class LinkSaved(Link):
 
 @router.post("/api/situations/{sit_id:path}/link", response_model=LinkSaved)
 async def link_child(
-    sit_id: str, body: LinkIn, ctx: UserCtx = Depends(current_user_or_local)
+    sit_id: str, body: LinkIn, p: Principal = Depends(current_principal_or_local)
 ) -> LinkSaved:
     """Attach a child to a situation: ``situation --rel--> dst``.
 
     The one relationship-write the Situation/COA feature needs (``routes/ontology.py``
     exposes object upsert + traversal but no link route). Idempotent on
     ``(user_id, src, dst, rel)``.
+
+    Both ids are caller-supplied and both are written — ``link`` inserts the edge
+    and the promote below MERGES into ``dst`` — so a hidden endpoint is refused on
+    either side before either write lands.
     """
-    reg = get_registry(ctx, get_settings())
+    await _refuse_overwrite_of_hidden_row(p, sit_id)
+    await _refuse_overwrite_of_hidden_row(p, body.dst)
+    reg = _reg(p)
     link = await reg.link(Link(src=sit_id, dst=body.dst, rel=body.rel, props=body.props))
     # Promote the child to a durable object (Move 1). Without this the child is a
     # traversal-only derived stub — never its own row, so Explorer/list_by_kind
@@ -288,17 +339,17 @@ _EXPORT_EXT = {"html": "html", "json": "json", "pptx": "pptx"}
 
 @router.post("/api/situations/{sit_id:path}/export")
 async def export_situation(
-    sit_id: str, body: ExportIn, ctx: UserCtx = Depends(current_user_or_local)
+    sit_id: str, body: ExportIn, p: Principal = Depends(current_principal_or_local)
 ) -> Response:
     """Walk a situation's linked children + sourced assertions + attached
     evidence into a shareable case report. Every claim carries a provenance
     footnote; every exhibit is content-addressed. See app/intel/case_export.py."""
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     obj = await reg.get(sit_id)
     if obj is None or (obj.props or {}).get("kind") != _SITUATION_KIND:
         raise HTTPException(status_code=404, detail="situation not found")
 
-    bundle = await case_export.build_bundle(ctx, sit_id, settings=get_settings())
+    bundle = await case_export.build_bundle(_ctx(p), sit_id, settings=get_settings())
     # ASCII-safe slug for the Content-Disposition filename (a client-set id with
     # non-Latin-1 chars would otherwise raise UnicodeEncodeError at the ASGI
     # layer → HTTP 500). Ids are normally ascii; this just guarantees it.
@@ -349,7 +400,7 @@ _COA_SYSTEM = (
 
 @router.post("/api/situations/{sit_id:path}/coa/propose")
 async def propose_coas(
-    sit_id: str, ctx: UserCtx = Depends(current_user_or_local)
+    sit_id: str, p: Principal = Depends(current_principal_or_local)
 ) -> dict[str, Any]:
     """Grounded-LLM COAs over the situation's linked evidence (hypothetical, not saved).
 
@@ -359,7 +410,7 @@ async def propose_coas(
     router's ``/link``. Degrades to ``ok:false`` (never a fabricated COA) when no
     model is configured.
     """
-    reg = get_registry(ctx, get_settings())
+    reg = _reg(p)
     obj = await reg.get(sit_id)
     sit = _from_object(obj) if obj is not None else None
     if sit is None:
