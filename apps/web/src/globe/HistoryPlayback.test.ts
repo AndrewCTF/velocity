@@ -10,6 +10,7 @@ vi.mock('../transport/http.js', () => ({
 
 import { apiFetch } from '../transport/http.js';
 import { installHistoryPlayback } from './HistoryPlayback.js';
+import { chunkKeyForMs, chunkStartMs, nextChunk } from './heatmapChunk.js';
 
 const mockedFetch = vi.mocked(apiFetch);
 
@@ -19,12 +20,20 @@ function jsonResponse(body: unknown): Response {
 
 // Minimal viewer stub exposing only the surface HistoryPlayback.ts touches:
 // dataSources.add/get/length (hideLive/restoreLive walk the collection),
-// camera.computeViewRectangle (skip bbox filtering), clock (plain bag of
-// fields the module assigns to), scene.requestRender/maximumRenderTimeChange,
-// isDestroyed. dataSources.add captures the real Cesium.CustomDataSource the
-// module creates so the test can inspect the entities it built, without
-// needing any export beyond the existing installHistoryPlayback().
-function fakeViewer(): { viewer: Cesium.Viewer; getDs: () => Cesium.CustomDataSource } {
+// camera.computeViewRectangle (skip bbox filtering), clock (a plain bag of
+// fields the module assigns to, PLUS a fake onTick event the chunk pipeline's
+// ensureTickListener() subscribes to — see fireTick), scene.requestRender/
+// maximumRenderTimeChange, isDestroyed. dataSources.add captures the real
+// Cesium.CustomDataSource the module creates so the test can inspect the
+// entities it built, without needing any export beyond installHistoryPlayback().
+function fakeViewer(): {
+  viewer: Cesium.Viewer;
+  getDs: () => Cesium.CustomDataSource;
+  // Fires every registered onTick listener with the (mutated) viewer.clock,
+  // then flushes the async chunk-load work it kicks off — a real Cesium
+  // onTick handler runs synchronously but ours does `void (async () => ...)`.
+  fireTick: () => Promise<void>;
+} {
   const sources: Cesium.DataSource[] = [];
   let captured: Cesium.CustomDataSource | undefined;
   const dataSources = {
@@ -39,10 +48,22 @@ function fakeViewer(): { viewer: Cesium.Viewer; getDs: () => Cesium.CustomDataSo
       return sources.length;
     },
   };
+  const listeners: Array<(clock: unknown) => void> = [];
+  const clock: Record<string, unknown> = {
+    onTick: {
+      addEventListener: (fn: (clock: unknown) => void) => {
+        listeners.push(fn);
+        return () => {
+          const idx = listeners.indexOf(fn);
+          if (idx >= 0) listeners.splice(idx, 1);
+        };
+      },
+    },
+  };
   const viewer = {
     dataSources,
     camera: { computeViewRectangle: () => undefined },
-    clock: {},
+    clock,
     scene: { requestRender: () => {}, maximumRenderTimeChange: 0 },
     isDestroyed: () => false,
   } as unknown as Cesium.Viewer;
@@ -51,6 +72,10 @@ function fakeViewer(): { viewer: Cesium.Viewer; getDs: () => Cesium.CustomDataSo
     getDs: () => {
       if (!captured) throw new Error('history CustomDataSource was never added');
       return captured;
+    },
+    fireTick: async () => {
+      for (const fn of [...listeners]) fn(viewer.clock);
+      await new Promise((resolve) => setTimeout(resolve, 0));
     },
   };
 }
@@ -183,5 +208,104 @@ describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point t
       expect(mlat).toBeGreaterThan(Math.min(lat0, lat1));
       expect(mlat).toBeLessThan(Math.max(lat0, lat1));
     }
+  });
+});
+
+describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk boundary, never removeAll', () => {
+  it('a tick that crosses into the next half hour appends to the SAME entity instead of rebuilding it', async () => {
+    const { viewer, getDs, fireTick } = fakeViewer();
+
+    const startMs = Date.UTC(2024, 5, 1, 12, 0, 0); // an exact UTC half-hour boundary
+    const { day, index } = chunkKeyForMs(startMs);
+    const nxt = nextChunk(day, index);
+    const chunk1StartSec = chunkStartMs(day, index) / 1000;
+    const chunk2StartSec = chunkStartMs(nxt.day, nxt.index) / 1000;
+
+    mockedFetch.mockReset();
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      // Very old oldest-recorded-day: every chunk this test touches is well
+      // after it, so both chunks route to the own archive — this test is
+      // about the append-not-rebuild behaviour, not source selection (that is
+      // heatmapChunk.test.ts's job for the binary decode itself).
+      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
+      if (u.startsWith('/api/history/tracks')) {
+        const fromTs = Number(new URL(u, 'http://local').searchParams.get('from_ts'));
+        const isChunk2 = Math.abs(fromTs - chunk2StartSec) < 5;
+        const lon = isChunk2 ? 40.0 : 35.0;
+        return jsonResponse({
+          tracks: [{ id: 'aircraft:ABC123', kind: 'aircraft', points: [[lon, 33.0, fromTs + 60, 90]] }],
+        });
+      }
+      return jsonResponse({});
+    });
+
+    const controller = installHistoryPlayback(viewer);
+    const endMs = startMs + 3 * 3600 * 1000;
+    await controller.loadAt(startMs, endMs);
+
+    const ds = getDs();
+    const entityBefore = ds.entities.getById('hist:aircraft:ABC123');
+    expect(entityBefore, 'entity missing after the first chunk').toBeDefined();
+    expect(ds.entities.values.length).toBe(1);
+
+    // Advance the clock into the next half hour and fire onTick, simulating
+    // continuous playback crossing the chunk boundary.
+    (viewer.clock as unknown as { currentTime: Cesium.JulianDate }).currentTime = Cesium.JulianDate.fromDate(
+      new Date(chunk2StartSec * 1000 + 60_000),
+    );
+    await fireTick();
+
+    const entityAfter = ds.entities.getById('hist:aircraft:ABC123');
+    expect(entityAfter, 'the SAME entity must persist across the chunk boundary').toBe(entityBefore);
+    expect(ds.entities.values.length, 'a chunk boundary must never removeAll()').toBe(1);
+
+    const posAtChunk2 = entityAfter!.position!.getValue(
+      Cesium.JulianDate.fromDate(new Date((chunk2StartSec + 60) * 1000)),
+    )!;
+    const [lon2] = lonLat(posAtChunk2);
+    expect(lon2).toBeCloseTo(40.0, 3);
+
+    const posAtChunk1 = entityAfter!.position!.getValue(
+      Cesium.JulianDate.fromDate(new Date((chunk1StartSec + 60) * 1000)),
+    )!;
+    const [lon1] = lonLat(posAtChunk1);
+    expect(lon1).toBeCloseTo(35.0, 3);
+  });
+
+  it('loadAt() resets the previous window — a fresh jump does removeAll, unlike a chunk-boundary tick', async () => {
+    const { viewer, getDs } = fakeViewer();
+    mockedFetch.mockReset();
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
+      if (u.startsWith('/api/history/tracks')) {
+        return jsonResponse({
+          tracks: [{ id: 'aircraft:OLD111', kind: 'aircraft', points: [[1.0, 1.0, 1_700_000_000, 0]] }],
+        });
+      }
+      return jsonResponse({});
+    });
+
+    const controller = installHistoryPlayback(viewer);
+    await controller.loadAt(1_700_000_000_000, 1_700_010_800_000);
+    expect(getDs().entities.values.length).toBe(1);
+
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
+      if (u.startsWith('/api/history/tracks')) {
+        return jsonResponse({
+          tracks: [{ id: 'aircraft:NEW222', kind: 'aircraft', points: [[2.0, 2.0, 1_800_000_000, 0]] }],
+        });
+      }
+      return jsonResponse({});
+    });
+
+    await controller.loadAt(1_800_000_000_000, 1_800_010_800_000);
+    const ds = getDs();
+    expect(ds.entities.getById('hist:aircraft:OLD111'), 'a new loadAt() jump must clear the prior window').toBeUndefined();
+    expect(ds.entities.getById('hist:aircraft:NEW222')).toBeDefined();
+    expect(ds.entities.values.length).toBe(1);
   });
 });
