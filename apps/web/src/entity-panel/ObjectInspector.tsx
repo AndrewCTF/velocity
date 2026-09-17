@@ -4,6 +4,7 @@ import { useSelection } from '../state/stores.js';
 import { EntityPanel } from './EntityPanel.js';
 import { tracks } from '../intel/tracks.js';
 import { apiFetch } from '../transport/http.js';
+import { Badge, MicroLabel, Widget, type BadgeTone } from '../shell/instruments.js';
 
 // Object inspector (design §6.3) — a tabbed ObjectCard over the selected object.
 // OVERVIEW reuses the rich EntityPanel (profile/kinematics/ACARS/actions) unchanged;
@@ -79,6 +80,7 @@ export function ObjectInspector({ viewer }: { viewer: Cesium.Viewer | null }): J
         {/* Overview is always mounted (it owns the empty state + resolves selection). */}
         <div style={{ display: tab === 'overview' || !id ? 'block' : 'none' }}>
           <EntityPanel viewer={viewer} />
+          {id && <RegistryAndFilings id={id} />}
         </div>
         {id && tab === 'properties' && <PropertiesTab viewer={viewer} id={id} />}
         {id && tab === 'history' && <HistoryTab id={id} />}
@@ -295,6 +297,135 @@ export function PropertiesTab({ viewer, id }: { viewer: Cesium.Viewer | null; id
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+// ── T0 ↔ T2 join: registry, filing and claim tiers about this object ────────
+// One Widget under the live kinematics (docs/gap-analysis-2026-09-13.md §6
+// rows 6-7). /api/entity/{eid} joins the ontology's assertions for the SAME
+// canonical id to the object's newest live sensor fix, so the panel can answer
+// says-who / since-when next to what-is-it / where-is-it. Rows are grouped by
+// source, each carrying the tier its source names and how far the statement
+// sits from the fix. Renders NOTHING when the block is empty: an object with
+// no registry presence has no story in this tier, and an empty shell is the
+// "nothing here" canvas the console bans.
+type RegistryAssertion = {
+  prop: string;
+  value: unknown;
+  source: string;
+  confidence?: number;
+  observed_at?: string | null;
+  derivation?: Record<string, unknown> | null;
+  tier?: string;
+  lag_s?: number | null;
+};
+type RegistryBlock = {
+  assertions?: RegistryAssertion[];
+  tiers?: Record<string, string>;
+  degraded?: boolean;
+};
+
+// Tier chips classify PROVENANCE, not severity: sensor = the live feed we
+// already plot (accent), registry = an authoritative registration (ok),
+// filing = a document on record (neutral), claim = somebody said so (warn).
+const TIER_TONE: Record<string, BadgeTone> = {
+  sensor: 'accent',
+  registry: 'ok',
+  filing: 'neutral',
+  claim: 'warn',
+};
+
+function utcStamp(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : `${d.toISOString().slice(0, 19).replace('T', ' ')}Z`;
+}
+
+// How far a statement sits from the live fix, in the largest honest unit.
+function lagLabel(lagS: number): string {
+  const a = Math.abs(lagS);
+  if (a < 60) return 'at the fix';
+  const dur =
+    a >= 86400
+      ? `${Math.round(a / 86400)} d`
+      : a >= 3600
+        ? `${Math.round(a / 3600)} h`
+        : `${Math.round(a / 60)} min`;
+  return lagS > 0 ? `+${dur} after the fix` : `${dur} before the fix`;
+}
+
+// '—' is reserved for a value the source did not report (the §7 never-guess rule).
+function assertionValue(v: unknown): string {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
+export function RegistryAndFilings({ id }: { id: string }): JSX.Element | null {
+  const [block, setBlock] = useState<RegistryBlock | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setBlock(null);
+    (async () => {
+      try {
+        const r = await apiFetch(`/api/entity/${encodeURIComponent(id)}`, { cache: 'no-store' });
+        if (!alive || !r.ok) return;
+        const body = (await r.json()) as { registry?: RegistryBlock };
+        if (alive) setBlock(body.registry ?? null);
+      } catch {
+        // best-effort: the live kinematics above render regardless
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  const assertions = block?.assertions ?? [];
+  if (assertions.length === 0) return null;
+
+  // Grouped by source, keeping the store's newest-first order within a group.
+  const groups = new Map<string, RegistryAssertion[]>();
+  for (const a of assertions) {
+    const rows = groups.get(a.source);
+    if (rows) rows.push(a);
+    else groups.set(a.source, [a]);
+  }
+
+  return (
+    <div className="px-4 pb-4">
+      <Widget title="Registry and filings" count={assertions.length}>
+        <div className="space-y-2.5">
+          {[...groups.entries()].map(([source, rows]) => {
+            const tier = rows[0]?.tier ?? block?.tiers?.[source] ?? 'other';
+            return (
+              <div key={source}>
+                <MicroLabel className="flex items-center gap-1.5">
+                  <Badge tone={TIER_TONE[tier] ?? 'neutral'}>{tier}</Badge>
+                  <span className="mono normal-case tracking-normal text-txt-2">{source}</span>
+                </MicroLabel>
+                <div className="mt-1 space-y-0.5">
+                  {rows.map((a, i) => (
+                    <div
+                      key={`${a.prop}-${i}`}
+                      className="mono text-[11px] text-txt-1 leading-snug break-words"
+                    >
+                      {[
+                        `${a.prop} = ${assertionValue(a.value)}`,
+                        utcStamp(a.observed_at),
+                        a.lag_s != null ? lagLabel(a.lag_s) : null,
+                      ]
+                        .filter((p): p is string => p != null)
+                        .join(' · ')}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Widget>
     </div>
   );
 }
