@@ -110,7 +110,7 @@ function meshScreenSpaceError(canvas: HTMLCanvasElement): number {
   return 24 * Math.max(1, Math.sqrt((canvas.width * canvas.height) / MESH_PIXEL_BUDGET));
 }
 
-function applyGoogleGate(
+export function applyGoogleGate(
   viewer: Cesium.Viewer,
   tileset: Cesium.Cesium3DTileset,
   wanted: boolean,
@@ -1112,7 +1112,13 @@ export function GlobeCanvas({
       if (googleTilesetRef.current && googleKeylessRef.current !== wantKeyless3d && wantGoogle) {
         scene.primitives.remove(googleTilesetRef.current); // also destroys
         googleTilesetRef.current = null;
+        // Undo what the dropped tileset's gate left behind; the new one's gate
+        // sets its own state when it arrives.
         scene.globe.show = true;
+        scene.globe.maximumScreenSpaceError = presetKnobs(
+          useSettings.getState().mapQuality,
+        ).idleSSE;
+        (viewer.cesiumWidget.creditContainer as HTMLElement).style.display = 'none';
       }
       // The OSM boxes follow the Google mesh's visibility; they load on their
       // own promise, so either may arrive first.
@@ -1168,9 +1174,12 @@ export function GlobeCanvas({
               return;
             }
             googleKeylessRef.current = keyless;
-            // Hidden first, so the gate below always sees a change and sets
-            // the backdrop up; a tileset is born with show = true.
-            if (keyless) tileset.show = false;
+            // Hidden first, whichever source it is: a tileset is born with
+            // show = true, and the gate only acts on a change. Left visible,
+            // one created under 30 km skipped the gate's work entirely — the
+            // keyless mesh got no backdrop, and the licensed stream kept the
+            // globe on under it with Google's required attribution hidden.
+            tileset.show = false;
             scene.primitives.add(tileset);
             googleTilesetRef.current = tileset;
             applyGoogleGate(viewer, tileset, googleWantedRef.current, keyless);
