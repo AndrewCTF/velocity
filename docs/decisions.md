@@ -3054,3 +3054,137 @@ are fixed: write gates on situations and maps, the replay source chosen from the
 archive's `oldest_ts` (never the SQLite shard list), and a truncated heatmap
 cache treated as a miss rather than served. Public copy carries no comparison to
 other vendors; guard `apps/web/src/copy/noComparison.test.ts`.
+
+## Keyless Google Earth 3D (2026-10-03)
+
+**Decision.** The operator asked for Google's photoreal 3D "without requiring
+any key at all", was told what that means, and chose it. `/tiles/g3d` serves
+Google Earth's own mesh as 3D Tiles; `app/rocktree.py` decodes it. It reverses
+the "We do not do that" line `docs/gaussian-splat-free-sources.md` carried since
+2026-07-11.
+
+**What it is, plainly.** `kh.google.com/rt/earth` is the unauthenticated channel
+Google Earth's web client reads. It is private and undocumented, and reading it
+from anything else is outside Google's terms. Google can change or block it
+without notice, and a public repository that ships a client for it can draw a
+takedown. That is why it has its own switch, `GOOGLE_3D_KEYLESS`, off by default
+and separate from `ENABLE_GOOGLE_3D` (the licensed stream): nobody who turned on
+the licensed tiles gets this by surprise. A commercial tier is refused with 451.
+
+**How an operator turns it on.** Two steps, on purpose. The deployment allows
+it with `GOOGLE_3D_KEYLESS=true`; `/api/config` then reports
+`features.google3dKeyless`, and the basemap list (View menu, and the picker in
+the 2D shell) offers **Google 3D**. Where the server has it off the entry is
+shown disabled and says which variable to set, so nobody clicks a control that
+does nothing. `ENABLE_GOOGLE_3D` is unchanged: it adds Google's licensed
+stream to the `3D sat` basemap and needs the Google key or the ion token.
+
+**Why not the three repositories the operator linked.** All three were read.
+3DTilesDownloader needs a Google Maps key (its README says so). geo-downloader
+needs a Cesium ion token or a Google key (`src-tauri/src/tiles3d/fetcher.rs`
+resolves ion asset 2275207). Dusseldorf-City-MSFS has no code, only a link to a
+manual capture tutorial. The licensed stream they use was already wired
+(`createGooglePhotorealistic3DTileset`) and works with the ion token alone:
+208 tiles over Düsseldorf, zero errors, measured the same day.
+
+**Format facts that cost time.** Per the public notes in
+retroplasma/earth-reverse-engineering, plus three things measured here:
+
+- The globe is a **sphere of radius 6 371 010 m**, and a point at geodetic
+  latitude φ sits at spherical latitude φ. Read as earth-fixed WGS84 the mesh
+  floats 5.8 km up at Düsseldorf. Checked on the Rheinturm: its shaft shows up
+  at 51.2179 N, 194 to 279 m, under this reading, and nothing is there under a
+  geocentric one. `_to_wgs84` re-projects every vertex.
+- Heights are sea-level heights. They are used as ellipsoidal ones, which is
+  the convention the keyless terrain already has, so water sits at zero.
+- **Texture V runs top-down for the photogrammetry atlases and bottom-up for
+  terrain** (the meshes that carry an explicit offset and scale). Swapped,
+  every atlas triangle samples the black padding between charts: 100 % of
+  triangle centres on black one way, 0 % the other, on four nodes.
+
+**No holes.** 3D Tiles REPLACE drops a parent whole once its children load;
+Google ships children only for octants that have finer data and masks the
+parent per octant. Each partly refined node therefore gets one extra LEAF child
+(`?keep=<octant mask>`) carrying its own triangles for the uncovered octants.
+Over a dense city these are a fifth of all requests and every one is empty (93
+of 455), which invites the shortcut tried on 2026-10-04: fold the leftovers
+into a sibling instead. That is wrong. The sibling refines, REPLACE drops it,
+and the parent's leftovers vanish one level down, which is real terrain at the
+edge of a photogrammetry area. A filler has to be a leaf. The guard pins that.
+
+**Speed, measured 2026-10-04**, Düsseldorf from 900 m, headed Chrome on the
+RTX 5090, warm cache, time until the tileset reports every tile loaded:
+
+|                                           | tiles | triangles | load, median               |
+| ----------------------------------------- | ----- | --------- | -------------------------- |
+| First working version (`GE_PER_TEXEL` 16) | 455   | 492 k     | 4.9 s (9 runs, 2.9 to 6.2) |
+| Shipped (`GE_PER_TEXEL` 10)               | 344   | 283 k     | 3.7 s (2 runs)             |
+| Google's licensed tiles, same view        | 208   | 268 k     | 3.6 s (4 runs, 3.3 to 3.9) |
+
+The shipped row was taken as the equivalent screen-space-error setting before
+the constant was changed, and before the tileset JSON was cached; headed Chrome
+stopped launching on the desktop before it could be repeated, so the final
+build is confirmed for correctness only (headless: 310 tiles, 277 k triangles,
+0 failed requests). Treat 3.7 s as plumbed, not proven.
+
+What changed: `GE_PER_TEXEL` 16 → 10, which puts about the same triangle count
+on screen as the licensed tiles; the tileset JSON is built once and cached
+(27 ms of event loop each, two dozen per view), with boxes rounded to the
+centimetre; OSM building boxes are hidden while the mesh is on screen. A first
+visit to a city costs about a second more than a warm one (5.0 s against 4.0 s,
+Cologne).
+
+What did NOT help, so nobody retries it blind: warming a node's siblings from
+Google ahead of the browser (first visits stayed at 5.8 to 7.5 s); Cesium's
+`skipLevelOfDetail` (median 3.1 s against 3.6 s over five alternating runs,
+inside the noise); turning off progressive resolution or the foveated delay.
+The decode is not the cost either: 0.9 ms a node against 46 ms to fetch it.
+
+**Detail is a setting, and the default is the sharp one.** Hours after asking
+for speed the operator looked at the result and asked for resolution: at 10 a
+source texel covers 2.4 screen pixels and buildings read as soft. The number
+is now `GOOGLE_3D_DETAIL` (default 24 = one texel per pixel, the sharpest the
+source has). Same close view of the Düsseldorf harbour from 260 m, headless:
+
+| `GOOGLE_3D_DETAIL` | tiles | triangles | textures |
+| ------------------ | ----- | --------- | -------- |
+| 10                 | 366   | 266 k     | 133 MB   |
+| 24                 | 965   | 1.02 M    | 379 MB   |
+
+So the "shipped" speed row above describes detail 10, not the default; the
+default loads about 2.6 times the tiles and was not timed (headed Chrome still
+would not launch). The tileset JSON is served `no-cache` because it depends on
+this setting, and the routes are `/tiles/g3d/root.json` and `t{path}.json`
+(renamed from `tileset.json` / `b{path}.json` so a browser holding the old
+hour-cached tree could not keep showing it).
+
+**Why it still looked worse than Google Earth (2026-10-05).** The operator
+held up a screenshot of Morningside Heights and said ours was not close. The
+tiles were already at one texel per pixel; the renderer was throwing it away.
+Same view, same tiles, three things compared on magnified crops:
+
+- **FXAA blurs photo textures.** It is a screen-space blur and it smeared each
+  window into the next. While the mesh is on screen the high preset now runs
+  4x MSAA with FXAA off (`applyGoogleGate`); MSAA stays off everywhere else for
+  the VRAM reason stated where `msaaSamples` is first set.
+- **Mipmaps make it worse, not better.** Cesium gives glTF textures no
+  anisotropic filtering, so trilinear picks a coarse mip on every facade seen
+  at an angle: windows gone, and a third more texture memory (646 MB against
+  484 MB). The sampler stays plain LINEAR.
+- **Cesium's memory cap silently lowers detail on big screens.** Past
+  `cacheBytes + maximumCacheOverflowBytes` it raises the screen-space error
+  instead of failing. With the old 0.5 + 1 GB budget a 3922x2034 canvas ran at
+  error 36 instead of 24. The high preset now gets 2 + 2 GB: same canvas,
+  error 24, 2.9 GB in use, 5 118 tiles, 2.59 M triangles, 0 failed requests.
+  The lighter presets and phones keep the old budget.
+
+A finer level of detail than one texel per pixel (`GOOGLE_3D_DETAIL=48`) is
+only slightly sharper for 2.5 times the tiles, so it is not the default.
+
+**The spread is the backend, not this code.** A cached tile takes the API a
+median 8 ms but 319 ms at p99, with stalls to 1.9 s (4 072 requests, six at a
+time), because the event loop shares a process with the 1 s ADS-B cycle. Every
+tile route pays that. It is the next thing to fix if the globe must load
+faster, and it is not a 3D problem.
+
+→ `apps/api/tests/test_rocktree.py`

@@ -173,6 +173,15 @@ class Settings(BaseSettings):
     # operator switches it off here.
     adsb_disabled_hosts: str = ""
 
+    # Keyless Google Earth 3D (app/rocktree.py) is OFF unless
+    # GOOGLE_3D_KEYLESS is set; ENABLE_GOOGLE_3D (the licensed stream) must
+    # never turn it on — it reads a private Google endpoint, outside Google's
+    # terms, by operator decision.
+    google_3d_keyless: bool = False
+    # Texels per 24 screen pixels (rocktree.GE_PER_TEXEL): 24 = one texel per
+    # pixel, the sharpest the source has; 10 = soft and about twice as fast.
+    google_3d_detail: float = 24.0
+
     # ── outbound proxy pool (app.upstream_proxy) ──
     # Comma-separated proxy URLs the shared upstream client rotates over, e.g.
     # "http://user:pass@host:8080,socks5://host:1080". EMPTY = off, which is the

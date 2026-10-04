@@ -344,11 +344,14 @@ function BasemapPicker({
       data-testid="basemap-picker"
       className="mono text-[10px] tracking-[0.6px] uppercase bg-transparent border border-line rounded-sm px-1.5 py-1 text-txt-2 hover:border-accent-line hover:text-txt-1 focus:outline-hidden focus:border-accent-line cursor-pointer"
     >
-      {BASEMAP_OPTIONS.map((o) => (
-        <option key={o.value} value={o.value} title={o.title}>
-          {o.label}
-        </option>
-      ))}
+      {BASEMAP_OPTIONS.map((o) => {
+        const why = o.unavailable?.() ?? null;
+        return (
+          <option key={o.value} value={o.value} title={why ?? o.title} disabled={why !== null}>
+            {o.label}
+          </option>
+        );
+      })}
     </select>
   );
 }

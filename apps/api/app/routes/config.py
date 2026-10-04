@@ -26,6 +26,9 @@ router = APIRouter(tags=["config"])
 
 class Features(BaseModel):
     enable_google3_d: bool = Field(..., alias="enableGoogle3D")
+    # The keyless Google Earth source (/tiles/g3d) is switched on here; the
+    # globe offers its "Google 3D" basemap only then.
+    google3d_keyless: bool = Field(False, alias="google3dKeyless")
 
     model_config = {"populate_by_name": True}
 
@@ -67,9 +70,7 @@ async def get_config(request: Request, settings: Settings = Depends(get_settings
         if token:
             who = client_key(request.client.host if request.client else "", request.headers)
             if _locked(who, live) is None:
-                reveal = await _authorized(
-                    static, token, live, who=who, path=request.url.path
-                )
+                reveal = await _authorized(static, token, live, who=who, path=request.url.path)
                 if not reveal:
                     record_auth_failure(
                         who, live, "bad-credential", request.url.path, credential_kind(token)
@@ -77,7 +78,10 @@ async def get_config(request: Request, settings: Settings = Depends(get_settings
     return RuntimeConfig(
         cesiumIonToken=settings.cesium_ion_token if reveal else "",
         googleApiKey=settings.gmaps_key if reveal else "",
-        features=Features(enableGoogle3D=settings.enable_google_3d),
+        features=Features(
+            enableGoogle3D=settings.enable_google_3d,
+            google3dKeyless=settings.google_3d_keyless,
+        ),
         classification=settings.classification,
         buildId=settings.build_id,
         openMode=(not _auth_enabled(settings) and settings.allow_unauthenticated),

@@ -115,6 +115,12 @@ Browser-tier pacing and the headful lever are in `tools/CLAUDE.md`.
 
 - Satellites: `/api/space/gp` requests `FORMAT=tle` (JSON variant → 0 sats);
   propagation stays chunked, client-side. → `tests/test_invariants.py`
+- Keyless Google Earth 3D (`app/rocktree.py`, `/tiles/g3d`) is OFF unless
+  `GOOGLE_3D_KEYLESS` is set, and `ENABLE_GOOGLE_3D` (the licensed stream) must
+  never turn it on: it reads a private Google endpoint, outside Google's terms,
+  by operator decision. Do not "simplify" `_to_wgs84` or the texture V rule —
+  the globe is a sphere and atlases run top-down, both measured.
+  → `tests/test_rocktree.py`, `docs/decisions.md` (Keyless Google Earth 3D)
 - Keyless layers keep working with no API key: ADS-B grid, Baltic AIS,
   MyShipTracking, ShipXplorer, USGS quakes, Esri dark-canvas basemap, CelesTrak. FIRMS
   degrades gracefully without MAP_KEY.

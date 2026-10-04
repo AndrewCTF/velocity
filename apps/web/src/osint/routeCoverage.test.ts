@@ -41,6 +41,10 @@ const EXEMPT: Record<string, string> = {
   // Redirect/proxy responses the browser consumes as a URL, never as JSON.
   '/api/ground/photo': 'image proxy: the URL is put in an <img src>, not fetched',
   // Reached through a path the search cannot see literally.
+  '/tiles/g3d/t{path}.json':
+    'linked from /tiles/g3d/root.json as an external tileset; Cesium follows it',
+  '/tiles/g3d/n{path}.glb':
+    'tile content URI inside the /tiles/g3d tilesets; Cesium fetches it, GlobeCanvas names only the root',
   '/api/intel/dossier/aircraft':
     'ObjectInspector builds /api/intel/dossier/${kind}/${ident} from the selection',
   // Aliases of a route that IS wired.

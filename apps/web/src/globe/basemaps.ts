@@ -1,16 +1,32 @@
 import type { ImageryMode } from '../state/stores.js';
+import { latestRuntimeConfig } from '../transport/config.js';
 
 // Basemap picker options, in display order. Attribution strings double as
 // the option tooltip — Esri/OpenTopoMap/USGS/EOX all require it per their
 // ToS. The Cesium credit container itself stays off (dark-chrome invariant,
 // GlobeCanvas.tsx) so this tooltip is the attribution surface for now; a
 // future pass can also surface it in a persistent footer.
-export const BASEMAP_OPTIONS: Array<{ value: ImageryMode; label: string; title: string }> = [
+export const BASEMAP_OPTIONS: Array<{
+  value: ImageryMode;
+  label: string;
+  title: string;
+  /** Why this basemap cannot be chosen right now, or null. Absent = always can. */
+  unavailable?: () => string | null;
+}> = [
   { value: '2d-dark', label: '2D dark', title: 'Dark gray canvas (Esri, proxied, keyless)' },
   {
     value: '3d-sat',
     label: '3D sat',
     title: 'Keyless satellite imagery + 3D terrain (ion token adds OSM Buildings)',
+  },
+  {
+    value: 'google-3d',
+    label: 'Google 3D',
+    title: 'Photoreal 3D cities from Google Earth, no key · Data (c) Google. Non-commercial use only',
+    unavailable: () =>
+      latestRuntimeConfig()?.features.google3dKeyless
+        ? null
+        : 'This server has Google 3D switched off (GOOGLE_3D_KEYLESS).',
   },
   {
     value: 'apple-sat',

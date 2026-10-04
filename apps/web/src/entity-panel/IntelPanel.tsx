@@ -261,7 +261,7 @@ export function IntelPanel({ viewer }: Props): JSX.Element {
     useSelection.getState().select(sid);
   };
 
-  const satOn = imageryMode === '3d-sat';
+  const satOn = imageryMode === '3d-sat' || imageryMode === 'google-3d';
   return (
     <div className="p-3 space-y-4">
       <div className="flex items-center justify-between">
