@@ -2,16 +2,19 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // What the backend last said about itself. The "Google 3D" basemap reads it.
-const server = vi.hoisted(() => ({ google3dKeyless: false }));
+const server = vi.hoisted(() => ({ answered: true, google3dKeyless: false }));
 vi.mock('../transport/config.js', async (original) => ({
   ...(await original<typeof import('../transport/config.js')>()),
-  latestRuntimeConfig: () => ({
-    cesiumIonToken: '',
-    googleApiKey: '',
-    features: { enableGoogle3D: false, google3dKeyless: server.google3dKeyless },
-    classification: 'UNCLAS',
-    buildId: 'test',
-  }),
+  latestRuntimeConfig: () =>
+    server.answered
+      ? {
+          cesiumIonToken: '',
+          googleApiKey: '',
+          features: { enableGoogle3D: false, google3dKeyless: server.google3dKeyless },
+          classification: 'UNCLAS',
+          buildId: 'test',
+        }
+      : null,
 }));
 
 import { CommandBar } from './CommandBar.js';
@@ -21,6 +24,15 @@ describe('CommandBar basemap picker', () => {
   beforeEach(() => {
     useImagery.getState().setMode('2d-dark');
     server.google3dKeyless = false;
+    server.answered = true;
+  });
+
+  it('does not call Google 3D switched off before the server has answered', () => {
+    server.answered = false;
+    render(<CommandBar viewer={null} ionToken="" />);
+    const option = screen.getByRole('option', { name: 'Google 3D' }) as HTMLOptionElement;
+    expect(option.disabled).toBe(true);
+    expect(option.title).toBe('Still connecting to the server.');
   });
 
   it('offers Google 3D only where the server has it switched on', () => {

@@ -23,10 +23,15 @@ export const BASEMAP_OPTIONS: Array<{
     value: 'google-3d',
     label: 'Google 3D',
     title: 'Photoreal 3D cities from Google Earth, no key · Data (c) Google. Non-commercial use only',
-    unavailable: () =>
-      latestRuntimeConfig()?.features.google3dKeyless
+    unavailable: () => {
+      // No config yet is "not known", not "off": the backend answers a cold
+      // boot late, and the menu can be opened before it does.
+      const config = latestRuntimeConfig();
+      if (!config) return 'Still connecting to the server.';
+      return config.features.google3dKeyless
         ? null
-        : 'This server has Google 3D switched off (GOOGLE_3D_KEYLESS).',
+        : 'This server has Google 3D switched off (GOOGLE_3D_KEYLESS).';
+    },
   },
   {
     value: 'apple-sat',
