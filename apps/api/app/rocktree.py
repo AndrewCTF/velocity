@@ -18,6 +18,7 @@ earn a protobuf dependency.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import struct
@@ -471,7 +472,9 @@ def node_glb(buf: bytes, keep: int = 0xFF) -> bytes:
             ]
             material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": tex}
         gltf["materials"].append(material)
-        wide = len(pos) > 0xFFFF
+        # 65535 is the primitive-restart value for 16-bit indices and glTF
+        # forbids it as an index, so a mesh that would need it goes to 32-bit.
+        wide = len(pos) >= 0xFFFF
         gltf["meshes"][0]["primitives"].append(
             {
                 "attributes": {
@@ -533,13 +536,13 @@ def split(path: str) -> tuple[str, str]:
     return path[:cut], path[cut:]
 
 
-async def bulk(head: str) -> Bulk:
-    """The bulk headed at `head` (length a multiple of 4), walking the epoch
-    chain down from the planet root. Raises LookupError for a path Google does
-    not have."""
-    hit = _bulks.get(head)
-    if hit and time.monotonic() - hit[0] < _BULK_TTL:
-        return hit[1]
+# Bulks being fetched right now. A cold view asks for the root tileset and
+# dozens of nodes at once, and every one of them walks the same chain of
+# bulks; without this each request fetched the whole chain from Google itself.
+_bulk_loading: dict[str, asyncio.Future[Bulk]] = {}
+
+
+async def _load_bulk(head: str) -> Bulk:
     if head:
         up = await bulk(head[:-4])
         node = up.nodes.get(head[-4:])
@@ -554,6 +557,29 @@ async def bulk(head: str) -> Bulk:
         _bulks.clear()
     _bulks[head] = (time.monotonic(), got)
     return got
+
+
+async def bulk(head: str) -> Bulk:
+    """The bulk headed at `head` (length a multiple of 4), walking the epoch
+    chain down from the planet root. Raises LookupError for a path Google does
+    not have. Concurrent callers share one fetch."""
+    hit = _bulks.get(head)
+    if hit and time.monotonic() - hit[0] < _BULK_TTL:
+        return hit[1]
+    loop = asyncio.get_running_loop()
+    pending = _bulk_loading.get(head)
+    if pending is None or pending.get_loop() is not loop:
+        pending = _bulk_loading[head] = loop.create_task(_load_bulk(head))
+
+        def done(task: asyncio.Future[Bulk], head: str = head) -> None:
+            if _bulk_loading.get(head) is task:
+                del _bulk_loading[head]
+            if not task.cancelled():
+                task.exception()  # retrieved here too: the first caller may be gone
+
+        pending.add_done_callback(done)
+    # Shielded: one caller hanging up must not cancel the fetch the others share.
+    return await asyncio.shield(pending)
 
 
 _json: dict[tuple[str, float], tuple[float, bytes]] = {}

@@ -8,6 +8,7 @@ and that the route is dark unless the operator opted in.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import struct
 
@@ -17,7 +18,6 @@ from fastapi.testclient import TestClient
 
 from app import rocktree as rt
 from app.config import Settings, get_settings
-from app.main import app
 
 # ── a ten-line protobuf writer, so the fixtures read as the format does ──
 
@@ -205,17 +205,69 @@ def test_split_finds_the_bulk_that_describes_a_node() -> None:
 # ── route ──
 
 
-def test_route_is_dark_unless_the_operator_opted_in(client: TestClient) -> None:
-    assert client.get("/tiles/g3d/root.json").status_code == 404
-    assert client.get("/tiles/g3d/n3060.glb").status_code == 404
+def test_route_is_dark_unless_the_operator_opted_in(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fixture builds its own app, so the override goes on client.app. On
+    # the module-level app it changes nothing and every case below would pass
+    # for the wrong reason — which is what the control at the end is for.
+    def refused_by_the_gate(url: str) -> bool:
+        # FastAPI also answers 404 for a route that does not exist; only the
+        # gate names the switch.
+        r = client.get(url)
+        return r.status_code == 404 and "GOOGLE_3D_KEYLESS" in r.json()["detail"]
+
+    assert refused_by_the_gate("/tiles/g3d/root.json")
+    assert refused_by_the_gate("/tiles/g3d/t3060.json")
+    assert refused_by_the_gate("/tiles/g3d/n3060.glb")
     # ENABLE_GOOGLE_3D alone (the licensed stream) must not turn scraping on.
-    app.dependency_overrides[get_settings] = lambda: Settings(
+    client.app.dependency_overrides[get_settings] = lambda: Settings(
         enable_google_3d=True, google_3d_keyless=False
     )
-    assert client.get("/tiles/g3d/root.json").status_code == 404
+    assert refused_by_the_gate("/tiles/g3d/root.json")
+    assert refused_by_the_gate("/tiles/g3d/n3060.glb")
+
+    # Control: with the switch on the same URL is served, so the 404s above
+    # were the gate and not a missing route.
+    async def tree(head: str, detail: float) -> bytes:
+        return b'{"asset":{"version":"1.0"}}'
+
+    monkeypatch.setattr(rt, "tileset_json", tree)
+    client.app.dependency_overrides[get_settings] = lambda: Settings(google_3d_keyless=True)
+    served = client.get("/tiles/g3d/root.json")
+    assert served.status_code == 200
+    assert served.json() == {"asset": {"version": "1.0"}}
+
+
+def test_concurrent_requests_share_one_bulk_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cold view walks the same bulk chain from dozens of requests at once."""
+    calls: list[str] = []
+    root = _f(1, _f(1, b"") + _f(2, 7))  # PlanetoidMetadata: root epoch 7
+    one_bulk = (
+        _node_meta("0")
+        + _f(2, _f(1, b"") + _f(2, 7))
+        + _f(3, np.array([6371010.0, 0.0, 0.0]).tobytes())
+        + _f(4, np.array([8.0, 4.0, 2.0, 1.0], dtype="<f4").tobytes())
+    )
+
+    async def fake_get(path: str) -> bytes:
+        calls.append(path.split("/")[0])
+        await asyncio.sleep(0.01)  # long enough for every caller to arrive
+        return root if path == "PlanetoidMetadata" else one_bulk
+
+    monkeypatch.setattr(rt, "_get", fake_get)
+    monkeypatch.setattr(rt, "_bulks", {})
+    monkeypatch.setattr(rt, "_bulk_loading", {})
+
+    async def burst() -> list[rt.Bulk]:
+        return list(await asyncio.gather(*(rt.bulk("") for _ in range(20))))
+
+    got = asyncio.run(burst())
+    assert calls == ["PlanetoidMetadata", "BulkMetadata"]
+    assert all(b is got[0] for b in got)
 
 
 def test_route_rejects_anything_that_is_not_an_octree_path(client: TestClient) -> None:
-    app.dependency_overrides[get_settings] = lambda: Settings(google_3d_keyless=True)
+    client.app.dependency_overrides[get_settings] = lambda: Settings(google_3d_keyless=True)
     for bad in ("n8.glb", "n30a.glb", "n3_0.glb", "t306.json", "t9999.json", "n3060.glb?keep=0"):
         assert client.get(f"/tiles/g3d/{bad}").status_code == 422, bad

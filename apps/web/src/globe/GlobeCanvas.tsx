@@ -292,6 +292,9 @@ export function GlobeCanvas({
   // Which source the cached tileset came from: the 'google-3d' basemap reads
   // the backend's keyless mesh, the ENABLE_GOOGLE_3D flag the licensed stream.
   const googleKeylessRef = useRef(false);
+  // ...and which source the basemap wants NOW, for a load that finishes after
+  // the operator has already switched away.
+  const googleWantKeylessRef = useRef(false);
   const googleWantedRef = useRef(false);
   // Generation counter so out-of-order async tile loads (user spamming the
   // toggle) cannot install a stale tileset into the current scene.
@@ -1057,6 +1060,7 @@ export function GlobeCanvas({
       // views and re-toggles burn no quota.
       const wantGoogle = wantKeyless3d || enableGoogle3D;
       googleWantedRef.current = wantGoogle;
+      googleWantKeylessRef.current = wantKeyless3d;
       // One tileset is kept per session. If it came from the other source
       // (a box with both switched on), drop it and build the right one.
       if (googleTilesetRef.current && googleKeylessRef.current !== wantKeyless3d && wantGoogle) {
@@ -1069,51 +1073,63 @@ export function GlobeCanvas({
         const bld = osmBuildingsRef.current;
         if (bld) applyBuildingsGate(viewer, bld, googleTilesetRef.current);
       };
+      const startGoogle = (keyless: boolean): void => {
+        googleCreatingRef.current = true;
+        // Past cacheBytes + overflow Cesium does not fail, it quietly raises
+        // the screen-space error. Decoded photo textures at one texel per
+        // pixel need ~1 GB for a 2200 px wide view and more than the old
+        // 0.5 + 1 GB at 4K, where the error went 24 → 36 and the mesh turned
+        // soft (measured 2026-10-05). The high preset gets room for 4K;
+        // the lighter presets and phones keep the old budget.
+        const roomy =
+          !isMobileDevice() && useSettings.getState().mapQuality === 'high';
+        const GIB = 1024 * 1024 * 1024;
+        const googleOptions = {
+          // 24 (vs default 16) ≈ half the tile fetches for slightly softer
+          // detail; big cache so revisiting a city reuses tiles.
+          maximumScreenSpaceError: 24,
+          cacheBytes: roomy ? 2 * GIB : GIB / 2,
+          maximumCacheOverflowBytes: roomy ? 2 * GIB : GIB,
+        };
+        // 'google-3d': Google Earth's own mesh as 3D Tiles from the backend
+        // (app/rocktree.py), no key of any kind. Otherwise the licensed
+        // stream, which needs the Google key or the ion token.
+        (keyless
+          ? Cesium.Cesium3DTileset.fromUrl(backendUrl('/tiles/g3d/root.json'), googleOptions)
+          : Cesium.createGooglePhotorealistic3DTileset(undefined, googleOptions)
+        )
+          .then((tileset) => {
+            googleCreatingRef.current = false;
+            if (!viewerRef.current) {
+              tileset.destroy();
+              return;
+            }
+            // The basemap can change while this loads, and no effect run
+            // sees a tileset that does not exist yet. One from the source
+            // that is no longer wanted must never be shown under the other
+            // basemap's name: drop it and build the right one.
+            if (googleWantedRef.current && googleWantKeylessRef.current !== keyless) {
+              tileset.destroy();
+              startGoogle(googleWantKeylessRef.current);
+              return;
+            }
+            googleKeylessRef.current = keyless;
+            scene.primitives.add(tileset);
+            googleTilesetRef.current = tileset;
+            applyGoogleGate(viewer, tileset, googleWantedRef.current);
+            yieldBuildings();
+          })
+          .catch((e: unknown) => {
+            googleCreatingRef.current = false;
+            console.warn('Google Photorealistic 3D failed:', e);
+          });
+      };
       if (wantGoogle) {
         if (googleTilesetRef.current) {
           applyGoogleGate(viewer, googleTilesetRef.current, true);
           yieldBuildings();
         } else if (!googleCreatingRef.current) {
-          googleCreatingRef.current = true;
-          // Past cacheBytes + overflow Cesium does not fail, it quietly raises
-          // the screen-space error. Decoded photo textures at one texel per
-          // pixel need ~1 GB for a 2200 px wide view and more than the old
-          // 0.5 + 1 GB at 4K, where the error went 24 → 36 and the mesh turned
-          // soft (measured 2026-10-05). The high preset gets room for 4K;
-          // the lighter presets and phones keep the old budget.
-          const roomy =
-            !isMobileDevice() && useSettings.getState().mapQuality === 'high';
-          const GIB = 1024 * 1024 * 1024;
-          const googleOptions = {
-            // 24 (vs default 16) ≈ half the tile fetches for slightly softer
-            // detail; big cache so revisiting a city reuses tiles.
-            maximumScreenSpaceError: 24,
-            cacheBytes: roomy ? 2 * GIB : GIB / 2,
-            maximumCacheOverflowBytes: roomy ? 2 * GIB : GIB,
-          };
-          // 'google-3d': Google Earth's own mesh as 3D Tiles from the backend
-          // (app/rocktree.py), no key of any kind. Otherwise the licensed
-          // stream, which needs the Google key or the ion token.
-          (wantKeyless3d
-            ? Cesium.Cesium3DTileset.fromUrl(backendUrl('/tiles/g3d/root.json'), googleOptions)
-            : Cesium.createGooglePhotorealistic3DTileset(undefined, googleOptions)
-          )
-            .then((tileset) => {
-              googleCreatingRef.current = false;
-              googleKeylessRef.current = wantKeyless3d;
-              if (!viewerRef.current) {
-                tileset.destroy();
-                return;
-              }
-              scene.primitives.add(tileset);
-              googleTilesetRef.current = tileset;
-              applyGoogleGate(viewer, tileset, googleWantedRef.current);
-              yieldBuildings();
-            })
-            .catch((e: unknown) => {
-              googleCreatingRef.current = false;
-              console.warn('Google Photorealistic 3D failed:', e);
-            });
+          startGoogle(wantKeyless3d);
         }
       } else if (googleTilesetRef.current) {
         applyGoogleGate(viewer, googleTilesetRef.current, false);
