@@ -3182,6 +3182,40 @@ Same view, same tiles, three things compared on magnified crops:
 A finer level of detail than one texel per pixel (`GOOGLE_3D_DETAIL=48`) is
 only slightly sharper for 2.5 times the tiles, so it is not the default.
 
+**The mesh in use: a black map, a starved loader and a logo (2026-10-06).**
+The operator reported the basemap as buggy on a large display. Reproduced by
+doing what an operator does: pick Google 3D at world view, fly to a city.
+
+- **Black map on arrival.** The gate hid the globe the moment the camera went
+  under 30 km, before one mesh tile existed: about five seconds of black with
+  aircraft dots on it. Under the keyless mesh the globe now stays visible as
+  the backdrop. Left on under a loaded mesh it changes at most 0.01 % of
+  pixels (New York, San Francisco, Innsbruck, Rio), so nothing is gained by
+  hiding it. The licensed stream still hides it: its heights are ellipsoidal.
+- **The globe starved the mesh.** Cesium allows one server 18 requests at a
+  time. On a 3162 px wide canvas the satellite basemap took all 18 for four
+  seconds at a stretch and the mesh had none in flight. While the mesh is up
+  the globe now runs at screen-space error 16, a handful of coarse tiles.
+- **Too many tiles on a big canvas.** One texel per pixel at 3162x1994 wanted
+  3 140 tiles and 2.5 GB for one view and had not finished after 40 s. Above
+  2.5 MP the mesh's error now scales with the pixel count, and it skips the
+  chain of coarser tiles above the ones it needs (`skipLevelOfDetail`). Same
+  view: 1 365 tiles, 1.1 GB, loaded in 16 s; a full-resolution crop of the two
+  is hard to tell apart. A 1920 px fly-in went from 16 s to 6 s.
+- **A logo under the time dock.** Showing the mesh un-hid Cesium's credit
+  strip, which is right for the licensed stream and wrong here: it put the
+  Cesium ion logo half behind the dock. The strip stays hidden for this source.
+
+Two things that look like bugs and are Google's data: a hard colour line
+across Manhattan at 59th Street (two capture blocks; raw texture means
+81/69/70 south of it and 96/109/123 north, same node epoch), and a blurred
+patch on the left bank in Paris (a finest-level node, blurred at source).
+
+Tried and dropped again: warming sibling nodes from Google (cold first visit
+on a quiet API: 16/6/6 s with, 8/5/9 s without), and filling per column
+instead of per octant (the per-octant rule is Google's own; 1 416 of 1 426
+fillers in the cache are empty and the rest are small real slivers).
+
 **The spread is the backend, not this code.** A cached tile takes the API a
 median 8 ms but 319 ms at p99, with stalls to 1.9 s (4 072 requests, six at a
 time), because the event loop shares a process with the 1 s ADS-B cycle. Every

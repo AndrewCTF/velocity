@@ -91,10 +91,30 @@ function applyBuildingsGate(
 // Flip the Google tileset/globe/credit trio in one place. No-ops when the
 // state didn't change, so calling it from camera.changed stays cheap and
 // requestRenderMode-friendly (render only requested on actual flips).
+// While the keyless mesh is on screen the satellite globe is only a backdrop
+// for the seconds before the mesh has loaded. At its normal detail it asked for
+// 18 imagery tiles at a time, which is every request slot Cesium gives one
+// server, and the mesh got none until they finished (measured 2026-10-06 on a
+// 3162 px wide canvas: no mesh request in flight for 4 s behind 18 satellite
+// ones). This error keeps the backdrop to a handful of coarse tiles.
+const MESH_BACKDROP_GLOBE_SSE = 16;
+
+// Tile demand grows with the pixel count. At one texel per pixel a 3162x1994
+// canvas wanted 3 140 tiles and 2.5 GB for a single view and was still loading
+// after 40 s. Above this many pixels the error scales so the demand stays what
+// a 2.5 MP canvas asks for: the same view then finished in 16 s with 1 365
+// tiles, and a full-resolution crop of the two is hard to tell apart
+// (measured 2026-10-06). Smaller canvases keep one texel per pixel.
+const MESH_PIXEL_BUDGET = 2_500_000;
+function meshScreenSpaceError(canvas: HTMLCanvasElement): number {
+  return 24 * Math.max(1, Math.sqrt((canvas.width * canvas.height) / MESH_PIXEL_BUDGET));
+}
+
 function applyGoogleGate(
   viewer: Cesium.Viewer,
   tileset: Cesium.Cesium3DTileset,
   wanted: boolean,
+  keyless: boolean,
 ): void {
   const h = viewer.camera.positionCartographic.height;
   const visible = wanted && h < GOOGLE_3D_MAX_CAMERA_HEIGHT_M;
@@ -112,12 +132,33 @@ function applyGoogleGate(
     if (fxaa) fxaa.enabled = !sharp;
     scene.requestRender();
   }
+  if (keyless) {
+    const sse = meshScreenSpaceError(viewer.canvas);
+    if (Math.abs(tileset.maximumScreenSpaceError - sse) > 0.5) {
+      tileset.maximumScreenSpaceError = sse;
+    }
+  }
   if (tileset.show !== visible) {
     tileset.show = visible;
-    viewer.scene.globe.show = !visible;
-    // Google ToS requires visible attribution while their tiles render.
+    const globe = viewer.scene.globe;
+    if (keyless) {
+      // The globe stays up under our own mesh, coarse, as the backdrop: it is
+      // what shows through while tiles arrive. Hiding it, as the licensed path
+      // does, left a black map for the ~5 s the first tiles take. Left visible
+      // under a loaded mesh it changes at most 0.01 % of pixels (New York, San
+      // Francisco, Innsbruck, Rio), so there is nothing to gain by hiding it.
+      globe.show = true;
+      globe.maximumScreenSpaceError = visible
+        ? MESH_BACKDROP_GLOBE_SSE
+        : presetKnobs(useSettings.getState().mapQuality).idleSSE;
+    } else {
+      globe.show = !visible;
+    }
+    // Google's terms require visible attribution while the LICENSED tiles
+    // render. The keyless mesh has no such strip: showing it there put the
+    // Cesium ion logo half under the time dock.
     const credit = viewer.cesiumWidget.creditContainer as HTMLElement;
-    credit.style.display = visible ? '' : 'none';
+    credit.style.display = visible && !keyless ? '' : 'none';
     viewer.scene.requestRender();
   }
 }
@@ -655,7 +696,12 @@ export function GlobeCanvas({
     const setMotionQuality = (motion: boolean): void => {
       if (viewer.isDestroyed()) return;
       const k = presetKnobs(useSettings.getState().mapQuality);
-      scene.globe.maximumScreenSpaceError = motion ? k.motionSSE : k.idleSSE;
+      const meshUp = googleKeylessRef.current && googleTilesetRef.current?.show === true;
+      scene.globe.maximumScreenSpaceError = meshUp
+        ? MESH_BACKDROP_GLOBE_SSE
+        : motion
+          ? k.motionSSE
+          : k.idleSSE;
       const fx = scene.postProcessStages?.fxaa;
       // MSAA on means the photoreal mesh is up and FXAA must stay off.
       if (fx) fx.enabled = !motion && scene.msaaSamples === 1;
@@ -889,7 +935,7 @@ export function GlobeCanvas({
     // nothing changed, so this listener stays requestRenderMode-friendly.
     const onCameraChanged = (): void => {
       const ts = googleTilesetRef.current;
-      if (ts) applyGoogleGate(viewer, ts, googleWantedRef.current);
+      if (ts) applyGoogleGate(viewer, ts, googleWantedRef.current, googleKeylessRef.current);
       const bld = osmBuildingsRef.current;
       if (bld) applyBuildingsGate(viewer, bld, ts);
     };
@@ -988,7 +1034,7 @@ export function GlobeCanvas({
       // at unmount via scene.primitives.
       googleWantedRef.current = false;
       if (googleTilesetRef.current) {
-        applyGoogleGate(viewer, googleTilesetRef.current, false);
+        applyGoogleGate(viewer, googleTilesetRef.current, false, googleKeylessRef.current);
       }
       // Reset terrain to the cheap ellipsoid. Setting viewer.terrainProvider
       // here also resets viewer.scene.terrainProvider.
@@ -1066,6 +1112,7 @@ export function GlobeCanvas({
       if (googleTilesetRef.current && googleKeylessRef.current !== wantKeyless3d && wantGoogle) {
         scene.primitives.remove(googleTilesetRef.current); // also destroys
         googleTilesetRef.current = null;
+        scene.globe.show = true;
       }
       // The OSM boxes follow the Google mesh's visibility; they load on their
       // own promise, so either may arrive first.
@@ -1095,7 +1142,14 @@ export function GlobeCanvas({
         // (app/rocktree.py), no key of any kind. Otherwise the licensed
         // stream, which needs the Google key or the ion token.
         (keyless
-          ? Cesium.Cesium3DTileset.fromUrl(backendUrl('/tiles/g3d/root.json'), googleOptions)
+          ? Cesium.Cesium3DTileset.fromUrl(backendUrl('/tiles/g3d/root.json'), {
+              ...googleOptions,
+              // Load the tiles the view needs and skip the chain of coarser
+              // ones above them: half the requests for the same picture
+              // (151 against 355 for one view). What has not arrived yet shows
+              // the satellite backdrop, never a hole.
+              skipLevelOfDetail: true,
+            })
           : Cesium.createGooglePhotorealistic3DTileset(undefined, googleOptions)
         )
           .then((tileset) => {
@@ -1114,9 +1168,12 @@ export function GlobeCanvas({
               return;
             }
             googleKeylessRef.current = keyless;
+            // Hidden first, so the gate below always sees a change and sets
+            // the backdrop up; a tileset is born with show = true.
+            if (keyless) tileset.show = false;
             scene.primitives.add(tileset);
             googleTilesetRef.current = tileset;
-            applyGoogleGate(viewer, tileset, googleWantedRef.current);
+            applyGoogleGate(viewer, tileset, googleWantedRef.current, keyless);
             yieldBuildings();
           })
           .catch((e: unknown) => {
@@ -1126,13 +1183,13 @@ export function GlobeCanvas({
       };
       if (wantGoogle) {
         if (googleTilesetRef.current) {
-          applyGoogleGate(viewer, googleTilesetRef.current, true);
+          applyGoogleGate(viewer, googleTilesetRef.current, true, googleKeylessRef.current);
           yieldBuildings();
         } else if (!googleCreatingRef.current) {
           startGoogle(wantKeyless3d);
         }
       } else if (googleTilesetRef.current) {
-        applyGoogleGate(viewer, googleTilesetRef.current, false);
+        applyGoogleGate(viewer, googleTilesetRef.current, false, googleKeylessRef.current);
         yieldBuildings();
       } else {
         scene.globe.show = true;
