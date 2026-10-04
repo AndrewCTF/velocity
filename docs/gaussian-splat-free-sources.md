@@ -22,9 +22,15 @@ and it is locked behind keys + terms:
 Google's [Map Tiles API policies](https://developers.google.com/maps/documentation/tile/policies)
 **explicitly forbid** extracting/caching/deriving 3D objects from the tiles:
 _"you may not have 3D objects extracted, traced, or otherwise derived by hand or
-machine from Photorealistic 3D Tiles."_ So "grab the gaussian file out of Google
-Earth / Apple Maps" is (a) not even splats — it's keyed, watermarked mesh — and
-(b) a direct ToS + access-control violation. We do not do that.
+machine from Photorealistic 3D Tiles."_ It is also not splats — it is textured
+mesh.
+
+**Reversed by the operator on 2026-10-03.** This section used to end "We do not
+do that." The operator asked for Google's photoreal 3D with no key of any kind,
+was shown the exposure, and chose it. The platform now reads Google Earth's own
+client channel and serves it to the globe as 3D Tiles — behind
+`GOOGLE_3D_KEYLESS`, off by default. Details, numbers and the risk:
+`docs/decisions.md`, "Keyless Google Earth 3D".
 
 ## You can only have two of {keyless, whole-world, splats}
 

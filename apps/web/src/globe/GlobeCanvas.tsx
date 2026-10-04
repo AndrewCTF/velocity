@@ -43,6 +43,8 @@ interface Props {
   //  - '3d-sat':            Cesium World Imagery + World Terrain + OSM Buildings.
   //                         Requires ionToken; with runtime google flag, also
   //                         adds Google Photorealistic 3D Tiles.
+  //  - 'google-3d':         '3d-sat' plus Google Earth's photoreal mesh from
+  //                         the backend's keyless /tiles/g3d. No key, no token.
   imageryMode?: ImageryMode;
   // Optional feature flag — if true AND imageryMode === '3d-sat' AND a Google
   // Maps key is set, load Google Photorealistic 3D Tiles (global photogrammetry)
@@ -68,15 +70,18 @@ const OSM_BUILDINGS_MAX_CAMERA_HEIGHT_M = 100_000;
 // so panning within one district reuses what's already extruded.
 const LOD1_AUTO_MIN_MOVE_DEG = 0.045;
 
-// Hide the OSM buildings tileset when the camera is too high to see it.
+// Hide the OSM buildings tileset when the camera is too high to see it, and
+// while the Google photogrammetry is on screen: that mesh already contains
+// every building, and untextured boxes drawn over it only cover it up.
 // No-ops when the show state didn't change, so it's safe to call from
 // camera.changed under requestRenderMode (render only requested on flips).
 function applyBuildingsGate(
   viewer: Cesium.Viewer,
   tileset: Cesium.Cesium3DTileset,
+  photoreal: Cesium.Cesium3DTileset | null,
 ): void {
   const h = viewer.camera.positionCartographic.height;
-  const visible = h < OSM_BUILDINGS_MAX_CAMERA_HEIGHT_M;
+  const visible = h < OSM_BUILDINGS_MAX_CAMERA_HEIGHT_M && !photoreal?.show;
   if (tileset.show !== visible) {
     tileset.show = visible;
     viewer.scene.requestRender();
@@ -93,6 +98,20 @@ function applyGoogleGate(
 ): void {
   const h = viewer.camera.positionCartographic.height;
   const visible = wanted && h < GOOGLE_3D_MAX_CAMERA_HEIGHT_M;
+  // FXAA is a blur filter: over photogrammetry it smears every window into its
+  // neighbour (compared on Morningside Heights, 2026-10-05). While the mesh is
+  // on screen the high preset swaps it for 4x MSAA, which cleans edges and
+  // leaves the photo texture alone. MSAA stays off everywhere else — see the
+  // VRAM note where msaaSamples is first set.
+  const scene = viewer.scene;
+  const sharp =
+    visible && !isMobileDevice() && useSettings.getState().mapQuality === 'high';
+  if (scene.msaaSamples !== (sharp ? 4 : 1)) {
+    scene.msaaSamples = sharp ? 4 : 1;
+    const fxaa = scene.postProcessStages?.fxaa;
+    if (fxaa) fxaa.enabled = !sharp;
+    scene.requestRender();
+  }
   if (tileset.show !== visible) {
     tileset.show = visible;
     viewer.scene.globe.show = !visible;
@@ -159,7 +178,10 @@ function buildAppleImagery(): Cesium.ImageryLayer {
 // this picker's. A future pass can move them behind /tiles/ once that's done.
 // Axis order differs by host: Esri/USGS serve {z}/{y}/{x}; OpenTopoMap/EOX
 // serve {z}/{x}/{y} — verified live 2026-07-11 (curl -4 -sI each z3 tile, 200).
-export type ThirdPartyImageryMode = Exclude<ImageryMode, '2d-dark' | '3d-sat' | 'apple-sat'>;
+export type ThirdPartyImageryMode = Exclude<
+  ImageryMode,
+  '2d-dark' | '3d-sat' | 'google-3d' | 'apple-sat'
+>;
 
 interface ThirdPartyBasemapDef {
   url: string;
@@ -267,6 +289,12 @@ export function GlobeCanvas({
   // Google tileset is created at most once per session and toggled via
   // .show — re-enabling must never re-fetch the root tileset (quota diet).
   const googleCreatingRef = useRef(false);
+  // Which source the cached tileset came from: the 'google-3d' basemap reads
+  // the backend's keyless mesh, the ENABLE_GOOGLE_3D flag the licensed stream.
+  const googleKeylessRef = useRef(false);
+  // ...and which source the basemap wants NOW, for a load that finishes after
+  // the operator has already switched away.
+  const googleWantKeylessRef = useRef(false);
   const googleWantedRef = useRef(false);
   // Generation counter so out-of-order async tile loads (user spamming the
   // toggle) cannot install a stale tileset into the current scene.
@@ -629,7 +657,8 @@ export function GlobeCanvas({
       const k = presetKnobs(useSettings.getState().mapQuality);
       scene.globe.maximumScreenSpaceError = motion ? k.motionSSE : k.idleSSE;
       const fx = scene.postProcessStages?.fxaa;
-      if (fx) fx.enabled = !motion;
+      // MSAA on means the photoreal mesh is up and FXAA must stay off.
+      if (fx) fx.enabled = !motion && scene.msaaSamples === 1;
     };
     const onMoveStart = (): void => {
       if (restoreTimer != null) {
@@ -862,7 +891,7 @@ export function GlobeCanvas({
       const ts = googleTilesetRef.current;
       if (ts) applyGoogleGate(viewer, ts, googleWantedRef.current);
       const bld = osmBuildingsRef.current;
-      if (bld) applyBuildingsGate(viewer, bld);
+      if (bld) applyBuildingsGate(viewer, bld, ts);
     };
     viewer.camera.changed.addEventListener(onCameraChanged);
 
@@ -936,10 +965,11 @@ export function GlobeCanvas({
     const hasIon = Boolean(ionToken);
     // 3d-sat no longer requires ion: imagery + terrain come from our own
     // keyless proxies. ion remains an optional bonus (OSM Buildings).
-    const wantSat = imageryMode === '3d-sat';
+    const wantKeyless3d = imageryMode === 'google-3d';
+    const wantSat = imageryMode === '3d-sat' || wantKeyless3d;
     const wantApple = imageryMode === 'apple-sat';
     const thirdPartyDef =
-      imageryMode === '2d-dark' || imageryMode === '3d-sat' || imageryMode === 'apple-sat'
+      imageryMode === '2d-dark' || wantSat || imageryMode === 'apple-sat'
         ? undefined
         : THIRD_PARTY_BASEMAPS[imageryMode];
 
@@ -1019,7 +1049,7 @@ export function GlobeCanvas({
             osmBuildingsRef.current = tileset;
             // Apply the height gate immediately so a high boot camera never
             // pays to draw sub-pixel buildings before the first camera move.
-            applyBuildingsGate(viewer, tileset);
+            applyBuildingsGate(viewer, tileset, googleTilesetRef.current);
             scene.requestRender();
           })
           .catch((e: unknown) => console.warn('OSM buildings failed:', e));
@@ -1028,36 +1058,82 @@ export function GlobeCanvas({
       // Optional: Google Photorealistic 3D Tiles. Created once per session
       // (lazy), then toggled via .show + the camera-height gate so orbit
       // views and re-toggles burn no quota.
-      googleWantedRef.current = enableGoogle3D;
-      if (enableGoogle3D) {
+      const wantGoogle = wantKeyless3d || enableGoogle3D;
+      googleWantedRef.current = wantGoogle;
+      googleWantKeylessRef.current = wantKeyless3d;
+      // One tileset is kept per session. If it came from the other source
+      // (a box with both switched on), drop it and build the right one.
+      if (googleTilesetRef.current && googleKeylessRef.current !== wantKeyless3d && wantGoogle) {
+        scene.primitives.remove(googleTilesetRef.current); // also destroys
+        googleTilesetRef.current = null;
+      }
+      // The OSM boxes follow the Google mesh's visibility; they load on their
+      // own promise, so either may arrive first.
+      const yieldBuildings = (): void => {
+        const bld = osmBuildingsRef.current;
+        if (bld) applyBuildingsGate(viewer, bld, googleTilesetRef.current);
+      };
+      const startGoogle = (keyless: boolean): void => {
+        googleCreatingRef.current = true;
+        // Past cacheBytes + overflow Cesium does not fail, it quietly raises
+        // the screen-space error. Decoded photo textures at one texel per
+        // pixel need ~1 GB for a 2200 px wide view and more than the old
+        // 0.5 + 1 GB at 4K, where the error went 24 → 36 and the mesh turned
+        // soft (measured 2026-10-05). The high preset gets room for 4K;
+        // the lighter presets and phones keep the old budget.
+        const roomy =
+          !isMobileDevice() && useSettings.getState().mapQuality === 'high';
+        const GIB = 1024 * 1024 * 1024;
+        const googleOptions = {
+          // 24 (vs default 16) ≈ half the tile fetches for slightly softer
+          // detail; big cache so revisiting a city reuses tiles.
+          maximumScreenSpaceError: 24,
+          cacheBytes: roomy ? 2 * GIB : GIB / 2,
+          maximumCacheOverflowBytes: roomy ? 2 * GIB : GIB,
+        };
+        // 'google-3d': Google Earth's own mesh as 3D Tiles from the backend
+        // (app/rocktree.py), no key of any kind. Otherwise the licensed
+        // stream, which needs the Google key or the ion token.
+        (keyless
+          ? Cesium.Cesium3DTileset.fromUrl(backendUrl('/tiles/g3d/root.json'), googleOptions)
+          : Cesium.createGooglePhotorealistic3DTileset(undefined, googleOptions)
+        )
+          .then((tileset) => {
+            googleCreatingRef.current = false;
+            if (!viewerRef.current) {
+              tileset.destroy();
+              return;
+            }
+            // The basemap can change while this loads, and no effect run
+            // sees a tileset that does not exist yet. One from the source
+            // that is no longer wanted must never be shown under the other
+            // basemap's name: drop it and build the right one.
+            if (googleWantedRef.current && googleWantKeylessRef.current !== keyless) {
+              tileset.destroy();
+              startGoogle(googleWantKeylessRef.current);
+              return;
+            }
+            googleKeylessRef.current = keyless;
+            scene.primitives.add(tileset);
+            googleTilesetRef.current = tileset;
+            applyGoogleGate(viewer, tileset, googleWantedRef.current);
+            yieldBuildings();
+          })
+          .catch((e: unknown) => {
+            googleCreatingRef.current = false;
+            console.warn('Google Photorealistic 3D failed:', e);
+          });
+      };
+      if (wantGoogle) {
         if (googleTilesetRef.current) {
           applyGoogleGate(viewer, googleTilesetRef.current, true);
+          yieldBuildings();
         } else if (!googleCreatingRef.current) {
-          googleCreatingRef.current = true;
-          Cesium.createGooglePhotorealistic3DTileset(undefined, {
-            // 24 (vs default 16) ≈ half the tile fetches for slightly softer
-            // detail; big cache so revisiting a city reuses tiles.
-            maximumScreenSpaceError: 24,
-            cacheBytes: 512 * 1024 * 1024,
-            maximumCacheOverflowBytes: 1024 * 1024 * 1024,
-          })
-            .then((tileset) => {
-              googleCreatingRef.current = false;
-              if (!viewerRef.current) {
-                tileset.destroy();
-                return;
-              }
-              scene.primitives.add(tileset);
-              googleTilesetRef.current = tileset;
-              applyGoogleGate(viewer, tileset, googleWantedRef.current);
-            })
-            .catch((e: unknown) => {
-              googleCreatingRef.current = false;
-              console.warn('Google Photorealistic 3D failed:', e);
-            });
+          startGoogle(wantKeyless3d);
         }
       } else if (googleTilesetRef.current) {
         applyGoogleGate(viewer, googleTilesetRef.current, false);
+        yieldBuildings();
       } else {
         scene.globe.show = true;
       }

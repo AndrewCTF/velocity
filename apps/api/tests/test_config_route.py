@@ -29,7 +29,7 @@ def test_returns_runtime_config_with_camel_case_keys(client: TestClient) -> None
     assert isinstance(body["googleApiKey"], str)
     assert body["classification"] == "UNCLAS"
     assert body["buildId"] == "test"
-    assert body["features"] == {"enableGoogle3D": False}
+    assert body["features"] == {"enableGoogle3D": False, "google3dKeyless": False}
     # openMode = keyless AND ALLOW_UNAUTHENTICATED. The conftest env sets
     # ALLOW_UNAUTHENTICATED=1 with no API_KEY/Supabase, so it is deterministically
     # True — assert the VALUE, not just the type, or an inverted computation

@@ -113,6 +113,9 @@ export const useTime = create<TimeState>((set) => ({
 export type ImageryMode =
   | '2d-dark'
   | '3d-sat'
+  // '3d-sat' plus Google Earth's photoreal mesh, served keyless by the backend
+  // (app/rocktree.py). Only where the operator set GOOGLE_3D_KEYLESS.
+  | 'google-3d'
   // Apple Maps satellite, proxied + cached by the backend like '3d-sat'
   // (app/apple_maps.py holds the signed-session protocol). Non-commercial.
   | 'apple-sat'

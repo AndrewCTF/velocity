@@ -18,6 +18,9 @@ Sources (all keyless):
   "(c) Esri"; high-zoom complement to the 10 m Sentinel mosaic.
 - apple: Apple Maps satellite, keyless via the signed-session protocol in
   `app/apple_maps.py`. NON-COMMERCIAL: the route refuses a commercial tier.
+- g3d: Google Earth's photogrammetry as 3D Tiles, keyless via the client
+  channel decoded in `app/rocktree.py`. Outside Google's terms, so it is OFF
+  unless GOOGLE_3D_KEYLESS is set and refuses a commercial tier.
 - terrain: AWS Open Data Mapzen terrarium elevation tiles (z 0-15),
   transcoded per-tile to Mapbox terrain-RGB encoding because the frontend's
   cesium-martini worker decoder only understands that formula. The
@@ -31,9 +34,9 @@ import asyncio
 import datetime as dt
 from io import BytesIO
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
-from app import apple_maps, memtier
+from app import apple_maps, memtier, rocktree
 from app.config import Settings, get_settings
 from app.imagery import cdse
 from app.tier import commercial_request
@@ -47,6 +50,7 @@ def _recent_date() -> str:
     """A recent UTC date for CDSE Sentinel mosaics (leastCC over the lookback).
     Two days back to allow for processing/ingest latency."""
     return (dt.datetime.now(dt.UTC) - dt.timedelta(days=2)).strftime("%Y-%m-%d")
+
 
 # Esri's keyless dark canvas: a label-free base plus a transparent label
 # reference, served z0-16. Carto's `dark_all` is no longer keyless: every tile
@@ -75,6 +79,7 @@ async def _dark_basemap_png(z: int, x: int, y: int) -> bytes | None:
     buf = BytesIO()
     img.convert("RGB").save(buf, format="PNG", optimize=False)
     return buf.getvalue()
+
 
 _EOX_LAYER = "s2cloudless-2024_3857"
 # z <= split → EOX Sentinel-2 (10 m cloudless mosaic, broad/low-zoom);
@@ -237,9 +242,7 @@ def _sat_url(z: int, x: int, y: int) -> tuple[str, str]:
 _SAT_STITCH_MAX_Z = 18
 
 
-async def _stitch_sat_2x(
-    z: int, x: int, y: int, cache: TileCache
-) -> bytes | None:
+async def _stitch_sat_2x(z: int, x: int, y: int, cache: TileCache) -> bytes | None:
     """Fetch four z+1 children and stitch into one 512×512 JPEG.
 
     Each child is individually cache-eligible, so a later zoom into the area
@@ -420,14 +423,15 @@ async def apple_prefetch(
     async def warm_one(x: int, y: int) -> None:
         async def load() -> bytes | None:
             return await apple_maps.fetch_tile(z, x, y)
+
         try:
             await cache.get("apple-sat-2x", z, x, y, "jpg", _TTL_SAT, load)
         except Exception:  # noqa: BLE001
             pass
 
-    asyncio.ensure_future(asyncio.gather(
-        *(warm_one(x_min + dx, y_min + dy) for dx in range(nx) for dy in range(ny))
-    ))
+    asyncio.ensure_future(
+        asyncio.gather(*(warm_one(x_min + dx, y_min + dy) for dx in range(nx) for dy in range(ny)))
+    )
     return Response(status_code=202)
 
 
@@ -455,6 +459,93 @@ def _terrarium_to_mapbox_rgb(png_bytes: bytes) -> bytes | None:
         return buf.getvalue()
     except Exception:
         return None
+
+
+# Octree paths are octal digit strings; anything else never reaches the cache.
+_G3D_PATH = r"^[0-7]{1,28}$"
+_TTL_G3D = 30 * 86400.0
+
+
+def _g3d_gate(settings: Settings, commercial: bool) -> None:
+    if not settings.google_3d_keyless:
+        raise HTTPException(404, "keyless Google 3D is off (set GOOGLE_3D_KEYLESS)")
+    if commercial:
+        raise HTTPException(451, "Google Earth data is not licensed for commercial reuse")
+
+
+async def _g3d_tileset(path: str, settings: Settings, commercial: bool) -> Response:
+    _g3d_gate(settings, commercial)
+    try:
+        body = await rocktree.tileset_json(path, settings.google_3d_detail)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except Exception as e:  # noqa: BLE001 - a moved endpoint must read as a dead tile
+        raise HTTPException(502, "Google Earth upstream failed") from e
+    return Response(
+        content=body,
+        media_type="application/json",
+        # Revalidated every time: the tree depends on GOOGLE_3D_DETAIL and on
+        # Google's epoch, and a browser holding an hour-old copy shows neither.
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.get("/tiles/g3d/root.json")
+async def g3d_root(
+    settings: Settings = Depends(get_settings),
+    commercial: bool = Depends(commercial_request),
+) -> Response:
+    """Google Earth as 3D Tiles, from the planet root.
+
+    Every content URI inside is a sibling of this route, so the browser never
+    talks to Google and never needs a key or a token.
+    """
+    return await _g3d_tileset("", settings, commercial)
+
+
+@router.get("/tiles/g3d/t{path}.json")
+async def g3d_branch(
+    path: str = Path(..., pattern=r"^([0-7]{4}){1,7}$"),
+    settings: Settings = Depends(get_settings),
+    commercial: bool = Depends(commercial_request),
+) -> Response:
+    """One deeper branch, linked from its parent as an external tileset."""
+    return await _g3d_tileset(path, settings, commercial)
+
+
+@router.get("/tiles/g3d/n{path}.glb")
+async def g3d_node(
+    path: str = Path(..., pattern=_G3D_PATH),
+    keep: int = Query(255, ge=1, le=255),
+    settings: Settings = Depends(get_settings),
+    commercial: bool = Depends(commercial_request),
+) -> Response:
+    """One octree node as binary glTF. `keep` is an octant bitmask: a partly
+    refined parent is drawn only where it has no finer child."""
+    _g3d_gate(settings, commercial)
+
+    async def load() -> bytes | None:
+        try:
+            return await rocktree.glb(path, keep)
+        except LookupError:
+            raise
+        except Exception:  # noqa: BLE001
+            return None
+
+    try:
+        # The transcode runs once per node: the cache holds the finished glb.
+        data = await _cache_for(settings.tile_cache_dir, _tile_budget(settings)).get(
+            "g3d", len(path), int(path, 8), keep, "glb", _TTL_G3D, load
+        )
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    if data is None:
+        raise HTTPException(502, "Google Earth upstream failed")
+    return Response(
+        content=data,
+        media_type="model/gltf-binary",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
 
 
 @router.get("/tiles/terrain/{z}/{x}/{y}.png")

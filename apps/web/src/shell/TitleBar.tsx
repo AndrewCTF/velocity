@@ -195,6 +195,7 @@ const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
       sep: i === 0,
       on: () => useImagery.getState().mode === b.value,
       run: () => useImagery.getState().setMode(b.value),
+      ...(b.unavailable ? { disabled: b.unavailable } : {}),
     })),
     {
       label: 'Command layout',

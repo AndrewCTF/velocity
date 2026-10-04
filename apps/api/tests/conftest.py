@@ -63,6 +63,7 @@ def _test_settings() -> Settings:
     return Settings(
         cesium_ion_token="test-ion-token",
         enable_google_3d=False,
+        google_3d_keyless=False,
         classification="UNCLAS",
         build_id="test",
         opensky_client_id="",
