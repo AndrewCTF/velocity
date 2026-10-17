@@ -8,7 +8,7 @@
 // illustrative (cop/notionalCop.ts), labelled as such.
 
 import * as Cesium from 'cesium';
-import ms from 'milsymbol';
+import type milsymbol from 'milsymbol';
 import type { LayerAdapter, AdapterCtx } from './types.js';
 import { type CopUnit } from '../../cop/notionalCop.js';
 import { useCop } from '../../cop/copStore.js';
@@ -21,12 +21,16 @@ const RING = '#f59e0b';
 const SHOW_WITHIN_M = 1_500_000;
 const SYMBOL_SCALE = 0.62;
 
+// Loaded on first attach, not at boot: milsymbol is the largest library in the
+// console (1.3 MB of source) and this layer is off by default.
+let ms: typeof milsymbol | null = null;
+
 // Build a milsymbol unit: proper 2525 frame + echelon (from the SIDC) + the unit
 // designation / higher formation rendered as text modifiers ON the symbol. We
 // return the canvas + its anchor so the billboard can pin the icon's reference
 // point (not the text-extended bounding-box centre) onto the geo position.
 function unitSymbol(u: CopUnit): { image: HTMLCanvasElement; anchor: { x: number; y: number } } {
-  const sym = new ms.Symbol(u.sidc, {
+  const sym = new ms!.Symbol(u.sidc, {
     size: 30,
     uniqueDesignation: u.designation,
     ...(u.higher ? { higherFormation: u.higher } : {}),
@@ -50,6 +54,7 @@ export class MilSymbolAdapter implements LayerAdapter {
 
   async attach(viewer: Cesium.Viewer): Promise<void> {
     await viewer.dataSources.add(this.ds);
+    ms ??= (await import('milsymbol')).default;
     if (this.detached || viewer.isDestroyed()) return;
     this.viewer = viewer;
     this.rebuild();

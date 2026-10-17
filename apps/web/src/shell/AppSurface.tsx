@@ -1,25 +1,51 @@
 import { Suspense, lazy, type ReactNode } from 'react';
 import * as Cesium from 'cesium';
 import { useAppView, APP_META, type AppId } from '../state/appView.js';
-import { InvestigationCanvas } from '../graph/InvestigationCanvas.js';
-import { InvestigatePanel } from '../osint/InvestigatePanel.js';
 import { TargetKanbanPanel } from '../target-kanban/TargetKanbanPanel.js';
-import { VideoApp } from '../fmv/VideoApp.js';
-import { ReportsApp } from '../reports/ReportsApp.js';
-import { ExplorerApp } from '../explorer/ExplorerApp.js';
-import { FoundryApp } from '../foundry/FoundryApp.js';
-import { WorkflowsApp } from '../workflows/WorkflowsApp.js';
-import { CountryApp } from '../country/CountryApp.js';
-import { AiHubApp } from '../ai/AiHubApp.js';
-import { MarketsApp } from '../markets/MarketsApp.js';
 import { TabbedPanel } from './TabbedPanel.js';
-import { ExtractPanel } from '../extract/ExtractPanel.js';
-import { CountriesPanel } from '../osint/CountriesPanel.js';
-import { SourcesPanel } from '../osint/SourcesPanel.js';
 
 // CityApp is the one surface that drags three + the splat renderer with it —
 // code-split so the console bundle doesn't carry a 3D engine nobody opened.
 const CityApp = lazy(() => import('../city/CityApp.js').then((m) => ({ default: m.CityApp })));
+// Every other app is split the same way. Statically imported, they were 452 KB
+// of the 2.8 MB boot chunk (yjs via Reports, Foundry, Workflows, the graph
+// canvas), parsed before the globe could start, for surfaces the console opens
+// on demand. The Suspense below already covers them. Measured 2026-10-17.
+const InvestigationCanvas = lazy(() =>
+  import('../graph/InvestigationCanvas.js').then((m) => ({ default: m.InvestigationCanvas })),
+);
+const InvestigatePanel = lazy(() =>
+  import('../osint/InvestigatePanel.js').then((m) => ({ default: m.InvestigatePanel })),
+);
+const VideoApp = lazy(() => import('../fmv/VideoApp.js').then((m) => ({ default: m.VideoApp })));
+const ReportsApp = lazy(() =>
+  import('../reports/ReportsApp.js').then((m) => ({ default: m.ReportsApp })),
+);
+const ExplorerApp = lazy(() =>
+  import('../explorer/ExplorerApp.js').then((m) => ({ default: m.ExplorerApp })),
+);
+const FoundryApp = lazy(() =>
+  import('../foundry/FoundryApp.js').then((m) => ({ default: m.FoundryApp })),
+);
+const WorkflowsApp = lazy(() =>
+  import('../workflows/WorkflowsApp.js').then((m) => ({ default: m.WorkflowsApp })),
+);
+const CountryApp = lazy(() =>
+  import('../country/CountryApp.js').then((m) => ({ default: m.CountryApp })),
+);
+const AiHubApp = lazy(() => import('../ai/AiHubApp.js').then((m) => ({ default: m.AiHubApp })));
+const MarketsApp = lazy(() =>
+  import('../markets/MarketsApp.js').then((m) => ({ default: m.MarketsApp })),
+);
+const ExtractPanel = lazy(() =>
+  import('../extract/ExtractPanel.js').then((m) => ({ default: m.ExtractPanel })),
+);
+const CountriesPanel = lazy(() =>
+  import('../osint/CountriesPanel.js').then((m) => ({ default: m.CountriesPanel })),
+);
+const SourcesPanel = lazy(() =>
+  import('../osint/SourcesPanel.js').then((m) => ({ default: m.SourcesPanel })),
+);
 
 /** Apps whose content is forms and prose, not a table or a board.
  *

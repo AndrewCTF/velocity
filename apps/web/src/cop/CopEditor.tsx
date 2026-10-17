@@ -2,11 +2,13 @@
 // directly on the globe via the shared draw toolbox. Edits write to copStore;
 // MilSymbolAdapter re-renders them live. Mounted as the 'cop' mode-surface.
 
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Widget, Btn, SectionLabel, MicroLabel } from '../shell/instruments.js';
 import { Anchor, Mountain, Plus, X } from 'lucide-react';
 import { toast } from '../shell/toast.js';
-import { OrbatTree } from './OrbatTree.js';
+// Its own chunk: OrbatTree draws with milsymbol, the largest library the
+// console carried at boot (1.3 MB of source) for a mode most sessions never open.
+const OrbatTree = lazy(() => import('./OrbatTree.js').then((m) => ({ default: m.OrbatTree })));
 import {
   useCop,
   composeSidc,
@@ -151,7 +153,9 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
 
   return (
     <div className="space-y-2 p-2">
-      <OrbatTree />
+      <Suspense fallback={null}>
+        <OrbatTree />
+      </Suspense>
       <Widget title="Build symbol" count={`${units.length} units`}>
         {/* Affiliation */}
         <SectionLabel title="Affiliation" />

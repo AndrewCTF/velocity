@@ -212,6 +212,9 @@ const FINDING_LAYERS: ReadonlyArray<{
   },
 ];
 
+// After the boot requests that put data on the globe have had their sockets.
+const FINDINGS_DELAY_MS = 3000;
+
 /** Counts from the analytic layers, fetched whether or not the layer is on.
  *
  *  This is the "built-but-unreachable capability keeps not converting" finding
@@ -224,22 +227,32 @@ function Findings({ registry }: { registry: LayerRegistry }): JSX.Element {
 
   useEffect(() => {
     const ab = new AbortController();
-    for (const f of FINDING_LAYERS) {
-      apiFetch(f.endpoint, { signal: ab.signal })
-        .then(async (r) => {
-          if (ab.signal.aborted) return;
-          if (!r.ok) {
-            setCounts((c) => ({ ...c, [f.id]: 'error' }));
-            return;
-          }
-          const j = (await r.json()) as { features?: unknown[] };
-          setCounts((c) => ({ ...c, [f.id]: Array.isArray(j.features) ? j.features.length : 0 }));
-        })
-        .catch(() => {
-          if (!ab.signal.aborted) setCounts((c) => ({ ...c, [f.id]: 'error' }));
-        });
+    // Not at first paint: a browser holds six sockets to the API, and these two
+    // asked for them at the same instant as the aircraft snapshot and
+    // /api/config. The sanctions join answered in 0.4-1.8 s (measured
+    // 2026-10-17), holding a socket the globe's first data was queued behind.
+    const start = window.setTimeout(load, FINDINGS_DELAY_MS);
+    return () => {
+      window.clearTimeout(start);
+      ab.abort();
+    };
+    function load(): void {
+      for (const f of FINDING_LAYERS) {
+        apiFetch(f.endpoint, { signal: ab.signal })
+          .then(async (r) => {
+            if (ab.signal.aborted) return;
+            if (!r.ok) {
+              setCounts((c) => ({ ...c, [f.id]: 'error' }));
+              return;
+            }
+            const j = (await r.json()) as { features?: unknown[] };
+            setCounts((c) => ({ ...c, [f.id]: Array.isArray(j.features) ? j.features.length : 0 }));
+          })
+          .catch(() => {
+            if (!ab.signal.aborted) setCounts((c) => ({ ...c, [f.id]: 'error' }));
+          });
+      }
     }
-    return () => ab.abort();
   }, []);
 
   return (
