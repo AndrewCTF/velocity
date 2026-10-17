@@ -4,7 +4,7 @@ Engine: **EOGS** (Earth Observation Gaussian Splatting, CVPR 2025,
 https://github.com/mezzelfo/EOGS). Chosen over Skyfall-GS because EOGS **bakes the
 real optical color into the splats** (verified: per-Gaussian RGB via `RGB2SH`),
 whereas Skyfall-GS Stage 2 diffusion-hallucinates close-up texture. Color here is
-*observed*, not generated.
+_observed_, not generated.
 
 The EOGS clone, datasets, CUDA env, and outputs are gitignored; THIS file is the
 reproducible recipe.
@@ -57,8 +57,10 @@ uv pip install --python ../.venv/bin/python --no-build-isolation \
 ```
 
 ### rpcm / srtm4 (data prep only)
+
 `rpcm` hard-imports `srtm4`, whose C/GeoTIFF `make` fails on glibc-15. EOGS's
 RPC->affine prep does NOT use SRTM elevation, so:
+
 ```bash
 uv pip install --python ../.venv/bin/python --no-deps rpcm geojson
 # write a stub .venv/.../site-packages/srtm4.py whose srtm4() raises (never called by to_affine)
@@ -83,10 +85,12 @@ LD_LIBRARY_PATH=$CH/lib python train.py \
   --eval -m ../../output/JAX_068 --sh_degree 0 --iterations 5000
 python render.py -m ../../output/JAX_068
 ```
+
 ~130 it/s on a 5090 → ~40 s for 5000 iters. Output: per-Gaussian-colored splats +
 rendered novel views + a DSM under `output/JAX_068/test_opNone/ours_5000/`.
 
 ## 6. Status / next
+
 - DONE: toolchain, EOGS build, JAX_068 real-colored 3D.
 - NEXT: more scenes; then the research add-on — fuse SAR (geometry/cloud-gap) while
   color stays from real optical (novel/unproven — see fusion spec §7).
