@@ -23,7 +23,10 @@ export function PhoneMapButtons({
   const [locating, setLocating] = useState(false);
   // The desktop tool rail, when asked for from More, takes the right edge.
   const tools = usePhoneSheet((s) => s.tools);
-  if (!phone || !viewer || tools) return null;
+  // They ride above a peek sheet (a picked contact) and step aside for a
+  // taller one, which is when the map above it is the thing being read.
+  const sheetPx = usePhoneSheet((s) => s.sheetPx);
+  if (!phone || !viewer || tools || sheetPx > 240) return null;
   const canLocate =
     typeof window !== "undefined" &&
     window.isSecureContext &&
@@ -55,7 +58,7 @@ export function PhoneMapButtons({
   };
 
   return (
-    <div className="pmapbtns">
+    <div className="pmapbtns" style={{ bottom: sheetPx + 14 }}>
       {canLocate && (
         <button
           type="button"

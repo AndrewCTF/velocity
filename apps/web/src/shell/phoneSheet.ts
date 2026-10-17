@@ -24,6 +24,13 @@ interface PhoneSheetState {
   /** Where a notice draws itself on a phone: the Notices sheet's body. */
   noticeHost: HTMLElement | null;
   setNoticeHost: (el: HTMLElement | null) => void;
+  /** The map well, for sheets owned outside the console (Menu, Alerts) to
+   *  portal into, so they stack and size like the console's own. */
+  mapWell: HTMLElement | null;
+  setMapWell: (el: HTMLElement | null) => void;
+  /** Height of the open sheet, so the map's buttons can ride above it. */
+  sheetPx: number;
+  setSheetPx: (px: number) => void;
 }
 
 export const usePhoneSheet = create<PhoneSheetState>((set) => ({
@@ -44,4 +51,8 @@ export const usePhoneSheet = create<PhoneSheetState>((set) => ({
   },
   noticeHost: null,
   setNoticeHost: (el) => set({ noticeHost: el }),
+  mapWell: null,
+  setMapWell: (el) => set({ mapWell: el }),
+  sheetPx: 0,
+  setSheetPx: (px) => set({ sheetPx: px }),
 }));

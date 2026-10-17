@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,8 +41,8 @@ describe("title bar on a phone", () => {
     expect(menu).toContain("MENUS.map");
     expect(menu).toContain("MENU_ITEMS[m]");
     expect(menu).toContain("APP_GROUPS");
-    expect(menu, "the menu sheet must use the shared Modal").toContain(
-      "<Modal",
+    expect(menu, "the menu is a sheet like every phone surface").toContain(
+      "<BottomSheet",
     );
     // A menu hint names a key; a phone has none.
     expect(menu).not.toContain("it.hint");
@@ -55,19 +55,17 @@ describe("title bar on a phone", () => {
 });
 
 describe("phone sheets", () => {
-  it("every console surface on a phone is a BottomSheet; the 2D map keeps MobileSheets", () => {
-    const consoleSrc = read("Console.tsx");
-    expect(consoleSrc).toContain("<BottomSheet");
-    expect(consoleSrc).not.toContain("MobileSheets");
-    expect(read("ConsoleShell.tsx")).toContain("MobileSheets");
+  it("every phone surface is a BottomSheet: the console, the 2D shell, Menu and Alerts", () => {
+    for (const f of ["Console.tsx", "ConsoleShell.tsx", "TitleBar.tsx"])
+      expect(read(f), f).toContain("<BottomSheet");
+    expect(read("../alerts/AlertsPanel.tsx")).toContain("<BottomSheet");
+    // The full-screen chooser this replaced is gone, not left beside it.
+    expect(existsSync(resolve(HERE, "MobileSheets.tsx"))).toBe(false);
   });
 
   it("wraps every sheet's content in the error boundary", () => {
     expect(read("BottomSheet.tsx")).toMatch(
       /<ErrorBoundary label=\{label\}>\{children\}<\/ErrorBoundary>/,
-    );
-    expect(read("MobileSheets.tsx")).toMatch(
-      /<ErrorBoundary label=\{active\.label\}>/,
     );
   });
 });

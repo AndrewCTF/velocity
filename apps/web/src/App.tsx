@@ -101,6 +101,8 @@ export function App(): JSX.Element {
   // tool rail (behind More until asked for) and the COP picker.
   const phone = useIsMobile();
   const phoneTools = usePhoneSheet((s) => s.tools);
+  // On a phone Alerts is one of the sheets, so it closes when another opens.
+  const phoneAlerts = usePhoneSheet((s) => s.open === "alerts");
   // The settings modal lived only in AppRouter's TopBar, which returns null on
   // `/`. So on the console — the one route with a Settings button — nothing
   // hosted the modal and the button did nothing.
@@ -363,7 +365,7 @@ export function App(): JSX.Element {
           />
         }
         bleed={APP_META[activeApp].chrome === "full"}
-        onOpenAlerts={() => setAlertsOpen(true)}
+        onOpenAlerts={() => usePhoneSheet.getState().toggle("alerts")}
         phoneMore={[
           {
             label: "Analyst agent",
@@ -450,8 +452,10 @@ export function App(): JSX.Element {
         }
       />
       <AlertsPanel
-        open={alertsOpen}
-        onClose={() => setAlertsOpen(false)}
+        open={phone ? phoneAlerts : alertsOpen}
+        onClose={() =>
+          phone ? usePhoneSheet.getState().show(null) : setAlertsOpen(false)
+        }
         viewer={viewer}
       />
       {/* The inbox's recorded home is the title bar (REHOMED `inbox`), and this

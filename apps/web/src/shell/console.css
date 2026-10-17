@@ -562,6 +562,7 @@
   position: absolute;
   right: 10px;
   bottom: 14px;
+  transition: bottom 260ms cubic-bezier(0.16, 1, 0.3, 1);
   z-index: var(--z-dock);
   display: flex;
   flex-direction: column;

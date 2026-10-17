@@ -216,13 +216,32 @@ describe("Console on a phone", () => {
     expect(screen.queryByRole("region", { name: "Layers" })).toBeNull();
   });
 
-  it("the Alerts tab opens the inbox and drops any sheet", () => {
-    const onOpenAlerts = vi.fn();
+  it("the Alerts tab is a sheet tab: it takes over from any other sheet", () => {
+    // App toggles the "alerts" sheet; AlertsPanel renders it into the map well.
+    const onOpenAlerts = vi.fn(() => usePhoneSheet.getState().toggle("alerts"));
     phone({ onOpenAlerts });
     fireEvent.click(tab("Layers"));
     fireEvent.click(tab("Alerts"));
     expect(onOpenAlerts).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("region", { name: "Layers" })).toBeNull();
+    expect(tab("Alerts")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("gives sheets owned outside the console the map well to portal into", () => {
+    phone();
+    expect(usePhoneSheet.getState().mapWell).toBe(
+      document.querySelector(".csl2-map"),
+    );
+  });
+
+  it("publishes the open sheet's height for the map buttons, and zero when closed", () => {
+    phone();
+    expect(usePhoneSheet.getState().sheetPx).toBe(0);
+    fireEvent.click(tab("Layers"));
+    // 600px well in jsdom: half is 300.
+    expect(usePhoneSheet.getState().sheetPx).toBe(300);
+    fireEvent.click(tab("Layers"));
+    expect(usePhoneSheet.getState().sheetPx).toBe(0);
   });
 
   it("draws notices into the Notices sheet and counts them, not over the map", () => {
@@ -266,6 +285,14 @@ describe("Console on a phone", () => {
     fireEvent.pointerDown(handle, { clientY: 300, pointerId: 1 });
     fireEvent.pointerMove(handle, { clientY: 550, pointerId: 1 });
     fireEvent.pointerUp(handle, { clientY: 550, pointerId: 1 });
+    expect(screen.queryByRole("region", { name: "Layers" })).toBeNull();
+  });
+
+  it("Escape closes the open sheet, with focus still on the tab that opened it", () => {
+    phone();
+    tab("Layers").focus();
+    fireEvent.click(tab("Layers"));
+    fireEvent.keyDown(tab("Layers"), { key: "Escape" });
     expect(screen.queryByRole("region", { name: "Layers" })).toBeNull();
   });
 

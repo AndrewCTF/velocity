@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "../normal/Icon.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
+import { usePhoneSheet } from "./phoneSheet.js";
 
 // The phone's one container for everything that is not the map: a sheet that
 // rises from the tab bar, stops at a height, and can be dragged between its
@@ -86,9 +87,11 @@ export function BottomSheet({
 
   useEffect(() => {
     if (!open) return;
+    // One sheet is open at a time, so Escape closes it wherever focus is: the
+    // button that opened it (Menu, a tab) keeps focus, and a sheet that only
+    // closed from inside itself ignored the key a keyboard user reached for.
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== "Escape") return;
-      if (!sheetRef.current?.contains(document.activeElement)) return;
       e.stopPropagation();
       onClose();
     };
@@ -96,12 +99,20 @@ export function BottomSheet({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
 
-  if (!open && !keepMounted) return null;
-
   // jsdom and a first paint have no layout yet; a phone's map well is about this.
   const w = well || 600;
   const rest = stopPx(detent, w);
   const height = drag ?? rest;
+
+  // The map's own buttons ride above whichever sheet is up (PhoneMapButtons).
+  const setSheetPx = usePhoneSheet((s) => s.setSheetPx);
+  useEffect(() => {
+    if (!open) return;
+    setSheetPx(height);
+    return () => setSheetPx(0);
+  }, [open, height, setSheetPx]);
+
+  if (!open && !keepMounted) return null;
 
   const onDown = (e: React.PointerEvent<HTMLDivElement>): void => {
     // The grab bar starts a drag too; only Close is a plain button here.

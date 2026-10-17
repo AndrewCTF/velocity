@@ -22,6 +22,7 @@ import { shouldOfferAiSetup } from "./settings/localAi/aiSetupSeen.js";
 import { fetchModelsOnce } from "./settings/localAi/LocalAiSection.js";
 import { ToastHost } from "./shell/toast.js";
 import { useIsMobile } from "./shell/useIsMobile.js";
+import { Icon } from "./normal/Icon.js";
 import { LowEndBanner } from "./globe/LowEndBanner.js";
 import { DegradedBanner } from "./globe/DegradedBanner.js";
 import { readMfaStep, useMfaNeeded, type MfaStep } from "./auth/mfa.js";
@@ -107,6 +108,7 @@ function DashboardRoute(): JSX.Element {
 
 function TopBar(): JSX.Element | null {
   const loc = useLocation();
+  const phone = useIsMobile();
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The map's "Alert me about this area" action bumps seq; open Settings so the
   // prefilled alert form is in front of the operator.
@@ -122,6 +124,25 @@ function TopBar(): JSX.Element | null {
   if (loc.pathname === "/") return null;
   const is2D = loc.pathname.startsWith("/2d");
   const isStudio = loc.pathname.startsWith("/studio");
+  // On a phone the 2D map's top row already leads back to 3D, and Studio is a
+  // desktop authoring page; as 20px chips these four sat on the map's search
+  // row. Settings stays, as a round button under the marking.
+  if (phone && is2D)
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Settings"
+          className="pround fixed right-[10px] top-[62px] z-(--z-dock)"
+        >
+          <Icon name="settings" className="h-[20px] w-[20px]" />
+        </button>
+        {settingsOpen && (
+          <SettingsModal onClose={() => setSettingsOpen(false)} />
+        )}
+      </>
+    );
   return (
     <div className="absolute top-1 right-2 z-(--z-dock) flex items-center gap-2">
       <button

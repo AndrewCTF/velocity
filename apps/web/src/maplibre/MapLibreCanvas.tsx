@@ -75,10 +75,13 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       attributionControl: false,
       hash: false,
     });
-    map.addControl(
-      new maplibregl.NavigationControl({ showCompass: false }),
-      "top-right",
-    );
+    // Zoom buttons are a mouse's control. A touch screen pinches, and on a
+    // phone they sat behind the floating marking chip.
+    if (!isMobileDevice())
+      map.addControl(
+        new maplibregl.NavigationControl({ showCompass: false }),
+        "top-right",
+      );
     // Globe projection (MapLibre v5+).
     map.on("style.load", () => {
       try {

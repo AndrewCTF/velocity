@@ -10,7 +10,7 @@ import {
   APP_GROUPS,
   type AppId,
 } from "../state/appView.js";
-import { Modal } from "./Modal.js";
+import { BottomSheet } from "./BottomSheet.js";
 import { useIsMobile } from "./useIsMobile.js";
 import { usePhoneSheet } from "./phoneSheet.js";
 import {
@@ -455,6 +455,7 @@ export function TitleBar({
   const replaying = useLiveHidden();
   const notices = usePhoneSheet((s) => s.notices);
   const showSheet = usePhoneSheet((s) => s.show);
+  const phoneSheet = usePhoneSheet((s) => s.open);
   const currentTime = useTime((s) => s.currentTime);
   const ws = useConnection((s) => s.ws);
   const clock = new Date(currentTime).toISOString().slice(11, 19) + "Z";
@@ -484,7 +485,6 @@ export function TitleBar({
   const [launcher, setLauncher] = useState(false);
   // Phone: the whole bar folds into one Menu button (see PhoneMenu below).
   const isMobile = useIsMobile();
-  const [phoneMenu, setPhoneMenu] = useState(false);
   const activeApp = useAppView((s) => s.app);
   const setApp = useAppView((s) => s.setApp);
   const [pinned, setPinned] = useState<AppId[]>([
@@ -592,10 +592,10 @@ export function TitleBar({
           <nav aria-label="Application" data-primary-nav className="contents">
             <button
               type="button"
-              onClick={() => setPhoneMenu(true)}
+              onClick={() => usePhoneSheet.getState().toggle("menu")}
               aria-label="Menu"
               aria-haspopup="dialog"
-              aria-expanded={phoneMenu}
+              aria-expanded={phoneSheet === "menu"}
               className="pround"
             >
               <Icon name="menu" className="h-[20px] w-[20px]" />
@@ -643,8 +643,8 @@ export function TitleBar({
           )}
         </div>
         <PhoneMenu
-          open={phoneMenu}
-          onClose={() => setPhoneMenu(false)}
+          open={phoneSheet === "menu"}
+          onClose={() => showSheet(null)}
           ctx={ctx}
           activeApp={activeApp}
           setApp={setApp}
@@ -987,14 +987,14 @@ function AppRow({
 /** One row of the phone menu. 44px in px, not `h-11`: the root font is 13px, so
  *  the rem class is 36px and misses the touch target. */
 const PHONE_ROW =
-  "flex min-h-[44px] w-full items-center gap-3 rounded-sm px-3 text-left text-[13px] text-txt-1 hover:bg-(--hover)";
+  "flex min-h-[48px] w-full items-center gap-3 rounded-sm px-4 text-left text-[15px] text-txt-1 hover:bg-(--hover)";
 
 /** What the desktop bar spreads across six menus, an app launcher, three icon
  *  buttons and an account chip, in the one sheet the phone's Menu button opens:
  *  the 2D map, the apps, then every menu with the same items and the same
  *  commands. Nothing is invented and nothing is dropped; a menu hint (⌘K) is the
- *  one thing left off, because a phone has no key to press. The Modal brings
- *  the backdrop, Escape and focus return the bar's dropdowns work for. */
+ *  one thing left off, because a phone has no key to press. A bottom sheet in
+ *  the map well like every other phone surface, opened at full height. */
 function PhoneMenu({
   open,
   onClose,
@@ -1007,10 +1007,12 @@ function PhoneMenu({
   ctx: MenuCtx;
   activeApp: AppId;
   setApp: (id: AppId) => void;
-}): JSX.Element {
-  return (
-    <Modal open={open} onClose={onClose} title="Menu" width={420}>
-      <div className="-mx-1 flex flex-col">
+}): JSX.Element | null {
+  const well = usePhoneSheet((s) => s.mapWell);
+  if (!well) return null;
+  return createPortal(
+    <BottomSheet label="Menu" open={open} onClose={onClose} initial="full">
+      <div className="flex flex-col py-1">
         <Link to="/2d" onClick={onClose} className={PHONE_ROW}>
           <Icon name="map" className="h-[16px] w-[16px] shrink-0 text-txt-3" />
           2D map
@@ -1067,7 +1069,8 @@ function PhoneMenu({
         ))}
         <PhoneAccount onDone={onClose} />
       </div>
-    </Modal>
+    </BottomSheet>,
+    well,
   );
 }
 

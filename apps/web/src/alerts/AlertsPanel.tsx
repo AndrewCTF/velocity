@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { createPortal } from "react-dom";
 import type * as Cesium from "cesium";
 import { useAlerts } from "../state/stores.js";
 import { slewToEntity } from "../globe/camera.js";
@@ -12,6 +13,8 @@ import type { Alert } from "@osint/shared";
 import { Icon } from "../normal/Icon.js";
 import { dict } from "../shell/safeKeys.js";
 import { useIsMobile } from "../shell/useIsMobile.js";
+import { usePhoneSheet } from "../shell/phoneSheet.js";
+import { BottomSheet } from "../shell/BottomSheet.js";
 
 interface Props {
   open: boolean;
@@ -149,15 +152,111 @@ export function AlertsPanel({
     return c;
   }, [alerts]);
 
-  // On a phone the panel is the screen above the tab bar. Its desktop place
-  // (46px under a title row, 170px clear of a docked timeline) is two strips
-  // of dimmed map around a narrower card on a 412px screen.
+  // On a phone the panel is a bottom sheet like every other phone surface. Its
+  // desktop place (46px under a title row, 170px clear of a docked timeline) is
+  // two strips of dimmed map around a narrower card on a 412px screen.
   const phone = useIsMobile();
+  const well = usePhoneSheet((s) => s.mapWell);
 
   // All hooks above run every render; only the visual tree is gated on `open`
   // (a conditional return placed ABOVE the useMemos changed the hook count on
   // open/close → "rendered more hooks than during the previous render" crash).
   if (!open) return null;
+
+  // The filter row and the buffer, shared by the phone sheet and the desktop
+  // slide-over.
+  const content = (
+    <>
+      <div className="px-4 py-2.5 border-b border-line-2 flex flex-wrap items-center gap-1">
+        <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mr-1">
+          sev
+        </span>
+        {["critical", "high", "medium", "low"].map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setFilterSev((cur) => (cur === s ? null : s))}
+            className={`mono text-[10px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
+              filterSev === s
+                ? "border-accent-line bg-accent-dim text-accent"
+                : "border-line text-txt-3 hover:border-accent-line hover:text-txt-1"
+            }`}
+            aria-pressed={filterSev === s}
+          >
+            {s}{" "}
+            <span className="tabular-nums text-txt-2">{sevCounts[s] ?? 0}</span>
+          </button>
+        ))}
+        {ruleKeys.length > 0 && (
+          <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 ml-2 mr-1">
+            rule
+          </span>
+        )}
+        {ruleKeys.map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => setFilterRule((cur) => (cur === r ? null : r))}
+            className={`mono text-[10px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
+              filterRule === r
+                ? "border-accent-line bg-accent-dim text-accent"
+                : "border-line text-txt-3 hover:border-accent-line hover:text-txt-1"
+            }`}
+            aria-pressed={filterRule === r}
+          >
+            {RULE_LABEL[r] ?? r}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        {filtered.length === 0 ? (
+          <p className="text-[10.5px] leading-snug text-txt-3 px-1 py-3 text-center">
+            {alerts.length === 0
+              ? "No alerts in buffer. Correlation rules fire when criteria match."
+              : "No alerts match the current filters."}
+          </p>
+        ) : (
+          <>
+            <SectionLabel title="Buffer" count={filtered.length} />
+            {/* Polite live region — announce newly-arrived alerts to assistive
+                  tech without re-reading the whole buffer (additions only). */}
+            <ul
+              className="divide-y divide-line border-b border-line"
+              aria-live="polite"
+              aria-relevant="additions"
+              aria-label="Alert buffer"
+            >
+              {filtered.map((a) => (
+                <li key={a.id}>
+                  <AlertCard alert={a} viewer={viewer} />
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  if (phone)
+    return well
+      ? createPortal(
+          <BottomSheet label="Alerts" open onClose={onClose} initial="full">
+            <div className="flex items-center gap-3 border-b border-line-2 px-4 py-2">
+              <span className="mono text-[12px] tabular-nums text-txt-2">
+                {alerts.length} total
+              </span>
+              <span className="flex-1" />
+              <Btn onClick={() => clear()} title="Clear alert buffer">
+                Clear
+              </Btn>
+            </div>
+            {content}
+          </BottomSheet>,
+          well,
+        )
+      : null;
 
   return (
     <>
@@ -169,21 +268,13 @@ export function AlertsPanel({
       />
       <aside
         ref={dialogRef}
-        className={
-          phone
-            ? "fixed inset-x-0 top-0 z-(--z-modal) flex flex-col bg-bg-1 pt-[env(safe-area-inset-top)]"
-            : "fixed top-[46px] bottom-[170px] right-0 z-(--z-modal) w-full max-w-[460px] bg-bg-1 border-l border-line-2 rounded-l-md flex flex-col"
-        }
+        className="fixed top-[46px] bottom-[170px] right-0 z-(--z-modal) w-full max-w-[460px] bg-bg-1 border-l border-line-2 rounded-l-md flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-label="Alerts"
         style={{
           boxShadow:
             "inset 1px 0 0 rgba(0,0,0,0.5), inset -1px 0 0 rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)",
-          // Above the 58px tab bar, so the tabs stay in reach.
-          ...(phone
-            ? { bottom: "calc(58px + env(safe-area-inset-bottom))" }
-            : {}),
         }}
       >
         <header className="px-4 py-3 border-b border-line-2 flex items-start justify-between gap-3">
@@ -221,77 +312,7 @@ export function AlertsPanel({
           </div>
         </header>
 
-        <div className="px-4 py-2.5 border-b border-line-2 flex flex-wrap items-center gap-1">
-          <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mr-1">
-            sev
-          </span>
-          {["critical", "high", "medium", "low"].map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setFilterSev((cur) => (cur === s ? null : s))}
-              className={`mono text-[10px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
-                filterSev === s
-                  ? "border-accent-line bg-accent-dim text-accent"
-                  : "border-line text-txt-3 hover:border-accent-line hover:text-txt-1"
-              }`}
-              aria-pressed={filterSev === s}
-            >
-              {s}{" "}
-              <span className="tabular-nums text-txt-2">
-                {sevCounts[s] ?? 0}
-              </span>
-            </button>
-          ))}
-          {ruleKeys.length > 0 && (
-            <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 ml-2 mr-1">
-              rule
-            </span>
-          )}
-          {ruleKeys.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setFilterRule((cur) => (cur === r ? null : r))}
-              className={`mono text-[10px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
-                filterRule === r
-                  ? "border-accent-line bg-accent-dim text-accent"
-                  : "border-line text-txt-3 hover:border-accent-line hover:text-txt-1"
-              }`}
-              aria-pressed={filterRule === r}
-            >
-              {RULE_LABEL[r] ?? r}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 py-3">
-          {filtered.length === 0 ? (
-            <p className="text-[10.5px] leading-snug text-txt-3 px-1 py-3 text-center">
-              {alerts.length === 0
-                ? "No alerts in buffer. Correlation rules fire when criteria match."
-                : "No alerts match the current filters."}
-            </p>
-          ) : (
-            <>
-              <SectionLabel title="Buffer" count={filtered.length} />
-              {/* Polite live region — announce newly-arrived alerts to assistive
-                  tech without re-reading the whole buffer (additions only). */}
-              <ul
-                className="divide-y divide-line border-b border-line"
-                aria-live="polite"
-                aria-relevant="additions"
-                aria-label="Alert buffer"
-              >
-                {filtered.map((a) => (
-                  <li key={a.id}>
-                    <AlertCard alert={a} viewer={viewer} />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
+        {content}
       </aside>
     </>
   );

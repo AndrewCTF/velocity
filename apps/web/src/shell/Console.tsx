@@ -99,7 +99,8 @@ export interface ConsoleProps {
    *  bar was fixed for; the strip is where an operator goes to get back to the
    *  map, so asking for a panel now returns them to it. */
   onPanelWhileBleed?: () => void;
-  /** Phone only: opens the alert inbox, behind the tab bar's Alerts tab. */
+  /** Phone only: toggles the alert inbox's sheet ("alerts" in the sheet
+   *  store), behind the tab bar's Alerts tab. */
   onOpenAlerts?: () => void;
   /** Phone only: rows the app adds to the More sheet. */
   phoneMore?: readonly PhoneAction[];
@@ -149,6 +150,7 @@ export function Console({
   const tools = usePhoneSheet((s) => s.tools);
   const setTools = usePhoneSheet((s) => s.setTools);
   const setNoticeHost = usePhoneSheet((s) => s.setNoticeHost);
+  const setMapWell = usePhoneSheet((s) => s.setMapWell);
 
   // Selecting a panel. In full-bleed the panel column does not exist, so the
   // request also has to get the operator back to a surface that has one. On a
@@ -289,6 +291,13 @@ export function Console({
   // readout ended up underneath it again.
   const mapRef = useRef<HTMLElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
+  // Sheets owned outside the console (the title bar's Menu, Alerts) portal into
+  // the map well so they stack and size like the console's own.
+  useEffect(() => {
+    if (!isMobile) return;
+    setMapWell(mapRef.current);
+    return () => setMapWell(null);
+  }, [isMobile, setMapWell]);
   useEffect(() => {
     const el = dockRef.current;
     const host = mapRef.current;
@@ -349,10 +358,7 @@ export function Console({
               id: "alerts",
               label: "Alerts",
               icon: "bell" as const,
-              run: () => {
-                closeSheet();
-                onOpenAlerts();
-              },
+              run: onOpenAlerts,
             },
           ]
         : []),
