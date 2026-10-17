@@ -12,7 +12,10 @@ import { useImageryDiff } from "../imagery/imageryDiffStore.js";
 import { useGround } from "../ground/groundStore.js";
 import { useGeoScope } from "../state/geoScope.js";
 import { useAgent } from "../state/agent.js";
+import { useAlertDraft } from "../settings/alertDraft.js";
 import type { AreaResult } from "./mapTools.js";
+
+const KM_PER_NM = 1.852;
 
 export interface MapAction {
   label: string;
@@ -79,6 +82,16 @@ export function pointActions(lat: number, lon: number): MapAction[] {
           center: { lat, lon },
           radiusKm: 25,
           rule: "enter",
+        }),
+    },
+    {
+      label: "Alert me about this area",
+      run: () =>
+        useAlertDraft.getState().open({
+          label: `Area ${lat.toFixed(2)}, ${lon.toFixed(2)}`,
+          lat,
+          lon,
+          radius_nm: 15,
         }),
     },
     {
@@ -161,6 +174,16 @@ export function areaActions(a: AreaResult): MapAction[] {
           center: { lat, lon },
           radiusKm: searchRadius,
           rule: "enter",
+        }),
+    },
+    {
+      label: "Alert me about this box",
+      run: () =>
+        useAlertDraft.getState().open({
+          label: `Area ${lat.toFixed(2)}, ${lon.toFixed(2)}`,
+          lat,
+          lon,
+          radius_nm: Math.max(1, Math.round(a.radiusKm / KM_PER_NM)),
         }),
     },
     {

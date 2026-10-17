@@ -161,6 +161,28 @@ only as far back as your own archive goes.
 > `docker-compose.prod.yml`, which leaves the flag unset. The globe, replay,
 > evidence capture, and all keyless feeds never needed the flag.
 
+### Open it on your phone
+
+The stack listens on `127.0.0.1` only, on purpose: the dev stack runs in open
+mode, so anything that can reach it can use it. To reach your own instance from
+your phone, put it on your tailnet instead of your LAN:
+
+```bash
+tailscale serve --bg 8080   # https://<this-machine>.<your-tailnet>.ts.net
+```
+
+Then add that origin to `.env` and restart, or the API refuses the new `Host`
+header (the DNS-rebinding guard in `app/origin_guard.py`):
+
+```bash
+CORS_ORIGINS=http://localhost:8080,https://<this-machine>.<your-tailnet>.ts.net
+```
+
+Only devices signed in to your tailnet can open it. Don't use `tailscale funnel`,
+which publishes it to the whole internet. For anything wider than your own
+devices, run `docker-compose.prod.yml` with Supabase sign-in configured
+(`docs/security/auth-and-sessions.md`); it fails closed without a credential.
+
 <details>
 <summary><b>Local dev without Docker</b></summary>
 
@@ -446,6 +468,21 @@ Optional keys, if you want more reach: AISStream for global AIS, an OpenSky
 login for a bigger ADS-B budget, `FIRMS_MAP_KEY` for fires, an ACLED key for
 conflict events, `CLOUDFLARE_TOKEN` for outages. `GET /api/intel/sources`
 reports what's actually live versus what's still waiting on a key.
+
+### Use your own receiver
+
+If you run an ADS-B receiver (readsb, ultrafeeder, tar1090), Velocity folds its
+aircraft into the same picture as the public feeds and records them to your
+archive like everything else. Point `ADSB_FEED_URLS` in `.env` at your
+tar1090's `aircraft.json`. The variable replaces the default list, so keep the
+defaults in it if you still want them:
+
+```bash
+ADSB_FEED_URLS=http://192.168.1.20:8080/data/aircraft.json,https://globe.theairtraffic.com/data/aircraft.json,https://skylink.hpradar.com/data/aircraft.json,https://api.adsb.lol/v2/point/0/0/20000
+```
+
+Contacts are merged by ICAO address, freshest fix wins. Inside Docker,
+`localhost` is the API container, so use the receiver's LAN address.
 
 ## MCP server: query the live console from an AI agent
 

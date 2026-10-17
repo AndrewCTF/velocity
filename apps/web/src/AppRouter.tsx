@@ -9,6 +9,7 @@ import {
 import { App } from "./App.js";
 import { AuthProvider, useAuth } from "./auth/AuthContext.js";
 import { SettingsModal } from "./settings/SettingsModal.js";
+import { useAlertDraft } from "./settings/alertDraft.js";
 import { useSettings } from "./state/settings.js";
 import { Onboarding, hasOnboarded } from "./onboarding/Onboarding.js";
 import { isSupabaseConfigured } from "./transport/supabase.js";
@@ -102,6 +103,12 @@ function DashboardRoute(): JSX.Element {
 function TopBar(): JSX.Element | null {
   const loc = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The map's "Alert me about this area" action bumps seq; open Settings so the
+  // prefilled alert form is in front of the operator.
+  const alertSeq = useAlertDraft((s) => s.seq);
+  useEffect(() => {
+    if (alertSeq > 0) setSettingsOpen(true);
+  }, [alertSeq]);
   // The auth pages are full-screen cards — no overlay chrome on them.
   if (["/login", "/signup", "/forgot", "/reset"].includes(loc.pathname))
     return null;
