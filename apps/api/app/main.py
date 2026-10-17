@@ -127,6 +127,7 @@ from app.routes import oceans as oceans_routes
 from app.routes import ontology as ontology_routes
 from app.routes import orgs as orgs_routes
 from app.routes import osint as osint_routes
+from app.routes import overhead as overhead_routes
 from app.routes import places as places_routes
 from app.routes import primary as primary_routes
 from app.routes import projection as projection_routes
@@ -747,6 +748,9 @@ def create_app() -> FastAPI:
     app.include_router(eq_routes.router)
     app.include_router(aviation_routes.router)
     app.include_router(adsb_routes.router)
+    # Nearest-aircraft payload for ESP32 / e-ink desk displays, read from the
+    # same in-memory snapshot (docs/desk-display.md). No upstream call of its own.
+    app.include_router(overhead_routes.router)
     app.include_router(ai_routes.router)
     app.include_router(ai_models_routes.router)
     app.include_router(ai_selection_routes.router)

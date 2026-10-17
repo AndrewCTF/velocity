@@ -484,6 +484,10 @@ ADSB_FEED_URLS=http://192.168.1.20:8080/data/aircraft.json,https://globe.theairt
 Contacts are merged by ICAO address, freshest fix wins. Inside Docker,
 `localhost` is the API container, so use the receiver's LAN address.
 
+For a small desk display of what is overhead (ESP32, e-ink), `GET /api/overhead`
+returns the nearest aircraft as compact JSON from the same snapshot, with no
+upstream call of its own: see [docs/desk-display.md](docs/desk-display.md).
+
 ## MCP server: query the live console from an AI agent
 
 The part I think is genuinely new: the backend doubles as a **Model Context
