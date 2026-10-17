@@ -6,11 +6,14 @@
 // aircraft billboards and 6,000 vessels still shown with the live data sources
 // hidden). Those layers register here and hide their own primitives.
 
+import { useSyncExternalStore } from "react";
+
 export interface LiveHideable {
   setLiveHidden(hidden: boolean): void;
 }
 
 const layers = new Set<LiveHideable>();
+const listeners = new Set<() => void>();
 let hidden = false;
 
 /** True while a replay owns the map; a layer created now must start hidden. */
@@ -31,4 +34,17 @@ export function setLiveLayersHidden(next: boolean): void {
   if (next === hidden) return;
   hidden = next;
   for (const layer of layers) layer.setLiveHidden(next);
+  for (const fn of listeners) fn();
+}
+
+function subscribe(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/** liveHidden() for a component: re-renders when a replay starts or ends. */
+export function useLiveHidden(): boolean {
+  return useSyncExternalStore(subscribe, liveHidden);
 }

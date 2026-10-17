@@ -21,6 +21,7 @@ import { perfSnapshot } from "../globe/perf.js";
 import { flyToGlobal, resetToTopDown } from "../globe/camera.js";
 import { viewerCenter } from "../globe/center.js";
 import { useMapTools } from "../globe/mapTools.js";
+import { useLiveHidden } from "../globe/liveVisibility.js";
 import { useAgent } from "../state/agent.js";
 import {
   useAlerts,
@@ -449,6 +450,8 @@ export function TitleBar({
   // Live state behind the document line. Subscribed, not read once, so "live /
   // held" and the socket dot change when the thing they describe changes.
   const playing = useTime((s) => s.playing);
+  // A replay runs the clock too, over the past, with the live map hidden.
+  const replaying = useLiveHidden();
   const currentTime = useTime((s) => s.currentTime);
   const ws = useConnection((s) => s.ws);
   const clock = new Date(currentTime).toISOString().slice(11, 19) + "Z";
@@ -533,13 +536,15 @@ export function TitleBar({
     <span
       className="ml-3 flex min-w-0 flex-1 items-center justify-center gap-2"
       title={
-        playing
-          ? "The clock is running at real time; contacts advance as fixes arrive."
-          : "The clock is held. Contacts stay at the fix they had when you paused."
+        replaying
+          ? "Replaying the past. Live contacts are hidden until you return to live."
+          : playing
+            ? "The clock is running at real time; contacts advance as fixes arrive."
+            : "The clock is held. Contacts stay at the fix they had when you paused."
       }
     >
       <span
-        className={`h-[10px] w-[10px] shrink-0 rounded-[1px] ${playing ? "bg-ok" : "bg-warn"}`}
+        className={`h-[10px] w-[10px] shrink-0 rounded-[1px] ${replaying ? "bg-accent" : playing ? "bg-ok" : "bg-warn"}`}
         aria-hidden
       />
       <span className="truncate text-[13px] font-semibold text-txt-0">
@@ -549,7 +554,7 @@ export function TitleBar({
         {clock}
       </span>
       <span className="shrink-0 text-[12px] text-txt-3">
-        {playing ? "live" : "held"}
+        {replaying ? "replay" : playing ? "live" : "held"}
       </span>
       <span
         className={`h-[6px] w-[6px] shrink-0 rounded-full ${WS_DOT[ws] ?? "bg-bg-4"}`}
