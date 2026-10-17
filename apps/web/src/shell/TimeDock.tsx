@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type * as Cesium from "cesium";
+import * as Cesium from "cesium";
 import { Icon } from "../normal/Icon.js";
 import { apiFetch } from "../transport/http.js";
-import { useTime } from "../state/stores.js";
+import { useSelection, useTime } from "../state/stores.js";
 import { usePolReplay } from "../state/polReplayStore.js";
+import { encodeRewind, isRewindId, parseRewind } from "../state/rewindLink.js";
 import {
   installHistoryPlayback,
   type PlaybackController,
   type PlaybackInfo,
 } from "../globe/HistoryPlayback.js";
 import { CoverageStrip, type Coverage } from "../timeline/CoverageStrip.js";
+import { toast } from "./toast.js";
 
 // TimeDock — THE transport. Built from docs/mockups/console-2026-08
 // (`12-map-replay.html`) and fed by the same density/events endpoints the old
@@ -89,9 +91,10 @@ function retentionLabel(hours: number): string {
   return `~${Math.round(hours)}h`;
 }
 
-// Cesium is imported as a TYPE here (the viewer is only ever handed to us by
-// the caller), so JulianDate conversion is done by hand rather than via
-// Cesium.JulianDate — the same shape Timeline.tsx used to build.
+// Cesium is imported at runtime ONLY for the rewind link's camera maths
+// (Cartesian3.fromDegrees / Math.toRadians below). JulianDate conversion is
+// still done by hand rather than via Cesium.JulianDate — the same shape
+// Timeline.tsx used to build, and the one TimeDock.test.tsx's header pins.
 function jdToMs(jd: Cesium.JulianDate): number {
   return (
     (jd.dayNumber - 2440587) * 86400_000 +
@@ -382,6 +385,97 @@ export function TimeDock({
     [viewer],
   );
 
+  // Rewind link (state/rewindLink.ts): `#c=…&sel=…&t=…` reopens the console at a
+  // place, a contact and a past moment. Read ONCE, the first time a live viewer
+  // exists, and after the install effect above so `ctrlRef` is populated and
+  // `applyReplayStart` has a controller. The ref, not the dependency list, is
+  // what stops a re-render or a re-created viewer pulling the camera back.
+  // Place, then contact, then moment. loadAt() reads the view rectangle to
+  // filter an upstream chunk only once that chunk lands, after this effect has
+  // returned, so it filters to the linked view and not the default one.
+  const rewindRead = useRef(false);
+  useEffect(() => {
+    if (!viewer || viewer.isDestroyed() || rewindRead.current) return;
+    rewindRead.current = true;
+    const link = parseRewind(window.location.hash);
+    if (!link) return;
+    const { lon, lat, height, heading, pitch } = link.c;
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+      orientation: {
+        heading: Cesium.Math.toRadians(heading),
+        pitch: Cesium.Math.toRadians(pitch),
+        roll: 0,
+      },
+    });
+    viewer.scene.requestRender();
+    // Applied once; drop it from the address bar so copying the URL later
+    // cannot hand someone a moment the operator has since moved away from.
+    window.history.replaceState(
+      window.history.state,
+      "",
+      window.location.pathname + window.location.search,
+    );
+    const replaying = link.t !== undefined && Date.now() - link.t > 120_000;
+    if (link.sel) {
+      // Replay draws a contact as `hist:<id>` (HistoryPlayback.ts) and hides the
+      // live one, so a replayed link selects the marker that is actually drawn.
+      const sel =
+        replaying && !link.sel.startsWith("hist:")
+          ? `hist:${link.sel}`
+          : link.sel;
+      useSelection.getState().select(sel);
+    }
+    // Within ~2 min of now there is nothing to rewind to, so stay live.
+    if (replaying && link.t !== undefined) {
+      // ponytail: the pickers and applyReplayStart speak a UTC day + HH:MM, so a
+      // link replays from the minute, not the second it was copied at. Give
+      // applyReplayStart an epoch-ms entry point if seconds ever matter.
+      const iso = new Date(link.t).toISOString();
+      const day = iso.slice(0, 10);
+      const time = iso.slice(11, 16);
+      setReplayDay(day);
+      setReplayTime(time);
+      applyReplayStart(day, time);
+    }
+  }, [viewer, applyReplayStart]);
+
+  // "Copy rewind link": where the camera is, what is selected and, in replay,
+  // the clock, as one URL. `clockMs` already mirrors the viewer clock.
+  const copyRewindLink = (): void => {
+    if (!viewer || viewer.isDestroyed()) return;
+    const pos = viewer.camera.positionCartographic;
+    // heading/pitch are undefined while the scene morphs between 2D and 3D.
+    const deg = (rad: number, fallback: number): number =>
+      Number.isFinite(rad) ? Cesium.Math.toDegrees(rad) : fallback;
+    const sel = useSelection.getState().selectedEntityId;
+    const hash = pos
+      ? encodeRewind({
+          c: {
+            lon: Cesium.Math.toDegrees(pos.longitude),
+            lat: Cesium.Math.toDegrees(pos.latitude),
+            height: pos.height,
+            heading: deg(viewer.camera.heading, 0),
+            pitch: deg(viewer.camera.pitch, -90),
+          },
+          sel: sel ?? undefined,
+          t: live ? undefined : clockMs,
+        })
+      : "";
+    if (!hash) {
+      toast.error("Could not read the camera position");
+      return;
+    }
+    const { origin, pathname, search } = window.location;
+    const url = `${origin}${pathname}${search}${hash}`;
+    void copyText(url).then((copied) => {
+      if (!copied) toast.error("Could not copy the link");
+      else if (sel && !isRewindId(sel))
+        toast.ok("Link copied · selection not included (unsupported id)");
+      else toast.ok("Link copied");
+    });
+  };
+
   const onScrub = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const el = strip.current;
@@ -630,6 +724,12 @@ export function TimeDock({
         >
           Live
         </button>
+        {/* Needs a camera to read, so the 2D console (no viewer) has none. */}
+        {viewer && (
+          <TBtn label="Copy rewind link" onClick={copyRewindLink}>
+            <Icon name="link" className="h-3 w-3" />
+          </TBtn>
+        )}
         <span className="flex-1" />
         <div className="flex overflow-hidden rounded-sm border border-line-2">
           {SPEEDS.map((s) => (
@@ -863,6 +963,29 @@ function UpstreamAvailabilityRow({
       </svg>
     </div>
   );
+}
+
+// ponytail: the legacy execCommand path is deprecated, but it is the only
+// clipboard an http:// operator box (a phone on the LAN) has; drop it when that
+// stops being a deployment.
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    try {
+      ta.select();
+      return document.execCommand("copy");
+    } finally {
+      ta.remove();
+    }
+  } catch {
+    return false;
+  }
 }
 
 function TBtn({
