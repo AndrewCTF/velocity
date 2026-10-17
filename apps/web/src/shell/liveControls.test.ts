@@ -93,7 +93,7 @@ describe('shell controls are live', () => {
     if (/⇧T/.test(titlebar)) expect(app, '⇧T is printed but nothing binds it').toMatch(/shiftKey/);
     if (/1-4 left panels/.test(titlebar))
       expect(consoleSrc, 'the panel numbers are printed but nothing binds them').toMatch(
-        /addEventListener\('keydown'/,
+        /addEventListener\(["']keydown["']/,
       );
   });
 });

@@ -60,6 +60,6 @@ describe('sign-out clears investigation data (ASVS V14.3.1)', () => {
 
   it('AuthProvider runs it on SIGNED_OUT', () => {
     const ctx = readFileSync(join(process.cwd(), 'src/auth/AuthContext.tsx'), 'utf8');
-    expect(ctx).toMatch(/event === 'SIGNED_OUT'\) \{\s*clearUserData\(\)/);
+    expect(ctx).toMatch(/event === ["']SIGNED_OUT["']\) \{\s*clearUserData\(\)/);
   });
 });

@@ -63,7 +63,7 @@ def test_the_app_count_matches_the_registry(readme: str) -> None:
     src = APP_VIEW.read_text(encoding="utf-8")
     block = re.search(r"export const APP_IDS[^=]*=\s*\[(.*?)\]", src, re.S)
     assert block, "APP_IDS array not found in state/appView.ts"
-    real = len(re.findall(r"'[a-z0-9]+'", block.group(1)))
+    real = len(re.findall(r"['\"][a-z0-9]+['\"]", block.group(1)))
     claimed = re.search(r"workspace of ([a-z]+) apps", readme)
     assert claimed, "README lost its 'workspace of N apps' line"
     word = claimed.group(1)

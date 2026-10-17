@@ -104,7 +104,7 @@ describe('re-homed surfaces are actually rendered', () => {
 
   it('Intel lands in Info, the panel that answers what is happening', () => {
     const app = src('App.tsx');
-    expect(app).toMatch(/id: 'intel'[^\n]*<IntelPanel/);
+    expect(app).toMatch(/id: ["']intel["'][^}]*<IntelPanel/);
   });
 
   it('keeps both halves of the old Ops panel in Info', () => {

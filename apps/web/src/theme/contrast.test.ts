@@ -19,7 +19,11 @@ import {
 // regressing accessibility. See docs/decisions.md (typography & WCAG-AA pass).
 
 // vitest runs with cwd = apps/web; tokens.css is the source of truth this guards.
-const CSS = readFileSync(join(process.cwd(), 'src/theme/tokens.css'), 'utf8');
+// Attribute selectors are read in one quote style whichever the formatter wrote.
+const CSS = readFileSync(join(process.cwd(), 'src/theme/tokens.css'), 'utf8').replace(
+  /data-theme="([\w-]+)"/g,
+  "data-theme='$1'",
+);
 
 // Pull `--name: #hex;` decls out of a single `:root {…}` / `:root[…] {…}` block.
 function parseBlockRaw(selector: string): Record<string, string> {

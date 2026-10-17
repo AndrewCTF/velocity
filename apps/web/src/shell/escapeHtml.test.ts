@@ -18,7 +18,7 @@ describe('escapeHtml (ASVS V1.2.1)', () => {
 
   it('BriefPanel builds its HTML with it and no longer interpolates status raw', () => {
     const src = readFileSync(join(process.cwd(), 'src/reports/BriefPanel.tsx'), 'utf8');
-    expect(src).toContain("import { escapeHtml } from '../shell/escapeHtml.js'");
+    expect(src).toMatch(/import \{ escapeHtml \} from ["']\.\.\/shell\/escapeHtml\.js["']/);
     expect(src).not.toMatch(/replace\(\/\[&<>\]\/g/);
     expect(src).not.toContain('">${f.status}</td>');
     expect(src).toContain('${esc(f.status)}');

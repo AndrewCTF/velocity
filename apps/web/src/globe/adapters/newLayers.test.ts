@@ -134,29 +134,29 @@ describe('registry: airspace.tfr / places.bases / maritime.warnings descriptors'
 describe('StyleKind dispatch reaches the new cases', () => {
   it('the polygon path is widened to accept tfr + hazardpoly alongside jamming', () => {
     expect(ADAPTER_SRC).toMatch(
-      /styleKind === 'jamming' \|\|[\s\S]*?styleKind === 'tfr'[\s\S]*?styleKind === 'hazardpoly'/,
+      /styleKind === ["']jamming["'] \|\|[\s\S]*?styleKind === ["']tfr["'][\s\S]*?styleKind === ["']hazardpoly["']/,
     );
   });
 
   it('StyleKind union includes tfr, base, warning', () => {
-    expect(ADAPTER_SRC).toMatch(/\|\s*'tfr'/);
-    expect(ADAPTER_SRC).toMatch(/\|\s*'base'/);
-    expect(ADAPTER_SRC).toMatch(/\|\s*'warning'/);
+    expect(ADAPTER_SRC).toMatch(/\|\s*["']tfr["']/);
+    expect(ADAPTER_SRC).toMatch(/\|\s*["']base["']/);
+    expect(ADAPTER_SRC).toMatch(/\|\s*["']warning["']/);
   });
 
   it('applyStyle has dispatch cases for base and warning billboards', () => {
-    expect(ADAPTER_SRC).toMatch(/case 'base': \{/);
-    expect(ADAPTER_SRC).toMatch(/case 'warning': \{/);
+    expect(ADAPTER_SRC).toMatch(/case ["']base["']: \{/);
+    expect(ADAPTER_SRC).toMatch(/case ["']warning["']: \{/);
   });
 
   it('LayerCompositor maps the three new layer ids to their StyleKind', () => {
-    expect(COMPOSITOR_SRC).toMatch(/d\.id === 'airspace\.tfr'\s*\n?\s*\?\s*'tfr'/);
-    expect(COMPOSITOR_SRC).toMatch(/d\.id === 'places\.bases'\s*\n?\s*\?\s*'base'/);
-    expect(COMPOSITOR_SRC).toMatch(/d\.id === 'maritime\.warnings'\s*\n?\s*\?\s*'warning'/);
+    expect(COMPOSITOR_SRC).toMatch(/d\.id === ["']airspace\.tfr["']\s*\n?\s*\?\s*["']tfr["']/);
+    expect(COMPOSITOR_SRC).toMatch(/d\.id === ["']places\.bases["']\s*\n?\s*\?\s*["']base["']/);
+    expect(COMPOSITOR_SRC).toMatch(/d\.id === ["']maritime\.warnings["']\s*\n?\s*\?\s*["']warning["']/);
   });
 
   it('places.bases participates in the bbox/LOD gate alongside airports/ports', () => {
-    expect(COMPOSITOR_SRC).toMatch(/d\.id === 'places\.bases'/);
+    expect(COMPOSITOR_SRC).toMatch(/d\.id === ["']places\.bases["']/);
   });
 });
 
@@ -209,16 +209,16 @@ describe('registry: infrastructure/military facility descriptors', () => {
   });
 
   it('every facility layer id routes to the facility StyleKind + bbox gate', () => {
-    expect(COMPOSITOR_SRC).toMatch(/FACILITY_LAYER_IDS\.has\(d\.id\)\s*\n?\s*\?\s*'facility'/);
+    expect(COMPOSITOR_SRC).toMatch(/FACILITY_LAYER_IDS\.has\(d\.id\)\s*\n?\s*\?\s*["']facility["']/);
     for (const id of facilityIds) {
-      expect(COMPOSITOR_SRC, id).toContain(`'${id}'`);
+      expect(COMPOSITOR_SRC.includes(`'${id}'`) || COMPOSITOR_SRC.includes(`"${id}"`), id).toBe(true);
     }
     // and the bbox/LOD zoom gate includes the facility set
     expect(COMPOSITOR_SRC).toMatch(/FACILITY_LAYER_IDS\.has\(d\.id\)\s*\n?\s*\) \{/);
   });
 
   it('StyleKind union + applyStyle handle facility', () => {
-    expect(ADAPTER_SRC).toMatch(/\|\s*'facility'/);
-    expect(ADAPTER_SRC).toMatch(/case 'facility': \{/);
+    expect(ADAPTER_SRC).toMatch(/\|\s*["']facility["']/);
+    expect(ADAPTER_SRC).toMatch(/case ["']facility["']: \{/);
   });
 });

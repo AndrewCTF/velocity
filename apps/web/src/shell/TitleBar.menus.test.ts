@@ -32,17 +32,17 @@ describe('title-bar menus', () => {
   });
 
   it('gives every item a command to run', () => {
-    const labels = (bar.match(/\blabel: '[^']+',?\n?\s*(hint|sep|on|disabled|run):/g) ?? []).length;
+    const labels = (bar.match(/\blabel: ["'][^"']+["'],?\n?\s*(hint|sep|on|disabled|run):/g) ?? []).length;
     const runs = (bar.match(/\brun: \(/g) ?? []).length;
     expect(runs, 'fewer run handlers than items').toBeGreaterThanOrEqual(
-      (bar.match(/{\s*label: '/g) ?? []).length,
+      (bar.match(/{\s*label: ["']/g) ?? []).length,
     );
     expect(labels).toBeGreaterThan(0);
   });
 
   it('closes on Escape and on a click outside', () => {
-    expect(bar).toContain("window.addEventListener('pointerdown', onDown, true)");
-    expect(bar).toMatch(/e\.key !== 'Escape'/);
+    expect(bar).toMatch(/window\.addEventListener\(["']pointerdown["'], onDown, true\)/);
+    expect(bar).toMatch(/e\.key !== ["']Escape["']/);
   });
 
   // The second way to ship an inert menu: render it INSIDE the header, which
@@ -57,7 +57,7 @@ describe('title-bar menus', () => {
     // Both of them: the menu bar AND the app launcher live in the same header.
     expect((bar.match(/createPortal\(/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(bar, 'a portalled dropdown is positioned against its trigger').toMatch(
-      /position: 'fixed', left: anchor\.left, top: anchor\.top/,
+      /position: ["']fixed["'], left: anchor\.left, top: anchor\.top/,
     );
     // And the outside-click test has to know the popup is no longer inside the
     // bar's subtree, or the first click anywhere closes nothing.
