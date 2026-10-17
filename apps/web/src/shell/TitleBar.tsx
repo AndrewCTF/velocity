@@ -12,6 +12,7 @@ import {
 } from "../state/appView.js";
 import { Modal } from "./Modal.js";
 import { useIsMobile } from "./useIsMobile.js";
+import { usePhoneSheet } from "./phoneSheet.js";
 import {
   useEntityStats,
   setStatsViewer,
@@ -452,6 +453,8 @@ export function TitleBar({
   const playing = useTime((s) => s.playing);
   // A replay runs the clock too, over the past, with the live map hidden.
   const replaying = useLiveHidden();
+  const notices = usePhoneSheet((s) => s.notices);
+  const showSheet = usePhoneSheet((s) => s.show);
   const currentTime = useTime((s) => s.currentTime);
   const ws = useConnection((s) => s.ws);
   const clock = new Date(currentTime).toISOString().slice(11, 19) + "Z";
@@ -576,32 +579,69 @@ export function TitleBar({
     </span>
   );
 
-  // On a phone the bar is one Menu button, the document line and the marking.
+  // On a phone the bar is not a bar. It floats on the map's top edge as a map
+  // app's does: the menu, a search pill, the marking, and under them one chip
+  // for the clock (tap it for Time) and one for notices when there are any.
   // The six menus, the app launcher, inbox, alerts, settings and the account
-  // chip were what ran past the right edge (they are ~860px of controls in a
-  // 412px strip, and `overflow: hidden` clips them without moving them), and at
-  // 20px tall they were the phone's navigation. They are all in the sheet.
+  // chip are all in the Menu sheet; as a strip they were ~860px of 20px controls
+  // in a 412px window.
   if (isMobile)
     return (
       <div ref={barRef} className="contents">
-        <nav aria-label="Application" data-primary-nav className="shrink-0">
+        <div className="pfloat-row">
+          <nav aria-label="Application" data-primary-nav className="contents">
+            <button
+              type="button"
+              onClick={() => setPhoneMenu(true)}
+              aria-label="Menu"
+              aria-haspopup="dialog"
+              aria-expanded={phoneMenu}
+              className="pround"
+            >
+              <Icon name="menu" className="h-[20px] w-[20px]" />
+            </button>
+          </nav>
           <button
             type="button"
-            onClick={() => setPhoneMenu(true)}
-            aria-label="Menu"
-            aria-haspopup="dialog"
-            aria-expanded={phoneMenu}
-            className="flex h-[44px] w-[44px] items-center justify-center rounded-sm text-txt-1 hover:bg-(--hover)"
+            className="psearch"
+            onClick={() => showSheet("find")}
           >
-            <Icon name="menu" className="h-[20px] w-[20px]" />
+            <Icon name="search" className="h-[18px] w-[18px] shrink-0" />
+            <span>Search planes, ships</span>
           </button>
-        </nav>
-        <Icon
-          name="hexagon"
-          className="ml-1 h-[16px] w-[16px] shrink-0 text-accent-fg"
-        />
-        {docLine}
-        {pill}
+          {pill}
+        </div>
+        <div className="pfloat-chips">
+          <button
+            type="button"
+            className="pchip"
+            onClick={() => showSheet("time")}
+            title={
+              replaying
+                ? "Replaying the past. Open Time to return to live."
+                : "Open Time"
+            }
+          >
+            <span
+              className={`h-[8px] w-[8px] shrink-0 rounded-full ${replaying ? "bg-accent" : playing ? "bg-ok" : "bg-warn"}`}
+              aria-hidden
+            />
+            {documentTitle ?? APP_META[activeApp]?.label ?? "Live map"}
+            <span className="mono tabular-nums">{clock}</span>
+            <span>{replaying ? "replay" : playing ? "live" : "held"}</span>
+          </button>
+          {notices > 0 && (
+            <button
+              type="button"
+              className="pchip"
+              data-tone="warn"
+              onClick={() => showSheet("notices")}
+            >
+              <Icon name="warning" className="h-[14px] w-[14px]" />
+              {notices === 1 ? "1 notice" : `${notices} notices`}
+            </button>
+          )}
+        </div>
         <PhoneMenu
           open={phoneMenu}
           onClose={() => setPhoneMenu(false)}

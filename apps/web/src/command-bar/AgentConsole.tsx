@@ -125,7 +125,7 @@ export function AgentConsole({
   viewer,
 }: {
   viewer: Cesium.Viewer | null;
-}): JSX.Element {
+}): JSX.Element | null {
   const isMobile = useIsMobile();
   const open = useAgent((s) => s.open);
   const setOpen = useAgent((s) => s.setOpen);
@@ -477,6 +477,12 @@ export function AgentConsole({
     }
   };
 
+  // Opened from the phone's More sheet: the keyboard is why it was opened.
+  useEffect(() => {
+    if (isMobile && open)
+      requestAnimationFrame(() => inputRef.current?.focus());
+  }, [isMobile, open]);
+
   const greenFeeds = Object.values(feeds).filter(
     (f) => f.status === "green",
   ).length;
@@ -489,23 +495,11 @@ export function AgentConsole({
       ? "amber"
       : "green";
 
-  // ── mobile: a FAB opens a full-screen console ──
-  if (isMobile && !open) {
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(true);
-          requestAnimationFrame(() => inputRef.current?.focus());
-        }}
-        aria-label="Open analyst agent"
-        className="on-dark fixed bottom-3 right-3 z-(--z-dock) flex items-center gap-2 mono text-[13px] px-4 py-2.5 rounded-md border border-accent-line text-accent"
-        style={{ background: "rgba(9,12,18,0.95)" }}
-      >
-        <span className="w-2 h-2 bg-accent rotate-45" /> Agent
-      </button>
-    );
-  }
+  // ── mobile: the console opens full-screen from the More sheet ──
+  // It used to float a launcher over the map's bottom-right corner, where it
+  // landed on the phone's tab bar. The phone layout lists it under More
+  // (App.tsx `phoneMore`), which opens it through the same store.
+  if (isMobile && !open) return null;
 
   // `on-dark`: this panel pins its own near-black background regardless of the
   // colour scheme, so its text ramp has to stay the dark one (see tokens.css).

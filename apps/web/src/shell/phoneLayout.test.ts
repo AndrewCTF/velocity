@@ -17,13 +17,18 @@ const bar = read("TitleBar.tsx");
 const css = read("console.css");
 
 describe("title bar on a phone", () => {
-  it("folds into one Menu button inside a nav, 44px in px", () => {
-    // The root font is 13px, so a rem class (`h-11`) is 36px and misses.
-    const phone = /if \(isMobile\)\s+return \([\s\S]*?\n {4}\);/.exec(bar)?.[0];
+  const phone =
+    /if \(isMobile\)\s+return \([\s\S]*?\n {4}\);/.exec(bar)?.[0] ?? "";
+
+  it("floats a Menu button, a search pill and the marking on the map", () => {
     expect(phone, "TitleBar has no isMobile branch").toBeTruthy();
     expect(phone).toContain("data-primary-nav");
     expect(phone).toContain('aria-label="Menu"');
-    expect(phone).toContain("h-[44px] w-[44px]");
+    // 44px round controls, sized in console.css (`.pround`), never a rem class:
+    // the root font is 13px, so `h-11` is 36px and misses.
+    expect(phone).toContain('className="pround"');
+    expect(phone).toContain('className="psearch"');
+    expect(phone).toContain('showSheet("find")');
     expect(
       phone,
       "the phone bar still renders the desktop menu bar",
@@ -43,23 +48,24 @@ describe("title bar on a phone", () => {
     expect(menu).not.toContain("it.hint");
   });
 
-  it("is the same document line and marking pill the desktop bar has", () => {
-    expect(bar.match(/\{docLine\}/g)?.length).toBe(2);
+  it("carries the desktop's marking pill and the same clock state words", () => {
     expect(bar.match(/\{pill\}/g)?.length).toBe(2);
+    expect(phone).toContain('replaying ? "replay" : playing ? "live" : "held"');
   });
 });
 
-describe("one mobile chooser", () => {
-  it("is shared by the console and the 2D map, and written once", () => {
-    expect(read("Console.tsx")).toContain("MobileSheets");
+describe("phone sheets", () => {
+  it("every console surface on a phone is a BottomSheet; the 2D map keeps MobileSheets", () => {
+    const consoleSrc = read("Console.tsx");
+    expect(consoleSrc).toContain("<BottomSheet");
+    expect(consoleSrc).not.toContain("MobileSheets");
     expect(read("ConsoleShell.tsx")).toContain("MobileSheets");
-    // The chooser's backdrop and the sheet's Close live in one file.
-    expect(read("ConsoleShell.tsx")).not.toContain('aria-label="Close menu"');
-    expect(read("Console.tsx")).not.toContain('aria-label="Close menu"');
-    expect(read("MobileSheets.tsx")).toContain('aria-label="Close menu"');
   });
 
   it("wraps every sheet's content in the error boundary", () => {
+    expect(read("BottomSheet.tsx")).toMatch(
+      /<ErrorBoundary label=\{label\}>\{children\}<\/ErrorBoundary>/,
+    );
     expect(read("MobileSheets.tsx")).toMatch(
       /<ErrorBoundary label=\{active\.label\}>/,
     );
@@ -67,9 +73,17 @@ describe("one mobile chooser", () => {
 });
 
 describe("phone styles", () => {
-  it("sizes the nav bar's buttons to 44px", () => {
-    expect(css).toMatch(/\.csl2-nav button \{[^}]*min-height: 44px/);
-    expect(css).toMatch(/\.csl2-nav button \{[^}]*min-width: 44px/);
+  it("sizes the tab bar's buttons to at least 44px", () => {
+    expect(css).toMatch(/\.ptabs button \{[^}]*min-width: 44px/);
+    expect(css).toMatch(/\.ptabs button \{[^}]*height: 58px/);
+    expect(css).toMatch(/\.pround \{[^}]*width: 44px;[^}]*height: 44px/);
+  });
+
+  it("lets touches through the floating top edge, between its controls", () => {
+    expect(css).toMatch(/\.pfloat \{[^}]*pointer-events: none/);
+    expect(css).toMatch(
+      /\.pfloat :is\(button, a, \.csl2-clas\) \{\s*pointer-events: auto/,
+    );
   });
 
   it("ports the mockup's touch rule, under the same query as the phone layout", () => {
@@ -79,9 +93,10 @@ describe("phone styles", () => {
     expect(css).toContain(":not(.absolute)");
   });
 
-  it("takes the dock out of the layout until asked, and wraps its rows", () => {
-    expect(css).toMatch(/\.csl2\[data-phone\] \.csl2-dock \{\s*display: none;/);
-    expect(css).toContain('.csl2-dock[data-sheet="open"]');
-    expect(css).toMatch(/> \.items-center \{[^}]*flex-wrap: wrap/);
+  it("unpins the dock inside its sheet and wraps its rows", () => {
+    expect(css).toMatch(/\.psheet \.csl2-dock \{[^}]*max-height: none/);
+    expect(css).toMatch(
+      /\.psheet \.csl2-dock > div > \.items-center \{[^}]*flex-wrap: wrap/,
+    );
   });
 });

@@ -455,112 +455,372 @@
   }
 }
 
+/* The map is the screen: no title row, no gutter, nothing beside it. The tab
+   bar is the only row the map gives up. */
 .csl2[data-phone] {
-  /* A 44px menu button has to fit the strip it lives in. */
-  --g-title: 44px;
-  /* No gutter: the map is full-bleed, panels are sheets, nothing sits beside it. */
   --g-gap: 0px;
-  grid-template-rows: var(--g-title) minmax(0, 1fr) auto;
-}
-.csl2[data-phone] .csl2-title {
-  padding: 0 8px 0 0;
-}
-/* The strip clips its overflow and the menu button fills its height, so the
-   default ring (offset outward) was cut to a sliver of its right edge. */
-.csl2[data-phone] .csl2-title :focus-visible {
-  outline-offset: -4px;
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 .csl2[data-phone] .csl2-map {
   border: 0;
   border-radius: 0;
 }
 
-/* The open-mode banner inside the map. The desktop rule caps it at
-   `100% - 420px`, which is negative on a phone. */
-.csl2[data-phone] .csl2-map .map-banner {
-  max-width: calc(100% - 16px);
-}
-
-/* The panel sheets scroll under their section tabs instead of taking them away. */
-.csl2[data-phone] .csl2-subtabs {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  height: 40px;
-}
-
-/* ── Nav bar ───────────────────────────────────────────────────────────────
-   Two 44px buttons. AgentConsole's launcher is `position: fixed` to the bottom
-   right corner of the window and lives in a file this one does not own, so it
-   lands on this bar; its slot is left free and it reads as the bar's third
-   button. Without the right padding it sat on top of Time. */
-.csl2-nav {
+/* ── Floating top edge ─────────────────────────────────────────────────────
+   Menu, search pill and marking, then the clock and notices chips, laid on
+   the map instead of above it. The layer itself lets touches through, so the
+   map pans between the controls. */
+.pfloat {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: var(--z-dock);
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  padding: 6px 100px 6px 8px;
+  padding: max(10px, env(safe-area-inset-top)) 10px 0;
+  pointer-events: none;
+}
+.pfloat :is(button, a, .csl2-clas) {
+  pointer-events: auto;
+}
+.pfloat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pfloat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pfloat .csl2-clas {
+  flex: none;
+  height: 28px;
+  margin: 0;
+  background: var(--bg-1);
+}
+
+/* A round 44px map control: the menu, and the map's own two buttons. */
+.pround {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--bg-1);
+  color: var(--txt-0);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.pround:disabled {
+  color: var(--txt-3);
+}
+.psearch {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line-2);
+  border-radius: 22px;
+  background: var(--bg-1);
+  color: var(--txt-2);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+}
+.psearch span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--bg-1) 92%, transparent);
+  color: var(--txt-1);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  font: inherit;
+  font-size: 13px;
+}
+.pchip[data-tone="warn"] {
+  border-color: var(--warn-line);
+  color: var(--warn-fg);
+}
+
+/* Where am I, and north up. Bottom right, in the thumb's reach. */
+.pmapbtns {
+  position: absolute;
+  right: 10px;
+  bottom: 14px;
+  z-index: var(--z-dock);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Tab bar ───────────────────────────────────────────────────────────────
+   Icon over label, the whole cell the target. The open tab's icon sits in a
+   tinted capsule, so the state reads at a glance without a second colour. */
+.ptabs {
+  display: flex;
+  padding: 0 4px env(safe-area-inset-bottom);
   background: var(--bg-1);
   border-top: 1px solid var(--line-2);
 }
-.csl2-nav button {
+.ptabs button {
   flex: 1 1 0;
-  display: inline-flex;
+  min-width: 44px;
+  height: 58px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-width: 44px;
-  min-height: 44px;
+  gap: 4px;
+  border: 0;
   background: none;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-sm);
-  color: var(--txt-1);
+  color: var(--txt-2);
   font: inherit;
-  font-size: var(--fs-body);
+  font-size: 11px;
+  letter-spacing: 0.2px;
 }
-.csl2-nav button:is([aria-expanded="true"], [aria-pressed="true"]) {
-  background: var(--accent-dim);
-  border-color: var(--accent-line);
+.ptabs button > svg {
+  box-sizing: content-box;
+  padding: 4px 18px;
+  border-radius: 14px;
+  transition: background-color 160ms ease-out;
+}
+.ptabs button[aria-pressed="true"] {
   color: var(--accent-fg);
 }
-
-/* ── Time dock, as a sheet ─────────────────────────────────────────────────
-   The dock has to stay mounted (it installs the playback controller and drives
-   the viewer clock), so it keeps its place in the tree and changes shape: out
-   of the layout until the Time button asks for it, then a bottom sheet whose
-   control rows wrap. Its transport row is ~860px wide; at phone width it was
-   clipped by the dock's overflow, which put Play, Live and Copy rewind link out
-   of reach. Wrap rather than scroll sideways: the rows keep every control on
-   screen, and a scrolling row still has controls past the edge. */
-.csl2[data-phone] .csl2-dock {
-  display: none;
+.ptabs button[aria-pressed="true"] > svg {
+  background: var(--accent-dim);
 }
-.csl2[data-phone] .csl2-dock[data-sheet="open"] {
-  display: block;
+
+/* ── Bottom sheet ──────────────────────────────────────────────────────────
+   See BottomSheet.tsx. Height is set inline from the stop or the finger. */
+.psheet {
   position: absolute;
   inset: auto 0 0;
-  z-index: calc(var(--z-overlay) + 1);
-  max-height: 70%;
-  margin: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  border-width: 1px 0 0;
-  border-radius: 12px 12px 0 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--panel-bg);
+  border-top: 1px solid var(--line-2);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.45);
+  transition: height 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: psheet-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-/* The sheet's title row stays put while the rows under it scroll. */
-.csl2[data-phone] .csl2-dock[data-sheet="open"] > :first-child {
+.psheet[hidden] {
+  display: none;
+}
+.psheet[data-dragging] {
+  transition: none;
+}
+@keyframes psheet-in {
+  from {
+    transform: translateY(48px);
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .psheet {
+    transition: none;
+    animation: none;
+  }
+}
+.psheet-handle {
+  flex: none;
+  touch-action: none;
+}
+.psheet-grab {
+  display: block;
+  width: 100%;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.psheet-grab span {
+  display: block;
+  width: 40px;
+  height: 5px;
+  margin: 9px auto 0;
+  border-radius: 3px;
+  background: var(--line-2);
+}
+.psheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 2px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.psheet-title {
+  color: var(--txt-0);
+  font-size: 17px;
+  font-weight: 600;
+}
+.psheet-close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--txt-2);
+}
+.psheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* A panel's sub-tabs stay put while its rows scroll under them. */
+.psheet .csl2-subtabs {
   position: sticky;
   top: 0;
   z-index: 1;
+  height: 44px;
   background: var(--panel-bg);
 }
-/* `!important` because the rows carry fixed `h-[30px]` / `h-[26px]` / `h-5`. */
-.csl2[data-phone] .csl2-dock[data-sheet="open"] > div > .items-center {
-  height: auto !important;
-  min-height: var(--g-row-2);
-  flex-wrap: wrap;
-  row-gap: 4px;
-  padding-block: 4px;
+
+/* ── More ──────────────────────────────────────────────────────────────── */
+.pmore {
+  margin: 0;
+  padding: 4px 0 12px;
+  list-style: none;
 }
-.csl2[data-phone] .csl2-dock[data-sheet="open"] span.flex-1:empty {
+.pmore button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 16px;
+  border: 0;
+  background: none;
+  color: var(--txt-0);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+}
+.pmore button:active {
+  background: var(--hover);
+}
+.pmore button > svg {
+  flex: none;
+  color: var(--txt-2);
+}
+.pmore-label {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pmore-label small {
+  color: var(--txt-2);
+  font-size: 12px;
+}
+
+/* ── Notices ───────────────────────────────────────────────────────────────
+   The banners keep their own markup (PhoneNotice portals it here) and lose
+   their map placement: full width, in flow, readable size. `!important`
+   because their sizes are utilities, and utilities outrank this layer. */
+.pnotices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+.pnotices .map-banner,
+.pnotices .map-banner > div {
+  position: static !important;
+  max-width: none !important;
+  width: 100%;
+  margin: 0 !important;
+  padding-inline: 0;
+  flex-wrap: wrap;
+  transform: none !important;
+}
+.pnotices .map-banner > div,
+.pnotices > .map-banner:not(:has(> div)) {
+  padding: 12px !important;
+}
+.pnotices .map-banner :is(span, p, a, button) {
+  font-size: 13px !important;
+  line-height: 1.45;
+}
+/* The banner's status dot sat on a line of its own once the row wrapped. */
+.pnotices .map-banner > span:empty {
+  display: none;
+}
+
+/* ── Layers, in a sheet ────────────────────────────────────────────────────
+   A row is the toggle, so it gets a thumb's height and a readable label; the
+   desktop's 26px rows of 12px text were built for a mouse in a 336px column. */
+.psheet [data-layer-row] {
+  height: 48px !important;
+  gap: 12px !important;
+  padding-inline: 16px !important;
+}
+.psheet [data-layer-row] > span:first-of-type span {
+  font-size: 15px !important;
+}
+.psheet [data-layer-row] > span.mono {
+  font-size: 13px !important;
+}
+.psheet [data-layer-row] svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+.psheet [data-layer-folder] {
+  height: 44px !important;
+  padding-inline: 16px !important;
+}
+.psheet [data-layer-folder] :is(span, button) {
+  font-size: 13px !important;
+}
+.psheet [data-layer-folder] button[aria-label] {
+  width: 44px !important;
+  height: 44px !important;
+}
+
+/* ── Time, as a sheet ──────────────────────────────────────────────────────
+   The dock keeps its markup and loses its floating card: no margin, border or
+   height cap, and its control rows wrap. Its transport row is ~860px wide; at
+   phone width it was clipped, which put Play, Live and Copy rewind link out of
+   reach. Wrap rather than scroll sideways: a scrolling row still has controls
+   past the edge. `!important` because the rows carry fixed `h-[30px]` /
+   `h-[26px]` / `h-5`. */
+.psheet .csl2-dock {
+  max-height: none;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.psheet .csl2-dock > div > .items-center {
+  height: auto !important;
+  min-height: 44px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+  padding-block: 6px;
+}
+.psheet .csl2-dock span.flex-1:empty {
   display: none;
 }

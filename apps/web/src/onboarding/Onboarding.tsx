@@ -127,10 +127,13 @@ export function OnboardingHint({
   return (
     <div
       role="status"
-      className="fixed inset-x-2 bottom-[64px] z-(--z-dropdown) flex items-center gap-3 rounded-md border border-line-2 bg-bg-1 px-3 py-2 shadow-xl"
+      className="fixed inset-x-2 z-(--z-dropdown) flex items-center gap-3 rounded-xl border border-line-2 bg-bg-1 px-3 py-2 shadow-xl"
+      // Above the 58px tab bar and the home indicator under it.
+      style={{ bottom: "calc(66px + env(safe-area-inset-bottom))" }}
     >
       <p className="mono min-w-0 flex-1 text-[12px] leading-snug text-txt-1">
-        Tap a plane or ship to inspect it. Panels opens layers, search and more.
+        Tap a plane or ship to inspect it. Layers and search are at the bottom
+        of the screen.
       </p>
       <button
         type="button"

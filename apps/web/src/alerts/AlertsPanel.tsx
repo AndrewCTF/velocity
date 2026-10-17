@@ -11,6 +11,7 @@ import {
 import type { Alert } from "@osint/shared";
 import { Icon } from "../normal/Icon.js";
 import { dict } from "../shell/safeKeys.js";
+import { useIsMobile } from "../shell/useIsMobile.js";
 
 interface Props {
   open: boolean;
@@ -148,6 +149,11 @@ export function AlertsPanel({
     return c;
   }, [alerts]);
 
+  // On a phone the panel is the screen above the tab bar. Its desktop place
+  // (46px under a title row, 170px clear of a docked timeline) is two strips
+  // of dimmed map around a narrower card on a 412px screen.
+  const phone = useIsMobile();
+
   // All hooks above run every render; only the visual tree is gated on `open`
   // (a conditional return placed ABOVE the useMemos changed the hook count on
   // open/close → "rendered more hooks than during the previous render" crash).
@@ -163,13 +169,21 @@ export function AlertsPanel({
       />
       <aside
         ref={dialogRef}
-        className="fixed top-[46px] bottom-[170px] right-0 z-(--z-modal) w-full max-w-[460px] bg-bg-1 border-l border-line-2 rounded-l-md flex flex-col"
+        className={
+          phone
+            ? "fixed inset-x-0 top-0 z-(--z-modal) flex flex-col bg-bg-1 pt-[env(safe-area-inset-top)]"
+            : "fixed top-[46px] bottom-[170px] right-0 z-(--z-modal) w-full max-w-[460px] bg-bg-1 border-l border-line-2 rounded-l-md flex flex-col"
+        }
         role="dialog"
         aria-modal="true"
         aria-label="Alerts"
         style={{
           boxShadow:
             "inset 1px 0 0 rgba(0,0,0,0.5), inset -1px 0 0 rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)",
+          // Above the 58px tab bar, so the tabs stay in reach.
+          ...(phone
+            ? { bottom: "calc(58px + env(safe-area-inset-bottom))" }
+            : {}),
         }}
       >
         <header className="px-4 py-3 border-b border-line-2 flex items-start justify-between gap-3">

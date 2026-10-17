@@ -41,6 +41,11 @@ import { RequireWebGL2 } from "./globe/NoWebGL.js";
 import { GlobeOverlays } from "./globe/GlobeOverlays.js";
 import { GlobeToolbar } from "./globe/GlobeToolbar.js";
 import { GlobeTheater } from "./globe/GlobeTheater.js";
+import { PhoneMapButtons } from "./globe/PhoneMapButtons.js";
+import { useIsMobile } from "./shell/useIsMobile.js";
+import { usePhoneSheet } from "./shell/phoneSheet.js";
+import { PhoneNotice } from "./shell/PhoneNotice.js";
+import { useAgent } from "./state/agent.js";
 import { AgentConsole } from "./command-bar/AgentConsole.js";
 import { LayerRegistry } from "./registry/LayerRegistry.js";
 import { registerDefaults } from "./registry/defaults.js";
@@ -91,6 +96,11 @@ export function App(): JSX.Element {
   const [viewer, setViewer] = useState<Cesium.Viewer | null>(null);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
+  // On a phone the map carries two buttons, not the desktop furniture: the
+  // coordinate readouts, legend and scale bar (GlobeOverlays), the 13-button
+  // tool rail (behind More until asked for) and the COP picker.
+  const phone = useIsMobile();
+  const phoneTools = usePhoneSheet((s) => s.tools);
   // The settings modal lived only in AppRouter's TopBar, which returns null on
   // `/`. So on the console — the one route with a Settings button — nothing
   // hosted the modal and the button did nothing.
@@ -353,6 +363,18 @@ export function App(): JSX.Element {
           />
         }
         bleed={APP_META[activeApp].chrome === "full"}
+        onOpenAlerts={() => setAlertsOpen(true)}
+        phoneMore={[
+          {
+            label: "Analyst agent",
+            hint: "ask about what is on the map",
+            icon: "sparkle",
+            run: () => {
+              usePhoneSheet.getState().show(null);
+              useAgent.getState().setOpen(true);
+            },
+          },
+        ]}
         // A full-bleed app owns the whole body, so the panel column it would
         // open into is not mounted. Asking for a panel returns to the map.
         onPanelWhileBleed={goToMap}
@@ -401,10 +423,11 @@ export function App(): JSX.Element {
                   Both are null/viewer-safe and pointer-scoped so they never
                   block globe interaction. */}
               <GlobeTheater viewer={viewer} />
-              <GlobeOverlays viewer={viewer} />
-              <GlobeToolbar viewer={viewer} />
+              {!phone && <GlobeOverlays viewer={viewer} />}
+              {(!phone || phoneTools) && <GlobeToolbar viewer={viewer} />}
+              <PhoneMapButtons viewer={viewer} />
               <MapToolPanels viewer={viewer} />
-              <CopControl viewer={viewer} registry={registry} />
+              {!phone && <CopControl viewer={viewer} registry={registry} />}
               <AuthNotice />
               <OpenModeBanner open={Boolean(config?.openMode)} />
               <AgentConsole viewer={viewer} />
@@ -855,26 +878,28 @@ export function OpenModeBanner({
     }
   };
   return (
-    <div className="map-banner flex justify-center px-3 pointer-events-none">
-      <div className="pointer-events-auto flex items-center gap-2 bg-bg-1/95 border border-warn rounded-sm px-3 py-1.5 shadow-lg max-w-xl">
-        <span className="mono text-[10px] uppercase tracking-[0.6px] text-warn">
-          Open mode
-        </span>
-        <span className="text-[11px] text-txt-2 leading-snug">
-          Compute/LLM endpoints are served without authentication (keyless +
-          ALLOW_UNAUTHENTICATED). Fine for a trusted local box; set API_KEY or
-          Supabase before exposing it.
-        </span>
-        <button
-          type="button"
-          onClick={close}
-          className="mono text-[10px] text-txt-3 hover:text-txt-0 px-1"
-          aria-label="Dismiss open-mode banner"
-        >
-          ✕
-        </button>
+    <PhoneNotice>
+      <div className="map-banner flex justify-center px-3 pointer-events-none">
+        <div className="pointer-events-auto flex items-center gap-2 bg-bg-1/95 border border-warn rounded-sm px-3 py-1.5 shadow-lg max-w-xl">
+          <span className="mono text-[10px] uppercase tracking-[0.6px] text-warn">
+            Open mode
+          </span>
+          <span className="text-[11px] text-txt-2 leading-snug">
+            Compute/LLM endpoints are served without authentication (keyless +
+            ALLOW_UNAUTHENTICATED). Fine for a trusted local box; set API_KEY or
+            Supabase before exposing it.
+          </span>
+          <button
+            type="button"
+            onClick={close}
+            className="mono text-[10px] text-txt-3 hover:text-txt-0 px-1"
+            aria-label="Dismiss open-mode banner"
+          >
+            ✕
+          </button>
+        </div>
       </div>
-    </div>
+    </PhoneNotice>
   );
 }
 

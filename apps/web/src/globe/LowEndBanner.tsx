@@ -1,3 +1,4 @@
+import { PhoneNotice } from "../shell/PhoneNotice.js";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { deviceTier } from "../shell/device.js";
@@ -40,32 +41,34 @@ export function LowEndBanner(): JSX.Element | null {
   };
 
   return (
-    <div
-      role="status"
-      className="map-banner flex items-center gap-2.5 mono text-[10px] px-3 py-1.5 rounded-sm border border-accent-line bg-bg-1/95 text-txt-1 shadow-lg"
-    >
-      <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-      <span>
-        Low-end graphics detected. The{" "}
-        <span className="text-accent">2D map</span> runs smoother on this
-        device. Or lower{" "}
-        <span className="text-txt-0">Settings → Display → quality</span>.
-      </span>
-      <Link
-        to="/2d"
-        onClick={dismiss}
-        className="px-2 py-0.5 rounded-sm border border-accent-line text-accent hover:bg-accent-dim shrink-0"
+    <PhoneNotice>
+      <div
+        role="status"
+        className="map-banner flex items-center gap-2.5 mono text-[10px] px-3 py-1.5 rounded-sm border border-accent-line bg-bg-1/95 text-txt-1 shadow-lg"
       >
-        Switch to 2D
-      </Link>
-      <button
-        type="button"
-        onClick={dismiss}
-        aria-label="Dismiss"
-        className="px-1.5 py-0.5 rounded-sm border border-line text-txt-3 hover:text-txt-1 hover:border-accent-line shrink-0"
-      >
-        <Icon name="x" className="w-3 h-3" />
-      </button>
-    </div>
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+        <span>
+          Low-end graphics detected. The{" "}
+          <span className="text-accent">2D map</span> runs smoother on this
+          device. Or lower{" "}
+          <span className="text-txt-0">Settings → Display → quality</span>.
+        </span>
+        <Link
+          to="/2d"
+          onClick={dismiss}
+          className="px-2 py-0.5 rounded-sm border border-accent-line text-accent hover:bg-accent-dim shrink-0"
+        >
+          Switch to 2D
+        </Link>
+        <button
+          type="button"
+          onClick={dismiss}
+          aria-label="Dismiss"
+          className="px-1.5 py-0.5 rounded-sm border border-line text-txt-3 hover:text-txt-1 hover:border-accent-line shrink-0"
+        >
+          <Icon name="x" className="w-3 h-3" />
+        </button>
+      </div>
+    </PhoneNotice>
   );
 }

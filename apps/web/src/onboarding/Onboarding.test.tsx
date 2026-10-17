@@ -18,12 +18,12 @@ describe("OnboardingHint", () => {
     expect(document.querySelector("[aria-modal]")).toBeNull();
   });
 
-  // It is shown on "/" and on "/2d", and both phone layouts have a Panels
-  // button, so that is the only control it may name.
+  // It is shown on "/" (a tab bar) and on "/2d" (a Panels button), so it
+  // names where the controls are, which is true of both, not a control name.
   it("says where the panels are, with no em dash", () => {
     render(<OnboardingHint onClose={() => {}} />);
     const text = screen.getByRole("status").textContent ?? "";
-    expect(text).toMatch(/Panels/);
+    expect(text).toMatch(/bottom of the screen/);
     expect(text).not.toContain("—");
   });
 
