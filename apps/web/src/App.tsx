@@ -37,6 +37,7 @@ import { TaskingPanel } from "./tasking/TaskingPanel.js";
 import { TargetKanbanPanel } from "./target-kanban/TargetKanbanPanel.js";
 import { FmvPanel } from "./fmv/FmvPanel.js";
 import { GlobeCanvas } from "./globe/GlobeCanvas.js";
+import { RequireWebGL2 } from "./globe/NoWebGL.js";
 import { GlobeOverlays } from "./globe/GlobeOverlays.js";
 import { GlobeToolbar } from "./globe/GlobeToolbar.js";
 import { GlobeTheater } from "./globe/GlobeTheater.js";
@@ -381,14 +382,18 @@ export function App(): JSX.Element {
             <>
               <div className="csl2-globe">
                 <ErrorBoundary label="globe">
-                  <GlobeCanvas
-                    ionToken={config?.cesiumIonToken ?? ""}
-                    registry={registry}
-                    onViewerReady={onViewerReady}
-                    imageryMode={imageryMode}
-                    enableGoogle3D={config?.features.enableGoogle3D ?? false}
-                    googleApiKey={config?.googleApiKey ?? ""}
-                  />
+                  {/* A device with no WebGL 2 gets the reason and a way out
+                      instead of the generic panel-error notice. */}
+                  <RequireWebGL2>
+                    <GlobeCanvas
+                      ionToken={config?.cesiumIonToken ?? ""}
+                      registry={registry}
+                      onViewerReady={onViewerReady}
+                      imageryMode={imageryMode}
+                      enableGoogle3D={config?.features.enableGoogle3D ?? false}
+                      googleApiKey={config?.googleApiKey ?? ""}
+                    />
+                  </RequireWebGL2>
                 </ErrorBoundary>
               </div>
               {!config && <BootLoading />}

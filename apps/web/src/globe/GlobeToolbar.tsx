@@ -70,7 +70,7 @@ const TOOLS: readonly ToolDef[] = [
     id: "measure",
     icon: Ruler,
     label: "Measure",
-    hint: "Click points for a running distance; right-click to finish",
+    hint: "Click points for a running distance; right-click or long-press (1.5 s) to finish",
   },
   {
     id: "area",
@@ -448,7 +448,7 @@ export function GlobeToolbar({
               <span className="text-txt-3 text-[9px]">
                 {measure.points} pt{measure.points === 1 ? "" : "s"}
                 {measure.live
-                  ? " · click to add · right-click to finish"
+                  ? " · click to add · right-click or long-press (1.5 s) to finish"
                   : " · done"}
               </span>
             </>
