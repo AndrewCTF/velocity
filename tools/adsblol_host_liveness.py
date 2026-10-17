@@ -81,8 +81,6 @@ HOSTS = [
     "ingress-system2.adsb.lol",
 ]
 
-CTX = ssl.create_default_context()  # CERT_REQUIRED + check_hostname
-CTX.minimum_version = ssl.TLSVersion.TLSv1_2  # said explicitly; no legacy TLS here
 TIMEOUT = 10
 
 
@@ -122,6 +120,11 @@ def common_name(cert: dict) -> str:
 
 
 def probe(host: str) -> Row:
+    # Built here, not once at module level, so the TLS 1.2 floor sits on the
+    # same path as wrap_socket: CodeQL (py/insecure-protocol) could not see a
+    # floor set on a module global before a function read it.
+    ctx = ssl.create_default_context()  # CERT_REQUIRED + check_hostname
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     dns, ips = resolve(host)
     if not ips:
         return Row(host, dns, "-", dns, "-", "-")
@@ -129,7 +132,7 @@ def probe(host: str) -> Row:
     for ip in ips:
         try:
             with socket.create_connection((ip, 443), timeout=TIMEOUT) as raw:
-                with CTX.wrap_socket(raw, server_hostname=host) as s:
+                with ctx.wrap_socket(raw, server_hostname=host) as s:
                     cert = s.getpeercert() or {}
             return Row(
                 host,
