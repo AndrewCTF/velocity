@@ -1255,6 +1255,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2026-10-04: 3102 passed + 21 skipped in ~262 s (branch palantir-stack-2026-09, AIS pipeline wave, measured on the uncommitted shared tree); displaced 2026-10-17 by 3159 + 21 (branch frontend-speed-2026-10: the AIS, keyless Google 3D and clearance work committed and master's #95/#96 merged).
 - 2026-09-17: 2996 passed + 21 skipped in ~236 s (branch palantir-stack-2026-09); displaced 2026-10-04 by 3102 + 21 (AIS pipeline wave, measured on the shared working tree, which also carries the keyless Google 3D and clearance tests).
 - 2026-09-17: 2996 passed + 21 skipped in ~236 s (branch palantir-stack-2026-09, palantir-stack waves); displaced 2026-10-05 by 3007 + 21 (keyless Google 3D adds 11; the four MQTT tests that had been failing on master since late September pass again and were always in the count).
 - 2026-09-13: 2813 passed + 2 skipped in ~207 s (branch release-basemap-schemes-2026-09, adsb-feeder stall + heap fix); displaced 2026-09-17 by 2996 + 21 (palantir-stack waves; the 17 Timescale tests skip without HISTORY_PG_TEST_DSN).

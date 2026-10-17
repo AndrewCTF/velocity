@@ -52,16 +52,17 @@ undo and why it was made.
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **3102 passed + 21 skipped in ~262 s** (skips = opt-in live probes
-  - the 17 Timescale tests that run only with `HISTORY_PG_TEST_DSN`, which CI
-    sets; measured 2026-10-04, branch palantir-stack-2026-09, AIS pipeline wave).
-    Runs SERIAL by default: `-n auto --dist
-loadfile` groups different files per worker on different core counts, so a
-    suite with module-state leaks answers differently per machine and CI (4 cores)
-    failed a branch that was green locally (16). Opt in per-machine, never commit
-    it as the default. Never commit below the baseline you inherited. When you raise it, update the number/date/wave here and move the
-    displaced line to `docs/decisions.md#backend-test-baseline-history` — this
-    bullet stays a three-line fact, not a changelog.
+  Baseline: **3159 passed + 21 skipped in ~273 s** (skips are the opt-in live
+  probes and the 17 Timescale tests that run only with `HISTORY_PG_TEST_DSN`,
+  which CI sets; measured 2026-10-17, branch frontend-speed-2026-10).
+  Runs SERIAL by default: `-n auto --dist loadfile` groups different files per
+  worker on different core counts, so a suite with module-state leaks answers
+  differently per machine and CI (4 cores) failed a branch that was green
+  locally (16). Opt in per-machine, never commit it as the default. Never
+  commit below the baseline you inherited. When you raise it, update the
+  number/date/wave here and move the displaced line to
+  `docs/decisions.md#backend-test-baseline-history`; this bullet stays a
+  three-line fact, not a changelog.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
   = typecheck + lint + web unit + api tests in one command.
 - Boot: `bash scripts/run-api.sh` from repo ROOT (:8000), Vite :5173. Restart
