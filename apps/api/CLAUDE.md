@@ -131,7 +131,7 @@ is actually blocked before listing a host. `/data/aircraft.json` on
 airplanes.live/adsb.fi/adsbexchange is a WAF PATH rule: 403 to every client
 from every address INCLUDING real Chrome. Do not "fix" it with headers, a
 proxy or TLS impersonation — load the page and read the request IT made
-(`/fetch?url=<page>&capture=<regex>`). Browser and poller must share one exit
+(`/fetch?url=<page>&capture=<substring>`). Browser and poller must share one exit
 or a clearance cookie is bound to an address nobody is using. Before spending a
 browser on a host, check whether it is blocked at all: airplanes.live's
 `/re-api/` answers BARE httpx 200, so the browser there is for DISCOVERY.
@@ -326,7 +326,7 @@ The style rules it enforces are in `apps/web/CLAUDE.md`.
 - **CelesTrak does not rate-limit bursts** (this line said so until 2026-08-21
   and it was wrong). It answers a repeat pull inside its 2 h publish window with
   **403 plus the body `GP data has not updated since your last successful
-  download of GROUP=<g> at <ts>`** — a conditional GET wearing a 403, keyed by
+download of GROUP=<g> at <ts>`** — a conditional GET wearing a 403, keyed by
   (source IP, GROUP), identical for our UA and a browser UA. `routes/space.py`
   reads that body and serves its on-disk last-good copy; treating it as an
   outage is what emptied the satellite layer on every restart.

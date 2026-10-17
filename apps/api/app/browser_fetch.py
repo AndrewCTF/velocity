@@ -229,9 +229,10 @@ async def fetch(
 ) -> httpx.Response | None:
     """Fetch `url` in a real browser, or None if the tier can't serve it.
 
-    `capture` is a regex: when given, the browser navigates to `url` and returns
-    the body of the first request THE PAGE made whose URL matches — the only way
-    to read an endpoint behind a WAF path rule.
+    `capture` is a literal substring, not a pattern: when given, the browser
+    navigates to `url` and returns the body of the first request THE PAGE made
+    whose URL contains it — the only way to read an endpoint behind a WAF path
+    rule.
 
     Returns a real ``httpx.Response`` so callers can keep their status handling.
     """

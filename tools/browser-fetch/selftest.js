@@ -113,6 +113,7 @@ const { paced } = require("./index.js");
         noToken: await get(p, '/fetch?url=https://example.test/', h),
         badToken: await get(p, '/fetch?url=https://example.test/', { ...h, authorization: 'Bearer nope' }),
         goodTokenBadUrl: await get(p, '/fetch?url=ftp://x', { ...h, authorization: 'Bearer t0k' }),
+        longCapture: await get(p, '/fetch?url=https://example.test/&capture=' + 'a'.repeat(201), { ...h, authorization: 'Bearer t0k' }),
         rebindHost: await get(p, '/health', { host: 'evil.example:' + p }),
         health: await get(p, '/health', h),
         authBare: await get(p, '/auth', h),
@@ -135,11 +136,30 @@ const { paced } = require("./index.js");
     noToken: 401,
     badToken: 401,
     goodTokenBadUrl: 400,
+    longCapture: 400,
     rebindHost: 421,
     health: 200,
     authBare: 401,
     authOk: 204,
   });
+
+  // 6. A failed fetch tells the caller what KIND of failure it was, never the
+  //    exception's own text, which can carry a Playwright call log and stack
+  //    (CodeQL js/stack-trace-exposure).
+  const { failureKind } = require("./index.js");
+  const leaky = new Error(
+    "page.goto: net::ERR_X at https://secret.test/\n  at foo (/x.js:1:1)",
+  );
+  assert.strictEqual(failureKind(leaky), "fetch failed");
+  const timeout = Object.assign(new Error("Timeout 45000ms exceeded"), {
+    name: "TimeoutError",
+  });
+  assert.strictEqual(failureKind(timeout), "timeout");
+  const miss = Object.assign(new Error("no response matched /re-api/"), {
+    code: "NO_CAPTURE",
+  });
+  assert.strictEqual(failureKind(miss), "no response matched");
+  assert.strictEqual(failureKind(undefined), "fetch failed");
 
   console.log("browser-fetch selftest: ok");
   process.exit(0);

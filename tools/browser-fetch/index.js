@@ -15,10 +15,10 @@
 //      path directly; you have to load the page and read what IT fetched.
 //
 //   GET /fetch?url=<u>[&wait=<ms>]              → navigate, return the body
-//   GET /fetch?url=<page>&capture=<regex>[&wait=<ms>]
+//   GET /fetch?url=<page>&capture=<substring>[&wait=<ms>]
 //                                               → navigate, return the body of
 //                                                 the first response the page
-//                                                 made whose URL matches
+//                                                 made whose URL contains it
 //   GET /health                                 → {ok, contexts, last_good}
 //   GET /auth                                   → 204 with the token, else 401
 //
@@ -275,11 +275,19 @@ function fetchUrl(url, opts) {
   return paced(host, () => loadPage(host, url, opts));
 }
 
+const MAX_CAPTURE_LEN = 200;
+
+function failureKind(e) {
+  if (e && e.code === "NO_CAPTURE") return "no response matched";
+  if (e && e.name === "TimeoutError") return "timeout";
+  return "fetch failed";
+}
+
 async function loadPage(host, url, { capture, waitMs }) {
   const { page } = await contextFor(host);
   let captured = null;
   const onResponse = async (r) => {
-    if (captured || !capture || !capture.test(r.url())) return;
+    if (captured || !capture || !r.url().includes(capture)) return;
     try {
       captured = { status: r.status(), url: r.url(), body: await r.body() };
     } catch (e) {}
@@ -306,7 +314,11 @@ async function loadPage(host, url, { capture, waitMs }) {
       // Give the page time to make the request we are after, if it has not yet.
       const deadline = Date.now() + NAV_TIMEOUT_MS;
       while (!captured && Date.now() < deadline) await page.waitForTimeout(250);
-      if (!captured) throw new Error(`no response matched ${capture}`);
+      if (!captured) {
+        const err = new Error(`no response matched ${capture}`);
+        err.code = "NO_CAPTURE";
+        throw err;
+      }
       lastGood = Date.now();
       return {
         status: captured.status,
@@ -378,14 +390,13 @@ const server = http.createServer(async (req, res) => {
   const target = u.searchParams.get("url");
   if (!target || !/^https?:\/\//i.test(target))
     return send(400, { error: "url must be http(s)" });
-  let capture = null;
-  if (u.searchParams.get("capture")) {
-    try {
-      capture = new RegExp(u.searchParams.get("capture"));
-    } catch (e) {
-      return send(400, { error: "bad capture regex" });
-    }
-  }
+  // A literal substring of the request URL, never a pattern: a caller-built
+  // RegExp is a regex-injection and ReDoS surface (CodeQL js/regex-injection),
+  // and every capture this tier has needed is a fixed path fragment
+  // (`/re-api/`, `aircraft.json`).
+  const capture = u.searchParams.get("capture") || null;
+  if (capture && capture.length > MAX_CAPTURE_LEN)
+    return send(400, { error: "capture too long" });
   const waitMs = Math.min(Number(u.searchParams.get("wait") || 0) || 0, 30000);
   const t0 = Date.now();
   try {
@@ -399,11 +410,11 @@ const server = http.createServer(async (req, res) => {
       ms: Date.now() - t0,
     });
   } catch (e) {
+    // The exception's text (a Playwright message can carry a call log and
+    // stack) goes to the log only; the caller gets the kind of failure, from a
+    // fixed set (CodeQL js/stack-trace-exposure).
     log("fetch failed", target, e && e.message);
-    send(502, {
-      error: String((e && e.message) || e).slice(0, 300),
-      ms: Date.now() - t0,
-    });
+    send(502, { error: failureKind(e), ms: Date.now() - t0 });
   }
 });
 
@@ -442,5 +453,6 @@ if (require.main === module) {
     launchOpts,
     HEADFUL,
     server,
+    failureKind,
   };
 }
