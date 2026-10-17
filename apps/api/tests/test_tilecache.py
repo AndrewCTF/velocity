@@ -96,6 +96,28 @@ def test_lru_evicts_oldest_to_low_water(tmp_path: Path) -> None:
     assert 0 not in survivors, "oldest tile evicted"
 
 
+def test_a_tile_that_was_read_lately_outlives_one_fetched_later(tmp_path: Path) -> None:
+    """Eviction goes by last use. By fetch time alone, the views looked at every
+    day were the first to go and came back cold."""
+    import os
+
+    tc = TileCache(tmp_path, max_bytes=1000)
+    d = tmp_path / "s" / "1" / "0"
+    d.mkdir(parents=True)
+    for i in range(10):  # fetched in order, never read since
+        p = d / f"{i}.png"
+        p.write_bytes(b"x" * 200)
+        os.utime(p, (1000 + i, 1000 + i))
+    os.utime(d / "0.png", (5000, 1000))  # the oldest fetch, read since (atime, mtime)
+
+    tc._evict_sync()
+
+    survivors = sorted(int(p.stem) for p in d.glob("*.png"))
+    assert 0 in survivors, "the tile in use was evicted"
+    assert 1 not in survivors, "the oldest unused tile goes first"
+    assert (d / "0.png").stat().st_mtime == 1000, "freshness still counts from the fetch"
+
+
 def test_no_eviction_when_cap_disabled(tmp_path: Path) -> None:
     """max_bytes=0 means unbounded — _evict_sync must never delete."""
     tc = TileCache(tmp_path, max_bytes=0)

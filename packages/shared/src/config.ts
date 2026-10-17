@@ -9,6 +9,9 @@ export interface RuntimeConfig {
   googleApiKey: string;
   features: {
     enableGoogle3D: boolean;
+    // The backend serves Google Earth's mesh with no key (/tiles/g3d), so the
+    // "Google 3D" basemap can be chosen. Absent on older backends = off.
+    google3dKeyless?: boolean;
   };
   classification: string; // banner label, e.g. 'UNCLAS'
   buildId: string;

@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react';
-import type * as Cesium from 'cesium';
-import { useAlerts, useImagery, useSim } from '../state/stores.js';
-import type { ImageryMode } from '../state/stores.js';
-import { useAoi } from '../state/aoi.js';
-import { BASEMAP_OPTIONS } from '../globe/basemaps.js';
-import { AppSwitcher } from '../shell/AppSwitcher.js';
-import { AoiSelector } from './AoiSelector.js';
-import { SearchField } from './SearchField.js';
-import { flyToChokepoint, flyToGlobal } from '../globe/camera.js';
-import { perfSnapshot } from '../globe/perf.js';
-import type { Chokepoint } from '../registry/chokepoints.js';
-import { Brand, StatusDot, Caveat } from '../shell/instruments.js';
-import { useAgent } from '../state/agent.js';
-import { apiFetch } from '../transport/http.js';
+import { useEffect, useState } from "react";
+import type * as Cesium from "cesium";
+import { useAlerts, useImagery, useSim } from "../state/stores.js";
+import type { ImageryMode } from "../state/stores.js";
+import { useAoi } from "../state/aoi.js";
+import { BASEMAP_OPTIONS } from "../globe/basemaps.js";
+import { AppSwitcher } from "../shell/AppSwitcher.js";
+import { AoiSelector } from "./AoiSelector.js";
+import { SearchField } from "./SearchField.js";
+import { flyToChokepoint, flyToGlobal } from "../globe/camera.js";
+import { perfSnapshot } from "../globe/perf.js";
+import type { Chokepoint } from "../registry/chokepoints.js";
+import { Brand, StatusDot, Caveat } from "../shell/instruments.js";
+import { useAgent } from "../state/agent.js";
+import { apiFetch } from "../transport/http.js";
 
 interface Props {
   viewer: Cesium.Viewer | null;
@@ -31,7 +31,7 @@ interface Props {
 // bar overflowing → no horizontal scrollbar on the top nav. Measured live at 1280:
 // px-2 → 41px over; px-1.5 → 14px over; px-1 (+ the SysStats trim below) → fits
 // with ~26px margin. Keep it tight if you add a cell.
-const CELL = 'h-full flex items-center gap-2 px-1 border-r border-line';
+const CELL = "h-full flex items-center gap-2 px-1 border-r border-line";
 // Fixed cells must never wrap into a second line inside the 42px row (at
 // ~1600px the AGENT text used to wrap and overlap the clock). They keep their
 // intrinsic width; the alert ticker is the ONLY shrinkable cell (flex-1
@@ -41,7 +41,7 @@ const FIXED_CELL = `${CELL} shrink-0 whitespace-nowrap`;
 
 export function CommandBar({
   viewer,
-  classification = 'UNCLAS',
+  classification = "UNCLAS",
   onOpenAlerts,
 }: Props): JSX.Element {
   const setActiveAoi = useAoi((s) => s.setActive);
@@ -141,10 +141,20 @@ export function CommandBar({
  *  - SIM off    → live open-source feeds (ADS-B/AIS/quakes are keyless here),
  *    marked neutral with a "keyless OSINT" posture note.
  */
-function PostureCaveat({ classification }: { classification: string }): JSX.Element {
+function PostureCaveat({
+  classification,
+}: {
+  classification: string;
+}): JSX.Element {
   const simActive = useSim((s) => s.active);
   if (simActive) {
-    return <Caveat level={`${classification} // SIMULATED`} note="notional contacts" tone="warn" />;
+    return (
+      <Caveat
+        level={`${classification} // SIMULATED`}
+        note="notional contacts"
+        tone="warn"
+      />
+    );
   }
   return (
     <Caveat
@@ -171,9 +181,12 @@ function AgentIndicator(): JSX.Element {
     let alive = true;
     const tick = async () => {
       try {
-        const r = await apiFetch('/api/intel/brief');
+        const r = await apiFetch("/api/intel/brief");
         if (!r.ok) return;
-        const d = (await r.json()) as { incident_count?: number; top_threat_level?: string };
+        const d = (await r.json()) as {
+          incident_count?: number;
+          top_threat_level?: string;
+        };
         if (!alive) return;
         setCount(d.incident_count ?? 0);
         setThreat(d.top_threat_level ?? null);
@@ -189,7 +202,8 @@ function AgentIndicator(): JSX.Element {
     };
   }, []);
 
-  const dotTone = threat === 'high' ? 'red' : threat === 'elevated' ? 'amber' : 'ok';
+  const dotTone =
+    threat === "high" ? "red" : threat === "elevated" ? "amber" : "ok";
   return (
     <button
       type="button"
@@ -222,7 +236,11 @@ function AgentIndicator(): JSX.Element {
  * If the viewer is null (tests, pre-mount) the entity count is omitted and
  * the FPS loop never starts — nothing is fabricated.
  */
-function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | null {
+function SysStats({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element | null {
   const [entCount, setEntCount] = useState<number | null>(null);
   const [fps, setFps] = useState<number | null>(null);
   // Governor/drain readout straight from window.__perf (§5.7). rr = real renders/s
@@ -287,7 +305,10 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
     <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-3 flex items-center gap-3 tabular-nums">
       {entCount !== null && (
         <span title="Total entities across all globe data sources">
-          ent <b className="text-txt-1 font-semibold">{entCount.toLocaleString()}</b>
+          ent{" "}
+          <b className="text-txt-1 font-semibold">
+            {entCount.toLocaleString()}
+          </b>
         </span>
       )}
       {fps !== null && (
@@ -296,12 +317,18 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
         </span>
       )}
       {perf !== null && perf.rr > 0 && (
-        <span className="hidden min-[1920px]:inline" title="Real Cesium scene renders per second (governor metric)">
+        <span
+          className="hidden min-[1920px]:inline"
+          title="Real Cesium scene renders per second (governor metric)"
+        >
           <b className="text-txt-1 font-semibold">{perf.rr}</b>rr
         </span>
       )}
       {perf !== null && perf.dr > 0 && (
-        <span className="hidden min-[1920px]:inline" title="Last aircraft push-application (drain) cost, ms">
+        <span
+          className="hidden min-[1920px]:inline"
+          title="Last aircraft push-application (drain) cost, ms"
+        >
           <b className="text-txt-1 font-semibold">{perf.dr}</b>ms
         </span>
       )}
@@ -312,13 +339,12 @@ function SysStats({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | n
 // "low" severity uses --sev-low (≡ txt-1) so it doesn't collide with the
 // teal selection accent. See tokens.css.
 const SEV_COLOR: Record<string, string> = {
-  info: 'text-txt-2',
-  low: 'text-(--sev-low)',
-  medium: 'text-warn',
-  high: 'text-alert',
-  critical: 'text-alert',
+  info: "text-txt-2",
+  low: "text-(--sev-low)",
+  medium: "text-warn",
+  high: "text-alert",
+  critical: "text-alert",
 };
-
 
 /**
  * Compact mono basemap picker. Replaces the old binary 3D-sat toggle with a
@@ -334,7 +360,8 @@ function BasemapPicker({
   onChange: (m: ImageryMode) => void;
 }): JSX.Element {
   // BASEMAP_OPTIONS is a non-empty literal array, so the fallback is always defined.
-  const current = BASEMAP_OPTIONS.find((o) => o.value === mode) ?? BASEMAP_OPTIONS[0]!;
+  const current =
+    BASEMAP_OPTIONS.find((o) => o.value === mode) ?? BASEMAP_OPTIONS[0]!;
   return (
     <select
       value={mode}
@@ -344,11 +371,19 @@ function BasemapPicker({
       data-testid="basemap-picker"
       className="mono text-[10px] tracking-[0.6px] uppercase bg-transparent border border-line rounded-sm px-1.5 py-1 text-txt-2 hover:border-accent-line hover:text-txt-1 focus:outline-hidden focus:border-accent-line cursor-pointer"
     >
-      {BASEMAP_OPTIONS.map((o) => (
-        <option key={o.value} value={o.value} title={o.title}>
-          {o.label}
-        </option>
-      ))}
+      {BASEMAP_OPTIONS.map((o) => {
+        const why = o.unavailable?.() ?? null;
+        return (
+          <option
+            key={o.value}
+            value={o.value}
+            title={why ?? o.title}
+            disabled={why !== null}
+          >
+            {o.label}
+          </option>
+        );
+      })}
     </select>
   );
 }
@@ -374,14 +409,14 @@ function SimToggle(): JSX.Element {
       title="Toggle browser-side simulation mode (drones, attack scenarios)"
       data-testid="sim-toggle"
       className={[
-        'mono text-[10px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap',
+        "mono text-[10px] tracking-[0.6px] uppercase px-2 py-1 border rounded-sm transition-colors whitespace-nowrap",
         active
-          ? 'border-mag-line text-mag bg-mag-dim'
-          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1',
-      ].join(' ')}
+          ? "border-mag-line text-mag bg-mag-dim"
+          : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1",
+      ].join(" ")}
     >
       <span aria-hidden="true" className="mr-1">
-        {active ? '◉' : '◎'}
+        {active ? "◉" : "◎"}
       </span>
       SIM
     </button>
@@ -404,22 +439,33 @@ function AlertTicker({ onOpen }: { onOpen?: () => void }): JSX.Element {
       onClick={onOpen}
       className="relative w-full flex items-center gap-2 truncate text-left pl-3 focus:outline-hidden group"
       aria-live="polite"
-      aria-label={total > 0 ? `Open alerts panel (${total} alerts)` : 'Open alerts panel'}
+      aria-label={
+        total > 0 ? `Open alerts panel (${total} alerts)` : "Open alerts panel"
+      }
       title="Open alerts panel (press A)"
     >
-      <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-alert" aria-hidden="true" />
+      <span
+        className="absolute left-0 top-0 bottom-0 w-[2px] bg-alert"
+        aria-hidden="true"
+      />
       {top ? (
         <>
           <span className="mono text-[10px] tracking-[0.7px] uppercase text-alert shrink-0 group-hover:text-accent transition-colors">
             alert
           </span>
-          <span className="mono text-[10px] text-txt-4 tabular-nums shrink-0">{total}</span>
-          <span className={`mono text-[11px] truncate ${SEV_COLOR[top.severity] ?? 'text-alert-fg'}`}>
+          <span className="mono text-[10px] text-txt-4 tabular-nums shrink-0">
+            {total}
+          </span>
+          <span
+            className={`mono text-[11px] truncate ${SEV_COLOR[top.severity] ?? "text-alert-fg"}`}
+          >
             [{top.severity}] {top.message}
           </span>
         </>
       ) : (
-        <span className="mono text-[11px] text-txt-3 group-hover:text-accent transition-colors">— quiet</span>
+        <span className="mono text-[11px] text-txt-3 group-hover:text-accent transition-colors">
+          — quiet
+        </span>
       )}
     </button>
   );

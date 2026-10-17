@@ -7,18 +7,24 @@
 #
 # Usage:
 #   bash start.sh                 # both on default ports (API 8000, web 5173)
-#   API_PORT=8001 bash start.sh   # override backend port
+#   API_PORT=8010 bash start.sh   # override backend port
+#
+# A third process serves map tiles (TILES_PORT, default 8001): the same tile
+# routes with nothing else on their event loop. The API's loop is busy with the
+# feeds a third of the time, and a Google 3D view is a thousand tile requests
+# that each waited behind it (apps/api/app/tiles_main.py).
 # Ctrl-C tears down both.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 API_PORT="${API_PORT:-8000}"
 WEB_PORT="${WEB_PORT:-5173}"
+TILES_PORT="${TILES_PORT:-8001}"
 
 # Free stale holders first: a leftover backend/frontend on these ports makes
 # uvicorn/vite fail to bind, and under `wait -n` the first dead child tears the
 # whole stack down — reads as an instant crash. Clear them before launching.
-for port in "$API_PORT" "$WEB_PORT"; do
+for port in "$API_PORT" "$WEB_PORT" "$TILES_PORT"; do
   holders="$(lsof -ti ":$port" 2>/dev/null || true)"
   if [[ -n "$holders" ]]; then
     echo "[start] port $port busy (pids: $holders) — freeing"
@@ -46,6 +52,12 @@ echo "[start] backend  → http://localhost:${API_PORT}  (uvicorn app.main:app)"
 API_PORT="$API_PORT" bash scripts/run-api.sh &
 pids+=($!)
 
+echo "[start] tiles    → http://localhost:${TILES_PORT}  (uvicorn app.tiles_main:app)"
+# No access log: one view is a thousand lines of it.
+apps/api/.venv/bin/python3 apps/api/.venv/bin/uvicorn app.tiles_main:app \
+  --app-dir apps/api --port "$TILES_PORT" --no-access-log &
+pids+=($!)
+
 echo "[start] frontend → http://localhost:${WEB_PORT}  (vite)"
 # Run the locally-installed vite binary directly. pnpm lives under nvm and is
 # often not on PATH in a non-login shell, so `pnpm dev` fails with "command not
@@ -53,6 +65,12 @@ echo "[start] frontend → http://localhost:${WEB_PORT}  (vite)"
 # package manager only if the binary is missing (deps not installed yet).
 (
   cd apps/web
+  export TILES_PROXY_TARGET="http://127.0.0.1:${TILES_PORT}"
+  # A browser on this machine asks the tile process for the mesh itself.
+  # For this dev server only: Vite inlines VITE_* into whatever it builds, and
+  # the desktop shell's page is also "localhost", so never set this where the
+  # web app or the shell is BUILT.
+  export VITE_TILES_PORT="${TILES_PORT}"
   if [[ -x node_modules/.bin/vite ]]; then
     exec node_modules/.bin/vite --port "$WEB_PORT"
   elif command -v pnpm >/dev/null 2>&1; then

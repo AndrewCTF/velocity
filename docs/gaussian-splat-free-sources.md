@@ -11,20 +11,26 @@ exist in July 2026 — from anyone, at any price for the "keyless" part.**
 The only planet-scale photoreal 3D that exists is **textured mesh, not splats**,
 and it is locked behind keys + terms:
 
-| Source | What it is | Key? | Whole world? | Splats? |
-|---|---|---|---|---|
-| **Google Photorealistic 3D Tiles** | textured mesh (glTF/3D Tiles), ~49 countries | **API key + billing acct** (≈1k free loads/mo) | ~most cities | ❌ mesh |
-| **Apple Maps** 3D / Look Around | proprietary mesh + imagery | **no public API at all** | wide | ❌ mesh |
-| **Cesium ion 3DGS LOD** (Apr 2026) | real 3DGS, streamed with LOD | free **ion token** + you host the scene | ❌ your uploads | ✅ |
-| **MapTiler GeoSplats** | 3DGS SDK | **key** | ❌ per-scene | ✅ |
-| Community splats (SuperSplat, HF, Luma, Polycam) | per-scene 3DGS, direct URLs | **none** | ❌ a few dozen places | ✅ |
+| Source                                           | What it is                                   | Key?                                           | Whole world?          | Splats? |
+| ------------------------------------------------ | -------------------------------------------- | ---------------------------------------------- | --------------------- | ------- |
+| **Google Photorealistic 3D Tiles**               | textured mesh (glTF/3D Tiles), ~49 countries | **API key + billing acct** (≈1k free loads/mo) | ~most cities          | ❌ mesh |
+| **Apple Maps** 3D / Look Around                  | proprietary mesh + imagery                   | **no public API at all**                       | wide                  | ❌ mesh |
+| **Cesium ion 3DGS LOD** (Apr 2026)               | real 3DGS, streamed with LOD                 | free **ion token** + you host the scene        | ❌ your uploads       | ✅      |
+| **MapTiler GeoSplats**                           | 3DGS SDK                                     | **key**                                        | ❌ per-scene          | ✅      |
+| Community splats (SuperSplat, HF, Luma, Polycam) | per-scene 3DGS, direct URLs                  | **none**                                       | ❌ a few dozen places | ✅      |
 
 Google's [Map Tiles API policies](https://developers.google.com/maps/documentation/tile/policies)
 **explicitly forbid** extracting/caching/deriving 3D objects from the tiles:
 _"you may not have 3D objects extracted, traced, or otherwise derived by hand or
-machine from Photorealistic 3D Tiles."_ So "grab the gaussian file out of Google
-Earth / Apple Maps" is (a) not even splats — it's keyed, watermarked mesh — and
-(b) a direct ToS + access-control violation. We do not do that.
+machine from Photorealistic 3D Tiles."_ It is also not splats — it is textured
+mesh.
+
+**Reversed by the operator on 2026-10-03.** This section used to end "We do not
+do that." The operator asked for Google's photoreal 3D with no key of any kind,
+was shown the exposure, and chose it. The platform now reads Google Earth's own
+client channel and serves it to the globe as 3D Tiles — behind
+`GOOGLE_3D_KEYLESS`, off by default. Details, numbers and the risk:
+`docs/decisions.md`, "Keyless Google Earth 3D".
 
 ## You can only have two of {keyless, whole-world, splats}
 
@@ -37,9 +43,9 @@ Earth / Apple Maps" is (a) not even splats — it's keyed, watermarked mesh — 
 
 ## …but you CAN get real Gaussian splats of any city, keyless — by generating them
 
-A pre-built global splat *stream* doesn't exist. But the whole-world keyless
+A pre-built global splat _stream_ doesn't exist. But the whole-world keyless
 splat answer is **on-demand generation**: the keyless split of the trilemma is to
-trade *instant* for *a few seconds of compute*. City 3D's **"Splat this city
+trade _instant_ for _a few seconds of compute_. City 3D's **"Splat this city
 (keyless satellite)"** button (`apps/web/src/city/satToSplat.ts`) stitches a
 satellite chip for any lat/lon from the backend's **keyless** `/tiles/sat` proxy
 (EOX Sentinel-2 + Esri World Imagery, no key) and runs it through the existing
@@ -76,6 +82,7 @@ existing replace-in-place loader → one district shown at a time, bounded memor
 revisits hit the 12 h cache.
 
 **Proven live 2026-07-11** (Vite :5173 + API :8000):
+
 - Overpass direct, Midtown Manhattan district: **1,213 buildings, 85% with real
   OSM heights**, no key.
 - `/api/intel/lod1?bbox=` Midtown: **1,213 extrudable features, 1,036 OSM
@@ -102,11 +109,11 @@ into City 3D → "LOAD FROM URL":
   — Mip-NeRF 360 scenes (`bonsai` 35, `room` 35, `counter` 31, `kitchen` 51,
   `garden` 134, `bicycle` 110, `stump` 116 MB); HF reflects Origin → CORS-ok.
 - Browse for more: [SuperSplat library](https://superspl.at/) (splats tagged
-  *Downloadable* are CC — use the `.ply`/`.sog` URL) and
+  _Downloadable_ are CC — use the `.ply`/`.sog` URL) and
   [Hugging Face splat datasets](https://huggingface.co/datasets?search=gaussian+splatting)
   (use the file's `resolve/main/…` direct URL).
 
 These are research/demo scenes (Mip-NeRF 360, Tanks & Temples), not cities —
-because compact, browser-loadable, keyless *city-scale* splats basically don't
+because compact, browser-loadable, keyless _city-scale_ splats basically don't
 exist yet; city 3DGS (CityGaussian, MatrixCity) ships as multi-GB aerial
 captures that need LOD streaming (Cesium/PlayCanvas), which needs a token.

@@ -18,6 +18,9 @@ Sources (all keyless):
   "(c) Esri"; high-zoom complement to the 10 m Sentinel mosaic.
 - apple: Apple Maps satellite, keyless via the signed-session protocol in
   `app/apple_maps.py`. NON-COMMERCIAL: the route refuses a commercial tier.
+- g3d: Google Earth's photogrammetry as 3D Tiles, keyless via the client
+  channel decoded in `app/rocktree.py`. Outside Google's terms, so it is OFF
+  unless GOOGLE_3D_KEYLESS is set and refuses a commercial tier.
 - terrain: AWS Open Data Mapzen terrarium elevation tiles (z 0-15),
   transcoded per-tile to Mapbox terrain-RGB encoding because the frontend's
   cesium-martini worker decoder only understands that formula. The
@@ -29,11 +32,14 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import time
 from io import BytesIO
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
-from app import apple_maps, memtier
+from app import apple_maps, memtier, rocktree
 from app.config import Settings, get_settings
 from app.imagery import cdse
 from app.tier import commercial_request
@@ -47,6 +53,7 @@ def _recent_date() -> str:
     """A recent UTC date for CDSE Sentinel mosaics (leastCC over the lookback).
     Two days back to allow for processing/ingest latency."""
     return (dt.datetime.now(dt.UTC) - dt.timedelta(days=2)).strftime("%Y-%m-%d")
+
 
 # Esri's keyless dark canvas: a label-free base plus a transparent label
 # reference, served z0-16. Carto's `dark_all` is no longer keyless: every tile
@@ -75,6 +82,7 @@ async def _dark_basemap_png(z: int, x: int, y: int) -> bytes | None:
     buf = BytesIO()
     img.convert("RGB").save(buf, format="PNG", optimize=False)
     return buf.getvalue()
+
 
 _EOX_LAYER = "s2cloudless-2024_3857"
 # z <= split → EOX Sentinel-2 (10 m cloudless mosaic, broad/low-zoom);
@@ -119,14 +127,44 @@ def _tile_budget(settings: Settings) -> int:
 # 8 cap (different file, _UPSTREAM_SEMAPHORE).
 _FETCH_SEMAPHORE = asyncio.Semaphore(24)
 
+# A host that will not CONNECT is left alone for this long, and one caller at a
+# time finds out whether it is back. EOX answers a tile burst by dropping SYNs
+# for minutes; every uncached low-zoom tile then cost two attempts of two 5 s
+# connects, 20.7 s, and ended in a 502 anyway. A browser has six connections to
+# this origin, so the sixteen backdrop tiles under the Google 3D mesh held all
+# of them for a minute and the mesh (10 ms a tile) could not be asked for: first
+# mesh tile after 61 s, against 3 s with this (measured 2026-10-10, Manhattan).
+# ponytail: connect failures only. A host that accepts and then stalls still
+# costs every tile the 15 s read timeout twice; trip on that too if it is seen.
+_HOST_DOWN_S = 60.0
+_host_down: dict[str, float] = {}  # host → monotonic time of its next probe
+# Tile CDNs connect in under a second or not at all (20 to 760 ms from here).
+_TILE_TIMEOUT = httpx.Timeout(15.0, connect=2.0)
+
 
 async def _fetch_bytes(url: str) -> bytes | None:
+    host = urlsplit(url).hostname or ""
+    if time.monotonic() < _host_down.get(host, 0.0):
+        return None
     async with _FETCH_SEMAPHORE:
         for attempt in (0, 1):
+            # Again, here: this tile may have queued behind the ones that just
+            # watched the connect fail.
+            if time.monotonic() < _host_down.get(host, 0.0):
+                return None
+            if host in _host_down:
+                # The probe. Everyone else keeps skipping until it has an answer.
+                _host_down[host] = time.monotonic() + _HOST_DOWN_S
             try:
-                r = await get_client().get(url)
+                r = await get_client().get(url, timeout=_TILE_TIMEOUT)
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                # No second attempt: the transport already retried the connect.
+                _host_down[host] = time.monotonic() + _HOST_DOWN_S
+                return None
             except Exception:
                 r = None
+            else:
+                _host_down.pop(host, None)
             if r is not None and r.status_code == 200:
                 return r.content
             if attempt == 0:
@@ -237,9 +275,7 @@ def _sat_url(z: int, x: int, y: int) -> tuple[str, str]:
 _SAT_STITCH_MAX_Z = 18
 
 
-async def _stitch_sat_2x(
-    z: int, x: int, y: int, cache: TileCache
-) -> bytes | None:
+async def _stitch_sat_2x(z: int, x: int, y: int, cache: TileCache) -> bytes | None:
     """Fetch four z+1 children and stitch into one 512×512 JPEG.
 
     Each child is individually cache-eligible, so a later zoom into the area
@@ -420,14 +456,15 @@ async def apple_prefetch(
     async def warm_one(x: int, y: int) -> None:
         async def load() -> bytes | None:
             return await apple_maps.fetch_tile(z, x, y)
+
         try:
             await cache.get("apple-sat-2x", z, x, y, "jpg", _TTL_SAT, load)
         except Exception:  # noqa: BLE001
             pass
 
-    asyncio.ensure_future(asyncio.gather(
-        *(warm_one(x_min + dx, y_min + dy) for dx in range(nx) for dy in range(ny))
-    ))
+    asyncio.ensure_future(
+        asyncio.gather(*(warm_one(x_min + dx, y_min + dy) for dx in range(nx) for dy in range(ny)))
+    )
     return Response(status_code=202)
 
 
@@ -455,6 +492,103 @@ def _terrarium_to_mapbox_rgb(png_bytes: bytes) -> bytes | None:
         return buf.getvalue()
     except Exception:
         return None
+
+
+# Octree paths are octal digit strings; anything else never reaches the cache.
+_G3D_PATH = r"^[0-7]{1,28}$"
+_TTL_G3D = 30 * 86400.0
+
+
+def _g3d_gate(settings: Settings, commercial: bool) -> None:
+    if not settings.google_3d_keyless:
+        raise HTTPException(404, "keyless Google 3D is off (set GOOGLE_3D_KEYLESS)")
+    if commercial:
+        raise HTTPException(451, "Google Earth data is not licensed for commercial reuse")
+
+
+# What a filler with no triangle in it weighs: the stand-in `node_glb` ships.
+_G3D_EMPTY_BYTES = len(rocktree.node_glb(b""))
+
+
+async def _g3d_tileset(path: str, settings: Settings, commercial: bool) -> Response:
+    _g3d_gate(settings, commercial)
+    cache = _cache_for(settings.tile_cache_dir, _tile_budget(settings))
+
+    def empty(node: str, keep: int) -> bool | None:
+        size = cache.size("g3d", len(node), int(node, 8), keep, "glb")
+        return None if size is None else size == _G3D_EMPTY_BYTES
+
+    try:
+        body = await rocktree.tileset_json(path, settings.google_3d_detail, empty)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except Exception as e:  # noqa: BLE001 - a moved endpoint must read as a dead tile
+        raise HTTPException(502, "Google Earth upstream failed") from e
+    return Response(
+        content=body,
+        media_type="application/json",
+        # Revalidated every time: the tree depends on GOOGLE_3D_DETAIL and on
+        # Google's epoch, and a browser holding an hour-old copy shows neither.
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.get("/tiles/g3d/root.json")
+async def g3d_root(
+    settings: Settings = Depends(get_settings),
+    commercial: bool = Depends(commercial_request),
+) -> Response:
+    """Google Earth as 3D Tiles, from the planet root.
+
+    Every content URI inside is a sibling of this route, so the browser never
+    talks to Google and never needs a key or a token.
+    """
+    return await _g3d_tileset("", settings, commercial)
+
+
+@router.get("/tiles/g3d/t{path}.json")
+async def g3d_branch(
+    path: str = Path(..., pattern=r"^([0-7]{2}){1,14}$"),
+    settings: Settings = Depends(get_settings),
+    commercial: bool = Depends(commercial_request),
+) -> Response:
+    """One deeper branch, linked from its parent as an external tileset."""
+    return await _g3d_tileset(path, settings, commercial)
+
+
+@router.get("/tiles/g3d/n{path}.glb")
+async def g3d_node(
+    path: str = Path(..., pattern=_G3D_PATH),
+    keep: int = Query(255, ge=1, le=255),
+    settings: Settings = Depends(get_settings),
+    commercial: bool = Depends(commercial_request),
+) -> Response:
+    """One octree node as binary glTF. `keep` is an octant bitmask: a partly
+    refined parent is drawn only where it has no finer child."""
+    _g3d_gate(settings, commercial)
+
+    async def load() -> bytes | None:
+        try:
+            return await rocktree.glb(path, keep)
+        except LookupError:
+            raise
+        except Exception:  # noqa: BLE001
+            return None
+
+    try:
+        # The transcode runs once per node: the cache holds the finished glb.
+        data = await _cache_for(settings.tile_cache_dir, _tile_budget(settings)).get(
+            "g3d", len(path), int(path, 8), keep, "glb", _TTL_G3D, load
+        )
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    if data is None:
+        raise HTTPException(502, "Google Earth upstream failed")
+    return Response(
+        content=data,
+        media_type="model/gltf-binary",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
 
 
 @router.get("/tiles/terrain/{z}/{x}/{y}.png")
