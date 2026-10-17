@@ -20,6 +20,7 @@
 // Deliberately NOT a modal. Everything it reports is optional - the console
 // runs keyless - so this is "here is what would widen coverage", not "something
 // is broken". A modal would be lying about the severity.
+import { PhoneNotice } from "../shell/PhoneNotice.js";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { apiFetch } from "../transport/http.js";
@@ -93,21 +94,23 @@ export function DegradedBanner(): JSX.Element | null {
   };
 
   return (
-    <div
-      role="status"
-      className="map-banner flex items-center gap-2.5 mono text-[10px] px-3 py-1.5 rounded-sm border border-line bg-bg-1/95 text-txt-2 shadow-lg"
-    >
-      <span>{text}</span>
-      <Link to="/?panel=ops" className="text-accent hover:underline">
-        details
-      </Link>
-      <button
-        type="button"
-        onClick={dismiss}
-        className="text-txt-3 hover:text-txt-1"
+    <PhoneNotice>
+      <div
+        role="status"
+        className="map-banner flex items-center gap-2.5 mono text-[10px] px-3 py-1.5 rounded-sm border border-line bg-bg-1/95 text-txt-2 shadow-lg"
       >
-        dismiss
-      </button>
-    </div>
+        <span>{text}</span>
+        <Link to="/?panel=ops" className="text-accent hover:underline">
+          details
+        </Link>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="text-txt-3 hover:text-txt-1"
+        >
+          dismiss
+        </button>
+      </div>
+    </PhoneNotice>
   );
 }

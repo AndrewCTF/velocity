@@ -11,6 +11,7 @@ import {
   UNCORROBORATED_ALPHA,
 } from "./freshness.js";
 import { useSettings } from "../../state/settings.js";
+import { liveHidden, registerLiveLayer } from "../liveVisibility.js";
 
 // Generic batched-primitive renderer for high-count map layers. Renders icons +
 // labels as ONE Cesium.BillboardCollection + ONE Cesium.LabelCollection
@@ -295,6 +296,7 @@ export class PrimitiveEntityLayer {
   private removeCorroborationSub: (() => void) | null = null;
   // Camera tilted toward the horizon → icons stand up as side silhouettes.
   private tiltActive = false;
+  private unregisterLive: (() => void) | null = null;
 
   constructor(
     private readonly scene: Cesium.Scene,
@@ -315,6 +317,9 @@ export class PrimitiveEntityLayer {
       scene.primitives.add(this.bbColl);
       scene.primitives.add(this.lblColl);
     }
+    // Replay hides the live map; these pixels follow no data source, so they
+    // register to be hidden with it (globe/liveVisibility.ts).
+    this.unregisterLive = registerLiveLayer(this);
     if (opts.sideStyleFn) {
       // Re-evaluate stand-up mode whenever the camera moves (ctrl-drag tilt).
       // §5.2.2: 0.15 (was 0.05) — 0.05 fired camera.changed every ~5% viewport
@@ -489,6 +494,7 @@ export class PrimitiveEntityLayer {
     if (!p) {
       const bb = this.bbColl.add({
         ...this.opts.billboardBase(),
+        show: !liveHidden(),
         position: pos,
         image: s.imageUri,
         scale: s.scale,
@@ -506,6 +512,7 @@ export class PrimitiveEntityLayer {
       ) {
         lbl = this.lblColl.add({
           ...this.opts.labelBase(labelText),
+          show: !liveHidden(),
           position: pos,
           id: { id },
         });
@@ -562,6 +569,7 @@ export class PrimitiveEntityLayer {
           if (this.labelBudgetLeft()) {
             p.lbl = this.lblColl.add({
               ...this.opts.labelBase(labelText),
+              show: !liveHidden(),
               position: pos,
               id: { id },
             });
@@ -673,6 +681,14 @@ export class PrimitiveEntityLayer {
     }
   }
 
+  setLiveHidden(hidden: boolean): void {
+    for (const p of this.prims.values()) {
+      p.bb.show = !hidden;
+      if (p.lbl) p.lbl.show = !hidden;
+    }
+    this.scene.requestRender();
+  }
+
   destroy(): void {
     this.removePreUpdate?.();
     this.removePreUpdate = null;
@@ -682,6 +698,8 @@ export class PrimitiveEntityLayer {
     this.removeFilterSub = null;
     this.removeCorroborationSub?.();
     this.removeCorroborationSub = null;
+    this.unregisterLive?.();
+    this.unregisterLive = null;
     if (this.usesShared) {
       // Only OUR billboards/labels leave the shared collection; the container
       // itself outlives this layer and is torn down when the last ref goes.

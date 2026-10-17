@@ -206,7 +206,10 @@ export function LayersPanel({
             );
             return (
               <section key={folder.id} aria-label={folder.label}>
-                <div className="mt-3 flex h-[26px] items-center gap-[6px] border-t border-line px-[14px] pt-[6px] first:mt-0 first:border-t-0 first:pt-0">
+                <div
+                  data-layer-folder
+                  className="mt-3 flex h-[26px] items-center gap-[6px] border-t border-line px-[14px] pt-[6px] first:mt-0 first:border-t-0 first:pt-0"
+                >
                   <button
                     type="button"
                     onClick={() => toggleOpen(folder.id)}
@@ -255,6 +258,7 @@ export function LayersPanel({
                         type="button"
                         onClick={() => toggleRow(registry, row)}
                         aria-pressed={en}
+                        data-layer-row
                         className="flex h-(--g-row-2) w-full items-center gap-2 px-[14px] text-left hover:bg-(--hover)"
                       >
                         <Icon

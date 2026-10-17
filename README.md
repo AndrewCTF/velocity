@@ -52,7 +52,7 @@ labelled as automated output, not sold as "AI insight."
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-3159%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-3276%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 [![ISO/IEC 27001:2022 controls mapped, self-assessed](<https://img.shields.io/badge/ISO%2FIEC%2027001%3A2022-controls%20mapped%20(self--assessed)-informational.svg>)](docs/security/isms/statement-of-applicability.md)
 [![OWASP ASVS 5.0 L2 self-assessed](https://img.shields.io/badge/OWASP%20ASVS%205.0-L2%20self--assessed-informational.svg)](docs/security/asvs-l2-assessment.md)
@@ -160,6 +160,28 @@ only as far back as your own archive goes.
 > takes over (the flag becomes irrelevant). For an internet-facing box use
 > `docker-compose.prod.yml`, which leaves the flag unset. The globe, replay,
 > evidence capture, and all keyless feeds never needed the flag.
+
+### Open it on your phone
+
+The stack listens on `127.0.0.1` only, on purpose: the dev stack runs in open
+mode, so anything that can reach it can use it. To reach your own instance from
+your phone, put it on your tailnet instead of your LAN:
+
+```bash
+tailscale serve --bg 8080   # https://<this-machine>.<your-tailnet>.ts.net
+```
+
+Then add that origin to `.env` and restart, or the API refuses the new `Host`
+header (the DNS-rebinding guard in `app/origin_guard.py`):
+
+```bash
+CORS_ORIGINS=http://localhost:8080,https://<this-machine>.<your-tailnet>.ts.net
+```
+
+Only devices signed in to your tailnet can open it. Don't use `tailscale funnel`,
+which publishes it to the whole internet. For anything wider than your own
+devices, run `docker-compose.prod.yml` with Supabase sign-in configured
+(`docs/security/auth-and-sessions.md`); it fails closed without a credential.
 
 <details>
 <summary><b>Local dev without Docker</b></summary>
@@ -447,6 +469,25 @@ login for a bigger ADS-B budget, `FIRMS_MAP_KEY` for fires, an ACLED key for
 conflict events, `CLOUDFLARE_TOKEN` for outages. `GET /api/intel/sources`
 reports what's actually live versus what's still waiting on a key.
 
+### Use your own receiver
+
+If you run an ADS-B receiver (readsb, ultrafeeder, tar1090), Velocity folds its
+aircraft into the same picture as the public feeds and records them to your
+archive like everything else. Point `ADSB_FEED_URLS` in `.env` at your
+tar1090's `aircraft.json`. The variable replaces the default list, so keep the
+defaults in it if you still want them:
+
+```bash
+ADSB_FEED_URLS=http://192.168.1.20:8080/data/aircraft.json,https://globe.theairtraffic.com/data/aircraft.json,https://skylink.hpradar.com/data/aircraft.json,https://api.adsb.lol/v2/point/0/0/20000
+```
+
+Contacts are merged by ICAO address, freshest fix wins. Inside Docker,
+`localhost` is the API container, so use the receiver's LAN address.
+
+For a small desk display of what is overhead (ESP32, e-ink), `GET /api/overhead`
+returns the nearest aircraft as compact JSON from the same snapshot, with no
+upstream call of its own: see [docs/desk-display.md](docs/desk-display.md).
+
 ## MCP server: query the live console from an AI agent
 
 The part I think is genuinely new: the backend doubles as a **Model Context
@@ -656,7 +697,7 @@ osint/
 
 ```bash
 # from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
-OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 3159 passed + 21 skipped
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 3276 passed + 21 skipped
 pnpm -r test                          # vitest (web, shared)
 pnpm -r typecheck
 bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot

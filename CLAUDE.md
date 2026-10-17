@@ -52,9 +52,9 @@ undo and why it was made.
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **3159 passed + 21 skipped in ~273 s** (skips are the opt-in live
+  Baseline: **3276 passed + 21 skipped in ~317 s** (skips are the opt-in live
   probes and the 17 Timescale tests that run only with `HISTORY_PG_TEST_DSN`,
-  which CI sets; measured 2026-10-17, branch frontend-speed-2026-10).
+  which CI sets; measured 2026-10-17, branch reach-wave-2026-10).
   Runs SERIAL by default: `-n auto --dist loadfile` groups different files per
   worker on different core counts, so a suite with module-state leaks answers
   differently per machine and CI (4 cores) failed a branch that was green

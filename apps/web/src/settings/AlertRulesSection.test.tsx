@@ -8,6 +8,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AlertRulesSection } from "./AlertRulesSection.js";
+import { useAlertDraft } from "./alertDraft.js";
+import { pointActions } from "../globe/mapActions.js";
 
 vi.mock("../transport/http.js", () => ({
   apiFetch: vi.fn(),
@@ -31,6 +33,30 @@ describe("AlertRulesSection", () => {
     mockedFetch.mockReset();
     // GET /api/alerts/rules on mount (empty list).
     mockedFetch.mockResolvedValue(jsonResponse([]));
+  });
+
+  it("prefills from the map's 'Alert me about this area' action, once", async () => {
+    const action = pointActions(26.5, 56.25).find((a) =>
+      a.label.startsWith("Alert me"),
+    );
+    expect(action).toBeDefined();
+    const seq0 = useAlertDraft.getState().seq;
+    void action!.run();
+    expect(useAlertDraft.getState().seq).toBe(seq0 + 1);
+
+    const { unmount } = render(<AlertRulesSection />);
+    expect(
+      (screen.getByPlaceholderText("lat") as HTMLInputElement).value,
+    ).toBe("26.5000");
+    expect(
+      (screen.getByPlaceholderText("lon") as HTMLInputElement).value,
+    ).toBe("56.2500");
+    // The draft is consumed: a second mount starts empty.
+    unmount();
+    render(<AlertRulesSection />);
+    expect(
+      (screen.getByPlaceholderText("lat") as HTMLInputElement).value,
+    ).toBe("");
   });
 
   it("POSTs a well-formed AlertRuleIn body via apiFetch on submit", async () => {

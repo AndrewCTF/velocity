@@ -10,6 +10,9 @@ import {
   APP_GROUPS,
   type AppId,
 } from "../state/appView.js";
+import { BottomSheet } from "./BottomSheet.js";
+import { useIsMobile } from "./useIsMobile.js";
+import { usePhoneSheet } from "./phoneSheet.js";
 import {
   useEntityStats,
   setStatsViewer,
@@ -19,6 +22,7 @@ import { perfSnapshot } from "../globe/perf.js";
 import { flyToGlobal, resetToTopDown } from "../globe/camera.js";
 import { viewerCenter } from "../globe/center.js";
 import { useMapTools } from "../globe/mapTools.js";
+import { useLiveHidden } from "../globe/liveVisibility.js";
 import { useAgent } from "../state/agent.js";
 import {
   useAlerts,
@@ -447,6 +451,11 @@ export function TitleBar({
   // Live state behind the document line. Subscribed, not read once, so "live /
   // held" and the socket dot change when the thing they describe changes.
   const playing = useTime((s) => s.playing);
+  // A replay runs the clock too, over the past, with the live map hidden.
+  const replaying = useLiveHidden();
+  const notices = usePhoneSheet((s) => s.notices);
+  const showSheet = usePhoneSheet((s) => s.show);
+  const phoneSheet = usePhoneSheet((s) => s.open);
   const currentTime = useTime((s) => s.currentTime);
   const ws = useConnection((s) => s.ws);
   const clock = new Date(currentTime).toISOString().slice(11, 19) + "Z";
@@ -474,6 +483,8 @@ export function TitleBar({
   const contactSeries = useSeries(counted);
   const msSeries = useSeries(renderMs);
   const [launcher, setLauncher] = useState(false);
+  // Phone: the whole bar folds into one Menu button (see PhoneMenu below).
+  const isMobile = useIsMobile();
   const activeApp = useAppView((s) => s.app);
   const setApp = useAppView((s) => s.setApp);
   const [pinned, setPinned] = useState<AppId[]>([
@@ -513,6 +524,133 @@ export function TitleBar({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [menu, launcher]);
+
+  // The document line. It used to be a hardcoded amber square, a fixed title
+  // and a green check reading "Saved" — three pieces of chrome that were true
+  // of nothing. It said Saved on a console that saves nothing, which is the
+  // fabricated-state failure this repo bans in the map and had left sitting in
+  // the window frame.
+  //
+  // Now: what you are looking at, whether the clock is live or held, and
+  // whether the alert socket is actually up. Every value is read from the store
+  // that owns it. Built once because the desktop bar and the phone strip both
+  // carry it.
+  const docLine = (
+    <span
+      className="ml-3 flex min-w-0 flex-1 items-center justify-center gap-2"
+      title={
+        replaying
+          ? "Replaying the past. Live contacts are hidden until you return to live."
+          : playing
+            ? "The clock is running at real time; contacts advance as fixes arrive."
+            : "The clock is held. Contacts stay at the fix they had when you paused."
+      }
+    >
+      <span
+        className={`h-[10px] w-[10px] shrink-0 rounded-[1px] ${replaying ? "bg-accent" : playing ? "bg-ok" : "bg-warn"}`}
+        aria-hidden
+      />
+      <span className="truncate text-[13px] font-semibold text-txt-0">
+        {documentTitle ?? APP_META[activeApp]?.label ?? "Live map"}
+      </span>
+      <span className="mono shrink-0 tabular-nums text-[12px] text-txt-2">
+        {clock}
+      </span>
+      <span className="shrink-0 text-[12px] text-txt-3">
+        {replaying ? "replay" : playing ? "live" : "held"}
+      </span>
+      <span
+        className={`h-[6px] w-[6px] shrink-0 rounded-full ${WS_DOT[ws] ?? "bg-bg-4"}`}
+        title={`Alert socket: ${ws}`}
+        aria-label={`Alert socket ${ws}`}
+      />
+    </span>
+  );
+
+  // The marking, as a pill. A full-width saturated band was 26px of screen
+  // spent on one word, and the loudest thing on a data surface.
+  const pill = (
+    <span
+      className="csl2-clas ml-2"
+      data-kind={exercise ? "exercise" : "unclas"}
+    >
+      <Icon name="shield" className="h-3 w-3" />
+      {exercise ? "EXERCISE" : classification}
+    </span>
+  );
+
+  // On a phone the bar is not a bar. It floats on the map's top edge as a map
+  // app's does: the menu, a search pill, the marking, and under them one chip
+  // for the clock (tap it for Time) and one for notices when there are any.
+  // The six menus, the app launcher, inbox, alerts, settings and the account
+  // chip are all in the Menu sheet; as a strip they were ~860px of 20px controls
+  // in a 412px window.
+  if (isMobile)
+    return (
+      <div ref={barRef} className="contents">
+        <div className="pfloat-row">
+          <nav aria-label="Application" data-primary-nav className="contents">
+            <button
+              type="button"
+              onClick={() => usePhoneSheet.getState().toggle("menu")}
+              aria-label="Menu"
+              aria-haspopup="dialog"
+              aria-expanded={phoneSheet === "menu"}
+              className="pround"
+            >
+              <Icon name="menu" className="h-[20px] w-[20px]" />
+            </button>
+          </nav>
+          <button
+            type="button"
+            className="psearch"
+            onClick={() => showSheet("find")}
+          >
+            <Icon name="search" className="h-[18px] w-[18px] shrink-0" />
+            <span>Search planes, ships</span>
+          </button>
+          {pill}
+        </div>
+        <div className="pfloat-chips">
+          <button
+            type="button"
+            className="pchip"
+            onClick={() => showSheet("time")}
+            title={
+              replaying
+                ? "Replaying the past. Open Time to return to live."
+                : "Open Time"
+            }
+          >
+            <span
+              className={`h-[8px] w-[8px] shrink-0 rounded-full ${replaying ? "bg-accent" : playing ? "bg-ok" : "bg-warn"}`}
+              aria-hidden
+            />
+            {documentTitle ?? APP_META[activeApp]?.label ?? "Live map"}
+            <span className="mono tabular-nums">{clock}</span>
+            <span>{replaying ? "replay" : playing ? "live" : "held"}</span>
+          </button>
+          {notices > 0 && (
+            <button
+              type="button"
+              className="pchip"
+              data-tone="warn"
+              onClick={() => showSheet("notices")}
+            >
+              <Icon name="warning" className="h-[14px] w-[14px]" />
+              {notices === 1 ? "1 notice" : `${notices} notices`}
+            </button>
+          )}
+        </div>
+        <PhoneMenu
+          open={phoneSheet === "menu"}
+          onClose={() => showSheet(null)}
+          ctx={ctx}
+          activeApp={activeApp}
+          setApp={setApp}
+        />
+      </div>
+    );
 
   return (
     // `display: contents` — a DOM node the outside-click test can ask about,
@@ -627,42 +765,7 @@ export function TitleBar({
         <Icon name="chevron-down" className="h-3 w-3" />
       </button>
 
-      {/* The document line. It used to be a hardcoded amber square, a fixed
-          title and a green check reading "Saved" — three pieces of chrome that
-          were true of nothing. It said Saved on a console that saves nothing,
-          which is the fabricated-state failure this repo bans in the map and
-          had left sitting in the window frame.
-
-          Now: what you are looking at, whether the clock is live or held, and
-          whether the alert socket is actually up. Every value is read from the
-          store that owns it. */}
-      <span
-        className="ml-3 flex min-w-0 flex-1 items-center justify-center gap-2"
-        title={
-          playing
-            ? "The clock is running at real time; contacts advance as fixes arrive."
-            : "The clock is held. Contacts stay at the fix they had when you paused."
-        }
-      >
-        <span
-          className={`h-[10px] w-[10px] shrink-0 rounded-[1px] ${playing ? "bg-ok" : "bg-warn"}`}
-          aria-hidden
-        />
-        <span className="truncate text-[13px] font-semibold text-txt-0">
-          {documentTitle ?? APP_META[activeApp]?.label ?? "Live map"}
-        </span>
-        <span className="mono shrink-0 tabular-nums text-[12px] text-txt-2">
-          {clock}
-        </span>
-        <span className="shrink-0 text-[12px] text-txt-3">
-          {playing ? "live" : "held"}
-        </span>
-        <span
-          className={`h-[6px] w-[6px] shrink-0 rounded-full ${WS_DOT[ws] ?? "bg-bg-4"}`}
-          title={`Alert socket: ${ws}`}
-          aria-label={`Alert socket ${ws}`}
-        />
-      </span>
+      {docLine}
 
       {launcher &&
         anchor &&
@@ -775,15 +878,7 @@ export function TitleBar({
         Settings
       </button>
 
-      {/* The marking, as a pill. A full-width saturated band was 26px of screen
-          spent on one word, and the loudest thing on a data surface. */}
-      <span
-        className="csl2-clas ml-2"
-        data-kind={exercise ? "exercise" : "unclas"}
-      >
-        <Icon name="shield" className="h-3 w-3" />
-        {exercise ? "EXERCISE" : classification}
-      </span>
+      {pill}
     </div>
   );
 }
@@ -884,5 +979,128 @@ function AppRow({
         <Icon name="star" className="h-3 w-3" />
       </button>
     </div>
+  );
+}
+
+// ── Phone ────────────────────────────────────────────────────────────────────
+
+/** One row of the phone menu. 44px in px, not `h-11`: the root font is 13px, so
+ *  the rem class is 36px and misses the touch target. */
+const PHONE_ROW =
+  "flex min-h-[48px] w-full items-center gap-3 rounded-sm px-4 text-left text-[15px] text-txt-1 hover:bg-(--hover)";
+
+/** What the desktop bar spreads across six menus, an app launcher, three icon
+ *  buttons and an account chip, in the one sheet the phone's Menu button opens:
+ *  the 2D map, the apps, then every menu with the same items and the same
+ *  commands. Nothing is invented and nothing is dropped; a menu hint (⌘K) is the
+ *  one thing left off, because a phone has no key to press. A bottom sheet in
+ *  the map well like every other phone surface, opened at full height. */
+function PhoneMenu({
+  open,
+  onClose,
+  ctx,
+  activeApp,
+  setApp,
+}: {
+  open: boolean;
+  onClose: () => void;
+  ctx: MenuCtx;
+  activeApp: AppId;
+  setApp: (id: AppId) => void;
+}): JSX.Element | null {
+  const well = usePhoneSheet((s) => s.mapWell);
+  if (!well) return null;
+  return createPortal(
+    <BottomSheet label="Menu" open={open} onClose={onClose} initial="full">
+      <div className="flex flex-col py-1">
+        <Link to="/2d" onClick={onClose} className={PHONE_ROW}>
+          <Icon name="map" className="h-[16px] w-[16px] shrink-0 text-txt-3" />
+          2D map
+          <span className="ml-auto truncate text-[12px] text-txt-3">
+            lighter on a weak GPU
+          </span>
+        </Link>
+        <Group label="Apps">
+          {APP_GROUPS.flatMap((g) => g.apps).map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setApp(id);
+                onClose();
+              }}
+              title={APP_META[id]?.hint}
+              className={`${PHONE_ROW} ${id === activeApp ? "bg-accent-dim text-accent-fg" : ""}`}
+            >
+              <Icon
+                name={APP_ICON[id] ?? "hexagon"}
+                className="h-[16px] w-[16px] shrink-0"
+              />
+              {APP_META[id]?.label ?? id}
+            </button>
+          ))}
+        </Group>
+        {MENUS.map((m) => (
+          <Group key={m} label={m}>
+            {MENU_ITEMS[m].map((it) => {
+              const why = it.disabled?.(ctx) ?? null;
+              const checked = it.on?.(ctx) ?? false;
+              return (
+                <button
+                  key={it.label}
+                  type="button"
+                  disabled={why !== null}
+                  {...(why ? { title: why } : {})}
+                  onClick={() => {
+                    it.run(ctx);
+                    onClose();
+                  }}
+                  className={`${PHONE_ROW} ${why ? "cursor-not-allowed text-txt-3" : ""}`}
+                >
+                  <Icon
+                    name="check"
+                    className={`h-3 w-3 shrink-0 ${checked ? "text-accent-fg" : "invisible"}`}
+                  />
+                  <span className="min-w-0 flex-1">{it.label}</span>
+                </button>
+              );
+            })}
+          </Group>
+        ))}
+        <PhoneAccount onDone={onClose} />
+      </div>
+    </BottomSheet>,
+    well,
+  );
+}
+
+/** Sign in or out, as a menu row. SignInChip is the desktop bar's version of
+ *  this and its 20px chip is not a phone target. Same rule as there: the visible
+ *  word is the action (ASVS V7.4.4), the account stays in the accessible name. */
+function PhoneAccount({ onDone }: { onDone: () => void }): JSX.Element | null {
+  const { user, loading, signOut } = useAuth();
+  if (!isSupabaseConfigured || loading) return null;
+  if (!user)
+    return (
+      <Link to="/login" onClick={onDone} className={`${PHONE_ROW} mt-2`}>
+        <Icon name="user" className="h-[16px] w-[16px] shrink-0 text-txt-3" />
+        Sign in
+      </Link>
+    );
+  const who = user.email ?? user.id.slice(0, 8);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onDone();
+        void signOut();
+      }}
+      aria-label={`Sign out ${who}`}
+      className={`${PHONE_ROW} mt-2`}
+    >
+      <Icon name="user" className="h-[16px] w-[16px] shrink-0 text-txt-3" />
+      Sign out
+      <span className="ml-auto truncate text-[12px] text-txt-3">{who}</span>
+    </button>
   );
 }

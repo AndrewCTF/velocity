@@ -1,8 +1,18 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import * as Cesium from "cesium";
 import { TimeDock } from "./TimeDock.js";
-import { useTime } from "../state/stores.js";
+import { toast } from "./toast.js";
+import { useSelection, useTime } from "../state/stores.js";
+import { parseRewind } from "../state/rewindLink.js";
 
 // TimeDock.tsx itself imports Cesium as a TYPE only and builds/reads
 // `viewer.clock.currentTime` for seek()/goLive() by hand as a plain
@@ -117,9 +127,20 @@ function mockRoutes(opts: MockRoutesOpts = {}): void {
 
 // Minimal viewer stub exposing exactly the surface both TimeDock.tsx and the
 // REAL HistoryPlayback.ts (installHistoryPlayback runs unmocked here) touch.
+// What the rewind link reads and writes on the camera. Radians, as a real Camera
+// reports them; the pose is Paris at 12 km, heading east, 45 degrees down.
+interface FakeCamera {
+  computeViewRectangle: () => undefined;
+  setView: Mock;
+  positionCartographic: { longitude: number; latitude: number; height: number };
+  heading: number;
+  pitch: number;
+}
+
 function fakeViewer(): {
   viewer: Cesium.Viewer;
   getDs: () => Cesium.CustomDataSource | undefined;
+  camera: FakeCamera;
 } {
   const sources: Cesium.DataSource[] = [];
   const dataSources = {
@@ -152,15 +173,27 @@ function fakeViewer(): {
     shouldAnimate: false,
     multiplier: 1,
   };
+  const camera: FakeCamera = {
+    computeViewRectangle: () => undefined,
+    setView: vi.fn(),
+    positionCartographic: {
+      longitude: Cesium.Math.toRadians(2.35),
+      latitude: Cesium.Math.toRadians(48.85),
+      height: 12_000,
+    },
+    heading: Cesium.Math.toRadians(90),
+    pitch: Cesium.Math.toRadians(-45),
+  };
   const viewer = {
     dataSources,
-    camera: { computeViewRectangle: () => undefined },
+    camera,
     clock,
     scene: { requestRender: () => {}, maximumRenderTimeChange: 0 },
     isDestroyed: () => false,
   } as unknown as Cesium.Viewer;
   return {
     viewer,
+    camera,
     getDs: () =>
       sources.find((s) => s.name === "history-replay") as
         Cesium.CustomDataSource | undefined,
@@ -411,5 +444,308 @@ describe("TimeDock — restored archive-ownership chrome (CoverageStrip + chip +
     expect(
       screen.queryByText(/vessels unavailable before 2025-06-15/),
     ).not.toBeInTheDocument();
+  });
+});
+
+// The rewind link: `#c=…&sel=…&t=…` opens the console at a place, a contact and
+// a past moment, and the dock mints one for the current view. The format and its
+// validation are state/rewindLink.test.ts; this is the wiring to the viewer, the
+// selection store and the replay path.
+const CAM_HASH = "c=2.35,48.85,12000,90,-45";
+
+function setHash(hash: string): void {
+  window.history.replaceState(null, "", `/${hash}`);
+}
+
+function stubClipboard(writeText: Mock): void {
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText },
+    configurable: true,
+  });
+}
+
+describe("TimeDock — rewind link", () => {
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+    useSelection.setState({ selectedEntityId: null });
+    delete (navigator as { clipboard?: unknown }).clipboard;
+    delete (document as { execCommand?: unknown }).execCommand;
+  });
+
+  describe("opening a link", () => {
+    it("moves the camera, selects the contact and replays from the moment the hash names", async () => {
+      const t = Date.parse("2024-06-01T10:30:45Z");
+      // A replayed contact is `hist:<id>` on the map, so that is what a link
+      // copied during replay names.
+      setHash(`#${CAM_HASH}&sel=hist:aircraft:ABC123&t=${t}`);
+      mockRoutes({
+        trackForTracks: [
+          {
+            id: "aircraft:ABC123",
+            kind: "aircraft",
+            points: [[10.0, 20.0, t / 1000 + 60, 90]],
+          },
+        ],
+      });
+      const { viewer, camera, getDs } = fakeViewer();
+      render(<TimeDock viewer={viewer} />);
+
+      expect(camera.setView).toHaveBeenCalledTimes(1);
+      const arg = camera.setView.mock.calls[0]![0] as {
+        destination: Cesium.Cartesian3;
+        orientation: { heading: number; pitch: number; roll: number };
+      };
+      expect(
+        Cesium.Cartesian3.equalsEpsilon(
+          arg.destination,
+          Cesium.Cartesian3.fromDegrees(2.35, 48.85, 12_000),
+          0,
+          1e-6,
+        ),
+      ).toBe(true);
+      expect(arg.orientation.heading).toBeCloseTo(Math.PI / 2, 9);
+      expect(arg.orientation.pitch).toBeCloseTo(-Math.PI / 4, 9);
+      expect(arg.orientation.roll).toBe(0);
+
+      expect(useSelection.getState().selectedEntityId).toBe(
+        "hist:aircraft:ABC123",
+      );
+
+      // The pickers show the restored moment, to the minute (their resolution).
+      expect(screen.getByLabelText("Replay start day")).toHaveValue(
+        "2024-06-01",
+      );
+      expect(screen.getByLabelText("Replay start time (UTC)")).toHaveValue(
+        "10:30",
+      );
+      expect(screen.getByTitle("Return to live (L)")).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+      // It went through loadAt(): the clock starts at that minute...
+      await waitFor(() =>
+        expect(Cesium.JulianDate.toDate(viewer.clock.startTime).getTime()).toBe(
+          Date.parse("2024-06-01T10:30:00Z"),
+        ),
+      );
+      // ...and the contact the link selected is on the replayed map.
+      await waitFor(() =>
+        expect(getDs()?.entities.getById("hist:aircraft:ABC123")).toBeDefined(),
+      );
+      // Applied once and cleared, so the address bar cannot go stale.
+      expect(window.location.hash).toBe("");
+    });
+
+    it("selects the replay marker when a replayed link names the live id", () => {
+      const t = Date.parse("2024-06-01T10:30:45Z");
+      setHash(`#${CAM_HASH}&sel=aircraft:ABC123&t=${t}`);
+      mockRoutes({});
+      const { viewer } = fakeViewer();
+      render(<TimeDock viewer={viewer} />);
+      expect(useSelection.getState().selectedEntityId).toBe(
+        "hist:aircraft:ABC123",
+      );
+    });
+
+    it("waits for the viewer, then applies the link exactly once", () => {
+      setHash(`#${CAM_HASH}&sel=aircraft:ABC123`);
+      const a = fakeViewer();
+      const { rerender } = render(<TimeDock viewer={null} />);
+      // The real sequence: the dock mounts before the globe has a viewer.
+      expect(useSelection.getState().selectedEntityId).toBeNull();
+
+      rerender(<TimeDock viewer={a.viewer} />);
+      expect(a.camera.setView).toHaveBeenCalledTimes(1);
+      expect(useSelection.getState().selectedEntityId).toBe("aircraft:ABC123");
+
+      // Neither a re-render nor a re-created viewer pulls the operator back.
+      useSelection.setState({ selectedEntityId: null });
+      rerender(<TimeDock viewer={a.viewer} />);
+      const b = fakeViewer();
+      rerender(<TimeDock viewer={b.viewer} />);
+      expect(a.camera.setView).toHaveBeenCalledTimes(1);
+      expect(b.camera.setView).not.toHaveBeenCalled();
+      expect(useSelection.getState().selectedEntityId).toBeNull();
+    });
+
+    it("stays live when the time is within two minutes of now or ahead of it", () => {
+      for (const t of [Date.now() - 30_000, Date.now() + 30 * 60_000]) {
+        setHash(`#${CAM_HASH}&t=${t}`);
+        const { viewer, camera } = fakeViewer();
+        const { unmount } = render(<TimeDock viewer={viewer} />);
+        expect(camera.setView).toHaveBeenCalledTimes(1);
+        expect(screen.getByLabelText("Replay start day")).toHaveValue("");
+        expect(screen.getByTitle("Return to live (L)")).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        );
+        unmount();
+      }
+    });
+
+    it("does nothing for a hash that is not a valid link", () => {
+      for (const hash of [
+        "", // the common case
+        `#c=999,0,10,0,0&sel=aircraft:ABC123`, // latitude out of range
+        "#sel=aircraft:ABC123", // no camera
+        "#access_token=abc.def&type=signup", // an auth redirect
+        "#c=<script>alert(1)</script>&sel=aircraft:ABC123",
+      ]) {
+        setHash(hash);
+        const { viewer, camera } = fakeViewer();
+        const { unmount } = render(<TimeDock viewer={viewer} />);
+        expect(camera.setView, hash).not.toHaveBeenCalled();
+        expect(useSelection.getState().selectedEntityId, hash).toBeNull();
+        unmount();
+      }
+    });
+
+    it("keeps the camera when only the selection is bad", () => {
+      setHash(`#${CAM_HASH}&sel=<script>alert(1)</script>`);
+      const { viewer, camera } = fakeViewer();
+      render(<TimeDock viewer={viewer} />);
+      expect(camera.setView).toHaveBeenCalledTimes(1);
+      expect(useSelection.getState().selectedEntityId).toBeNull();
+    });
+  });
+
+  describe("Copy rewind link", () => {
+    it("is not offered where there is no globe to read a camera from", () => {
+      render(<TimeDock viewer={null} />);
+      expect(screen.queryByLabelText("Copy rewind link")).toBeNull();
+    });
+
+    it("copies a live link that parses back to the camera and the selection, with no time", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard(writeText);
+      const ok = vi.spyOn(toast, "ok");
+      useSelection.setState({ selectedEntityId: "aircraft:ABC123" });
+      const { viewer } = fakeViewer();
+      render(<TimeDock viewer={viewer} />);
+
+      fireEvent.click(screen.getByLabelText("Copy rewind link"));
+      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+
+      const url = new URL(writeText.mock.calls[0]![0] as string);
+      expect(`${url.origin}${url.pathname}${url.search}`).toBe(
+        `${location.origin}${location.pathname}${location.search}`,
+      );
+      expect(parseRewind(url.hash)).toEqual({
+        c: { lon: 2.35, lat: 48.85, height: 12_000, heading: 90, pitch: -45 },
+        sel: "aircraft:ABC123",
+      });
+      await waitFor(() => expect(ok).toHaveBeenCalledWith("Link copied"));
+    });
+
+    it("carries the clock once the dock is in replay", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard(writeText);
+      const { viewer } = fakeViewer();
+      const before = Date.now();
+      render(<TimeDock viewer={viewer} />);
+
+      fireEvent.click(screen.getByLabelText("Back 15 seconds"));
+      expect(screen.getByTitle("Return to live (L)")).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+      fireEvent.click(screen.getByLabelText("Copy rewind link"));
+      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+
+      const link = parseRewind(
+        new URL(writeText.mock.calls[0]![0] as string).hash,
+      );
+      expect(link?.sel).toBeUndefined();
+      expect(link?.t).toBeGreaterThanOrEqual(before - 15_000);
+      expect(link?.t).toBeLessThan(before - 15_000 + 5_000);
+    });
+
+    it("says so when the selected id cannot ride in a link, and leaves it out", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard(writeText);
+      const ok = vi.spyOn(toast, "ok");
+      useSelection.setState({ selectedEntityId: "landing:12.5,41.2" });
+      const { viewer } = fakeViewer();
+      render(<TimeDock viewer={viewer} />);
+
+      fireEvent.click(screen.getByLabelText("Copy rewind link"));
+      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+
+      expect(
+        parseRewind(new URL(writeText.mock.calls[0]![0] as string).hash)?.sel,
+      ).toBeUndefined();
+      await waitFor(() =>
+        expect(ok).toHaveBeenCalledWith(
+          expect.stringContaining("selection not included"),
+        ),
+      );
+    });
+
+    it("falls back to upright north-down while the scene morphs, when Cesium reports no heading or pitch", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard(writeText);
+      const { viewer, camera } = fakeViewer();
+      camera.heading = undefined as never;
+      camera.pitch = undefined as never;
+      render(<TimeDock viewer={viewer} />);
+
+      fireEvent.click(screen.getByLabelText("Copy rewind link"));
+      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+
+      expect(
+        parseRewind(new URL(writeText.mock.calls[0]![0] as string).hash)?.c,
+      ).toMatchObject({ heading: 0, pitch: -90 });
+    });
+
+    it("refuses to copy a camera it cannot read", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard(writeText);
+      const error = vi.spyOn(toast, "error");
+      const { viewer, camera } = fakeViewer();
+      camera.positionCartographic.longitude = NaN;
+      render(<TimeDock viewer={viewer} />);
+
+      fireEvent.click(screen.getByLabelText("Copy rewind link"));
+
+      expect(error).toHaveBeenCalledWith("Could not read the camera position");
+      expect(writeText).not.toHaveBeenCalled();
+    });
+
+    it("reports a clipboard that refuses, instead of claiming the link was copied", async () => {
+      stubClipboard(vi.fn().mockRejectedValue(new Error("denied")));
+      const ok = vi.spyOn(toast, "ok");
+      const error = vi.spyOn(toast, "error");
+      const { viewer } = fakeViewer();
+      render(<TimeDock viewer={viewer} />);
+
+      fireEvent.click(screen.getByLabelText("Copy rewind link"));
+
+      await waitFor(() =>
+        expect(error).toHaveBeenCalledWith("Could not copy the link"),
+      );
+      expect(ok).not.toHaveBeenCalled();
+    });
+
+    it("uses the legacy copy command where there is no async clipboard (an http:// box)", async () => {
+      let copied = "";
+      Object.defineProperty(document, "execCommand", {
+        value: vi.fn((cmd: string) => {
+          copied = document.querySelector("textarea")?.value ?? "";
+          return cmd === "copy";
+        }),
+        configurable: true,
+      });
+      const ok = vi.spyOn(toast, "ok");
+      const { viewer } = fakeViewer();
+      render(<TimeDock viewer={viewer} />);
+
+      fireEvent.click(screen.getByLabelText("Copy rewind link"));
+
+      await waitFor(() => expect(ok).toHaveBeenCalledWith("Link copied"));
+      expect(document.execCommand).toHaveBeenCalledWith("copy");
+      expect(parseRewind(new URL(copied).hash)?.c.lon).toBe(2.35);
+      // The scratch textarea does not outlive the copy.
+      expect(document.querySelector("textarea")).toBeNull();
+    });
   });
 });

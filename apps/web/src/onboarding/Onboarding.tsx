@@ -108,6 +108,44 @@ const STEPS: Step[] = [
   },
 ];
 
+/** The same first-run gate for the phone layout. The tour below is a centred
+ *  modal over the map, and on a 412px screen that modal is the screen: the
+ *  visitor opens the console to see the map and is made to click through four
+ *  cards first. This floats above the nav, takes no part of the map's box, and
+ *  leaves everything under it live. No dialog role and no backdrop, so nothing
+ *  is trapped behind it; Got it is the whole tour. Sizes are px on purpose, the
+ *  root font is 13px so a rem class would land under the 44px touch target. */
+export function OnboardingHint({
+  onClose,
+}: {
+  onClose: () => void;
+}): JSX.Element {
+  const finish = (): void => {
+    markOnboarded();
+    onClose();
+  };
+  return (
+    <div
+      role="status"
+      className="fixed inset-x-2 z-(--z-dropdown) flex items-center gap-3 rounded-xl border border-line-2 bg-bg-1 px-3 py-2 shadow-xl"
+      // Above the 58px tab bar and the home indicator under it.
+      style={{ bottom: "calc(66px + env(safe-area-inset-bottom))" }}
+    >
+      <p className="mono min-w-0 flex-1 text-[12px] leading-snug text-txt-1">
+        Tap a plane or ship to inspect it. Layers and search are at the bottom
+        of the screen.
+      </p>
+      <button
+        type="button"
+        onClick={finish}
+        className="mono h-[44px] min-w-[44px] shrink-0 rounded-sm border border-accent-line bg-accent-dim px-3 text-[12px] text-accent"
+      >
+        Got it
+      </button>
+    </div>
+  );
+}
+
 export function Onboarding({
   onClose,
 }: {

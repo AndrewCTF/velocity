@@ -12,9 +12,11 @@ import { flyToPosition } from "../globe/camera.js";
 
 interface Props {
   viewer: Cesium.Viewer | null;
+  /** Fill the container (the phone's Search sheet) instead of the bar's cell. */
+  wide?: boolean;
 }
 
-export function SearchField({ viewer }: Props): JSX.Element {
+export function SearchField({ viewer, wide = false }: Props): JSX.Element {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -140,7 +142,11 @@ export function SearchField({ viewer }: Props): JSX.Element {
   return (
     <div
       ref={containerRef}
-      className="relative w-40 min-[1440px]:w-56 min-[1920px]:w-80"
+      className={
+        wide
+          ? "relative w-full"
+          : "relative w-40 min-[1440px]:w-56 min-[1920px]:w-80"
+      }
     >
       <input
         ref={inputRef}

@@ -693,18 +693,24 @@ async def _deliver_sinks(
     """
     channel = rule.get("channel")
     url = str(rule.get("sink_url") or "").strip()
-    if channel not in ("discord", "webhook") or not url:
+    if channel not in ("discord", "webhook", "ntfy") or not url:
         return
 
     from app.intel import alert_rules_local  # noqa: PLC0415
+    from app.routes.alert_rules import ntfy_target  # noqa: PLC0415
     from app.workflows import control  # noqa: PLC0415
 
     ts = _now_iso()
     message = _alert_message(rule, cand, transition)
     rule_id = str(rule.get("id"))
+    post_url, topic = url, ""
 
     try:
-        await asyncio.to_thread(control.check_sink_url, url)
+        if channel == "ntfy":
+            # ntfy's JSON publish goes to the server root; the topic rides in the
+            # body. The SSRF check below runs on the URL actually POSTed to.
+            post_url, topic = ntfy_target(url)
+        await asyncio.to_thread(control.check_sink_url, post_url)
     except Exception as exc:  # noqa: BLE001 — bad sink config, log + stop
         await alert_rules_local.record_delivery(
             rule_id=rule_id, entity_id=cand.entity_id, transition=transition,
@@ -716,13 +722,16 @@ async def _deliver_sinks(
     if channel == "discord":
         # Discord's incoming-webhook contract: a plain {"content": <text>} post.
         body: dict[str, Any] = {"content": f"[{rule.get('label') or 'watch'}] {message}"}
+    elif channel == "ntfy":
+        # ntfy JSON publish: the phone shows `title` as the heading, `message` below.
+        body = {"topic": topic, "title": str(rule.get("label") or "watch"), "message": message}
     else:
         obj = alert_object(rule, cand, transition, ts)
         body = {"type": "watch.alert", **obj.props}
 
     try:
         res = await control.send(
-            "POST", url, headers={"content-type": "application/json"},
+            "POST", post_url, headers={"content-type": "application/json"},
             json_body=body, timeout_s=10.0, public_only=True,
         )
         ok = res.error is None and (res.status is not None and res.status < 400)

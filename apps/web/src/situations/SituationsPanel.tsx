@@ -79,8 +79,8 @@ export function SituationsPanel({ viewer }: Props = {}): JSX.Element {
       {error && <p className="text-[10px] text-warn">{error}</p>}
       {situations.length === 0 && (
         <p className="text-txt-3 text-[11px]">
-          No situations yet. Create one here, right-click the map → "Create
-          situation here", or promote an incident from the Intel tab.
+          No situations yet. Create one here, right-click or long-press the map
+          → "Create situation here", or promote an incident from the Intel tab.
         </p>
       )}
       <ul className="space-y-1.5">

@@ -63,6 +63,9 @@ const EXEMPT: Record<string, string> = {
     "inbound push: an external sender calls it with a per-dataset token. " +
     "The operator arms and revokes it from Foundry → Connections, which does " +
     "have a UI address (POST/DELETE /api/foundry/datasets/{id}/ingest-token).",
+  // Another caller that is not the browser: a microcontroller on a desk.
+  "/api/overhead":
+    "device API for ESP32/e-ink desk displays; consumer is docs/desk-display.md",
 };
 
 interface Route {

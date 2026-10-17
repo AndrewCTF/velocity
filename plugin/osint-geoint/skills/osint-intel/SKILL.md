@@ -33,7 +33,9 @@ did. The spine of every investigation:
    pass `lat,lon,radius_nm` or a bbox to scope.
 3. **`focus_area(lat, lon, radius_nm)`** — mark the incident's region PRIMARY: a
    dedicated always-fresh fetch that bypasses global rate limits, plus a full
-   bundle (aircraft, density, jamming, vessels, anomalies) in one call.
+   bundle (aircraft, density, jamming, vessels, anomalies) in one call. For an
+   irregular zone pass `polygon` (longitude first); the ring's bounding circle
+   is loaded and records outside the ring are dropped.
 4. **Drill** into the evidence: `query_vessels`, `query_aircraft`, `gps_jamming`,
    `detect_deception`, `locate_emitter`, `vessel_dossier`, `aircraft_dossier`.
 5. **`deep_analyze(question, lat, lon)`** — hand the gathered intel to a reasoning

@@ -515,6 +515,56 @@ describe("HistoryPlayback: replay source routing reads stats.oldest_ts, not stat
     ).toBeDefined();
   });
 
+  // The default keyless archive: one legacy SQLite file, so stats carries no
+  // oldest_ts and no dated shard. The floor comes from coverage instead.
+  function mockLegacySqlite(calls: string[], coverageOldest: number | null): void {
+    mockedFetch.mockReset();
+    mockedFetch.mockImplementation(async (url: string) => {
+      const u = url.toString();
+      calls.push(u);
+      if (u === "/api/history/stats")
+        return jsonResponse({ backend: "sqlite", shards: [{ day: "legacy" }] });
+      if (u.startsWith("/api/history/coverage"))
+        return jsonResponse({ oldest_ts: coverageOldest });
+      if (u.startsWith("/api/history/upstream/chunk"))
+        return upstreamChunk(oldestMs - HALF_HOUR_MS);
+      if (u.startsWith("/api/history/tracks"))
+        return jsonResponse({ tracks: [] });
+      return jsonResponse({});
+    });
+  }
+
+  it("a legacy single-file archive takes its floor from coverage and replays older aircraft from upstream", async () => {
+    const calls: string[] = [];
+    mockLegacySqlite(calls, oldestMs / 1000);
+    const { viewer, getDs } = fakeViewer();
+    const info = await installHistoryPlayback(viewer).loadAt(
+      oldestMs - HALF_HOUR_MS,
+      oldestMs,
+    );
+    expect(
+      calls.filter((u) => u.startsWith("/api/history/upstream/chunk")),
+    ).toHaveLength(1);
+    expect(info?.source).toBe("upstream");
+    expect(getDs().entities.getById("hist:aircraft:abcdef")).toBeDefined();
+  });
+
+  it("an empty archive replays past aircraft from upstream", async () => {
+    const calls: string[] = [];
+    mockLegacySqlite(calls, null);
+    const { viewer } = fakeViewer();
+    const info = await installHistoryPlayback(viewer).loadAt(
+      oldestMs - HALF_HOUR_MS,
+      oldestMs,
+    );
+    // The requested half hour, plus the next one prefetched: with an empty
+    // archive every past half hour is upstream.
+    expect(
+      calls.filter((u) => u.startsWith("/api/history/upstream/chunk")).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(info?.source).toBe("upstream");
+  });
+
   it("a half hour starting AT oldest_ts stays on the own archive with no upstream call", async () => {
     const calls: string[] = [];
     mockTimescaleStats(calls);

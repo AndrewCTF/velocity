@@ -12,7 +12,7 @@
 | `get_situation()`                 | Cheapest first call — global counts, worst jamming cells, emergencies, vessel mix.              | `detail`                                            |
 | `intel_brief(...)`                | **Headline.** Ranked, cited cross-domain INCIDENTS with narratives + evidence IDs + follow-ups. | area/bbox, `link_km=50`, `window_hours=6`, `detail` |
 | `anomalies(...)`                  | Fused triage report: emergencies, jamming hotspots, dark vessels, alerts + `threat_level`.      | area/bbox, `detail`                                 |
-| `focus_area(lat, lon, radius_nm)` | Load a region **PRIMARY** (dedicated fresh fetch) + full bundle in one call.                    | `label`, `cell_deg=1.0`, `detail`                   |
+| `focus_area(lat, lon, radius_nm)` | Load a region **PRIMARY** (dedicated fresh fetch) + full bundle in one call.                    | `label`, `cell_deg=1.0`, `detail`, `polygon=[[lon,lat],…]` |
 
 ## Drill into evidence
 

@@ -61,6 +61,10 @@ Bounded to 8 AOIs (LRU). Uses the same shared httpx client + upstream
 semaphore + host list as the adsb module, so it can never out-pace the global
 fan-out's rate budget.
 
+`focus_area(polygon=[[lon, lat], …])` registers the ring's bounding circle
+PRIMARY as above (capped at 250 nm, flagged `polygon_truncated` past that) and
+clips the bundle to the ring in the tool; `lat`/`lon` are then optional.
+
 ## HTTP API — `/api/intel/*`
 
 All return compact JSON. Geography is accepted as a centre (`lat,lon[,radius_nm]`)
