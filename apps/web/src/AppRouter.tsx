@@ -11,12 +11,17 @@ import { AuthProvider, useAuth } from "./auth/AuthContext.js";
 import { SettingsModal } from "./settings/SettingsModal.js";
 import { useAlertDraft } from "./settings/alertDraft.js";
 import { useSettings } from "./state/settings.js";
-import { Onboarding, hasOnboarded } from "./onboarding/Onboarding.js";
+import {
+  Onboarding,
+  OnboardingHint,
+  hasOnboarded,
+} from "./onboarding/Onboarding.js";
 import { isSupabaseConfigured } from "./transport/supabase.js";
 import { AiSetupWizard } from "./settings/localAi/AiSetupWizard.js";
-import { hasSeenAiSetup } from "./settings/localAi/aiSetupSeen.js";
+import { shouldOfferAiSetup } from "./settings/localAi/aiSetupSeen.js";
 import { fetchModelsOnce } from "./settings/localAi/LocalAiSection.js";
 import { ToastHost } from "./shell/toast.js";
+import { useIsMobile } from "./shell/useIsMobile.js";
 import { LowEndBanner } from "./globe/LowEndBanner.js";
 import { DegradedBanner } from "./globe/DegradedBanner.js";
 import { readMfaStep, useMfaNeeded, type MfaStep } from "./auth/mfa.js";
@@ -177,20 +182,28 @@ function PredictedMotionBadge(): JSX.Element | null {
 }
 
 // First-run tour. Only on the live map routes ("/" and "/2d") — auth, news and
-// studio pages get no overlay. Shows once, then localStorage remembers it.
+// studio pages get no overlay. Shows once, then localStorage remembers it. On
+// the phone layout it is a hint over the map instead of a modal over all of it.
 function OnboardingGate(): JSX.Element | null {
   const loc = useLocation();
   const [show, setShow] = useState(() => !hasOnboarded());
+  const phone = useIsMobile();
   const onMap = loc.pathname === "/" || loc.pathname.startsWith("/2d");
   if (!show || !onMap) return null;
-  return <Onboarding onClose={() => setShow(false)} />;
+  const close = (): void => setShow(false);
+  return phone ? (
+    <OnboardingHint onClose={close} />
+  ) : (
+    <Onboarding onClose={close} />
+  );
 }
 
 // First-run local-AI setup wizard gate. Only on the live map routes, only
-// once per browser (velocity.aiSetupSeen), and only when there's actually
-// nothing to route to yet: zero installed models AND llama.cpp isn't already
-// running (an operator who already has a model or a hand-run llama-server
-// doesn't need the wizard nagging them).
+// once per browser (velocity.aiSetupSeen), only off a touch device (the wizard
+// configures the server, see shouldOfferAiSetup), and only when there's
+// actually nothing to route to yet: zero installed models AND llama.cpp isn't
+// already running (an operator who already has a model or a hand-run
+// llama-server doesn't need the wizard nagging them).
 function AiSetupGate(): JSX.Element | null {
   const loc = useLocation();
   const onMap = loc.pathname === "/" || loc.pathname.startsWith("/2d");
@@ -198,7 +211,7 @@ function AiSetupGate(): JSX.Element | null {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    if (!onMap || hasSeenAiSetup() || checked) return;
+    if (!onMap || !shouldOfferAiSetup() || checked) return;
     let live = true;
     void (async () => {
       const models = await fetchModelsOnce();

@@ -10,6 +10,8 @@ import {
   APP_GROUPS,
   type AppId,
 } from "../state/appView.js";
+import { Modal } from "./Modal.js";
+import { useIsMobile } from "./useIsMobile.js";
 import {
   useEntityStats,
   setStatsViewer,
@@ -474,6 +476,9 @@ export function TitleBar({
   const contactSeries = useSeries(counted);
   const msSeries = useSeries(renderMs);
   const [launcher, setLauncher] = useState(false);
+  // Phone: the whole bar folds into one Menu button (see PhoneMenu below).
+  const isMobile = useIsMobile();
+  const [phoneMenu, setPhoneMenu] = useState(false);
   const activeApp = useAppView((s) => s.app);
   const setApp = useAppView((s) => s.setApp);
   const [pinned, setPinned] = useState<AppId[]>([
@@ -513,6 +518,94 @@ export function TitleBar({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [menu, launcher]);
+
+  // The document line. It used to be a hardcoded amber square, a fixed title
+  // and a green check reading "Saved" — three pieces of chrome that were true
+  // of nothing. It said Saved on a console that saves nothing, which is the
+  // fabricated-state failure this repo bans in the map and had left sitting in
+  // the window frame.
+  //
+  // Now: what you are looking at, whether the clock is live or held, and
+  // whether the alert socket is actually up. Every value is read from the store
+  // that owns it. Built once because the desktop bar and the phone strip both
+  // carry it.
+  const docLine = (
+    <span
+      className="ml-3 flex min-w-0 flex-1 items-center justify-center gap-2"
+      title={
+        playing
+          ? "The clock is running at real time; contacts advance as fixes arrive."
+          : "The clock is held. Contacts stay at the fix they had when you paused."
+      }
+    >
+      <span
+        className={`h-[10px] w-[10px] shrink-0 rounded-[1px] ${playing ? "bg-ok" : "bg-warn"}`}
+        aria-hidden
+      />
+      <span className="truncate text-[13px] font-semibold text-txt-0">
+        {documentTitle ?? APP_META[activeApp]?.label ?? "Live map"}
+      </span>
+      <span className="mono shrink-0 tabular-nums text-[12px] text-txt-2">
+        {clock}
+      </span>
+      <span className="shrink-0 text-[12px] text-txt-3">
+        {playing ? "live" : "held"}
+      </span>
+      <span
+        className={`h-[6px] w-[6px] shrink-0 rounded-full ${WS_DOT[ws] ?? "bg-bg-4"}`}
+        title={`Alert socket: ${ws}`}
+        aria-label={`Alert socket ${ws}`}
+      />
+    </span>
+  );
+
+  // The marking, as a pill. A full-width saturated band was 26px of screen
+  // spent on one word, and the loudest thing on a data surface.
+  const pill = (
+    <span
+      className="csl2-clas ml-2"
+      data-kind={exercise ? "exercise" : "unclas"}
+    >
+      <Icon name="shield" className="h-3 w-3" />
+      {exercise ? "EXERCISE" : classification}
+    </span>
+  );
+
+  // On a phone the bar is one Menu button, the document line and the marking.
+  // The six menus, the app launcher, inbox, alerts, settings and the account
+  // chip were what ran past the right edge (they are ~860px of controls in a
+  // 412px strip, and `overflow: hidden` clips them without moving them), and at
+  // 20px tall they were the phone's navigation. They are all in the sheet.
+  if (isMobile)
+    return (
+      <div ref={barRef} className="contents">
+        <nav aria-label="Application" data-primary-nav className="shrink-0">
+          <button
+            type="button"
+            onClick={() => setPhoneMenu(true)}
+            aria-label="Menu"
+            aria-haspopup="dialog"
+            aria-expanded={phoneMenu}
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-sm text-txt-1 hover:bg-(--hover)"
+          >
+            <Icon name="menu" className="h-[20px] w-[20px]" />
+          </button>
+        </nav>
+        <Icon
+          name="hexagon"
+          className="ml-1 h-[16px] w-[16px] shrink-0 text-accent-fg"
+        />
+        {docLine}
+        {pill}
+        <PhoneMenu
+          open={phoneMenu}
+          onClose={() => setPhoneMenu(false)}
+          ctx={ctx}
+          activeApp={activeApp}
+          setApp={setApp}
+        />
+      </div>
+    );
 
   return (
     // `display: contents` — a DOM node the outside-click test can ask about,
@@ -627,42 +720,7 @@ export function TitleBar({
         <Icon name="chevron-down" className="h-3 w-3" />
       </button>
 
-      {/* The document line. It used to be a hardcoded amber square, a fixed
-          title and a green check reading "Saved" — three pieces of chrome that
-          were true of nothing. It said Saved on a console that saves nothing,
-          which is the fabricated-state failure this repo bans in the map and
-          had left sitting in the window frame.
-
-          Now: what you are looking at, whether the clock is live or held, and
-          whether the alert socket is actually up. Every value is read from the
-          store that owns it. */}
-      <span
-        className="ml-3 flex min-w-0 flex-1 items-center justify-center gap-2"
-        title={
-          playing
-            ? "The clock is running at real time; contacts advance as fixes arrive."
-            : "The clock is held. Contacts stay at the fix they had when you paused."
-        }
-      >
-        <span
-          className={`h-[10px] w-[10px] shrink-0 rounded-[1px] ${playing ? "bg-ok" : "bg-warn"}`}
-          aria-hidden
-        />
-        <span className="truncate text-[13px] font-semibold text-txt-0">
-          {documentTitle ?? APP_META[activeApp]?.label ?? "Live map"}
-        </span>
-        <span className="mono shrink-0 tabular-nums text-[12px] text-txt-2">
-          {clock}
-        </span>
-        <span className="shrink-0 text-[12px] text-txt-3">
-          {playing ? "live" : "held"}
-        </span>
-        <span
-          className={`h-[6px] w-[6px] shrink-0 rounded-full ${WS_DOT[ws] ?? "bg-bg-4"}`}
-          title={`Alert socket: ${ws}`}
-          aria-label={`Alert socket ${ws}`}
-        />
-      </span>
+      {docLine}
 
       {launcher &&
         anchor &&
@@ -775,15 +833,7 @@ export function TitleBar({
         Settings
       </button>
 
-      {/* The marking, as a pill. A full-width saturated band was 26px of screen
-          spent on one word, and the loudest thing on a data surface. */}
-      <span
-        className="csl2-clas ml-2"
-        data-kind={exercise ? "exercise" : "unclas"}
-      >
-        <Icon name="shield" className="h-3 w-3" />
-        {exercise ? "EXERCISE" : classification}
-      </span>
+      {pill}
     </div>
   );
 }
@@ -884,5 +934,125 @@ function AppRow({
         <Icon name="star" className="h-3 w-3" />
       </button>
     </div>
+  );
+}
+
+// ── Phone ────────────────────────────────────────────────────────────────────
+
+/** One row of the phone menu. 44px in px, not `h-11`: the root font is 13px, so
+ *  the rem class is 36px and misses the touch target. */
+const PHONE_ROW =
+  "flex min-h-[44px] w-full items-center gap-3 rounded-sm px-3 text-left text-[13px] text-txt-1 hover:bg-(--hover)";
+
+/** What the desktop bar spreads across six menus, an app launcher, three icon
+ *  buttons and an account chip, in the one sheet the phone's Menu button opens:
+ *  the 2D map, the apps, then every menu with the same items and the same
+ *  commands. Nothing is invented and nothing is dropped; a menu hint (⌘K) is the
+ *  one thing left off, because a phone has no key to press. The Modal brings
+ *  the backdrop, Escape and focus return the bar's dropdowns work for. */
+function PhoneMenu({
+  open,
+  onClose,
+  ctx,
+  activeApp,
+  setApp,
+}: {
+  open: boolean;
+  onClose: () => void;
+  ctx: MenuCtx;
+  activeApp: AppId;
+  setApp: (id: AppId) => void;
+}): JSX.Element {
+  return (
+    <Modal open={open} onClose={onClose} title="Menu" width={420}>
+      <div className="-mx-1 flex flex-col">
+        <Link to="/2d" onClick={onClose} className={PHONE_ROW}>
+          <Icon name="map" className="h-[16px] w-[16px] shrink-0 text-txt-3" />
+          2D map
+          <span className="ml-auto truncate text-[12px] text-txt-3">
+            lighter on a weak GPU
+          </span>
+        </Link>
+        <Group label="Apps">
+          {APP_GROUPS.flatMap((g) => g.apps).map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setApp(id);
+                onClose();
+              }}
+              title={APP_META[id]?.hint}
+              className={`${PHONE_ROW} ${id === activeApp ? "bg-accent-dim text-accent-fg" : ""}`}
+            >
+              <Icon
+                name={APP_ICON[id] ?? "hexagon"}
+                className="h-[16px] w-[16px] shrink-0"
+              />
+              {APP_META[id]?.label ?? id}
+            </button>
+          ))}
+        </Group>
+        {MENUS.map((m) => (
+          <Group key={m} label={m}>
+            {MENU_ITEMS[m].map((it) => {
+              const why = it.disabled?.(ctx) ?? null;
+              const checked = it.on?.(ctx) ?? false;
+              return (
+                <button
+                  key={it.label}
+                  type="button"
+                  disabled={why !== null}
+                  {...(why ? { title: why } : {})}
+                  onClick={() => {
+                    it.run(ctx);
+                    onClose();
+                  }}
+                  className={`${PHONE_ROW} ${why ? "cursor-not-allowed text-txt-3" : ""}`}
+                >
+                  <Icon
+                    name="check"
+                    className={`h-3 w-3 shrink-0 ${checked ? "text-accent-fg" : "invisible"}`}
+                  />
+                  <span className="min-w-0 flex-1">{it.label}</span>
+                </button>
+              );
+            })}
+          </Group>
+        ))}
+        <PhoneAccount onDone={onClose} />
+      </div>
+    </Modal>
+  );
+}
+
+/** Sign in or out, as a menu row. SignInChip is the desktop bar's version of
+ *  this and its 20px chip is not a phone target. Same rule as there: the visible
+ *  word is the action (ASVS V7.4.4), the account stays in the accessible name. */
+function PhoneAccount({ onDone }: { onDone: () => void }): JSX.Element | null {
+  const { user, loading, signOut } = useAuth();
+  if (!isSupabaseConfigured || loading) return null;
+  if (!user)
+    return (
+      <Link to="/login" onClick={onDone} className={`${PHONE_ROW} mt-2`}>
+        <Icon name="user" className="h-[16px] w-[16px] shrink-0 text-txt-3" />
+        Sign in
+      </Link>
+    );
+  const who = user.email ?? user.id.slice(0, 8);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onDone();
+        void signOut();
+      }}
+      aria-label={`Sign out ${who}`}
+      className={`${PHONE_ROW} mt-2`}
+    >
+      <Icon name="user" className="h-[16px] w-[16px] shrink-0 text-txt-3" />
+      Sign out
+      <span className="ml-auto truncate text-[12px] text-txt-3">{who}</span>
+    </button>
   );
 }

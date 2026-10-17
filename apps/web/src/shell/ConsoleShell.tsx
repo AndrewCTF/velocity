@@ -8,14 +8,10 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  X,
-  PanelRightClose,
-  PanelLeftClose,
-  PanelRightOpen,
-} from "lucide-react";
+import { PanelRightClose, PanelLeftClose, PanelRightOpen } from "lucide-react";
 import type { TabDef } from "./TabbedPanel.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
+import { MobileSheets } from "./MobileSheets.js";
 import { useIsMobile } from "./useIsMobile.js";
 import { StatusDot, MicroLabel } from "./instruments.js";
 import { FloatingPanel } from "./FloatingPanel.js";
@@ -448,78 +444,24 @@ export function ConsoleShell({
         {/* ───────────────── mobile chrome ───────────────── */}
         {isMobile && (
           <>
-            {/* active panel — full-screen over the globe */}
-            {active && (
-              <div
-                className="absolute inset-0 z-30 flex flex-col"
-                style={{ background: RAIL_BG }}
-              >
-                <div
-                  className="flex items-center justify-between border-b border-line-2 px-3 flex-none"
-                  style={{ height: 40 }}
-                >
-                  <span className="mono text-[12px] text-txt-0">
-                    {active.label}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveId(null)}
-                    className="mono text-[12px] text-txt-2 px-2 py-1 flex items-center gap-1"
-                    aria-label="Close panel"
-                  >
-                    <X size={13} strokeWidth={1.75} aria-hidden /> Close
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                  <ErrorBoundary label={active.label}>
-                    {active.content}
-                  </ErrorBoundary>
-                </div>
-              </div>
-            )}
+            {/* the active panel and the panel chooser — shared with the
+                console's phone layout (MobileSheets.tsx) */}
+            <MobileSheets
+              panels={mobilePanels}
+              activeId={activeId}
+              onActive={setActiveId}
+              menuOpen={menuOpen}
+              onMenuOpen={setMenuOpen}
+            />
 
-            {/* panel chooser sheet */}
-            {menuOpen && !active && (
-              <div className="absolute inset-0 z-30">
-                <button
-                  type="button"
-                  aria-label="Close menu"
-                  onClick={() => setMenuOpen(false)}
-                  className="absolute inset-0 bg-black/60"
-                />
-                <div
-                  className="absolute left-0 right-0 bottom-0 max-h-[80%] overflow-y-auto border-t border-line-2 rounded-t-2xl p-2"
-                  style={{ background: RAIL_BG }}
-                >
-                  <div className="mono text-[11px] text-txt-2 px-2 pt-2 pb-1">
-                    PANELS
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 p-1">
-                    {mobilePanels.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveId(p.id);
-                          setMenuOpen(false);
-                        }}
-                        className="flex items-center gap-2 border border-line-2 rounded-md px-3 py-3 mono text-[12px] text-txt-0 text-left hover:border-accent-line"
-                      >
-                        {p.icon}
-                        <span>{p.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* hamburger — opens the chooser (hidden while a panel is open) */}
+            {/* hamburger — opens the chooser (hidden while a panel is open).
+                Same layer as the sheets and later in the tree, so it stays
+                above the chooser's backdrop and a second tap still closes it. */}
             {!active && (
               <button
                 type="button"
                 onClick={() => setMenuOpen((v) => !v)}
-                className="absolute bottom-3 left-3 z-40 mono text-[13px] px-4 py-2.5 rounded-md border border-line-2 text-txt-0 flex items-center gap-2"
+                className="absolute bottom-3 left-3 z-(--z-overlay) mono text-[13px] px-4 py-2.5 rounded-md border border-line-2 text-txt-0 flex items-center gap-2"
                 style={{ background: RAIL_BG }}
                 aria-label="Open panels menu"
               >
