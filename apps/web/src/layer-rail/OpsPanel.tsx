@@ -13,25 +13,29 @@
 // RESKIN/COMPOSE only: every value here is real. No fabricated counts, no dead
 // controls. See the design contract — primitives come from shell/instruments.
 
-import { useEffect, useMemo, useState } from 'react';
-import * as Cesium from 'cesium';
-import type { AlertSeverity } from '@osint/shared';
-import { SectionLabel, Badge, type BadgeTone } from '../shell/instruments.js';
-import { chokepoints, type Chokepoint } from '../registry/chokepoints.js';
-import { useAoi } from '../state/aoi.js';
-import { flyToChokepoint } from '../globe/camera.js';
-import { apiFetch } from '../transport/http.js';
-import { useReducedMotion } from '../shell/useReducedMotion.js';
-import { useEntityStats, setStatsViewer, acquireStats } from '../globe/entityStats.js';
+import { useEffect, useMemo, useState } from "react";
+import * as Cesium from "cesium";
+import type { AlertSeverity } from "@osint/shared";
+import { SectionLabel, Badge, type BadgeTone } from "../shell/instruments.js";
+import { chokepoints, type Chokepoint } from "../registry/chokepoints.js";
+import { useAoi } from "../state/aoi.js";
+import { flyToChokepoint } from "../globe/camera.js";
+import { apiFetch } from "../transport/http.js";
+import { useReducedMotion } from "../shell/useReducedMotion.js";
+import {
+  useEntityStats,
+  setStatsViewer,
+  acquireStats,
+} from "../globe/entityStats.js";
 
 // Each chokepoint gets a small category-toned dot so the list scans fast.
 // Token refs (the consumer is CSS style.background), one distinct hue per
 // category, theme-aware in both light and dark.
-const CATEGORY_DOT: Record<Chokepoint['category'], string> = {
-  maritime: 'var(--accent)',
-  aviation: 'var(--warn)',
-  cable: 'var(--mag)',
-  'air-corridor': 'var(--ok)',
+const CATEGORY_DOT: Record<Chokepoint["category"], string> = {
+  maritime: "var(--accent)",
+  aviation: "var(--warn)",
+  cable: "var(--mag)",
+  "air-corridor": "var(--ok)",
 };
 
 // Live in-AOI contact counts come from the shared entity-stats sampler
@@ -39,11 +43,17 @@ const CATEGORY_DOT: Record<Chokepoint['category'], string> = {
 // of a second per-2s walk here that competed with Cesium's render loop.
 
 // Severity ordering + badge tone mapping for the standing-detections rollup.
-const SEVERITY_ORDER: readonly AlertSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
+const SEVERITY_ORDER: readonly AlertSeverity[] = [
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "info",
+];
 function severityTone(sev: AlertSeverity): BadgeTone {
-  if (sev === 'critical' || sev === 'high') return 'alert';
-  if (sev === 'medium') return 'warn';
-  return 'neutral';
+  if (sev === "critical" || sev === "high") return "alert";
+  if (sev === "medium") return "warn";
+  return "neutral";
 }
 
 export function OpsPanel({
@@ -61,14 +71,19 @@ export function OpsPanel({
   // from /api/alerts/standing (the evaluator's most recent picture × the user's
   // rules) so this section is stable across reloads / reconnects / restarts —
   // unlike the EDGE-triggered alert buffer, which only blips on a fresh crossing.
-  const [standing, setStanding] = useState<{ counts: Record<string, number>; total: number }>({
+  const [standing, setStanding] = useState<{
+    counts: Record<string, number>;
+    total: number;
+  }>({
     counts: {},
     total: 0,
   });
   // A non-2xx poll (e.g. a 401 on a deployment that hard-gates this route) must
   // not read the same as "fetched, zero detections" — this carries the HTTP
   // status so the panel can say so instead of showing a confident 0.
-  const [standingUnavailable, setStandingUnavailable] = useState<number | null>(null);
+  const [standingUnavailable, setStandingUnavailable] = useState<number | null>(
+    null,
+  );
   useEffect(() => {
     let cancelled = false;
     const poll = async (): Promise<void> => {
@@ -76,7 +91,7 @@ export function OpsPanel({
         // no-store: this is a live level poll — never let the browser replay a
         // stale/misrouted cached body (e.g. an index.html served during a backend
         // blip), which would freeze the panel on wrong data.
-        const r = await apiFetch('/api/alerts/standing', { cache: 'no-store' });
+        const r = await apiFetch("/api/alerts/standing", { cache: "no-store" });
         if (cancelled) return;
         if (!r.ok) {
           setStandingUnavailable(r.status);
@@ -88,7 +103,10 @@ export function OpsPanel({
         };
         if (cancelled) return;
         setStandingUnavailable(null);
-        setStanding({ counts: data.counts ?? {}, total: (data.detections ?? []).length });
+        setStanding({
+          counts: data.counts ?? {},
+          total: (data.detections ?? []).length,
+        });
       } catch {
         /* keep last good counts on a transient failure */
       }
@@ -139,16 +157,20 @@ export function OpsPanel({
                 aria-pressed={isActive}
                 title={c.significance}
                 className={[
-                  'w-full text-left flex items-center gap-2 border-l-2 pl-2 pr-1 py-[5px]',
-                  'hover:bg-bg-3/50 transition-colors',
-                  isActive ? 'border-accent bg-accent-dim/40' : 'border-transparent',
-                ].join(' ')}
+                  "w-full text-left flex items-center gap-2 border-l-2 pl-2 pr-1 py-[5px]",
+                  "hover:bg-bg-3/50 transition-colors",
+                  isActive
+                    ? "border-accent bg-accent-dim/40"
+                    : "border-transparent",
+                ].join(" ")}
               >
                 <span
                   className="h-2 w-2 rounded-sm shrink-0"
                   style={{ background: CATEGORY_DOT[c.category] }}
                 />
-                <span className="text-[11.5px] text-txt-1 truncate min-w-0 flex-1">{c.name}</span>
+                <span className="text-[11.5px] text-txt-1 truncate min-w-0 flex-1">
+                  {c.name}
+                </span>
                 {live !== undefined && (
                   <span
                     className="mono text-[10px] text-accent tabular-nums shrink-0"
@@ -185,7 +207,7 @@ export function OpsPanel({
         >
           <SectionLabel
             title="Standing detections"
-            count={standingUnavailable != null ? '—' : standing.total}
+            count={standingUnavailable != null ? "—" : standing.total}
           />
         </div>
         {standingUnavailable != null ? (
@@ -193,7 +215,9 @@ export function OpsPanel({
             Standing detections unavailable (HTTP {standingUnavailable})
           </div>
         ) : detections.length === 0 ? (
-          <div className="mono text-[10px] text-txt-3 px-2 py-[5px]">no detections firing</div>
+          <div className="mono text-[10px] text-txt-3 px-2 py-[5px]">
+            no detections firing
+          </div>
         ) : (
           <div className="space-y-px">
             {detections.map(({ sev, n }) => (

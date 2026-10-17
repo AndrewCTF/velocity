@@ -1,5 +1,5 @@
 export interface AircraftEnrichment {
-  kind: 'aircraft';
+  kind: "aircraft";
   icao24: string;
   registration?: string | null;
   type?: string | null;
@@ -42,7 +42,7 @@ export interface Airport {
   lon?: number | null;
 }
 export interface VesselEnrichment {
-  kind: 'vessel';
+  kind: "vessel";
   mmsi: string;
   name?: string | null;
   imo?: string | null;
@@ -75,7 +75,7 @@ export interface VesselEnrichment {
   note?: string;
 }
 export interface QuakeEnrichment {
-  kind: 'quake';
+  kind: "quake";
   id: string;
   mag?: number | null;
   place?: string | null;
@@ -110,7 +110,7 @@ export interface Frequency {
   mhz?: number | null;
 }
 export interface AirportEnrichment {
-  kind: 'airport';
+  kind: "airport";
   icao: string;
   iata?: string | null;
   name?: string | null;
@@ -143,7 +143,7 @@ export interface AirportEnrichment {
   source?: string;
 }
 export interface PortEnrichment {
-  kind: 'port';
+  kind: "port";
   wpi: string;
   name?: string | null;
   lat?: number | null;
@@ -166,7 +166,7 @@ export interface PortEnrichment {
   source?: string;
 }
 export interface SatelliteEnrichment {
-  kind: 'satellite';
+  kind: "satellite";
   norad_cat_id: string;
   object_name?: string | null;
   object_type?: string | null;
@@ -215,7 +215,7 @@ export interface Metar {
   elev?: number;
 }
 
-import { apiFetch } from './http.js';
+import { apiFetch } from "./http.js";
 
 export async function fetchEnrichment(
   eid: string,
@@ -223,9 +223,9 @@ export async function fetchEnrichment(
   hints?: { callsign?: string | null },
 ): Promise<Enrichment | null> {
   const params = new URLSearchParams();
-  if (hints?.callsign) params.set('callsign', hints.callsign);
+  if (hints?.callsign) params.set("callsign", hints.callsign);
   const qs = params.toString();
-  const path = `/api/entity/${encodeURIComponent(eid)}${qs ? `?${qs}` : ''}`;
+  const path = `/api/entity/${encodeURIComponent(eid)}${qs ? `?${qs}` : ""}`;
   const r = await apiFetch(path, signal ? { signal } : {});
   if (!r.ok) return null;
   return (await r.json()) as Enrichment;
@@ -235,7 +235,10 @@ export async function fetchEnrichment(
  * null on any failure or when the station simply has no current report
  * (`data` empty — a non-reporting airfield, not an error) so callers can
  * render a graceful "unavailable" state instead of crashing. */
-export async function fetchMetar(icao: string, signal?: AbortSignal): Promise<Metar | null> {
+export async function fetchMetar(
+  icao: string,
+  signal?: AbortSignal,
+): Promise<Metar | null> {
   const path = `/api/weather/metar?ids=${encodeURIComponent(icao)}`;
   const r = await apiFetch(path, signal ? { signal } : {});
   if (!r.ok) return null;

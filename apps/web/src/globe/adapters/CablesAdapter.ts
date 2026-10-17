@@ -1,25 +1,31 @@
-import * as Cesium from 'cesium';
-import type { LayerAdapter, AdapterCtx } from './types.js';
-import { colors } from './styles.js';
-import { apiFetch } from '../../transport/http.js';
+import * as Cesium from "cesium";
+import type { LayerAdapter, AdapterCtx } from "./types.js";
+import { colors } from "./styles.js";
+import { apiFetch } from "../../transport/http.js";
 
 interface Props {
   ctx: AdapterCtx;
   endpoint: string;
-  kind: 'lines' | 'landings';
+  kind: "lines" | "landings";
 }
 
 interface CableLine {
-  type: 'Feature';
-  properties: { id?: string; name?: string; rfs?: string | number; length?: number };
-  geometry: { type: 'MultiLineString'; coordinates: Array<Array<[number, number]>> } |
-            { type: 'LineString'; coordinates: Array<[number, number]> };
+  type: "Feature";
+  properties: {
+    id?: string;
+    name?: string;
+    rfs?: string | number;
+    length?: number;
+  };
+  geometry:
+    | { type: "MultiLineString"; coordinates: Array<Array<[number, number]>> }
+    | { type: "LineString"; coordinates: Array<[number, number]> };
 }
 
 interface Landing {
-  type: 'Feature';
+  type: "Feature";
   properties: { id?: string; name?: string; city?: string };
-  geometry: { type: 'Point'; coordinates: [number, number] };
+  geometry: { type: "Point"; coordinates: [number, number] };
 }
 
 interface FC {
@@ -53,17 +59,22 @@ export class CablesAdapter implements LayerAdapter {
   private async fetchOnce(): Promise<void> {
     this.aborter = new AbortController();
     try {
-      const r = await apiFetch(this.props.endpoint, { signal: this.aborter.signal });
+      const r = await apiFetch(this.props.endpoint, {
+        signal: this.aborter.signal,
+      });
       if (!r.ok) {
-        this.props.ctx.reportStatus({ status: 'red', note: `upstream ${r.status}` });
+        this.props.ctx.reportStatus({
+          status: "red",
+          note: `upstream ${r.status}`,
+        });
         return;
       }
       const fc = (await r.json()) as FC;
       this.render(fc);
-      this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
+      this.props.ctx.reportStatus({ status: "green", lastSeen: Date.now() });
     } catch (e) {
-      if ((e as DOMException)?.name === 'AbortError') return;
-      this.props.ctx.reportStatus({ status: 'red', note: 'transport error' });
+      if ((e as DOMException)?.name === "AbortError") return;
+      this.props.ctx.reportStatus({ status: "red", note: "transport error" });
     }
   }
 
@@ -71,33 +82,39 @@ export class CablesAdapter implements LayerAdapter {
     const entities = this.ds.entities;
     entities.suspendEvents();
     entities.removeAll();
-    const accentMat = new Cesium.ColorMaterialProperty(colors.accent().withAlpha(0.55));
+    const accentMat = new Cesium.ColorMaterialProperty(
+      colors.accent().withAlpha(0.55),
+    );
     for (const f of fc.features ?? []) {
-      if (this.props.kind === 'lines') {
+      if (this.props.kind === "lines") {
         const lines: Array<Array<[number, number]>> = [];
         const g = f.geometry;
-        if (g.type === 'LineString') lines.push(g.coordinates as Array<[number, number]>);
-        else if (g.type === 'MultiLineString') lines.push(...(g.coordinates as Array<Array<[number, number]>>));
+        if (g.type === "LineString")
+          lines.push(g.coordinates as Array<[number, number]>);
+        else if (g.type === "MultiLineString")
+          lines.push(...(g.coordinates as Array<Array<[number, number]>>));
         else continue;
         for (let i = 0; i < lines.length; i++) {
           const pts = lines[i];
           if (!pts || pts.length < 2) continue;
           const lineOpts: Cesium.Entity.ConstructorOptions = {
-            id: `cable:${f.properties?.id ?? f.properties?.name ?? 'x'}:${i}`,
+            id: `cable:${f.properties?.id ?? f.properties?.name ?? "x"}:${i}`,
             polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArray(pts.flatMap((p) => [p[0], p[1]])),
+              positions: Cesium.Cartesian3.fromDegreesArray(
+                pts.flatMap((p) => [p[0], p[1]]),
+              ),
               width: 1.2,
               material: accentMat,
               clampToGround: false,
             },
-            properties: { kind: 'cable', name: f.properties?.name },
+            properties: { kind: "cable", name: f.properties?.name },
           };
           if (f.properties?.name) lineOpts.name = f.properties.name;
           entities.add(lineOpts);
         }
       } else {
         const g = f.geometry;
-        if (g.type !== 'Point') continue;
+        if (g.type !== "Point") continue;
         const [lon, lat] = g.coordinates;
         const landOpts: Cesium.Entity.ConstructorOptions = {
           id: `landing:${f.properties?.id ?? f.properties?.name ?? `${lon},${lat}`}`,
@@ -109,7 +126,7 @@ export class CablesAdapter implements LayerAdapter {
             outlineWidth: 1,
           },
           properties: {
-            kind: 'cable_landing',
+            kind: "cable_landing",
             name: f.properties?.name,
             city: (f.properties as { city?: string }).city,
           },

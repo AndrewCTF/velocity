@@ -5,6 +5,7 @@ items (marked `[>30d]`) kept because they are the highest-engagement artifacts i
 category and every 30-day item reacts to them.
 
 Companion documents:
+
 - `docs/palantir-reference-2026-07.md` — what the incumbent ships, panel by panel.
 - `docs/plan-50-2026-07-29.md` — the 50 changes this evidence produced.
 
@@ -49,17 +50,17 @@ That is a category-collapse diagnosis from the audience we would be launching to
 
 ### 1.1 What every competitor is missing, in one table
 
-| Project | Evidence | Stateless? | History/replay | Provenance | Queue/alerts | Agent API |
-|---|---|---|---|---|---|---|
-| **OSIRIS** (+4 forks) | X, GH | **Yes** — "entirely stateless, pulls data on demand" | none | none | none | none |
-| **Shadowbroker** | HN 312pts | Yes — 60 s GeoJSON push | none | none | none | none |
-| **WorldMonitor** | GH, X | Yes | none | none | AI threat classify | none |
-| **IRONSIGHT** | X 2026-07-19 | Yes | none | none | none | none |
-| **KNWLDGBox** | X 2026-07-21 | Yes | none | none | none | none |
-| **GlobalThreatMap** | X | Yes | none | none | none | none |
-| **SitDeck** | HN 47267923 | Yes | none | none | none | none |
-| **IranWarLive** | HN 47200316 | Yes | none | none | none | none |
-| **This repo** | — | No — `history.db` | **owned, unlimited** | partial | rules exist | MCP, 34 tools |
+| Project               | Evidence     | Stateless?                                           | History/replay       | Provenance | Queue/alerts       | Agent API     |
+| --------------------- | ------------ | ---------------------------------------------------- | -------------------- | ---------- | ------------------ | ------------- |
+| **OSIRIS** (+4 forks) | X, GH        | **Yes** — "entirely stateless, pulls data on demand" | none                 | none       | none               | none          |
+| **Shadowbroker**      | HN 312pts    | Yes — 60 s GeoJSON push                              | none                 | none       | none               | none          |
+| **WorldMonitor**      | GH, X        | Yes                                                  | none                 | none       | AI threat classify | none          |
+| **IRONSIGHT**         | X 2026-07-19 | Yes                                                  | none                 | none       | none               | none          |
+| **KNWLDGBox**         | X 2026-07-21 | Yes                                                  | none                 | none       | none               | none          |
+| **GlobalThreatMap**   | X            | Yes                                                  | none                 | none       | none               | none          |
+| **SitDeck**           | HN 47267923  | Yes                                                  | none                 | none       | none               | none          |
+| **IranWarLive**       | HN 47200316  | Yes                                                  | none                 | none       | none               | none          |
+| **This repo**         | —            | No — `history.db`                                    | **owned, unlimited** | partial    | rules exist        | MCP, 34 tools |
 
 Every single competitor is a **stateless viewer of other people's live APIs**. Not one
 of them owns the past, scores the trustworthiness of a contact, works a queue, or can be
@@ -76,32 +77,32 @@ competitors have 15-65 layers. Compete on the four columns nobody else has.
 Ranked by real engagement, not by how impressive the project is. The ordering is the
 lesson.
 
-| # | Item | Source | Date | Engagement |
-|---|---|---|---|---|
-| 1 | [Somebody used spoofed ADSB signals to raster the meme of JD Vance](https://news.ycombinator.com/item?id=46802067) | HN | 2026-01-28 `[>30d]` | **549 pts, 150 cmt** |
-| 2 | [Show HN: Is Hormuz open yet?](https://news.ycombinator.com/item?id=47696562) | HN | 2026-04-08 `[>30d]` | **484 pts, 209 cmt** |
-| 3 | [How to track dark ships using OSINT (with demos)](https://youtu.be/niL4JPfcD3g) | YouTube (David Bombal) | 2026-04-19 `[>30d]` | **332,802 views** |
-| 4 | [Show HN: real-time OSINT dashboard, 15 live global feeds (Shadowbroker)](https://news.ycombinator.com/item?id=47300102) | HN | 2026-03-08 `[>30d]` | **312 pts, 123 cmt** |
-| 5 | [Small aircraft crashes into house near Ganderkesee Airfield](https://www.reddit.com/r/flightradar24/comments/1v678na/) | r/flightradar24 | 2026-07-25 | **703 pts, 36 cmt** |
-| 6 | [Top 7 OSINT tools REVEALED for 2026](https://youtu.be/WHOgdsEiyew) | YouTube (David Bombal) | 2026-02-15 | 397,386 views |
-| 7 | [Oshkosh Feeders are Live](https://www.reddit.com/r/ADSB/comments/1uxl3i7/) | r/ADSB | 2026-07-15 | **179 pts, 18 cmt** |
-| 8 | [OSINT professionals: watch out for this recruitment approach](https://www.reddit.com/r/OSINT/comments/1v4917w/) | r/OSINT | 2026-07-23 | **168 pts, 19 cmt** |
-| 9 | [What's the most interesting OSINT job you've ever had?](https://www.reddit.com/r/OSINT/comments/1v0vdak/) | r/OSINT | 2026-07-19 | **167 pts, 47 cmt** |
-| 10 | [User Scanner v1.4.1 — free 2-in-1 OSINT tool](https://www.reddit.com/r/Hacking_Tutorials/comments/1uw7f6d/) | r/Hacking_Tutorials | 2026-07-14 | **139 pts, 15 cmt** |
-| 11 | [OSINT Toolkit Every Investigator Needs in 2026](https://youtu.be/iMD4R1LeqNg) | YouTube (Shield Spectrum) | 2026-04-02 | 73,444 views |
-| 12 | [Where to practice crypto OSINT skills without real-world consequences?](https://www.reddit.com/r/OSINT/comments/1v70zud/) | r/OSINT | 2026-07-26 | 59 pts, 6 cmt |
-| 13 | [Show HN: OSINT tool that finds exposed files on domains](https://news.ycombinator.com/item?id=48797656) | HN | 2026-07-05 | 58 pts, 26 cmt |
-| 14 | [Show HN: Red Grid Link — P2P team tracking over Bluetooth, no servers](https://news.ycombinator.com/item?id=47461529) | HN | 2026-03-20 `[>30d]` | 54 pts, 36 cmt |
-| 15 | [Show HN: Customizable OSINT dashboard to monitor the situation](https://news.ycombinator.com/item?id=46591589) | HN | 2026-01-12 `[>30d]` | 50 pts, 23 cmt |
-| 16 | [ADV-S Flight Radar is officially live!!!](https://www.reddit.com/r/ADSB/comments/1v5evbi/) | r/ADSB | 2026-07-24 | 40 pts, 7 cmt |
-| 17 | [Built a GUI for usual OSINT tools plus added some extra](https://www.reddit.com/r/osinttools/comments/1v7qbp7/) | r/osinttools | 2026-07-27 | 15 pts, 4 cmt |
-| 18 | [Espectrosint vs maltego?](https://www.reddit.com/r/OSINT/comments/1v4t369/) | r/OSINT | 2026-07-23 | 4 pts, 3 cmt |
-| 19 | **[Multi-source live geospatial fusion on a Cesium globe (this repo)](https://www.reddit.com/r/geospatial/comments/1uqppm7/)** | r/geospatial | 2026-07-08 | **2 pts, 0 cmt** |
+| #   | Item                                                                                                                           | Source                    | Date                | Engagement           |
+| --- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------- | ------------------- | -------------------- |
+| 1   | [Somebody used spoofed ADSB signals to raster the meme of JD Vance](https://news.ycombinator.com/item?id=46802067)             | HN                        | 2026-01-28 `[>30d]` | **549 pts, 150 cmt** |
+| 2   | [Show HN: Is Hormuz open yet?](https://news.ycombinator.com/item?id=47696562)                                                  | HN                        | 2026-04-08 `[>30d]` | **484 pts, 209 cmt** |
+| 3   | [How to track dark ships using OSINT (with demos)](https://youtu.be/niL4JPfcD3g)                                               | YouTube (David Bombal)    | 2026-04-19 `[>30d]` | **332,802 views**    |
+| 4   | [Show HN: real-time OSINT dashboard, 15 live global feeds (Shadowbroker)](https://news.ycombinator.com/item?id=47300102)       | HN                        | 2026-03-08 `[>30d]` | **312 pts, 123 cmt** |
+| 5   | [Small aircraft crashes into house near Ganderkesee Airfield](https://www.reddit.com/r/flightradar24/comments/1v678na/)        | r/flightradar24           | 2026-07-25          | **703 pts, 36 cmt**  |
+| 6   | [Top 7 OSINT tools REVEALED for 2026](https://youtu.be/WHOgdsEiyew)                                                            | YouTube (David Bombal)    | 2026-02-15          | 397,386 views        |
+| 7   | [Oshkosh Feeders are Live](https://www.reddit.com/r/ADSB/comments/1uxl3i7/)                                                    | r/ADSB                    | 2026-07-15          | **179 pts, 18 cmt**  |
+| 8   | [OSINT professionals: watch out for this recruitment approach](https://www.reddit.com/r/OSINT/comments/1v4917w/)               | r/OSINT                   | 2026-07-23          | **168 pts, 19 cmt**  |
+| 9   | [What's the most interesting OSINT job you've ever had?](https://www.reddit.com/r/OSINT/comments/1v0vdak/)                     | r/OSINT                   | 2026-07-19          | **167 pts, 47 cmt**  |
+| 10  | [User Scanner v1.4.1 — free 2-in-1 OSINT tool](https://www.reddit.com/r/Hacking_Tutorials/comments/1uw7f6d/)                   | r/Hacking_Tutorials       | 2026-07-14          | **139 pts, 15 cmt**  |
+| 11  | [OSINT Toolkit Every Investigator Needs in 2026](https://youtu.be/iMD4R1LeqNg)                                                 | YouTube (Shield Spectrum) | 2026-04-02          | 73,444 views         |
+| 12  | [Where to practice crypto OSINT skills without real-world consequences?](https://www.reddit.com/r/OSINT/comments/1v70zud/)     | r/OSINT                   | 2026-07-26          | 59 pts, 6 cmt        |
+| 13  | [Show HN: OSINT tool that finds exposed files on domains](https://news.ycombinator.com/item?id=48797656)                       | HN                        | 2026-07-05          | 58 pts, 26 cmt       |
+| 14  | [Show HN: Red Grid Link — P2P team tracking over Bluetooth, no servers](https://news.ycombinator.com/item?id=47461529)         | HN                        | 2026-03-20 `[>30d]` | 54 pts, 36 cmt       |
+| 15  | [Show HN: Customizable OSINT dashboard to monitor the situation](https://news.ycombinator.com/item?id=46591589)                | HN                        | 2026-01-12 `[>30d]` | 50 pts, 23 cmt       |
+| 16  | [ADV-S Flight Radar is officially live!!!](https://www.reddit.com/r/ADSB/comments/1v5evbi/)                                    | r/ADSB                    | 2026-07-24          | 40 pts, 7 cmt        |
+| 17  | [Built a GUI for usual OSINT tools plus added some extra](https://www.reddit.com/r/osinttools/comments/1v7qbp7/)               | r/osinttools              | 2026-07-27          | 15 pts, 4 cmt        |
+| 18  | [Espectrosint vs maltego?](https://www.reddit.com/r/OSINT/comments/1v4t369/)                                                   | r/OSINT                   | 2026-07-23          | 4 pts, 3 cmt         |
+| 19  | **[Multi-source live geospatial fusion on a Cesium globe (this repo)](https://www.reddit.com/r/geospatial/comments/1uqppm7/)** | r/geospatial              | 2026-07-08          | **2 pts, 0 cmt**     |
 
 **Read rows 1, 2, 5, 7 and 19 together.** Row 19 is our own post. "Multi-source live
 geospatial fusion on a Cesium globe, with GeoJSON/CSV/KML export for QGIS" scored **2
 points and zero comments**. In the same window, a plane crash thread got 703 and a post
-about *Noctua fans in a receiver enclosure* got 179.
+about _Noctua fans in a receiver enclosure_ got 179.
 
 The audience does not upvote capability descriptions. It upvotes **an event**, **a
 decisive answer**, or **a build they can copy**. "Multi-source fusion" is a description
@@ -172,7 +173,7 @@ The technically-correct top replies:
 > "Detecting falsified data is a separate matter." — u/fc417fc802
 
 The audience for this product **already knows the feed is poisonable** and knows the
-detection method is *cross-platform corroboration*. Every competitor renders a contact as
+detection method is _cross-platform corroboration_. Every competitor renders a contact as
 a plain icon with no indication of how many independent sources saw it, when, or whether
 the report is self-consistent.
 
@@ -240,7 +241,7 @@ budget (~8,000/day for feeders). Directly relevant to our OpenSky staleness.
 > until 2015. Thousands of developers... **I wish these weekend warriors would work on a
 > project like that someday, to see what capabilities truly take.**" — u/nonameiguess
 
-The only answer that survives this is *honest scope*: state coverage, state lag, state
+The only answer that survives this is _honest scope_: state coverage, state lag, state
 what you cannot see. Claiming completeness against someone who built the real thing is
 unwinnable.
 
@@ -253,8 +254,8 @@ unwinnable.
 > author doesnt look over the docs or doesnt care for 'details'." — u/mentalgear
 > "Whole thing feels very vibe coded. Even OP's post here." — u/Escapade5160
 
-For an OSINT audience specifically, sloppy artifacts are read as *evidence of unreliable
-sourcing*. Misaligned ASCII in a README is treated as a provenance signal.
+For an OSINT audience specifically, sloppy artifacts are read as _evidence of unreliable
+sourcing_. Misaligned ASCII in a README is treated as a provenance signal.
 
 **5.6 Hosting.**
 
@@ -285,28 +286,28 @@ Reddit's JSON API returned 403/429 to this host, see §7).
 
 **r/OSINT — what practitioners are actually asking, July 2026**
 
-| Date | Thread | Why it matters here |
-|---|---|---|
-| 2026-07-03 | [Is OSINT automation actually doable?](https://www.reddit.com/r/OSINT/comments/1ujpjxq/) | The core demand: automate the boring parts |
-| 2026-07-08 | [How U.S. Satellite Imagery Restrictions Are Changing How We Report on Iran](https://www.reddit.com/r/OSINT/comments/1uqqz3f/) | Coverage honesty is a live topic |
-| 2026-07-11 | [Monitoring the Shadow Fleet](https://www.reddit.com/r/OSINT/comments/1uttsjm/) | Dark vessels |
-| 2026-07-13 | [How useful is the platform Blind?](https://www.reddit.com/r/OSINT/comments/1uvrp5m/) | Tool-evaluation genre |
-| 2026-07-17 | [Determining if a ship is laden — Open Source Centre](https://www.reddit.com/r/OSINT/comments/1uzljmr/) | Inference from observables |
+| Date           | Thread                                                                                                                                                             | Why it matters here                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| 2026-07-03     | [Is OSINT automation actually doable?](https://www.reddit.com/r/OSINT/comments/1ujpjxq/)                                                                           | The core demand: automate the boring parts                     |
+| 2026-07-08     | [How U.S. Satellite Imagery Restrictions Are Changing How We Report on Iran](https://www.reddit.com/r/OSINT/comments/1uqqz3f/)                                     | Coverage honesty is a live topic                               |
+| 2026-07-11     | [Monitoring the Shadow Fleet](https://www.reddit.com/r/OSINT/comments/1uttsjm/)                                                                                    | Dark vessels                                                   |
+| 2026-07-13     | [How useful is the platform Blind?](https://www.reddit.com/r/OSINT/comments/1uvrp5m/)                                                                              | Tool-evaluation genre                                          |
+| 2026-07-17     | [Determining if a ship is laden — Open Source Centre](https://www.reddit.com/r/OSINT/comments/1uzljmr/)                                                            | Inference from observables                                     |
 | **2026-07-19** | **[Anyone have experience with OpenSky Network API or ADS-B Exchange API — what is the polling request limit?](https://www.reddit.com/r/OSINT/comments/1v1bgqm/)** | **Our exact upstream problem, asked by a stranger, in window** |
-| 2026-07-20 | [How to effectively monitor/scrape specific Facebook Groups for time-sensitive posts in 2026?](https://www.reddit.com/r/OSINT/comments/1v25xkw/) | Standing monitoring, not ad-hoc search |
-| 2026-07-25 | [Is it possible to view all comments made by a TikTok account?](https://www.reddit.com/r/OSINT/comments/1v6mxsx/) | Pivot-from-entity |
-| 2026-07-26 | [Where to practice crypto OSINT skills without real-world consequences?](https://www.reddit.com/r/OSINT/comments/1v70zud/) | 59 pts — demand for a **sandbox/replay** |
+| 2026-07-20     | [How to effectively monitor/scrape specific Facebook Groups for time-sensitive posts in 2026?](https://www.reddit.com/r/OSINT/comments/1v25xkw/)                   | Standing monitoring, not ad-hoc search                         |
+| 2026-07-25     | [Is it possible to view all comments made by a TikTok account?](https://www.reddit.com/r/OSINT/comments/1v6mxsx/)                                                  | Pivot-from-entity                                              |
+| 2026-07-26     | [Where to practice crypto OSINT skills without real-world consequences?](https://www.reddit.com/r/OSINT/comments/1v70zud/)                                         | 59 pts — demand for a **sandbox/replay**                       |
 
 **r/geospatial — in-window, most relevant to the globe**
 
-| Date | Thread |
-|---|---|
-| 2026-06-28 | [Real-time global events mapped (PC & Mobile) on interactive 3D/2.5D map from 30+ feeds](https://www.reddit.com/r/geospatial/comments/1uneu8w/) — another competitor |
-| 2026-07-08 | [Multi-source live geospatial fusion on a Cesium globe (**ours, 2 pts**)](https://www.reddit.com/r/geospatial/comments/1uqppm7/) |
-| 2026-07-11 | [maplibre-label-callout: labels with connector lines](https://www.reddit.com/r/geospatial/comments/1usmzp6/) — label collision is a shared pain |
-| 2026-07-14 | [MapCheck 1.1: loads large, high quality PDF maps **on-device**, offline imports](https://www.reddit.com/r/geospatial/comments/1uwbz1p/) |
+| Date       | Thread                                                                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-06-28 | [Real-time global events mapped (PC & Mobile) on interactive 3D/2.5D map from 30+ feeds](https://www.reddit.com/r/geospatial/comments/1uneu8w/) — another competitor        |
+| 2026-07-08 | [Multi-source live geospatial fusion on a Cesium globe (**ours, 2 pts**)](https://www.reddit.com/r/geospatial/comments/1uqppm7/)                                            |
+| 2026-07-11 | [maplibre-label-callout: labels with connector lines](https://www.reddit.com/r/geospatial/comments/1usmzp6/) — label collision is a shared pain                             |
+| 2026-07-14 | [MapCheck 1.1: loads large, high quality PDF maps **on-device**, offline imports](https://www.reddit.com/r/geospatial/comments/1uwbz1p/)                                    |
 | 2026-07-15 | [I added automatic AI segmentation to my QGIS plugin. **Draw a zone, type what to find, get clean vector polygons**](https://www.reddit.com/r/geospatial/comments/1ux9j4v/) |
-| 2026-07-28 | [Cesium DevCon 2026 session recordings are all free on YouTube now](https://www.reddit.com/r/geospatial/comments/1v8kx2n/) |
+| 2026-07-28 | [Cesium DevCon 2026 session recordings are all free on YouTube now](https://www.reddit.com/r/geospatial/comments/1v8kx2n/)                                                  |
 
 The QGIS-plugin post is the single most transferable interaction pattern found:
 **draw a zone → type what you want in natural language → get a structured result.** We
@@ -338,7 +339,7 @@ threads + 91 RSS posts), Hacker News (Algolia API, full comment trees for 4 thre
   cookies while they were asleep was not a consent decision to make unasked. **All X
   evidence in this document came from web search over `site:x.com`, which returns post
   text and URLs but usually not like/repost counts.** X items are therefore cited with
-  date and URL but *without* engagement figures. That is a real gap: X is where OSINT
+  date and URL but _without_ engagement figures. That is a real gap: X is where OSINT
   practitioners actually live (@sentdefender, @MATA_osint, @zarGEOINT, @DefenceGeek).
   Fix: log into x.com in Firefox, or set `XAI_API_KEY`, then re-run.
 - **Reddit JSON API: 403/429 from this host.** Vote counts here come from the engine's
@@ -353,7 +354,7 @@ threads + 91 RSS posts), Hacker News (Algolia API, full comment trees for 4 thre
 **What this research does not claim.** It does not claim the competitor list is
 exhaustive — new dashboards are appearing weekly and that is the point of §1. It does not
 claim measured performance numbers for any competitor; OSIRIS's "60fps with thousands of
-entities" is *their* claim from their README, not a measurement. It does not establish
+entities" is _their_ claim from their README, not a measurement. It does not establish
 what paying users want, because no paying-user evidence exists in these sources.
 
 **Reproduce this:**
@@ -378,7 +379,7 @@ Raw artifacts: `~/Documents/Last30Days/osint-tools-raw-osint.md`,
 2. **Score the contact, don't just draw it.** The top story in the category (549 pts) is
    about fake data on a live map, and the audience already knows the detection method is
    cross-source corroboration. Provenance/freshness on every entity is differentiating
-   *and* it fixes "OpenSky dead planes". (Evidence: §4.)
+   _and_ it fixes "OpenSky dead planes". (Evidence: §4.)
 3. **Answer a question, don't render a capability.** 484 points for one word; 2 points
    for "multi-source live geospatial fusion". Ship named, shareable, threshold-backed
    answers. (Evidence: §2, §3.)

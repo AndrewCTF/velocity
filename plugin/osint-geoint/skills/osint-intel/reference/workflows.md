@@ -50,7 +50,7 @@ only on the one target you commit to.
 1. `news_analysis()` → debiased world events: verified facts (≥2 independent
    outlets) vs attributed claims vs rhetoric.
 2. `fact_check("<specific claim>")` → `{verdict, reasoning, supporting_sources,
-   confidence}`. Use before treating any statement as fact.
+confidence}`. Use before treating any statement as fact.
 3. Cross with geospatial: if a claim names a place, `intel_brief(lat, lon)` there
    to see whether the live picture supports it.
 

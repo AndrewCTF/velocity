@@ -7,15 +7,15 @@
 // a self-contained overlay, same pattern as SatelliteAdapter. Data is
 // illustrative (cop/notionalCop.ts), labelled as such.
 
-import * as Cesium from 'cesium';
-import type milsymbol from 'milsymbol';
-import type { LayerAdapter, AdapterCtx } from './types.js';
-import { type CopUnit } from '../../cop/notionalCop.js';
-import { useCop } from '../../cop/copStore.js';
+import * as Cesium from "cesium";
+import type milsymbol from "milsymbol";
+import type { LayerAdapter, AdapterCtx } from "./types.js";
+import { type CopUnit } from "../../cop/notionalCop.js";
+import { useCop } from "../../cop/copStore.js";
 
-const FRIENDLY = '#5b9bd5';
-const HOSTILE = '#e8584e';
-const RING = '#f59e0b';
+const FRIENDLY = "#5b9bd5";
+const HOSTILE = "#e8584e";
+const RING = "#f59e0b";
 // COP symbols are a regional overlay — show within ~1500 km of the camera so
 // they read at AO zoom and don't clutter / oversize at world view.
 const SHOW_WITHIN_M = 1_500_000;
@@ -29,7 +29,10 @@ let ms: typeof milsymbol | null = null;
 // designation / higher formation rendered as text modifiers ON the symbol. We
 // return the canvas + its anchor so the billboard can pin the icon's reference
 // point (not the text-extended bounding-box centre) onto the geo position.
-function unitSymbol(u: CopUnit): { image: HTMLCanvasElement; anchor: { x: number; y: number } } {
+function unitSymbol(u: CopUnit): {
+  image: HTMLCanvasElement;
+  anchor: { x: number; y: number };
+} {
   const sym = new ms!.Symbol(u.sidc, {
     size: 30,
     uniqueDesignation: u.designation,
@@ -54,7 +57,7 @@ export class MilSymbolAdapter implements LayerAdapter {
 
   async attach(viewer: Cesium.Viewer): Promise<void> {
     await viewer.dataSources.add(this.ds);
-    ms ??= (await import('milsymbol')).default;
+    ms ??= (await import("milsymbol")).default;
     if (this.detached || viewer.isDestroyed()) return;
     this.viewer = viewer;
     this.rebuild();
@@ -93,7 +96,8 @@ export class MilSymbolAdapter implements LayerAdapter {
           font: '600 10px "IBM Plex Mono", monospace',
           fillColor: c,
           showBackground: true,
-          backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.7),
+          backgroundColor:
+            Cesium.Color.fromCssColorString("#0c0e11").withAlpha(0.7),
           backgroundPadding: new Cesium.Cartesian2(5, 3),
           pixelOffset: new Cesium.Cartesian2(0, -8),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
@@ -107,7 +111,9 @@ export class MilSymbolAdapter implements LayerAdapter {
     // FLOT / phase lines — thick, dashed, with a midpoint label.
     for (const ln of cop.lines) {
       if (ln.coords.length < 2) continue;
-      const color = Cesium.Color.fromCssColorString(ln.side === 'hostile' ? HOSTILE : FRIENDLY);
+      const color = Cesium.Color.fromCssColorString(
+        ln.side === "hostile" ? HOSTILE : FRIENDLY,
+      );
       this.ds.entities.add({
         id: `${id}:line:${ln.id}`,
         polyline: {
@@ -130,7 +136,8 @@ export class MilSymbolAdapter implements LayerAdapter {
           font: '600 11px "IBM Plex Mono", monospace',
           fillColor: color,
           showBackground: true,
-          backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.78),
+          backgroundColor:
+            Cesium.Color.fromCssColorString("#0c0e11").withAlpha(0.78),
           backgroundPadding: new Cesium.Cartesian2(6, 3),
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           // Depth-tested: the globe OCCLUDES a far-side COP symbol/label rather
@@ -153,7 +160,10 @@ export class MilSymbolAdapter implements LayerAdapter {
           verticalOrigin: Cesium.VerticalOrigin.TOP,
           // pin the icon's milsymbol anchor onto the position (offset is in
           // screen px = anchor × the fixed billboard scale).
-          pixelOffset: new Cesium.Cartesian2(-anchor.x * SYMBOL_SCALE, -anchor.y * SYMBOL_SCALE),
+          pixelOffset: new Cesium.Cartesian2(
+            -anchor.x * SYMBOL_SCALE,
+            -anchor.y * SYMBOL_SCALE,
+          ),
           // Depth-tested: the globe OCCLUDES a far-side COP symbol/label rather
           // than letting it bleed through to the opposite hemisphere.
           distanceDisplayCondition: ddc,

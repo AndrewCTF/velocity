@@ -19,13 +19,13 @@ export interface BundledKeyCheck {
 /** Returns an error message when the build must fail, null when it may proceed. */
 export function bundledApiKeyError(check: BundledKeyCheck): string | null {
   if (check.desktop || !check.isProduction) return null;
-  const key = check.env['VITE_API_KEY'];
+  const key = check.env["VITE_API_KEY"];
   if (!key || !key.trim()) return null;
   return (
-    'VITE_API_KEY is set for a production web build. Vite inlines it into the ' +
-    'public bundle, so anyone who loads the page can read the operator key. ' +
-    'Unset VITE_API_KEY (check the shell and every apps/web/.env* file) and let ' +
-    'browsers sign in with Supabase. The desktop build (VELOCITY_DESKTOP=1) and ' +
-    '`vite` dev are the only places it is allowed.'
+    "VITE_API_KEY is set for a production web build. Vite inlines it into the " +
+    "public bundle, so anyone who loads the page can read the operator key. " +
+    "Unset VITE_API_KEY (check the shell and every apps/web/.env* file) and let " +
+    "browsers sign in with Supabase. The desktop build (VELOCITY_DESKTOP=1) and " +
+    "`vite` dev are the only places it is allowed."
   );
 }

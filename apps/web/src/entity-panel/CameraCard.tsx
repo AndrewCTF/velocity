@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
-import { detectImage, detectStatus, isDesktop } from '../transport/desktop.js';
-import { BboxOverlay, colorFor, detCounts } from '../ground/detectionOverlay.js';
-import type { GroundDetection } from '../ground/types.js';
-import { Btn, Caveat, MicroLabel } from '../shell/instruments.js';
-import { useCaptures } from '../state/captures.js';
+import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../transport/http.js";
+import { detectImage, detectStatus, isDesktop } from "../transport/desktop.js";
+import {
+  BboxOverlay,
+  colorFor,
+  detCounts,
+} from "../ground/detectionOverlay.js";
+import type { GroundDetection } from "../ground/types.js";
+import { Btn, Caveat, MicroLabel } from "../shell/instruments.js";
+import { useCaptures } from "../state/captures.js";
 
 // Snapshot viewer for a selected CCTV cam (Caltrans / Digitraffic — public,
 // keyless). Fetches through apiFetch (the sanctioned transport) into an object
@@ -55,7 +59,7 @@ export function CameraCard({
       // frame actually has objects and we know where the cam is.
       if (out && out.length > 0 && lat != null && lon != null) {
         useCaptures.getState().pin({
-          source: 'cam',
+          source: "cam",
           srcId: camId,
           camId,
           lat,
@@ -65,7 +69,7 @@ export function CameraCard({
         });
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not run detection.');
+      setErr(e instanceof Error ? e.message : "Could not run detection.");
     } finally {
       busyRef.current = false;
       setDetecting(false);
@@ -78,12 +82,16 @@ export function CameraCard({
 
     const fetchSnap = async (): Promise<void> => {
       try {
-        const r = await apiFetch(`/api/cams/${encodeURIComponent(camId)}/snapshot`);
+        const r = await apiFetch(
+          `/api/cams/${encodeURIComponent(camId)}/snapshot`,
+        );
         if (!r.ok || cancelled) return;
         const buf = new Uint8Array(await r.arrayBuffer());
         if (cancelled) return;
         bytesRef.current = buf;
-        const url = URL.createObjectURL(new Blob([buf], { type: 'image/jpeg' }));
+        const url = URL.createObjectURL(
+          new Blob([buf], { type: "image/jpeg" }),
+        );
         setSrc((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return url;
@@ -115,11 +123,19 @@ export function CameraCard({
     <div className="rounded-sm border border-line bg-bg-2/60 p-2">
       <div className="mb-1 flex items-center justify-between">
         <span className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3">
-          live cam{isDesktop() && !hlsUrl ? ' · perception ai' : ''}
+          live cam{isDesktop() && !hlsUrl ? " · perception ai" : ""}
         </span>
         {isDesktop() && !hlsUrl && (
-          <Btn size="sm" tone={detecting ? 'neutral' : 'accent'} onClick={() => void detect(bytesRef.current)}>
-            {detecting ? 'detecting…' : dets.length ? `redetect (${dets.length})` : 'detect'}
+          <Btn
+            size="sm"
+            tone={detecting ? "neutral" : "accent"}
+            onClick={() => void detect(bytesRef.current)}
+          >
+            {detecting
+              ? "detecting…"
+              : dets.length
+                ? `redetect (${dets.length})`
+                : "detect"}
           </Btn>
         )}
       </div>
@@ -128,7 +144,12 @@ export function CameraCard({
         <HlsPlayer url={hlsUrl} />
       ) : src ? (
         <div className="relative overflow-hidden rounded-sm bg-black">
-          <img src={src} alt="cam snapshot" className="block w-full select-none" draggable={false} />
+          <img
+            src={src}
+            alt="cam snapshot"
+            className="block w-full select-none"
+            draggable={false}
+          />
           <div className="absolute inset-0">
             <BboxOverlay dets={dets} />
           </div>
@@ -155,9 +176,9 @@ export function CameraCard({
             <MicroLabel>
               {isDesktop()
                 ? detecting
-                  ? 'detecting…'
-                  : 'no objects detected'
-                : 'detection needs desktop app'}
+                  ? "detecting…"
+                  : "no objects detected"
+                : "detection needs desktop app"}
             </MicroLabel>
           )}
           {isDesktop() && device && (
@@ -182,10 +203,10 @@ function HlsPlayer({ url }: { url: string }): JSX.Element {
     if (!video) return;
     let hls: { destroy: () => void } | null = null;
     let cancelled = false;
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = url;
     } else {
-      void import('hls.js').then(({ default: Hls }) => {
+      void import("hls.js").then(({ default: Hls }) => {
         if (cancelled || !Hls.isSupported()) return;
         const h = new Hls();
         h.loadSource(url);
@@ -199,5 +220,14 @@ function HlsPlayer({ url }: { url: string }): JSX.Element {
     };
   }, [url]);
 
-  return <video ref={ref} className="w-full rounded" controls muted autoPlay playsInline />;
+  return (
+    <video
+      ref={ref}
+      className="w-full rounded"
+      controls
+      muted
+      autoPlay
+      playsInline
+    />
+  );
 }

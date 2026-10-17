@@ -4,17 +4,26 @@
 // confirm → download → done. Style mirrors Onboarding.tsx (fixed overlay,
 // bg-bg-1 card, mono type); the body reuses the same instrument primitives
 // as SettingsModal/LocalAiSection so it doesn't invent new form idioms.
-import { useEffect, useState } from 'react';
-import { apiFetch } from '../../transport/http.js';
-import { Btn, StatusDot } from '../../shell/instruments.js';
-import { DownloadProgress } from './DownloadProgress.js';
-import { markAiSetupSeen } from './aiSetupSeen.js';
-import { humanBytes, type DownloadJob, type HardwareResponse, type PresetId } from './types.js';
+import { useEffect, useState } from "react";
+import { apiFetch } from "../../transport/http.js";
+import { Btn, StatusDot } from "../../shell/instruments.js";
+import { DownloadProgress } from "./DownloadProgress.js";
+import { markAiSetupSeen } from "./aiSetupSeen.js";
+import {
+  humanBytes,
+  type DownloadJob,
+  type HardwareResponse,
+  type PresetId,
+} from "./types.js";
 
-type Step = 'detect' | 'preset' | 'confirm' | 'download' | 'done';
+type Step = "detect" | "preset" | "confirm" | "download" | "done";
 
-export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element {
-  const [step, setStep] = useState<Step>('detect');
+export function AiSetupWizard({
+  onClose,
+}: {
+  onClose: () => void;
+}): JSX.Element {
+  const [step, setStep] = useState<Step>("detect");
   const [hardware, setHardware] = useState<HardwareResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<PresetId | null>(null);
@@ -25,7 +34,7 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
     let live = true;
     void (async () => {
       try {
-        const r = await apiFetch('/api/ai/hardware');
+        const r = await apiFetch("/api/ai/hardware");
         if (!live) return;
         if (!r.ok) {
           setError(`Could not probe your hardware (HTTP ${r.status})`);
@@ -34,9 +43,9 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
         const body = (await r.json()) as HardwareResponse;
         setHardware(body);
         setChosen(body.recommendation.preset);
-        setStep('preset');
+        setStep("preset");
       } catch {
-        if (live) setError('Could not reach the hardware probe');
+        if (live) setError("Could not reach the hardware probe");
       }
     })();
     return () => {
@@ -47,7 +56,7 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
   const finish = (skip: boolean): void => {
     markAiSetupSeen();
     if (skip) onClose();
-    else setStep('done');
+    else setStep("done");
   };
 
   const startDownload = async (): Promise<void> => {
@@ -55,9 +64,9 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
     const preset = hardware.presets[chosen];
     setJobError(null);
     try {
-      const r = await apiFetch('/api/ai/models/download', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+      const r = await apiFetch("/api/ai/models/download", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ repo_id: preset.repo_id, quant: preset.quant }),
       });
       if (r.status !== 202) {
@@ -66,9 +75,9 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
       }
       const body = (await r.json()) as { job_id: string };
       setJobId(body.job_id);
-      setStep('download');
+      setStep("download");
     } catch {
-      setJobError('Network error. Check your connection.');
+      setJobError("Network error. Check your connection.");
     }
   };
 
@@ -81,7 +90,9 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
     >
       <div className="w-[440px] max-w-[92vw] rounded-md border border-line bg-bg-1 shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-          <span className="mono text-[12px] tracking-[0.12em] uppercase text-accent">Local AI setup</span>
+          <span className="mono text-[12px] tracking-[0.12em] uppercase text-accent">
+            Local AI setup
+          </span>
           <button
             type="button"
             onClick={() => finish(true)}
@@ -94,20 +105,26 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
         <div className="px-4 py-3.5 min-h-[180px]">
           {error && (
             <p className="mono text-[11px] text-alert">
-              {error}. You can still set this up later from ⚙ Settings → Local AI.
+              {error}. You can still set this up later from ⚙ Settings → Local
+              AI.
             </p>
           )}
 
-          {!error && step === 'detect' && (
-            <p className="mono text-[11px] text-txt-2">Detecting GPU, RAM and free disk…</p>
+          {!error && step === "detect" && (
+            <p className="mono text-[11px] text-txt-2">
+              Detecting GPU, RAM and free disk…
+            </p>
           )}
 
-          {!error && step === 'preset' && hardware && (
+          {!error && step === "preset" && hardware && (
             <div className="space-y-2">
               <p className="mono text-[11px] text-txt-2">
-                {hardware.gpu ? `${hardware.gpu.name} · ${(hardware.gpu.vram_mb / 1024).toFixed(0)} GB VRAM` : 'no GPU detected'}
-                {' · '}
-                {(hardware.ram_mb / 1024).toFixed(0)} GB RAM · {(hardware.disk_free_mb / 1024).toFixed(0)} GB free disk
+                {hardware.gpu
+                  ? `${hardware.gpu.name} · ${(hardware.gpu.vram_mb / 1024).toFixed(0)} GB VRAM`
+                  : "no GPU detected"}
+                {" · "}
+                {(hardware.ram_mb / 1024).toFixed(0)} GB RAM ·{" "}
+                {(hardware.disk_free_mb / 1024).toFixed(0)} GB free disk
               </p>
               <div className="space-y-1.5">
                 {(Object.keys(hardware.presets) as PresetId[]).map((id) => {
@@ -121,24 +138,37 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
                       disabled={refused}
                       onClick={() => setChosen(id)}
                       className={`w-full text-left rounded-sm border px-2.5 py-2 transition-colors disabled:opacity-50 ${
-                        chosen === id ? 'border-accent-line bg-accent-dim text-txt-0' : 'border-line text-txt-2 hover:border-accent-line'
+                        chosen === id
+                          ? "border-accent-line bg-accent-dim text-txt-0"
+                          : "border-line text-txt-2 hover:border-accent-line"
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="mono text-[11px] font-medium capitalize">
                           {id}
-                          {recommended ? ' (recommended)' : ''}
+                          {recommended ? " (recommended)" : ""}
                         </span>
-                        <StatusDot tone={p.fits ? 'green' : 'red'} />
+                        <StatusDot tone={p.fits ? "green" : "red"} />
                       </div>
-                      <div className="mono text-[10px] text-txt-3 mt-0.5 truncate">{p.repo_id ?? '—'}</div>
+                      <div className="mono text-[10px] text-txt-3 mt-0.5 truncate">
+                        {p.repo_id ?? "—"}
+                      </div>
                       <div className="mono text-[10px] text-txt-3">
-                        {p.quant ?? '—'} · {p.est_size_gb === null ? '—' : `~${p.est_size_gb.toFixed(0)} GB`}
+                        {p.quant ?? "—"} ·{" "}
+                        {p.est_size_gb === null
+                          ? "—"
+                          : `~${p.est_size_gb.toFixed(0)} GB`}
                       </div>
                       <p className="mono text-[10px] text-txt-3 mt-0.5 leading-snug">
-                        {recommended ? hardware.recommendation.reason : p.reason}
+                        {recommended
+                          ? hardware.recommendation.reason
+                          : p.reason}
                       </p>
-                      {refused && <p className="mono text-[10px] text-alert mt-0.5">{p.refused_reason}</p>}
+                      {refused && (
+                        <p className="mono text-[10px] text-alert mt-0.5">
+                          {p.refused_reason}
+                        </p>
+                      )}
                     </button>
                   );
                 })}
@@ -146,46 +176,55 @@ export function AiSetupWizard({ onClose }: { onClose: () => void }): JSX.Element
             </div>
           )}
 
-          {!error && step === 'confirm' && hardware && chosen && (
-            <ConfirmStep preset={hardware.presets[chosen]} diskFreeMb={hardware.disk_free_mb} error={jobError} />
+          {!error && step === "confirm" && hardware && chosen && (
+            <ConfirmStep
+              preset={hardware.presets[chosen]}
+              diskFreeMb={hardware.disk_free_mb}
+              error={jobError}
+            />
           )}
 
-          {!error && step === 'download' && jobId && (
+          {!error && step === "download" && jobId && (
             <div className="space-y-2">
               <p className="mono text-[11px] text-txt-2">Downloading…</p>
               <DownloadProgress
                 jobId={jobId}
                 onDone={(job: DownloadJob) => {
-                  if (job.status === 'done') setStep('done');
-                  else setJobError(job.error ?? 'download failed');
+                  if (job.status === "done") setStep("done");
+                  else setJobError(job.error ?? "download failed");
                 }}
               />
             </div>
           )}
 
-          {!error && step === 'done' && (
+          {!error && step === "done" && (
             <p className="mono text-[11px] text-txt-1">
-              Model installed. It's now the active main model. You can pin it hot, set up
-              selection-brief inference, or add more models any time from ⚙ Settings → Local AI.
+              Model installed. It's now the active main model. You can pin it
+              hot, set up selection-brief inference, or add more models any time
+              from ⚙ Settings → Local AI.
             </p>
           )}
         </div>
 
         <div className="flex items-center justify-end gap-1.5 border-t border-line px-4 py-2.5">
-          {step === 'preset' && (
-            <Btn tone="accent" disabled={!chosen} onClick={() => setStep('confirm')}>
+          {step === "preset" && (
+            <Btn
+              tone="accent"
+              disabled={!chosen}
+              onClick={() => setStep("confirm")}
+            >
               Next →
             </Btn>
           )}
-          {step === 'confirm' && (
+          {step === "confirm" && (
             <>
-              <Btn onClick={() => setStep('preset')}>Back</Btn>
+              <Btn onClick={() => setStep("preset")}>Back</Btn>
               <Btn tone="accent" onClick={() => void startDownload()}>
                 ⭳ Download
               </Btn>
             </>
           )}
-          {step === 'done' && (
+          {step === "done" && (
             <Btn tone="accent" onClick={() => finish(false)}>
               Done
             </Btn>
@@ -201,7 +240,7 @@ function ConfirmStep({
   diskFreeMb,
   error,
 }: {
-  preset: HardwareResponse['presets'][PresetId];
+  preset: HardwareResponse["presets"][PresetId];
   diskFreeMb: number;
   error: string | null;
 }): JSX.Element {
@@ -209,21 +248,29 @@ function ConfirmStep({
   // against free disk — skip the warning rather than guess at a figure.
   const freeBytes = diskFreeMb * 1024 * 1024;
   const tight =
-    preset.est_size_gb !== null && preset.est_size_gb * 1024 * 1024 * 1024 > freeBytes * 0.8;
+    preset.est_size_gb !== null &&
+    preset.est_size_gb * 1024 * 1024 * 1024 > freeBytes * 0.8;
   return (
     <div className="space-y-1.5">
       <p className="mono text-[11px] text-txt-2">Confirm download:</p>
       <div className="rounded-sm border border-line bg-bg-2/50 p-2.5">
-        <div className="mono text-[11px] text-txt-1">{preset.repo_id ?? '—'}</div>
-        <div className="mono text-[10px] text-txt-3 mt-0.5">{preset.quant ?? '—'}</div>
+        <div className="mono text-[11px] text-txt-1">
+          {preset.repo_id ?? "—"}
+        </div>
+        <div className="mono text-[10px] text-txt-3 mt-0.5">
+          {preset.quant ?? "—"}
+        </div>
         <div className="mono text-[10px] text-txt-3 mt-1">
-          {preset.est_size_gb === null ? '—' : `~${preset.est_size_gb.toFixed(1)} GB`} to download ·{' '}
-          {humanBytes(diskFreeMb * 1024 * 1024)} free
+          {preset.est_size_gb === null
+            ? "—"
+            : `~${preset.est_size_gb.toFixed(1)} GB`}{" "}
+          to download · {humanBytes(diskFreeMb * 1024 * 1024)} free
         </div>
       </div>
       {tight && (
         <p className="mono text-[10px] text-warn">
-          This uses most of your free disk space; consider a smaller quant if the download fails.
+          This uses most of your free disk space; consider a smaller quant if
+          the download fails.
         </p>
       )}
       {error && <p className="mono text-[10px] text-alert">{error}</p>}

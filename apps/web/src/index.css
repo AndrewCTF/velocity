@@ -1,8 +1,8 @@
-@import './theme/tokens.css' layer(base);
-@import './shell/console.css' layer(base);
-@import './theme/reflow.css' layer(base);
+@import "./theme/tokens.css" layer(base);
+@import "./shell/console.css" layer(base);
+@import "./theme/reflow.css" layer(base);
 
-@import 'tailwindcss';
+@import "tailwindcss";
 
 /* Design tokens as Tailwind theme colours. The palettes themselves live in
    theme/tokens.css (one block per colour scheme); these only point at them.
@@ -56,9 +56,9 @@
   --text-color-alert: var(--alert-fg);
   --text-color-ok: var(--ok-fg);
 
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --font-sans: Inter, 'IBM Plex Sans', system-ui, sans-serif;
-  --font-label: Inter, 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: Inter, "IBM Plex Sans", system-ui, sans-serif;
+  --font-label: Inter, "IBM Plex Sans", system-ui, sans-serif;
 
   --radius-sm: var(--r-sm);
   --radius-md: var(--r-md);
@@ -77,7 +77,7 @@
     border-color: #e5e7eb;
   }
   button:not(:disabled),
-  [role='button']:not(:disabled) {
+  [role="button"]:not(:disabled) {
     cursor: pointer;
   }
 }

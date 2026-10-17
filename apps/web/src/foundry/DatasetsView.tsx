@@ -1,5 +1,5 @@
-import { CheckCircle2, Table2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Table2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useFoundry,
   type Check,
@@ -14,15 +14,15 @@ import {
   type DeadLetterEntry,
   type DocumentUpload,
   type RowsPage,
-} from '../state/foundry.js';
-import { Badge, Btn, Toggle } from '../shell/instruments.js';
-import { useConfirm } from '../shell/Modal.js';
-import { Modal } from '../shell/Modal.js';
-import { apiFetch } from '../transport/http.js';
-import { useFoundryNav, type DetailTab } from './nav.js';
-import { useFoundryPoll } from './useFoundryPoll.js';
-import { UploadModal } from './UploadModal.js';
-import { MapTab, MonitorsTab, SqlTab } from './WorkbenchTabs.js';
+} from "../state/foundry.js";
+import { Badge, Btn, Toggle } from "../shell/instruments.js";
+import { useConfirm } from "../shell/Modal.js";
+import { Modal } from "../shell/Modal.js";
+import { apiFetch } from "../transport/http.js";
+import { useFoundryNav, type DetailTab } from "./nav.js";
+import { useFoundryPoll } from "./useFoundryPoll.js";
+import { UploadModal } from "./UploadModal.js";
+import { MapTab, MonitorsTab, SqlTab } from "./WorkbenchTabs.js";
 import {
   EmptyState,
   Field,
@@ -36,8 +36,8 @@ import {
   rowCls,
   stamp,
   tableHeadCls,
-} from './ui.js';
-import { Icon } from '../normal/Icon.js';
+} from "./ui.js";
+import { Icon } from "../normal/Icon.js";
 
 // Datasets — a master/detail workspace: a filterable list (left) and a tabbed
 // detail (right) with Schema, Preview, Stats, Versions, Lineage, Dead-letter,
@@ -46,32 +46,57 @@ import { Icon } from '../normal/Icon.js';
 // cascade); deletes/rollback through a styled confirm — no window.prompt.
 
 const PAGE_SIZE = 50;
-const CHECK_TYPES: CheckType[] = ['row_count_min', 'row_count_max', 'not_null', 'unique', 'column_exists', 'freshness', 'schema_contract'];
+const CHECK_TYPES: CheckType[] = [
+  "row_count_min",
+  "row_count_max",
+  "not_null",
+  "unique",
+  "column_exists",
+  "freshness",
+  "schema_contract",
+];
 
 function paramsSummary(check: Check): string {
-  if (check.type === 'row_count_min' || check.type === 'row_count_max') return String(check.params.min ?? check.params.max ?? '');
-  if (check.type === 'freshness') return `${check.params.column} < ${check.params.max_age_s}s`;
-  if (check.type === 'schema_contract') return ((check.params.columns as string[] | undefined) ?? []).join(', ');
-  return String(check.params.column ?? '');
+  if (check.type === "row_count_min" || check.type === "row_count_max")
+    return String(check.params.min ?? check.params.max ?? "");
+  if (check.type === "freshness")
+    return `${check.params.column} < ${check.params.max_age_s}s`;
+  if (check.type === "schema_contract")
+    return ((check.params.columns as string[] | undefined) ?? []).join(", ");
+  return String(check.params.column ?? "");
 }
 
 function AutoSyncBanner(): JSX.Element | null {
   const lastAutoSync = useFoundry((s) => s.lastAutoSync);
   if (!lastAutoSync || lastAutoSync.length === 0) return null;
   return (
-    <div className="rounded-md border border-line-2 bg-bg-1 px-3 py-2 space-y-1" data-testid="auto-sync-banner">
-      <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3">Ontology auto-sync</div>
+    <div
+      className="rounded-md border border-line-2 bg-bg-1 px-3 py-2 space-y-1"
+      data-testid="auto-sync-banner"
+    >
+      <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3">
+        Ontology auto-sync
+      </div>
       {lastAutoSync.map((a) => (
-        <div key={a.binding_id} className="flex items-center gap-2 text-[11px] mono">
-          {a.status === 'ok' && a.result ? (
+        <div
+          key={a.binding_id}
+          className="flex items-center gap-2 text-[11px] mono"
+        >
+          {a.status === "ok" && a.result ? (
             <>
               <Badge tone="ok">minted {a.result.minted}</Badge>
               <Badge tone="accent">updated {a.result.updated}</Badge>
-              {a.result.skipped > 0 && <span className="text-txt-3">skipped {a.result.skipped}</span>}
-              {a.result.errors.length > 0 && <Badge tone="alert">{a.result.errors.length} error(s)</Badge>}
+              {a.result.skipped > 0 && (
+                <span className="text-txt-3">skipped {a.result.skipped}</span>
+              )}
+              {a.result.errors.length > 0 && (
+                <Badge tone="alert">{a.result.errors.length} error(s)</Badge>
+              )}
             </>
           ) : (
-            <span className="text-warn">binding {a.binding_id}: {a.error ?? 'failed'}</span>
+            <span className="text-warn">
+              binding {a.binding_id}: {a.error ?? "failed"}
+            </span>
           )}
         </div>
       ))}
@@ -88,11 +113,11 @@ function ChecksSection({ datasetId }: { datasetId: string }): JSX.Element {
   const getCheckResults = useFoundry((s) => s.getCheckResults);
 
   const [results, setResults] = useState<CheckResult[]>([]);
-  const [type, setType] = useState<CheckType>('row_count_min');
-  const [name, setName] = useState('');
-  const [paramValue, setParamValue] = useState('');
-  const [paramValue2, setParamValue2] = useState('');
-  const [severity, setSeverity] = useState<CheckSeverity>('warn');
+  const [type, setType] = useState<CheckType>("row_count_min");
+  const [name, setName] = useState("");
+  const [paramValue, setParamValue] = useState("");
+  const [paramValue2, setParamValue2] = useState("");
+  const [severity, setSeverity] = useState<CheckSeverity>("warn");
 
   useEffect(() => {
     // Guard against a superseded dataset landing last (A -> B -> A rapid switch),
@@ -110,15 +135,22 @@ function ChecksSection({ datasetId }: { datasetId: string }): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId]);
 
-  const resultFor = (checkId: string): CheckResult | undefined => results.find((r) => r.check_id === checkId);
-  const isCount = type === 'row_count_min' || type === 'row_count_max';
+  const resultFor = (checkId: string): CheckResult | undefined =>
+    results.find((r) => r.check_id === checkId);
+  const isCount = type === "row_count_min" || type === "row_count_max";
 
   const buildParams = (): Record<string, unknown> | null => {
-    if (type === 'row_count_min') return { min: Number(paramValue) };
-    if (type === 'row_count_max') return { max: Number(paramValue) };
-    if (type === 'freshness') return paramValue && paramValue2 ? { column: paramValue, max_age_s: Number(paramValue2) } : null;
-    if (type === 'schema_contract') {
-      const cols = paramValue.split(',').map((s) => s.trim()).filter(Boolean);
+    if (type === "row_count_min") return { min: Number(paramValue) };
+    if (type === "row_count_max") return { max: Number(paramValue) };
+    if (type === "freshness")
+      return paramValue && paramValue2
+        ? { column: paramValue, max_age_s: Number(paramValue2) }
+        : null;
+    if (type === "schema_contract") {
+      const cols = paramValue
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       return cols.length ? { columns: cols } : null;
     }
     return paramValue ? { column: paramValue } : null;
@@ -128,42 +160,136 @@ function ChecksSection({ datasetId }: { datasetId: string }): JSX.Element {
     if (!name) return;
     const params = buildParams();
     if (!params) return;
-    await createCheck({ dataset_id: datasetId, name, type, params, severity, enabled: true });
-    setName('');
-    setParamValue('');
-    setParamValue2('');
+    await createCheck({
+      dataset_id: datasetId,
+      name,
+      type,
+      params,
+      severity,
+      enabled: true,
+    });
+    setName("");
+    setParamValue("");
+    setParamValue2("");
     void getCheckResults(datasetId).then(setResults);
   };
 
-  const failing = checks.filter((c) => c.enabled && resultFor(c.id)?.passed === false).length;
+  const failing = checks.filter(
+    (c) => c.enabled && resultFor(c.id)?.passed === false,
+  ).length;
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">Data health</span>
-        {failing > 0 ? <Badge tone="alert">{failing} failing</Badge> : checks.length > 0 ? <Badge tone="ok">all passing</Badge> : null}
+        <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">
+          Data health
+        </span>
+        {failing > 0 ? (
+          <Badge tone="alert">{failing} failing</Badge>
+        ) : checks.length > 0 ? (
+          <Badge tone="ok">all passing</Badge>
+        ) : null}
       </div>
       <div className="flex items-end gap-2 flex-wrap rounded-md border border-line-2 bg-bg-1 p-3">
-        <div className="w-32"><Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="min rows" className={controlCls} /></Field></div>
-        <div className="w-40"><Field label="Type"><Select value={type} onChange={(v) => { setType(v as CheckType); setParamValue(''); setParamValue2(''); }} options={CHECK_TYPES.map((t) => ({ value: t, label: t }))} /></Field></div>
-        {type === 'freshness' ? (
+        <div className="w-32">
+          <Field label="Name">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="min rows"
+              className={controlCls}
+            />
+          </Field>
+        </div>
+        <div className="w-40">
+          <Field label="Type">
+            <Select
+              value={type}
+              onChange={(v) => {
+                setType(v as CheckType);
+                setParamValue("");
+                setParamValue2("");
+              }}
+              options={CHECK_TYPES.map((t) => ({ value: t, label: t }))}
+            />
+          </Field>
+        </div>
+        {type === "freshness" ? (
           <>
-            <div className="w-28"><Field label="timestamp col"><input value={paramValue} onChange={(e) => setParamValue(e.target.value)} className={controlCls} /></Field></div>
-            <div className="w-24"><Field label="max age (s)"><input value={paramValue2} onChange={(e) => setParamValue2(e.target.value)} type="number" className={controlCls} /></Field></div>
+            <div className="w-28">
+              <Field label="timestamp col">
+                <input
+                  value={paramValue}
+                  onChange={(e) => setParamValue(e.target.value)}
+                  className={controlCls}
+                />
+              </Field>
+            </div>
+            <div className="w-24">
+              <Field label="max age (s)">
+                <input
+                  value={paramValue2}
+                  onChange={(e) => setParamValue2(e.target.value)}
+                  type="number"
+                  className={controlCls}
+                />
+              </Field>
+            </div>
           </>
-        ) : type === 'schema_contract' ? (
-          <div className="w-52"><Field label="required columns"><input value={paramValue} onChange={(e) => setParamValue(e.target.value)} placeholder="id, name, ts" className={controlCls} /></Field></div>
+        ) : type === "schema_contract" ? (
+          <div className="w-52">
+            <Field label="required columns">
+              <input
+                value={paramValue}
+                onChange={(e) => setParamValue(e.target.value)}
+                placeholder="id, name, ts"
+                className={controlCls}
+              />
+            </Field>
+          </div>
         ) : (
-          <div className="w-28"><Field label={isCount ? 'value' : 'column'}><input value={paramValue} onChange={(e) => setParamValue(e.target.value)} type={isCount ? 'number' : 'text'} className={controlCls} /></Field></div>
+          <div className="w-28">
+            <Field label={isCount ? "value" : "column"}>
+              <input
+                value={paramValue}
+                onChange={(e) => setParamValue(e.target.value)}
+                type={isCount ? "number" : "text"}
+                className={controlCls}
+              />
+            </Field>
+          </div>
         )}
-        <div className="w-24"><Field label="Severity"><Select value={severity} onChange={(v) => setSeverity(v as CheckSeverity)} options={[{ value: 'warn', label: 'warn' }, { value: 'fail', label: 'fail' }]} /></Field></div>
-        <Btn tone="accent" disabled={!name || !paramValue} onClick={() => void add()}>+ Check</Btn>
+        <div className="w-24">
+          <Field label="Severity">
+            <Select
+              value={severity}
+              onChange={(v) => setSeverity(v as CheckSeverity)}
+              options={[
+                { value: "warn", label: "warn" },
+                { value: "fail", label: "fail" },
+              ]}
+            />
+          </Field>
+        </div>
+        <Btn
+          tone="accent"
+          disabled={!name || !paramValue}
+          onClick={() => void add()}
+        >
+          + Check
+        </Btn>
       </div>
       <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
         <table className="w-full border-collapse">
           <thead>
             <tr className={tableHeadCls()}>
-              <Th>Name</Th><Th>Type</Th><Th>Params</Th><Th>Severity</Th><Th align="center">Enabled</Th><Th>Result</Th><Th />
+              <Th>Name</Th>
+              <Th>Type</Th>
+              <Th>Params</Th>
+              <Th>Severity</Th>
+              <Th align="center">Enabled</Th>
+              <Th>Result</Th>
+              <Th />
             </tr>
           </thead>
           <tbody>
@@ -173,17 +299,63 @@ function ChecksSection({ datasetId }: { datasetId: string }): JSX.Element {
                 <tr key={c.id} className={rowCls}>
                   <td className={`${cellMono} text-txt-0`}>{c.name}</td>
                   <td className={`${cellMono} text-txt-2`}>{c.type}</td>
-                  <td className={`${cellMono} text-txt-3 text-[10px]`}>{paramsSummary(c)}</td>
-                  <td className="px-2.5 py-1.5"><Badge tone={c.severity === 'fail' ? 'alert' : 'warn'}>{c.severity}</Badge></td>
-                  <td className="px-2.5 py-1.5 text-center"><Toggle on={c.enabled} onChange={(next) => void updateCheck(c.id, { enabled: next }).then(() => void getCheckResults(datasetId).then(setResults))} label="enabled" /></td>
-                  <td className="px-2.5 py-1.5">{res ? <Badge tone={res.passed ? 'ok' : c.severity === 'fail' ? 'alert' : 'warn'}>{res.passed ? 'pass' : 'fail'}</Badge> : <span className="text-[10px] text-txt-3">—</span>}</td>
-                  <td className="px-2.5 py-1.5 text-right"><button type="button" onClick={() => void deleteCheck(c.id)} className="text-txt-3 hover:text-alert text-[12px]" aria-label="Delete check"><Icon name="x" className="w-3 h-3" /></button></td>
+                  <td className={`${cellMono} text-txt-3 text-[10px]`}>
+                    {paramsSummary(c)}
+                  </td>
+                  <td className="px-2.5 py-1.5">
+                    <Badge tone={c.severity === "fail" ? "alert" : "warn"}>
+                      {c.severity}
+                    </Badge>
+                  </td>
+                  <td className="px-2.5 py-1.5 text-center">
+                    <Toggle
+                      on={c.enabled}
+                      onChange={(next) =>
+                        void updateCheck(c.id, { enabled: next }).then(
+                          () =>
+                            void getCheckResults(datasetId).then(setResults),
+                        )
+                      }
+                      label="enabled"
+                    />
+                  </td>
+                  <td className="px-2.5 py-1.5">
+                    {res ? (
+                      <Badge
+                        tone={
+                          res.passed
+                            ? "ok"
+                            : c.severity === "fail"
+                              ? "alert"
+                              : "warn"
+                        }
+                      >
+                        {res.passed ? "pass" : "fail"}
+                      </Badge>
+                    ) : (
+                      <span className="text-[10px] text-txt-3">—</span>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right">
+                    <button
+                      type="button"
+                      onClick={() => void deleteCheck(c.id)}
+                      className="text-txt-3 hover:text-alert text-[12px]"
+                      aria-label="Delete check"
+                    >
+                      <Icon name="x" className="w-3 h-3" />
+                    </button>
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        {checks.length === 0 && <div className="px-2.5 py-3 text-center mono text-[11px] text-txt-3">No checks yet. Add one to gate every version write.</div>}
+        {checks.length === 0 && (
+          <div className="px-2.5 py-3 text-center mono text-[11px] text-txt-3">
+            No checks yet. Add one to gate every version write.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -192,33 +364,63 @@ function ChecksSection({ datasetId }: { datasetId: string }): JSX.Element {
 // Data Docs — the auto-generated single-pane dataset overview the backend
 // already produced (GET /docs) but no view rendered. Producer/upstream/
 // downstream chips deep-link into Pipeline / Datasets.
-function DocsTab({ dataset, docs }: { dataset: Dataset; docs: DatasetDocs | null }): JSX.Element {
+function DocsTab({
+  dataset,
+  docs,
+}: {
+  dataset: Dataset;
+  docs: DatasetDocs | null;
+}): JSX.Element {
   const navigate = useFoundryNav((s) => s.navigate);
   const select = useFoundryNav((s) => s.select);
-  if (!docs) return <div className="p-4 mono text-[11px] text-txt-3">Loading data docs…</div>;
+  if (!docs)
+    return (
+      <div className="p-4 mono text-[11px] text-txt-3">Loading data docs…</div>
+    );
   const lin = docs.lineage;
   return (
     <div className="space-y-3" data-testid="docs-tab">
       <div className="rounded-md border border-line-2 bg-bg-1 p-3">
-        <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3 mb-1">Description</div>
-        <div className="text-[11px] text-txt-1">{docs.dataset.description || <span className="text-txt-4">(no description)</span>}</div>
+        <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3 mb-1">
+          Description
+        </div>
+        <div className="text-[11px] text-txt-1">
+          {docs.dataset.description || (
+            <span className="text-txt-4">(no description)</span>
+          )}
+        </div>
         <div className="flex items-center gap-2 mt-2 flex-wrap">
-          <Badge tone={docs.dataset.kind === 'raw' ? 'accent' : 'mag'}>{docs.dataset.kind}</Badge>
-          <span className="mono text-[10px] text-txt-2">v{docs.dataset.latest_version}</span>
-          <span className="mono text-[10px] text-txt-2 tabular-nums">{docs.dataset.row_count.toLocaleString()} rows</span>
-          {docs.dead_letter_present && <Badge tone="warn">dead-letter present</Badge>}
+          <Badge tone={docs.dataset.kind === "raw" ? "accent" : "mag"}>
+            {docs.dataset.kind}
+          </Badge>
+          <span className="mono text-[10px] text-txt-2">
+            v{docs.dataset.latest_version}
+          </span>
+          <span className="mono text-[10px] text-txt-2 tabular-nums">
+            {docs.dataset.row_count.toLocaleString()} rows
+          </span>
+          {docs.dead_letter_present && (
+            <Badge tone="warn">dead-letter present</Badge>
+          )}
           {lin.stale === true && <Badge tone="warn">stale</Badge>}
         </div>
       </div>
 
       <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
         <table className="w-full border-collapse">
-          <thead><tr className={tableHeadCls()}><Th>Column</Th><Th>Type</Th></tr></thead>
+          <thead>
+            <tr className={tableHeadCls()}>
+              <Th>Column</Th>
+              <Th>Type</Th>
+            </tr>
+          </thead>
           <tbody>
             {docs.schema.map((c) => (
               <tr key={c.name} className={rowCls}>
                 <td className={`${cellMono} text-txt-0`}>{c.name}</td>
-                <td className="px-2.5 py-1.5"><TypeChip type={c.type} /></td>
+                <td className="px-2.5 py-1.5">
+                  <TypeChip type={c.type} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -226,30 +428,63 @@ function DocsTab({ dataset, docs }: { dataset: Dataset; docs: DatasetDocs | null
       </div>
 
       <div className="rounded-md border border-line-2 bg-bg-1 p-3 space-y-2">
-        <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3">Lineage</div>
+        <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3">
+          Lineage
+        </div>
         <div className="text-[11px] text-txt-1">
           {lin.produced_by ? (
-            <>Produced by{' '}
-              <button className="mono text-accent hover:underline" onClick={() => navigate('pipeline', lin.produced_by!)}>{lin.produced_by}</button>
+            <>
+              Produced by{" "}
+              <button
+                className="mono text-accent hover:underline"
+                onClick={() => navigate("pipeline", lin.produced_by!)}
+              >
+                {lin.produced_by}
+              </button>
             </>
-          ) : 'Raw dataset: each column is its own source.'}
+          ) : (
+            "Raw dataset: each column is its own source."
+          )}
         </div>
         {lin.upstream_datasets.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] text-txt-3 uppercase tracking-[0.4px]">upstream</span>
+            <span className="text-[10px] text-txt-3 uppercase tracking-[0.4px]">
+              upstream
+            </span>
             {lin.upstream_datasets.map((id) => (
-              <button key={id} className="mono text-[10px] text-accent hover:underline" onClick={() => select(id)}>{id}</button>
+              <button
+                key={id}
+                className="mono text-[10px] text-accent hover:underline"
+                onClick={() => select(id)}
+              >
+                {id}
+              </button>
             ))}
           </div>
         )}
         {lin.downstream.length > 0 && (
           <div className="space-y-1">
-            <span className="text-[10px] text-txt-3 uppercase tracking-[0.4px]">downstream</span>
+            <span className="text-[10px] text-txt-3 uppercase tracking-[0.4px]">
+              downstream
+            </span>
             {lin.downstream.map((d, i) => (
-              <div key={i} className="flex items-center gap-1.5 mono text-[10px]">
-                <button className="text-mag hover:underline" onClick={() => navigate('pipeline', d.transform)}>{d.transform}</button>
+              <div
+                key={i}
+                className="flex items-center gap-1.5 mono text-[10px]"
+              >
+                <button
+                  className="text-mag hover:underline"
+                  onClick={() => navigate("pipeline", d.transform)}
+                >
+                  {d.transform}
+                </button>
                 <span className="text-txt-4">→</span>
-                <button className="text-accent hover:underline" onClick={() => select(d.output_dataset_id)}>{d.output_dataset_id}</button>
+                <button
+                  className="text-accent hover:underline"
+                  onClick={() => select(d.output_dataset_id)}
+                >
+                  {d.output_dataset_id}
+                </button>
               </div>
             ))}
           </div>
@@ -258,7 +493,9 @@ function DocsTab({ dataset, docs }: { dataset: Dataset; docs: DatasetDocs | null
 
       {docs.checks.length > 0 && (
         <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
-          <div className="px-2.5 py-1.5 text-[10px] uppercase tracking-[0.4px] text-txt-3 border-b border-line">Latest check results</div>
+          <div className="px-2.5 py-1.5 text-[10px] uppercase tracking-[0.4px] text-txt-3 border-b border-line">
+            Latest check results
+          </div>
           <table className="w-full border-collapse">
             <tbody>
               {docs.checks.map((c) => {
@@ -266,7 +503,21 @@ function DocsTab({ dataset, docs }: { dataset: Dataset; docs: DatasetDocs | null
                 return (
                   <tr key={c.id} className={rowCls}>
                     <td className={`${cellMono} text-txt-0`}>{c.name}</td>
-                    <td className="px-2.5 py-1.5"><Badge tone={res ? (res.passed ? 'ok' : c.severity === 'fail' ? 'alert' : 'warn') : 'neutral'}>{res ? (res.passed ? 'pass' : 'fail') : '—'}</Badge></td>
+                    <td className="px-2.5 py-1.5">
+                      <Badge
+                        tone={
+                          res
+                            ? res.passed
+                              ? "ok"
+                              : c.severity === "fail"
+                                ? "alert"
+                                : "warn"
+                            : "neutral"
+                        }
+                      >
+                        {res ? (res.passed ? "pass" : "fail") : "—"}
+                      </Badge>
+                    </td>
                   </tr>
                 );
               })}
@@ -274,7 +525,10 @@ function DocsTab({ dataset, docs }: { dataset: Dataset; docs: DatasetDocs | null
           </table>
         </div>
       )}
-      <div className="mono text-[10px] text-txt-4">Generated from dataset {dataset.id} · {docs.versions.length} versions on record.</div>
+      <div className="mono text-[10px] text-txt-4">
+        Generated from dataset {dataset.id} · {docs.versions.length} versions on
+        record.
+      </div>
     </div>
   );
 }
@@ -296,7 +550,7 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
   const setDetailTab = useFoundryNav((s) => s.setDetailTab);
   const navigate = useFoundryNav((s) => s.navigate);
 
-  const tab: DetailTab = detailTab ?? 'schema';
+  const tab: DetailTab = detailTab ?? "schema";
   const [rows, setRows] = useState<RowsPage | null>(null);
   const [stats, setStats] = useState<ColumnStat[]>([]);
   const [versions, setVersions] = useState<DatasetVersion[]>([]);
@@ -307,32 +561,59 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
   const [version, setVersion] = useState<number | undefined>(undefined);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [docBusy, setDocBusy] = useState(false);
-  const [docStatus, setDocStatus] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const [docStatus, setDocStatus] = useState<{
+    tone: "ok" | "error";
+    text: string;
+  } | null>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setOffset(0); setVersion(undefined); }, [dataset.id]);
+  useEffect(() => {
+    setOffset(0);
+    setVersion(undefined);
+  }, [dataset.id]);
   useEffect(() => {
     // Guard against a stale page winning: switching dataset resets offset in the
     // same commit, so an in-flight fetch for the old id/offset must not land.
     let cancelled = false;
-    void getRows(dataset.id, version, PAGE_SIZE, offset).then((r) => { if (!cancelled) setRows(r); });
-    void getStats(dataset.id, version).then((r) => { if (!cancelled) setStats(r); });
-    void getVersions(dataset.id).then((r) => { if (!cancelled) setVersions(r); });
-    return () => { cancelled = true; };
+    void getRows(dataset.id, version, PAGE_SIZE, offset).then((r) => {
+      if (!cancelled) setRows(r);
+    });
+    void getStats(dataset.id, version).then((r) => {
+      if (!cancelled) setStats(r);
+    });
+    void getVersions(dataset.id).then((r) => {
+      if (!cancelled) setVersions(r);
+    });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset.id, version, offset]);
   useEffect(() => {
     // Same guard for the tab sub-fetches — dataset A's rows must never render
     // under dataset B when selection changes mid-flight.
     let cancelled = false;
-    if (tab === 'deadletter') void getDeadLetter(dataset.id).then((r) => { if (!cancelled) setDeadLetter(r); });
-    if (tab === 'lineage') void getColumnLineage(dataset.id).then((r) => { if (!cancelled) setLineage(r); });
-    if (tab === 'docs') void getDatasetDocs(dataset.id).then((r) => { if (!cancelled) setDocs(r); });
-    return () => { cancelled = true; };
+    if (tab === "deadletter")
+      void getDeadLetter(dataset.id).then((r) => {
+        if (!cancelled) setDeadLetter(r);
+      });
+    if (tab === "lineage")
+      void getColumnLineage(dataset.id).then((r) => {
+        if (!cancelled) setLineage(r);
+      });
+    if (tab === "docs")
+      void getDatasetDocs(dataset.id).then((r) => {
+        if (!cancelled) setDocs(r);
+      });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, dataset.id]);
 
-  const refresh = (): void => { void getVersions(dataset.id).then(setVersions); };
+  const refresh = (): void => {
+    void getVersions(dataset.id).then(setVersions);
+  };
 
   // One document becomes ONE row appended as a new version (POST
   // /datasets/{id}/documents), so the picker hands the raw file to the backend
@@ -343,14 +624,17 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
     setDocBusy(true);
     setDocStatus(null);
     const form = new FormData();
-    form.append('file', file);
+    form.append("file", file);
     const r = await apiFetch(`/api/foundry/datasets/${dataset.id}/documents`, {
-      method: 'POST',
+      method: "POST",
       body: form,
     }).catch(() => null);
     setDocBusy(false);
     if (!r) {
-      setDocStatus({ tone: 'error', text: 'Could not add the document (no answer from the backend).' });
+      setDocStatus({
+        tone: "error",
+        text: "Could not add the document (no answer from the backend).",
+      });
       return;
     }
     if (!r.ok) {
@@ -359,7 +643,7 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
         .then((body: { detail?: string }) => body.detail ?? null)
         .catch(() => null);
       setDocStatus({
-        tone: 'error',
+        tone: "error",
         text: detail
           ? `Could not add the document (HTTP ${r.status}): ${detail}`
           : `Could not add the document (HTTP ${r.status}).`,
@@ -368,7 +652,7 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
     }
     const d = (await r.json().catch(() => null)) as DocumentUpload | null;
     setDocStatus({
-      tone: 'ok',
+      tone: "ok",
       text: d
         ? `Added ${file.name} · v${d.latest_version} · ${d.row_count.toLocaleString()} rows`
         : `Added ${file.name}`,
@@ -377,28 +661,48 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
     void loadDatasets();
   };
 
-  const tabs: Array<{ id: DetailTab; label: string; count?: number | undefined }> = [
-    { id: 'schema', label: 'Schema', count: dataset.schema.length },
-    { id: 'preview', label: 'Preview' },
-    { id: 'stats', label: 'Stats' },
-    { id: 'versions', label: 'Versions', count: versions.length || undefined },
-    { id: 'lineage', label: 'Lineage' },
-    { id: 'deadletter', label: 'Dead-letter' },
-    { id: 'checks', label: 'Checks' },
-    { id: 'docs', label: 'Docs' },
-    { id: 'map', label: 'Map' },
-    { id: 'sql', label: 'SQL' },
-    { id: 'monitors', label: 'Monitors' },
+  const tabs: Array<{
+    id: DetailTab;
+    label: string;
+    count?: number | undefined;
+  }> = [
+    { id: "schema", label: "Schema", count: dataset.schema.length },
+    { id: "preview", label: "Preview" },
+    { id: "stats", label: "Stats" },
+    { id: "versions", label: "Versions", count: versions.length || undefined },
+    { id: "lineage", label: "Lineage" },
+    { id: "deadletter", label: "Dead-letter" },
+    { id: "checks", label: "Checks" },
+    { id: "docs", label: "Docs" },
+    { id: "map", label: "Map" },
+    { id: "sql", label: "SQL" },
+    { id: "monitors", label: "Monitors" },
   ];
 
   const onDelete = async (): Promise<void> => {
-    if (await confirm({ title: `Delete dataset "${dataset.name}"?`, body: 'All versions and rows are removed permanently.', tone: 'danger', confirmLabel: 'Delete' })) {
+    if (
+      await confirm({
+        title: `Delete dataset "${dataset.name}"?`,
+        body: "All versions and rows are removed permanently.",
+        tone: "danger",
+        confirmLabel: "Delete",
+      })
+    ) {
       const ok = await deleteDataset(dataset.id);
       if (ok) select(null);
     }
   };
   const onRollback = async (v: number): Promise<void> => {
-    if (await confirm({ title: `Roll back "${dataset.name}" to v${v}?`, body: 'Creates a new latest version from v' + v + '. Does not delete history.', confirmLabel: 'Roll back' })) {
+    if (
+      await confirm({
+        title: `Roll back "${dataset.name}" to v${v}?`,
+        body:
+          "Creates a new latest version from v" +
+          v +
+          ". Does not delete history.",
+        confirmLabel: "Roll back",
+      })
+    ) {
       const d = await rollbackDataset(dataset.id, v);
       if (d) refresh();
     }
@@ -408,10 +712,18 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
     <div className="h-full flex flex-col">
       <div className="px-4 py-2.5 border-b border-line-2 bg-bg-1 flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-2">
-          <Badge tone={dataset.kind === 'raw' ? 'accent' : 'mag'}>{dataset.kind}</Badge>
-          <h2 className="text-[13px] font-semibold text-txt-0 truncate">{dataset.name}</h2>
-          <span className="mono text-[10px] text-txt-3">v{dataset.latest_version}</span>
-          <span className="mono text-[10px] text-txt-2 tabular-nums">{dataset.row_count.toLocaleString()} rows</span>
+          <Badge tone={dataset.kind === "raw" ? "accent" : "mag"}>
+            {dataset.kind}
+          </Badge>
+          <h2 className="text-[13px] font-semibold text-txt-0 truncate">
+            {dataset.name}
+          </h2>
+          <span className="mono text-[10px] text-txt-3">
+            v{dataset.latest_version}
+          </span>
+          <span className="mono text-[10px] text-txt-2 tabular-nums">
+            {dataset.row_count.toLocaleString()} rows
+          </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <input
@@ -423,107 +735,234 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) void addDocument(f);
-              e.target.value = '';
+              e.target.value = "";
             }}
           />
-          <Btn size="sm" disabled={docBusy} onClick={() => docInputRef.current?.click()}>
-            {docBusy ? 'adding…' : 'Add document'}
+          <Btn
+            size="sm"
+            disabled={docBusy}
+            onClick={() => docInputRef.current?.click()}
+          >
+            {docBusy ? "adding…" : "Add document"}
           </Btn>
-          <Btn size="sm" tone="accent" onClick={() => setUploadOpen(true)}>⇪ Upload version</Btn>
-          <Btn size="sm" onClick={() => navigate('pipeline')}>Lineage ›</Btn>
-          <Btn size="sm" onClick={() => void onDelete()}>Delete</Btn>
+          <Btn size="sm" tone="accent" onClick={() => setUploadOpen(true)}>
+            ⇪ Upload version
+          </Btn>
+          <Btn size="sm" onClick={() => navigate("pipeline")}>
+            Lineage ›
+          </Btn>
+          <Btn size="sm" onClick={() => void onDelete()}>
+            Delete
+          </Btn>
         </div>
       </div>
       {docStatus && (
         <p
           data-testid="document-status"
-          className={`px-4 py-2 text-[11px] border-b border-line-2 ${docStatus.tone === 'ok' ? 'text-txt-2' : 'text-alert'}`}
+          className={`px-4 py-2 text-[11px] border-b border-line-2 ${docStatus.tone === "ok" ? "text-txt-2" : "text-alert"}`}
         >
           {docStatus.text}
         </p>
       )}
       <div className="flex-1 min-h-0 overflow-auto p-4 space-y-3">
-        {dataset.description && <p className="text-[11px] text-txt-2">{dataset.description}</p>}
+        {dataset.description && (
+          <p className="text-[11px] text-txt-2">{dataset.description}</p>
+        )}
         {error && <p className="text-[11px] text-alert">{error}</p>}
         <AutoSyncBanner />
         <Tabs tabs={tabs} active={tab} onChange={setDetailTab} />
 
-        {tab === 'schema' && (
+        {tab === "schema" && (
           <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
             <table className="w-full border-collapse">
-              <thead><tr className={tableHeadCls()}><Th>Column</Th><Th>Type</Th></tr></thead>
+              <thead>
+                <tr className={tableHeadCls()}>
+                  <Th>Column</Th>
+                  <Th>Type</Th>
+                </tr>
+              </thead>
               <tbody>
                 {dataset.schema.map((c) => (
                   <tr key={c.name} className={rowCls}>
                     <td className={`${cellMono} text-txt-0`}>{c.name}</td>
-                    <td className="px-2.5 py-1.5"><TypeChip type={c.type} /></td>
+                    <td className="px-2.5 py-1.5">
+                      <TypeChip type={c.type} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {dataset.schema.length === 0 && <div className="px-2.5 py-3 text-center mono text-[11px] text-txt-3">No columns. Upload data to infer a schema.</div>}
+            {dataset.schema.length === 0 && (
+              <div className="px-2.5 py-3 text-center mono text-[11px] text-txt-3">
+                No columns. Upload data to infer a schema.
+              </div>
+            )}
           </div>
         )}
 
-        {tab === 'preview' && (
+        {tab === "preview" && (
           <div className="space-y-1.5">
             <div className="flex items-center justify-end gap-2 mono text-[10px] text-txt-3">
-              <Btn size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>‹ prev</Btn>
-              <span className="tabular-nums">{offset + 1}–{offset + (rows?.rows.length ?? 0)} of {(rows?.total ?? 0).toLocaleString()}</span>
-              <Btn size="sm" disabled={!rows || offset + PAGE_SIZE >= rows.total} onClick={() => setOffset(offset + PAGE_SIZE)}>next ›</Btn>
+              <Btn
+                size="sm"
+                disabled={offset === 0}
+                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+              >
+                ‹ prev
+              </Btn>
+              <span className="tabular-nums">
+                {offset + 1}–{offset + (rows?.rows.length ?? 0)} of{" "}
+                {(rows?.total ?? 0).toLocaleString()}
+              </span>
+              <Btn
+                size="sm"
+                disabled={!rows || offset + PAGE_SIZE >= rows.total}
+                onClick={() => setOffset(offset + PAGE_SIZE)}
+              >
+                next ›
+              </Btn>
             </div>
             <div className="overflow-auto rounded-md border border-line-2 bg-bg-1 max-h-[60vh]">
               <table className="w-full border-collapse">
-                <thead><tr className={tableHeadCls()}>{(rows?.schema ?? []).map((f) => <Th key={f.name}>{f.name}</Th>)}</tr></thead>
+                <thead>
+                  <tr className={tableHeadCls()}>
+                    {(rows?.schema ?? []).map((f) => (
+                      <Th key={f.name}>{f.name}</Th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
                   {(rows?.rows ?? []).map((row, i) => (
                     <tr key={i} className="border-t border-line">
-                      {(rows?.schema ?? []).map((f) => <td key={f.name} className="px-2.5 py-1 mono text-[11px] text-txt-1 whitespace-nowrap">{String((row as Record<string, unknown>)[f.name] ?? '')}</td>)}
+                      {(rows?.schema ?? []).map((f) => (
+                        <td
+                          key={f.name}
+                          className="px-2.5 py-1 mono text-[11px] text-txt-1 whitespace-nowrap"
+                        >
+                          {String(
+                            (row as Record<string, unknown>)[f.name] ?? "",
+                          )}
+                        </td>
+                      ))}
                     </tr>
                   ))}
-                  {(rows?.rows.length ?? 0) === 0 && <tr><td className="px-2.5 py-3 text-center mono text-[11px] text-txt-3">No rows.</td></tr>}
+                  {(rows?.rows.length ?? 0) === 0 && (
+                    <tr>
+                      <td className="px-2.5 py-3 text-center mono text-[11px] text-txt-3">
+                        No rows.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {tab === 'stats' && (
+        {tab === "stats" && (
           <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
             <table className="w-full border-collapse">
-              <thead><tr className={tableHeadCls()}><Th>Column</Th><Th>Type</Th><Th align="right">Nulls</Th><Th align="right">Distinct</Th><Th align="right">Min</Th><Th align="right">Max</Th></tr></thead>
+              <thead>
+                <tr className={tableHeadCls()}>
+                  <Th>Column</Th>
+                  <Th>Type</Th>
+                  <Th align="right">Nulls</Th>
+                  <Th align="right">Distinct</Th>
+                  <Th align="right">Min</Th>
+                  <Th align="right">Max</Th>
+                </tr>
+              </thead>
               <tbody>
                 {stats.map((c) => (
                   <tr key={c.name} className={rowCls}>
                     <td className={`${cellMono} text-txt-0`}>{c.name}</td>
-                    <td className="px-2.5 py-1.5"><TypeChip type={c.type} /></td>
-                    <td className={`${cellMono} text-right ${c.nulls > 0 ? 'text-warn' : 'text-txt-2'}`}>{c.nulls}</td>
-                    <td className={`${cellMono} text-right text-txt-2`}>{c.distinct}</td>
-                    <td className={`${cellMono} text-right text-txt-3 text-[10px]`}>{String(c.min ?? '—')}</td>
-                    <td className={`${cellMono} text-right text-txt-3 text-[10px]`}>{String(c.max ?? '—')}</td>
+                    <td className="px-2.5 py-1.5">
+                      <TypeChip type={c.type} />
+                    </td>
+                    <td
+                      className={`${cellMono} text-right ${c.nulls > 0 ? "text-warn" : "text-txt-2"}`}
+                    >
+                      {c.nulls}
+                    </td>
+                    <td className={`${cellMono} text-right text-txt-2`}>
+                      {c.distinct}
+                    </td>
+                    <td
+                      className={`${cellMono} text-right text-txt-3 text-[10px]`}
+                    >
+                      {String(c.min ?? "—")}
+                    </td>
+                    <td
+                      className={`${cellMono} text-right text-txt-3 text-[10px]`}
+                    >
+                      {String(c.max ?? "—")}
+                    </td>
                   </tr>
                 ))}
-                {stats.length === 0 && <tr><td colSpan={6} className="px-2.5 py-3 text-center mono text-[11px] text-txt-3">No columns.</td></tr>}
+                {stats.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-2.5 py-3 text-center mono text-[11px] text-txt-3"
+                    >
+                      No columns.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         )}
 
-        {tab === 'versions' && (
+        {tab === "versions" && (
           <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
             <table className="w-full border-collapse">
-              <thead><tr className={tableHeadCls()}><Th>Version</Th><Th>Source</Th><Th align="right">Rows</Th><Th>Created</Th><Th /></tr></thead>
+              <thead>
+                <tr className={tableHeadCls()}>
+                  <Th>Version</Th>
+                  <Th>Source</Th>
+                  <Th align="right">Rows</Th>
+                  <Th>Created</Th>
+                  <Th />
+                </tr>
+              </thead>
               <tbody>
                 {versions.map((v) => (
-                  <tr key={v.version} className={`${rowCls} ${version === v.version ? 'bg-accent-dim' : ''}`}>
-                    <td className={`${cellMono} text-txt-0 cursor-pointer`} onClick={() => { setVersion(v.version); setOffset(0); setDetailTab('preview'); }}>
-                      v{v.version}{v.version === dataset.latest_version && <span className="ml-1 text-txt-3 text-[10px]">latest</span>}
+                  <tr
+                    key={v.version}
+                    className={`${rowCls} ${version === v.version ? "bg-accent-dim" : ""}`}
+                  >
+                    <td
+                      className={`${cellMono} text-txt-0 cursor-pointer`}
+                      onClick={() => {
+                        setVersion(v.version);
+                        setOffset(0);
+                        setDetailTab("preview");
+                      }}
+                    >
+                      v{v.version}
+                      {v.version === dataset.latest_version && (
+                        <span className="ml-1 text-txt-3 text-[10px]">
+                          latest
+                        </span>
+                      )}
                     </td>
                     <td className={`${cellMono} text-txt-2`}>{v.source}</td>
-                    <td className={`${cellMono} text-right`}>{v.row_count.toLocaleString()}</td>
-                    <td className={`${cellMono} text-txt-3 text-[10px]`}>{stamp(v.created_at)}</td>
+                    <td className={`${cellMono} text-right`}>
+                      {v.row_count.toLocaleString()}
+                    </td>
+                    <td className={`${cellMono} text-txt-3 text-[10px]`}>
+                      {stamp(v.created_at)}
+                    </td>
                     <td className="px-2.5 py-1.5 text-right">
-                      {v.version !== dataset.latest_version && <Btn size="sm" onClick={() => void onRollback(v.version)}>Roll back</Btn>}
+                      {v.version !== dataset.latest_version && (
+                        <Btn
+                          size="sm"
+                          onClick={() => void onRollback(v.version)}
+                        >
+                          Roll back
+                        </Btn>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -532,39 +971,104 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
           </div>
         )}
 
-        {tab === 'lineage' && (
+        {tab === "lineage" && (
           <div className="rounded-md border border-line-2 bg-bg-1 p-3 space-y-2">
             <div className="text-[11px] text-txt-2">
-              {lineage?.produced_by ? <>Produced by <span className="mono text-accent">{lineage.produced_by}</span>{lineage.primary_input && <> from <span className="mono text-txt-1">{lineage.primary_input}</span></>}</> : 'Raw dataset: each column is its own source.'}
+              {lineage?.produced_by ? (
+                <>
+                  Produced by{" "}
+                  <span className="mono text-accent">
+                    {lineage.produced_by}
+                  </span>
+                  {lineage.primary_input && (
+                    <>
+                      {" "}
+                      from{" "}
+                      <span className="mono text-txt-1">
+                        {lineage.primary_input}
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : (
+                "Raw dataset: each column is its own source."
+              )}
             </div>
             <table className="w-full border-collapse">
-              <thead><tr className={tableHeadCls()}><Th>Output column</Th><Th>Derives from</Th></tr></thead>
+              <thead>
+                <tr className={tableHeadCls()}>
+                  <Th>Output column</Th>
+                  <Th>Derives from</Th>
+                </tr>
+              </thead>
               <tbody>
                 {Object.entries(lineage?.columns ?? {}).map(([col, srcs]) => (
                   <tr key={col} className={rowCls}>
                     <td className={`${cellMono} text-txt-0`}>{col}</td>
-                    <td className="px-2.5 py-1.5">{srcs.length ? srcs.map((s) => <span key={s} className="mono text-[10px] mr-1.5 text-txt-2">{s}</span>) : <span className="text-txt-4 text-[10px]">—</span>}</td>
+                    <td className="px-2.5 py-1.5">
+                      {srcs.length ? (
+                        srcs.map((s) => (
+                          <span
+                            key={s}
+                            className="mono text-[10px] mr-1.5 text-txt-2"
+                          >
+                            {s}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-txt-4 text-[10px]">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
-                {!lineage && <tr><td colSpan={2} className="px-2.5 py-3 text-center mono text-[11px] text-txt-3">Loading…</td></tr>}
+                {!lineage && (
+                  <tr>
+                    <td
+                      colSpan={2}
+                      className="px-2.5 py-3 text-center mono text-[11px] text-txt-3"
+                    >
+                      Loading…
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         )}
 
-        {tab === 'deadletter' && (
+        {tab === "deadletter" && (
           <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">
             {deadLetter.length === 0 ? (
-              <div className="p-4"><EmptyState icon={CheckCircle2} title="No quarantined rows" hint="Rows that raise during a filter/derive in the last build land here instead of failing the whole build." /></div>
+              <div className="p-4">
+                <EmptyState
+                  icon={CheckCircle2}
+                  title="No quarantined rows"
+                  hint="Rows that raise during a filter/derive in the last build land here instead of failing the whole build."
+                />
+              </div>
             ) : (
               <table className="w-full border-collapse">
-                <thead><tr className={tableHeadCls()}><Th>Step</Th><Th>Error</Th><Th>Row</Th></tr></thead>
+                <thead>
+                  <tr className={tableHeadCls()}>
+                    <Th>Step</Th>
+                    <Th>Error</Th>
+                    <Th>Row</Th>
+                  </tr>
+                </thead>
                 <tbody>
                   {deadLetter.map((e, i) => (
                     <tr key={i} className={rowCls}>
-                      <td className="px-2.5 py-1.5"><Badge tone="warn">{e.step_type}</Badge></td>
-                      <td className={`${cellMono} text-alert-fg text-[10px]`}>{e.error}</td>
-                      <td className={`${cellMono} text-txt-3 text-[10px] truncate max-w-[280px]`}>{JSON.stringify(e.row)}</td>
+                      <td className="px-2.5 py-1.5">
+                        <Badge tone="warn">{e.step_type}</Badge>
+                      </td>
+                      <td className={`${cellMono} text-alert-fg text-[10px]`}>
+                        {e.error}
+                      </td>
+                      <td
+                        className={`${cellMono} text-txt-3 text-[10px] truncate max-w-[280px]`}
+                      >
+                        {JSON.stringify(e.row)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -573,20 +1077,28 @@ function DatasetDetail({ dataset }: { dataset: Dataset }): JSX.Element {
           </div>
         )}
 
-        {tab === 'checks' && <ChecksSection datasetId={dataset.id} />}
-        {tab === 'docs' && <DocsTab dataset={dataset} docs={docs} />}
-        {tab === 'map' && <MapTab dataset={dataset} />}
-        {tab === 'sql' && <SqlTab dataset={dataset} />}
-        {tab === 'monitors' && <MonitorsTab datasetId={dataset.id} />}
+        {tab === "checks" && <ChecksSection datasetId={dataset.id} />}
+        {tab === "docs" && <DocsTab dataset={dataset} docs={docs} />}
+        {tab === "map" && <MapTab dataset={dataset} />}
+        {tab === "sql" && <SqlTab dataset={dataset} />}
+        {tab === "monitors" && <MonitorsTab datasetId={dataset.id} />}
       </div>
-      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} existing={dataset} onDone={() => { setUploadOpen(false); refresh(); }} />
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        existing={dataset}
+        onDone={() => {
+          setUploadOpen(false);
+          refresh();
+        }}
+      />
       {confirmElement}
     </div>
   );
 }
 
-type KindFilter = 'all' | 'raw' | 'derived';
-type SortKey = 'updated' | 'name' | 'rows';
+type KindFilter = "all" | "raw" | "derived";
+type SortKey = "updated" | "name" | "rows";
 
 export function DatasetsView(): JSX.Element {
   const datasets = useFoundry((s) => s.datasets);
@@ -597,27 +1109,31 @@ export function DatasetsView(): JSX.Element {
   const selectedId = useFoundryNav((s) => s.selectedId);
   const select = useFoundryNav((s) => s.select);
 
-  const [query, setQuery] = useState('');
-  const [kind, setKind] = useState<KindFilter>('all');
-  const [sort, setSort] = useState<SortKey>('updated');
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<KindFilter>("all");
+  const [sort, setSort] = useState<SortKey>("updated");
   const [newOpen, setNewOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newDesc, setNewDesc] = useState('');
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
 
   useFoundryPoll(() => loadDatasets());
 
   const filtered = useMemo(() => {
     let list = datasets;
-    if (kind !== 'all') list = list.filter((d) => d.kind === kind);
+    if (kind !== "all") list = list.filter((d) => d.kind === kind);
     if (query.trim()) {
       const q = query.trim().toLowerCase();
-      list = list.filter((d) => d.name.toLowerCase().includes(q) || d.description.toLowerCase().includes(q));
+      list = list.filter(
+        (d) =>
+          d.name.toLowerCase().includes(q) ||
+          d.description.toLowerCase().includes(q),
+      );
     }
     const sorted = [...list];
     sorted.sort((a, b) => {
-      if (sort === 'name') return a.name.localeCompare(b.name);
-      if (sort === 'rows') return b.row_count - a.row_count;
+      if (sort === "name") return a.name.localeCompare(b.name);
+      if (sort === "rows") return b.row_count - a.row_count;
       return b.updated_at.localeCompare(a.updated_at);
     });
     return sorted;
@@ -630,8 +1146,8 @@ export function DatasetsView(): JSX.Element {
     const d = await createDataset(newName.trim(), newDesc || undefined);
     if (d) {
       setNewOpen(false);
-      setNewName('');
-      setNewDesc('');
+      setNewName("");
+      setNewDesc("");
       clearAutoSync();
       select(d.id);
     }
@@ -642,25 +1158,62 @@ export function DatasetsView(): JSX.Element {
       {/* master list */}
       <div className="w-[320px] shrink-0 border-r border-line-2 bg-bg-1 flex flex-col">
         <div className="p-2.5 space-y-2 border-b border-line-2">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search datasets…" className={controlCls} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search datasets…"
+            className={controlCls}
+          />
           <div className="flex items-center gap-2">
             <FilterChips<KindFilter>
               value={kind}
               onChange={setKind}
               options={[
-                { key: 'all', label: 'all', count: datasets.length },
-                { key: 'raw', label: 'raw', count: datasets.filter((d) => d.kind === 'raw').length },
-                { key: 'derived', label: 'derived', count: datasets.filter((d) => d.kind === 'derived').length },
+                { key: "all", label: "all", count: datasets.length },
+                {
+                  key: "raw",
+                  label: "raw",
+                  count: datasets.filter((d) => d.kind === "raw").length,
+                },
+                {
+                  key: "derived",
+                  label: "derived",
+                  count: datasets.filter((d) => d.kind === "derived").length,
+                },
               ]}
             />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-[0.4px] text-txt-3">sort</span>
-            <Select value={sort} onChange={(v) => setSort(v as SortKey)} className="flex-1" options={[{ value: 'updated', label: 'updated' }, { value: 'name', label: 'name' }, { value: 'rows', label: 'rows' }]} />
+            <span className="text-[10px] uppercase tracking-[0.4px] text-txt-3">
+              sort
+            </span>
+            <Select
+              value={sort}
+              onChange={(v) => setSort(v as SortKey)}
+              className="flex-1"
+              options={[
+                { value: "updated", label: "updated" },
+                { value: "name", label: "name" },
+                { value: "rows", label: "rows" },
+              ]}
+            />
           </div>
           <div className="flex items-center gap-1.5">
-            <Btn size="sm" tone="accent" className="flex-1" onClick={() => setNewOpen(true)}>+ New dataset</Btn>
-            <Btn size="sm" className="flex-1" onClick={() => setUploadOpen(true)}>⇪ Upload</Btn>
+            <Btn
+              size="sm"
+              tone="accent"
+              className="flex-1"
+              onClick={() => setNewOpen(true)}
+            >
+              + New dataset
+            </Btn>
+            <Btn
+              size="sm"
+              className="flex-1"
+              onClick={() => setUploadOpen(true)}
+            >
+              ⇪ Upload
+            </Btn>
           </div>
           {error && <p className="text-[10px] text-alert">{error}</p>}
         </div>
@@ -671,15 +1224,24 @@ export function DatasetsView(): JSX.Element {
               <button
                 key={d.id}
                 type="button"
-                onClick={() => { clearAutoSync(); select(d.id); }}
-                className={`w-full text-left px-3 py-2 border-l-2 border-b border-line transition-colors ${on ? 'border-accent bg-accent-dim' : 'border-transparent hover:bg-bg-2'}`}
+                onClick={() => {
+                  clearAutoSync();
+                  select(d.id);
+                }}
+                className={`w-full text-left px-3 py-2 border-l-2 border-b border-line transition-colors ${on ? "border-accent bg-accent-dim" : "border-transparent hover:bg-bg-2"}`}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[12px] text-txt-0 truncate flex-1">{d.name}</span>
-                  <Badge tone={d.kind === 'raw' ? 'accent' : 'mag'}>{d.kind}</Badge>
+                  <span className="text-[12px] text-txt-0 truncate flex-1">
+                    {d.name}
+                  </span>
+                  <Badge tone={d.kind === "raw" ? "accent" : "mag"}>
+                    {d.kind}
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 mono text-[10px] text-txt-3">
-                  <span className="tabular-nums">{d.row_count.toLocaleString()} rows</span>
+                  <span className="tabular-nums">
+                    {d.row_count.toLocaleString()} rows
+                  </span>
                   <span>· v{d.latest_version}</span>
                   <span className="ml-auto">{stamp(d.updated_at)}</span>
                 </div>
@@ -687,7 +1249,13 @@ export function DatasetsView(): JSX.Element {
             );
           })}
           {filtered.length === 0 && (
-            <div className="p-4"><EmptyState icon={Table2} title="No datasets" hint="Upload a CSV, JSON, or NDJSON file to create your first dataset." /></div>
+            <div className="p-4">
+              <EmptyState
+                icon={Table2}
+                title="No datasets"
+                hint="Upload a CSV, JSON, or NDJSON file to create your first dataset."
+              />
+            </div>
           )}
         </div>
       </div>
@@ -698,7 +1266,11 @@ export function DatasetsView(): JSX.Element {
           <DatasetDetail dataset={selected} />
         ) : (
           <div className="h-full flex items-center justify-center p-8">
-            <EmptyState icon={Table2} title="Select a dataset" hint="Pick one from the list, or upload a file to create a new dataset." />
+            <EmptyState
+              icon={Table2}
+              title="Select a dataset"
+              hint="Pick one from the list, or upload a file to create a new dataset."
+            />
           </div>
         )}
       </div>
@@ -711,18 +1283,44 @@ export function DatasetsView(): JSX.Element {
         footer={
           <>
             <Btn onClick={() => setNewOpen(false)}>Cancel</Btn>
-            <Btn tone="accent" disabled={!newName.trim()} onClick={() => void onCreate()}>Create</Btn>
+            <Btn
+              tone="accent"
+              disabled={!newName.trim()}
+              onClick={() => void onCreate()}
+            >
+              Create
+            </Btn>
           </>
         }
       >
         <div className="space-y-3">
-          <Field label="Name"><input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="my_dataset" className={controlCls} /></Field>
-          <Field label="Description (optional)"><input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} className={controlCls} /></Field>
-          <p className="text-[10px] text-txt-4">Creates an empty dataset. Upload a file next to add its first version.</p>
+          <Field label="Name">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="my_dataset"
+              className={controlCls}
+            />
+          </Field>
+          <Field label="Description (optional)">
+            <input
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              className={controlCls}
+            />
+          </Field>
+          <p className="text-[10px] text-txt-4">
+            Creates an empty dataset. Upload a file next to add its first
+            version.
+          </p>
         </div>
       </Modal>
 
-      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onDone={() => setUploadOpen(false)} />
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onDone={() => setUploadOpen(false)}
+      />
     </div>
   );
 }

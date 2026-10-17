@@ -2,15 +2,15 @@
 // research_updated.md §1.1. Both the Cesium and MapLibre adapters subscribe
 // to events emitted here so they stay in sync.
 
-import { isLayerDescriptor, type LayerDescriptor } from '@osint/shared';
+import { isLayerDescriptor, type LayerDescriptor } from "@osint/shared";
 
 export type RegistryEvent =
-  | { type: 'register'; layer: LayerDescriptor }
-  | { type: 'unregister'; id: string }
-  | { type: 'enable'; id: string }
-  | { type: 'disable'; id: string }
-  | { type: 'opacity'; id: string; opacity: number }
-  | { type: 'time-window'; id: string; from: string; to: string };
+  | { type: "register"; layer: LayerDescriptor }
+  | { type: "unregister"; id: string }
+  | { type: "enable"; id: string }
+  | { type: "disable"; id: string }
+  | { type: "opacity"; id: string; opacity: number }
+  | { type: "time-window"; id: string; from: string; to: string };
 
 export type RegistryListener = (e: RegistryEvent) => void;
 
@@ -25,32 +25,37 @@ export class LayerRegistry {
 
   register(layer: LayerDescriptor): void {
     if (!isLayerDescriptor(layer)) {
-      throw new TypeError(`LayerRegistry.register: invalid descriptor (id=${(layer as { id?: unknown }).id ?? '?'})`);
+      throw new TypeError(
+        `LayerRegistry.register: invalid descriptor (id=${(layer as { id?: unknown }).id ?? "?"})`,
+      );
     }
     if (this.layers.has(layer.id)) {
       throw new Error(`LayerRegistry: duplicate id "${layer.id}"`);
     }
-    this.layers.set(layer.id, { descriptor: layer, enabled: layer.visibleByDefault });
-    this.emit({ type: 'register', layer });
+    this.layers.set(layer.id, {
+      descriptor: layer,
+      enabled: layer.visibleByDefault,
+    });
+    this.emit({ type: "register", layer });
   }
 
   unregister(id: string): void {
     if (!this.layers.delete(id)) return;
-    this.emit({ type: 'unregister', id });
+    this.emit({ type: "unregister", id });
   }
 
   enable(id: string): void {
     const s = this.require(id);
     if (s.enabled) return;
     s.enabled = true;
-    this.emit({ type: 'enable', id });
+    this.emit({ type: "enable", id });
   }
 
   disable(id: string): void {
     const s = this.require(id);
     if (!s.enabled) return;
     s.enabled = false;
-    this.emit({ type: 'disable', id });
+    this.emit({ type: "disable", id });
   }
 
   setOpacity(id: string, opacity: number): void {
@@ -59,13 +64,16 @@ export class LayerRegistry {
     }
     const s = this.require(id);
     s.descriptor = { ...s.descriptor, opacity };
-    this.emit({ type: 'opacity', id, opacity });
+    this.emit({ type: "opacity", id, opacity });
   }
 
   setTimeWindow(id: string, from: string, to: string): void {
     const s = this.require(id);
-    s.descriptor = { ...s.descriptor, time: { ...s.descriptor.time, from, to } };
-    this.emit({ type: 'time-window', id, from, to });
+    s.descriptor = {
+      ...s.descriptor,
+      time: { ...s.descriptor.time, from, to },
+    };
+    this.emit({ type: "time-window", id, from, to });
   }
 
   list(): readonly LayerDescriptor[] {

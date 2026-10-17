@@ -1,6 +1,11 @@
-import * as Cesium from 'cesium';
-import { useControl, factionColor, type ControlZone, type FrontLine } from '../situations/controlStore.js';
-import { hatchMaterial } from './hatch.js';
+import * as Cesium from "cesium";
+import {
+  useControl,
+  factionColor,
+  type ControlZone,
+  type FrontLine,
+} from "../situations/controlStore.js";
+import { hatchMaterial } from "./hatch.js";
 
 // Renders the territorial-control store — controlled/contested AREAS as 45°-hatched
 // polygons and FRONT LINES as solid (confirmed) / dashed (contested) polylines, with
@@ -18,7 +23,10 @@ function centroid(ring: [number, number][]): [number, number] {
   return [lon / ring.length, lat / ring.length];
 }
 
-function labelGraphics(text: string, color: Cesium.Color): Cesium.LabelGraphics.ConstructorOptions {
+function labelGraphics(
+  text: string,
+  color: Cesium.Color,
+): Cesium.LabelGraphics.ConstructorOptions {
   return {
     text,
     font: '600 11px "IBM Plex Mono", monospace',
@@ -27,21 +35,21 @@ function labelGraphics(text: string, color: Cesium.Color): Cesium.LabelGraphics.
     outlineWidth: 2,
     style: Cesium.LabelStyle.FILL_AND_OUTLINE,
     showBackground: true,
-    backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.78),
+    backgroundColor: Cesium.Color.fromCssColorString("#0c0e11").withAlpha(0.78),
     backgroundPadding: new Cesium.Cartesian2(6, 3),
     verticalOrigin: Cesium.VerticalOrigin.CENTER,
   };
 }
 
 export function installControl(viewer: Cesium.Viewer): () => void {
-  const ds = new Cesium.CustomDataSource('__control');
+  const ds = new Cesium.CustomDataSource("__control");
   void viewer.dataSources.add(ds);
 
   const addZone = (z: ControlZone): void => {
     if (z.ring.length < 3) return;
     const cssColor = factionColor(useControl.getState().factions, z.factionId);
     const color = Cesium.Color.fromCssColorString(cssColor);
-    const contested = z.status === 'contested';
+    const contested = z.status === "contested";
     ds.entities.add({
       id: z.id,
       polygon: {
@@ -56,9 +64,13 @@ export function installControl(viewer: Cesium.Viewer): () => void {
       },
     });
     const [clon, clat] = centroid(z.ring);
-    const text = [z.label, contested ? '(contested)' : null, z.conditions ? `· ${z.conditions}` : null]
+    const text = [
+      z.label,
+      contested ? "(contested)" : null,
+      z.conditions ? `· ${z.conditions}` : null,
+    ]
       .filter(Boolean)
-      .join(' ');
+      .join(" ");
     if (text) {
       ds.entities.add({
         id: `${z.id}:lbl`,
@@ -70,7 +82,7 @@ export function installControl(viewer: Cesium.Viewer): () => void {
 
   const addLine = (l: FrontLine): void => {
     if (l.coords.length < 2) return;
-    const contested = l.status === 'contested';
+    const contested = l.status === "contested";
     const positions = Cesium.Cartesian3.fromDegreesArray(l.coords.flat());
     ds.entities.add({
       id: l.id,
@@ -81,11 +93,11 @@ export function installControl(viewer: Cesium.Viewer): () => void {
         arcType: Cesium.ArcType.GEODESIC,
         material: contested
           ? new Cesium.PolylineDashMaterialProperty({
-              color: Cesium.Color.fromCssColorString('#f59e0b'),
+              color: Cesium.Color.fromCssColorString("#f59e0b"),
               dashLength: 12,
             })
           : new Cesium.PolylineOutlineMaterialProperty({
-              color: Cesium.Color.fromCssColorString('#e5e7eb'),
+              color: Cesium.Color.fromCssColorString("#e5e7eb"),
               outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
               outlineWidth: 2,
             }),
@@ -96,7 +108,10 @@ export function installControl(viewer: Cesium.Viewer): () => void {
       ds.entities.add({
         id: `${l.id}:lbl`,
         position: Cesium.Cartesian3.fromDegrees(mid[0], mid[1]),
-        label: labelGraphics(l.label, Cesium.Color.fromCssColorString(contested ? '#f59e0b' : '#e5e7eb')),
+        label: labelGraphics(
+          l.label,
+          Cesium.Color.fromCssColorString(contested ? "#f59e0b" : "#e5e7eb"),
+        ),
       });
     }
   };

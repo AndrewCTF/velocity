@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import * as Cesium from 'cesium';
-import { useSelection } from '../state/stores.js';
-import { useSettings } from '../state/settings.js';
+import { useEffect, useRef, useState } from "react";
+import * as Cesium from "cesium";
+import { useSelection } from "../state/stores.js";
+import { useSettings } from "../state/settings.js";
 
 // Instrument overlays drawn over the globe (.gov in the mockup): a category
 // legend, a north compass, a scale bar, live cursor + selection coordinates,
@@ -21,18 +21,18 @@ interface LegendItem {
 // The rendered data categories. These mirror the icon dispatch in
 // globe/adapters/styles.ts — truthful, not invented.
 const LEGEND: readonly LegendItem[] = [
-  { color: '#facc15', label: 'aircraft' },
-  { color: '#14b8a6', label: 'vessels' },
-  { color: '#ef4444', label: 'dark candidate' },
-  { color: 'rgba(255,90,82,0.5)', label: 'GPS jamming' },
+  { color: "#facc15", label: "aircraft" },
+  { color: "#14b8a6", label: "vessels" },
+  { color: "#ef4444", label: "dark candidate" },
+  { color: "rgba(255,90,82,0.5)", label: "GPS jamming" },
 ];
 
 function fmtLat(lat: number): string {
-  const h = lat >= 0 ? 'N' : 'S';
+  const h = lat >= 0 ? "N" : "S";
   return `${Math.abs(lat).toFixed(2)}°${h}`;
 }
 function fmtLon(lon: number): string {
-  const h = lon >= 0 ? 'E' : 'W';
+  const h = lon >= 0 ? "E" : "W";
   return `${Math.abs(lon).toFixed(2)}°${h}`;
 }
 function fmtAlt(m: number): string {
@@ -57,12 +57,20 @@ function fmtKm(m: number): string {
 export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
   const selId = useSelection((s) => s.selectedEntityId);
   const deadReckon = useSettings((s) => s.aircraftDeadReckon);
-  const [center, setCenter] = useState<{ lon: number; lat: number; alt: number } | null>(null);
-  const [cursor, setCursor] = useState<{ lon: number; lat: number } | null>(null);
+  const [center, setCenter] = useState<{
+    lon: number;
+    lat: number;
+    alt: number;
+  } | null>(null);
+  const [cursor, setCursor] = useState<{ lon: number; lat: number } | null>(
+    null,
+  );
   const [headingDeg, setHeadingDeg] = useState(0);
-  const [scale, setScale] = useState<{ px: number; label: string } | null>(null);
+  const [scale, setScale] = useState<{ px: number; label: string } | null>(
+    null,
+  );
   const [sel, setSel] = useState<{ lon: number; lat: number } | null>(null);
-  const lastRef = useRef<string>('');
+  const lastRef = useRef<string>("");
 
   useEffect(() => {
     if (!viewer) return;
@@ -87,8 +95,14 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       const canvas = viewer.scene.canvas;
       const w = canvas.clientWidth || canvas.width;
       const h = canvas.clientHeight || canvas.height;
-      const a = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(w / 2 - 50, h / 2), ell);
-      const b = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(w / 2 + 50, h / 2), ell);
+      const a = viewer.camera.pickEllipsoid(
+        new Cesium.Cartesian2(w / 2 - 50, h / 2),
+        ell,
+      );
+      const b = viewer.camera.pickEllipsoid(
+        new Cesium.Cartesian2(w / 2 + 50, h / 2),
+        ell,
+      );
       if (a && b) {
         const distM = Cesium.Cartesian3.distance(a, b);
         const mPerPx = distM / 100;
@@ -100,7 +114,9 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       }
     };
 
-    const onMouseMove = (movement: { endPosition: Cesium.Cartesian2 }): void => {
+    const onMouseMove = (movement: {
+      endPosition: Cesium.Cartesian2;
+    }): void => {
       if (viewer.isDestroyed()) return;
       const cart = viewer.camera.pickEllipsoid(movement.endPosition, ell);
       if (!cart) {
@@ -108,7 +124,10 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
         return;
       }
       const c = Cesium.Cartographic.fromCartesian(cart);
-      setCursor({ lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) });
+      setCursor({
+        lon: Cesium.Math.toDegrees(c.longitude),
+        lat: Cesium.Math.toDegrees(c.latitude),
+      });
     };
 
     readCamera();
@@ -144,7 +163,10 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       const pos = e?.position?.getValue(viewer.clock.currentTime);
       if (!pos) return;
       const c = Cesium.Cartographic.fromCartesian(pos);
-      const next = { lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) };
+      const next = {
+        lon: Cesium.Math.toDegrees(c.longitude),
+        lat: Cesium.Math.toDegrees(c.latitude),
+      };
       const key = `${next.lon.toFixed(3)}|${next.lat.toFixed(3)}`;
       if (key !== lastRef.current) {
         lastRef.current = key;
@@ -166,13 +188,15 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       <div className="md:hidden absolute top-2 left-2 right-2 flex justify-center">
         <div
           className="px-2.5 py-1 rounded-md border border-line text-[10px] text-txt-1 flex items-center gap-2"
-          style={{ background: 'rgba(8,10,15,0.6)' }}
+          style={{ background: "rgba(8,10,15,0.6)" }}
         >
           <span className="text-txt-0">
-            {center ? `${fmtLat(center.lat)}  ${fmtLon(center.lon)}` : '—'}
+            {center ? `${fmtLat(center.lat)}  ${fmtLon(center.lon)}` : "—"}
           </span>
           <span className="text-txt-3">·</span>
-          <span className="text-txt-3">{center ? fmtAlt(center.alt) : '—'}</span>
+          <span className="text-txt-3">
+            {center ? fmtAlt(center.alt) : "—"}
+          </span>
           <span className="text-txt-3">·</span>
           <span className="text-txt-3">{headingDeg.toFixed(0)}°</span>
         </div>
@@ -182,11 +206,14 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
           resizable rail otherwise) via --rail-left-w so it never leaves a gap. */}
       <div
         className="on-dark hidden md:flex absolute flex-col gap-1 text-[10px] text-txt-3"
-        style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)', top: 14 }}
+        style={{ left: "calc(var(--rail-left-w, 44px) + 12px)", top: 14 }}
       >
         {LEGEND.map((l) => (
           <span key={l.label} className="flex items-center gap-1.5">
-            <i className="inline-block w-[7px] h-[7px] rounded-full" style={{ background: l.color }} />
+            <i
+              className="inline-block w-[7px] h-[7px] rounded-full"
+              style={{ background: l.color }}
+            />
             {l.label}
           </span>
         ))}
@@ -195,57 +222,75 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       {/* compass — top-right, rotates with camera heading; hugs the live right rail */}
       <div
         className="on-dark hidden md:flex absolute w-[34px] h-[34px] border border-line rounded-full items-center justify-center text-[10px] text-txt-2"
-        style={{ background: 'rgba(8,10,15,0.5)', right: 'calc(var(--rail-right-w, 360px) + 12px)', top: 14 }}
+        style={{
+          background: "rgba(8,10,15,0.5)",
+          right: "calc(var(--rail-right-w, 360px) + 12px)",
+          top: 14,
+        }}
         title={`heading ${headingDeg.toFixed(0)}°`}
       >
-        <span style={{ transform: `rotate(${-headingDeg}deg)`, display: 'inline-block' }}>N</span>
+        <span
+          style={{
+            transform: `rotate(${-headingDeg}deg)`,
+            display: "inline-block",
+          }}
+        >
+          N
+        </span>
       </div>
 
       {/* scale bar — bottom-left above the coords */}
       {scale && (
-        <div className="hidden md:block absolute bottom-[62px] map-foot-item-2" style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)' }}>
+        <div
+          className="hidden md:block absolute bottom-[62px] map-foot-item-2"
+          style={{ left: "calc(var(--rail-left-w, 44px) + 12px)" }}
+        >
           <div
             className="h-[5px]"
             style={{
               width: scale.px,
-              borderLeft: '1px solid var(--txt-2)',
-              borderRight: '1px solid var(--txt-2)',
-              borderBottom: '1px solid var(--txt-2)',
+              borderLeft: "1px solid var(--txt-2)",
+              borderRight: "1px solid var(--txt-2)",
+              borderBottom: "1px solid var(--txt-2)",
             }}
           />
-          <div className="text-[10px] text-txt-3 mt-[3px] tracking-[0.4px]">{scale.label}</div>
+          <div className="text-[10px] text-txt-3 mt-[3px] tracking-[0.4px]">
+            {scale.label}
+          </div>
         </div>
       )}
 
       {/* cursor + selection coordinates — bottom-left */}
       <div
         className="hidden md:block absolute bottom-[14px] map-foot-item text-[10px] text-txt-2 leading-[1.7]"
-        style={{ left: 'calc(var(--rail-left-w, 44px) + 12px)' }}
+        style={{ left: "calc(var(--rail-left-w, 44px) + 12px)" }}
       >
         <div>
-          cursor{' '}
+          cursor{" "}
           <span className="text-txt-1">
-            {cursor ? `${fmtLat(cursor.lat)}  ${fmtLon(cursor.lon)}` : '—'}
+            {cursor ? `${fmtLat(cursor.lat)}  ${fmtLon(cursor.lon)}` : "—"}
           </span>
         </div>
         <div>
-          sel{'    '}
-          <span className="text-txt-1">{sel ? `${fmtLat(sel.lat)}  ${fmtLon(sel.lon)}` : '—'}</span>
+          sel{"    "}
+          <span className="text-txt-1">
+            {sel ? `${fmtLat(sel.lat)}  ${fmtLon(sel.lon)}` : "—"}
+          </span>
         </div>
       </div>
 
       {/* projection / center / zoom — bottom-right, hugs the live right rail */}
       <div
         className="hidden md:block absolute bottom-[14px] map-foot-item text-[10px] text-txt-3 tracking-[0.5px] text-right leading-[1.7]"
-        style={{ right: 'calc(var(--rail-right-w, 360px) + 12px)' }}
+        style={{ right: "calc(var(--rail-right-w, 360px) + 12px)" }}
       >
         <div>
-          center{' '}
+          center{" "}
           <span className="text-txt-2">
-            {center ? `${fmtLon(center.lon)} ${fmtLat(center.lat)}` : '—'}
+            {center ? `${fmtLon(center.lon)} ${fmtLat(center.lat)}` : "—"}
           </span>
         </div>
-        <div>alt {center ? fmtAlt(center.alt) : '—'}</div>
+        <div>alt {center ? fmtAlt(center.alt) : "—"}</div>
         {/* honest marker for the dead-reckoning opt-in: aircraft positions are
             being ESTIMATED between ADS-B fixes while this reads "predicted" */}
         {deadReckon && (

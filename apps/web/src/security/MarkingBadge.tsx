@@ -1,7 +1,7 @@
 // Classification marking badge — the small coloured pill shown on any classified
 // object/layer/situation, plus a full-width banner for the top of a view.
 
-import { clampLevel, LEVEL_COLOR, marking } from './classification.js';
+import { clampLevel, LEVEL_COLOR, marking } from "./classification.js";
 
 export function MarkingBadge({
   level,
@@ -15,17 +15,17 @@ export function MarkingBadge({
   const lv = clampLevel(level);
   return (
     <span
-      title={title ?? 'Classification marking'}
+      title={title ?? "Classification marking"}
       style={{
         background: LEVEL_COLOR[lv],
-        color: '#fff',
+        color: "#fff",
         fontFamily: '"IBM Plex Mono", monospace',
         fontSize: 10,
         fontWeight: 700,
-        padding: '1px 5px',
+        padding: "1px 5px",
         borderRadius: 3,
         letterSpacing: 0.5,
-        whiteSpace: 'nowrap',
+        whiteSpace: "nowrap",
       }}
     >
       {marking(level, compartments)}
@@ -45,14 +45,14 @@ export function ClassificationBanner({
     <div
       style={{
         background: LEVEL_COLOR[lv],
-        color: '#fff',
+        color: "#fff",
         fontFamily: '"IBM Plex Mono", monospace',
         fontSize: 11,
         fontWeight: 700,
-        textAlign: 'center',
+        textAlign: "center",
         letterSpacing: 1,
-        padding: '2px 0',
-        width: '100%',
+        padding: "2px 0",
+        width: "100%",
       }}
     >
       {marking(level, compartments)}

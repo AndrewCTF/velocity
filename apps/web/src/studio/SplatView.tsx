@@ -5,10 +5,10 @@
 // non-recon scene sources (local files, pasted URLs) without duplicating the
 // THREE/Spark wiring. Behavior is unchanged from the inline version; the only
 // additions are optional `className` and `onStats` props (both additive).
-import { useEffect, useRef } from 'react';
-import * as THREE from 'three';
-import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
+import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 export interface CamPose {
   position: number[];
@@ -23,7 +23,7 @@ export interface SplatStats {
 export function SplatView({
   url,
   cam,
-  className = 'absolute inset-0',
+  className = "absolute inset-0",
   onStats,
 }: {
   url: string;
@@ -45,7 +45,10 @@ export function SplatView({
     const w = host.clientWidth || 960;
     const h = host.clientHeight || 720;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: false,
+      powerPreference: "high-performance",
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h);
     host.appendChild(renderer.domElement);
@@ -68,22 +71,36 @@ export function SplatView({
         // median-centered space, matching the served .ply.
         if (cam) {
           camera.up.set(cam.up[0]!, cam.up[1]!, cam.up[2]!);
-          camera.position.set(cam.position[0]!, cam.position[1]!, cam.position[2]!);
+          camera.position.set(
+            cam.position[0]!,
+            cam.position[1]!,
+            cam.position[2]!,
+          );
           controls.target.set(cam.target[0]!, cam.target[1]!, cam.target[2]!);
         }
         controls.update();
         if (import.meta.env.DEV) {
-          (window as unknown as { __sv?: unknown }).__sv = { renderer, scene, camera, mesh, spark };
+          (window as unknown as { __sv?: unknown }).__sv = {
+            renderer,
+            scene,
+            camera,
+            mesh,
+            spark,
+          };
         }
         if (onStats) {
           // Best-effort: only read a count if Spark actually exposes one on
           // this build — never fabricate a number.
-          const n = (mesh as unknown as { numSplats?: number; packedSplats?: { numSplats?: number } });
-          const count = typeof n.numSplats === 'number'
-            ? n.numSplats
-            : typeof n.packedSplats?.numSplats === 'number'
-              ? n.packedSplats.numSplats
-              : null;
+          const n = mesh as unknown as {
+            numSplats?: number;
+            packedSplats?: { numSplats?: number };
+          };
+          const count =
+            typeof n.numSplats === "number"
+              ? n.numSplats
+              : typeof n.packedSplats?.numSplats === "number"
+                ? n.packedSplats.numSplats
+                : null;
           onStats({ numSplats: count });
         }
       },
@@ -98,7 +115,7 @@ export function SplatView({
       camera.updateProjectionMatrix();
       renderer.setSize(ww, hh);
     };
-    window.addEventListener('resize', onResize);
+    window.addEventListener("resize", onResize);
 
     const loop = (): void => {
       raf = requestAnimationFrame(loop);
@@ -110,7 +127,7 @@ export function SplatView({
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
-      window.removeEventListener('resize', onResize);
+      window.removeEventListener("resize", onResize);
       controls.dispose();
       try {
         (mesh as unknown as { dispose?: () => void }).dispose?.();

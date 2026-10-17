@@ -4,5 +4,5 @@
 const JOB_ID = /^[0-9a-f]{6,32}$/;
 
 export function validJobId(raw: unknown): string | null {
-  return typeof raw === 'string' && JOB_ID.test(raw) ? raw : null;
+  return typeof raw === "string" && JOB_ID.test(raw) ? raw : null;
 }

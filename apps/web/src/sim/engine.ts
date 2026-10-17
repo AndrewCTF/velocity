@@ -15,11 +15,11 @@ import type {
   RouteLine,
   DefenseSite,
   AgentSpec,
-} from './types.js';
-import { getSystem } from './catalog.js';
-import { resolveRaid, salvoForDefender, RENDER_AGENT_CAP } from './combat.js';
-import { PROFILES, linkProfileFor, type LinkProfile } from './links.js';
-import type { Jammer } from './ew.js';
+} from "./types.js";
+import { getSystem } from "./catalog.js";
+import { resolveRaid, salvoForDefender, RENDER_AGENT_CAP } from "./combat.js";
+import { PROFILES, linkProfileFor, type LinkProfile } from "./links.js";
+import type { Jammer } from "./ew.js";
 
 const R_KM = 6371;
 const rad = (d: number): number => (d * Math.PI) / 180;
@@ -39,18 +39,30 @@ export function bearingDeg(a: LatLon, b: LatLon): number {
   const phi2 = rad(b.lat);
   const dl = rad(b.lon - a.lon);
   const y = Math.sin(dl) * Math.cos(phi2);
-  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dl);
+  const x =
+    Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(dl);
   return (deg(Math.atan2(y, x)) + 360) % 360;
 }
 
-export function destPoint(origin: LatLon, brgDeg: number, distKm: number): LatLon {
+export function destPoint(
+  origin: LatLon,
+  brgDeg: number,
+  distKm: number,
+): LatLon {
   const d = distKm / R_KM;
   const brg = rad(brgDeg);
   const lat1 = rad(origin.lat);
   const lon1 = rad(origin.lon);
-  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brg));
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brg),
+  );
   const lon2 =
-    lon1 + Math.atan2(Math.sin(brg) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+    lon1 +
+    Math.atan2(
+      Math.sin(brg) * Math.sin(d) * Math.cos(lat1),
+      Math.cos(d) - Math.sin(lat1) * Math.sin(lat2),
+    );
   return { lat: deg(lat2), lon: ((deg(lon2) + 540) % 360) - 180 };
 }
 
@@ -117,7 +129,7 @@ function buildAgents(
     const startDelaySec = i * gap;
     agents.push({
       id: `sim:agent:${i}`,
-      label: `UAV ${String(i + 1).padStart(2, '0')}`,
+      label: `UAV ${String(i + 1).padStart(2, "0")}`,
       color,
       launch: from,
       target: to,
@@ -127,17 +139,23 @@ function buildAgents(
       startDelaySec,
       swarmId,
     });
-    if (n <= 40) routes.push({ id: `sim:agent:${i}:route`, color, points: [from, to] });
+    if (n <= 40)
+      routes.push({ id: `sim:agent:${i}:route`, color, points: [from, to] });
     maxEnd = Math.max(maxEnd, startDelaySec + legSec);
   }
-  if (n > 40) routes.push({ id: 'sim:corridor', color, points: [launch, target] });
+  if (n > 40)
+    routes.push({ id: "sim:corridor", color, points: [launch, target] });
   // Headroom past the nominal leg so RTL / loiter behaviours have time to play.
   const durationSec = Math.ceil(maxEnd * 1.6 + 10);
   return { agents, routes, durationSec };
 }
 
-function buildSwarm(p: SwarmParams, jammers: Jammer[], napOfEarth: boolean): SimPlan {
-  const profile = PROFILES[p.linkKey ?? 'fpv_rf'] ?? PROFILES.fpv_rf!;
+function buildSwarm(
+  p: SwarmParams,
+  jammers: Jammer[],
+  napOfEarth: boolean,
+): SimPlan {
+  const profile = PROFILES[p.linkKey ?? "fpv_rf"] ?? PROFILES.fpv_rf!;
   const { agents, routes, durationSec } = buildAgents(
     p.launch,
     p.target,
@@ -147,8 +165,8 @@ function buildSwarm(p: SwarmParams, jammers: Jammer[], napOfEarth: boolean): Sim
     profile,
     p.spreadKm,
     seedFrom(p),
-    '#ef4444',
-    'sim:swarm:0',
+    "#ef4444",
+    "sim:swarm:0",
   );
   // A swarm flying unopposed never gets engaged ("0 intercepted") and draws no
   // defensive ring. Place a notional point air-defence at the target so the raid
@@ -156,17 +174,17 @@ function buildSwarm(p: SwarmParams, jammers: Jammer[], napOfEarth: boolean): Sim
   // through (a 100-drone swarm saturates a single battery — the whole point).
   const defenses: DefenseSite[] = [
     {
-      id: 'sim:swarm:def:0',
-      name: 'Point air defence',
+      id: "sim:swarm:def:0",
+      name: "Point air defence",
       lat: p.target.lat,
       lon: p.target.lon,
       rangeKm: 30,
-      color: '#4d8dff',
+      color: "#4d8dff",
       pk: 0.45,
     },
   ];
   return {
-    scenario: 'drone-swarm',
+    scenario: "drone-swarm",
     durationSec,
     units: [],
     routes,
@@ -184,35 +202,51 @@ function buildLanding(p: LandingParams): SimPlan {
   const legSec = (legKm / speed) * 3600;
   const brg = bearingDeg(p.start, p.pad);
   const flare = destPoint(p.start, brg, legKm * 0.6);
-  const id = 'sim:landing:0';
-  const color = '#2dd4bf';
+  const id = "sim:landing:0";
+  const color = "#2dd4bf";
   const units: UnitTrack[] = [
     {
       id,
-      kind: 'drone',
-      label: 'DRONE 01',
+      kind: "drone",
+      label: "DRONE 01",
       color,
       fixes: [
         { tSec: 0, lat: p.start.lat, lon: p.start.lon, alt: p.startAltM },
-        { tSec: legSec * 0.6, lat: flare.lat, lon: flare.lon, alt: p.startAltM * 0.3 },
+        {
+          tSec: legSec * 0.6,
+          lat: flare.lat,
+          lon: flare.lon,
+          alt: p.startAltM * 0.3,
+        },
         { tSec: legSec, lat: p.pad.lat, lon: p.pad.lon, alt: 0 },
       ],
     },
   ];
-  const routes: RouteLine[] = [{ id: `${id}:route`, color, points: [p.start, p.pad] }];
-  return { scenario: 'drone-landing', durationSec: Math.ceil(legSec), units, routes };
+  const routes: RouteLine[] = [
+    { id: `${id}:route`, color, points: [p.start, p.pad] },
+  ];
+  return {
+    scenario: "drone-landing",
+    durationSec: Math.ceil(legSec),
+    units,
+    routes,
+  };
 }
 
 function cruiseAltFor(category: string): number {
-  if (category === 'fighter') return 8000;
-  if (category === 'drone') return 4000;
+  if (category === "fighter") return 8000;
+  if (category === "drone") return 4000;
   return 1500; // loitering munition
 }
 
 // Lay the attacker strike force as link-equipped agents, place the defender's
 // SAM sites + range rings, and size the impact footprint (nap-of-earth gives
 // terrain cover). The SimController runs the live link/EW/terrain dynamics.
-export function buildAttack(p: AttackParams, jammers: Jammer[], napOfEarth: boolean): SimPlan {
+export function buildAttack(
+  p: AttackParams,
+  jammers: Jammer[],
+  napOfEarth: boolean,
+): SimPlan {
   const attacker = getSystem(p.attackerId);
   const defender = getSystem(p.defenderId);
   if (!attacker) throw new Error(`unknown attacker system: ${p.attackerId}`);
@@ -224,7 +258,11 @@ export function buildAttack(p: AttackParams, jammers: Jammer[], napOfEarth: bool
   const speed = Math.max(60, attacker.specs.speed_kph ?? 200);
   const alt = cruiseAltFor(attacker.category);
   const profile = linkProfileFor(attacker.id, attacker.category);
-  const seed = (count * 131 + Math.round(p.target.lat * 53) + Math.round(p.target.lon * 31)) >>> 0;
+  const seed =
+    (count * 131 +
+      Math.round(p.target.lat * 53) +
+      Math.round(p.target.lon * 31)) >>>
+    0;
   const { agents, routes, durationSec } = buildAgents(
     p.launch,
     p.target,
@@ -234,8 +272,8 @@ export function buildAttack(p: AttackParams, jammers: Jammer[], napOfEarth: bool
     profile,
     6,
     seed,
-    '#ef4444',
-    'sim:strike:0',
+    "#ef4444",
+    "sim:strike:0",
   );
 
   // Defence sites ringed around the target; the controller draws range rings.
@@ -251,7 +289,7 @@ export function buildAttack(p: AttackParams, jammers: Jammer[], napOfEarth: bool
       lat: c.lat,
       lon: c.lon,
       rangeKm: drawRangeKm,
-      color: '#4d8dff',
+      color: "#4d8dff",
       pk: defender.specs.pk_est ?? 0.6,
     });
   }
@@ -262,7 +300,15 @@ export function buildAttack(p: AttackParams, jammers: Jammer[], napOfEarth: bool
   const raid = resolveRaid(
     count,
     attacker.specs.pk_est ?? 0.6,
-    [{ id: defender.id, name: defender.name, pk: defender.specs.pk_est ?? 0.6, count: sites, salvoPerSite: salvoForDefender(defender.id) }],
+    [
+      {
+        id: defender.id,
+        name: defender.name,
+        pk: defender.specs.pk_est ?? 0.6,
+        count: sites,
+        salvoPerSite: salvoForDefender(defender.id),
+      },
+    ],
     cover,
   );
   const severity = Math.min(1, raid.leakers / count + 0.15);
@@ -274,7 +320,7 @@ export function buildAttack(p: AttackParams, jammers: Jammer[], napOfEarth: bool
   };
 
   return {
-    scenario: 'attack',
+    scenario: "attack",
     durationSec,
     units: [],
     routes,
@@ -290,19 +336,24 @@ export function buildAttack(p: AttackParams, jammers: Jammer[], napOfEarth: bool
 export function buildPlan(scenario: Scenario): SimPlan {
   const jammers = scenario.jammers ?? [];
   const noe = scenario.napOfEarth ?? false;
-  if (scenario.kind === 'drone-swarm') {
-    if (!scenario.swarm) throw new Error('drone-swarm scenario missing swarm params');
+  if (scenario.kind === "drone-swarm") {
+    if (!scenario.swarm)
+      throw new Error("drone-swarm scenario missing swarm params");
     return buildSwarm(scenario.swarm, jammers, noe);
   }
-  if (scenario.kind === 'drone-landing') {
-    if (!scenario.landing) throw new Error('drone-landing scenario missing landing params');
+  if (scenario.kind === "drone-landing") {
+    if (!scenario.landing)
+      throw new Error("drone-landing scenario missing landing params");
     return buildLanding(scenario.landing);
   }
-  if (scenario.kind === 'attack') {
-    if (!scenario.attack) throw new Error('attack scenario missing attack params');
+  if (scenario.kind === "attack") {
+    if (!scenario.attack)
+      throw new Error("attack scenario missing attack params");
     return buildAttack(scenario.attack, jammers, noe);
   }
-  throw new Error(`unknown scenario kind: ${(scenario as { kind: string }).kind}`);
+  throw new Error(
+    `unknown scenario kind: ${(scenario as { kind: string }).kind}`,
+  );
 }
 
 // Linear interpolation of a static-fix unit's position at sim-second t (used by
@@ -316,11 +367,21 @@ export function sampleUnit(
   const last = fixes[fixes.length - 1]!;
   if (t <= first.tSec) {
     const nxt = fixes[1] ?? first;
-    return { lat: first.lat, lon: first.lon, alt: first.alt, brg: bearingDeg(first, nxt) };
+    return {
+      lat: first.lat,
+      lon: first.lon,
+      alt: first.alt,
+      brg: bearingDeg(first, nxt),
+    };
   }
   if (t >= last.tSec) {
     const prv = fixes[fixes.length - 2] ?? last;
-    return { lat: last.lat, lon: last.lon, alt: last.alt, brg: bearingDeg(prv, last) };
+    return {
+      lat: last.lat,
+      lon: last.lon,
+      alt: last.alt,
+      brg: bearingDeg(prv, last),
+    };
   }
   for (let i = 0; i < fixes.length - 1; i++) {
     const a = fixes[i]!;

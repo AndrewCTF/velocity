@@ -9,28 +9,29 @@ product for a decade. This document records, panel by panel, what their system c
 what ours contains, and where the gap is — so design arguments start from evidence.
 
 Companion documents:
+
 - `docs/perf-baseline-2026-07-27.md` / `docs/perf-results-2026-07-27.md` — the measured
   before/after this reference motivated.
 - `docs/decisions.md` — the operator decisions that constrain what we may copy.
 
 ## 1. Sources actually read (not just found)
 
-| # | Source | Type | What it gave |
-|---|---|---|---|
-| S1 | `palantir.com/docs/foundry/map/map-overview` | HTML doc | Full Map panel + toolbar inventory |
-| S2 | `palantir.com/docs/foundry/map/getting-started` | HTML doc | Navigation grammar, core workflows |
-| S3 | `palantir.com/docs/foundry/map/layer-editor` | HTML doc | Raster/vector/object layer display options |
-| S4 | `palantir.com/docs/foundry/map/objects-loading-methods` | HTML doc | Auto / Tile / Object loading, the scale answer |
-| S5 | `palantir.com/docs/foundry/workshop/widgets-map` | HTML doc | The exhaustive map-widget option list |
-| S6 | `palantir.com/docs/foundry/getting-started/application-reference` | HTML doc | The complete Foundry application inventory |
-| S7 | `palantir.com/docs/gotham/api/target-workbench/target/create-target` | HTML API ref | Gotham Target data model |
-| S8 | G-Cloud 14 *Palantir Platform: Gotham* Service Definition | **PDF** | The Gotham application-by-application description |
-| S9 | G-Cloud 14 *Palantir Platform: Foundry & AIP* Service Definition | **PDF** | Foundry pillars + AIP capability list |
-| S10 | `blog.palantir.com` — *Redefining Real-Time Map Collaboration* | HTML blog | Gaia Follow Along: state sync + throttling numbers |
-| S11 | `blog.palantir.com` — *Plotlines in Three.js* | HTML blog | The GPU/instancing/circular-buffer techniques |
-| S12 | YouTube `rxKghrZU5w8` *Gotham for Defense Decision Making* | **video transcript** | The understand→decide→act loop |
-| S13 | YouTube `XEM5qz__HOU` *AIP \| Defense and Military* | **video transcript** | The AI-in-the-loop panel grammar |
-| S14 | YouTube `tZVx3BTkLlI` *Gotham: Europa* | **video transcript** | Chat/Slides/MetaConstellation release framing |
+| #   | Source                                                               | Type                 | What it gave                                       |
+| --- | -------------------------------------------------------------------- | -------------------- | -------------------------------------------------- |
+| S1  | `palantir.com/docs/foundry/map/map-overview`                         | HTML doc             | Full Map panel + toolbar inventory                 |
+| S2  | `palantir.com/docs/foundry/map/getting-started`                      | HTML doc             | Navigation grammar, core workflows                 |
+| S3  | `palantir.com/docs/foundry/map/layer-editor`                         | HTML doc             | Raster/vector/object layer display options         |
+| S4  | `palantir.com/docs/foundry/map/objects-loading-methods`              | HTML doc             | Auto / Tile / Object loading, the scale answer     |
+| S5  | `palantir.com/docs/foundry/workshop/widgets-map`                     | HTML doc             | The exhaustive map-widget option list              |
+| S6  | `palantir.com/docs/foundry/getting-started/application-reference`    | HTML doc             | The complete Foundry application inventory         |
+| S7  | `palantir.com/docs/gotham/api/target-workbench/target/create-target` | HTML API ref         | Gotham Target data model                           |
+| S8  | G-Cloud 14 _Palantir Platform: Gotham_ Service Definition            | **PDF**              | The Gotham application-by-application description  |
+| S9  | G-Cloud 14 _Palantir Platform: Foundry & AIP_ Service Definition     | **PDF**              | Foundry pillars + AIP capability list              |
+| S10 | `blog.palantir.com` — _Redefining Real-Time Map Collaboration_       | HTML blog            | Gaia Follow Along: state sync + throttling numbers |
+| S11 | `blog.palantir.com` — _Plotlines in Three.js_                        | HTML blog            | The GPU/instancing/circular-buffer techniques      |
+| S12 | YouTube `rxKghrZU5w8` _Gotham for Defense Decision Making_           | **video transcript** | The understand→decide→act loop                     |
+| S13 | YouTube `XEM5qz__HOU` _AIP \| Defense and Military_                  | **video transcript** | The AI-in-the-loop panel grammar                   |
+| S14 | YouTube `tZVx3BTkLlI` _Gotham: Europa_                               | **video transcript** | Chat/Slides/MetaConstellation release framing      |
 
 Exact URLs are in §9. The video-transcript recipe (repeatable, no API key) is in §8.
 
@@ -40,32 +41,32 @@ From S1/S2. This is the layout our globe is competing with.
 
 **Left-side panels**
 
-| Panel | Palantir's own description | We have | Gap |
-|---|---|---|---|
-| **Layers** | "Add, manage, and style object and overlay layers; set the base layer" | LayerRail | No per-layer *styling*; style is hard-coded in `styles.ts` |
-| **Find** | "Find objects and locations; navigate to specific geospatial coordinates" | search box + `CoordEntry.tsx` | Split across two surfaces; no unified find |
-| **Histogram** | "Analyze and filter objects based on property and time series values" | `explorer/facets.ts` | Exists as facets, not as a map-side filter panel |
-| **Info** | "Display an overall summary of the map" | `useEntityStats` | Exists as counts, not as a panel |
+| Panel         | Palantir's own description                                                | We have                       | Gap                                                        |
+| ------------- | ------------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------- |
+| **Layers**    | "Add, manage, and style object and overlay layers; set the base layer"    | LayerRail                     | No per-layer _styling_; style is hard-coded in `styles.ts` |
+| **Find**      | "Find objects and locations; navigate to specific geospatial coordinates" | search box + `CoordEntry.tsx` | Split across two surfaces; no unified find                 |
+| **Histogram** | "Analyze and filter objects based on property and time series values"     | `explorer/facets.ts`          | Exists as facets, not as a map-side filter panel           |
+| **Info**      | "Display an overall summary of the map"                                   | `useEntityStats`              | Exists as counts, not as a panel                           |
 
 **Right-side panels**
 
-| Panel | Palantir's own description | We have |
-|---|---|---|
-| **Selection** | "Analyze details about and take actions on the selected items" | `EntityPanel.tsx` — closest thing we have to parity |
-| **Time Selection** | "Set the time range and current timestamp to apply to the map and time series views" | partial (timeline/replay) |
-| **Series** (bottom-right) | "Enables temporal analysis of time series and event data" | not built |
+| Panel                     | Palantir's own description                                                           | We have                                             |
+| ------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| **Selection**             | "Analyze details about and take actions on the selected items"                       | `EntityPanel.tsx` — closest thing we have to parity |
+| **Time Selection**        | "Set the time range and current timestamp to apply to the map and time series views" | partial (timeline/replay)                           |
+| **Series** (bottom-right) | "Enables temporal analysis of time series and event data"                            | not built                                           |
 
 **Top toolbar — the seven tools**
 
-| Tool | Palantir's own description | Our equivalent |
-|---|---|---|
-| **Select** | "Select all items on the map, invert selection, or select items intersecting with a drawn shape" | `area` tool → box only; no invert, no select-all, no lasso |
-| **Search Around** | "Explore object relations" | `GlobeCanvas.tsx:696-705` right-click → `useInvestigation.searchAround` ✅ |
-| **Draw** | "Draw and interact with shapes on the map, including polygons, circles, rectangles, lines, points" | `draw.ts` supports **all five** — the UI exposes three |
-| **Capture** | "Capture a screenshot of the current map state" | `state/captures.ts` ✅ |
-| **Measure** | "Measure physical distances on the map" | `measure` tool ✅ (distance only, no area/bearing) |
-| **Annotate** | "Add text or polygon annotations to the map" | point-only, no text entry, no polygon |
-| **Delete** | "Remove items from the map" | store-level `remove`, no map-side delete tool |
+| Tool              | Palantir's own description                                                                         | Our equivalent                                                             |
+| ----------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Select**        | "Select all items on the map, invert selection, or select items intersecting with a drawn shape"   | `area` tool → box only; no invert, no select-all, no lasso                 |
+| **Search Around** | "Explore object relations"                                                                         | `GlobeCanvas.tsx:696-705` right-click → `useInvestigation.searchAround` ✅ |
+| **Draw**          | "Draw and interact with shapes on the map, including polygons, circles, rectangles, lines, points" | `draw.ts` supports **all five** — the UI exposes three                     |
+| **Capture**       | "Capture a screenshot of the current map state"                                                    | `state/captures.ts` ✅                                                     |
+| **Measure**       | "Measure physical distances on the map"                                                            | `measure` tool ✅ (distance only, no area/bearing)                         |
+| **Annotate**      | "Add text or polygon annotations to the map"                                                       | point-only, no text entry, no polygon                                      |
+| **Delete**        | "Remove items from the map"                                                                        | store-level `remove`, no map-side delete tool                              |
 
 **The single most important line in the Palantir map docs, for us** (S5):
 
@@ -81,8 +82,8 @@ and (S4):
 > **Object:** "Loads full details for individual objects. This option is best suited for
 > complex styling settings."
 
-Palantir's answer to "too many objects" is **not** a faster renderer. It is: *change what
-you load, per layer, automatically, based on how much there is.* We load everything,
+Palantir's answer to "too many objects" is **not** a faster renderer. It is: _change what
+you load, per layer, automatically, based on how much there is._ We load everything,
 always, for every enabled layer. That single architectural difference is the root of
 "the backend will blowup when I enable all toggles" — §5 turns it into our design.
 
@@ -96,18 +97,18 @@ single entity graph.
 This is the "describe each panel" deliverable. Quotes are from the G-Cloud service
 definition PDF.
 
-| Application | Verbatim purpose | Notable internals |
-|---|---|---|
-| **Browser** | "enables users to view and edit information related to specific objects or groups of objects within the platform's canonical data model (or 'Ontology')" | view/edit properties, add notes, change history, federated single-query search |
-| **Custom Object Views (COVs)** | "configurable dashboards … enable individual users or teams to modify the standard object views" | per-team layouts of the *same* object type; tab-level permissioning |
-| **Object Explorer** | "Palantir Gotham's top-down analysis application … run analyses on millions of records at a time" | embedded timelines + aggregations; bar/histogram/pie; **real-time object alerts** |
-| **Chat** | "securely send and receive messages, files, and data in a classification-controlled, hybrid network environment" | drag-and-drop objects into a channel; auto-redaction by clearance; bridges third-party IM |
-| **Inbox** | "centralises results, notifications, and alerts in an inbox-style interactive operational interface" | four alert types: **search feeds, object watch feeds, geofence alerts, sharing alerts** |
-| **Slides** | "a data-centric briefing and presentation application … decks are backed by live data" | template mode, intelligent auto-populating fields, live broadcast with presenter hand-off, PPTX/PDF export |
-| **Dossier** | "a real-time collaborative text editor … capture notes, annotate investigations, and compile custom profile sheets" | embedded objects keep a **dynamic link to source**; nested dossiers; reusable templates; Word/PDF export |
-| **Graph** | "a network analysis application … visual representations of networked data on a shared canvas" | six helpers, below |
-| **Gaia** | "a collaborative geospatial command and control application … near real-time" | geotagging, radius/route/polygon/temporal geo-search, heatmaps, SHP/KMZ/KML/LYR, ATAK/WinTAK/Mapbox bridges |
-| **Video** | "view, analyse, and enrich full motion video ('FMV')" | AR overlays, sub-second latency on live streams, AI detections with accept/dismiss feedback, burn-in export, **Soak Tool** heatmaps |
+| Application                    | Verbatim purpose                                                                                                                                         | Notable internals                                                                                                                   |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Browser**                    | "enables users to view and edit information related to specific objects or groups of objects within the platform's canonical data model (or 'Ontology')" | view/edit properties, add notes, change history, federated single-query search                                                      |
+| **Custom Object Views (COVs)** | "configurable dashboards … enable individual users or teams to modify the standard object views"                                                         | per-team layouts of the _same_ object type; tab-level permissioning                                                                 |
+| **Object Explorer**            | "Palantir Gotham's top-down analysis application … run analyses on millions of records at a time"                                                        | embedded timelines + aggregations; bar/histogram/pie; **real-time object alerts**                                                   |
+| **Chat**                       | "securely send and receive messages, files, and data in a classification-controlled, hybrid network environment"                                         | drag-and-drop objects into a channel; auto-redaction by clearance; bridges third-party IM                                           |
+| **Inbox**                      | "centralises results, notifications, and alerts in an inbox-style interactive operational interface"                                                     | four alert types: **search feeds, object watch feeds, geofence alerts, sharing alerts**                                             |
+| **Slides**                     | "a data-centric briefing and presentation application … decks are backed by live data"                                                                   | template mode, intelligent auto-populating fields, live broadcast with presenter hand-off, PPTX/PDF export                          |
+| **Dossier**                    | "a real-time collaborative text editor … capture notes, annotate investigations, and compile custom profile sheets"                                      | embedded objects keep a **dynamic link to source**; nested dossiers; reusable templates; Word/PDF export                            |
+| **Graph**                      | "a network analysis application … visual representations of networked data on a shared canvas"                                                           | six helpers, below                                                                                                                  |
+| **Gaia**                       | "a collaborative geospatial command and control application … near real-time"                                                                            | geotagging, radius/route/polygon/temporal geo-search, heatmaps, SHP/KMZ/KML/LYR, ATAK/WinTAK/Mapbox bridges                         |
+| **Video**                      | "view, analyse, and enrich full motion video ('FMV')"                                                                                                    | AR overlays, sub-second latency on live streams, AI detections with accept/dismiss feedback, burn-in export, **Soak Tool** heatmaps |
 
 **Graph's six "helpers"** — this is a panel grammar worth stealing outright for our
 Investigation canvas:
@@ -195,59 +196,59 @@ Marketplace, Walkthroughs.
 
 ## 5. Predicting the unshown panels from their names — the ask, done
 
-The operator explicitly asked to *"predict the other panels feature based on name, try
-guessing it."* Each prediction below states the guess, the reasoning, the confidence, and
+The operator explicitly asked to _"predict the other panels feature based on name, try
+guessing it."_ Each prediction below states the guess, the reasoning, the confidence, and
 — the useful part — **what it would mean for this repo**.
 
-| Name | Prediction | Basis | Conf. | What we'd build |
-|---|---|---|---|---|
-| **Linter** | A platform-wide *anti-pattern scanner* that ranks resources by cost/fragility and emits ranked, actionable recommendations — a "your enrollment is unhealthy in these 12 ways" inbox. | Name + the verbatim description in S6 mentions "anti-patterns", "cost-efficiency", "stability and resilience" | High | A `/api/health/lint` that ranks our own feeds by cost-per-useful-row and flags dead ones. Directly relevant to §5. |
-| **Data Health** | Declarative *checks* attached to a dataset (freshness, row-count delta, null-rate, schema drift) with a pass/fail history and alerting. | Name + "define health checks to ensure datasets are high-quality" | High | We already compute `seen_pos_s` freshness ad hoc. Formalise as per-layer health checks surfaced in one panel. |
-| **Machinery** | Process-mining: it reads event logs of an object's state transitions and shows the actual process graph vs. the intended one, highlighting loops, rework and stalls. | "identifying unwanted behaviors and facilitating improvements" + the word *machinery* (a process, not a dataset) | Med-High | Applies to our targeting/case lifecycle if §2.3's kanban `column` model is adopted. |
-| **Vertex** | A node-graph *simulation* canvas: bind models to ontology objects, wire outputs to inputs, run what-if, watch nodes turn red. | S6 "explore object relationships and run simulations" + the Demo Day description of Vertex chaining models with nodes that "turn red" | High | Our `workflows/EditorView.tsx` is 80% of this already. Add model-node binding + red-state propagation. |
-| **Quiver** | Time-series workbench: pick object(s) → pick series properties → stack/overlay/derive (smooth, diff, resample) → annotate → save as a reusable analysis. | "analysis on object data **and time series**"; the name suggests a bundle of arrows/series | High | This is the Palantir **Series** panel's full-page sibling. Our track history + `history.db` already stores the series. |
-| **Insight** | Guided analysis: a linear, undoable *path* of point-and-click steps over ontology objects, shareable as a recipe. | "point-and-click analysis on Ontology objects with **step-by-step analysis paths**" | High | Record + replay of an analyst's filter/aggregate steps — cheap on top of `explorer/facets.ts`. |
-| **Fusion** | A live spreadsheet whose cells are bound to ontology objects, where editing a cell **writes back** to the object. | "**bidirectional** spreadsheet application" | High | An editable table view over our ontology objects. |
-| **Contour** | Board-based SQL-less analysis: each "board" is a step (filter → pivot → join → chart) over a dataset, chained top-down. | "high-scale, **top-down** analysis on datasets"; the Contour docs reference a "Map board" | High | Distinct from Quiver: Contour is dataset/tabular, Quiver is object/temporal. |
-| **Carbon** | A workspace shell: pin apps, objects, and saved views into one tabbed/tiled surface per mission. | "combine apps and other resources … to create **curated workspaces**" | High | Our `AppRouter` tabs + detachable panels are the beginning of this. |
-| **Pilot** | Natural-language app generation: prompt → generated Workshop layout wired to real object types. | "creates applications from natural language prompts" | High | We have `AgentConsole`; generating a *panel layout* is the missing half. |
-| **Checkpoint** | An interstitial that blocks a sensitive action until the user types a justification, which is then audited. | "prompts users for **justifications**" | High | Pairs with our evidence locker's chain-of-custody. |
-| **Solution Designer** | A whiteboard for architecture: draw object types, links, pipelines and apps as a diagram that is *live-bound* to the real resources. | "interactive tool for crafting **architectural representations** of solutions" | Med-High | — |
-| **Marketplace / DevOps** | Package a working solution (ontology + pipelines + app) as an installable product with versioning. | Names + "Discover and install Foundry products" | High | Our plugin marketplace is a lesser version of this. |
-| **Walkthroughs** | Authorable in-product step-by-step coach-marks. | "custom, step-by-step tutorials" | High | Would fix a real persona finding: new users don't know where to start. |
-| **Cipher** | Format-preserving/deterministic encryption of columns so joins still work on ciphertext. | "obfuscate data through **cryptographic operations**" | Med | — |
-| **Data Lifetime** | Retention policies that propagate along lineage, so deleting a source deletes derivatives. | "**lineage-aware** retention policies" | High | Directly relevant: our `history.db` retention is byte-capped, not lineage-aware. |
-| **Nexus Peering** | Store-and-forward replication between disconnected Gotham instances that merges each side's enrichments on reconnect. | Name (peer + nexus) + the SDD's emphasis on "low-bandwidth, high-latency networks" | Med-High | — |
-| **Target Workbench** | Confirmed by S7, not a guess: kanban target boards + HPTL + aimpoints + 2525C symbols. | S7 | Certain | §7 borrows the `sidc` idea. |
-| **Gaia** | Confirmed by S8. | S8 | Certain | — |
+| Name                     | Prediction                                                                                                                                                                            | Basis                                                                                                                                 | Conf.    | What we'd build                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Linter**               | A platform-wide _anti-pattern scanner_ that ranks resources by cost/fragility and emits ranked, actionable recommendations — a "your enrollment is unhealthy in these 12 ways" inbox. | Name + the verbatim description in S6 mentions "anti-patterns", "cost-efficiency", "stability and resilience"                         | High     | A `/api/health/lint` that ranks our own feeds by cost-per-useful-row and flags dead ones. Directly relevant to §5.     |
+| **Data Health**          | Declarative _checks_ attached to a dataset (freshness, row-count delta, null-rate, schema drift) with a pass/fail history and alerting.                                               | Name + "define health checks to ensure datasets are high-quality"                                                                     | High     | We already compute `seen_pos_s` freshness ad hoc. Formalise as per-layer health checks surfaced in one panel.          |
+| **Machinery**            | Process-mining: it reads event logs of an object's state transitions and shows the actual process graph vs. the intended one, highlighting loops, rework and stalls.                  | "identifying unwanted behaviors and facilitating improvements" + the word _machinery_ (a process, not a dataset)                      | Med-High | Applies to our targeting/case lifecycle if §2.3's kanban `column` model is adopted.                                    |
+| **Vertex**               | A node-graph _simulation_ canvas: bind models to ontology objects, wire outputs to inputs, run what-if, watch nodes turn red.                                                         | S6 "explore object relationships and run simulations" + the Demo Day description of Vertex chaining models with nodes that "turn red" | High     | Our `workflows/EditorView.tsx` is 80% of this already. Add model-node binding + red-state propagation.                 |
+| **Quiver**               | Time-series workbench: pick object(s) → pick series properties → stack/overlay/derive (smooth, diff, resample) → annotate → save as a reusable analysis.                              | "analysis on object data **and time series**"; the name suggests a bundle of arrows/series                                            | High     | This is the Palantir **Series** panel's full-page sibling. Our track history + `history.db` already stores the series. |
+| **Insight**              | Guided analysis: a linear, undoable _path_ of point-and-click steps over ontology objects, shareable as a recipe.                                                                     | "point-and-click analysis on Ontology objects with **step-by-step analysis paths**"                                                   | High     | Record + replay of an analyst's filter/aggregate steps — cheap on top of `explorer/facets.ts`.                         |
+| **Fusion**               | A live spreadsheet whose cells are bound to ontology objects, where editing a cell **writes back** to the object.                                                                     | "**bidirectional** spreadsheet application"                                                                                           | High     | An editable table view over our ontology objects.                                                                      |
+| **Contour**              | Board-based SQL-less analysis: each "board" is a step (filter → pivot → join → chart) over a dataset, chained top-down.                                                               | "high-scale, **top-down** analysis on datasets"; the Contour docs reference a "Map board"                                             | High     | Distinct from Quiver: Contour is dataset/tabular, Quiver is object/temporal.                                           |
+| **Carbon**               | A workspace shell: pin apps, objects, and saved views into one tabbed/tiled surface per mission.                                                                                      | "combine apps and other resources … to create **curated workspaces**"                                                                 | High     | Our `AppRouter` tabs + detachable panels are the beginning of this.                                                    |
+| **Pilot**                | Natural-language app generation: prompt → generated Workshop layout wired to real object types.                                                                                       | "creates applications from natural language prompts"                                                                                  | High     | We have `AgentConsole`; generating a _panel layout_ is the missing half.                                               |
+| **Checkpoint**           | An interstitial that blocks a sensitive action until the user types a justification, which is then audited.                                                                           | "prompts users for **justifications**"                                                                                                | High     | Pairs with our evidence locker's chain-of-custody.                                                                     |
+| **Solution Designer**    | A whiteboard for architecture: draw object types, links, pipelines and apps as a diagram that is _live-bound_ to the real resources.                                                  | "interactive tool for crafting **architectural representations** of solutions"                                                        | Med-High | —                                                                                                                      |
+| **Marketplace / DevOps** | Package a working solution (ontology + pipelines + app) as an installable product with versioning.                                                                                    | Names + "Discover and install Foundry products"                                                                                       | High     | Our plugin marketplace is a lesser version of this.                                                                    |
+| **Walkthroughs**         | Authorable in-product step-by-step coach-marks.                                                                                                                                       | "custom, step-by-step tutorials"                                                                                                      | High     | Would fix a real persona finding: new users don't know where to start.                                                 |
+| **Cipher**               | Format-preserving/deterministic encryption of columns so joins still work on ciphertext.                                                                                              | "obfuscate data through **cryptographic operations**"                                                                                 | Med      | —                                                                                                                      |
+| **Data Lifetime**        | Retention policies that propagate along lineage, so deleting a source deletes derivatives.                                                                                            | "**lineage-aware** retention policies"                                                                                                | High     | Directly relevant: our `history.db` retention is byte-capped, not lineage-aware.                                       |
+| **Nexus Peering**        | Store-and-forward replication between disconnected Gotham instances that merges each side's enrichments on reconnect.                                                                 | Name (peer + nexus) + the SDD's emphasis on "low-bandwidth, high-latency networks"                                                    | Med-High | —                                                                                                                      |
+| **Target Workbench**     | Confirmed by S7, not a guess: kanban target boards + HPTL + aimpoints + 2525C symbols.                                                                                                | S7                                                                                                                                    | Certain  | §7 borrows the `sidc` idea.                                                                                            |
+| **Gaia**                 | Confirmed by S8.                                                                                                                                                                      | S8                                                                                                                                    | Certain  | —                                                                                                                      |
 
-## 6. Palantir video transcripts — what the panels *do* in motion
+## 6. Palantir video transcripts — what the panels _do_ in motion
 
 **S12 — "Gotham for Defense Decision Making" (5:20).** The loop the whole product is
 shaped around:
 
-- *Detect*: "AI models running on satellite data detect an increased level of military
+- _Detect_: "AI models running on satellite data detect an increased level of military
   activity"; "Ship detection models identify an alarming buildup of fishing vessels";
   "An activity model detects that many of those ships are tied together suggesting an
   ulterior motive".
-- *Fuse and hypothesise*: "Gotham fuses data from multiple sources to project likely
+- _Fuse and hypothesise_: "Gotham fuses data from multiple sources to project likely
   pass for the Lu Yang. The most dangerous routes head east… The analyst identifies a
   key fork to monitor between the routes."
-- *Task collection*: "the models determined that satellite coverage alone is not
+- _Task collection_: "the models determined that satellite coverage alone is not
   enough… Based on what is capable and ready the system recommends a few alternatives.
   The best option is an aircraft from Okinawa."
-- *Verify*: "An analyst back in the operations center **verifies the detection**".
-- *Decide*: "examines several human and machine-generated **courses of action** that have
+- _Verify_: "An analyst back in the operations center **verifies the detection**".
+- _Decide_: "examines several human and machine-generated **courses of action** that have
   been jointly tested and developed in past exercises" — three COAs, each scored by
   likely success and risk.
-- *Act*: "a task order is submitted and the American ship quickly alters course."
+- _Act_: "a task order is submitted and the American ship quickly alters course."
 
 Three things we lack: a **projected-route/uncertainty** product from a dark contact; a
 **collection-tasking recommender** ("what asset can see this, and is it available");
 **COA cards with explicit risk/time/probability**.
 
 **S13 — "AIP | Defense and Military" (8:05).** The panel grammar of AI-in-the-loop.
-The demo is a sequence of *typed natural-language commands*, each producing a
+The demo is a sequence of _typed natural-language commands_, each producing a
 structured, auditable artifact:
 
 `Show me more details` → `What enemy military unit is in the region?` →
@@ -283,7 +284,7 @@ decisions **before they are deployed**"); MetaConstellation for commercial-space
 ## 7. Palantir's own frontend engineering — the techniques, with numbers (S10, S11)
 
 This is the most directly actionable research in the whole section. From
-*Plotlines in Three.js* (S11), describing how Gaia renders satellites and tracks:
+_Plotlines in Three.js_ (S11), describing how Gaia renders satellites and tracks:
 
 - **Instanced mesh for high-density objects.** "With tens of thousands of objects circling
   around the globe, we used an instanced mesh to update objects on and off the map" —
@@ -303,7 +304,7 @@ This is the most directly actionable research in the whole section. From
 - **Amortise heavy work across frames.** `this.currentBatch = this.nextBatch()` —
   SGP4 propagation is spread over many frames instead of concentrated in one.
 
-From *Redefining Real-Time Map Collaboration* (S10):
+From _Redefining Real-Time Map Collaboration_ (S10):
 
 - **Send the minimum.** Only "user info, viewport, cursor location, and selection state"
   cross the wire — designed for low-bandwidth networks.
@@ -320,12 +321,12 @@ From *Redefining Real-Time Map Collaboration* (S10):
 
 **The four we adopt directly**, mapped to phases:
 
-| Palantir technique | Our phase | Our application |
-|---|---|---|
-| Batch by style into one draw call | §6.3 | Our per-entity billboards with per-category SVG → one `BillboardCollection` per category atlas |
-| Only touch GPU buffers on change | §6.2 | Already partly done (position-unchanged skip); extend to label + colour |
-| Amortise heavy work across frames | §6.4 | Chunk the upsert loop against `frameBudget.ts` |
-| Throttle by event count | §7.5 | The measure/move mousemove storm |
+| Palantir technique                | Our phase | Our application                                                                                |
+| --------------------------------- | --------- | ---------------------------------------------------------------------------------------------- |
+| Batch by style into one draw call | §6.3      | Our per-entity billboards with per-category SVG → one `BillboardCollection` per category atlas |
+| Only touch GPU buffers on change  | §6.2      | Already partly done (position-unchanged skip); extend to label + colour                        |
+| Amortise heavy work across frames | §6.4      | Chunk the upsert loop against `frameBudget.ts`                                                 |
+| Throttle by event count           | §7.5      | The measure/move mousemove storm                                                               |
 
 ## 8. The repeatable video-transcript recipe (no API key, no file writes)
 
@@ -371,13 +372,13 @@ PDFs: `pdftotext -layout <file>.pdf -` streams to stdout, no temp file.
 - Workshop Map [Legacy] https://www.palantir.com/docs/foundry/workshop/widgets-map-legacy
 - Gotham platform page https://www.palantir.com/platforms/gotham/
 - Palantir Learn https://learn.palantir.com/
-- IEEE, *A Brief Analysis of Palantir Gotham* https://ieeexplore.ieee.org/iel8/10808182/10808189/10808897.pdf
+- IEEE, _A Brief Analysis of Palantir Gotham_ https://ieeexplore.ieee.org/iel8/10808182/10808189/10808897.pdf
 
 Supporting technical sources for the implementation phases:
 
-- Cesium, *Entity API Performance* https://cesium.com/blog/2018/06/21/entity-api-performance/
+- Cesium, _Entity API Performance_ https://cesium.com/blog/2018/06/21/entity-api-performance/
 - Cesium community, EntityCollection vs Billboard/LabelCollection https://community.cesium.com/t/entitycollection-performance-vs-billboardcollection-labelcollection/8168
-- Cesium, *Drawing on 3D Models and Terrain* https://cesium.com/blog/2016/03/21/drawing-on-the-globe-and-3d-models/
+- Cesium, _Drawing on 3D Models and Terrain_ https://cesium.com/blog/2016/03/21/drawing-on-the-globe-and-3d-models/
 - `@cesium-extends/drawer` https://www.npmjs.com/package/@cesium-extends/drawer
 - `cesium-drawhelper` https://github.com/leforthomas/cesium-drawhelper
 - milsymbol (MIL-STD-2525 / APP-6 in JS, "1000 symbols in less than 20 milliseconds") https://github.com/spatialillusions/milsymbol
@@ -393,13 +394,13 @@ Supporting technical sources for the implementation phases:
 After writing §5 the predictions were checked against Palantir's analytics docs. Scoring
 the guesses matters: it tells us how much weight to put on the ones still unverified.
 
-| Name | Predicted | Palantir's own words | Verdict |
-|---|---|---|---|
-| **Quiver** | "Time-series workbench: pick object(s) → pick series properties → stack/overlay/derive → annotate → save as a reusable analysis" | "Quiver provides a point-and-click interface to perform data analysis on **object and time series data from the Ontology**, and you can use these analyses to create **interactive dashboards** that allow others to explore and investigate the data in operational workflows" | **Correct**, and it adds dashboards — Quiver dashboards can be "embedded in Object Views, Workshop applications, or Notepad documents" |
-| **Contour** | "Board-based analysis: each board is a step (filter → pivot → join → chart) over a dataset, chained top-down" | "Contour enables data analysis on **tabular data at scale** … a point-and-click user interface to perform data analysis on tables at scale". Contour dashboards "support chart-to-chart filtering, inline parameter references, a fullscreen presentation view, and PDF exports" | **Correct** on tabular/top-down; the board chain is confirmed by the Map board doc |
-| **Insight** | "Guided analysis: a linear, undoable path of point-and-click steps over ontology objects, shareable as a recipe" | "Insight is designed for **operational users** to analyze the ontology and **create object sets**" | **Partly correct** — the point-and-click-over-ontology half is right; the emphasis is object-set construction for operators, not a shareable recipe |
-| **Vertex** | "A node-graph simulation canvas: bind models to ontology objects, wire outputs to inputs, run what-if, watch nodes turn red" | Not in the analytics docs; the Demo Day narration describes exactly this ("simulate the interactions of all of the models and the impact on the supply chain into the future"; visualization nodes "turn red to alert users") | **Corroborated by video, not by doc** |
-| **Machinery**, **Fusion** | process mining / bidirectional spreadsheet | Not covered in the analytics docs | **Still prediction only** |
+| Name                      | Predicted                                                                                                                        | Palantir's own words                                                                                                                                                                                                                                                             | Verdict                                                                                                                                             |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Quiver**                | "Time-series workbench: pick object(s) → pick series properties → stack/overlay/derive → annotate → save as a reusable analysis" | "Quiver provides a point-and-click interface to perform data analysis on **object and time series data from the Ontology**, and you can use these analyses to create **interactive dashboards** that allow others to explore and investigate the data in operational workflows"  | **Correct**, and it adds dashboards — Quiver dashboards can be "embedded in Object Views, Workshop applications, or Notepad documents"              |
+| **Contour**               | "Board-based analysis: each board is a step (filter → pivot → join → chart) over a dataset, chained top-down"                    | "Contour enables data analysis on **tabular data at scale** … a point-and-click user interface to perform data analysis on tables at scale". Contour dashboards "support chart-to-chart filtering, inline parameter references, a fullscreen presentation view, and PDF exports" | **Correct** on tabular/top-down; the board chain is confirmed by the Map board doc                                                                  |
+| **Insight**               | "Guided analysis: a linear, undoable path of point-and-click steps over ontology objects, shareable as a recipe"                 | "Insight is designed for **operational users** to analyze the ontology and **create object sets**"                                                                                                                                                                               | **Partly correct** — the point-and-click-over-ontology half is right; the emphasis is object-set construction for operators, not a shareable recipe |
+| **Vertex**                | "A node-graph simulation canvas: bind models to ontology objects, wire outputs to inputs, run what-if, watch nodes turn red"     | Not in the analytics docs; the Demo Day narration describes exactly this ("simulate the interactions of all of the models and the impact on the supply chain into the future"; visualization nodes "turn red to alert users")                                                    | **Corroborated by video, not by doc**                                                                                                               |
+| **Machinery**, **Fusion** | process mining / bidirectional spreadsheet                                                                                       | Not covered in the analytics docs                                                                                                                                                                                                                                                | **Still prediction only**                                                                                                                           |
 
 Two useful lessons for us:
 
@@ -424,8 +425,8 @@ https://www.palantir.com/docs/foundry/contour/overview
 
 ## 11. The panel walkthrough, panel by panel
 
-The operator asked to *"describe each panels and predict the other panels feature based on
-name."* Sections 2-5 give the inventory and the predictions; this section walks each panel
+The operator asked to _"describe each panels and predict the other panels feature based on
+name."_ Sections 2-5 give the inventory and the predictions; this section walks each panel
 individually with the four things an implementer needs: **what it shows**, **what its
 controls are**, **what we have**, and **the smallest thing we could build**.
 
@@ -463,8 +464,8 @@ default; a `Selected time` variable; a `Time window` as two timestamps; time zon
 or UTC); time format (12/24/local); a **playback state** boolean; a **playback position**
 in milliseconds; and **"Auto pause at"** — an array of timestamps the playback stops on.
 
-That last one is the interesting design: playback that *stops itself at the moments that
-matter*. Our replay has no such concept.
+That last one is the interesting design: playback that _stops itself at the moments that
+matter_. Our replay has no such concept.
 
 **We have:** a timeline and replay, plus `situations/controlStore.ts`.
 
@@ -504,8 +505,9 @@ zoom levels.
 (7 curated folders, 52 rows, 3 hidden).
 
 **Gap, in order of impact:**
+
 1. **No per-layer styling.** Style is compiled into `styles.ts`. Palantir's layer is a
-   data selection *plus* a style; ours is a data selection with a fixed style.
+   data selection _plus_ a style; ours is a data selection with a fixed style.
 2. **No saved-set layer.** Palantir can drop a saved Object Explorer exploration onto the
    map as a layer. Our `explorer/` produces filtered sets that cannot become layers.
 3. **No lock.** A layer you can see but not select is genuinely useful for reference data
@@ -533,7 +535,7 @@ objects. MGRS/UTM parsing is ~80 lines and is the format military users actually
 Histogram helper buckets by "Object Types, Entity Properties, Event Properties, Entity
 Relationships, Events per Entity, Notes, Hints, and Tags."
 
-Note it is *both* an analysis and a **filter**: you brush a bucket and the map filters.
+Note it is _both_ an analysis and a **filter**: you brush a bucket and the map filters.
 
 **We have:** `explorer/facets.ts` computes facets, and there is a histogram in the
 explorer — but it does not filter the map.
@@ -598,12 +600,12 @@ path (detect `east < west` after normalization, emit two boxes).
 
 ### 11.11 Map toolbar — Measure
 
-**Palantir (S5):** measurements are a *display* property of a shape, not a separate mode —
+**Palantir (S5):** measurements are a _display_ property of a shape, not a separate mode —
 "Polygon perimeter: segment or total length", "Polygon area: display within shape",
 "Line measurements: segment or cumulative length", units following the map or org default.
 
-That is a better model than ours. We have a Measure *tool* whose output disappears when
-you switch tools; Palantir has measurements *on the geometry*.
+That is a better model than ours. We have a Measure _tool_ whose output disappears when
+you switch tools; Palantir has measurements _on the geometry_.
 
 **Smallest build:** the annotation plan §9.6's on-geometry measurement labels. Then the Measure tool becomes a
 convenience (draw a throwaway line) rather than the only way to get a number.
@@ -707,7 +709,7 @@ dossiers, reusable templates, and Word/PDF export.
 
 **We have:** case → report export (evidence locker), which is the export half.
 
-**Gap:** the *dynamic link*. Our exports are snapshots.
+**Gap:** the _dynamic link_. Our exports are snapshots.
 
 **Smallest build:** an object-mention syntax in the case notes that renders live from the
 ontology. The ontology already stores the objects; this is a renderer.
@@ -722,7 +724,7 @@ fields, live broadcast with presenter hand-off, PPTX/PDF export.
 **Gap:** the live-data binding and the template system.
 
 **Not in scope**, but noted: of everything in this appendix, Slides is the one whose
-absence a *briefer* would feel most, and the dependency is already installed.
+absence a _briefer_ would feel most, and the dependency is already installed.
 
 ### 11.21 Gotham Video
 
@@ -756,7 +758,7 @@ From S13, the two design rules that are worth adopting even without building AIP
 
 1. **"Every response from AIP retains links back to the underlying data records."** Our
    selection brief and country brief produce prose with no structured citations. Making
-   citations a *hard contract* of the LLM response schema (each claim carries the object
+   citations a _hard contract_ of the LLM response schema (each claim carries the object
    ids it came from) is a bounded change to `llm.py`'s response handling and it is what
    makes model output auditable.
 2. **A guardrail control panel** where "organizations set the guardrails for models,
@@ -781,8 +783,8 @@ implementation, not before:
 
 - Palantir Learn (https://learn.palantir.com/) — free training tracks; the Workshop and
   Ontology tracks are the closest thing to a public spec of the panel grammar.
-- IEEE, *A Brief Analysis of Palantir Gotham: A Collaborative and Interactive Big Data
-  Visualization Analysis Software Based on Dynamic Ontology*
+- IEEE, _A Brief Analysis of Palantir Gotham: A Collaborative and Interactive Big Data
+  Visualization Analysis Software Based on Dynamic Ontology_
   (https://ieeexplore.ieee.org/iel8/10808182/10808189/10808897.pdf) — an outside-in
   architecture read.
 - Palantir Privacy and Governance Whitepaper
@@ -794,14 +796,14 @@ implementation, not before:
 
 ### 12.2 Comparable open platforms — worth reading for what they got cheap
 
-| Project | Why it is worth an hour |
-|---|---|
-| ShadowBroker (https://github.com/BigBodyCobain/Shadowbroker) | Same premise as ours (ADS-B + AIS + orbital + seismic in one globe) with a "Recon Toolkit panel for keyless OSINT lookups". Compare their layer set to our 64. |
-| Godseye (https://github.com/VrushankPatel/godseye) | Frontend-only, backend-free, keyless — an extreme version of our keyless invariant. Their CelesTrak fallback chain is worth copying. |
-| Phantom Tide (https://phantom.labs.jamessawyer.co.uk/) | Cross-domain correlation dashboard (ships + aircraft + notices + environment + satellite detections). Closest to our incident-brief fusion. |
-| IntelSky (https://www.intelsky.org/) | Squawk monitoring + a 147 k-aircraft profile database. Our `emergencies` layer is a thin version of this. |
-| The OSINT Toolbox, Flight & Marine (https://github.com/The-Osint-Toolbox/Flight-And-Marine-OSINT) | A maintained source list — the cheapest way to find feeds we do not have. |
-| deck.gl (https://deck.gl/docs) | Not a migration proposal. Read it for the layer/attribute-update model, which is the same idea as §7.3's batching. |
+| Project                                                                                           | Why it is worth an hour                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ShadowBroker (https://github.com/BigBodyCobain/Shadowbroker)                                      | Same premise as ours (ADS-B + AIS + orbital + seismic in one globe) with a "Recon Toolkit panel for keyless OSINT lookups". Compare their layer set to our 64. |
+| Godseye (https://github.com/VrushankPatel/godseye)                                                | Frontend-only, backend-free, keyless — an extreme version of our keyless invariant. Their CelesTrak fallback chain is worth copying.                           |
+| Phantom Tide (https://phantom.labs.jamessawyer.co.uk/)                                            | Cross-domain correlation dashboard (ships + aircraft + notices + environment + satellite detections). Closest to our incident-brief fusion.                    |
+| IntelSky (https://www.intelsky.org/)                                                              | Squawk monitoring + a 147 k-aircraft profile database. Our `emergencies` layer is a thin version of this.                                                      |
+| The OSINT Toolbox, Flight & Marine (https://github.com/The-Osint-Toolbox/Flight-And-Marine-OSINT) | A maintained source list — the cheapest way to find feeds we do not have.                                                                                      |
+| deck.gl (https://deck.gl/docs)                                                                    | Not a migration proposal. Read it for the layer/attribute-update model, which is the same idea as §7.3's batching.                                             |
 
 ### 12.3 Candidate new data layers, ranked by (value ÷ effort)
 
@@ -809,24 +811,23 @@ Each is keyless or degrades keylessly, which is a CLAUDE.md invariant. **None of
 in scope for this branch** — they are the answer to "find more sources", to be filed in
 `docs/osint-sources-plan.md` and picked up separately.
 
-| Candidate | Kind | Why | Effort |
-|---|---|---|---|
-| NOTAMs (FAA/EUROCONTROL) | airspace polygons | We have TFRs but not the broader NOTAM set; directly complements `airspace.tfr` | M — XML, same shape as the TFR parser |
-| GDACS tropical-cyclone **track forecasts** | line + cone | We show cyclone points; the forecast cone is the decision-relevant part | S — same feed we already pull |
-| Copernicus EMS rapid-mapping activations | polygons | Authoritative "something happened here" boundaries | S |
-| OpenSky **flight tracks** (not just states) | polylines | We reconstruct tracks client-side; upstream has real ones | M |
-| USGS **ShakeMap** contours | polygons | Turns a quake point into an impact footprint | S |
-| NOAA/NWS **radar** tiles | raster | The one basemap-adjacent layer analysts always ask for | M — tile proxying already exists |
-| Global Fishing Watch (public tiles) | raster/points | Directly complements the SAR dark-vessel AOIs | M — check licence |
-| OpenInfraMap power lines | lines | We have plants and substations, not the grid between them | M — vector tiles |
-| Wikidata **conflict/incident** items | points | Fills GDELT's gaps for historical events | M — SPARQL, and the query-shape traps in `intel/country_profile.py` apply |
-| ADS-B **receiver coverage** map | polygons | Honest coverage reporting — an antidote to "why is this area empty" | S |
-| SWPC **aurora oval forecast** | polygon | We have the point/index feed; the oval is the visual | S |
-| Sentinel-2 **NDVI/burn-scar** on demand | raster | Fits the existing on-demand imagery path | L |
+| Candidate                                   | Kind              | Why                                                                             | Effort                                                                    |
+| ------------------------------------------- | ----------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| NOTAMs (FAA/EUROCONTROL)                    | airspace polygons | We have TFRs but not the broader NOTAM set; directly complements `airspace.tfr` | M — XML, same shape as the TFR parser                                     |
+| GDACS tropical-cyclone **track forecasts**  | line + cone       | We show cyclone points; the forecast cone is the decision-relevant part         | S — same feed we already pull                                             |
+| Copernicus EMS rapid-mapping activations    | polygons          | Authoritative "something happened here" boundaries                              | S                                                                         |
+| OpenSky **flight tracks** (not just states) | polylines         | We reconstruct tracks client-side; upstream has real ones                       | M                                                                         |
+| USGS **ShakeMap** contours                  | polygons          | Turns a quake point into an impact footprint                                    | S                                                                         |
+| NOAA/NWS **radar** tiles                    | raster            | The one basemap-adjacent layer analysts always ask for                          | M — tile proxying already exists                                          |
+| Global Fishing Watch (public tiles)         | raster/points     | Directly complements the SAR dark-vessel AOIs                                   | M — check licence                                                         |
+| OpenInfraMap power lines                    | lines             | We have plants and substations, not the grid between them                       | M — vector tiles                                                          |
+| Wikidata **conflict/incident** items        | points            | Fills GDELT's gaps for historical events                                        | M — SPARQL, and the query-shape traps in `intel/country_profile.py` apply |
+| ADS-B **receiver coverage** map             | polygons          | Honest coverage reporting — an antidote to "why is this area empty"             | S                                                                         |
+| SWPC **aurora oval forecast**               | polygon           | We have the point/index feed; the oval is the visual                            | S                                                                         |
+| Sentinel-2 **NDVI/burn-scar** on demand     | raster            | Fits the existing on-demand imagery path                                        | L                                                                         |
 
 The honest ranking rule for adding any of these: a layer earns its slot only if it changes
-what an operator would *do*, not just what they can *see*. The persona studies in
+what an operator would _do_, not just what they can _see_. The persona studies in
 `docs/user-feedback-personas-*.md` are the input for that judgement, not this document.
 
 ---
-

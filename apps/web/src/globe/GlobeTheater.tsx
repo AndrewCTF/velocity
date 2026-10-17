@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import * as Cesium from 'cesium';
-import { chokepoints, type Chokepoint } from '../registry/chokepoints.js';
+import { useEffect } from "react";
+import * as Cesium from "cesium";
+import { chokepoints, type Chokepoint } from "../registry/chokepoints.js";
 
 // AOI theater overlay — draws the watched strategic chokepoints as translucent
 // boxes + labels on the globe (the mockup's red/amber AOI frames). These are
@@ -15,15 +15,16 @@ interface Props {
 
 function tierColor(c: Chokepoint): Cesium.Color {
   const t = c.daily_transits ?? 0;
-  if ((c.oil_flow_mbpd ?? 0) >= 10 || t >= 150) return Cesium.Color.fromCssColorString('#ff5a52'); // hi
-  if (t >= 60) return Cesium.Color.fromCssColorString('#f5a524'); // md
-  return Cesium.Color.fromCssColorString('#566377'); // lo
+  if ((c.oil_flow_mbpd ?? 0) >= 10 || t >= 150)
+    return Cesium.Color.fromCssColorString("#ff5a52"); // hi
+  if (t >= 60) return Cesium.Color.fromCssColorString("#f5a524"); // md
+  return Cesium.Color.fromCssColorString("#566377"); // lo
 }
 
 export function GlobeTheater({ viewer }: Props): null {
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
-    const ds = new Cesium.CustomDataSource('aoi-theater');
+    const ds = new Cesium.CustomDataSource("aoi-theater");
     void viewer.dataSources.add(ds);
 
     for (const c of chokepoints) {
@@ -57,8 +58,16 @@ export function GlobeTheater({ viewer }: Props): null {
           pixelOffset: new Cesium.Cartesian2(2, -3),
           // Keep the theater labels readable but unobtrusive: only when the
           // box is reasonably large on screen (zoomed toward a region).
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 6_000_000),
-          translucencyByDistance: new Cesium.NearFarScalar(1.5e6, 1.0, 6e6, 0.0),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+            0,
+            6_000_000,
+          ),
+          translucencyByDistance: new Cesium.NearFarScalar(
+            1.5e6,
+            1.0,
+            6e6,
+            0.0,
+          ),
           // Depth-tested (no disableDepthTestDistance) so the globe OCCLUDES a
           // chokepoint label on the far side instead of it bleeding through to
           // the opposite hemisphere.

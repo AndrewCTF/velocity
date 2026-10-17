@@ -4,8 +4,8 @@
 // contract, not to a live server, so field names here MUST match the backend
 // 1:1. Keep in sync with apps/api if the contract changes.
 
-export type EngineId = 'auto' | 'llamacpp' | 'vllm' | 'ollama';
-export type PresetId = 'speed' | 'medium' | 'quality';
+export type EngineId = "auto" | "llamacpp" | "vllm" | "ollama";
+export type PresetId = "speed" | "medium" | "quality";
 
 export interface EngineStatus {
   installed: boolean;
@@ -25,7 +25,7 @@ export interface InstalledModel {
   filename: string;
   size_bytes: number;
   tier: string | null;
-  roles: ('main' | 'selection')[];
+  roles: ("main" | "selection")[];
   hot: boolean;
 }
 
@@ -101,7 +101,8 @@ export interface HardwareResponse {
   presets: Record<PresetId, HardwarePreset>;
 }
 
-export type DownloadStatus = 'queued' | 'downloading' | 'verifying' | 'done' | 'error';
+export type DownloadStatus =
+  "queued" | "downloading" | "verifying" | "done" | "error";
 
 export interface DownloadJob {
   status: DownloadStatus;
@@ -137,7 +138,7 @@ export interface SelectionBriefResponse {
   backend: string;
   latency_ms: number;
   cached: boolean;
-  withheld?: 'unknown-citations';
+  withheld?: "unknown-citations";
   detail?: string;
   unknown_citations?: string[];
   // true when the prose cited at least one id and every id it cited was real.
@@ -150,8 +151,8 @@ export interface SelectionBriefResponse {
 export const UNSLOTH_REPO_RE = /^unsloth\/[A-Za-z0-9._-]{1,96}$/;
 
 export function humanBytes(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
   let v = n;
   let i = 0;
   while (v >= 1024 && i < units.length - 1) {

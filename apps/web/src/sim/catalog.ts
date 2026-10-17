@@ -6,16 +6,16 @@
 // system → catalog.generated.ts); the hand-written seed below is the fallback
 // used only if the generated module is empty.
 
-import { GENERATED_CATALOG } from './catalog.generated.js';
+import { GENERATED_CATALOG } from "./catalog.generated.js";
 
 export type SystemCategory =
-  | 'drone'
-  | 'loitering_munition'
-  | 'sam'
-  | 'fighter'
-  | 'armor'
-  | 'infantry'
-  | 'naval';
+  | "drone"
+  | "loitering_munition"
+  | "sam"
+  | "fighter"
+  | "armor"
+  | "infantry"
+  | "naval";
 
 export interface SystemSpecs {
   range_km?: number;
@@ -41,103 +41,172 @@ export interface CatalogItem {
 // Seed set — fallback only; the generated catalog is preferred (see CATALOG).
 const SEED_CATALOG: CatalogItem[] = [
   {
-    id: 'shahed-136',
-    name: 'Shahed-136 / Geran-2',
-    category: 'loitering_munition',
-    country: 'Iran / Russia',
-    role: 'Long-range one-way attack drone',
-    specs: { range_km: 2000, speed_kph: 185, ceiling_m: 4000, payload_kg: 40, pk_est: 0.6, cost_usd: 50000 },
-    sources: ['Wikipedia: HESA Shahed 136', 'CSIS'],
+    id: "shahed-136",
+    name: "Shahed-136 / Geran-2",
+    category: "loitering_munition",
+    country: "Iran / Russia",
+    role: "Long-range one-way attack drone",
+    specs: {
+      range_km: 2000,
+      speed_kph: 185,
+      ceiling_m: 4000,
+      payload_kg: 40,
+      pk_est: 0.6,
+      cost_usd: 50000,
+    },
+    sources: ["Wikipedia: HESA Shahed 136", "CSIS"],
   },
   {
-    id: 'bayraktar-tb2',
-    name: 'Bayraktar TB2',
-    category: 'drone',
-    country: 'Türkiye',
-    role: 'MALE armed UAV',
-    specs: { range_km: 150, speed_kph: 220, ceiling_m: 7600, payload_kg: 150, pk_est: 0.6, cost_usd: 5000000 },
-    sources: ['Wikipedia: Baykar Bayraktar TB2'],
+    id: "bayraktar-tb2",
+    name: "Bayraktar TB2",
+    category: "drone",
+    country: "Türkiye",
+    role: "MALE armed UAV",
+    specs: {
+      range_km: 150,
+      speed_kph: 220,
+      ceiling_m: 7600,
+      payload_kg: 150,
+      pk_est: 0.6,
+      cost_usd: 5000000,
+    },
+    sources: ["Wikipedia: Baykar Bayraktar TB2"],
   },
   {
-    id: 'mq9-reaper',
-    name: 'MQ-9 Reaper',
-    category: 'drone',
-    country: 'USA',
-    role: 'MALE hunter-killer UAV',
-    specs: { range_km: 1850, speed_kph: 480, ceiling_m: 15000, payload_kg: 1700, pk_est: 0.7, cost_usd: 30000000 },
-    sources: ['Wikipedia: General Atomics MQ-9 Reaper'],
+    id: "mq9-reaper",
+    name: "MQ-9 Reaper",
+    category: "drone",
+    country: "USA",
+    role: "MALE hunter-killer UAV",
+    specs: {
+      range_km: 1850,
+      speed_kph: 480,
+      ceiling_m: 15000,
+      payload_kg: 1700,
+      pk_est: 0.7,
+      cost_usd: 30000000,
+    },
+    sources: ["Wikipedia: General Atomics MQ-9 Reaper"],
   },
   {
-    id: 'patriot-pac3',
-    name: 'MIM-104 Patriot PAC-3',
-    category: 'sam',
-    country: 'USA',
-    role: 'Long-range air & missile defence',
-    specs: { range_km: 35, speed_kph: 5880, ceiling_m: 24000, pk_est: 0.8, cost_usd: 4000000 },
-    sources: ['CSIS Missile Threat: Patriot'],
+    id: "patriot-pac3",
+    name: "MIM-104 Patriot PAC-3",
+    category: "sam",
+    country: "USA",
+    role: "Long-range air & missile defence",
+    specs: {
+      range_km: 35,
+      speed_kph: 5880,
+      ceiling_m: 24000,
+      pk_est: 0.8,
+      cost_usd: 4000000,
+    },
+    sources: ["CSIS Missile Threat: Patriot"],
   },
   {
-    id: 's-400',
-    name: 'S-400 Triumf',
-    category: 'sam',
-    country: 'Russia',
-    role: 'Long-range strategic SAM',
-    specs: { range_km: 400, speed_kph: 17000, ceiling_m: 30000, pk_est: 0.75, cost_usd: 3000000 },
-    sources: ['Wikipedia: S-400 missile system'],
+    id: "s-400",
+    name: "S-400 Triumf",
+    category: "sam",
+    country: "Russia",
+    role: "Long-range strategic SAM",
+    specs: {
+      range_km: 400,
+      speed_kph: 17000,
+      ceiling_m: 30000,
+      pk_est: 0.75,
+      cost_usd: 3000000,
+    },
+    sources: ["Wikipedia: S-400 missile system"],
   },
   {
-    id: 'nasams',
-    name: 'NASAMS',
-    category: 'sam',
-    country: 'USA / Norway',
-    role: 'Medium-range air defence',
-    specs: { range_km: 30, speed_kph: 4900, ceiling_m: 14000, pk_est: 0.7, cost_usd: 1000000 },
-    sources: ['Wikipedia: NASAMS'],
+    id: "nasams",
+    name: "NASAMS",
+    category: "sam",
+    country: "USA / Norway",
+    role: "Medium-range air defence",
+    specs: {
+      range_km: 30,
+      speed_kph: 4900,
+      ceiling_m: 14000,
+      pk_est: 0.7,
+      cost_usd: 1000000,
+    },
+    sources: ["Wikipedia: NASAMS"],
   },
   {
-    id: 'iron-dome',
-    name: 'Iron Dome',
-    category: 'sam',
-    country: 'Israel',
-    role: 'Short-range rocket/drone defence',
-    specs: { range_km: 70, speed_kph: 2500, ceiling_m: 10000, pk_est: 0.85, cost_usd: 50000 },
-    sources: ['Wikipedia: Iron Dome'],
+    id: "iron-dome",
+    name: "Iron Dome",
+    category: "sam",
+    country: "Israel",
+    role: "Short-range rocket/drone defence",
+    specs: {
+      range_km: 70,
+      speed_kph: 2500,
+      ceiling_m: 10000,
+      pk_est: 0.85,
+      cost_usd: 50000,
+    },
+    sources: ["Wikipedia: Iron Dome"],
   },
   {
-    id: 'pantsir-s1',
-    name: 'Pantsir-S1',
-    category: 'sam',
-    country: 'Russia',
-    role: 'Point-defence gun/missile system',
-    specs: { range_km: 20, speed_kph: 4700, ceiling_m: 15000, pk_est: 0.65, cost_usd: 15000000 },
-    sources: ['Wikipedia: Pantsir missile system'],
+    id: "pantsir-s1",
+    name: "Pantsir-S1",
+    category: "sam",
+    country: "Russia",
+    role: "Point-defence gun/missile system",
+    specs: {
+      range_km: 20,
+      speed_kph: 4700,
+      ceiling_m: 15000,
+      pk_est: 0.65,
+      cost_usd: 15000000,
+    },
+    sources: ["Wikipedia: Pantsir missile system"],
   },
   {
-    id: 'm1-abrams',
-    name: 'M1A2 Abrams',
-    category: 'armor',
-    country: 'USA',
-    role: 'Main battle tank',
-    specs: { range_km: 426, speed_kph: 67, payload_kg: 0, pk_est: 0.8, cost_usd: 9000000 },
-    sources: ['Wikipedia: M1 Abrams'],
+    id: "m1-abrams",
+    name: "M1A2 Abrams",
+    category: "armor",
+    country: "USA",
+    role: "Main battle tank",
+    specs: {
+      range_km: 426,
+      speed_kph: 67,
+      payload_kg: 0,
+      pk_est: 0.8,
+      cost_usd: 9000000,
+    },
+    sources: ["Wikipedia: M1 Abrams"],
   },
   {
-    id: 't-90',
-    name: 'T-90M',
-    category: 'armor',
-    country: 'Russia',
-    role: 'Main battle tank',
-    specs: { range_km: 550, speed_kph: 60, payload_kg: 0, pk_est: 0.72, cost_usd: 4500000 },
-    sources: ['Wikipedia: T-90'],
+    id: "t-90",
+    name: "T-90M",
+    category: "armor",
+    country: "Russia",
+    role: "Main battle tank",
+    specs: {
+      range_km: 550,
+      speed_kph: 60,
+      payload_kg: 0,
+      pk_est: 0.72,
+      cost_usd: 4500000,
+    },
+    sources: ["Wikipedia: T-90"],
   },
   {
-    id: 'himars',
-    name: 'M142 HIMARS',
-    category: 'infantry',
-    country: 'USA',
-    role: 'Long-range rocket artillery',
-    specs: { range_km: 80, speed_kph: 85, payload_kg: 90, pk_est: 0.85, cost_usd: 5000000 },
-    sources: ['Wikipedia: M142 HIMARS'],
+    id: "himars",
+    name: "M142 HIMARS",
+    category: "infantry",
+    country: "USA",
+    role: "Long-range rocket artillery",
+    specs: {
+      range_km: 80,
+      speed_kph: 85,
+      payload_kg: 90,
+      pk_est: 0.85,
+      cost_usd: 5000000,
+    },
+    sources: ["Wikipedia: M142 HIMARS"],
   },
 ];
 
@@ -146,24 +215,40 @@ const SEED_CATALOG: CatalogItem[] = [
 // (fiber = unjammable ~20 km tether; RF = jammable, ~10 km LOS).
 const EXTRA_SYSTEMS: CatalogItem[] = [
   {
-    id: 'fpv-rf',
-    name: 'FPV (RF command)',
-    category: 'drone',
-    country: 'Various',
-    role: 'Short-range RF-piloted attack drone',
-    specs: { range_km: 10, speed_kph: 120, ceiling_m: 2000, payload_kg: 1.5, pk_est: 0.5, cost_usd: 500 },
-    sources: ['open-source / Ukraine-war reporting'],
-    notes: 'RF command link: jammable, line-of-sight limited. Falls when jammed.',
+    id: "fpv-rf",
+    name: "FPV (RF command)",
+    category: "drone",
+    country: "Various",
+    role: "Short-range RF-piloted attack drone",
+    specs: {
+      range_km: 10,
+      speed_kph: 120,
+      ceiling_m: 2000,
+      payload_kg: 1.5,
+      pk_est: 0.5,
+      cost_usd: 500,
+    },
+    sources: ["open-source / Ukraine-war reporting"],
+    notes:
+      "RF command link: jammable, line-of-sight limited. Falls when jammed.",
   },
   {
-    id: 'fpv-fiber',
-    name: 'FPV (fiber-optic)',
-    category: 'drone',
-    country: 'Various',
-    role: 'Fiber-tethered attack drone, jam-proof',
-    specs: { range_km: 20, speed_kph: 120, ceiling_m: 2000, payload_kg: 1.5, pk_est: 0.6, cost_usd: 1500 },
-    sources: ['open-source / Ukraine-war reporting'],
-    notes: 'Fiber-optic spool ~10–20 km: UNJAMMABLE, no RF emission, but tethered range cap.',
+    id: "fpv-fiber",
+    name: "FPV (fiber-optic)",
+    category: "drone",
+    country: "Various",
+    role: "Fiber-tethered attack drone, jam-proof",
+    specs: {
+      range_km: 20,
+      speed_kph: 120,
+      ceiling_m: 2000,
+      payload_kg: 1.5,
+      pk_est: 0.6,
+      cost_usd: 1500,
+    },
+    sources: ["open-source / Ukraine-war reporting"],
+    notes:
+      "Fiber-optic spool ~10–20 km: UNJAMMABLE, no RF emission, but tethered range cap.",
   },
 ];
 
@@ -186,5 +271,9 @@ export function systemsByCategory(cat: SystemCategory): CatalogItem[] {
 
 // Categories that can act as the strike force / the defending force in an attack
 // scenario. (Air defence intercepts; drones/munitions/fighters strike.)
-export const ATTACKER_CATEGORIES: SystemCategory[] = ['loitering_munition', 'drone', 'fighter'];
-export const DEFENDER_CATEGORIES: SystemCategory[] = ['sam'];
+export const ATTACKER_CATEGORIES: SystemCategory[] = [
+  "loitering_munition",
+  "drone",
+  "fighter",
+];
+export const DEFENDER_CATEGORIES: SystemCategory[] = ["sam"];

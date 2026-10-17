@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Widget, Caveat } from '../shell/instruments.js';
-import { apiFetch } from '../transport/http.js';
+import { useEffect, useState } from "react";
+import { Widget, Caveat } from "../shell/instruments.js";
+import { apiFetch } from "../transport/http.js";
 
 // The one sanctioned use of a claim-tier source, in the dossier.
 //
@@ -33,14 +33,15 @@ interface Corroboration {
 }
 
 type State =
-  | { status: 'loading' }
-  | { status: 'error'; code: number }
-  | { status: 'done'; data: Corroboration };
+  | { status: "loading" }
+  | { status: "error"; code: number }
+  | { status: "done"; data: Corroboration };
 
 function lagLabel(s: number | null): string {
-  if (s === null) return '—';
+  if (s === null) return "—";
   const abs = Math.abs(s);
-  const unit = abs < 5400 ? `${Math.round(abs / 60)} min` : `${Math.round(abs / 3600)} h`;
+  const unit =
+    abs < 5400 ? `${Math.round(abs / 60)} min` : `${Math.round(abs / 3600)} h`;
   return s >= 0 ? `+${unit}` : `-${unit}`;
 }
 
@@ -57,27 +58,39 @@ export function CorroborationCard({
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!open || lon === null || lon === undefined || lat === null || lat === undefined) return;
-    setState({ status: 'loading' });
+    if (
+      !open ||
+      lon === null ||
+      lon === undefined ||
+      lat === null ||
+      lat === undefined
+    )
+      return;
+    setState({ status: "loading" });
     const ab = new AbortController();
-    const q = new URLSearchParams({ lon: String(lon), lat: String(lat), radius_km: '50' });
-    if (at) q.set('at', String(at));
+    const q = new URLSearchParams({
+      lon: String(lon),
+      lat: String(lat),
+      radius_km: "50",
+    });
+    if (at) q.set("at", String(at));
     apiFetch(`/api/intel/corroborate?${q}`, { signal: ab.signal })
       .then(async (r) => {
         if (ab.signal.aborted) return;
         if (!r.ok) {
-          setState({ status: 'error', code: r.status });
+          setState({ status: "error", code: r.status });
           return;
         }
-        setState({ status: 'done', data: (await r.json()) as Corroboration });
+        setState({ status: "done", data: (await r.json()) as Corroboration });
       })
       .catch(() => {
-        if (!ab.signal.aborted) setState({ status: 'error', code: 0 });
+        if (!ab.signal.aborted) setState({ status: "error", code: 0 });
       });
     return () => ab.abort();
   }, [open, lon, lat, at]);
 
-  if (lon === null || lon === undefined || lat === null || lat === undefined) return null;
+  if (lon === null || lon === undefined || lat === null || lat === undefined)
+    return null;
 
   if (!open) {
     return (
@@ -99,20 +112,22 @@ export function CorroborationCard({
     );
   }
 
-  if (!state || state.status === 'loading') {
+  if (!state || state.status === "loading") {
     return (
       <Widget title="Corroboration">
-        <div className="px-[14px] py-[6px] text-[12px] text-txt-3">checking…</div>
+        <div className="px-[14px] py-[6px] text-[12px] text-txt-3">
+          checking…
+        </div>
       </Widget>
     );
   }
-  if (state.status === 'error') {
+  if (state.status === "error") {
     return (
       <Widget title="Corroboration">
         <div className="px-[14px] py-[6px] text-[12px] text-txt-2">
           {state.code === 502
             ? 'Claim-tier source unavailable, so this is not a "nobody said anything".'
-            : `Corroboration unavailable${state.code ? ` (HTTP ${state.code})` : ''}`}
+            : `Corroboration unavailable${state.code ? ` (HTTP ${state.code})` : ""}`}
         </div>
       </Widget>
     );
@@ -122,15 +137,18 @@ export function CorroborationCard({
   return (
     <Widget title="Corroboration">
       <div className="flex items-baseline gap-2 px-[14px] py-[6px]">
-        <span className="mono text-[18px] tabular-nums text-txt-0">{d.count}</span>
+        <span className="mono text-[18px] tabular-nums text-txt-0">
+          {d.count}
+        </span>
         <span className="text-[12px] text-txt-3">
-          {d.count === 1 ? 'report nearby' : 'reports nearby'}, of {d.considered} in the window
+          {d.count === 1 ? "report nearby" : "reports nearby"}, of{" "}
+          {d.considered} in the window
         </span>
       </div>
       {d.count === 0 ? (
         <p className="px-[14px] pb-[6px] text-[12px] leading-relaxed text-txt-3">
-          Nothing claim-tier was published within 50 km of this position in the window. That is a
-          result, not a verdict on the observation.
+          Nothing claim-tier was published within 50 km of this position in the
+          window. That is a result, not a verdict on the observation.
         </p>
       ) : (
         d.nearby.slice(0, 5).map((r, i) => (
@@ -142,9 +160,12 @@ export function CorroborationCard({
               {r.distance_km} km
             </span>
             <span className="min-w-0 flex-1 truncate text-txt-1">
-              {[r.actor1, r.actor2].filter(Boolean).join(' → ') || '—'} · {r.event ?? '—'}
+              {[r.actor1, r.actor2].filter(Boolean).join(" → ") || "—"} ·{" "}
+              {r.event ?? "—"}
             </span>
-            <span className="mono shrink-0 tabular-nums text-txt-2">{lagLabel(r.lag_s)}</span>
+            <span className="mono shrink-0 tabular-nums text-txt-2">
+              {lagLabel(r.lag_s)}
+            </span>
           </div>
         ))
       )}

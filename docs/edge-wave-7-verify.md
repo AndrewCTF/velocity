@@ -19,11 +19,11 @@ $ /usr/bin/time -f "PARALLEL_WALL=%e s" env OSINT_DISABLE_BACKGROUND=1 \
 PARALLEL_WALL=31.74 s
 ```
 
-| | serial | parallel | change |
-|---|---|---|---|
-| pytest-reported | 118.93 s | **30.07 s** | **-75 %** |
-| wall clock | 124.39 s | **31.74 s** | **-74 %** |
-| result | 2006 passed + 2 skipped | 2006 passed + 2 skipped | identical |
+|                 | serial                  | parallel                | change    |
+| --------------- | ----------------------- | ----------------------- | --------- |
+| pytest-reported | 118.93 s                | **30.07 s**             | **-75 %** |
+| wall clock      | 124.39 s                | **31.74 s**             | **-74 %** |
+| result          | 2006 passed + 2 skipped | 2006 passed + 2 skipped | identical |
 
 **4.0× faster, same result set.** The bare command is now parallel too — the
 flags live in `addopts`, so `verify.sh`, CI and a plain `pytest apps/api -q` all
@@ -50,11 +50,11 @@ regressions.
 `_isolate_*` fixture is `tmp_path`-based and resets on `yield`
 (`conftest.py:75-146`). Three other things are not:
 
-| state | where | why it breaks under `load` |
-|---|---|---|
-| `ais_sidecar._stale_since`, `._restarts` | `test_ais_sidecar_reuse.py:137,157,167,198-199` | cleared with `.clear()`, not `monkeypatch` — not auto-reverted |
-| `adsb_sidecar._proc`, `._reuse_pid` | `test_adsb_sidecar_supervise.py:163-167` | assigned directly, not `monkeypatch` |
-| `_TEST_TILE_DIR` | `conftest.py:34` | one module-level `mkdtemp` shared by every test in the process, deliberately (`conftest.py:31-33`) so the tile tests can assert on a warm disk cache |
+| state                                    | where                                           | why it breaks under `load`                                                                                                                           |
+| ---------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ais_sidecar._stale_since`, `._restarts` | `test_ais_sidecar_reuse.py:137,157,167,198-199` | cleared with `.clear()`, not `monkeypatch` — not auto-reverted                                                                                       |
+| `adsb_sidecar._proc`, `._reuse_pid`      | `test_adsb_sidecar_supervise.py:163-167`        | assigned directly, not `monkeypatch`                                                                                                                 |
+| `_TEST_TILE_DIR`                         | `conftest.py:34`                                | one module-level `mkdtemp` shared by every test in the process, deliberately (`conftest.py:31-33`) so the tile tests can assert on a warm disk cache |
 
 All three depend on tests from the same file running in declaration order in one
 process. `--dist loadfile` guarantees exactly that: one file, one worker. So the

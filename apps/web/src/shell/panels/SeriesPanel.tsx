@@ -1,9 +1,9 @@
-import type * as Cesium from 'cesium';
-import { Icon } from '../../normal/Icon.js';
-import { useSelection } from '../../state/stores.js';
-import { MetricsPanel } from '../../metrics/MetricsPanel.js';
-import { ArchiveSeriesCard } from '../../entity-panel/ArchiveSeriesCard.js';
-import { findEntity, readProperties } from '../../entity-panel/read.js';
+import type * as Cesium from "cesium";
+import { Icon } from "../../normal/Icon.js";
+import { useSelection } from "../../state/stores.js";
+import { MetricsPanel } from "../../metrics/MetricsPanel.js";
+import { ArchiveSeriesCard } from "../../entity-panel/ArchiveSeriesCard.js";
+import { findEntity, readProperties } from "../../entity-panel/read.js";
 
 // Series — the second right-dock panel, per docs/mockups/console-2026-08
 // (WIRING.md, "Right dock, panels the mockup adds"): MetricsPanel over the
@@ -14,14 +14,18 @@ import { findEntity, readProperties } from '../../entity-panel/read.js';
 // in the contract and not in the app is the same "reachable but invisible"
 // defect the rebuild set out to fix, one level down.
 
-export function SeriesPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Element {
+export function SeriesPanel({
+  viewer,
+}: {
+  viewer?: Cesium.Viewer | null;
+}): JSX.Element {
   const id = useSelection((s) => s.selectedEntityId);
   // The archive card needs the entity's kind to pick a series; read it off the
   // live entity rather than parsing it out of the id.
-  let kind = '';
+  let kind = "";
   if (viewer && id && !viewer.isDestroyed()) {
     const e = findEntity(viewer, id);
-    if (e) kind = String(readProperties(e)['kind'] ?? '');
+    if (e) kind = String(readProperties(e)["kind"] ?? "");
   }
 
   return (

@@ -4,7 +4,7 @@
 // East is right (compass azimuth, clockwise). Same hand-rolled-SVG idiom as the
 // timeline histogram — no chart lib, no Cesium.
 
-import type { SkyPoint } from '../sim/tasking.js';
+import type { SkyPoint } from "../sim/tasking.js";
 
 interface Props {
   samples: readonly SkyPoint[];
@@ -12,7 +12,13 @@ interface Props {
 }
 
 // Map (azDeg, elDeg) → SVG x/y. radius shrinks as elevation rises (90° → centre).
-function project(azDeg: number, elDeg: number, cx: number, cy: number, rMax: number): {
+function project(
+  azDeg: number,
+  elDeg: number,
+  cx: number,
+  cy: number,
+  rMax: number,
+): {
   x: number;
   y: number;
 } {
@@ -55,9 +61,9 @@ export function SkyViewPlot({ samples, size = 220 }: Props): JSX.Element {
   }
   if (cur.length > 0) segments.push(cur);
 
-  const ring = 'rgba(255,255,255,0.10)';
-  const ringLbl = 'rgba(255,255,255,0.35)';
-  const track = 'var(--accent, #7cc4ff)';
+  const ring = "rgba(255,255,255,0.10)";
+  const ringLbl = "rgba(255,255,255,0.35)";
+  const track = "var(--accent, #7cc4ff)";
 
   return (
     <svg
@@ -72,7 +78,15 @@ export function SkyViewPlot({ samples, size = 220 }: Props): JSX.Element {
       {elRings.map((el) => {
         const r = (rMax * (90 - el)) / 90;
         return (
-          <circle key={el} cx={cx} cy={cy} r={r} fill="none" stroke={ring} strokeWidth={1} />
+          <circle
+            key={el}
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke={ring}
+            strokeWidth={1}
+          />
         );
       })}
       {/* zenith dot */}
@@ -112,16 +126,44 @@ export function SkyViewPlot({ samples, size = 220 }: Props): JSX.Element {
       })}
 
       {/* cardinal letters */}
-      <text x={cx} y={12} textAnchor="middle" className="mono" fontSize={9} fill={ringLbl}>
+      <text
+        x={cx}
+        y={12}
+        textAnchor="middle"
+        className="mono"
+        fontSize={9}
+        fill={ringLbl}
+      >
         N
       </text>
-      <text x={size - 6} y={cy + 3} textAnchor="middle" className="mono" fontSize={9} fill={ringLbl}>
+      <text
+        x={size - 6}
+        y={cy + 3}
+        textAnchor="middle"
+        className="mono"
+        fontSize={9}
+        fill={ringLbl}
+      >
         E
       </text>
-      <text x={cx} y={size - 4} textAnchor="middle" className="mono" fontSize={9} fill={ringLbl}>
+      <text
+        x={cx}
+        y={size - 4}
+        textAnchor="middle"
+        className="mono"
+        fontSize={9}
+        fill={ringLbl}
+      >
         S
       </text>
-      <text x={7} y={cy + 3} textAnchor="middle" className="mono" fontSize={9} fill={ringLbl}>
+      <text
+        x={7}
+        y={cy + 3}
+        textAnchor="middle"
+        className="mono"
+        fontSize={9}
+        fill={ringLbl}
+      >
         W
       </text>
 
@@ -132,12 +174,18 @@ export function SkyViewPlot({ samples, size = 220 }: Props): JSX.Element {
             const { x, y } = project(s.azDeg, s.elDeg, cx, cy, rMax);
             return `${x.toFixed(1)},${y.toFixed(1)}`;
           })
-          .join(' ');
+          .join(" ");
         const first = seg[0]!;
         const start = project(first.azDeg, first.elDeg, cx, cy, rMax);
         return (
           <g key={i}>
-            <polyline points={pts} fill="none" stroke={track} strokeWidth={1.5} opacity={0.9} />
+            <polyline
+              points={pts}
+              fill="none"
+              stroke={track}
+              strokeWidth={1.5}
+              opacity={0.9}
+            />
             {/* rise marker (entry into view) */}
             <circle cx={start.x} cy={start.y} r={2} fill={track} />
           </g>

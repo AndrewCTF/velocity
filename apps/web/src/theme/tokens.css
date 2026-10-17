@@ -87,25 +87,33 @@
      Derivation and the calibration that produced them:
      docs/mockups/console-2026-08/README.md. Blueprint v5 publishes
      $pt-button-height: 30px, which is what pins the scale. */
-  --g-band: 20px;   --g-title: 40px;  --g-menu: 30px;   --g-rail: 40px;
-  --g-left: 336px;  --g-right: 308px; --g-action: 50px; --g-tabs: 32px;
-  --g-btn: 30px;    --g-btn-sm: 24px; --g-btn-xs: 20px;
-  --g-row: 20px;    /* dense LIST row */
-  --g-row-2: 26px;  /* row carrying a control */
-  --g-row-3: 38px;  /* two-line row */
-  --g-row-tbl: 40px;   /* DATA TABLE row. Measured at ~42 in the reference; a
+  --g-band: 20px;
+  --g-title: 40px;
+  --g-menu: 30px;
+  --g-rail: 40px;
+  --g-left: 336px;
+  --g-right: 308px;
+  --g-action: 50px;
+  --g-tabs: 32px;
+  --g-btn: 30px;
+  --g-btn-sm: 24px;
+  --g-btn-xs: 20px;
+  --g-row: 20px; /* dense LIST row */
+  --g-row-2: 26px; /* row carrying a control */
+  --g-row-3: 38px; /* two-line row */
+  --g-row-tbl: 40px; /* DATA TABLE row. Measured at ~42 in the reference; a
                           list row and a table row are not the same object. */
   --g-row-tbl-h: 32px;
   --g-icon: 16px;
-  --g-pad: 14px;    /* panel gutter, left and right */
-  --g-gap: 8px;     /* gutter BETWEEN regions, so nothing shares an edge */
+  --g-pad: 14px; /* panel gutter, left and right */
+  --g-gap: 8px; /* gutter BETWEEN regions, so nothing shares an edge */
   /* Row hover — Carbon layer-hover-01. --txt-3 sits on it on every hoverable
      row, so contrast.test.ts holds the pair to AA. */
   --hover: #333333;
 
   /* radii — hard-cornered, instrument-grade */
   --r-sm: 2px;
-  --r-md: 2px;   /* Blueprint v5 radius is 2px throughout */
+  --r-md: 2px; /* Blueprint v5 radius is 2px throughout */
   --r-lg: 4px;
 
   /* ── spacing scale (design §6.2 — promoted out of normal/.nrm so BOTH shells
@@ -153,11 +161,11 @@
   --cls-exercise-bg: #3a2a05;
   --cls-exercise-fg: #f5c451;
 
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: "Inter", "IBM Plex Sans", system-ui, sans-serif;
   /* Labels use the SAME neutral grotesque (small + tracked caps), not a condensed
      mil-cosplay face — Palantir uses one refined grotesque throughout. */
-  --font-label: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-label: "Inter", "IBM Plex Sans", system-ui, sans-serif;
 }
 
 /* ── Light theme ───────────────────────────────────────────────────────────
@@ -167,7 +175,7 @@
    the map itself stays dark. A scheme overrides --hover with its substrate: the
    light block once inherited the DARK hover and flashed near-black rows.
    Carbon's yellow 30 cannot hold white ink, so --on-warn stays dark. */
-:root[data-theme='light'] {
+:root[data-theme="light"] {
   color-scheme: light;
   --bg-0: #f4f4f4;
   --bg-1: #ffffff;
@@ -175,7 +183,7 @@
   --bg-3: #e0e0e0;
   --bg-4: #c6c6c6;
   --panel-bg: #ffffff;
-  --line: rgba(22, 22, 22, 0.10);
+  --line: rgba(22, 22, 22, 0.1);
   --line-2: rgba(22, 22, 22, 0.18);
   --txt-0: #161616;
   --txt-1: #262626;
@@ -232,7 +240,7 @@
 /* Midnight — GitHub Primer's dark theme (canvas, border and fg tokens as
    published). Emphasis hues are the fills; the -fg tokens are Primer's scale-3
    text tones, a step brighter than its muted fg so they hold AA on a tint. */
-:root[data-theme='midnight'] {
+:root[data-theme="midnight"] {
   color-scheme: dark;
   --bg-0: #010409;
   --bg-1: #0d1117;
@@ -240,7 +248,7 @@
   --bg-3: #21262d;
   --bg-4: #30363d;
   --panel-bg: #0d1117;
-  --line: rgba(240, 246, 252, 0.10);
+  --line: rgba(240, 246, 252, 0.1);
   --line-2: rgba(240, 246, 252, 0.18);
   --txt-0: #f0f6fc;
   --txt-1: #e6edf3;
@@ -283,7 +291,7 @@
 /* Slate — Radix Colors slate (dark) with teal as the accent, so blue stays a
    data colour. Steps 1-6 are the substrate, 11/12 the text; fills are step 9,
    text-on-substrate hues step 11. */
-:root[data-theme='slate'] {
+:root[data-theme="slate"] {
   color-scheme: dark;
   --bg-0: #111113;
   --bg-1: #18191b;
@@ -336,7 +344,7 @@
    alert stays red, because a scheme that collapses alert and warn into one
    amber cannot carry a threat state. The accent tint is 14%, not 20%: amber is
    bright and a 20% tint lifted the card until the muted tier fell under AA. */
-:root[data-theme='amber'] {
+:root[data-theme="amber"] {
   color-scheme: dark;
   --bg-0: #111110;
   --bg-1: #191918;
@@ -386,7 +394,7 @@
 
 /* High contrast — GitHub Primer's dark high-contrast theme. Hairlines are
    actually visible and every text tier clears AAA (7:1), not just AA. */
-:root[data-theme='contrast'] {
+:root[data-theme="contrast"] {
   color-scheme: dark;
   --bg-0: #010409;
   --bg-1: #0a0c10;
@@ -438,7 +446,7 @@
    where Carbon's Daylight reads clinical. Radix step-9 red and step-11 amber
    fail AA as fill/ink here, so alert fills with red 11 and the -fg tones are
    step 12. */
-:root[data-theme='paper'] {
+:root[data-theme="paper"] {
   color-scheme: dark;
   --bg-0: #f1f0ef;
   --bg-1: #fdfdfc;
@@ -498,7 +506,7 @@
    `--hover`, because every in-ramp step failed the floor (the same call
    gotham.css already documents), and the selection magenta, which is welded to
    the globe's selection polyline (apps/web/CLAUDE.md) and is data, not chrome. */
-:root[data-theme='bp-dark'] {
+:root[data-theme="bp-dark"] {
   color-scheme: dark;
   --bg-0: #111418;
   --bg-1: #252a31;
@@ -506,7 +514,7 @@
   --bg-3: #383e47;
   --bg-4: #404854;
   --panel-bg: #252a31;
-  --line: rgba(255, 255, 255, 0.10);
+  --line: rgba(255, 255, 255, 0.1);
   --line-2: rgba(255, 255, 255, 0.18);
   --txt-0: #ffffff;
   --txt-1: #d3d8de;
@@ -514,16 +522,16 @@
   --txt-3: #abb3bf;
   --txt-4: #abb3bf;
   --accent: #2d72d2;
-  --accent-dim: rgba(45, 114, 210, 0.20);
+  --accent-dim: rgba(45, 114, 210, 0.2);
   --accent-line: rgba(45, 114, 210, 0.55);
   --accent-fg: #8abbff;
   --warn: #ec9a3c;
   --warn-bg: rgba(236, 154, 60, 0.16);
-  --warn-line: rgba(236, 154, 60, 0.40);
+  --warn-line: rgba(236, 154, 60, 0.4);
   --warn-fg: #fbb360;
   --alert: #cd4246;
   --alert-bg: rgba(205, 66, 70, 0.16);
-  --alert-line: rgba(205, 66, 70, 0.40);
+  --alert-line: rgba(205, 66, 70, 0.4);
   --alert-fg: #fa999c;
   --ok: #32a467;
   --ok-bg: rgba(50, 164, 103, 0.16);
@@ -554,18 +562,18 @@
      browser, not inferred from fc-list, which reports zero faces for it), so
      this is a real switch rather than a fallback chain that changes nothing. */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
   /* $pt-font-family-monospace is the bare keyword; Blueprint names none. */
   --font-mono: monospace;
   --font-label:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
 }
 
 /* Blueprint turquoise — turquoise3 from the extended ramp, for operators who need blue to stay a data colour.
    Same Blueprint 5.1.16 substrate as Blueprint dark; only the accent moves. */
-:root[data-theme='bp-turquoise'] {
+:root[data-theme="bp-turquoise"] {
   color-scheme: dark;
   --bg-0: #111418;
   --bg-1: #252a31;
@@ -573,7 +581,7 @@
   --bg-3: #383e47;
   --bg-4: #404854;
   --panel-bg: #252a31;
-  --line: rgba(255, 255, 255, 0.10);
+  --line: rgba(255, 255, 255, 0.1);
   --line-2: rgba(255, 255, 255, 0.18);
   --txt-0: #ffffff;
   --txt-1: #d3d8de;
@@ -581,16 +589,16 @@
   --txt-3: #abb3bf;
   --txt-4: #abb3bf;
   --accent: #00a396;
-  --accent-dim: rgba(0, 163, 150, 0.20);
+  --accent-dim: rgba(0, 163, 150, 0.2);
   --accent-line: rgba(0, 163, 150, 0.55);
   --accent-fg: #7ae1d8;
   --warn: #ec9a3c;
   --warn-bg: rgba(236, 154, 60, 0.16);
-  --warn-line: rgba(236, 154, 60, 0.40);
+  --warn-line: rgba(236, 154, 60, 0.4);
   --warn-fg: #fbb360;
   --alert: #cd4246;
   --alert-bg: rgba(205, 66, 70, 0.16);
-  --alert-line: rgba(205, 66, 70, 0.40);
+  --alert-line: rgba(205, 66, 70, 0.4);
   --alert-fg: #fa999c;
   --ok: #32a467;
   --ok-bg: rgba(50, 164, 103, 0.16);
@@ -621,18 +629,18 @@
      browser, not inferred from fc-list, which reports zero faces for it), so
      this is a real switch rather than a fallback chain that changes nothing. */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
   /* $pt-font-family-monospace is the bare keyword; Blueprint names none. */
   --font-mono: monospace;
   --font-label:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
 }
 
 /* Blueprint indigo — indigo3, the hue this console already reserves for model output.
    Same Blueprint 5.1.16 substrate as Blueprint dark; only the accent moves. */
-:root[data-theme='bp-indigo'] {
+:root[data-theme="bp-indigo"] {
   color-scheme: dark;
   --bg-0: #111418;
   --bg-1: #252a31;
@@ -640,7 +648,7 @@
   --bg-3: #383e47;
   --bg-4: #404854;
   --panel-bg: #252a31;
-  --line: rgba(255, 255, 255, 0.10);
+  --line: rgba(255, 255, 255, 0.1);
   --line-2: rgba(255, 255, 255, 0.18);
   --txt-0: #ffffff;
   --txt-1: #d3d8de;
@@ -648,16 +656,16 @@
   --txt-3: #abb3bf;
   --txt-4: #abb3bf;
   --accent: #7961db;
-  --accent-dim: rgba(121, 97, 219, 0.20);
+  --accent-dim: rgba(121, 97, 219, 0.2);
   --accent-line: rgba(121, 97, 219, 0.55);
   --accent-fg: #bdadff;
   --warn: #ec9a3c;
   --warn-bg: rgba(236, 154, 60, 0.16);
-  --warn-line: rgba(236, 154, 60, 0.40);
+  --warn-line: rgba(236, 154, 60, 0.4);
   --warn-fg: #fbb360;
   --alert: #cd4246;
   --alert-bg: rgba(205, 66, 70, 0.16);
-  --alert-line: rgba(205, 66, 70, 0.40);
+  --alert-line: rgba(205, 66, 70, 0.4);
   --alert-fg: #fa999c;
   --ok: #32a467;
   --ok-bg: rgba(50, 164, 103, 0.16);
@@ -688,13 +696,13 @@
      browser, not inferred from fc-list, which reports zero faces for it), so
      this is a real switch rather than a fallback chain that changes nothing. */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
   /* $pt-font-family-monospace is the bare keyword; Blueprint names none. */
   --font-mono: monospace;
   --font-label:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
 }
 
 /* Blueprint light — Blueprint 5.1.16's light surface, published ramp only.
@@ -706,7 +714,7 @@
    dark ramp's hover documents. The selection magenta is violet3 here rather
    than the globe's polyline hue, because on a white panel that hue is chrome
    the operator reads, not a line drawn over the map. */
-:root[data-theme='bp-light'] {
+:root[data-theme="bp-light"] {
   color-scheme: light;
   --bg-0: #edeff2;
   --bg-1: #ffffff;
@@ -714,7 +722,7 @@
   --bg-3: #e5e8eb;
   --bg-4: #d3d8de;
   --panel-bg: #ffffff;
-  --line: rgba(17, 20, 24, 0.10);
+  --line: rgba(17, 20, 24, 0.1);
   --line-2: rgba(17, 20, 24, 0.18);
   --txt-0: #111418;
   --txt-1: #1c2127;
@@ -722,16 +730,16 @@
   --txt-3: #5f6b7c;
   --txt-4: #5f6b7c;
   --accent: #215db0;
-  --accent-dim: rgba(33, 93, 176, 0.10);
+  --accent-dim: rgba(33, 93, 176, 0.1);
   --accent-line: rgba(33, 93, 176, 0.34);
   --accent-fg: #184a90;
   --warn: #935610;
   --warn-bg: rgba(147, 86, 16, 0.12);
-  --warn-line: rgba(147, 86, 16, 0.40);
+  --warn-line: rgba(147, 86, 16, 0.4);
   --warn-fg: #77450d;
   --alert: #ac2f33;
   --alert-bg: rgba(172, 47, 51, 0.12);
-  --alert-line: rgba(172, 47, 51, 0.40);
+  --alert-line: rgba(172, 47, 51, 0.4);
   --alert-fg: #8e292c;
   --ok: #1c6e42;
   --ok-bg: rgba(28, 110, 66, 0.12);
@@ -752,7 +760,7 @@
   --cls-unclas-fg: #165a36;
   --cls-exercise-bg: #edeff2;
   --cls-exercise-fg: #77450d;
-  --sh-1: 0 1px 2px rgba(17, 20, 24, 0.10);
+  --sh-1: 0 1px 2px rgba(17, 20, 24, 0.1);
   --sh-2: 0 6px 22px rgba(17, 20, 24, 0.14);
   --sh-pop: 0 18px 50px rgba(17, 20, 24, 0.18);
   /* Blueprint's $pt-font-family, verbatim (theme/blueprint.ts). A Palantir
@@ -763,13 +771,13 @@
      browser, not inferred from fc-list, which reports zero faces for it), so
      this is a real switch rather than a fallback chain that changes nothing. */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
   /* $pt-font-family-monospace is the bare keyword; Blueprint names none. */
   --font-mono: monospace;
   --font-label:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Open Sans', 'Helvetica Neue', sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Open Sans", "Helvetica Neue", sans-serif;
 }
 
 /* ── Surfaces that are dark in every scheme ────────────────────────────────
@@ -784,15 +792,15 @@
    light-family schemes; a dark scheme's own ramp is already correct and must
    not be overwritten with the default's greys. Map furniture is matched by the
    classes it already carries, so nothing in the globe layer had to change. */
-:root[data-theme='bp-light'] .on-dark,
-:root[data-theme='bp-light'] .map-foot-item,
-:root[data-theme='bp-light'] .map-foot-item-2,
-:root[data-theme='light'] .on-dark,
-:root[data-theme='light'] .map-foot-item,
-:root[data-theme='light'] .map-foot-item-2,
-:root[data-theme='paper'] .on-dark,
-:root[data-theme='paper'] .map-foot-item,
-:root[data-theme='paper'] .map-foot-item-2 {
+:root[data-theme="bp-light"] .on-dark,
+:root[data-theme="bp-light"] .map-foot-item,
+:root[data-theme="bp-light"] .map-foot-item-2,
+:root[data-theme="light"] .on-dark,
+:root[data-theme="light"] .map-foot-item,
+:root[data-theme="light"] .map-foot-item-2,
+:root[data-theme="paper"] .on-dark,
+:root[data-theme="paper"] .map-foot-item,
+:root[data-theme="paper"] .map-foot-item-2 {
   --txt-0: #f6f7f9;
   --txt-1: #c5cbd3;
   --txt-2: #abb3bf;
@@ -805,7 +813,7 @@
   --bg-3: #2f343c;
   --hover: #2a2f37;
   --accent-fg: #8abbff;
-  --accent-dim: rgba(45, 114, 210, 0.20);
+  --accent-dim: rgba(45, 114, 210, 0.2);
   --accent-line: rgba(45, 114, 210, 0.55);
   --warn-fg: #fbb360;
   --alert-fg: #fa999c;
@@ -820,13 +828,13 @@
   --scroll-thumb: rgba(255, 255, 255, 0.13);
   --scroll-thumb-hover: rgba(255, 255, 255, 0.22);
 }
-:root[data-theme='light'],
-:root[data-theme='paper'],
-:root[data-theme='bp-light'] {
+:root[data-theme="light"],
+:root[data-theme="paper"],
+:root[data-theme="bp-light"] {
   --scroll-thumb: rgba(17, 20, 24, 0.22);
   --scroll-thumb-hover: rgba(17, 20, 24, 0.36);
 }
-:root[data-theme='contrast'] {
+:root[data-theme="contrast"] {
   --scroll-thumb: rgba(255, 255, 255, 0.45);
   --scroll-thumb-hover: rgba(255, 255, 255, 0.7);
 }

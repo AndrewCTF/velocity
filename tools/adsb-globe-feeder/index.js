@@ -38,15 +38,17 @@
  *                    instead — it removes the map size the fetch box is derived
  *                    from and freezes the store silently.
  */
-'use strict';
+"use strict";
 
-const http = require('http');
-const zlib = require('zlib');
-const { chromium } = require('playwright');
+const http = require("http");
+const zlib = require("zlib");
+const { chromium } = require("playwright");
 
-const GLOBE_URLS = (process.env.GLOBE_URLS || 'https://globe.airplanes.live/')
-  .split(',').map((s) => s.trim()).filter(Boolean);
-const PORT = parseInt(process.env.PORT || '8090', 10);
+const GLOBE_URLS = (process.env.GLOBE_URLS || "https://globe.airplanes.live/")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const PORT = parseInt(process.env.PORT || "8090", 10);
 // Viewport and zoom are coupled: tar1090 fetches the aircraft its VIEW EXTENT
 // covers, and the extent is (viewport px x resolution), where resolution halves
 // per zoom level. Halving both viewport dimensions and subtracting 1 from the
@@ -55,14 +57,14 @@ const PORT = parseInt(process.env.PORT || '8090', 10);
 // across the browser tier; the smaller pair holds the same count for a fraction
 // of the raster work. Both stay env-tunable so a site with a zoom floor can be
 // pinned back without a code change.
-const VIEW_W = parseInt(process.env.VIEW_W || '683', 10);
-const VIEW_H = parseInt(process.env.VIEW_H || '450', 10);
-const ZOOM = parseFloat(process.env.ZOOM || '1.2');
-const CENTER = (process.env.CENTER || '15,35').split(',').map(Number);
-const MIN_PLANES = parseInt(process.env.MIN_PLANES || '500', 10);
-const READ_MS = parseInt(process.env.READ_MS || '5000', 10);
-const NUDGE_MS = parseInt(process.env.NUDGE_MS || '30000', 10);
-const READ_TIMEOUT_MS = parseInt(process.env.READ_TIMEOUT_MS || '15000', 10);
+const VIEW_W = parseInt(process.env.VIEW_W || "683", 10);
+const VIEW_H = parseInt(process.env.VIEW_H || "450", 10);
+const ZOOM = parseFloat(process.env.ZOOM || "1.2");
+const CENTER = (process.env.CENTER || "15,35").split(",").map(Number);
+const MIN_PLANES = parseInt(process.env.MIN_PLANES || "500", 10);
+const READ_MS = parseInt(process.env.READ_MS || "5000", 10);
+const NUDGE_MS = parseInt(process.env.NUDGE_MS || "30000", 10);
+const READ_TIMEOUT_MS = parseInt(process.env.READ_TIMEOUT_MS || "15000", 10);
 // Per-renderer JS heap cap, and the share of it at which a source's page is
 // replaced by a fresh one opened BESIDE it (the old page keeps serving until the
 // new one has filled). Every tar1090 tab's heap climbs for as long as it is open
@@ -70,8 +72,8 @@ const READ_TIMEOUT_MS = parseInt(process.env.READ_TIMEOUT_MS || '15000', 10);
 // its route lookup off, ~6.5 MB/s with it on). At the cap the renderer hangs,
 // the read times out and the source goes dark for ~20 s while it reloads, which
 // is what adsb.lol did every ~80 s. Recycling below the cap keeps the gap at 0.
-const HEAP_MB = parseInt(process.env.HEAP_MB || '1024', 10);
-const RECYCLE_FRAC = parseFloat(process.env.RECYCLE_FRAC || '0.6');
+const HEAP_MB = parseInt(process.env.HEAP_MB || "1024", 10);
+const RECYCLE_FRAC = parseFloat(process.env.RECYCLE_FRAC || "0.6");
 // Image loading. We need tar1090's PARSED AIRCRAFT STORE, never its pixels, and
 // aircraft silhouettes plus basemap tiles are pure decode + texture cost on a
 // tab nobody looks at.
@@ -81,13 +83,13 @@ const RECYCLE_FRAC = parseFloat(process.env.RECYCLE_FRAC || '0.6');
 // with three tar1090 tabs that was enough to wedge the read loop (measured
 // 2026-07-27: pumps stopped landing, health age_s climbed to 163 s while the
 // slots still held their last good data). The flag costs nothing at runtime.
-const BLOCK_IMAGES = process.env.BLOCK_IMAGES !== '0';
+const BLOCK_IMAGES = process.env.BLOCK_IMAGES !== "0";
 // Hide the map's layers after warm-up (see hideLayersFn). ON by default: the
 // pixels are never read, and the drawing is ~85% of this process's CPU.
 // HIDE_LAYERS=0 restores drawing for anyone debugging the page by hand.
-const HIDE_LAYERS = process.env.HIDE_LAYERS !== '0';
+const HIDE_LAYERS = process.env.HIDE_LAYERS !== "0";
 const UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 /* eslint-disable no-undef */
 // These run IN THE PAGE (via page.evaluate) — they reference the page's tar1090
@@ -96,31 +98,44 @@ const UA =
 
 // In-page reader: pull tar1090's own plane store → readsb aircraft.json items.
 function readFn() {
-  if (typeof g === 'undefined' || !g.planesOrdered) return null;
+  if (typeof g === "undefined" || !g.planesOrdered) return null;
   const out = [];
   for (const p of g.planesOrdered) {
     if (!p || !p.position) continue;
-    const lon = p.position[0], lat = p.position[1];
-    if (typeof lat !== 'number' || typeof lon !== 'number') continue;
+    const lon = p.position[0],
+      lat = p.position[1];
+    if (typeof lat !== "number" || typeof lon !== "number") continue;
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
-    const hex = (p.icao || p.hex || '').toLowerCase();
+    const hex = (p.icao || p.hex || "").toLowerCase();
     if (!hex) continue;
     out.push({
-      hex, lat, lon,
-      flight: ((p.flight || '') + '').trim() || undefined,
-      track: p.track, alt_baro: p.alt_baro, gs: p.gs,
-      squawk: p.squawk, category: p.category, r: p.registration,
-      seen: p.seen, seen_pos: p.seen_pos,
+      hex,
+      lat,
+      lon,
+      flight: ((p.flight || "") + "").trim() || undefined,
+      track: p.track,
+      alt_baro: p.alt_baro,
+      gs: p.gs,
+      squawk: p.squawk,
+      category: p.category,
+      r: p.registration,
+      seen: p.seen,
+      seen_pos: p.seen_pos,
       // GPS-integrity fields → jamming/nacp detector. tar1090's plane store
       // carries readsb's nac_p/nic; dropping them left the jamming layer empty.
-      nac_p: p.nac_p, nic: p.nic,
+      nac_p: p.nac_p,
+      nic: p.nic,
     });
   }
   return out;
 }
 
 function heapFn() {
-  try { return performance.memory.usedJSHeapSize / 1048576; } catch (e) { return null; }
+  try {
+    return performance.memory.usedJSHeapSize / 1048576;
+  } catch (e) {
+    return null;
+  }
 }
 
 // adsb.lol's config.js sets useRouteAPI = true: every callsign is queued for a
@@ -129,12 +144,22 @@ function heapFn() {
 // took the tab's heap growth from ~6.5 MB/s to ~1.3 MB/s. A no-op on sites
 // that do not declare it.
 function noRoutesFn() {
-  try { useRouteAPI = false; return true; } catch (e) { return false; }
+  try {
+    useRouteAPI = false;
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 function zoomFn({ z, c }) {
-  try { OLMap.getView().setZoom(z); OLMap.getView().setCenter(ol.proj.fromLonLat(c)); return true; }
-  catch (e) { return false; }
+  try {
+    OLMap.getView().setZoom(z);
+    OLMap.getView().setCenter(ol.proj.fromLonLat(c));
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 // Hide every OpenLayers layer, keeping the map ATTACHED.
@@ -151,33 +176,42 @@ function zoomFn({ z, c }) {
 // layer is skipped at render time but changes nothing about what is fetched.
 function hideLayersFn() {
   try {
-    if (typeof OLMap === 'undefined' || !OLMap.getLayers) return 'no-map';
+    if (typeof OLMap === "undefined" || !OLMap.getLayers) return "no-map";
     let n = 0;
-    OLMap.getLayers().forEach((l) => { try { l.setVisible(false); n++; } catch (e) {} });
+    OLMap.getLayers().forEach((l) => {
+      try {
+        l.setVisible(false);
+        n++;
+      } catch (e) {}
+    });
     return `hidden:${n}`;
-  } catch (e) { return `error:${e && e.message}`; }
+  } catch (e) {
+    return `error:${e && e.message}`;
+  }
 }
 
 let browser = null;
 let pumpMsLast = 0;
 const pages = new Map(); // url -> { page, aircraft:[], lastGood:0 }
 
-function log(...a) { console.log(new Date().toISOString(), ...a); }
+function log(...a) {
+  console.log(new Date().toISOString(), ...a);
+}
 
 function launchOpts() {
   const o = {
     headless: true,
     args: [
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
       // Headless/background tabs throttle their JS timers — which slows
       // tar1090's OWN fetch loop, so g.planesOrdered refreshed only ~every 10 s
       // (measured) instead of tar1090's native ~1-7 s. These keep the tab
       // "foreground" so tar1090 polls the aggregator at full rate.
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-features=CalculateNativeWinOcclusion',
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-features=CalculateNativeWinOcclusion",
       // Long-lived scraper hygiene: nothing here changes what tar1090 fetches,
       // it only stops Chrome doing work for a tab with no viewer. The heap cap
       // is per renderer and well above what the plane store needs (~13k small
@@ -186,21 +220,21 @@ function launchOpts() {
       `--js-flags=--max-old-space-size=${HEAP_MB}`,
       // Without it performance.memory is bucketed and cached for minutes, and
       // the recycle check below would read a stale number.
-      '--enable-precise-memory-info',
-      '--disable-extensions',
-      '--disable-background-networking',
-      '--disable-component-update',
-      '--disable-client-side-phishing-detection',
-      '--disable-sync',
-      '--metrics-recording-only',
-      '--mute-audio',
-      '--no-first-run',
-      '--no-default-browser-check',
+      "--enable-precise-memory-info",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-component-update",
+      "--disable-client-side-phishing-detection",
+      "--disable-sync",
+      "--metrics-recording-only",
+      "--mute-audio",
+      "--no-first-run",
+      "--no-default-browser-check",
     ],
   };
-  if (BLOCK_IMAGES) o.args.push('--blink-settings=imagesEnabled=false');
+  if (BLOCK_IMAGES) o.args.push("--blink-settings=imagesEnabled=false");
   if (process.env.CHROME_PATH) o.executablePath = process.env.CHROME_PATH;
-  else o.channel = 'chrome';
+  else o.channel = "chrome";
   // Optional Cloudflare WARP egress (app/warp.py publishes the loopback SOCKS5
   // port). Unset = direct, which is what has been clearing Cloudflare here.
   if (process.env.WARP_PROXY) o.proxy = { server: process.env.WARP_PROXY };
@@ -216,11 +250,18 @@ function launchOpts() {
 // blackout. A `disconnected` handler nulls `browser` so the next call relaunches.
 async function ensureBrowser() {
   if (browser && browser.isConnected()) return;
-  if (browser) { try { await browser.close(); } catch (e) {} }
+  if (browser) {
+    try {
+      await browser.close();
+    } catch (e) {}
+  }
   browser = null;
   browser = await chromium.launch(launchOpts());
-  browser.on('disconnected', () => { browser = null; log('browser disconnected — will relaunch on next read'); });
-  log('browser launched');
+  browser.on("disconnected", () => {
+    browser = null;
+    log("browser disconnected — will relaunch on next read");
+  });
+  log("browser launched");
 }
 
 async function openPage(url) {
@@ -231,9 +272,12 @@ async function openPage(url) {
   });
   try {
     const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
     // Wait for Cloudflare to clear + tar1090 globals to exist.
-    await page.waitForFunction('typeof OLMap !== "undefined" && typeof g !== "undefined"', { timeout: 60000 });
+    await page.waitForFunction(
+      'typeof OLMap !== "undefined" && typeof g !== "undefined"',
+      { timeout: 60000 },
+    );
     await page.evaluate(noRoutesFn);
     // Zoom to the whole world ONCE — this single move makes tar1090 fetch +
     // decode + parse every aircraft into g.planesOrdered. Do NOT keep re-moving
@@ -245,19 +289,25 @@ async function openPage(url) {
     for (let i = 0; i < 14; i++) {
       await page.waitForTimeout(2500);
       const ac = await page.evaluate(readFn);
-      if (Array.isArray(ac) && ac.length >= MIN_PLANES) { loaded = ac.length; break; }
+      if (Array.isArray(ac) && ac.length >= MIN_PLANES) {
+        loaded = ac.length;
+        break;
+      }
     }
-    if (loaded) log('opened', url, '-', loaded, 'aircraft');
-    else log('warn: planes not populated for', url, '(loop will keep trying)');
+    if (loaded) log("opened", url, "-", loaded, "aircraft");
+    else log("warn: planes not populated for", url, "(loop will keep trying)");
     // Only after the store has filled, so the first fetch still had a drawn map.
-    if (HIDE_LAYERS) log('render-off', url, '-', await page.evaluate(hideLayersFn));
+    if (HIDE_LAYERS)
+      log("render-off", url, "-", await page.evaluate(hideLayersFn));
     return page;
   } catch (e) {
     // Close THIS context on failure so its renderers don't orphan on the SHARED
     // browser (multi-source: browser.close() would kill sibling tabs, so scope
     // teardown to the context). A goto/waitForFunction timeout during a
     // Cloudflare re-challenge otherwise leaked this context's renderer per reload.
-    try { await context.close(); } catch (_) {}
+    try {
+      await context.close();
+    } catch (_) {}
     throw e;
   }
 }
@@ -265,18 +315,27 @@ async function openPage(url) {
 // Tiny alternating pan to keep tar1090's fetch loop alive (headless tabs can be
 // treated as "hidden" and throttle refresh). Once every NUDGE_MS, NOT per read.
 function nudgeFn({ c, d }) {
-  try { OLMap.getView().setCenter(ol.proj.fromLonLat([c[0] + d, c[1]])); return true; } catch (e) { return false; }
+  try {
+    OLMap.getView().setCenter(ol.proj.fromLonLat([c[0] + d, c[1]]));
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 /* eslint-enable no-undef */
 
 async function initPage(url) {
   try {
     const existing = pages.get(url);
-    if (existing && existing.page) { try { await existing.page.context().close(); } catch (e) {} }
+    if (existing && existing.page) {
+      try {
+        await existing.page.context().close();
+      } catch (e) {}
+    }
     const page = await openPage(url);
     pages.set(url, { page, aircraft: [], lastGood: Date.now(), reads: 0 });
   } catch (e) {
-    log('init failed for', url, '-', e.message);
+    log("init failed for", url, "-", e.message);
     pages.set(url, { page: null, aircraft: [], lastGood: 0, reads: 0 });
   }
 }
@@ -291,24 +350,39 @@ async function maybeRecycle(url, slot) {
     slot.page.evaluate(heapFn),
     new Promise((f) => setTimeout(() => f(null), 2000)),
   ]).catch(() => null);
-  if (typeof heap !== 'number' || heap < HEAP_MB * RECYCLE_FRAC) return;
+  if (typeof heap !== "number" || heap < HEAP_MB * RECYCLE_FRAC) return;
   slot.recycling = true;
-  log('recycle', url, '- heap', Math.round(heap), 'MB');
-  openPage(url).then(async (fresh) => {
-    const cur = pages.get(url);
-    if (cur !== slot || !slot.page) { try { await fresh.context().close(); } catch (e) {} return; }
-    const old = slot.page;
-    slot.page = fresh;
-    slot.reads = 0;
-    slot.recycling = false;
-    try { await old.context().close(); } catch (e) {}
-    log('recycled', url);
-  }).catch((e) => { slot.recycling = false; log('recycle failed', url, '-', e.message); });
+  log("recycle", url, "- heap", Math.round(heap), "MB");
+  openPage(url)
+    .then(async (fresh) => {
+      const cur = pages.get(url);
+      if (cur !== slot || !slot.page) {
+        try {
+          await fresh.context().close();
+        } catch (e) {}
+        return;
+      }
+      const old = slot.page;
+      slot.page = fresh;
+      slot.reads = 0;
+      slot.recycling = false;
+      try {
+        await old.context().close();
+      } catch (e) {}
+      log("recycled", url);
+    })
+    .catch((e) => {
+      slot.recycling = false;
+      log("recycle failed", url, "-", e.message);
+    });
 }
 
 async function pump(url) {
   const slot = pages.get(url);
-  if (!slot || !slot.page) { await initPage(url); return; }
+  if (!slot || !slot.page) {
+    await initPage(url);
+    return;
+  }
   try {
     // READ ONLY — never re-move the map here; that resets tar1090's load.
     // page.evaluate has NO default timeout, so a wedged renderer hangs this
@@ -320,7 +394,8 @@ async function pump(url) {
     const ac = await Promise.race([
       slot.page.evaluate(readFn),
       new Promise((_, rej) =>
-        setTimeout(() => rej(new Error('evaluate timeout')), READ_TIMEOUT_MS)),
+        setTimeout(() => rej(new Error("evaluate timeout")), READ_TIMEOUT_MS),
+      ),
     ]);
     if (Array.isArray(ac) && ac.length >= MIN_PLANES) {
       slot.aircraft = ac;
@@ -329,11 +404,11 @@ async function pump(url) {
     } else if (Date.now() - slot.lastGood > 150000) {
       // Truly stalled for >2.5 min — rebuild the page (rare; keeps stream open
       // the rest of the time per "don't open/close constantly").
-      log('stalled', url, '- reloading');
+      log("stalled", url, "- reloading");
       await initPage(url);
     }
   } catch (e) {
-    log('read error', url, '-', e.message, '- reinit');
+    log("read error", url, "-", e.message, "- reinit");
     await initPage(url); // page died (e.g. Cloudflare re-challenge); rebuild it
   }
 }
@@ -341,10 +416,12 @@ async function pump(url) {
 let nudgeTick = 0;
 async function nudgeAll() {
   nudgeTick++;
-  const d = (nudgeTick % 2) ? 0.03 : -0.03; // alternate so center actually changes
+  const d = nudgeTick % 2 ? 0.03 : -0.03; // alternate so center actually changes
   for (const slot of pages.values()) {
     if (!slot.page) continue;
-    try { await slot.page.evaluate(nudgeFn, { c: CENTER, d }); } catch (e) {}
+    try {
+      await slot.page.evaluate(nudgeFn, { c: CENTER, d });
+    } catch (e) {}
   }
 }
 
@@ -359,12 +436,15 @@ function unioned() {
   const merged = new Map(); // hex -> { sp, a }
   for (const slot of pages.values()) {
     for (const a of slot.aircraft) {
-      const sp = typeof a.seen_pos === 'number' ? a.seen_pos : 1e9;
+      const sp = typeof a.seen_pos === "number" ? a.seen_pos : 1e9;
       const prev = merged.get(a.hex);
       if (!prev || sp < prev.sp) merged.set(a.hex, { sp, a });
     }
   }
-  return { now: Date.now() / 1000, aircraft: [...merged.values()].map((v) => v.a) };
+  return {
+    now: Date.now() / 1000,
+    aircraft: [...merged.values()].map((v) => v.a),
+  };
 }
 
 // The union only changes when a pump lands, but the backend polls
@@ -382,11 +462,18 @@ function rebuildCache() {
   // the backend on LOOPBACK, where 2.8 MB reads in ~1 ms. `gz` is built lazily
   // and memoised per rev, so a remote consumer that asks for gzip still gets it
   // and pays for it once — but the steady-state local path never pays at all.
-  cache = { rev: cache.rev + 1, json, gz: null, total: u.aircraft.length, builtAt: Date.now() };
+  cache = {
+    rev: cache.rev + 1,
+    json,
+    gz: null,
+    total: u.aircraft.length,
+    builtAt: Date.now(),
+  };
 }
 
 function cachedGzip() {
-  if (!cache.gz && cache.json) cache.gz = zlib.gzipSync(cache.json, { level: 1 });
+  if (!cache.gz && cache.json)
+    cache.gz = zlib.gzipSync(cache.json, { level: 1 });
   return cache.gz;
 }
 
@@ -395,30 +482,45 @@ function cachedGzip() {
 // open because supervision's liveness probe must answer whoever holds the
 // token. Every route needs a loopback Host header (a DNS-rebinding page names
 // its own host). Without SIDECAR_TOKEN (a manual run) only the Host check applies.
-const SIDECAR_TOKEN = process.env.SIDECAR_TOKEN || '';
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+const SIDECAR_TOKEN = process.env.SIDECAR_TOKEN || "";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 function hostOk(req) {
-  const host = String(req.headers.host || '').toLowerCase();
-  const i = host.lastIndexOf(':');
+  const host = String(req.headers.host || "").toLowerCase();
+  const i = host.lastIndexOf(":");
   if (i <= 0) return false;
-  return LOOPBACK_HOSTS.has(host.slice(0, i)) && host.slice(i + 1) === String(req.socket.localPort);
+  return (
+    LOOPBACK_HOSTS.has(host.slice(0, i)) &&
+    host.slice(i + 1) === String(req.socket.localPort)
+  );
 }
 
 function tokenOk(req) {
   if (!SIDECAR_TOKEN) return true;
-  const got = Buffer.from(String(req.headers.authorization || ''));
+  const got = Buffer.from(String(req.headers.authorization || ""));
   const want = Buffer.from(`Bearer ${SIDECAR_TOKEN}`);
-  return got.length === want.length && require('crypto').timingSafeEqual(got, want);
+  return (
+    got.length === want.length && require("crypto").timingSafeEqual(got, want)
+  );
 }
 
 // Answers for the gate, or false when the request may proceed.
 function refuse(req, res, dataRoute) {
-  if (!hostOk(req)) { res.statusCode = 421; res.end('host not allowed'); return true; }
-  if (req.url.startsWith('/auth') && SIDECAR_TOKEN) {
-    res.statusCode = tokenOk(req) ? 204 : 401; res.end(); return true;
+  if (!hostOk(req)) {
+    res.statusCode = 421;
+    res.end("host not allowed");
+    return true;
   }
-  if (dataRoute && !tokenOk(req)) { res.statusCode = 401; res.end('unauthorized'); return true; }
+  if (req.url.startsWith("/auth") && SIDECAR_TOKEN) {
+    res.statusCode = tokenOk(req) ? 204 : 401;
+    res.end();
+    return true;
+  }
+  if (dataRoute && !tokenOk(req)) {
+    res.statusCode = 401;
+    res.end("unauthorized");
+    return true;
+  }
   return false;
 }
 
@@ -429,46 +531,71 @@ async function main() {
   // init-before-serve hung :8090 for >70s on one bad tab. The union is just empty
   // until tabs populate; the backend's sidecar-only path backfills with OpenSky
   // below its floor in the meantime.
-  http.createServer((req, res) => {
-    if (refuse(req, res, req.url.startsWith('/aircraft.json'))) return;
-    if (req.url.startsWith('/aircraft.json')) {
-      if (!cache.json) { res.statusCode = 503; res.end('{"now":0,"aircraft":[]}'); return; }
-      const etag = `W/"${cache.rev}"`;
-      res.setHeader('content-type', 'application/json');
-      res.setHeader('access-control-allow-origin', '*');
-      res.setHeader('etag', etag);
-      res.setHeader('cache-control', 'no-cache');
-      // A poll landing inside the same pump window gets a 304 and skips the
-      // multi-MB body AND the caller's parse.
-      if (req.headers['if-none-match'] === etag) { res.statusCode = 304; res.end(); return; }
-      const gzOk = (req.headers['accept-encoding'] || '').includes('gzip');
-      const body = gzOk ? cachedGzip() : cache.json;
-      if (gzOk) res.setHeader('content-encoding', 'gzip');
-      res.setHeader('content-length', body.length);
-      res.end(body);
-    } else if (req.url.startsWith('/health')) {
-      const per = {};
-      for (const [u, s] of pages) per[u] = { aircraft: s.aircraft.length, age_s: ((Date.now() - s.lastGood) / 1000) | 0 };
-      res.setHeader('content-type', 'application/json');
-      // Never call unioned() here — the count comes from the cache the pump
-      // loop already built.
-      res.end(JSON.stringify({
-        total: cache.total,
-        rev: cache.rev,
-        age_s: cache.builtAt ? ((Date.now() - cache.builtAt) / 1000) | 0 : null,
-        rss_mb: (process.memoryUsage().rss / 1048576) | 0,
-        contexts: pages.size,
-        pump_ms_last: pumpMsLast,
-        bytes_json: cache.json ? cache.json.length : 0,
-        bytes_gz: cache.gz ? cache.gz.length : null,
-        sources: per,
-      }));
-    } else { res.statusCode = 404; res.end('not found'); }
-  }).listen(PORT, '127.0.0.1', () => log(`serving aircraft.json on http://127.0.0.1:${PORT}`));
+  http
+    .createServer((req, res) => {
+      if (refuse(req, res, req.url.startsWith("/aircraft.json"))) return;
+      if (req.url.startsWith("/aircraft.json")) {
+        if (!cache.json) {
+          res.statusCode = 503;
+          res.end('{"now":0,"aircraft":[]}');
+          return;
+        }
+        const etag = `W/"${cache.rev}"`;
+        res.setHeader("content-type", "application/json");
+        res.setHeader("access-control-allow-origin", "*");
+        res.setHeader("etag", etag);
+        res.setHeader("cache-control", "no-cache");
+        // A poll landing inside the same pump window gets a 304 and skips the
+        // multi-MB body AND the caller's parse.
+        if (req.headers["if-none-match"] === etag) {
+          res.statusCode = 304;
+          res.end();
+          return;
+        }
+        const gzOk = (req.headers["accept-encoding"] || "").includes("gzip");
+        const body = gzOk ? cachedGzip() : cache.json;
+        if (gzOk) res.setHeader("content-encoding", "gzip");
+        res.setHeader("content-length", body.length);
+        res.end(body);
+      } else if (req.url.startsWith("/health")) {
+        const per = {};
+        for (const [u, s] of pages)
+          per[u] = {
+            aircraft: s.aircraft.length,
+            age_s: ((Date.now() - s.lastGood) / 1000) | 0,
+          };
+        res.setHeader("content-type", "application/json");
+        // Never call unioned() here — the count comes from the cache the pump
+        // loop already built.
+        res.end(
+          JSON.stringify({
+            total: cache.total,
+            rev: cache.rev,
+            age_s: cache.builtAt
+              ? ((Date.now() - cache.builtAt) / 1000) | 0
+              : null,
+            rss_mb: (process.memoryUsage().rss / 1048576) | 0,
+            contexts: pages.size,
+            pump_ms_last: pumpMsLast,
+            bytes_json: cache.json ? cache.json.length : 0,
+            bytes_gz: cache.gz ? cache.gz.length : null,
+            sources: per,
+          }),
+        );
+      } else {
+        res.statusCode = 404;
+        res.end("not found");
+      }
+    })
+    .listen(PORT, "127.0.0.1", () =>
+      log(`serving aircraft.json on http://127.0.0.1:${PORT}`),
+    );
 
   // Slow keep-alive: nudge the map every NUDGE_MS so tar1090 keeps refreshing
   // the global extent (headless tabs can otherwise be throttled as "hidden").
-  setInterval(() => { nudgeAll().catch(() => {}); }, NUDGE_MS);
+  setInterval(() => {
+    nudgeAll().catch(() => {});
+  }, NUDGE_MS);
 
   // Launch (or relaunch) Chrome, then init every source CONCURRENTLY so one slow
   // tab can't gate the others (the boot hang). Each source self-heals in the read
@@ -502,8 +629,14 @@ async function main() {
   // many sources landed, so the per-pump serialisation cost stays where it was.
   for (;;) {
     await new Promise((f) => setTimeout(f, Math.min(READ_MS, 1000)));
-    if (dirty.v) { dirty.v = false; rebuildCache(); }
+    if (dirty.v) {
+      dirty.v = false;
+      rebuildCache();
+    }
   }
 }
 
-main().catch((e) => { log('fatal', e); process.exit(1); });
+main().catch((e) => {
+  log("fatal", e);
+  process.exit(1);
+});

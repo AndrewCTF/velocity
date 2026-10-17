@@ -1,18 +1,36 @@
-import { useEffect, useMemo, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type CSSProperties } from 'react';
-import { createPortal } from 'react-dom';
-import { X, PanelRightClose, PanelLeftClose, PanelRightOpen } from 'lucide-react';
-import type { TabDef } from './TabbedPanel.js';
-import { ErrorBoundary } from './ErrorBoundary.js';
-import { useIsMobile } from './useIsMobile.js';
-import { StatusDot, MicroLabel } from './instruments.js';
-import { FloatingPanel } from './FloatingPanel.js';
-import { useConnection, useFeeds, useTime, useSim } from '../state/stores.js';
-import { useRailWidth, RIGHT_MIN, RIGHT_MAX, RIGHT_DEFAULT } from '../state/railWidth.js';
-import { useSettings } from '../state/settings.js';
-import { useFloatingPanels } from '../state/floatingPanels.js';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
+import {
+  X,
+  PanelRightClose,
+  PanelLeftClose,
+  PanelRightOpen,
+} from "lucide-react";
+import type { TabDef } from "./TabbedPanel.js";
+import { ErrorBoundary } from "./ErrorBoundary.js";
+import { useIsMobile } from "./useIsMobile.js";
+import { StatusDot, MicroLabel } from "./instruments.js";
+import { FloatingPanel } from "./FloatingPanel.js";
+import { useConnection, useFeeds, useTime, useSim } from "../state/stores.js";
+import {
+  useRailWidth,
+  RIGHT_MIN,
+  RIGHT_MAX,
+  RIGHT_DEFAULT,
+} from "../state/railWidth.js";
+import { useSettings } from "../state/settings.js";
+import { useFloatingPanels } from "../state/floatingPanels.js";
 
 // Stable id for the inspector's detached-window rect in the floatingPanels store.
-const INSPECTOR_PANEL_ID = 'inspector';
+const INSPECTOR_PANEL_ID = "inspector";
 
 // Desktop: five-zone layout (frontend.md §4) — 42px command bar, globe with a
 // 296px left rail + 336px right rail absolutely over it, 158px timeline footer.
@@ -53,15 +71,16 @@ const ICON_RAIL_W = 44;
 
 // Shared rail/panel surface. Neutral dark grey (theme-aware) so left and right
 // rails read as the same material; was a cool near-black.
-const RAIL_BG = 'var(--panel-bg)';
+const RAIL_BG = "var(--panel-bg)";
 
 // Resizable rails — widths persist to localStorage, clamped to sane bounds. The
 // LEFT rail keeps its local width state; the RIGHT rail's bounds (RIGHT_MIN/MAX)
 // and value now live in state/railWidth.ts (shared with the in-rail Wide toggle).
-const LS_LEFT = 'csl.leftW';
+const LS_LEFT = "csl.leftW";
 const LEFT_MIN = 220;
 const LEFT_MAX = 620;
-const clampN = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
+const clampN = (n: number, lo: number, hi: number): number =>
+  Math.max(lo, Math.min(hi, n));
 function readW(key: string, def: number): number {
   try {
     const v = Number(localStorage.getItem(key));
@@ -82,12 +101,12 @@ function RailResizer({
   width,
   set,
 }: {
-  side: 'left' | 'right';
+  side: "left" | "right";
   width: number;
   set: (w: number) => void;
 }): JSX.Element {
-  const lo = side === 'left' ? LEFT_MIN : RIGHT_MIN;
-  const hi = side === 'left' ? LEFT_MAX : RIGHT_MAX;
+  const lo = side === "left" ? LEFT_MIN : RIGHT_MIN;
+  const hi = side === "left" ? LEFT_MAX : RIGHT_MAX;
   // Pointer CAPTURE, plus a pointercancel handler, plus touch-action: none.
   //
   // Without capture the drag listened on window, so any gesture the browser
@@ -113,38 +132,41 @@ function RailResizer({
     const host = el.parentElement?.getBoundingClientRect();
     const move = (ev: PointerEvent): void => {
       const edge =
-        side === 'left' ? (host?.left ?? 0) : (host?.right ?? window.innerWidth);
-      const raw = side === 'left' ? ev.clientX - edge : edge - ev.clientX;
+        side === "left"
+          ? (host?.left ?? 0)
+          : (host?.right ?? window.innerWidth);
+      const raw = side === "left" ? ev.clientX - edge : edge - ev.clientX;
       set(clampN(raw, lo, hi));
     };
     const done = (): void => {
-      el.removeEventListener('pointermove', move as EventListener);
-      el.removeEventListener('pointerup', done);
-      el.removeEventListener('pointercancel', done);
+      el.removeEventListener("pointermove", move as EventListener);
+      el.removeEventListener("pointerup", done);
+      el.removeEventListener("pointercancel", done);
       try {
         el.releasePointerCapture(pid);
       } catch {
         /* already released */
       }
-      document.body.style.userSelect = '';
+      document.body.style.userSelect = "";
     };
-    document.body.style.userSelect = 'none';
-    el.addEventListener('pointermove', move as EventListener);
-    el.addEventListener('pointerup', done);
-    el.addEventListener('pointercancel', done);
+    document.body.style.userSelect = "none";
+    el.addEventListener("pointermove", move as EventListener);
+    el.addEventListener("pointerup", done);
+    el.addEventListener("pointercancel", done);
   };
   // Double-click snaps back to the default width — a cheap escape hatch when a
   // drag has left the rail somewhere unhelpful.
-  const onDoubleClick = (): void => set(side === 'left' ? LEFT_MIN : RIGHT_DEFAULT);
+  const onDoubleClick = (): void =>
+    set(side === "left" ? LEFT_MIN : RIGHT_DEFAULT);
   const onKey = (e: ReactKeyboardEvent): void => {
     // On the RIGHT rail the panel grows toward the screen's left edge, so
     // ArrowLeft = wider; the left rail is the mirror. Home/End jump to bounds.
-    const grow = side === 'left' ? KEY_STEP : -KEY_STEP;
+    const grow = side === "left" ? KEY_STEP : -KEY_STEP;
     let next: number | null = null;
-    if (e.key === 'ArrowLeft') next = width - grow;
-    else if (e.key === 'ArrowRight') next = width + grow;
-    else if (e.key === 'Home') next = lo;
-    else if (e.key === 'End') next = hi;
+    if (e.key === "ArrowLeft") next = width - grow;
+    else if (e.key === "ArrowRight") next = width + grow;
+    else if (e.key === "Home") next = lo;
+    else if (e.key === "End") next = hi;
     if (next !== null) {
       e.preventDefault();
       set(clampN(next, lo, hi));
@@ -157,7 +179,7 @@ function RailResizer({
       onKeyDown={onKey}
       // No `touch-action` existed anywhere in the frontend, so a touch drag on
       // this strip was competing with the browser's own scroll/zoom gesture.
-      style={{ touchAction: 'none' }}
+      style={{ touchAction: "none" }}
       role="separator"
       aria-orientation="vertical"
       aria-label={`Resize ${side} panel`}
@@ -168,7 +190,7 @@ function RailResizer({
       title="Drag to resize · double-click to reset · arrow keys when focused"
       // 11px target with a 2px negative margin: the same 7px of visible chrome,
       // a hit area a pointer can actually land on.
-      className={`group absolute top-0 bottom-0 ${side === 'left' ? 'right-0 mr-[-2px]' : 'left-0 ml-[-2px]'} w-[11px] cursor-col-resize z-30 flex items-center justify-center hover:bg-accent-line/40 focus-visible:bg-accent-line/50 focus:outline-hidden`}
+      className={`group absolute top-0 bottom-0 ${side === "left" ? "right-0 mr-[-2px]" : "left-0 ml-[-2px]"} w-[11px] cursor-col-resize z-30 flex items-center justify-center hover:bg-accent-line/40 focus-visible:bg-accent-line/50 focus:outline-hidden`}
     >
       {/* grip dots — subtle until hover/focus, then clearly a handle */}
       <span
@@ -201,7 +223,9 @@ export function ConsoleShell({
   const iconRailW = leftRailExpanded ? 176 : ICON_RAIL_W;
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [leftW, setLeftW] = useState(() => clampN(readW(LS_LEFT, 296), LEFT_MIN, LEFT_MAX));
+  const [leftW, setLeftW] = useState(() =>
+    clampN(readW(LS_LEFT, 296), LEFT_MIN, LEFT_MAX),
+  );
   // Right-rail width lives in a store (state/railWidth.ts) so the in-rail Wide
   // toggle and the resizer share one source; the store owns clamp + persistence.
   const rightW = useRailWidth((s) => s.rightW);
@@ -210,7 +234,9 @@ export function ConsoleShell({
   const wide = useRailWidth((s) => s.rightW) >= 520;
   // Inspector detach — reuses the same floating-window substrate the left rail
   // uses (state/floatingPanels.ts + FloatingPanel). Presence of the id === floating.
-  const inspectorFloating = useFloatingPanels((s) => Boolean(s.panels[INSPECTOR_PANEL_ID]));
+  const inspectorFloating = useFloatingPanels((s) =>
+    Boolean(s.panels[INSPECTOR_PANEL_ID]),
+  );
   const detachInspector = useFloatingPanels((s) => s.detach);
   const redockInspector = useFloatingPanels((s) => s.redock);
   useEffect(() => {
@@ -221,13 +247,17 @@ export function ConsoleShell({
     }
   }, [leftW]);
 
-  const timelinePanel: TabDef = { id: 'timeline', label: 'Timeline', content: bottom };
+  const timelinePanel: TabDef = {
+    id: "timeline",
+    label: "Timeline",
+    content: bottom,
+  };
   const mobilePanels: TabDef[] =
     leftTabs || rightTabs
       ? [...(leftTabs ?? []), ...(rightTabs ?? []), timelinePanel]
       : [
-          { id: 'left', label: 'Layers', content: left },
-          { id: 'right', label: 'Selection', content: right },
+          { id: "left", label: "Layers", content: left },
+          { id: "right", label: "Selection", content: right },
           timelinePanel,
         ];
   const active = mobilePanels.find((p) => p.id === activeId) ?? null;
@@ -237,14 +267,18 @@ export function ConsoleShell({
       className="csl h-screen w-screen overflow-hidden bg-bg-0 text-txt-0 grid"
       style={
         {
-          gridTemplateRows: isMobile ? '26px 42px 1fr' : bleed ? '26px 42px 1fr 0px' : '26px 42px 1fr 158px',
+          gridTemplateRows: isMobile
+            ? "26px 42px 1fr"
+            : bleed
+              ? "26px 42px 1fr 0px"
+              : "26px 42px 1fr 158px",
           // Publish the live (resizable) rail widths so map-overlay workspaces
           // (ModeSurface) track the rail instead of hardcoding left-[296px] and
           // under-/over-lapping when the operator drags it (design §4 grammar #1).
           // Full-bleed publishes 0 so AppSurface stretches to the right edge;
           // rightW itself is untouched and restores when the flag drops.
-          '--rail-left-w': `${iconRail ? iconRailW : leftW}px`,
-          '--rail-right-w': bleed ? '0px' : `${rightW}px`,
+          "--rail-left-w": `${iconRail ? iconRailW : leftW}px`,
+          "--rail-right-w": bleed ? "0px" : `${rightW}px`,
         } as CSSProperties
       }
     >
@@ -253,18 +287,18 @@ export function ConsoleShell({
       <div
         className="row-start-1 flex items-center justify-center text-[10px] font-semibold tracking-[1.6px] uppercase select-none"
         style={{
-          background: sim ? 'var(--cls-exercise-bg)' : 'var(--cls-unclas-bg)',
-          color: sim ? 'var(--cls-exercise-fg)' : 'var(--cls-unclas-fg)',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          background: sim ? "var(--cls-exercise-bg)" : "var(--cls-unclas-bg)",
+          color: sim ? "var(--cls-exercise-fg)" : "var(--cls-unclas-fg)",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
         }}
       >
         {sim
-          ? 'Unclassified // Exercise · Simulated data · not real-world'
-          : 'Unclassified // Open-source intelligence'}
+          ? "Unclassified // Exercise · Simulated data · not real-world"
+          : "Unclassified // Open-source intelligence"}
       </div>
       <header
         className="row-start-2 border-b border-line-2 bg-bg-1 relative z-30 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
-        style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}
+        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
       >
         {top}
       </header>
@@ -285,8 +319,15 @@ export function ConsoleShell({
             wrapper + pointer-events-auto pill so it never blocks globe drag.
             On desktop it floats between the rails (left 296 / right 336). */}
         <div
-          className={`absolute top-1.5 z-15 flex justify-center pointer-events-none ${isMobile ? 'inset-x-2' : ''}`}
-          style={isMobile ? undefined : { left: (iconRail ? iconRailW : leftW) + 10, right: rightW + 10 }}
+          className={`absolute top-1.5 z-15 flex justify-center pointer-events-none ${isMobile ? "inset-x-2" : ""}`}
+          style={
+            isMobile
+              ? undefined
+              : {
+                  left: (iconRail ? iconRailW : leftW) + 10,
+                  right: rightW + 10,
+                }
+          }
         >
           <MapHealthStrip />
         </div>
@@ -328,7 +369,7 @@ export function ConsoleShell({
             {right && !inspectorFloating && (
               <aside
                 data-rail="right"
-                className={`absolute right-0 top-0 bottom-0 border-l border-line-2 overflow-hidden z-20 flex-col ${bleed ? 'hidden' : 'flex'}`}
+                className={`absolute right-0 top-0 bottom-0 border-l border-line-2 overflow-hidden z-20 flex-col ${bleed ? "hidden" : "flex"}`}
                 aria-label="Selection"
                 style={{ background: RAIL_BG, width: rightW }}
               >
@@ -339,19 +380,39 @@ export function ConsoleShell({
                     type="button"
                     onClick={toggleWide}
                     aria-pressed={wide}
-                    aria-label={wide ? 'Collapse inspector to default width' : 'Widen inspector for two-column detail'}
-                    title={wide ? 'Collapse to default width' : 'Widen for two-column detail'}
+                    aria-label={
+                      wide
+                        ? "Collapse inspector to default width"
+                        : "Widen inspector for two-column detail"
+                    }
+                    title={
+                      wide
+                        ? "Collapse to default width"
+                        : "Widen for two-column detail"
+                    }
                     className="text-txt-3 hover:text-txt-0 px-1 h-5 flex items-center rounded-sm hover:bg-bg-3"
                   >
                     {wide ? (
-                      <PanelRightClose size={14} strokeWidth={1.75} aria-hidden />
+                      <PanelRightClose
+                        size={14}
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
                     ) : (
-                      <PanelLeftClose size={14} strokeWidth={1.75} aria-hidden />
+                      <PanelLeftClose
+                        size={14}
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
                     )}
                   </button>
                   <button
                     type="button"
-                    onClick={() => detachInspector(INSPECTOR_PANEL_ID, { w: Math.max(rightW, 420) })}
+                    onClick={() =>
+                      detachInspector(INSPECTOR_PANEL_ID, {
+                        w: Math.max(rightW, 420),
+                      })
+                    }
                     aria-label="Detach inspector into a floating window"
                     title="Detach into a movable window"
                     className="text-txt-3 hover:text-accent px-1 h-5 flex items-center rounded-sm hover:bg-bg-3"
@@ -367,7 +428,8 @@ export function ConsoleShell({
             )}
             {/* Detached inspector — same content node, floated free over the globe.
                 Portalled to <body> so the rail's stacking context can't clip it. */}
-            {right && inspectorFloating &&
+            {right &&
+              inspectorFloating &&
               createPortal(
                 <FloatingPanel
                   id={INSPECTOR_PANEL_ID}
@@ -388,12 +450,17 @@ export function ConsoleShell({
           <>
             {/* active panel — full-screen over the globe */}
             {active && (
-              <div className="absolute inset-0 z-30 flex flex-col" style={{ background: RAIL_BG }}>
+              <div
+                className="absolute inset-0 z-30 flex flex-col"
+                style={{ background: RAIL_BG }}
+              >
                 <div
                   className="flex items-center justify-between border-b border-line-2 px-3 flex-none"
                   style={{ height: 40 }}
                 >
-                  <span className="mono text-[12px] text-txt-0">{active.label}</span>
+                  <span className="mono text-[12px] text-txt-0">
+                    {active.label}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setActiveId(null)}
@@ -404,7 +471,9 @@ export function ConsoleShell({
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                  <ErrorBoundary label={active.label}>{active.content}</ErrorBoundary>
+                  <ErrorBoundary label={active.label}>
+                    {active.content}
+                  </ErrorBoundary>
                 </div>
               </div>
             )}
@@ -422,7 +491,9 @@ export function ConsoleShell({
                   className="absolute left-0 right-0 bottom-0 max-h-[80%] overflow-y-auto border-t border-line-2 rounded-t-2xl p-2"
                   style={{ background: RAIL_BG }}
                 >
-                  <div className="mono text-[11px] text-txt-2 px-2 pt-2 pb-1">PANELS</div>
+                  <div className="mono text-[11px] text-txt-2 px-2 pt-2 pb-1">
+                    PANELS
+                  </div>
                   <div className="grid grid-cols-2 gap-2 p-1">
                     {mobilePanels.map((p) => (
                       <button
@@ -464,8 +535,8 @@ export function ConsoleShell({
           mounted so the clock/replay side effects never restart. */}
       {!isMobile && (
         <footer
-          className={`row-start-4 border-t border-line-2 bg-bg-1 relative z-20 ${bleed ? 'overflow-hidden border-t-0' : ''}`}
-          style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}
+          className={`row-start-4 border-t border-line-2 bg-bg-1 relative z-20 ${bleed ? "overflow-hidden border-t-0" : ""}`}
+          style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
           aria-hidden={bleed || undefined}
         >
           {bottom}
@@ -491,41 +562,43 @@ function MapHealthStrip(): JSX.Element {
   const { feedTone, feedText, feedTitle } = useMemo(() => {
     const list = Object.values(feeds);
     const total = list.length;
-    const green = list.filter((f) => f.status === 'green').length;
-    const red = list.filter((f) => f.status === 'red').length;
-    const amber = list.filter((f) => f.status === 'amber').length;
-    const tone = total === 0 ? 'neutral' : red > 0 ? 'red' : amber > 0 ? 'amber' : 'green';
-    const text = total === 0 ? 'no feeds' : `${green}/${total} live`;
+    const green = list.filter((f) => f.status === "green").length;
+    const red = list.filter((f) => f.status === "red").length;
+    const amber = list.filter((f) => f.status === "amber").length;
+    const tone =
+      total === 0 ? "neutral" : red > 0 ? "red" : amber > 0 ? "amber" : "green";
+    const text = total === 0 ? "no feeds" : `${green}/${total} live`;
     const title =
       total === 0
-        ? 'No data feeds have reported yet'
+        ? "No data feeds have reported yet"
         : `Feeds: ${green} live · ${amber} degraded · ${red} down (of ${total})`;
     return { feedTone: tone, feedText: text, feedTitle: title };
   }, [feeds]);
 
-  const wsTone = ws === 'open' ? 'ok' : ws === 'connecting' ? 'neutral' : 'alert';
-  const wsText = ws === 'open' ? 'live' : ws === 'connecting' ? '…' : 'down';
+  const wsTone =
+    ws === "open" ? "ok" : ws === "connecting" ? "neutral" : "alert";
+  const wsText = ws === "open" ? "live" : ws === "connecting" ? "…" : "down";
   const wsTitle =
-    ws === 'open'
-      ? 'Alert WebSocket (/ws/alerts) is live'
-      : ws === 'connecting'
-        ? 'Connecting to /ws/alerts…'
-        : '/ws/alerts is down; alerts may be stale';
+    ws === "open"
+      ? "Alert WebSocket (/ws/alerts) is live"
+      : ws === "connecting"
+        ? "Connecting to /ws/alerts…"
+        : "/ws/alerts is down; alerts may be stale";
 
   // Replay posture: playing = the clock advances (live tracking); paused =
   // frozen / scrubbing a replay. The dot is informational (accent vs neutral).
-  const clockText = playing ? 'live' : 'paused';
-  const clockTone = playing ? 'ok' : 'neutral';
+  const clockText = playing ? "live" : "paused";
+  const clockTone = playing ? "ok" : "neutral";
   const clockTitle = playing
-    ? 'Timeline is advancing, tracking live time'
-    : 'Timeline paused (frozen / replay posture)';
+    ? "Timeline is advancing, tracking live time"
+    : "Timeline paused (frozen / replay posture)";
 
   return (
     <div
       className="pointer-events-auto inline-flex items-center gap-3 h-[20px] px-2.5 rounded-sm border border-line-2 bg-bg-1/90 backdrop-blur-xs"
       role="status"
       aria-label="Map health"
-      style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.35)' }}
+      style={{ boxShadow: "0 1px 0 rgba(0,0,0,0.35)" }}
     >
       <span className="flex items-center gap-1.5" title={wsTitle}>
         <StatusDot tone={wsTone} />
@@ -536,7 +609,9 @@ function MapHealthStrip(): JSX.Element {
       <span className="flex items-center gap-1.5" title={feedTitle}>
         <StatusDot tone={feedTone} />
         <MicroLabel>feeds</MicroLabel>
-        <span className="mono text-[10px] text-txt-2 tabular-nums">{feedText}</span>
+        <span className="mono text-[10px] text-txt-2 tabular-nums">
+          {feedText}
+        </span>
       </span>
       <span className="h-2.5 w-px bg-line" aria-hidden="true" />
       <span className="flex items-center gap-1.5" title={clockTitle}>

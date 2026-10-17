@@ -1,21 +1,31 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as Cesium from 'cesium';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as Cesium from "cesium";
 
 // Mock apiFetch at the transport boundary (repo eslint guard + established
 // pattern, see lod1Layer.test.ts) so load() can be exercised against a canned
 // /api/history/tracks response with no live backend.
-vi.mock('../transport/http.js', () => ({
+vi.mock("../transport/http.js", () => ({
   apiFetch: vi.fn(),
 }));
 
-import { apiFetch } from '../transport/http.js';
-import { installHistoryPlayback } from './HistoryPlayback.js';
-import { chunkKeyForMs, chunkStartMs, nextChunk, CHUNK_MS } from './heatmapChunk.js';
+import { apiFetch } from "../transport/http.js";
+import { installHistoryPlayback } from "./HistoryPlayback.js";
+import {
+  chunkKeyForMs,
+  chunkStartMs,
+  nextChunk,
+  CHUNK_MS,
+} from "./heatmapChunk.js";
 
 const mockedFetch = vi.mocked(apiFetch);
 
 function jsonResponse(body: unknown): Response {
-  return { ok: true, status: 200, statusText: 'OK', json: async () => body } as unknown as Response;
+  return {
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: async () => body,
+  } as unknown as Response;
 }
 
 // Minimal viewer stub exposing only the surface HistoryPlayback.ts touches:
@@ -70,7 +80,8 @@ function fakeViewer(opts: { destroyed?: boolean } = {}): {
   return {
     viewer,
     getDs: () => {
-      if (!captured) throw new Error('history CustomDataSource was never added');
+      if (!captured)
+        throw new Error("history CustomDataSource was never added");
       return captured;
     },
     fireTick: async () => {
@@ -82,12 +93,15 @@ function fakeViewer(opts: { destroyed?: boolean } = {}): {
 
 function lonLat(pos: Cesium.Cartesian3): [number, number] {
   const c = Cesium.Cartographic.fromCartesian(pos);
-  return [Cesium.Math.toDegrees(c.longitude), Cesium.Math.toDegrees(c.latitude)];
+  return [
+    Cesium.Math.toDegrees(c.longitude),
+    Cesium.Math.toDegrees(c.latitude),
+  ];
 }
 
 const WINDOW_SEC = 3600;
 
-describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point tracks', () => {
+describe("HistoryPlayback: multi-domain replay renders interpolated ≥2-point tracks", () => {
   let t0: number;
   let t1: number;
   let tMid: number;
@@ -102,16 +116,16 @@ describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point t
       jsonResponse({
         tracks: [
           {
-            id: 'aircraft:ABC123',
-            kind: 'aircraft',
+            id: "aircraft:ABC123",
+            kind: "aircraft",
             points: [
               [35.0, 33.0, t0, 90],
               [36.0, 34.0, t1, 90],
             ],
           },
           {
-            id: 'vessel:123456789',
-            kind: 'vessel',
+            id: "vessel:123456789",
+            kind: "vessel",
             points: [
               [10.0, 50.0, t0, 180],
               [11.0, 51.0, t1, 180],
@@ -122,7 +136,7 @@ describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point t
     );
   });
 
-  it('loads both an aircraft and a vessel track with ≥2-point interpolated position samples', async () => {
+  it("loads both an aircraft and a vessel track with ≥2-point interpolated position samples", async () => {
     const { viewer, getDs } = fakeViewer();
     const controller = installHistoryPlayback(viewer);
 
@@ -135,34 +149,40 @@ describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point t
     expect(info!.points).toBe(4);
 
     const ds = getDs();
-    const air = ds.entities.getById('hist:aircraft:ABC123');
-    const sea = ds.entities.getById('hist:vessel:123456789');
-    expect(air, 'aircraft replay entity missing').toBeDefined();
-    expect(sea, 'vessel replay entity missing').toBeDefined();
+    const air = ds.entities.getById("hist:aircraft:ABC123");
+    const sea = ds.entities.getById("hist:vessel:123456789");
+    expect(air, "aircraft replay entity missing").toBeDefined();
+    expect(sea, "vessel replay entity missing").toBeDefined();
 
     for (const [entity, [lon0, lat0], [lon1, lat1]] of [
       [air!, [35.0, 33.0], [36.0, 34.0]],
       [sea!, [10.0, 50.0], [11.0, 51.0]],
     ] as const) {
       const pos = entity.position;
-      expect(pos, 'entity has no position property').toBeDefined();
+      expect(pos, "entity has no position property").toBeDefined();
       expect(pos).toBeInstanceOf(Cesium.SampledPositionProperty);
 
       // Endpoint samples round-trip to the recorded fixes — ≥2 real points.
-      const [rl0, rl1] = lonLat(pos!.getValue(Cesium.JulianDate.fromDate(new Date(t0 * 1000)))!);
+      const [rl0, rl1] = lonLat(
+        pos!.getValue(Cesium.JulianDate.fromDate(new Date(t0 * 1000)))!,
+      );
       expect(rl0).toBeCloseTo(lon0, 3);
       expect(rl1).toBeCloseTo(lat0, 3);
-      const [rl2, rl3] = lonLat(pos!.getValue(Cesium.JulianDate.fromDate(new Date(t1 * 1000)))!);
+      const [rl2, rl3] = lonLat(
+        pos!.getValue(Cesium.JulianDate.fromDate(new Date(t1 * 1000)))!,
+      );
       expect(rl2).toBeCloseTo(lon1, 3);
       expect(rl3).toBeCloseTo(lat1, 3);
 
       // path.trailTime is the exact window passed to load(), for both kinds.
-      const trailTime = entity.path!.trailTime!.getValue(Cesium.JulianDate.now());
+      const trailTime = entity.path!.trailTime!.getValue(
+        Cesium.JulianDate.now(),
+      );
       expect(trailTime).toBe(WINDOW_SEC);
     }
   });
 
-  it('re-entrant load then exit restores the live layers — two Pattern-of-life clicks must not blank the globe', async () => {
+  it("re-entrant load then exit restores the live layers — two Pattern-of-life clicks must not blank the globe", async () => {
     const { viewer } = fakeViewer();
     // Two live layers already on the globe when replay starts.
     const live1 = { show: true } as unknown as Cesium.DataSource;
@@ -177,7 +197,7 @@ describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point t
     expect(live2.show).toBe(false);
 
     // Second click with no "◼ exit" between — load() runs again while active.
-    await controller.load(WINDOW_SEC, 'aircraft:ABC123');
+    await controller.load(WINDOW_SEC, "aircraft:ABC123");
     expect(live1.show).toBe(false); // still hidden during replay
 
     controller.clear(); // "◼ exit"
@@ -187,18 +207,20 @@ describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point t
     expect(live2.show).toBe(true);
   });
 
-  it('interpolates a midpoint position for BOTH aircraft and vessel (glide, not teleport-hold) — the sanctioned replay motion (docs/decisions.md 2026-07-11)', async () => {
+  it("interpolates a midpoint position for BOTH aircraft and vessel (glide, not teleport-hold) — the sanctioned replay motion (docs/decisions.md 2026-07-11)", async () => {
     const { viewer, getDs } = fakeViewer();
     const controller = installHistoryPlayback(viewer);
     await controller.load(WINDOW_SEC);
 
     const ds = getDs();
     for (const [id, [lon0, lat0], [lon1, lat1]] of [
-      ['hist:aircraft:ABC123', [35.0, 33.0], [36.0, 34.0]],
-      ['hist:vessel:123456789', [10.0, 50.0], [11.0, 51.0]],
+      ["hist:aircraft:ABC123", [35.0, 33.0], [36.0, 34.0]],
+      ["hist:vessel:123456789", [10.0, 50.0], [11.0, 51.0]],
     ] as const) {
       const entity = ds.entities.getById(id)!;
-      const mid = entity.position!.getValue(Cesium.JulianDate.fromDate(new Date(tMid * 1000)))!;
+      const mid = entity.position!.getValue(
+        Cesium.JulianDate.fromDate(new Date(tMid * 1000)),
+      )!;
       const [mlon, mlat] = lonLat(mid);
 
       // Interpolated: strictly between the two endpoints, equal to neither —
@@ -211,8 +233,8 @@ describe('HistoryPlayback: multi-domain replay renders interpolated ≥2-point t
   });
 });
 
-describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk boundary, never removeAll', () => {
-  it('a tick that crosses into the next half hour appends to the SAME entity instead of rebuilding it', async () => {
+describe("HistoryPlayback: chunk pipeline (loadAt) appends across a chunk boundary, never removeAll", () => {
+  it("a tick that crosses into the next half hour appends to the SAME entity instead of rebuilding it", async () => {
     const { viewer, getDs, fireTick } = fakeViewer();
 
     const startMs = Date.UTC(2024, 5, 1, 12, 0, 0); // an exact UTC half-hour boundary
@@ -228,13 +250,22 @@ describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk bounda
       // after it, so both chunks route to the own archive — this test is
       // about the append-not-rebuild behaviour, not source selection (that is
       // heatmapChunk.test.ts's job for the binary decode itself).
-      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
-      if (u.startsWith('/api/history/tracks')) {
-        const fromTs = Number(new URL(u, 'http://local').searchParams.get('from_ts'));
+      if (u === "/api/history/stats")
+        return jsonResponse({ shards: [{ day: "2020-01-01" }] });
+      if (u.startsWith("/api/history/tracks")) {
+        const fromTs = Number(
+          new URL(u, "http://local").searchParams.get("from_ts"),
+        );
         const isChunk2 = Math.abs(fromTs - chunk2StartSec) < 5;
         const lon = isChunk2 ? 40.0 : 35.0;
         return jsonResponse({
-          tracks: [{ id: 'aircraft:ABC123', kind: 'aircraft', points: [[lon, 33.0, fromTs + 60, 90]] }],
+          tracks: [
+            {
+              id: "aircraft:ABC123",
+              kind: "aircraft",
+              points: [[lon, 33.0, fromTs + 60, 90]],
+            },
+          ],
         });
       }
       return jsonResponse({});
@@ -245,20 +276,28 @@ describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk bounda
     await controller.loadAt(startMs, endMs);
 
     const ds = getDs();
-    const entityBefore = ds.entities.getById('hist:aircraft:ABC123');
-    expect(entityBefore, 'entity missing after the first chunk').toBeDefined();
+    const entityBefore = ds.entities.getById("hist:aircraft:ABC123");
+    expect(entityBefore, "entity missing after the first chunk").toBeDefined();
     expect(ds.entities.values.length).toBe(1);
 
     // Advance the clock into the next half hour and fire onTick, simulating
     // continuous playback crossing the chunk boundary.
-    (viewer.clock as unknown as { currentTime: Cesium.JulianDate }).currentTime = Cesium.JulianDate.fromDate(
+    (
+      viewer.clock as unknown as { currentTime: Cesium.JulianDate }
+    ).currentTime = Cesium.JulianDate.fromDate(
       new Date(chunk2StartSec * 1000 + 60_000),
     );
     await fireTick();
 
-    const entityAfter = ds.entities.getById('hist:aircraft:ABC123');
-    expect(entityAfter, 'the SAME entity must persist across the chunk boundary').toBe(entityBefore);
-    expect(ds.entities.values.length, 'a chunk boundary must never removeAll()').toBe(1);
+    const entityAfter = ds.entities.getById("hist:aircraft:ABC123");
+    expect(
+      entityAfter,
+      "the SAME entity must persist across the chunk boundary",
+    ).toBe(entityBefore);
+    expect(
+      ds.entities.values.length,
+      "a chunk boundary must never removeAll()",
+    ).toBe(1);
 
     const posAtChunk2 = entityAfter!.position!.getValue(
       Cesium.JulianDate.fromDate(new Date((chunk2StartSec + 60) * 1000)),
@@ -273,7 +312,7 @@ describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk bounda
     expect(lon1).toBeCloseTo(35.0, 3);
   });
 
-  it('an own-archive half hour asks for aircraft and vessel SEPARATELY so the id budget cannot starve vessels', async () => {
+  it("an own-archive half hour asks for aircraft and vessel SEPARATELY so the id budget cannot starve vessels", async () => {
     const { viewer, getDs } = fakeViewer();
     const calls: string[] = [];
     // The backend's real answer (apps/api/app/routes/history.py get_tracks):
@@ -285,17 +324,30 @@ describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk bounda
     mockedFetch.mockImplementation(async (url: string) => {
       const u = url.toString();
       calls.push(u);
-      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
-      if (u.startsWith('/api/history/tracks')) {
-        const q = new URL(u, 'http://local').searchParams;
-        const ts = Number(q.get('from_ts')) + 60;
-        if (q.get('kind') === 'vessel') {
+      if (u === "/api/history/stats")
+        return jsonResponse({ shards: [{ day: "2020-01-01" }] });
+      if (u.startsWith("/api/history/tracks")) {
+        const q = new URL(u, "http://local").searchParams;
+        const ts = Number(q.get("from_ts")) + 60;
+        if (q.get("kind") === "vessel") {
           return jsonResponse({
-            tracks: [{ id: 'vessel:257123456', kind: 'vessel', points: [[10.0, 50.0, ts, 180]] }],
+            tracks: [
+              {
+                id: "vessel:257123456",
+                kind: "vessel",
+                points: [[10.0, 50.0, ts, 180]],
+              },
+            ],
           });
         }
         return jsonResponse({
-          tracks: [{ id: 'aircraft:af351f', kind: 'aircraft', points: [[35.0, 33.0, ts, 90]] }],
+          tracks: [
+            {
+              id: "aircraft:af351f",
+              kind: "aircraft",
+              points: [[35.0, 33.0, ts, 90]],
+            },
+          ],
         });
       }
       return jsonResponse({});
@@ -305,33 +357,50 @@ describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk bounda
     const controller = installHistoryPlayback(viewer);
     await controller.loadAt(startMs, startMs + CHUNK_MS);
 
-    const tracksCalls = calls.filter((u) => u.startsWith('/api/history/tracks'));
-    expect(tracksCalls, 'the own archive must be asked once per kind').toHaveLength(2);
-    const aircraftCall = tracksCalls.find((u) => u.includes('kind=aircraft'));
-    const vesselCall = tracksCalls.find((u) => u.includes('kind=vessel'));
-    expect(aircraftCall, 'no kind=aircraft own-archive request').toBeDefined();
-    expect(vesselCall, 'no kind=vessel own-archive request').toBeDefined();
+    const tracksCalls = calls.filter((u) =>
+      u.startsWith("/api/history/tracks"),
+    );
+    expect(
+      tracksCalls,
+      "the own archive must be asked once per kind",
+    ).toHaveLength(2);
+    const aircraftCall = tracksCalls.find((u) => u.includes("kind=aircraft"));
+    const vesselCall = tracksCalls.find((u) => u.includes("kind=vessel"));
+    expect(aircraftCall, "no kind=aircraft own-archive request").toBeDefined();
+    expect(vesselCall, "no kind=vessel own-archive request").toBeDefined();
     for (const call of [aircraftCall!, vesselCall!]) {
-      expect(new URL(call, 'http://local').searchParams.get('limit_ids')).toBe('2000');
+      expect(new URL(call, "http://local").searchParams.get("limit_ids")).toBe(
+        "2000",
+      );
     }
 
     const ds = getDs();
-    expect(ds.entities.getById('hist:aircraft:af351f'), 'own-archive aircraft missing').toBeDefined();
     expect(
-      ds.entities.getById('hist:vessel:257123456'),
-      'own-archive vessel missing — starved by the aircraft id budget',
+      ds.entities.getById("hist:aircraft:af351f"),
+      "own-archive aircraft missing",
+    ).toBeDefined();
+    expect(
+      ds.entities.getById("hist:vessel:257123456"),
+      "own-archive vessel missing — starved by the aircraft id budget",
     ).toBeDefined();
   });
 
-  it('loadAt() resets the previous window — a fresh jump does removeAll, unlike a chunk-boundary tick', async () => {
+  it("loadAt() resets the previous window — a fresh jump does removeAll, unlike a chunk-boundary tick", async () => {
     const { viewer, getDs } = fakeViewer();
     mockedFetch.mockReset();
     mockedFetch.mockImplementation(async (url: string) => {
       const u = url.toString();
-      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
-      if (u.startsWith('/api/history/tracks')) {
+      if (u === "/api/history/stats")
+        return jsonResponse({ shards: [{ day: "2020-01-01" }] });
+      if (u.startsWith("/api/history/tracks")) {
         return jsonResponse({
-          tracks: [{ id: 'aircraft:OLD111', kind: 'aircraft', points: [[1.0, 1.0, 1_700_000_000, 0]] }],
+          tracks: [
+            {
+              id: "aircraft:OLD111",
+              kind: "aircraft",
+              points: [[1.0, 1.0, 1_700_000_000, 0]],
+            },
+          ],
         });
       }
       return jsonResponse({});
@@ -343,10 +412,17 @@ describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk bounda
 
     mockedFetch.mockImplementation(async (url: string) => {
       const u = url.toString();
-      if (u === '/api/history/stats') return jsonResponse({ shards: [{ day: '2020-01-01' }] });
-      if (u.startsWith('/api/history/tracks')) {
+      if (u === "/api/history/stats")
+        return jsonResponse({ shards: [{ day: "2020-01-01" }] });
+      if (u.startsWith("/api/history/tracks")) {
         return jsonResponse({
-          tracks: [{ id: 'aircraft:NEW222', kind: 'aircraft', points: [[2.0, 2.0, 1_800_000_000, 0]] }],
+          tracks: [
+            {
+              id: "aircraft:NEW222",
+              kind: "aircraft",
+              points: [[2.0, 2.0, 1_800_000_000, 0]],
+            },
+          ],
         });
       }
       return jsonResponse({});
@@ -354,13 +430,16 @@ describe('HistoryPlayback: chunk pipeline (loadAt) appends across a chunk bounda
 
     await controller.loadAt(1_800_000_000_000, 1_800_010_800_000);
     const ds = getDs();
-    expect(ds.entities.getById('hist:aircraft:OLD111'), 'a new loadAt() jump must clear the prior window').toBeUndefined();
-    expect(ds.entities.getById('hist:aircraft:NEW222')).toBeDefined();
+    expect(
+      ds.entities.getById("hist:aircraft:OLD111"),
+      "a new loadAt() jump must clear the prior window",
+    ).toBeUndefined();
+    expect(ds.entities.getById("hist:aircraft:NEW222")).toBeDefined();
     expect(ds.entities.values.length).toBe(1);
   });
 });
 
-describe('HistoryPlayback: replay source routing reads stats.oldest_ts, not stats.shards (W3-1)', () => {
+describe("HistoryPlayback: replay source routing reads stats.oldest_ts, not stats.shards (W3-1)", () => {
   // Timescale's history.stats() answers with `shards: []` (sharding is a
   // SQLite-only workaround) plus `oldest_ts` = MIN(t) as epoch seconds.
   // Resolving the own-archive floor from `shards` alone read every half hour
@@ -381,7 +460,12 @@ describe('HistoryPlayback: replay source routing reads stats.oldest_ts, not stat
     w[5] = Math.round(33.0 * 1e6); // lat
     w[6] = Math.round(35.0 * 1e6); // lon
     w[7] = 0; // alt/gs
-    return { ok: true, status: 200, statusText: 'OK', arrayBuffer: async () => w.buffer } as unknown as Response;
+    return {
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      arrayBuffer: async () => w.buffer,
+    } as unknown as Response;
   }
 
   function mockTimescaleStats(calls: string[]): void {
@@ -389,16 +473,22 @@ describe('HistoryPlayback: replay source routing reads stats.oldest_ts, not stat
     mockedFetch.mockImplementation(async (url: string) => {
       const u = url.toString();
       calls.push(u);
-      if (u === '/api/history/stats') {
-        return jsonResponse({ backend: 'timescale', oldest_ts: oldestMs / 1000, shards: [] });
+      if (u === "/api/history/stats") {
+        return jsonResponse({
+          backend: "timescale",
+          oldest_ts: oldestMs / 1000,
+          shards: [],
+        });
       }
-      if (u.startsWith('/api/history/upstream/chunk')) return upstreamChunk(oldestMs - HALF_HOUR_MS);
-      if (u.startsWith('/api/history/tracks')) return jsonResponse({ tracks: [] });
+      if (u.startsWith("/api/history/upstream/chunk"))
+        return upstreamChunk(oldestMs - HALF_HOUR_MS);
+      if (u.startsWith("/api/history/tracks"))
+        return jsonResponse({ tracks: [] });
       return jsonResponse({});
     });
   }
 
-  it('a half hour BEFORE oldest_ts fetches the upstream chunk and leaves aircraft out of the own fetch', async () => {
+  it("a half hour BEFORE oldest_ts fetches the upstream chunk and leaves aircraft out of the own fetch", async () => {
     const calls: string[] = [];
     mockTimescaleStats(calls);
 
@@ -406,17 +496,26 @@ describe('HistoryPlayback: replay source routing reads stats.oldest_ts, not stat
     const controller = installHistoryPlayback(viewer);
     const info = await controller.loadAt(oldestMs - HALF_HOUR_MS, oldestMs);
 
-    const upstream = calls.filter((u) => u.startsWith('/api/history/upstream/chunk'));
-    expect(upstream, 'the upstream chunk was never requested').toHaveLength(1);
-    expect(upstream[0]).toContain('index=');
+    const upstream = calls.filter((u) =>
+      u.startsWith("/api/history/upstream/chunk"),
+    );
+    expect(upstream, "the upstream chunk was never requested").toHaveLength(1);
+    expect(upstream[0]).toContain("index=");
     // Vessels are always the own archive; the own fetch must not also ask for
     // aircraft on a chunk whose aircraft come from upstream.
-    expect(calls.some((u) => u.startsWith('/api/history/tracks') && u.includes('kind=vessel'))).toBe(true);
-    expect(info?.source).toBe('upstream');
-    expect(getDs().entities.getById('hist:aircraft:abcdef'), 'decoded upstream aircraft missing').toBeDefined();
+    expect(
+      calls.some(
+        (u) => u.startsWith("/api/history/tracks") && u.includes("kind=vessel"),
+      ),
+    ).toBe(true);
+    expect(info?.source).toBe("upstream");
+    expect(
+      getDs().entities.getById("hist:aircraft:abcdef"),
+      "decoded upstream aircraft missing",
+    ).toBeDefined();
   });
 
-  it('a half hour starting AT oldest_ts stays on the own archive with no upstream call', async () => {
+  it("a half hour starting AT oldest_ts stays on the own archive with no upstream call", async () => {
     const calls: string[] = [];
     mockTimescaleStats(calls);
 
@@ -424,13 +523,15 @@ describe('HistoryPlayback: replay source routing reads stats.oldest_ts, not stat
     const controller = installHistoryPlayback(viewer);
     const info = await controller.loadAt(oldestMs, oldestMs + HALF_HOUR_MS);
 
-    expect(calls.some((u) => u.startsWith('/api/history/tracks'))).toBe(true);
-    expect(calls.filter((u) => u.startsWith('/api/history/upstream/chunk'))).toHaveLength(0);
-    expect(info?.source).toBe('none');
+    expect(calls.some((u) => u.startsWith("/api/history/tracks"))).toBe(true);
+    expect(
+      calls.filter((u) => u.startsWith("/api/history/upstream/chunk")),
+    ).toHaveLength(0);
+    expect(info?.source).toBe("none");
   });
 });
 
-describe('HistoryPlayback: destroy() tears down the decode Worker (W3-3)', () => {
+describe("HistoryPlayback: destroy() tears down the decode Worker (W3-3)", () => {
   // Stand-in for the DOM Worker so `createHeatmapDecoder()` takes its real
   // (non-jsdom-fallback) branch and its terminate() becomes observable.
   class FakeWorker {
@@ -450,14 +551,14 @@ describe('HistoryPlayback: destroy() tears down the decode Worker (W3-3)', () =>
   beforeEach(() => {
     FakeWorker.instances = [];
     mockedFetch.mockReset();
-    vi.stubGlobal('Worker', FakeWorker);
+    vi.stubGlobal("Worker", FakeWorker);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('terminates the Worker when the viewer is ALREADY destroyed (HMR teardown / ErrorBoundary)', () => {
+  it("terminates the Worker when the viewer is ALREADY destroyed (HMR teardown / ErrorBoundary)", () => {
     // destroy() bails early on a destroyed viewer so it never touches the
     // viewer's data sources; pre-fix that early return also skipped
     // decoder.terminate(), so the Worker thread and its bundled module graph
@@ -471,7 +572,7 @@ describe('HistoryPlayback: destroy() tears down the decode Worker (W3-3)', () =>
     expect(FakeWorker.instances[0]!.terminated).toBe(true);
   });
 
-  it('still terminates the Worker on the ordinary teardown path', () => {
+  it("still terminates the Worker on the ordinary teardown path", () => {
     const { viewer } = fakeViewer();
     const controller = installHistoryPlayback(viewer);
 

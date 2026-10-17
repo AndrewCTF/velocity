@@ -11,18 +11,19 @@
 // Not for URLs this app mints itself (blob: object URLs, symbol data: URIs);
 // those are not network data and would be dropped.
 
-const ALLOWED = new Set(['http:', 'https:']);
+const ALLOWED = new Set(["http:", "https:"]);
 
 export function safeHttpUrl(raw: unknown): string | undefined {
-  if (typeof raw !== 'string') return undefined;
+  if (typeof raw !== "string") return undefined;
   const s = raw.trim();
   if (!s) return undefined;
   let parsed: URL;
   try {
     const base =
-      typeof window !== 'undefined' && /^https?:$/.test(window.location.protocol)
+      typeof window !== "undefined" &&
+      /^https?:$/.test(window.location.protocol)
         ? window.location.href
-        : 'http://localhost/';
+        : "http://localhost/";
     parsed = new URL(s, base);
   } catch {
     return undefined;

@@ -1,6 +1,14 @@
-import { useMemo, useState } from 'react';
-import { Check, X } from 'lucide-react';
-import { Widget, Badge, Caveat, Btn, MicroLabel, StatusDot, type BadgeTone } from '../shell/instruments.js';
+import { useMemo, useState } from "react";
+import { Check, X } from "lucide-react";
+import {
+  Widget,
+  Badge,
+  Caveat,
+  Btn,
+  MicroLabel,
+  StatusDot,
+  type BadgeTone,
+} from "../shell/instruments.js";
 import {
   FEATURE_DEFS,
   matchByFeatures,
@@ -8,8 +16,8 @@ import {
   verifyAgainstAis,
   type FeatureTag,
   type AisVerdictLevel,
-} from '../intel/vesselClasses.js';
-import { safeHttpUrl } from '../shell/safeUrl.js';
+} from "../intel/vesselClasses.js";
+import { safeHttpUrl } from "../shell/safeUrl.js";
 
 // Imagery recognition: the analyst ticks the WEAPONS / SENSOR / DECK features they
 // can see in the detailed chip, and candidate classes rank by weighted feature
@@ -24,16 +32,16 @@ interface Props {
 }
 
 const VERDICT_TONE: Record<AisVerdictLevel, BadgeTone> = {
-  confirmed: 'ok',
-  plausible: 'accent',
-  mismatch: 'alert',
-  no_ais: 'neutral',
+  confirmed: "ok",
+  plausible: "accent",
+  mismatch: "alert",
+  no_ais: "neutral",
 };
 const VERDICT_DOT: Record<AisVerdictLevel, string> = {
-  confirmed: 'ok',
-  plausible: 'accent',
-  mismatch: 'alert',
-  no_ais: 'neutral',
+  confirmed: "ok",
+  plausible: "accent",
+  mismatch: "alert",
+  no_ais: "neutral",
 };
 
 const GROUPS: FeatureTag[][] = (() => {
@@ -44,7 +52,11 @@ const GROUPS: FeatureTag[][] = (() => {
   return Object.values(byGroup);
 })();
 
-export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props): JSX.Element {
+export function VesselClassCard({
+  lengthM,
+  shipType: _shipType,
+  sogKn,
+}: Props): JSX.Element {
   const [observed, setObserved] = useState<Set<FeatureTag>>(new Set());
   const toggle = (t: FeatureTag): void =>
     setObserved((s) => {
@@ -76,15 +88,20 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
         {lengthM ? (
           <p className="mono text-[10px] text-txt-3">
             AIS length {Math.round(lengthM)} m
-            {typeof sogKn === 'number' && (
-              <span className={sogKn < 1 ? 'text-ok' : 'text-txt-3'}>
-                {' '}· {sogKn < 1 ? 'moored (AIS position stable for cross-check)' : `underway ${sogKn.toFixed(0)} kn`}
+            {typeof sogKn === "number" && (
+              <span className={sogKn < 1 ? "text-ok" : "text-txt-3"}>
+                {" "}
+                ·{" "}
+                {sogKn < 1
+                  ? "moored (AIS position stable for cross-check)"
+                  : `underway ${sogKn.toFixed(0)} kn`}
               </span>
             )}
           </p>
         ) : (
           <p className="mono text-[10px] text-warn">
-            AIS length not broadcast. Verify visually (measure hull off the chip), or dark contact.
+            AIS length not broadcast. Verify visually (measure hull off the
+            chip), or dark contact.
           </p>
         )}
 
@@ -103,11 +120,11 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
                       onClick={() => toggle(t)}
                       title={FEATURE_DEFS[t].label}
                       className={[
-                        'mono text-[10px] tracking-[0.2px] px-1.5 py-[3px] rounded-sm border transition-colors',
+                        "mono text-[10px] tracking-[0.2px] px-1.5 py-[3px] rounded-sm border transition-colors",
                         on
-                          ? 'border-accent-line bg-accent-dim text-accent'
-                          : 'border-line bg-bg-2 text-txt-3 hover:text-txt-1 hover:border-accent-line',
-                      ].join(' ')}
+                          ? "border-accent-line bg-accent-dim text-accent"
+                          : "border-line bg-bg-2 text-txt-3 hover:text-txt-1 hover:border-accent-line",
+                      ].join(" ")}
                     >
                       {FEATURE_DEFS[t].label}
                     </button>
@@ -124,23 +141,25 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
         )}
 
         {/* Top verdict — AIS ground truth cross-checked against the visual top pick. */}
-        {!byLengthOnly && matches.length > 0 && lengthM ? (
-          (() => {
-            const v = verifyAgainstAis(matches[0]!.cls, lengthM);
-            const headline =
-              v.level === 'confirmed'
-                ? `CONFIRMED (${matches[0]!.cls.name}): visual fit + AIS length agree`
-                : v.level === 'plausible'
-                  ? `LIKELY (${matches[0]!.cls.name}): visual fit, AIS length close`
-                  : `⚠ MISMATCH: visual class ≠ AIS length (${v.lenDeltaPct}% off). Spoof / mis-ID / decoy?`;
-            return (
-              <div className="flex items-center gap-1.5 rounded-sm border border-line bg-bg-1/70 px-2 py-1.5">
-                <StatusDot tone={VERDICT_DOT[v.level]} />
-                <span className="text-[10px] text-txt-1 leading-snug">{headline}</span>
-              </div>
-            );
-          })()
-        ) : null}
+        {!byLengthOnly && matches.length > 0 && lengthM
+          ? (() => {
+              const v = verifyAgainstAis(matches[0]!.cls, lengthM);
+              const headline =
+                v.level === "confirmed"
+                  ? `CONFIRMED (${matches[0]!.cls.name}): visual fit + AIS length agree`
+                  : v.level === "plausible"
+                    ? `LIKELY (${matches[0]!.cls.name}): visual fit, AIS length close`
+                    : `⚠ MISMATCH: visual class ≠ AIS length (${v.lenDeltaPct}% off). Spoof / mis-ID / decoy?`;
+              return (
+                <div className="flex items-center gap-1.5 rounded-sm border border-line bg-bg-1/70 px-2 py-1.5">
+                  <StatusDot tone={VERDICT_DOT[v.level]} />
+                  <span className="text-[10px] text-txt-1 leading-snug">
+                    {headline}
+                  </span>
+                </div>
+              );
+            })()
+          : null}
 
         {/* Ranked candidates. */}
         {matches.length > 0 ? (
@@ -154,23 +173,32 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
                 >
                   <span
                     className="absolute left-0 top-0 bottom-0 w-[2px]"
-                    style={{ background: byLengthOnly ? 'var(--warn)' : 'var(--accent-line)' }}
+                    style={{
+                      background: byLengthOnly
+                        ? "var(--warn)"
+                        : "var(--accent-line)",
+                    }}
                   />
                   <div className="flex items-center gap-1.5">
                     <Badge tone="neutral">{m.cls.vesselType}</Badge>
-                    <span className="text-[11px] text-txt-0 flex-1 truncate" title={m.cls.name}>
+                    <span
+                      className="text-[11px] text-txt-0 flex-1 truncate"
+                      title={m.cls.name}
+                    >
                       {m.cls.name}
                     </span>
-                    {v && v.level !== 'no_ais' && (
+                    {v && v.level !== "no_ais" && (
                       <Badge tone={VERDICT_TONE[v.level]}>
                         <span className="inline-flex items-center gap-0.5">
                           AIS
-                          {v.level === 'mismatch' ? (
+                          {v.level === "mismatch" ? (
                             <X size={11} strokeWidth={2} aria-hidden />
                           ) : (
                             <Check size={11} strokeWidth={2} aria-hidden />
                           )}
-                          <span className="sr-only">{v.level === 'mismatch' ? 'mismatch' : 'match'}</span>
+                          <span className="sr-only">
+                            {v.level === "mismatch" ? "mismatch" : "match"}
+                          </span>
                           {v.lenDeltaPct}%
                         </span>
                       </Badge>
@@ -191,15 +219,29 @@ export function VesselClassCard({ lengthM, shipType: _shipType, sogKn }: Props):
                     <span>{m.cls.country}</span>
                     <span>{m.cls.lengthM} m</span>
                     {m.cls.sources[0] && (
-                      <a href={safeHttpUrl(m.cls.sources[0])} target="_blank" rel="noreferrer" className="text-accent hover:underline ml-auto">
+                      <a
+                        href={safeHttpUrl(m.cls.sources[0])}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent hover:underline ml-auto"
+                      >
                         src
                       </a>
                     )}
                   </div>
                   {!byLengthOnly && m.matched.length > 0 && (
                     <p className="mt-1 text-[10px] text-ok/90 leading-snug flex items-start gap-1">
-                      <Check size={11} strokeWidth={2} aria-hidden className="mt-px shrink-0" />
-                      <span>{m.matched.map((f) => FEATURE_DEFS[f].label).join(' · ')}</span>
+                      <Check
+                        size={11}
+                        strokeWidth={2}
+                        aria-hidden
+                        className="mt-px shrink-0"
+                      />
+                      <span>
+                        {m.matched
+                          .map((f) => FEATURE_DEFS[f].label)
+                          .join(" · ")}
+                      </span>
                     </p>
                   )}
                 </li>

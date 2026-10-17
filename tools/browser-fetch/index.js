@@ -31,21 +31,22 @@
 // There is deliberately no eval endpoint: this is an HTTP server that fetches
 // arbitrary URLs, and arbitrary in-page JS on top of that is a footgun. It
 // binds loopback only.
-'use strict';
+"use strict";
 
-const http = require('http');
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { chromium } = require('playwright');
+const http = require("http");
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const { chromium } = require("playwright");
 
 const PORT = Number(process.env.BROWSER_FETCH_PORT || 8095);
 const MAX_CONTEXTS = Number(process.env.BROWSER_MAX_PAGES || 4);
 const IDLE_MS = Number(process.env.BROWSER_IDLE_S || 300) * 1000;
 const NAV_TIMEOUT_MS = Number(process.env.BROWSER_NAV_TIMEOUT_MS || 45000);
 const PROFILE_ROOT =
-  process.env.BROWSER_PROFILE_DIR || path.join(os.homedir(), '.cache', 'osint', 'browser-profiles');
+  process.env.BROWSER_PROFILE_DIR ||
+  path.join(os.homedir(), ".cache", "osint", "browser-profiles");
 
 // Pacing floor between page loads of the SAME host, plus jitter. A browser that
 // hammers gets blocked like anything else, and a metronome-exact interval is
@@ -54,14 +55,17 @@ const PACE_MS = Number(process.env.BROWSER_PACE_MS || 2000);
 const JITTER_MS = Number(process.env.BROWSER_JITTER_MS || 1500);
 // How long to let a Cloudflare interstitial work before giving up on it.
 const CHALLENGE_MS = Number(process.env.BROWSER_CHALLENGE_MS || 25000);
-const CHALLENGE_RE = /just a moment|checking your browser|challenge-platform|cf-chl/i;
+const CHALLENGE_RE =
+  /just a moment|checking your browser|challenge-platform|cf-chl/i;
 
 let browser = null;
 let lastGood = 0;
 const contexts = new Map(); // host -> { ctx, page, idleTimer }
 const gates = new Map(); // host -> { chain, last }
 
-function log(...a) { console.log(new Date().toISOString(), ...a); }
+function log(...a) {
+  console.log(new Date().toISOString(), ...a);
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -73,7 +77,8 @@ function paced(host, fn) {
   const g = gates.get(host) || { chain: Promise.resolve(), last: 0 };
   gates.set(host, g);
   const run = async () => {
-    const wait = g.last + PACE_MS + Math.floor(Math.random() * JITTER_MS) - Date.now();
+    const wait =
+      g.last + PACE_MS + Math.floor(Math.random() * JITTER_MS) - Date.now();
     if (wait > 0) await sleep(wait);
     try {
       return await fn();
@@ -99,7 +104,7 @@ function paced(host, fn) {
 // interstitial that never cleared in 25 s; headful Chrome on an Xvfb display
 // got 200 and the real page with no challenge at all. When this is on, the
 // python side spawns us under xvfb-run so there is a display to draw into.
-const HEADFUL = process.env.BROWSER_HEADFUL === '1';
+const HEADFUL = process.env.BROWSER_HEADFUL === "1";
 
 function launchOpts() {
   const o = {
@@ -113,26 +118,26 @@ function launchOpts() {
     handleSIGINT: false,
     handleSIGHUP: false,
     args: [
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-features=CalculateNativeWinOcclusion',
-      '--js-flags=--max-old-space-size=512',
-      '--disable-extensions',
-      '--disable-background-networking',
-      '--disable-component-update',
-      '--disable-client-side-phishing-detection',
-      '--disable-sync',
-      '--metrics-recording-only',
-      '--mute-audio',
-      '--no-first-run',
-      '--no-default-browser-check',
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-features=CalculateNativeWinOcclusion",
+      "--js-flags=--max-old-space-size=512",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-component-update",
+      "--disable-client-side-phishing-detection",
+      "--disable-sync",
+      "--metrics-recording-only",
+      "--mute-audio",
+      "--no-first-run",
+      "--no-default-browser-check",
       // The one anti-detection flag worth having: it drops the obvious
       // navigator.webdriver tell. Anything past this is a stealth-plugin arms
       // race that is itself fingerprinted.
-      '--disable-blink-features=AutomationControlled',
+      "--disable-blink-features=AutomationControlled",
     ],
   };
   if (HEADFUL) {
@@ -142,10 +147,10 @@ function launchOpts() {
     // Wayland would draw on the OPERATOR'S real desktop instead of the virtual
     // one. Measured 2026-08-01 it already chooses X11 (3 and 7 top-level
     // windows on the Xvfb root, none on :0) — this stops that being luck.
-    o.args.push('--ozone-platform=x11');
+    o.args.push("--ozone-platform=x11");
   }
   if (process.env.CHROME_PATH) o.executablePath = process.env.CHROME_PATH;
-  else o.channel = 'chrome'; // real Chrome, not bundled Chromium — different fingerprint
+  else o.channel = "chrome"; // real Chrome, not bundled Chromium — different fingerprint
   if (process.env.WARP_PROXY) o.proxy = { server: process.env.WARP_PROXY };
   return o;
 }
@@ -154,10 +159,17 @@ function launchOpts() {
 // throwing "Target page, context or browser has been closed" forever.
 async function ensureBrowser() {
   if (browser && browser.isConnected()) return;
-  if (browser) { try { await browser.close(); } catch (e) {} }
+  if (browser) {
+    try {
+      await browser.close();
+    } catch (e) {}
+  }
   browser = await chromium.launch(launchOpts());
-  browser.on('disconnected', () => { browser = null; log('browser disconnected — relaunching on next use'); });
-  log('browser launched');
+  browser.on("disconnected", () => {
+    browser = null;
+    log("browser disconnected — relaunching on next use");
+  });
+  log("browser launched");
 }
 
 // One persistent context per host, so a clearance cookie earned once is still
@@ -177,13 +189,16 @@ async function contextFor(host) {
     // Reload this host's saved cookies. A returning visitor with a live
     // clearance cookie is both cheaper (no re-clear) and less interesting to a
     // bot filter than a first-time one on every boot.
-    const statePath = path.join(PROFILE_ROOT, `${host.replace(/[^a-z0-9.-]/gi, '_')}.json`);
+    const statePath = path.join(
+      PROFILE_ROOT,
+      `${host.replace(/[^a-z0-9.-]/gi, "_")}.json`,
+    );
     const restored = fs.existsSync(statePath);
     const ctx = await browser.newContext({
       viewport: { width: 1280, height: 800 },
-      locale: 'en-US',
+      locale: "en-US",
       storageState: restored ? statePath : undefined,
-      serviceWorkers: 'block',
+      serviceWorkers: "block",
     });
     ctx._statePath = statePath;
     slot = { ctx, page: await ctx.newPage(), idleTimer: null };
@@ -191,7 +206,9 @@ async function contextFor(host) {
     const carried = restored ? (await ctx.cookies()).length : 0;
     log(
       `context opened for ${host} (${contexts.size}/${MAX_CONTEXTS})` +
-      (restored ? ` — restored ${carried} cookies from ${path.basename(statePath)}` : ' — new profile')
+        (restored
+          ? ` — restored ${carried} cookies from ${path.basename(statePath)}`
+          : " — new profile"),
     );
   }
   slot.idleTimer = setTimeout(() => closeContext(host), IDLE_MS);
@@ -207,7 +224,9 @@ async function saveState(host) {
   try {
     fs.mkdirSync(PROFILE_ROOT, { recursive: true });
     await slot.ctx.storageState({ path: slot.ctx._statePath });
-  } catch (e) { log('storageState save failed', host, e && e.message); }
+  } catch (e) {
+    log("storageState save failed", host, e && e.message);
+  }
 }
 
 async function closeContext(host) {
@@ -216,7 +235,9 @@ async function closeContext(host) {
   await saveState(host);
   contexts.delete(host);
   clearTimeout(slot.idleTimer);
-  try { await slot.ctx.close(); } catch (e) {}
+  try {
+    await slot.ctx.close();
+  } catch (e) {}
   log(`context closed for ${host}`);
 }
 
@@ -227,22 +248,25 @@ async function closeContext(host) {
 // interstitial to go away, then read the document that replaced it.
 async function awaitChallenge(page, nav) {
   const status = nav ? nav.status() : 0;
-  const title = await page.title().catch(() => '');
-  const head = (await page.content().catch(() => '')).slice(0, 3000);
-  if (![403, 429, 503].includes(status) && !CHALLENGE_RE.test(title)) return null;
+  const title = await page.title().catch(() => "");
+  const head = (await page.content().catch(() => "")).slice(0, 3000);
+  if (![403, 429, 503].includes(status) && !CHALLENGE_RE.test(title))
+    return null;
   if (!CHALLENGE_RE.test(title) && !CHALLENGE_RE.test(head)) return null; // a plain block, not a challenge
-  log(`challenge detected (${status}) on ${page.url()} — waiting up to ${CHALLENGE_MS}ms`);
+  log(
+    `challenge detected (${status}) on ${page.url()} — waiting up to ${CHALLENGE_MS}ms`,
+  );
   try {
     await page.waitForFunction(
       () => !/just a moment|checking your browser/i.test(document.title),
-      { timeout: CHALLENGE_MS, polling: 500 }
+      { timeout: CHALLENGE_MS, polling: 500 },
     );
   } catch (e) {
-    log('challenge did not clear');
+    log("challenge did not clear");
     return null; // caller returns the interstitial honestly, status and all
   }
-  await page.waitForLoadState('domcontentloaded').catch(() => {});
-  log('challenge cleared');
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
+  log("challenge cleared");
   return Buffer.from(await page.content());
 }
 
@@ -256,15 +280,26 @@ async function loadPage(host, url, { capture, waitMs }) {
   let captured = null;
   const onResponse = async (r) => {
     if (captured || !capture || !capture.test(r.url())) return;
-    try { captured = { status: r.status(), url: r.url(), body: await r.body() }; } catch (e) {}
+    try {
+      captured = { status: r.status(), url: r.url(), body: await r.body() };
+    } catch (e) {}
   };
-  if (capture) page.on('response', onResponse);
+  if (capture) page.on("response", onResponse);
   try {
-    const nav = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
+    const nav = await page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: NAV_TIMEOUT_MS,
+    });
     const solved = await awaitChallenge(page, nav);
     if (solved && !capture) {
       lastGood = Date.now();
-      return { status: 200, url: page.url(), body: solved, captured: false, challenge: 'cleared' };
+      return {
+        status: 200,
+        url: page.url(),
+        body: solved,
+        captured: false,
+        challenge: "cleared",
+      };
     }
     if (waitMs) await page.waitForTimeout(waitMs);
     if (capture) {
@@ -273,63 +308,85 @@ async function loadPage(host, url, { capture, waitMs }) {
       while (!captured && Date.now() < deadline) await page.waitForTimeout(250);
       if (!captured) throw new Error(`no response matched ${capture}`);
       lastGood = Date.now();
-      return { status: captured.status, url: captured.url, body: captured.body, captured: true };
+      return {
+        status: captured.status,
+        url: captured.url,
+        body: captured.body,
+        captured: true,
+      };
     }
-    const body = await nav.body().catch(() => Buffer.from(''));
+    const body = await nav.body().catch(() => Buffer.from(""));
     lastGood = Date.now();
     return { status: nav.status(), url: nav.url(), body, captured: false };
   } finally {
-    if (capture) page.off('response', onResponse);
+    if (capture) page.off("response", onResponse);
     await saveState(host);
   }
 }
 
 // ASVS V13.2.1. The API mints SIDECAR_TOKEN per spawn; without one (a manual
 // run) only the Host check applies.
-const SIDECAR_TOKEN = process.env.SIDECAR_TOKEN || '';
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+const SIDECAR_TOKEN = process.env.SIDECAR_TOKEN || "";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 function hostOk(req) {
-  const host = String(req.headers.host || '').toLowerCase();
-  const i = host.lastIndexOf(':');
+  const host = String(req.headers.host || "").toLowerCase();
+  const i = host.lastIndexOf(":");
   if (i <= 0) return false;
-  return LOOPBACK_HOSTS.has(host.slice(0, i)) && host.slice(i + 1) === String(req.socket.localPort);
+  return (
+    LOOPBACK_HOSTS.has(host.slice(0, i)) &&
+    host.slice(i + 1) === String(req.socket.localPort)
+  );
 }
 
 function tokenOk(req) {
   if (!SIDECAR_TOKEN) return true;
-  const got = Buffer.from(String(req.headers.authorization || ''));
+  const got = Buffer.from(String(req.headers.authorization || ""));
   const want = Buffer.from(`Bearer ${SIDECAR_TOKEN}`);
   return got.length === want.length && crypto.timingSafeEqual(got, want);
 }
 
 const server = http.createServer(async (req, res) => {
   const send = (code, obj) => {
-    res.writeHead(code, { 'content-type': 'application/json' });
+    res.writeHead(code, { "content-type": "application/json" });
     res.end(JSON.stringify(obj));
   };
-  if (!hostOk(req)) return send(421, { error: 'host not allowed' });
+  if (!hostOk(req)) return send(421, { error: "host not allowed" });
   let u;
-  try { u = new URL(req.url, `http://127.0.0.1:${PORT}`); } catch (e) { return send(400, { error: 'bad url' }); }
-
-  if (u.pathname === '/health') {
-    return send(200, { ok: true, contexts: contexts.size, last_good: lastGood, max: MAX_CONTEXTS });
+  try {
+    u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+  } catch (e) {
+    return send(400, { error: "bad url" });
   }
-  if (u.pathname === '/auth' && SIDECAR_TOKEN) {
-    if (!tokenOk(req)) return send(401, { error: 'unauthorized' });
+
+  if (u.pathname === "/health") {
+    return send(200, {
+      ok: true,
+      contexts: contexts.size,
+      last_good: lastGood,
+      max: MAX_CONTEXTS,
+    });
+  }
+  if (u.pathname === "/auth" && SIDECAR_TOKEN) {
+    if (!tokenOk(req)) return send(401, { error: "unauthorized" });
     res.writeHead(204);
     return res.end();
   }
-  if (u.pathname !== '/fetch') return send(404, { error: 'not found' });
-  if (!tokenOk(req)) return send(401, { error: 'unauthorized' });
+  if (u.pathname !== "/fetch") return send(404, { error: "not found" });
+  if (!tokenOk(req)) return send(401, { error: "unauthorized" });
 
-  const target = u.searchParams.get('url');
-  if (!target || !/^https?:\/\//i.test(target)) return send(400, { error: 'url must be http(s)' });
+  const target = u.searchParams.get("url");
+  if (!target || !/^https?:\/\//i.test(target))
+    return send(400, { error: "url must be http(s)" });
   let capture = null;
-  if (u.searchParams.get('capture')) {
-    try { capture = new RegExp(u.searchParams.get('capture')); } catch (e) { return send(400, { error: 'bad capture regex' }); }
+  if (u.searchParams.get("capture")) {
+    try {
+      capture = new RegExp(u.searchParams.get("capture"));
+    } catch (e) {
+      return send(400, { error: "bad capture regex" });
+    }
   }
-  const waitMs = Math.min(Number(u.searchParams.get('wait') || 0) || 0, 30000);
+  const waitMs = Math.min(Number(u.searchParams.get("wait") || 0) || 0, 30000);
   const t0 = Date.now();
   try {
     const out = await fetchUrl(target, { capture, waitMs });
@@ -338,12 +395,15 @@ const server = http.createServer(async (req, res) => {
       url: out.url,
       captured: out.captured,
       bytes: out.body.length,
-      body_b64: out.body.toString('base64'),
+      body_b64: out.body.toString("base64"),
       ms: Date.now() - t0,
     });
   } catch (e) {
-    log('fetch failed', target, e && e.message);
-    send(502, { error: String((e && e.message) || e).slice(0, 300), ms: Date.now() - t0 });
+    log("fetch failed", target, e && e.message);
+    send(502, {
+      error: String((e && e.message) || e).slice(0, 300),
+      ms: Date.now() - t0,
+    });
   }
 });
 
@@ -351,9 +411,13 @@ if (require.main === module) {
   // Loopback only. This endpoint fetches arbitrary URLs on request; it must
   // never be reachable off the host. The caller (app/browser_fetch.py) does the
   // public-address check before asking.
-  server.listen(PORT, '127.0.0.1', () => log(`browser-fetch listening on 127.0.0.1:${PORT} (profiles: ${PROFILE_ROOT})`));
+  server.listen(PORT, "127.0.0.1", () =>
+    log(
+      `browser-fetch listening on 127.0.0.1:${PORT} (profiles: ${PROFILE_ROOT})`,
+    ),
+  );
 
-  for (const sig of ['SIGTERM', 'SIGINT']) {
+  for (const sig of ["SIGTERM", "SIGINT"]) {
     process.on(sig, async () => {
       // Flush every live context's cookies FIRST. Without this a shutdown threw
       // away the clearance a session had just earned, and the next boot arrived
@@ -362,11 +426,21 @@ if (require.main === module) {
       try {
         await Promise.all([...contexts.keys()].map((h) => closeContext(h)));
       } catch (e) {}
-      try { if (browser) await browser.close(); } catch (e) {}
+      try {
+        if (browser) await browser.close();
+      } catch (e) {}
       process.exit(0);
     });
   }
 } else {
   // Required as a module (selftest.js) — export the pure bits worth checking.
-  module.exports = { paced, gates, PACE_MS, JITTER_MS, launchOpts, HEADFUL, server };
+  module.exports = {
+    paced,
+    gates,
+    PACE_MS,
+    JITTER_MS,
+    launchOpts,
+    HEADFUL,
+    server,
+  };
 }

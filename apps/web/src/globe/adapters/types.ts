@@ -1,7 +1,7 @@
-import type * as Cesium from 'cesium';
-import type { LayerDescriptor } from '@osint/shared';
+import type * as Cesium from "cesium";
+import type { LayerDescriptor } from "@osint/shared";
 
-export type FeedStatusKind = 'green' | 'amber' | 'red' | 'unknown';
+export type FeedStatusKind = "green" | "amber" | "red" | "unknown";
 export interface FeedStatus {
   status: FeedStatusKind;
   lastSeen?: number;

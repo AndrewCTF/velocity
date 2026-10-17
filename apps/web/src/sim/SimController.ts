@@ -6,14 +6,14 @@
 //   - units (landing): the simple static-fix glide.
 // Sim entities live in a dedicated CustomDataSource with sim:* ids.
 
-import * as Cesium from 'cesium';
-import { icons } from '../globe/icons.js';
-import { labelFor } from '../globe/adapters/labelStyle.js';
-import { bearingDeg, destPoint, haversineKm, sampleUnit } from './engine.js';
-import { evaluateLink, type LinkState } from './links.js';
-import { ewAt, NO_EW } from './ew.js';
-import { routeGroundProfile, profileAt, lineMasked } from './terrain.js';
-import type { AgentSpec, LatLon, SimPlan } from './types.js';
+import * as Cesium from "cesium";
+import { icons } from "../globe/icons.js";
+import { labelFor } from "../globe/adapters/labelStyle.js";
+import { bearingDeg, destPoint, haversineKm, sampleUnit } from "./engine.js";
+import { evaluateLink, type LinkState } from "./links.js";
+import { ewAt, NO_EW } from "./ew.js";
+import { routeGroundProfile, profileAt, lineMasked } from "./terrain.js";
+import type { AgentSpec, LatLon, SimPlan } from "./types.js";
 
 export interface SimStats {
   airborne: number;
@@ -30,8 +30,8 @@ export interface SimClock {
 }
 
 type UpdateCb = (s: SimClock) => void;
-type Fate = 'flying' | 'struck' | 'intercepted' | 'ew_lost';
-type Mode = 'pre' | 'cruise' | 'rtl' | 'loiter' | 'crashed' | 'arrived';
+type Fate = "flying" | "struck" | "intercepted" | "ew_lost";
+type Mode = "pre" | "cruise" | "rtl" | "loiter" | "crashed" | "arrived";
 
 const SALVO_PER_SITE = 4;
 const NOE_AGL_M = 120; // nap-of-earth height above ground
@@ -82,19 +82,28 @@ export class SimController {
   private swarms = new Map<string, number[]>();
 
   constructor(private readonly viewer: Cesium.Viewer) {
-    this.ds = new Cesium.CustomDataSource('simulation');
+    this.ds = new Cesium.CustomDataSource("simulation");
     void viewer.dataSources.add(this.ds);
     this.placeHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    this.placeHandler.setInputAction((e: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
-      if (!this.placeCb) return;
-      const cart = viewer.camera.pickEllipsoid(e.position, viewer.scene.globe.ellipsoid);
-      if (!cart) return;
-      const c = Cesium.Cartographic.fromCartesian(cart);
-      const p = { lat: Cesium.Math.toDegrees(c.latitude), lon: Cesium.Math.toDegrees(c.longitude) };
-      const cb = this.placeCb;
-      this.placeCb = null;
-      cb(p);
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    this.placeHandler.setInputAction(
+      (e: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
+        if (!this.placeCb) return;
+        const cart = viewer.camera.pickEllipsoid(
+          e.position,
+          viewer.scene.globe.ellipsoid,
+        );
+        if (!cart) return;
+        const c = Cesium.Cartographic.fromCartesian(cart);
+        const p = {
+          lat: Cesium.Math.toDegrees(c.latitude),
+          lon: Cesium.Math.toDegrees(c.longitude),
+        };
+        const cb = this.placeCb;
+        this.placeCb = null;
+        cb(p);
+      },
+      Cesium.ScreenSpaceEventType.LEFT_CLICK,
+    );
   }
 
   setUpdateListener(cb: UpdateCb | null): void {
@@ -167,14 +176,20 @@ export class SimController {
         id: unit.id,
         position,
         billboard: {
-          image: unit.kind === 'drone' ? icons.drone(unit.color) : icons.uav(unit.color),
+          image:
+            unit.kind === "drone"
+              ? icons.drone(unit.color)
+              : icons.uav(unit.color),
           scale: 1.0,
           rotation,
           alignedAxis: Cesium.Cartesian3.ZERO,
           color,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 60_000_000),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+            0,
+            60_000_000,
+          ),
         },
         label: labelFor(unit.label),
         name: unit.label,
@@ -197,9 +212,9 @@ export class SimController {
         lon: spec.launch.lon,
         alt: 0,
         heading: bearingDeg(spec.launch, spec.target),
-        mode: 'pre',
-        fate: 'flying',
-        link: 'nominal',
+        mode: "pre",
+        fate: "flying",
+        link: "nominal",
         driftBiasDeg: 0,
         loiterPhase: 0,
         legKm: Math.max(0.1, haversineKm(spec.launch, spec.target)),
@@ -212,29 +227,38 @@ export class SimController {
         if (bucket) bucket.push(idx);
         else this.swarms.set(spec.swarmId, [idx]);
       }
-      const color = new Cesium.CallbackProperty(() => this.agentColor(rt), false);
+      const color = new Cesium.CallbackProperty(
+        () => this.agentColor(rt),
+        false,
+      );
       const position = new Cesium.CallbackPositionProperty(
         () => Cesium.Cartesian3.fromDegrees(rt.lon, rt.lat, rt.alt),
         false,
       );
-      const rotation = new Cesium.CallbackProperty(() => -Cesium.Math.toRadians(rt.heading), false);
+      const rotation = new Cesium.CallbackProperty(
+        () => -Cesium.Math.toRadians(rt.heading),
+        false,
+      );
       this.ds.entities.add({
         id: spec.id,
         position,
         billboard: {
-          image: icons.uav('#ffffff'),
+          image: icons.uav("#ffffff"),
           scale: 1.0,
           rotation,
           alignedAxis: Cesium.Cartesian3.ZERO,
           color,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 60_000_000),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+            0,
+            60_000_000,
+          ),
         },
         ...(showLabel ? { label: labelFor(spec.label) } : {}),
         name: spec.label,
         properties: {
-          kind: 'sim-uav',
+          kind: "sim-uav",
           sim: true,
           ...(spec.swarmId ? { swarmId: spec.swarmId } : {}),
           link_profile: spec.profile.type,
@@ -245,28 +269,37 @@ export class SimController {
           link: new Cesium.CallbackProperty(() => rt.link, false),
           fate: new Cesium.CallbackProperty(() => rt.fate, false),
           alt_m: new Cesium.CallbackProperty(() => Math.round(rt.alt), false),
-          heading_deg: new Cesium.CallbackProperty(() => Math.round(rt.heading), false),
+          heading_deg: new Cesium.CallbackProperty(
+            () => Math.round(rt.heading),
+            false,
+          ),
         },
       });
       // Fiber-optic tether: a line from the control station to the drone while
       // the link is alive (the physical spooled fiber).
-      if (spec.profile.type === 'fiber' && plan.station) {
+      if (spec.profile.type === "fiber" && plan.station) {
         const station = plan.station;
         this.ds.entities.add({
           id: `${spec.id}:fiber`,
           polyline: {
             positions: new Cesium.CallbackProperty(
               () =>
-                rt.mode === 'crashed' || rt.fate === 'ew_lost'
+                rt.mode === "crashed" || rt.fate === "ew_lost"
                   ? []
                   : [
-                      Cesium.Cartesian3.fromDegrees(station.lon, station.lat, 20),
+                      Cesium.Cartesian3.fromDegrees(
+                        station.lon,
+                        station.lat,
+                        20,
+                      ),
                       Cesium.Cartesian3.fromDegrees(rt.lon, rt.lat, rt.alt),
                     ],
               false,
             ),
             width: 1,
-            material: new Cesium.ColorMaterialProperty(Cesium.Color.fromCssColorString('#5eead4').withAlpha(0.5)),
+            material: new Cesium.ColorMaterialProperty(
+              Cesium.Color.fromCssColorString("#5eead4").withAlpha(0.5),
+            ),
           },
         });
       }
@@ -282,7 +315,7 @@ export class SimController {
   private drawSwarms(): void {
     for (const [swarmId, indices] of this.swarms) {
       if (indices.length === 0) continue;
-      const color = Cesium.Color.fromCssColorString('#ef4444');
+      const color = Cesium.Color.fromCssColorString("#ef4444");
       this.ds.entities.add({
         id: swarmId,
         position: new Cesium.CallbackPositionProperty(() => {
@@ -291,19 +324,28 @@ export class SimController {
           return Cesium.Cartesian3.fromDegrees(aoi.lon, aoi.lat, 0);
         }, false),
         ellipse: {
-          semiMajorAxis: new Cesium.CallbackProperty(() => (this.swarmAoi(swarmId)?.radiusKm ?? 0) * 1000, false),
-          semiMinorAxis: new Cesium.CallbackProperty(() => (this.swarmAoi(swarmId)?.radiusKm ?? 0) * 1000, false),
+          semiMajorAxis: new Cesium.CallbackProperty(
+            () => (this.swarmAoi(swarmId)?.radiusKm ?? 0) * 1000,
+            false,
+          ),
+          semiMinorAxis: new Cesium.CallbackProperty(
+            () => (this.swarmAoi(swarmId)?.radiusKm ?? 0) * 1000,
+            false,
+          ),
           material: new Cesium.ColorMaterialProperty(color.withAlpha(0.07)),
           outline: true,
           outlineColor: color.withAlpha(0.5),
           height: 0,
         },
         label: {
-          ...labelFor(''),
-          text: new Cesium.CallbackProperty(() => this.swarmLabel(swarmId), false),
+          ...labelFor(""),
+          text: new Cesium.CallbackProperty(
+            () => this.swarmLabel(swarmId),
+            false,
+          ),
         },
-        name: 'Swarm',
-        properties: { kind: 'sim-swarm', sim: true, swarmId },
+        name: "Swarm",
+        properties: { kind: "sim-swarm", sim: true, swarmId },
       });
     }
   }
@@ -323,9 +365,9 @@ export class SimController {
     for (const i of indices) {
       const rt = this.agents[i];
       if (!rt) continue;
-      if (rt.fate === 'struck') struck++;
-      else if (rt.fate === 'intercepted') intercepted++;
-      else if (rt.fate === 'ew_lost') linkLost++;
+      if (rt.fate === "struck") struck++;
+      else if (rt.fate === "intercepted") intercepted++;
+      else if (rt.fate === "ew_lost") linkLost++;
       else live++;
     }
     return { total: indices.length, live, struck, intercepted, linkLost };
@@ -333,7 +375,7 @@ export class SimController {
 
   private swarmLabel(swarmId: string): string {
     const indices = this.swarms.get(swarmId);
-    if (!indices) return 'Swarm';
+    if (!indices) return "Swarm";
     const t = this.swarmTally(indices);
     return `Swarm: ${t.total} UAV, ${t.struck} struck, ${t.intercepted} intercepted`;
   }
@@ -343,14 +385,20 @@ export class SimController {
   // members once the swarm is fully resolved. Bounding circle, NOT a hull —
   // the dispersion model produces near-circular clouds. Returns null for an
   // unknown/empty swarm.
-  swarmAoi(swarmId: string): { lat: number; lon: number; radiusKm: number } | null {
+  swarmAoi(
+    swarmId: string,
+  ): { lat: number; lon: number; radiusKm: number } | null {
     const indices = this.swarms.get(swarmId);
     if (!indices || indices.length === 0) return null;
     const isLive = (rt: RtAgent): boolean =>
-      rt.fate === 'flying' && rt.mode !== 'crashed' && rt.mode !== 'arrived';
-    let members = indices.map((i) => this.agents[i]).filter((rt): rt is RtAgent => !!rt && isLive(rt));
+      rt.fate === "flying" && rt.mode !== "crashed" && rt.mode !== "arrived";
+    let members = indices
+      .map((i) => this.agents[i])
+      .filter((rt): rt is RtAgent => !!rt && isLive(rt));
     if (members.length === 0) {
-      members = indices.map((i) => this.agents[i]).filter((rt): rt is RtAgent => !!rt);
+      members = indices
+        .map((i) => this.agents[i])
+        .filter((rt): rt is RtAgent => !!rt);
     }
     if (members.length === 0) return null;
     let sumLat = 0;
@@ -374,11 +422,14 @@ export class SimController {
   }
 
   private agentColor(rt: RtAgent): Cesium.Color {
-    if (rt.mode === 'crashed' || rt.fate === 'ew_lost') return Cesium.Color.fromCssColorString('#64748b');
-    if (rt.fate === 'intercepted') return Cesium.Color.fromCssColorString('#f59e0b');
-    if (rt.link === 'lost') return Cesium.Color.fromCssColorString('#94a3b8');
-    if (rt.link === 'degraded') return Cesium.Color.fromCssColorString('#f59e0b');
-    return Cesium.Color.fromCssColorString('#ef4444');
+    if (rt.mode === "crashed" || rt.fate === "ew_lost")
+      return Cesium.Color.fromCssColorString("#64748b");
+    if (rt.fate === "intercepted")
+      return Cesium.Color.fromCssColorString("#f59e0b");
+    if (rt.link === "lost") return Cesium.Color.fromCssColorString("#94a3b8");
+    if (rt.link === "degraded")
+      return Cesium.Color.fromCssColorString("#f59e0b");
+    return Cesium.Color.fromCssColorString("#ef4444");
   }
 
   private async precomputeTerrain(plan: SimPlan): Promise<void> {
@@ -408,28 +459,33 @@ export class SimController {
   private stepAgents(dt: number): void {
     const plan = this.plan;
     if (!plan) return;
-    const station = plan.station ?? { lat: this.agents[0]?.spec.launch.lat ?? 0, lon: this.agents[0]?.spec.launch.lon ?? 0 };
+    const station = plan.station ?? {
+      lat: this.agents[0]?.spec.launch.lat ?? 0,
+      lon: this.agents[0]?.spec.launch.lon ?? 0,
+    };
     const jammers = plan.jammers ?? [];
     const noe = !!plan.napOfEarth;
     const defenses = plan.defenses ?? [];
 
     for (const rt of this.agents) {
-      if (rt.mode === 'arrived') continue;
-      if (rt.mode === 'crashed') {
+      if (rt.mode === "arrived") continue;
+      if (rt.mode === "crashed") {
         // settle to the ground
-        const ground = this.groundProfile ? profileAt(this.groundProfile, this.fracOf(rt)) : 0;
+        const ground = this.groundProfile
+          ? profileAt(this.groundProfile, this.fracOf(rt))
+          : 0;
         if (rt.alt > ground) rt.alt = Math.max(ground, rt.alt - 250 * dt);
         continue;
       }
       if (this.simTime < rt.spec.startDelaySec) {
-        rt.mode = 'pre';
+        rt.mode = "pre";
         rt.lat = rt.spec.launch.lat;
         rt.lon = rt.spec.launch.lon;
         rt.alt = 0;
         continue;
       }
-      if (rt.mode === 'pre') {
-        rt.mode = 'cruise';
+      if (rt.mode === "pre") {
+        rt.mode = "cruise";
         rt.alt = rt.spec.cruiseAltM;
       }
 
@@ -438,49 +494,60 @@ export class SimController {
       const distToStationKm = haversineKm(pos, station);
 
       // link state: range + terrain LOS + EW
-      const losClear = rt.spec.profile.losRequired ? this.stationLosClear(frac, rt.alt) : true;
+      const losClear = rt.spec.profile.losRequired
+        ? this.stationLosClear(frac, rt.alt)
+        : true;
       const ew = jammers.length ? ewAt(rt.lat, rt.lon, jammers) : NO_EW;
-      const { state, gnssDenied } = evaluateLink(rt.spec.profile, distToStationKm, losClear, ew);
+      const { state, gnssDenied } = evaluateLink(
+        rt.spec.profile,
+        distToStationKm,
+        losClear,
+        ew,
+      );
       rt.link = state;
 
       // fiber: beyond the tether length the spool is exhausted → cut.
-      if (rt.spec.profile.type === 'fiber' && distToStationKm > rt.spec.profile.commsRangeKm) {
-        rt.mode = 'crashed';
-        rt.fate = 'ew_lost';
-        this.spawnBurst(rt, '#5eead4');
+      if (
+        rt.spec.profile.type === "fiber" &&
+        distToStationKm > rt.spec.profile.commsRangeKm
+      ) {
+        rt.mode = "crashed";
+        rt.fate = "ew_lost";
+        this.spawnBurst(rt, "#5eead4");
         continue;
       }
 
       // link loss behaviour
-      if (state === 'lost') {
+      if (state === "lost") {
         switch (rt.spec.profile.onLinkLoss) {
-          case 'crash':
-            rt.mode = 'crashed';
-            rt.fate = 'ew_lost';
-            this.spawnBurst(rt, '#94a3b8');
+          case "crash":
+            rt.mode = "crashed";
+            rt.fate = "ew_lost";
+            this.spawnBurst(rt, "#94a3b8");
             continue;
-          case 'rtl':
-            rt.mode = 'rtl';
+          case "rtl":
+            rt.mode = "rtl";
             break;
-          case 'loiter':
-            rt.mode = 'loiter';
+          case "loiter":
+            rt.mode = "loiter";
             break;
-          case 'continue_ins':
-            rt.mode = 'cruise';
+          case "continue_ins":
+            rt.mode = "cruise";
             break;
         }
-      } else if (rt.mode !== 'loiter' && rt.mode !== 'rtl') {
-        rt.mode = 'cruise';
+      } else if (rt.mode !== "loiter" && rt.mode !== "rtl") {
+        rt.mode = "cruise";
       }
 
       // GNSS denial → INS drift (heading bias grows with exposure)
-      if (gnssDenied && rt.spec.profile.navMode !== 'manual') {
-        rt.driftBiasDeg += rt.spec.profile.insDriftMPerKm * 0.02 * (rt.roll > 0.5 ? 1 : -1);
+      if (gnssDenied && rt.spec.profile.navMode !== "manual") {
+        rt.driftBiasDeg +=
+          rt.spec.profile.insDriftMPerKm * 0.02 * (rt.roll > 0.5 ? 1 : -1);
         rt.driftBiasDeg = Math.max(-25, Math.min(25, rt.driftBiasDeg));
       }
 
       // SAM engagement: first time inside a site's ring, within its salvo capacity.
-      if (!rt.samChecked && (rt.mode === 'cruise' || rt.mode === 'rtl')) {
+      if (!rt.samChecked && (rt.mode === "cruise" || rt.mode === "rtl")) {
         for (const d of defenses) {
           if (haversineKm(pos, d) <= d.rangeKm) {
             rt.samChecked = true;
@@ -489,27 +556,27 @@ export class SimController {
               this.siteEngaged.set(d.id, eng + 1);
               const cover = noe ? 0.7 : 1;
               if (rt.roll < (d.pk ?? 0.6) * cover) {
-                rt.mode = 'crashed';
-                rt.fate = 'intercepted';
-                this.spawnBurst(rt, '#f59e0b');
+                rt.mode = "crashed";
+                rt.fate = "intercepted";
+                this.spawnBurst(rt, "#f59e0b");
               }
             }
             break;
           }
         }
-        if (rt.mode === 'crashed') continue;
+        if (rt.mode === "crashed") continue;
       }
 
       // movement
       const stepKm = (rt.spec.speedMps * dt) / 1000;
-      if (rt.mode === 'loiter') {
+      if (rt.mode === "loiter") {
         rt.loiterPhase += dt * 0.4;
         const c = destPoint(pos, (rt.loiterPhase * 57.3) % 360, 0.5);
         rt.heading = bearingDeg(pos, c);
         rt.lat = c.lat;
         rt.lon = c.lon;
       } else {
-        const goal = rt.mode === 'rtl' ? station : rt.spec.target;
+        const goal = rt.mode === "rtl" ? station : rt.spec.target;
         rt.heading = (bearingDeg(pos, goal) + rt.driftBiasDeg + 360) % 360;
         const next = destPoint(pos, rt.heading, stepKm);
         rt.lat = next.lat;
@@ -518,20 +585,31 @@ export class SimController {
 
       // altitude
       if (noe) {
-        const ground = this.groundProfile ? profileAt(this.groundProfile, frac) : 0;
+        const ground = this.groundProfile
+          ? profileAt(this.groundProfile, frac)
+          : 0;
         rt.alt = ground + NOE_AGL_M;
       } else {
         const dGoal = haversineKm({ lat: rt.lat, lon: rt.lon }, rt.spec.target);
-        rt.alt = dGoal < 1.5 && rt.mode === 'cruise' ? Math.max(0, rt.spec.cruiseAltM * (dGoal / 1.5)) : rt.spec.cruiseAltM;
+        rt.alt =
+          dGoal < 1.5 && rt.mode === "cruise"
+            ? Math.max(0, rt.spec.cruiseAltM * (dGoal / 1.5))
+            : rt.spec.cruiseAltM;
       }
 
       // arrival
-      if (rt.mode === 'rtl' && haversineKm({ lat: rt.lat, lon: rt.lon }, station) < ARRIVE_KM) {
-        rt.mode = 'crashed';
+      if (
+        rt.mode === "rtl" &&
+        haversineKm({ lat: rt.lat, lon: rt.lon }, station) < ARRIVE_KM
+      ) {
+        rt.mode = "crashed";
         rt.alt = 0;
-      } else if (rt.mode === 'cruise' && haversineKm({ lat: rt.lat, lon: rt.lon }, rt.spec.target) < ARRIVE_KM) {
-        rt.mode = 'arrived';
-        rt.fate = 'struck';
+      } else if (
+        rt.mode === "cruise" &&
+        haversineKm({ lat: rt.lat, lon: rt.lon }, rt.spec.target) < ARRIVE_KM
+      ) {
+        rt.mode = "arrived";
+        rt.fate = "struck";
         rt.alt = 0;
       }
     }
@@ -562,7 +640,7 @@ export class SimController {
           return 6;
         }, false),
       },
-      properties: { kind: 'sim-burst', sim: true },
+      properties: { kind: "sim-burst", sim: true },
     });
   }
 
@@ -572,9 +650,13 @@ export class SimController {
       this.ds.entities.add({
         id: route.id,
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(route.points.flatMap((p) => [p.lon, p.lat])),
+          positions: Cesium.Cartesian3.fromDegreesArray(
+            route.points.flatMap((p) => [p.lon, p.lat]),
+          ),
           width: 1.5,
-          material: new Cesium.ColorMaterialProperty(Cesium.Color.fromCssColorString(route.color).withAlpha(0.28)),
+          material: new Cesium.ColorMaterialProperty(
+            Cesium.Color.fromCssColorString(route.color).withAlpha(0.28),
+          ),
           clampToGround: true,
         },
       });
@@ -592,7 +674,10 @@ export class SimController {
           scale: 1.0,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 60_000_000),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+            0,
+            60_000_000,
+          ),
         },
         ellipse: {
           semiMajorAxis: def.rangeKm * 1000,
@@ -604,33 +689,43 @@ export class SimController {
         },
         label: labelFor(def.name),
         name: def.name,
-        properties: { kind: 'sim-defense', sim: true },
+        properties: { kind: "sim-defense", sim: true },
       });
     }
     if (plan.impact) {
       const im = plan.impact;
       const appearT = plan.durationSec * 0.85;
-      const red = Cesium.Color.fromCssColorString('#ef4444');
+      const red = Cesium.Color.fromCssColorString("#ef4444");
       this.ds.entities.add({
-        id: 'sim:impact',
+        id: "sim:impact",
         position: Cesium.Cartesian3.fromDegrees(im.lon, im.lat),
         ellipse: {
           semiMajorAxis: im.radiusKm * 1000,
           semiMinorAxis: im.radiusKm * 1000,
-          material: new Cesium.ColorMaterialProperty(red.withAlpha(0.05 + 0.2 * im.severity)),
+          material: new Cesium.ColorMaterialProperty(
+            red.withAlpha(0.05 + 0.2 * im.severity),
+          ),
           outline: true,
           outlineColor: red.withAlpha(0.6),
           height: 0,
-          show: new Cesium.CallbackProperty(() => this.simTime >= appearT, false),
+          show: new Cesium.CallbackProperty(
+            () => this.simTime >= appearT,
+            false,
+          ),
         },
-        properties: { kind: 'sim-impact', sim: true },
+        properties: { kind: "sim-impact", sim: true },
       });
     }
   }
 
   private drawJammers(plan: SimPlan): void {
     for (const j of plan.jammers ?? []) {
-      const css = j.kind === 'gnss' ? '#a855f7' : j.kind === 'both' ? '#e25bef' : '#f97316';
+      const css =
+        j.kind === "gnss"
+          ? "#a855f7"
+          : j.kind === "both"
+            ? "#e25bef"
+            : "#f97316";
       const c = Cesium.Color.fromCssColorString(css);
       this.ds.entities.add({
         id: `${j.id}:zone`,
@@ -643,9 +738,20 @@ export class SimController {
           outlineColor: c.withAlpha(0.55),
           height: 0,
         },
-        point: { color: c, pixelSize: 7, outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
-        label: labelFor(j.kind === 'gnss' ? 'GNSS jam' : j.kind === 'both' ? 'EW' : 'comms jam'),
-        properties: { kind: 'sim-jammer', sim: true },
+        point: {
+          color: c,
+          pixelSize: 7,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 1,
+        },
+        label: labelFor(
+          j.kind === "gnss"
+            ? "GNSS jam"
+            : j.kind === "both"
+              ? "EW"
+              : "comms jam",
+        ),
+        properties: { kind: "sim-jammer", sim: true },
       });
     }
   }
@@ -653,32 +759,40 @@ export class SimController {
   private drawStation(plan: SimPlan): void {
     if (!plan.station || !plan.agents?.length) return;
     // Comms range ring for RF links (skip autonomous/fiber).
-    const rf = plan.agents.find((a) => a.profile.type === 'rf_los' || a.profile.type === 'rf_satcom');
+    const rf = plan.agents.find(
+      (a) => a.profile.type === "rf_los" || a.profile.type === "rf_satcom",
+    );
     const station = plan.station;
     this.ds.entities.add({
-      id: 'sim:station',
+      id: "sim:station",
       position: Cesium.Cartesian3.fromDegrees(station.lon, station.lat),
       billboard: {
-        image: icons.groundUnit('#38bdf8'),
+        image: icons.groundUnit("#38bdf8"),
         scale: 1.0,
         verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 60_000_000),
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+          0,
+          60_000_000,
+        ),
       },
       ...(rf && Number.isFinite(rf.profile.commsRangeKm)
         ? {
             ellipse: {
               semiMajorAxis: rf.profile.commsRangeKm * 1000,
               semiMinorAxis: rf.profile.commsRangeKm * 1000,
-              material: new Cesium.ColorMaterialProperty(Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.04)),
+              material: new Cesium.ColorMaterialProperty(
+                Cesium.Color.fromCssColorString("#38bdf8").withAlpha(0.04),
+              ),
               outline: true,
-              outlineColor: Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.4),
+              outlineColor:
+                Cesium.Color.fromCssColorString("#38bdf8").withAlpha(0.4),
               height: 0,
             },
           }
         : {}),
-      label: labelFor('GCS'),
-      name: 'Control station',
-      properties: { kind: 'sim-station', sim: true },
+      label: labelFor("GCS"),
+      name: "Control station",
+      properties: { kind: "sim-station", sim: true },
     });
   }
 
@@ -772,12 +886,12 @@ export class SimController {
     let linkLost = 0;
     let degraded = 0;
     for (const rt of this.agents) {
-      if (rt.fate === 'struck') struck++;
-      else if (rt.fate === 'intercepted') intercepted++;
-      else if (rt.fate === 'ew_lost') linkLost++;
+      if (rt.fate === "struck") struck++;
+      else if (rt.fate === "intercepted") intercepted++;
+      else if (rt.fate === "ew_lost") linkLost++;
       else {
         airborne++;
-        if (rt.link === 'degraded') degraded++;
+        if (rt.link === "degraded") degraded++;
       }
     }
     return { airborne, struck, intercepted, linkLost, degraded };

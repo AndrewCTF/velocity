@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "../transport/http.js";
 
 export interface WatchOfficerEvidence {
   domain: string;
@@ -8,7 +8,7 @@ export interface WatchOfficerEvidence {
   lon: number;
   lat: number;
   ref?: string;
-  kind?: 'measured' | 'inferred';
+  kind?: "measured" | "inferred";
   basis?: string;
 }
 
@@ -16,7 +16,7 @@ export interface WatchOfficerBrief {
   id: string;
   key: string;
   created: number;
-  threat_level: 'high' | 'elevated' | 'low' | string;
+  threat_level: "high" | "elevated" | "low" | string;
   domains: string[];
   centroid: { lon?: number; lat?: number };
   title: string;
@@ -55,7 +55,7 @@ export function useWatchOfficerStatus(): WatchOfficerStatus | null {
     let alive = true;
     const load = async (): Promise<void> => {
       try {
-        const r = await apiFetch('/api/watch-officer/status');
+        const r = await apiFetch("/api/watch-officer/status");
         if (!r.ok) return;
         const j = (await r.json()) as WatchOfficerStatus;
         if (alive) setStatus(j);
@@ -87,7 +87,7 @@ export function useWatchOfficerBriefs(): {
     let alive = true;
     const load = async (): Promise<void> => {
       try {
-        const r = await apiFetch('/api/watch-officer/briefs');
+        const r = await apiFetch("/api/watch-officer/briefs");
         if (!r.ok) return;
         const j = (await r.json()) as { briefs?: WatchOfficerBrief[] };
         if (alive) setBriefs(j.briefs ?? []);
@@ -103,13 +103,16 @@ export function useWatchOfficerBriefs(): {
     };
   }, []);
 
-  const triage = useCallback((id: string, verb: 'dismiss' | 'ack'): void => {
+  const triage = useCallback((id: string, verb: "dismiss" | "ack"): void => {
     setBriefs((bs) => bs.filter((b) => b.id !== id));
-    void apiFetch(`/api/watch-officer/briefs/${encodeURIComponent(id)}/${verb}`, { method: 'POST' });
+    void apiFetch(
+      `/api/watch-officer/briefs/${encodeURIComponent(id)}/${verb}`,
+      { method: "POST" },
+    );
   }, []);
 
-  const dismiss = useCallback((id: string) => triage(id, 'dismiss'), [triage]);
-  const ack = useCallback((id: string) => triage(id, 'ack'), [triage]);
+  const dismiss = useCallback((id: string) => triage(id, "dismiss"), [triage]);
+  const ack = useCallback((id: string) => triage(id, "ack"), [triage]);
 
   return { briefs, dismiss, ack };
 }
@@ -127,12 +130,17 @@ export interface BriefElaboration {
  *  null on any failure — the caller shows the brief without elaboration. 409
  *  means selection inference is off; surfaced as a typed sentinel so the UI can
  *  prompt the operator to enable it rather than silently doing nothing. */
-export async function elaborateBrief(id: string): Promise<BriefElaboration | 'disabled' | null> {
+export async function elaborateBrief(
+  id: string,
+): Promise<BriefElaboration | "disabled" | null> {
   try {
-    const r = await apiFetch(`/api/watch-officer/briefs/${encodeURIComponent(id)}/elaborate`, {
-      method: 'POST',
-    });
-    if (r.status === 409) return 'disabled';
+    const r = await apiFetch(
+      `/api/watch-officer/briefs/${encodeURIComponent(id)}/elaborate`,
+      {
+        method: "POST",
+      },
+    );
+    if (r.status === 409) return "disabled";
     if (!r.ok) return null;
     return (await r.json()) as BriefElaboration;
   } catch {

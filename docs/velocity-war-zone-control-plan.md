@@ -3,7 +3,7 @@
 ## Context
 
 The globe shows conflict as point events (GDELT via `AreaAdapter` / `conflict.py`), but
-not *territory*: who controls what, where the front line runs, contested ground. That is
+not _territory_: who controls what, where the front line runs, contested ground. That is
 the biggest gap vs Palantir Gotham's COP. Operator wants filled controlled areas with 45°
 hatch stripes, front lines as solid (confirmed) / dotted (contested) polylines, faction
 colors, labels, and current conditions.
@@ -32,7 +32,9 @@ tab, App.tsx:168).
 ## Build new (isolated, touches no guarded path)
 
 ### 1. `apps/web/src/state/controlStore.ts` (or `situations/controlStore.ts`)
+
 Mirror annotationStore. Types:
+
 - `Faction { id; name; color }` — default set (Blue `#38bdf8`, Red `#ef4444`, plus operator-added).
 - `ControlZone { id; factionId; status: 'controlled'|'contested'; label?; conditions?; ring: [lon,lat][]; asOf? }`
 - `FrontLine { id; label?; status: 'confirmed'|'contested'; coords: [lon,lat][] }`
@@ -43,6 +45,7 @@ Mirror annotationStore. Types:
   LineString/MultiLineString → front lines. Lenient; unmatched props default sensibly.
 
 ### 2. `apps/web/src/globe/hatch.ts`
+
 `hatchMaterial(cssColor, dense=false): Cesium.ImageMaterialProperty` — Cesium has NO 45°
 stripe material, so draw a small canvas (e.g. 12×12) with diagonal stripes in the color
 over transparent, return `new Cesium.ImageMaterialProperty({ image: canvas, repeat, transparent: true })`.
@@ -50,7 +53,9 @@ Cache by `color|dense`. `contested` uses denser stripes. <!-- ponytail: canvas t
 GLSL shader, no dep. -->
 
 ### 3. `apps/web/src/globe/ControlLayer.ts`
+
 `installControl(viewer)` mirroring `installAnnotations`. `CustomDataSource '__control'`:
+
 - Zone → polygon: `hierarchy` from ring, `material: hatchMaterial(faction.color, status==='contested')`,
   `outline`, `outlineColor` faction color, `classificationType: TERRAIN`; centroid label
   (faction name + label + conditions).
@@ -59,6 +64,7 @@ GLSL shader, no dep. -->
 - Rebuild on `useControl.subscribe`. Mount in GlobeCanvas.tsx next to `installAnnotations`.
 
 ### 4. `apps/web/src/situations/ControlSection.tsx`
+
 Mounted in `SituationsPanel`. Widget "Territorial control": faction picker (+ add faction
 color), status toggle (controlled/contested · confirmed/contested), label + conditions
 inputs, Draw zone / Draw line buttons (via `getDrawController`), Import GeoJSON (textarea

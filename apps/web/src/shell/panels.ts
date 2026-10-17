@@ -20,42 +20,69 @@
  *  list it was guarding. Freezing it here is the point: this is the record of
  *  what must not be lost, and it must not shrink as the migration proceeds. */
 export const LEGACY_LEFT = [
-  'layers', 'search-objects', 'feeds', 'ops', 'watch', 'annotate', 'inbox',
-  'answers', 'imagery', 'chokepoints', 'acars', 'extract', 'countries',
-  'allsources', 'filters', 'field', 'tasking', 'cop',
+  "layers",
+  "search-objects",
+  "feeds",
+  "ops",
+  "watch",
+  "annotate",
+  "inbox",
+  "answers",
+  "imagery",
+  "chokepoints",
+  "acars",
+  "extract",
+  "countries",
+  "allsources",
+  "filters",
+  "field",
+  "tasking",
+  "cop",
 ] as const;
 export const LEGACY_RIGHT = [
-  'selection', 'investigation', 'collab', 'filters', 'alerts', 'intel',
-  'news', 'ground', 'field',
+  "selection",
+  "investigation",
+  "collab",
+  "filters",
+  "alerts",
+  "intel",
+  "news",
+  "ground",
+  "field",
 ] as const;
 
 export type Home =
-  | { kind: 'panel'; panel: LeftPanelId | RightPanelId } // merged into a named panel
-  | { kind: 'tool'; tool: string } // it was a map tool wearing a panel
-  | { kind: 'app'; app: string } // it was an app wearing a panel
-  | { kind: 'titlebar'; slot: string } // it belongs in the window chrome
-  | { kind: 'redundant'; with: string }; // another surface already did this
+  | { kind: "panel"; panel: LeftPanelId | RightPanelId } // merged into a named panel
+  | { kind: "tool"; tool: string } // it was a map tool wearing a panel
+  | { kind: "app"; app: string } // it was an app wearing a panel
+  | { kind: "titlebar"; slot: string } // it belongs in the window chrome
+  | { kind: "redundant"; with: string }; // another surface already did this
 
-export type LeftPanelId = 'layers' | 'find' | 'histogram' | 'info';
+export type LeftPanelId = "layers" | "find" | "histogram" | "info";
 // `time` was declared here and never wired. The TimeDock owns playback, the
 // multiplier and the scrub range, and `useTime` holds no window a second
 // surface could own without inventing one — so a Time-selection tab would
 // either repeat the dock or fabricate state. Declaring a panel the shell can
 // never fill is the same defect as a tab that does nothing, one level up, so
 // the declaration is gone rather than left as an intention. (2026-08-05)
-export type RightPanelId = 'selection' | 'series';
+export type RightPanelId = "selection" | "series";
 
-export const LEFT_PANELS: ReadonlyArray<{ id: LeftPanelId; label: string; key: string }> = [
-  { id: 'layers', label: 'Layers', key: '1' },
-  { id: 'find', label: 'Find', key: '2' },
-  { id: 'histogram', label: 'Histogram', key: '3' },
-  { id: 'info', label: 'Info', key: '4' },
+export const LEFT_PANELS: ReadonlyArray<{
+  id: LeftPanelId;
+  label: string;
+  key: string;
+}> = [
+  { id: "layers", label: "Layers", key: "1" },
+  { id: "find", label: "Find", key: "2" },
+  { id: "histogram", label: "Histogram", key: "3" },
+  { id: "info", label: "Info", key: "4" },
 ];
 
-export const RIGHT_PANELS: ReadonlyArray<{ id: RightPanelId; label: string }> = [
-  { id: 'selection', label: 'Selection' },
-  { id: 'series', label: 'Series' },
-];
+export const RIGHT_PANELS: ReadonlyArray<{ id: RightPanelId; label: string }> =
+  [
+    { id: "selection", label: "Selection" },
+    { id: "series", label: "Series" },
+  ];
 
 /** Every old rail id, and where it lives now. Exhaustive by construction: the
  *  test asserts this covers the old registries with nothing left over. */
@@ -63,31 +90,34 @@ export const REHOMED: Readonly<Record<string, Home>> = {
   // ── left rail, 18 ────────────────────────────────────────────────────────
   // The curated catalog and the raw registry rail were two views of ONE thing.
   // Operator: "some of them are even redundant like the landing layers tab".
-  layers: { kind: 'panel', panel: 'layers' },
-  allsources: { kind: 'redundant', with: 'Layers, which gains a curated/all toggle' },
-  'search-objects': { kind: 'panel', panel: 'find' },
-  filters: { kind: 'panel', panel: 'histogram' },
+  layers: { kind: "panel", panel: "layers" },
+  allsources: {
+    kind: "redundant",
+    with: "Layers, which gains a curated/all toggle",
+  },
+  "search-objects": { kind: "panel", panel: "find" },
+  filters: { kind: "panel", panel: "histogram" },
   // "What is the system doing" is one question, and it had four answers.
-  feeds: { kind: 'panel', panel: 'info' },
-  ops: { kind: 'panel', panel: 'info' },
-  acars: { kind: 'panel', panel: 'info' },
-  chokepoints: { kind: 'panel', panel: 'info' },
+  feeds: { kind: "panel", panel: "info" },
+  ops: { kind: "panel", panel: "info" },
+  acars: { kind: "panel", panel: "info" },
+  chokepoints: { kind: "panel", panel: "info" },
   // These were never panels. They are things you do TO the map.
-  annotate: { kind: 'tool', tool: 'annotate' },
-  watch: { kind: 'tool', tool: 'watchbox' },
-  field: { kind: 'tool', tool: 'field' },
+  annotate: { kind: "tool", tool: "annotate" },
+  watch: { kind: "tool", tool: "watchbox" },
+  field: { kind: "tool", tool: "field" },
   // These were whole workflows squeezed into a 300px flyout.
-  imagery: { kind: 'app', app: 'video' },
-  extract: { kind: 'app', app: 'investigate' },
-  tasking: { kind: 'app', app: 'decide' },
+  imagery: { kind: "app", app: "video" },
+  extract: { kind: "app", app: "investigate" },
+  tasking: { kind: "app", app: "decide" },
   // Already an app, twice over.
-  countries: { kind: 'redundant', with: 'the Country app' },
-  answers: { kind: 'redundant', with: 'the AI app' },
-  cop: { kind: 'redundant', with: 'the COP workspace mode' },
-  inbox: { kind: 'titlebar', slot: 'inbox' },
+  countries: { kind: "redundant", with: "the Country app" },
+  answers: { kind: "redundant", with: "the AI app" },
+  cop: { kind: "redundant", with: "the COP workspace mode" },
+  inbox: { kind: "titlebar", slot: "inbox" },
 
   // ── right rail, 9 ────────────────────────────────────────────────────────
-  selection: { kind: 'panel', panel: 'selection' },
+  selection: { kind: "panel", panel: "selection" },
   // Recorded as "a section of the dossier" in the first pass, which was wrong:
   // IntelPanel takes no selection. It is the theatre rollup — the incident
   // brief, dark-vessel candidates, GPS-jamming clusters and the AOI watch — and
@@ -96,12 +126,15 @@ export const REHOMED: Readonly<Record<string, Home>> = {
   // and the standing-detection rollup from the old Ops panel, so this is the
   // fourth section of that panel rather than a fifth tab. (2026-08-05; the
   // wrong record is why it sat in the More parking lot instead of anywhere.)
-  intel: { kind: 'panel', panel: 'info' },
-  investigation: { kind: 'redundant', with: 'the Graph app' },
-  news: { kind: 'redundant', with: 'Reports, which already has a News tab' },
-  ground: { kind: 'redundant', with: 'Video, which already has a Ground recon tab' },
-  collab: { kind: 'titlebar', slot: 'share' },
-  alerts: { kind: 'titlebar', slot: 'alerts' },
+  intel: { kind: "panel", panel: "info" },
+  investigation: { kind: "redundant", with: "the Graph app" },
+  news: { kind: "redundant", with: "Reports, which already has a News tab" },
+  ground: {
+    kind: "redundant",
+    with: "Video, which already has a Ground recon tab",
+  },
+  collab: { kind: "titlebar", slot: "share" },
+  alerts: { kind: "titlebar", slot: "alerts" },
   // `filters` and `field` appear in BOTH rails in the old shell; the left-rail
   // entries above are their single home now.
 };
@@ -119,15 +152,15 @@ export function describeHome(id: string): string {
   const h = REHOMED[id];
   if (!h) return `${id} has no recorded home`;
   switch (h.kind) {
-    case 'panel':
+    case "panel":
       return `${id} → the ${h.panel} panel`;
-    case 'tool':
+    case "tool":
       return `${id} → the ${h.tool} map tool`;
-    case 'app':
+    case "app":
       return `${id} → the ${h.app} app`;
-    case 'titlebar':
+    case "titlebar":
       return `${id} → the title bar (${h.slot})`;
-    case 'redundant':
+    case "redundant":
       return `${id} → removed, superseded by ${h.with}`;
   }
 }

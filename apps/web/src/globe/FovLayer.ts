@@ -1,6 +1,6 @@
-import * as Cesium from 'cesium';
-import { create } from 'zustand';
-import { useSelection } from '../state/stores.js';
+import * as Cesium from "cesium";
+import { create } from "zustand";
+import { useSelection } from "../state/stores.js";
 
 // Field-of-view footprint for the selected satellite or aircraft, with optional
 // boresight lines from the platform down to the footprint edge.
@@ -35,8 +35,8 @@ export const useFov = create<FovState>((set) => ({
 // a notional camera cone.
 const SAT_HALF_DEG = 5;
 const AIR_HALF_DEG = 20;
-const SAT_FILL = Cesium.Color.fromCssColorString('#7dd3fc'); // cyan — real
-const AIR_FILL = Cesium.Color.fromCssColorString('#f59e0b'); // amber — notional
+const SAT_FILL = Cesium.Color.fromCssColorString("#7dd3fc"); // cyan — real
+const AIR_FILL = Cesium.Color.fromCssColorString("#f59e0b"); // amber — notional
 const N_LINES = 8;
 
 interface Footprint {
@@ -48,14 +48,21 @@ interface Footprint {
   isSat: boolean;
 }
 
-function destPoint(lat: number, lon: number, rKm: number, th: number): Cesium.Cartesian3 {
+function destPoint(
+  lat: number,
+  lon: number,
+  rKm: number,
+  th: number,
+): Cesium.Cartesian3 {
   const dLatDeg = (rKm / 110.574) * Math.cos(th);
-  const dLonDeg = (rKm / (111.32 * Math.max(0.01, Math.cos((lat * Math.PI) / 180)))) * Math.sin(th);
+  const dLonDeg =
+    (rKm / (111.32 * Math.max(0.01, Math.cos((lat * Math.PI) / 180)))) *
+    Math.sin(th);
   return Cesium.Cartesian3.fromDegrees(lon + dLonDeg, lat + dLatDeg, 0);
 }
 
 export function installFov(viewer: Cesium.Viewer): () => void {
-  const ds = new Cesium.CustomDataSource('__fov');
+  const ds = new Cesium.CustomDataSource("__fov");
   viewer.dataSources.add(ds);
 
   let entityRef: Cesium.Entity | null = null;
@@ -63,9 +70,10 @@ export function installFov(viewer: Cesium.Viewer): () => void {
 
   const isSatEntity = (e: Cesium.Entity, heightM: number): boolean => {
     const k = (
-      e.properties as unknown as { kind?: { getValue?: () => unknown } } | undefined
+      e.properties as unknown as
+        { kind?: { getValue?: () => unknown } } | undefined
     )?.kind?.getValue?.();
-    if (typeof k === 'string') return k === 'satellite';
+    if (typeof k === "string") return k === "satellite";
     return heightM > 80_000;
   };
 
@@ -90,14 +98,22 @@ export function installFov(viewer: Cesium.Viewer): () => void {
     };
   };
 
-  const active = (): boolean => useFov.getState().enabled && footprint() != null;
-  const fillFor = (isSat: boolean): Cesium.Color => (isSat ? SAT_FILL : AIR_FILL);
+  const active = (): boolean =>
+    useFov.getState().enabled && footprint() != null;
+  const fillFor = (isSat: boolean): Cesium.Color =>
+    isSat ? SAT_FILL : AIR_FILL;
 
   // Footprint disc on the ground, glued to the sub-satellite/sub-aircraft point.
-  const subPos = new Cesium.CallbackPositionProperty(() => footprint()?.sub, false);
-  const radius = new Cesium.CallbackProperty(() => footprint()?.radiusM ?? 0, false);
+  const subPos = new Cesium.CallbackPositionProperty(
+    () => footprint()?.sub,
+    false,
+  );
+  const radius = new Cesium.CallbackProperty(
+    () => footprint()?.radiusM ?? 0,
+    false,
+  );
   ds.entities.add({
-    id: '__fov__disc',
+    id: "__fov__disc",
     position: subPos,
     ellipse: {
       semiMajorAxis: radius,
@@ -115,12 +131,15 @@ export function installFov(viewer: Cesium.Viewer): () => void {
       ) as unknown as Cesium.Color,
       outlineWidth: 2,
       height: 0,
-      show: new Cesium.CallbackProperty(() => active(), false) as unknown as boolean,
+      show: new Cesium.CallbackProperty(
+        () => active(),
+        false,
+      ) as unknown as boolean,
     },
     label: {
       text: new Cesium.CallbackProperty(() => {
         const f = footprint();
-        if (!f) return '';
+        if (!f) return "";
         const km = (f.radiusM / 1000) * 2;
         const half = f.isSat ? SAT_HALF_DEG : AIR_HALF_DEG;
         return f.isSat
@@ -129,16 +148,20 @@ export function installFov(viewer: Cesium.Viewer): () => void {
       }, false) as unknown as string,
       font: 'bold 11px "IBM Plex Mono", monospace',
       fillColor: Cesium.Color.WHITE,
-      outlineColor: Cesium.Color.fromCssColorString('#05070b'),
+      outlineColor: Cesium.Color.fromCssColorString("#05070b"),
       outlineWidth: 3,
       style: Cesium.LabelStyle.FILL_AND_OUTLINE,
       showBackground: true,
-      backgroundColor: Cesium.Color.fromCssColorString('#05070b').withAlpha(0.7),
+      backgroundColor:
+        Cesium.Color.fromCssColorString("#05070b").withAlpha(0.7),
       pixelOffset: new Cesium.Cartesian2(0, -16),
       verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
       // Depth-tested so the globe occludes the FOV label on the far side
       // instead of it bleeding through the opposite hemisphere.
-      show: new Cesium.CallbackProperty(() => active(), false) as unknown as boolean,
+      show: new Cesium.CallbackProperty(
+        () => active(),
+        false,
+      ) as unknown as boolean,
     },
   });
 
@@ -162,7 +185,10 @@ export function installFov(viewer: Cesium.Viewer): () => void {
           ),
         ),
         arcType: Cesium.ArcType.NONE,
-        show: new Cesium.CallbackProperty(() => linesActive(), false) as unknown as boolean,
+        show: new Cesium.CallbackProperty(
+          () => linesActive(),
+          false,
+        ) as unknown as boolean,
       },
     });
   }
@@ -170,7 +196,7 @@ export function installFov(viewer: Cesium.Viewer): () => void {
   const findEntity = (id: string): Cesium.Entity | undefined => {
     for (let i = 0; i < viewer.dataSources.length; i++) {
       const d = viewer.dataSources.get(i);
-      if (d.name === '__fov') continue;
+      if (d.name === "__fov") continue;
       const e = d.entities.getById(id);
       if (e) return e;
     }
@@ -180,12 +206,14 @@ export function installFov(viewer: Cesium.Viewer): () => void {
   const updateTarget = (id: string | null): void => {
     if (id === currentId) return;
     currentId = id;
-    entityRef = id ? findEntity(id) ?? null : null;
+    entityRef = id ? (findEntity(id) ?? null) : null;
     viewer.scene.requestRender();
   };
 
   updateTarget(useSelection.getState().selectedEntityId);
-  const unsubSel = useSelection.subscribe((s) => updateTarget(s.selectedEntityId));
+  const unsubSel = useSelection.subscribe((s) =>
+    updateTarget(s.selectedEntityId),
+  );
   const unsubFov = useFov.subscribe(() => viewer.scene.requestRender());
 
   // Keep the footprint glued to a moving platform under requestRenderMode.

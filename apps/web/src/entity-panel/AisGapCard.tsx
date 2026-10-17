@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Widget, Caveat } from '../shell/instruments.js';
-import { apiFetch } from '../transport/http.js';
+import { useEffect, useState } from "react";
+import { Widget, Caveat } from "../shell/instruments.js";
+import { apiFetch } from "../transport/http.js";
 
 // Real AIS-gap list for the selected vessel — sourced from the dossier's
 // track-reconstruction (app/intel/dossier.py _track_stats: any >10 min hole
@@ -40,17 +40,23 @@ interface GapState {
 }
 
 function fmtUtc(epochS: number): string {
-  return new Date(epochS * 1000).toISOString().slice(11, 19) + 'Z';
+  return new Date(epochS * 1000).toISOString().slice(11, 19) + "Z";
 }
 
-export function AisGapCard({ mmsi }: { mmsi: string | null | undefined }): JSX.Element | null {
+export function AisGapCard({
+  mmsi,
+}: {
+  mmsi: string | null | undefined;
+}): JSX.Element | null {
   const [state, setState] = useState<GapState | null>(null);
 
   useEffect(() => {
     setState(null);
     if (!mmsi) return;
     const ab = new AbortController();
-    apiFetch(`/api/intel/dossier/vessel/${encodeURIComponent(mmsi)}`, { signal: ab.signal })
+    apiFetch(`/api/intel/dossier/vessel/${encodeURIComponent(mmsi)}`, {
+      signal: ab.signal,
+    })
       .then((r) => (r.ok ? (r.json() as Promise<DossierResponse>) : null))
       .then((j) => {
         if (ab.signal.aborted) return;
@@ -60,9 +66,12 @@ export function AisGapCard({ mmsi }: { mmsi: string | null | undefined }): JSX.E
         }
         const requestedS = j.window_requested_s;
         const availableTs = j.window_available_from_ts;
-        const availableS = availableTs != null ? Date.now() / 1000 - availableTs : null;
+        const availableS =
+          availableTs != null ? Date.now() / 1000 - availableTs : null;
         const shortened =
-          requestedS != null && availableS != null && availableS < requestedS - SHORTENED_MARGIN_S;
+          requestedS != null &&
+          availableS != null &&
+          availableS < requestedS - SHORTENED_MARGIN_S;
         setState({
           gaps: j.track?.gaps ?? [],
           shortened,
@@ -70,7 +79,8 @@ export function AisGapCard({ mmsi }: { mmsi: string | null | undefined }): JSX.E
         });
       })
       .catch(() => {
-        if (!ab.signal.aborted) setState({ gaps: [], shortened: false, availableHours: 0 });
+        if (!ab.signal.aborted)
+          setState({ gaps: [], shortened: false, availableHours: 0 });
       });
     return () => ab.abort();
   }, [mmsi]);
@@ -81,14 +91,20 @@ export function AisGapCard({ mmsi }: { mmsi: string | null | undefined }): JSX.E
   // window is SHORTENED, render even with zero gaps — otherwise "no gaps
   // shown" silently reads as "no gaps existed" when the store simply never
   // held that far back.
-  if (!mmsi || !state || (state.gaps.length === 0 && !state.shortened)) return null;
+  if (!mmsi || !state || (state.gaps.length === 0 && !state.shortened))
+    return null;
 
   return (
     <Widget title="AIS gaps" count={state.gaps.length}>
-      <Caveat level="SOURCED" note="from the recorded track, not estimated" tone="neutral" />
+      <Caveat
+        level="SOURCED"
+        note="from the recorded track, not estimated"
+        tone="neutral"
+      />
       {state.shortened && (
         <div className="mono text-[10px] text-warn mt-1">
-          Gaps within available history · last {state.availableHours.toFixed(1)} h
+          Gaps within available history · last {state.availableHours.toFixed(1)}{" "}
+          h
         </div>
       )}
       {state.gaps.length > 0 && (

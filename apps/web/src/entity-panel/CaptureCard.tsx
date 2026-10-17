@@ -3,12 +3,12 @@
 // or a ground pano. Shows the frame thumbnail, the detected class counts, source
 // provenance + capture time, and an "unpin" action. Reuses the shared detection
 // colours/counts (ground/detectionOverlay).
-import { useEffect, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
-import { colorFor, detCounts } from '../ground/detectionOverlay.js';
-import type { GroundDetection } from '../ground/types.js';
-import { Btn, MicroLabel } from '../shell/instruments.js';
-import { useCaptures } from '../state/captures.js';
+import { useEffect, useState } from "react";
+import { apiFetch } from "../transport/http.js";
+import { colorFor, detCounts } from "../ground/detectionOverlay.js";
+import type { GroundDetection } from "../ground/types.js";
+import { Btn, MicroLabel } from "../shell/instruments.js";
+import { useCaptures } from "../state/captures.js";
 
 interface CaptureSnap {
   id: string;
@@ -18,7 +18,7 @@ interface CaptureSnap {
 }
 
 function ago(ms: number): string {
-  if (!ms) return '—';
+  if (!ms) return "—";
   const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
@@ -27,7 +27,13 @@ function ago(ms: number): string {
 
 // Live thumbnail: cams go through the auth'd snapshot proxy (blob→objectURL),
 // ground panos are already a same-origin proxied url.
-function Thumb({ camId, photoUrl }: { camId: string; photoUrl: string }): JSX.Element | null {
+function Thumb({
+  camId,
+  photoUrl,
+}: {
+  camId: string;
+  photoUrl: string;
+}): JSX.Element | null {
   const [src, setSrc] = useState<string | null>(photoUrl || null);
   useEffect(() => {
     if (!camId) return;
@@ -35,7 +41,9 @@ function Thumb({ camId, photoUrl }: { camId: string; photoUrl: string }): JSX.El
     let url: string | null = null;
     void (async () => {
       try {
-        const r = await apiFetch(`/api/cams/${encodeURIComponent(camId)}/snapshot`);
+        const r = await apiFetch(
+          `/api/cams/${encodeURIComponent(camId)}/snapshot`,
+        );
         if (!r.ok || cancelled) return;
         url = URL.createObjectURL(await r.blob());
         if (!cancelled) setSrc(url);
@@ -49,18 +57,25 @@ function Thumb({ camId, photoUrl }: { camId: string; photoUrl: string }): JSX.El
     };
   }, [camId]);
   if (!src) return null;
-  return <img src={src} alt="capture frame" className="block w-full rounded-sm" draggable={false} />;
+  return (
+    <img
+      src={src}
+      alt="capture frame"
+      className="block w-full rounded-sm"
+      draggable={false}
+    />
+  );
 }
 
 export function CaptureCard({ snap }: { snap: CaptureSnap }): JSX.Element {
   const p = snap.properties;
-  const source = String(p['source'] ?? '');
-  const camId = String(p['cam_id'] ?? '');
-  const photoUrl = String(p['photo_url'] ?? '');
-  const capturedAt = Number(p['captured_at'] ?? 0);
+  const source = String(p["source"] ?? "");
+  const camId = String(p["cam_id"] ?? "");
+  const photoUrl = String(p["photo_url"] ?? "");
+  const capturedAt = Number(p["captured_at"] ?? 0);
   let dets: GroundDetection[] = [];
   try {
-    dets = JSON.parse(String(p['dets_json'] ?? '[]')) as GroundDetection[];
+    dets = JSON.parse(String(p["dets_json"] ?? "[]")) as GroundDetection[];
   } catch {
     /* malformed → none */
   }
@@ -71,9 +86,13 @@ export function CaptureCard({ snap }: { snap: CaptureSnap }): JSX.Element {
     <div className="rounded-sm border border-line-2 bg-bg-1 p-2">
       <div className="mb-1 flex items-center justify-between">
         <span className="mono text-[10px] uppercase tracking-[0.7px] text-accent">
-          capture · {source || 'obs'}
+          capture · {source || "obs"}
         </span>
-        <Btn size="sm" tone="neutral" onClick={() => useCaptures.getState().remove(snap.id)}>
+        <Btn
+          size="sm"
+          tone="neutral"
+          onClick={() => useCaptures.getState().remove(snap.id)}
+        >
           unpin
         </Btn>
       </div>
@@ -99,7 +118,9 @@ export function CaptureCard({ snap }: { snap: CaptureSnap }): JSX.Element {
       </div>
 
       <div className="mt-1.5 flex items-center justify-between mono text-[10px] text-txt-3">
-        <span>{pos ? `${pos.lat.toFixed(3)}, ${pos.lon.toFixed(3)}` : '—'}</span>
+        <span>
+          {pos ? `${pos.lat.toFixed(3)}, ${pos.lon.toFixed(3)}` : "—"}
+        </span>
         <span>YOLO · {ago(capturedAt)}</span>
       </div>
     </div>

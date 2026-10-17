@@ -17,19 +17,19 @@ for a self-hosted tool with a strong demo — Uptime Kuma, Dawarich,
 ArchiveBox, SpiderFoot (~13k) all cleared it — but not from one launch post.
 The realistic decomposition:
 
-| Source | Stars (realistic range) | When |
-|---|---|---|
-| Show HN, front page (top-10 for hours) | 800–2,500 | launch week |
-| Show HN, modest (page 2, 30–80 points) | 100–400 | launch week |
-| r/selfhosted strong post (500+ upvotes) | 150–500 | launch week |
-| r/OSINT + r/ADSB + r/homelab variants | 50–200 | weeks 1–3 |
-| GitHub Trending (daily/weekly) — triggered by launch velocity | ×1.5–2 multiplier on the wave | launch week, if >~150 stars/day |
-| awesome-selfhosted + awesome-OSINT + directory drip | 10–40/week, compounding | from week 3, indefinitely |
-| Newsletters (Self-Host Weekly, Week in OSINT, Console.dev) | 50–300 each | weeks 2–6 |
-| One YouTube review from a self-hosted channel | 100–600 | weeks 3–8 |
-| Timely case-study posts (replay of a real event) | 50–400 each | ongoing |
-| Second Show HN at a major release (new headline feature) | 300–1,200 | month 3–5 |
-| Baseline drip once >1k stars (search, similar-repo, trending residue) | 100–300/month | ongoing |
+| Source                                                                | Stars (realistic range)       | When                            |
+| --------------------------------------------------------------------- | ----------------------------- | ------------------------------- |
+| Show HN, front page (top-10 for hours)                                | 800–2,500                     | launch week                     |
+| Show HN, modest (page 2, 30–80 points)                                | 100–400                       | launch week                     |
+| r/selfhosted strong post (500+ upvotes)                               | 150–500                       | launch week                     |
+| r/OSINT + r/ADSB + r/homelab variants                                 | 50–200                        | weeks 1–3                       |
+| GitHub Trending (daily/weekly) — triggered by launch velocity         | ×1.5–2 multiplier on the wave | launch week, if >~150 stars/day |
+| awesome-selfhosted + awesome-OSINT + directory drip                   | 10–40/week, compounding       | from week 3, indefinitely       |
+| Newsletters (Self-Host Weekly, Week in OSINT, Console.dev)            | 50–300 each                   | weeks 2–6                       |
+| One YouTube review from a self-hosted channel                         | 100–600                       | weeks 3–8                       |
+| Timely case-study posts (replay of a real event)                      | 50–400 each                   | ongoing                         |
+| Second Show HN at a major release (new headline feature)              | 300–1,200                     | month 3–5                       |
+| Baseline drip once >1k stars (search, similar-repo, trending residue) | 100–300/month                 | ongoing                         |
 
 **Median path: ~1,000–1,800 stars in month 1, 5,000 around month 4–7.**
 A first-launch flop (sub-200 total) triggers the roadmap's 30-day gate:
@@ -37,8 +37,9 @@ stop building, fix positioning, relaunch. Do not spend the gate window
 adding features. Anything promising 5k in "2 weeks" involves fraud (§9).
 
 Two structural facts to exploit:
+
 1. **Velocity's demo is intrinsically viral-shaped.** A dark 3D globe with
-   20k live aircraft that *rewinds time* GIFs better than 95% of self-hosted
+   20k live aircraft that _rewinds time_ GIFs better than 95% of self-hosted
    tools (a dashboard can't do this). The GIF is the campaign.
 2. **The audiences already exist and already hate the paywalls** (FR24 7-day
    history, MarineTraffic 72h→24h cut, ADS-B Exchange API kill). The pitch
@@ -50,12 +51,13 @@ A launch post is a firehose pointed at the README for ~6 hours. Visitors
 star or bounce in ~20 seconds. Everything here is about that 20 seconds.
 
 **2.1 The funnel target.** Post → repo visit converts at 5–15%. A front-page
-HN day is 30–80k views → 5–15k repo visits → 500–1,500 stars *if the README
-lands*. Halving README quality halves the campaign. This is the highest-ROI
+HN day is 30–80k views → 5–15k repo visits → 500–1,500 stars _if the README
+lands_. Halving README quality halves the campaign. This is the highest-ROI
 work in the whole plan.
 
 **2.2 README surgery** (current README is feature-complete but depth-first;
 launch needs conversion-first):
+
 - **Above the fold:** one hero GIF (≤10 MB, 15–25 s loop): globe spins →
   zoom to a hotspot → click an aircraft → dossier opens → **scrub the
   timeline backwards, tracks rewind**. The rewind IS the differentiator —
@@ -81,6 +83,7 @@ launch needs conversion-first):
   content, wrong first impression.
 
 **2.3 Repo furniture** (GitHub's own distribution surfaces):
+
 - **Name check (decide once, before launch):** repo is
   `osint-geospatial-console`, product says "Velocity". Pick the memorable
   one, make the other a tagline. A rename after launch burns inbound links.
@@ -105,6 +108,7 @@ launch needs conversion-first):
 
 **2.4 The stranger-boot gate** (from the state-of-project audit — this is
 the launch precondition, not a parallel task):
+
 - Clean VM, fresh clone, `docker compose up`, no `.env`: globe shows
   aircraft within ~60 s. Fix what breaks.
 - The VPS/datacenter-egress case: boot on a cheap VPS, observe what a
@@ -115,10 +119,11 @@ the launch precondition, not a parallel task):
   "it's fake".
 - Decide the archive default: measure GB/day at full firehose, then either
   ship archive-mode-on with a disk budget, or keep 48 h and make the README
-  say exactly that ("unlimited *if you turn the dial*"). The pitch and the
+  say exactly that ("unlimited _if you turn the dial_"). The pitch and the
   boot must match — this community diffs claims against behavior for sport.
 
 **2.5 Asset kit** (produce once, reuse everywhere):
+
 - Hero GIF/mp4 (above) + 3 short GIFs: (a) replay scrub, (b) click→dossier
   →evidence capture, (c) dark-vessel/AIS-gap detection view.
 - 90-second silent screen-capture video with captions (YouTube unlisted —
@@ -135,7 +140,7 @@ r/OSINT, +more) and follow the right voice. Mechanics:
 
 **Day −7 to −1:** join the communities you'll post in (r/selfhosted,
 r/OSINT, Trace Labs Discord, OSINT Curious, a couple of self-hosted
-Discords) and *participate normally* — answer two or three questions,
+Discords) and _participate normally_ — answer two or three questions,
 comment on other tools. Drive-by self-promo from a fresh account is the #1
 cause of removed posts on r/selfhosted. Check each subreddit's self-promo
 rules the week of posting (r/selfhosted requires clear author-disclosure
@@ -152,8 +157,9 @@ lurkers). Do not link-drop the repo more than the post itself does.
 different thesis, not a crosspost). Same presence rules.
 
 **Day 3 or 4 (Wed/Thu) — Show HN.** 8–10 am ET (max weekday traffic window).
+
 - Title: `Show HN: Self-hosted flight/ship tracker with unlimited history
-  and replay` — concrete, no adjectives, no "AI", under 80 chars. Two
+and replay` — concrete, no adjectives, no "AI", under 80 chars. Two
   fallback titles pre-written (different angle: the paywall story; the
   "one Docker box" story).
 - URL = the GitHub repo. First comment (yours, immediately): the personal
@@ -162,17 +168,17 @@ different thesis, not a crosspost). Same presence rules.
   rewards builders who talk engineering, punishes marketing voice.
 - Stay in the thread all day. Prepared answers (write these before
   posting) for the predictable questions:
-  1. *Feed ToS/legality* — community feeds, polite pull cadences, no
+  1. _Feed ToS/legality_ — community feeds, polite pull cadences, no
      redistribution, that's why no public demo instance.
-  2. *"How is this different from FR24 / World Monitor / ADS-B Exchange?"*
+  2. _"How is this different from FR24 / World Monitor / ADS-B Exchange?"_
      — the comparison table, especially history + self-host + keyless.
-  3. *"Why is my globe empty?"* (VPS egress) — the FAQ link.
-  4. *OPSEC/misuse concerns* — serious answer: it fuses already-public
+  3. _"Why is my globe empty?"_ (VPS egress) — the FAQ link.
+  4. _OPSEC/misuse concerns_ — serious answer: it fuses already-public
      broadcasts; watch-lists stay on the user's hardware, which is the
      privacy-preserving direction.
-  5. *The AI features* — labeled, optional, local-only inference; never
+  5. _The AI features_ — labeled, optional, local-only inference; never
      auto-asserted as fact (assertion/provenance schema).
-  6. *Cesium perf on old hardware* — the low-end banner + quality presets.
+  6. _Cesium perf on old hardware_ — the low-end banner + quality presets.
 - **Do not** ask anyone to upvote, ever (HN voting-ring detection is real
   and permanent). If the post dies (<20 points): one relaunch is
   acceptable ~2 weeks later with a different title/angle; also email
@@ -187,13 +193,14 @@ Mastodon (infosec.exchange) + Bluesky thread with the replay GIF; tag
 screenshot it (asset for later posts) and expect a second wave.
 
 **All week:** respond to every issue within hours. Label the good ones
-`launch-feedback`. Ship two or three tiny fixes *during* the week and say
+`launch-feedback`. Ship two or three tiny fixes _during_ the week and say
 so in the threads ("fixed in v1.0.1") — visible momentum is the strongest
 star-converter there is.
 
 ## 4. Weeks 2–4 — directories, newsletters, reviewers
 
 **Directories** (slow, permanent, compounding — file all of them):
+
 - **awesome-selfhosted** PR (read their contributing rules: needs license,
   active maintenance, docs; put it under "Maps & GPS" or closest category).
   Expect nitpicks; comply fast.
@@ -208,6 +215,7 @@ star-converter there is.
   file early.
 
 **Newsletters** (one personalized paragraph + press kit link each):
+
 - **Self-Host Weekly / selfh.st** (submission form; high conversion for
   this exact audience).
 - **Sector035 "Week in OSINT"** — pitch as a tool note; the replay-of-a-
@@ -218,6 +226,7 @@ star-converter there is.
 
 **Reviewers** (self-hosted YouTube is the highest-variance channel: one
 video can be 500 stars):
+
 - Shortlist: DB Tech, Awesome Open Source, Techno Tim, Jim's Garage,
   Christian Lempa, Hardware Haven, NetworkChuck (long shot; the "track
   planes from your homelab" angle is his shape).
@@ -234,11 +243,12 @@ HN/Reddit channels are exhausted.
 
 One launch ≠ 5k. The compounding loop is **timely case studies using
 replay on real events** — content nobody without a local archive can make:
+
 - Template: event happens (airspace closure, naval incident, GPS-jamming
   spike, mystery drone wave) → within 24–48 h publish a 60–90 s replay GIF
-  + a 300-word "what the archive shows" write-up → post to the relevant
-  subreddit (r/OSINT, r/ADSB, r/CredibleDefense-adjacent where allowed),
-  Mastodon, Bluesky. Each carries one quiet repo link. 90% info, 10% ad.
+  - a 300-word "what the archive shows" write-up → post to the relevant
+    subreddit (r/OSINT, r/ADSB, r/CredibleDefense-adjacent where allowed),
+    Mastodon, Bluesky. Each carries one quiet repo link. 90% info, 10% ad.
 - Cadence: 1–2/month minimum; opportunistic when news breaks. These double
   as the demand research for W6 (which detector do people ask about?).
 - **Monthly release ritual:** one headline feature per month (aligned with
@@ -277,6 +287,7 @@ Funnel sanity: referrer views → uniques → stars should hold ≥5%; if a big
 referrer converts <2%, the README (not the channel) is the problem.
 
 Milestones against the median path:
+
 - Week 1: ≥400 (front-page HN) or ≥150 (modest launch). **<100 total by
   day 30 = the roadmap's gate fires: freeze features, rework positioning,
   relaunch. Do not pass the gate by adding channels.**
@@ -317,15 +328,15 @@ bearing asset in the whole plan.
 
 ## 10. Launch-week runbook (condensed)
 
-| Day | Action |
-|---|---|
-| T−7…−1 | Community participation; stranger-boot gate passes; README surgery done; assets recorded; release tagged |
-| Tue | r/selfhosted post (existing draft), all-day presence; file feedback issues |
-| Wed | r/OSINT post (its draft); fix + ship one small feedback item |
-| Wed/Thu | Show HN 8–10 am ET; first comment = builder story; all-day presence |
-| Fri | Discords + Mastodon/Bluesky thread; v1.0.1 with launch-week fixes |
-| Sat/Sun | r/ADSB / r/homelab variants if energy; weekly metrics entry #1 |
-| Week 2+ | §4 directories/newsletters/reviewers; §5 content engine starts |
+| Day     | Action                                                                                                   |
+| ------- | -------------------------------------------------------------------------------------------------------- |
+| T−7…−1  | Community participation; stranger-boot gate passes; README surgery done; assets recorded; release tagged |
+| Tue     | r/selfhosted post (existing draft), all-day presence; file feedback issues                               |
+| Wed     | r/OSINT post (its draft); fix + ship one small feedback item                                             |
+| Wed/Thu | Show HN 8–10 am ET; first comment = builder story; all-day presence                                      |
+| Fri     | Discords + Mastodon/Bluesky thread; v1.0.1 with launch-week fixes                                        |
+| Sat/Sun | r/ADSB / r/homelab variants if energy; weekly metrics entry #1                                           |
+| Week 2+ | §4 directories/newsletters/reviewers; §5 content engine starts                                           |
 
 The single sentence to keep on the monitor while doing all of it: **does
 this turn what we already see into something a stranger can run, trust,

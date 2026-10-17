@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useEvidence, type EvidenceObject } from './evidenceStore.js';
-import { useSituations } from '../situations/situationStore.js';
-import { apiFetch } from '../transport/http.js';
-import { SectionLabel, Btn, MicroLabel, Widget, Badge } from '../shell/instruments.js';
-import { toast } from '../shell/toast.js';
-import { safeHttpUrl } from '../shell/safeUrl.js';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useEvidence, type EvidenceObject } from "./evidenceStore.js";
+import { useSituations } from "../situations/situationStore.js";
+import { apiFetch } from "../transport/http.js";
+import {
+  SectionLabel,
+  Btn,
+  MicroLabel,
+  Widget,
+  Badge,
+} from "../shell/instruments.js";
+import { toast } from "../shell/toast.js";
+import { safeHttpUrl } from "../shell/safeUrl.js";
 
 // Evidence locker (roadmap P1) — chain-of-custody capture. Preserve a URL, a
 // file, or a moment of the live world as a content-addressed, hash-verified,
@@ -13,14 +19,14 @@ import { safeHttpUrl } from '../shell/safeUrl.js';
 // half of the investigation loop.
 
 const METHOD_LABEL: Record<string, string> = {
-  url: 'URL',
-  file_upload: 'file',
-  screenshot: 'screenshot',
-  feed_freeze: 'live-freeze',
+  url: "URL",
+  file_upload: "file",
+  screenshot: "screenshot",
+  feed_freeze: "live-freeze",
 };
 
 function fmtBytes(n?: number): string {
-  if (!n) return '0 B';
+  if (!n) return "0 B";
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
@@ -32,30 +38,40 @@ function fmtBytes(n?: number): string {
 // directly. The declared media_type is the uploader's claim, so the blob is also
 // re-typed to that allowlisted raster type before it becomes a URL.
 const RASTER_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/webp',
-  'image/avif',
-  'image/bmp',
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "image/bmp",
 ]);
 
 export function thumbnailType(mediaType: string | undefined): string | null {
-  const t = (mediaType ?? '').split(';')[0]!.trim().toLowerCase();
+  const t = (mediaType ?? "").split(";")[0]!.trim().toLowerCase();
   return RASTER_TYPES.has(t) ? t : null;
 }
 
 // Auth'd image thumbnail: fetch the blob through apiFetch (carries the Bearer /
 // X-API-Key) then objectURL it, so images render on a signed-in remote box too —
 // a raw <img src=/api/evidence/…/blob> can't set the auth header and would 401.
-function EvidenceThumb({ sha, alt, type }: { sha: string; alt: string; type: string }): JSX.Element | null {
+function EvidenceThumb({
+  sha,
+  alt,
+  type,
+}: {
+  sha: string;
+  alt: string;
+  type: string;
+}): JSX.Element | null {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     let url: string | null = null;
     void (async () => {
       try {
-        const r = await apiFetch(`/api/evidence/${encodeURIComponent(sha)}/blob`);
+        const r = await apiFetch(
+          `/api/evidence/${encodeURIComponent(sha)}/blob`,
+        );
         if (!r.ok || cancelled) return;
         const blob = await r.blob();
         // Re-check AFTER the blob await: if we unmounted during it, cleanup
@@ -91,15 +107,19 @@ function download(obj: EvidenceObject): void {
     try {
       const r = await apiFetch(`/api/evidence/${encodeURIComponent(sha)}/blob`);
       if (!r.ok) {
-        toast.error(r.status === 409 ? 'blob failed hash verification' : `download failed (${r.status})`);
+        toast.error(
+          r.status === 409
+            ? "blob failed hash verification"
+            : `download failed (${r.status})`,
+        );
         return;
       }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = obj.props.filename || `${sha.slice(0, 16)}`;
-      a.rel = 'noopener';
+      a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -108,7 +128,7 @@ function download(obj: EvidenceObject): void {
       // download stream has read it. Give it time, then reclaim the memory.
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch {
-      toast.error('Could not download the file. Check your connection.');
+      toast.error("Could not download the file. Check your connection.");
     }
   })();
 }
@@ -118,7 +138,7 @@ function EvidenceRow({ obj }: { obj: EvidenceObject }): JSX.Element {
   const attach = useEvidence((s) => s.attach);
   const verify = useEvidence((s) => s.verify);
   const situations = useSituations((s) => s.situations);
-  const [sit, setSit] = useState('');
+  const [sit, setSit] = useState("");
   const [verified, setVerified] = useState<boolean | null>(null);
 
   const thumbType = thumbnailType(p.media_type);
@@ -126,30 +146,46 @@ function EvidenceRow({ obj }: { obj: EvidenceObject }): JSX.Element {
   const onVerify = async (): Promise<void> => {
     const ok = await verify(p.sha256);
     setVerified(ok);
-    if (ok) toast.ok('hash verified: bytes unaltered');
-    else toast.error('hash MISMATCH: blob altered or missing');
+    if (ok) toast.ok("hash verified: bytes unaltered");
+    else toast.error("hash MISMATCH: blob altered or missing");
   };
 
   const onAttach = async (): Promise<void> => {
     if (!sit) return;
     const ok = await attach(p.sha256, sit);
-    if (ok) toast.ok('attached to case');
-    else toast.error('Could not attach to the case.');
+    if (ok) toast.ok("attached to case");
+    else toast.error("Could not attach to the case.");
   };
 
   return (
     <li className="rounded-sm border border-line bg-bg-1/70 px-2.5 py-2 space-y-1.5">
       <div className="flex items-center gap-2">
-        <Badge tone="neutral">{METHOD_LABEL[p.capture_method] ?? p.capture_method}</Badge>
-        <span className="text-[11px] text-txt-0 truncate flex-1" title={p.title ?? ''}>
+        <Badge tone="neutral">
+          {METHOD_LABEL[p.capture_method] ?? p.capture_method}
+        </Badge>
+        <span
+          className="text-[11px] text-txt-0 truncate flex-1"
+          title={p.title ?? ""}
+        >
           {p.title || p.filename || p.sha256.slice(0, 16)}
         </span>
         {verified !== null && (
-          <Badge tone={verified ? 'ok' : 'alert'}>{verified ? 'verified' : 'ALTERED'}</Badge>
+          <Badge tone={verified ? "ok" : "alert"}>
+            {verified ? "verified" : "ALTERED"}
+          </Badge>
         )}
       </div>
-      {thumbType && <EvidenceThumb sha={p.sha256} alt={p.title ?? 'evidence'} type={thumbType} />}
-      <div className="mono text-[10px] text-txt-3 break-all" title="SHA-256 (content address)">
+      {thumbType && (
+        <EvidenceThumb
+          sha={p.sha256}
+          alt={p.title ?? "evidence"}
+          type={thumbType}
+        />
+      )}
+      <div
+        className="mono text-[10px] text-txt-3 break-all"
+        title="SHA-256 (content address)"
+      >
         sha256 {p.sha256}
       </div>
       <div className="flex flex-wrap items-center gap-2 mono text-[10px] text-txt-3">
@@ -157,7 +193,12 @@ function EvidenceRow({ obj }: { obj: EvidenceObject }): JSX.Element {
         <span>{p.media_type}</span>
         {p.captured_at && <span>{p.captured_at}</span>}
         {p.source_url && (
-          <a href={safeHttpUrl(p.source_url)} target="_blank" rel="noreferrer" className="text-accent truncate max-w-[200px]">
+          <a
+            href={safeHttpUrl(p.source_url)}
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent truncate max-w-[200px]"
+          >
             {p.source_url}
           </a>
         )}
@@ -182,7 +223,12 @@ function EvidenceRow({ obj }: { obj: EvidenceObject }): JSX.Element {
             </option>
           ))}
         </select>
-        <Btn size="sm" tone="accent" disabled={!sit} onClick={() => void onAttach()}>
+        <Btn
+          size="sm"
+          tone="accent"
+          disabled={!sit}
+          onClick={() => void onAttach()}
+        >
           attach
         </Btn>
       </div>
@@ -202,13 +248,18 @@ export function EvidencePanel(): JSX.Element {
 
   const captureReplayWindow = useEvidence((s) => s.captureReplayWindow);
 
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   // A box and two moments. Defaults to "the last hour, here" so the control is
   // one click for the common case; the numbers stay editable because an
   // investigation is rarely about the last hour.
   const [win, setWin] = useState({
-    lamin: '50', lomin: '-1', lamax: '52', lomax: '1', hoursAgo: '1', windowMin: '10',
+    lamin: "50",
+    lomin: "-1",
+    lamax: "52",
+    lomax: "1",
+    hoursAgo: "1",
+    windowMin: "10",
   });
 
   useEffect(() => {
@@ -221,47 +272,55 @@ export function EvidencePanel(): JSX.Element {
     if (!u) return;
     const obj = await captureUrl(u);
     if (obj) {
-      setUrl('');
-      toast.ok('URL captured & hashed');
+      setUrl("");
+      toast.ok("URL captured & hashed");
     } else {
-      toast.error('Could not capture the URL.');
+      toast.error("Could not capture the URL.");
     }
   };
 
   const onFreezeWindow = async (): Promise<void> => {
     const num = (v: string): number => Number.parseFloat(v);
     const bbox = {
-      lamin: num(win.lamin), lomin: num(win.lomin),
-      lamax: num(win.lamax), lomax: num(win.lomax),
+      lamin: num(win.lamin),
+      lomin: num(win.lomin),
+      lamax: num(win.lamax),
+      lomax: num(win.lomax),
     };
     if (Object.values(bbox).some((n) => Number.isNaN(n))) {
-      toast.error('The box needs four numbers.');
+      toast.error("The box needs four numbers.");
       return;
     }
     const nowSec = Date.now() / 1000;
     const atA = nowSec - num(win.hoursAgo) * 3600;
     const obj = await captureReplayWindow(
-      bbox, atA, nowSec, Math.round(num(win.windowMin) * 60), null,
+      bbox,
+      atA,
+      nowSec,
+      Math.round(num(win.windowMin) * 60),
+      null,
     );
     if (obj) {
       const c = (obj.props as { counts?: Record<string, number> }).counts;
       toast.ok(
         c
           ? `window frozen · ${c.arrived} arrived, ${c.departed} departed`
-          : 'replay window frozen & hashed',
+          : "replay window frozen & hashed",
       );
     } else {
-      toast.error('Could not freeze the window.');
+      toast.error("Could not freeze the window.");
     }
   };
 
-  const onFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+  const onFile = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ): Promise<void> => {
     const f = e.target.files?.[0];
     if (!f) return;
     const obj = await upload(f);
-    if (obj) toast.ok('file captured & hashed');
-    else toast.error('Could not upload the file.');
-    if (fileRef.current) fileRef.current.value = '';
+    if (obj) toast.ok("file captured & hashed");
+    else toast.error("Could not upload the file.");
+    if (fileRef.current) fileRef.current.value = "";
   };
 
   const verifiedCount = useMemo(() => items.length, [items]);
@@ -270,9 +329,9 @@ export function EvidencePanel(): JSX.Element {
     <div className="p-3 space-y-3">
       <Widget title="Preserve evidence">
         <p className="text-[11px] text-txt-3 mb-2">
-          Every capture is content-addressed by SHA-256 at ingest and logged with an
-          append-only chain of custody. The hash is the identity; a tampered copy
-          can never masquerade as the original.
+          Every capture is content-addressed by SHA-256 at ingest and logged
+          with an append-only chain of custody. The hash is the identity; a
+          tampered copy can never masquerade as the original.
         </p>
         <div className="space-y-1.5">
           <MicroLabel>capture a URL (page/image/JSON)</MicroLabel>
@@ -282,12 +341,17 @@ export function EvidencePanel(): JSX.Element {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') void onCaptureUrl();
+                if (e.key === "Enter") void onCaptureUrl();
               }}
               placeholder="https://…"
               className="flex-1 mono text-[11px] bg-bg-2 border border-line-2 rounded-sm px-2 py-1.5 text-txt-1"
             />
-            <Btn tone="accent" size="sm" disabled={busy || !url.trim()} onClick={() => void onCaptureUrl()}>
+            <Btn
+              tone="accent"
+              size="sm"
+              disabled={busy || !url.trim()}
+              onClick={() => void onCaptureUrl()}
+            >
               capture
             </Btn>
           </div>
@@ -303,14 +367,16 @@ export function EvidencePanel(): JSX.Element {
           />
         </div>
         <div className="mt-2 space-y-1.5">
-          <MicroLabel>freeze a replay window (what changed in a box)</MicroLabel>
+          <MicroLabel>
+            freeze a replay window (what changed in a box)
+          </MicroLabel>
           <p className="text-[10px] text-txt-3">
-            The question a live-only map cannot answer: are these the same contacts as
-            before. The diff is computed from your own archive and hashed, so it can be
-            attached to a case and re-verified.
+            The question a live-only map cannot answer: are these the same
+            contacts as before. The diff is computed from your own archive and
+            hashed, so it can be attached to a case and re-verified.
           </p>
           <div className="grid grid-cols-4 gap-1">
-            {(['lamin', 'lomin', 'lamax', 'lomax'] as const).map((k) => (
+            {(["lamin", "lomin", "lamax", "lomax"] as const).map((k) => (
               <input
                 key={k}
                 value={win[k]}
@@ -324,19 +390,28 @@ export function EvidencePanel(): JSX.Element {
           <div className="flex items-center gap-1.5">
             <input
               value={win.hoursAgo}
-              onChange={(e) => setWin((w) => ({ ...w, hoursAgo: e.target.value }))}
+              onChange={(e) =>
+                setWin((w) => ({ ...w, hoursAgo: e.target.value }))
+              }
               aria-label="hours ago"
               className="w-14 mono text-[11px] bg-bg-2 border border-line-2 rounded-sm px-1.5 py-1 text-txt-1"
             />
             <span className="text-[10px] text-txt-3">h ago vs now, ±</span>
             <input
               value={win.windowMin}
-              onChange={(e) => setWin((w) => ({ ...w, windowMin: e.target.value }))}
+              onChange={(e) =>
+                setWin((w) => ({ ...w, windowMin: e.target.value }))
+              }
               aria-label="window minutes"
               className="w-14 mono text-[11px] bg-bg-2 border border-line-2 rounded-sm px-1.5 py-1 text-txt-1"
             />
             <span className="text-[10px] text-txt-3">min</span>
-            <Btn tone="accent" size="sm" disabled={busy} onClick={() => void onFreezeWindow()}>
+            <Btn
+              tone="accent"
+              size="sm"
+              disabled={busy}
+              onClick={() => void onFreezeWindow()}
+            >
               freeze
             </Btn>
           </div>
@@ -344,19 +419,25 @@ export function EvidencePanel(): JSX.Element {
         {busy && <p className="text-[10px] text-txt-3 mt-1">capturing…</p>}
         {error && <p className="text-[10px] text-warn mt-1">{error}</p>}
         <p className="text-[10px] text-txt-3 mt-2">
-          Screenshots and live-feed freezes are captured contextually from the globe
-          Selection panel ("preserve as evidence").
+          Screenshots and live-feed freezes are captured contextually from the
+          globe Selection panel ("preserve as evidence").
         </p>
       </Widget>
 
       <div className="flex items-center gap-2">
-        <SectionLabel title="Evidence" count={verifiedCount} className="flex-1" />
+        <SectionLabel
+          title="Evidence"
+          count={verifiedCount}
+          className="flex-1"
+        />
       </div>
-      {loading && items.length === 0 && <p className="text-[11px] text-txt-3">loading…</p>}
+      {loading && items.length === 0 && (
+        <p className="text-[11px] text-txt-3">loading…</p>
+      )}
       {!loading && items.length === 0 && (
         <p className="text-txt-3 text-[11px]">
-          No evidence captured yet. Preserve a URL or file above, or use "preserve as
-          evidence" from a selected entity.
+          No evidence captured yet. Preserve a URL or file above, or use
+          "preserve as evidence" from a selected entity.
         </p>
       )}
       <ul className="space-y-1.5">

@@ -5,8 +5,8 @@
 //
 // The dashboard layout choice keeps its own store (state/dashboardMode.ts) for
 // back-compat with its existing consumers; every other preference lives here.
-import { create } from 'zustand';
-import type { MapQuality } from '../globe/qualityPresets';
+import { create } from "zustand";
+import type { MapQuality } from "../globe/qualityPresets";
 
 export interface Settings {
   // Map quality preset (globe/qualityPresets.ts): one control that bundles
@@ -61,7 +61,7 @@ export interface Settings {
   // stack). Purely a client-side layout preference — unlike the two fields
   // above it does NOT mirror any backend state, so it may be written directly
   // from its settings control. Default 'top' so the brief is seen on select.
-  selectionAiPosition: 'top' | 'bottom';
+  selectionAiPosition: "top" | "bottom";
   // Left icon rail expanded (shows text labels next to each tool icon and widens
   // the rail 44px→176px). OFF by default = icon-only. ConsoleShell reads this to
   // size the rail column and --rail-left-w so map overlays dock past it.
@@ -75,19 +75,19 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  mapQuality: 'high',
+  mapQuality: "high",
   aircraftDeadReckon: false,
   corroboratedOnly: false,
   renderPixelCap: 2.0,
   continuousRenderGovernor: false,
   selectionAiEnabled: false,
   selectionAiModel: null,
-  selectionAiPosition: 'top',
+  selectionAiPosition: "top",
   leftRailExpanded: false,
   adaptiveLayerGovernor: true,
 };
 
-const LS_KEY = 'velocity.settings';
+const LS_KEY = "velocity.settings";
 
 function read(): Settings {
   try {

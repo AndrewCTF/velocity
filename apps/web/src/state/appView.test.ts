@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { APP_IDS, APP_GROUPS, type AppId } from './appView.js';
+import { describe, it, expect } from "vitest";
+import { APP_IDS, APP_GROUPS, type AppId } from "./appView.js";
 
 // Grouped top-bar switcher (docs/dashboard-workflows-plan.md §1): every app
 // must be reachable from exactly one cluster, and clusters must never
 // reference an id the shell doesn't know about.
-describe('APP_GROUPS', () => {
-  it('covers every AppId exactly once', () => {
+describe("APP_GROUPS", () => {
+  it("covers every AppId exactly once", () => {
     const counts = new Map<AppId, number>();
     for (const group of APP_GROUPS) {
       for (const id of group.apps) {
@@ -19,7 +19,7 @@ describe('APP_GROUPS', () => {
     expect(counts.size).toBe(APP_IDS.length);
   });
 
-  it('only references known AppIds', () => {
+  it("only references known AppIds", () => {
     const known = new Set<string>(APP_IDS);
     for (const group of APP_GROUPS) {
       for (const id of group.apps) {

@@ -30,12 +30,12 @@ perceived refresh, using only free/keyless upstreams.
 A single global query is the only way to reach ~13 k aircraft, but the free
 aggregators don't offer one (verified 2026-06 from a typical egress IP):
 
-| Host | Global verb | Result |
-|---|---|---|
-| airplanes.live | `/v2/all`, `/v2/all-with-pos` | **404** (no such endpoint) |
-| adsb.lol | `/v2/all-with-pos` | **451** legal block (+ AAAA breaks IPv4 pin) |
-| adsb.fi | `/v2/snapshot` | **403** |
-| **OpenSky** | **`/states/all`** | **200, ~13 k aircraft, anonymous OK** |
+| Host           | Global verb                   | Result                                       |
+| -------------- | ----------------------------- | -------------------------------------------- |
+| airplanes.live | `/v2/all`, `/v2/all-with-pos` | **404** (no such endpoint)                   |
+| adsb.lol       | `/v2/all-with-pos`            | **451** legal block (+ AAAA breaks IPv4 pin) |
+| adsb.fi        | `/v2/snapshot`                | **403**                                      |
+| **OpenSky**    | **`/states/all`**             | **200, ~13 k aircraft, anonymous OK**        |
 
 So **OpenSky is the breadth source** and airplanes.live `/v2/point` (≤250 nm
 radius, works fine) is the dense-region freshness overlay.
@@ -113,17 +113,17 @@ that can make a tick slow, and only when many cells are cold.
 
 ## Tuning knobs (`apps/api/app/routes/adsb.py`)
 
-| Constant | Value | Meaning |
-|---|---|---|
-| `_UPSTREAM_SEMAPHORE` | `8` | Max concurrent upstream fetches. **Keep ≤8** — airplanes.live trips ~>8 concurrent. |
-| `_CELL_TTL_FULL` / `_EMPTY` | `30` / `5` s | Per-cell cache. 30 s keeps steady-state load ~4-5 cells/s. |
-| `_OPENSKY_INTERVAL_S` | `15` s | Min seconds between OpenSky pulls (budget pacing). |
-| `_OPENSKY_DISABLED_UNTIL` | dynamic | Breaker gate: a failed pull sets it to the next 0000 UTC; OpenSky is skipped until then (or process restart). |
-| `_GRID_BUDGET_S` | `8` s | Wall-clock cap on the grid overlay per tick. |
-| `_FIREHOSE_DEAD_SKIP_S` | `30` s | Skip a dead firehose for this long. |
-| `_merge_with_previous(max_age_s)` | `180` s | Carry-forward window for contacts missing from a tick. |
-| `_SNAPSHOT_MIN_RETAIN_FRACTION` | `0.5` | Reject a new snapshot below 50 % of the previous count… |
-| `_SNAPSHOT_STALE_S` | `30` s | …unless the snapshot is already this stale (anti-lockout). |
+| Constant                          | Value        | Meaning                                                                                                       |
+| --------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------- |
+| `_UPSTREAM_SEMAPHORE`             | `8`          | Max concurrent upstream fetches. **Keep ≤8** — airplanes.live trips ~>8 concurrent.                           |
+| `_CELL_TTL_FULL` / `_EMPTY`       | `30` / `5` s | Per-cell cache. 30 s keeps steady-state load ~4-5 cells/s.                                                    |
+| `_OPENSKY_INTERVAL_S`             | `15` s       | Min seconds between OpenSky pulls (budget pacing).                                                            |
+| `_OPENSKY_DISABLED_UNTIL`         | dynamic      | Breaker gate: a failed pull sets it to the next 0000 UTC; OpenSky is skipped until then (or process restart). |
+| `_GRID_BUDGET_S`                  | `8` s        | Wall-clock cap on the grid overlay per tick.                                                                  |
+| `_FIREHOSE_DEAD_SKIP_S`           | `30` s       | Skip a dead firehose for this long.                                                                           |
+| `_merge_with_previous(max_age_s)` | `180` s      | Carry-forward window for contacts missing from a tick.                                                        |
+| `_SNAPSHOT_MIN_RETAIN_FRACTION`   | `0.5`        | Reject a new snapshot below 50 % of the previous count…                                                       |
+| `_SNAPSHOT_STALE_S`               | `30` s       | …unless the snapshot is already this stale (anti-lockout).                                                    |
 
 ---
 
@@ -140,12 +140,12 @@ that can make a tick slow, and only when many cells are cold.
 
 ## Failure modes → symptom
 
-| Symptom | Cause | Where |
-|---|---|---|
-| Count drops to a few hundred | rate-limit text cached as empty | `_parse_ac` / `load_cell` raise |
-| Count drops to ~1.6 k | OpenSky tier not contributing (breaker open: 429 on both budgets → disabled till 0000 UTC) | `_opensky_refresh_once` breaker, `_OPENSKY_DISABLED_UNTIL` |
-| Snapshot age climbs to 30–60 s | grid not time-boxed, blocks the tick | `_GRID_BUDGET_S` |
-| Icons blink off/on | snapshot rejected/replaced wholesale | retain-fraction + carry-forward |
+| Symptom                        | Cause                                                                                      | Where                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| Count drops to a few hundred   | rate-limit text cached as empty                                                            | `_parse_ac` / `load_cell` raise                            |
+| Count drops to ~1.6 k          | OpenSky tier not contributing (breaker open: 429 on both budgets → disabled till 0000 UTC) | `_opensky_refresh_once` breaker, `_OPENSKY_DISABLED_UNTIL` |
+| Snapshot age climbs to 30–60 s | grid not time-boxed, blocks the tick                                                       | `_GRID_BUDGET_S`                                           |
+| Icons blink off/on             | snapshot rejected/replaced wholesale                                                       | retain-fraction + carry-forward                            |
 
 ## Verify
 

@@ -4,11 +4,11 @@
 // POST /api/ai/local contract ({selection_enabled, selection_model}) and
 // mirrors the result into the settings store so EntityPanel doesn't have to
 // poll the backend on every selection.
-import { useState } from 'react';
-import { apiFetch } from '../../transport/http.js';
-import { Badge, Toggle } from '../../shell/instruments.js';
-import { useSettings } from '../../state/settings.js';
-import type { CatalogEntry, InstalledModel } from './types.js';
+import { useState } from "react";
+import { apiFetch } from "../../transport/http.js";
+import { Badge, Toggle } from "../../shell/instruments.js";
+import { useSettings } from "../../state/settings.js";
+import type { CatalogEntry, InstalledModel } from "./types.js";
 
 export function SelectionInferenceBlock({
   installed,
@@ -28,26 +28,32 @@ export function SelectionInferenceBlock({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const recommendedRepo = catalog.find((c) => c.tier === '8b')?.repo_id ?? null;
+  const recommendedRepo = catalog.find((c) => c.tier === "8b")?.repo_id ?? null;
 
-  const persist = async (nextEnabled: boolean, nextModel: string | null): Promise<void> => {
+  const persist = async (
+    nextEnabled: boolean,
+    nextModel: string | null,
+  ): Promise<void> => {
     setBusy(true);
     setErr(null);
     try {
-      const r = await apiFetch('/api/ai/local', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ selection_enabled: nextEnabled, selection_model: nextModel }),
+      const r = await apiFetch("/api/ai/local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          selection_enabled: nextEnabled,
+          selection_model: nextModel,
+        }),
       });
       if (!r.ok) {
         setErr(`Could not save the selection AI setting (HTTP ${r.status}).`);
         return;
       }
-      setSetting('selectionAiEnabled', nextEnabled);
-      setSetting('selectionAiModel', nextModel);
+      setSetting("selectionAiEnabled", nextEnabled);
+      setSetting("selectionAiModel", nextModel);
       onChanged();
     } catch {
-      setErr('Network error. Check your connection.');
+      setErr("Network error. Check your connection.");
     } finally {
       setBusy(false);
     }
@@ -59,9 +65,9 @@ export function SelectionInferenceBlock({
     if (!selected) return;
     setBusy(true);
     try {
-      await apiFetch('/api/ai/models/hot', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+      await apiFetch("/api/ai/models/hot", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ key: selected.key, hot: !selected.hot }),
       });
       onChanged();
@@ -73,7 +79,9 @@ export function SelectionInferenceBlock({
   return (
     <div className="rounded-sm border border-line px-2.5 py-2 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="mono text-[11px] font-medium text-txt-1">Selection AI brief</span>
+        <span className="mono text-[11px] font-medium text-txt-1">
+          Selection AI brief
+        </span>
         <Toggle
           on={selectionEnabled}
           onChange={(v) => void persist(v, selectionModel)}
@@ -81,21 +89,26 @@ export function SelectionInferenceBlock({
         />
       </div>
       <p className="mono text-[10px] text-txt-3 leading-snug">
-        When ON, clicking an aircraft/vessel/place shows a short AI assessment in the entity
-        panel, using a faster model separate from the main routing model.
+        When ON, clicking an aircraft/vessel/place shows a short AI assessment
+        in the entity panel, using a faster model separate from the main routing
+        model.
       </p>
 
       <div className="flex items-center justify-between gap-2">
-        <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3">Panel position</span>
+        <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3">
+          Panel position
+        </span>
         <div className="flex rounded-sm border border-line overflow-hidden">
-          {(['top', 'bottom'] as const).map((pos) => (
+          {(["top", "bottom"] as const).map((pos) => (
             <button
               key={pos}
               type="button"
-              onClick={() => setSetting('selectionAiPosition', pos)}
+              onClick={() => setSetting("selectionAiPosition", pos)}
               aria-pressed={aiPosition === pos}
               className={`mono text-[10px] px-2 py-0.5 capitalize ${
-                aiPosition === pos ? 'bg-accent-dim text-accent' : 'text-txt-2 hover:text-txt-1'
+                aiPosition === pos
+                  ? "bg-accent-dim text-accent"
+                  : "text-txt-2 hover:text-txt-1"
               }`}
             >
               {pos}
@@ -111,9 +124,11 @@ export function SelectionInferenceBlock({
               Model
             </label>
             <select
-              value={selectionModel ?? ''}
+              value={selectionModel ?? ""}
               disabled={busy || installed.length === 0}
-              onChange={(e) => void persist(selectionEnabled, e.target.value || null)}
+              onChange={(e) =>
+                void persist(selectionEnabled, e.target.value || null)
+              }
               aria-label="Selection-inference model"
               className="w-full mono text-[10px] bg-bg-2 border border-line rounded-sm px-1.5 py-1 text-txt-1 outline-hidden focus:border-accent-line"
             >
@@ -121,25 +136,32 @@ export function SelectionInferenceBlock({
               {installed.map((m) => (
                 <option key={m.key} value={m.key}>
                   {m.repo_id} · {m.quant}
-                  {m.repo_id === recommendedRepo ? ' (recommended)' : ''}
+                  {m.repo_id === recommendedRepo ? " (recommended)" : ""}
                 </option>
               ))}
             </select>
             {installed.length === 0 && (
-              <p className="mono text-[10px] text-txt-3 mt-1">install a model above first</p>
+              <p className="mono text-[10px] text-txt-3 mt-1">
+                install a model above first
+              </p>
             )}
           </div>
 
           {selected && (
             <label className="flex items-center gap-1.5 mono text-[10px] text-txt-2">
-              <Toggle on={selected.hot} onChange={() => void toggleHotLoad()} label="Hot-load selection model" />
+              <Toggle
+                on={selected.hot}
+                onChange={() => void toggleHotLoad()}
+                label="Hot-load selection model"
+              />
               hot-load (keep resident for fast briefs)
             </label>
           )}
 
           {recommendedRepo && (
             <p className="mono text-[10px] text-txt-3">
-              recommended fast pick: <Badge tone="accent">{recommendedRepo}</Badge>
+              recommended fast pick:{" "}
+              <Badge tone="accent">{recommendedRepo}</Badge>
             </p>
           )}
         </>

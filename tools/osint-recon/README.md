@@ -4,11 +4,11 @@ Optional deep-recon service for the OSINT console. It wraps the **GPL** recon
 tools as subprocesses so their code never links into the MIT app — the app only
 ever speaks HTTP to this process and receives normalised JSON.
 
-| Tool | License | What it adds |
-|------|---------|--------------|
-| [Amass](https://github.com/owasp-amass/amass) | Apache-2 | deep subdomain enumeration |
-| [theHarvester](https://github.com/laramies/theHarvester) | GPLv2 | emails + subdomains from 54+ sources |
-| [SpiderFoot](https://github.com/smicallef/spiderfoot) | GPLv3 | 200+ module automated footprint |
+| Tool                                                     | License  | What it adds                         |
+| -------------------------------------------------------- | -------- | ------------------------------------ |
+| [Amass](https://github.com/owasp-amass/amass)            | Apache-2 | deep subdomain enumeration           |
+| [theHarvester](https://github.com/laramies/theHarvester) | GPLv2    | emails + subdomains from 54+ sources |
+| [SpiderFoot](https://github.com/smicallef/spiderfoot)    | GPLv3    | 200+ module automated footprint      |
 
 ## Run
 

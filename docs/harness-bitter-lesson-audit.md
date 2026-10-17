@@ -15,7 +15,7 @@ Sutton (2019), re-read from source this session. Four claims that matter here:
    by a large margin, every time the clock runs long enough.** Chess, Go,
    speech, vision — same arc each time.
 2. **The human-knowledge approach wins in the short term and plateaus.**
-   That's why it keeps getting rebuilt: it demonstrably helps *today*.
+   That's why it keeps getting rebuilt: it demonstrably helps _today_.
 3. **The two general methods are search and learning** — both are ways of
    turning more compute into more capability.
 4. The subtle one, and the most relevant to harnesses: built-in human knowledge
@@ -31,16 +31,16 @@ is one of two things:
 
 - **Capability expander** — gives the model reach it cannot have alone: tools,
   execution, verification loops, facts about the environment, safety
-  boundaries. These get *more* valuable as the model improves (a better model
+  boundaries. These get _more_ valuable as the model improves (a better model
   exploits a test suite harder).
-- **Weakness compensator** — encodes a workaround for how the *current* model
+- **Weakness compensator** — encodes a workaround for how the _current_ model
   fails: process rituals, style enforcement, output policing, context
   rationing, prescriptive workflows, model routing tables. These decay into
   pure tax as the model improves, and — Sutton's point 4 — they actively
   block the better model from doing the thing its extra capability enables.
 
-**The test for any harness element:** *if the model were 2× better tomorrow,
-does this element help more, or get in the way more?* Expanders pass. Compensators fail.
+**The test for any harness element:** _if the model were 2× better tomorrow,
+does this element help more, or get in the way more?_ Expanders pass. Compensators fail.
 
 One more mapping worth making explicit: in agentic coding, the analog of
 Sutton's "search" is the **verify-and-retry loop** (run tests, read output,
@@ -57,37 +57,37 @@ It does not say "delete all human knowledge." Three categories are exempt:
   rate-limits with HTTP 200 + text/plain", "adsb.lol 451s a non-browser UA",
   "the operator rejected synthesized motion twice" — no amount of model
   improvement rediscovers these without re-paying the cost that learned them.
-  Sutton's complaint is about encoding *how to think*, not *what is true*.
+  Sutton's complaint is about encoding _how to think_, not _what is true_.
 - **Safety and authority boundaries** (permissions, commit hooks, "don't touch
   the sacred paths without certainty") are about trust, not capability.
 - **Verification infrastructure** is the general method itself.
 
-The failure mode this audit hunts is specifically: *procedural knowledge about
-how the model should reason, explore, communicate, and structure its work* —
+The failure mode this audit hunts is specifically: _procedural knowledge about
+how the model should reason, explore, communicate, and structure its work_ —
 that's the hand-crafted evaluation function.
 
 ---
 
 ## 2. Measured inventory (what the harness actually is)
 
-| Element | Measured size / mechanism |
-|---|---|
-| Skills on disk | **513 SKILL.md files**, 78 top-level dirs, gstack alone **1.5 GB** |
-| Skills advertised per session | ~130 entries in the system-prompt skill list, each with a multi-line description |
-| Plugins enabled | 14 (superpowers, caveman, ponytail, context-mode, context7 ×2 — plugin **and** claude.ai server, playwright, feature-dev, code-review, supabase, ui-ux-pro-max, frontend-design, skill-creator, security-guidance, claude-md-management) |
-| Persona layers | 3 overlapping: caveman (SessionStart + UserPromptSubmit re-injection + statusline), ponytail (SessionStart, full ruleset), project CLAUDE.md "terse symbolic" style section |
-| Anti-hallucination | Static contract injected **every user turn** (UserPromptSubmit) + Stop hook grepping the final message for `tests? passed\|parity\|production-ready\|…` and blocking once to force a self-audit |
-| Superpowers | Full `using-superpowers` skill text injected at SessionStart; doctrine: *"invoke a skill before ANY response, including clarifying questions"*, plus a 12-row table of forbidden thoughts |
-| context-mode | MCP sandbox + FTS5 knowledge base + PreToolUse rerouting + a standing instruction block telling the model not to Read/Bash for observation |
-| Project CLAUDE.md | 464 lines: invariants + war stories + response style + exploration procedure + subagent choreography |
-| Memory | 71 files / 3,022 lines, 78-line index loaded every session, plus a hand-written retention/decay/promotion policy |
-| Global CLAUDE.md | 50 lines (commit hygiene, shell discipline) |
-| Hooks (custom) | playwright lock cleaner, context-mode cache heal, anti-hallucination ×2, caveman statusline |
+| Element                       | Measured size / mechanism                                                                                                                                                                                                                |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Skills on disk                | **513 SKILL.md files**, 78 top-level dirs, gstack alone **1.5 GB**                                                                                                                                                                       |
+| Skills advertised per session | ~130 entries in the system-prompt skill list, each with a multi-line description                                                                                                                                                         |
+| Plugins enabled               | 14 (superpowers, caveman, ponytail, context-mode, context7 ×2 — plugin **and** claude.ai server, playwright, feature-dev, code-review, supabase, ui-ux-pro-max, frontend-design, skill-creator, security-guidance, claude-md-management) |
+| Persona layers                | 3 overlapping: caveman (SessionStart + UserPromptSubmit re-injection + statusline), ponytail (SessionStart, full ruleset), project CLAUDE.md "terse symbolic" style section                                                              |
+| Anti-hallucination            | Static contract injected **every user turn** (UserPromptSubmit) + Stop hook grepping the final message for `tests? passed\|parity\|production-ready\|…` and blocking once to force a self-audit                                          |
+| Superpowers                   | Full `using-superpowers` skill text injected at SessionStart; doctrine: _"invoke a skill before ANY response, including clarifying questions"_, plus a 12-row table of forbidden thoughts                                                |
+| context-mode                  | MCP sandbox + FTS5 knowledge base + PreToolUse rerouting + a standing instruction block telling the model not to Read/Bash for observation                                                                                               |
+| Project CLAUDE.md             | 464 lines: invariants + war stories + response style + exploration procedure + subagent choreography                                                                                                                                     |
+| Memory                        | 71 files / 3,022 lines, 78-line index loaded every session, plus a hand-written retention/decay/promotion policy                                                                                                                         |
+| Global CLAUDE.md              | 50 lines (commit hygiene, shell discipline)                                                                                                                                                                                              |
+| Hooks (custom)                | playwright lock cleaner, context-mode cache heal, anti-hallucination ×2, caveman statusline                                                                                                                                              |
 
 Fixed per-session overhead before the user types a word: the skill list,
 plugin instructions, superpowers text, context-mode doctrine, persona rules,
 MEMORY.md, and both CLAUDE.md files — on the order of tens of thousands of
-tokens of *standing instruction*, most of it procedural.
+tokens of _standing instruction_, most of it procedural.
 
 ---
 
@@ -101,13 +101,13 @@ the procedure), **DELETE** (compensator).
 The single clearest Bitter Lesson violation in the harness. "If there is a 1%
 chance a skill applies you MUST invoke it, before any response, including
 clarifying questions" plus a table that pre-labels the model's own judgment
-("this is just a simple question") as *rationalization*. This is a 2024-era
+("this is just a simple question") as _rationalization_. This is a 2024-era
 patch for models that skipped planning. Applied to a stronger model it is pure
 ceiling: it forbids exactly the judgment the capability gain bought, adds a
 skill-lookup round trip to trivial questions, and routes work through
 prescriptive workflows (brainstorming → writing-plans → …) whether or not the
 task needs them. This is Sutton's chess researchers insisting the program play
-*the way humans play*.
+_the way humans play_.
 
 Keep individual superpowers skills that encode real technique if any earn
 their place (see 3.4's usage test); delete the meta-doctrine that makes
@@ -123,8 +123,8 @@ Three separately-maintained systems all trying to control output shape:
   see memory `claude-usage-hygiene-2026-07-05`: cost driver = context size,
   **not output**) is comparable to what it saves, and it fights the model's
   own communication calibration.
-- **ponytail**: the *values* (YAGNI, stdlib-first, shortest diff) are things a
-  strong model already weighs; the *enforcement apparatus* (ladder, levels,
+- **ponytail**: the _values_ (YAGNI, stdlib-first, shortest diff) are things a
+  strong model already weighs; the _enforcement apparatus_ (ladder, levels,
   persistence rules, output format) is scaffold. Notably, the project
   CLAUDE.md already carries the one sentence that matters: "the best code is
   the code you didn't write, because there's less of it to break an invariant."
@@ -133,15 +133,15 @@ Three separately-maintained systems all trying to control output shape:
 
 They also conflict (ponytail full-prose exception vs caveman fragments vs
 CLAUDE.md symbols), so some model capacity every turn goes to arbitrating
-personas. Replace all three with ~3 lines in CLAUDE.md: *"Terse by default.
+personas. Replace all three with ~3 lines in CLAUDE.md: _"Terse by default.
 Numbers over adjectives. Full prose for commits, docs, security, and anything
-where fragment order risks misreading."* A better model does the rest; a
+where fragment order risks misreading."_ A better model does the rest; a
 worse model was never saved by the symbol table anyway.
 
 ### 3.3 Anti-hallucination apparatus — SHRINK to one standing paragraph; delete the regex police
 
-The *value* is real and operator-chosen (evidence tiers, no assume-then-assert)
-— that's an authority boundary, category KEEP. The *mechanism* is the problem:
+The _value_ is real and operator-chosen (evidence tiers, no assume-then-assert)
+— that's an authority boundary, category KEEP. The _mechanism_ is the problem:
 
 - The same static contract is injected every user turn. It's already in
   CLAUDE.md, the osint skill, and multiple memories. One canonical copy in
@@ -151,7 +151,7 @@ The *value* is real and operator-chosen (evidence tiers, no assume-then-assert)
   Its own comments document the decay spiral: bare "verified"/"proven" had to
   be excluded after false blocks. That maintenance treadmill (pattern → false
   positive → carve-out → weaker pattern) is exactly the hand-tuned-features
-  arc, and a stronger model triggers it *more* (writes more nuanced success
+  arc, and a stronger model triggers it _more_ (writes more nuanced success
   claims) while needing it less. Meanwhile a model that wants to bluff just
   avoids the trigger phrases — the hook selects for phrasing, not honesty.
 
@@ -168,7 +168,7 @@ writing-plans). The rest — a 78-skill gstack suite (ship/qa/canary/cso/
 office-hours/…), duplicated reviewers (review vs code-review vs codex vs
 cavecrew-reviewer), three QA variants, two design-review variants, **context7
 enabled twice** (plugin + claude.ai connector), 1.5 GB on disk — is a library
-of *other people's prescriptive workflows*, each one an encoding of how a
+of _other people's prescriptive workflows_, each one an encoding of how a
 human thinks the work should be structured.
 
 Bitter Lesson sorting rule for skills: a skill earns its slot if it encodes
@@ -186,7 +186,7 @@ execution, FTS5 indexing, mandatory rerouting doctrine, PreToolUse hooks. Two
 Bitter Lesson problems: (a) it bets against the scaling trend the harness
 should be riding — context length and native context management (the harness
 already summarizes and continues) are improving on the platform side, faster
-and better than a bolt-on; (b) as a *mandatory* doctrine it adds an MCP round
+and better than a bolt-on; (b) as a _mandatory_ doctrine it adds an MCP round
 trip + FTS recall risk to interactions where a direct Read was strictly
 better, and its standing instruction block is itself a permanent context tax.
 Keep the tool for genuinely huge outputs (multi-MB logs, big fetches); delete
@@ -206,11 +206,11 @@ The most interesting file because it's half treasure, half tax:
   choreography ("up to 3 haiku explorers in ONE message, disjoint scopes"),
   model-routing prescriptions. These encode June-2026 model economics in
   prose; every model upgrade silently invalidates them, and nobody goes back
-  to re-derive them. Prescribing *which model* a subagent uses is a routing
+  to re-derive them. Prescribing _which model_ a subagent uses is a routing
   table that should live in defaults, not doctrine.
 - **Upgrade (CONVERT, ~30%)**: the sacred behaviors. Several already have the
   right form — `test_adsb_viewport_stable.py`, `test_adsb_hot_blob.py` guard
-  their invariants *executably*. That's the pattern: an invariant enforced by
+  their invariants _executably_. That's the pattern: an invariant enforced by
   a test scales with the model (a better model reads the failing test and
   complies); an invariant enforced by prose scales with nothing and decays
   with every summarization. Every sacred behavior that can fail a command
@@ -220,7 +220,7 @@ The most interesting file because it's half treasure, half tax:
 
 The retention/decay/promotion policy is a hand-designed cognitive architecture
 — Sutton names this exact move: building in "how we think we think." The
-*content* is largely legitimate (session facts, measured counts, post-mortems
+_content_ is largely legitimate (session facts, measured counts, post-mortems
 — environment knowledge). The fixes are mechanical: prune superseded entries
 (the archive section is the model), collapse near-duplicates (≥4 ADS-B
 freshness memories tell one story), stop hand-tooling the policy file, and
@@ -238,7 +238,7 @@ own defaults (inherit model, agent picks effort) are the general method.
 ### 3.9 Things that already pass the test — KEEP, and grow
 
 - Permission allowlists, commit-msg hook (authority boundaries — and the
-  commit hook is *enforcement in code*, the right substrate).
+  commit hook is _enforcement in code_, the right substrate).
 - `scripts/kill-port.sh`, `run-api.sh` (tools).
 - The test suite + typecheck as commit gates (verification = the general
   method; the 711-passed baseline discipline is exactly right).
@@ -254,6 +254,7 @@ executable checks (the real Bitter Lesson investment), then set the standing
 rule that stops re-accretion. Each phase is independently shippable.
 
 ### Phase 0 — Measure the baseline (half a day)
+
 1. Count fixed per-session token overhead: dump a fresh session's system
    prompt + injected hook context; record total and per-source breakdown
    (skill list, superpowers, context-mode, personas, MEMORY.md, CLAUDE.mds).
@@ -263,6 +264,7 @@ rule that stops re-accretion. Each phase is independently shippable.
    environment facts, sacred-invariant coverage moved from prose to tests.**
 
 ### Phase 1 — Delete pure compensators (1 day, config-only)
+
 1. Disable persona plugins (caveman, ponytail) + their hooks/statusline; add
    the 3-line style note to global CLAUDE.md.
 2. Remove superpowers SessionStart injection / the mandatory-invocation
@@ -281,7 +283,9 @@ rule that stops re-accretion. Each phase is independently shippable.
    "don't Read/Bash" doctrine; keep ctx tools for >100 KB outputs.
 
 ### Phase 2 — Convert prose invariants to executable checks (the core investment, ~1 week incremental)
+
 For each sacred behavior in CLAUDE.md, add the cheapest check that fails loud:
+
 1. Frontend invariants (SVG-never-dots, upsert-never-removeAll,
    requestRenderMode:true, apiFetch-wraps-all, labels via labelStyle): vitest
    asserts + eslint `no-restricted-syntax` bans (`removeAll(`, raw
@@ -295,11 +299,12 @@ For each sacred behavior in CLAUDE.md, add the cheapest check that fails loud:
    (blob diff on `seen_pos_s`, sidecar health, vessel/aircraft counts). One
    command = the model's verify-retry loop gets maximally cheap — this is the
    "search" investment.
-4. Then shrink CLAUDE.md: each invariant becomes 1-2 lines of *why* + a
+4. Then shrink CLAUDE.md: each invariant becomes 1-2 lines of _why_ + a
    pointer to its enforcing test. Target ≤150 lines. History/rationale prose
    moves to `docs/decisions.md` (grep-able, not context-resident).
 
 ### Phase 3 — Restructure what remains to be model-upgrade-proof (ongoing)
+
 1. **No model names in prose.** Remove haiku/fable routing advice from
    CLAUDE.md + skills; subagents inherit by default. Model choice lives only
    in `settings.json`, one place to update per model generation.
@@ -312,11 +317,13 @@ For each sacred behavior in CLAUDE.md, add the cheapest check that fails loud:
    harness setting comes out of the instruction stream.
 
 ### Phase 4 — Reinvest the freed budget in general methods
-Where the complexity budget *should* go, in order of leverage:
+
+Where the complexity budget _should_ go, in order of leverage:
+
 1. Verification depth: screenshot-diff harness for the sacred visual
    invariants (icons/labels/smoothness) so "drag to Europe and look" becomes
    a command; live-probe scripts with counts (the anti-hallucination
-   *mechanism* that actually scales).
+   _mechanism_ that actually scales).
 2. Environment capability: faster test subsets, seeded fixtures for feed
    code, a real-hardware fps probe (the one measurement headless can't do).
 3. Let better models spend compute freely: with rituals gone, longer
@@ -345,6 +352,7 @@ overhead drivers: project CLAUDE.md 29,238 B (~7.3k tok), MEMORY.md 18,207 B
 ~1.1k B × every user turn, plus the ~130-entry advertised skill list.
 
 **P1 — compensators deleted (global).**
+
 - `~/.claude/settings.json`: 12 of 14 plugins disabled (kept playwright,
   code-review); anti-hallucination UserPromptSubmit + Stop hooks removed;
   caveman statusline removed; context-mode plugin disabled entirely (its
@@ -358,6 +366,7 @@ overhead drivers: project CLAUDE.md 29,238 B (~7.3k tok), MEMORY.md 18,207 B
   standing rule. Persona plugins gone.
 
 **P2 — prose invariants → executable guards (repo).**
+
 - `apps/web/eslint.config.js`: `no-restricted-globals` bans raw `fetch`
   outside transport/ + two documented third-party ignores;
   `no-restricted-syntax` bans `removeAll()` inside PollGeoJsonAdapter.
@@ -398,7 +407,7 @@ repo files, `mv ~/.claude/skills-archived/* ~/.claude/skills/`.
   Stop hook each fixed a real observed failure. The claim is not that they
   never worked — it's Sutton's claim: they plateau, then obstruct. If Phase 1
   regressions appear (e.g. verbose replies, skipped verification), the fix is
-  a *check* (Phase 2 style), not re-installing the ritual.
+  a _check_ (Phase 2 style), not re-installing the ritual.
 - **The evidence contract is operator authority, not scaffold** — this plan
   keeps it deliberately. Deleting it would be misreading the Bitter Lesson as
   "trust the model about everything." Trust boundaries are orthogonal to

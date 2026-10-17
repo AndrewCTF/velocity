@@ -3,13 +3,13 @@
 // AND inside a quoted attribute. Prefer React rendering; use this only where the
 // output is a standalone HTML file or blob (BriefPanel's export and print view).
 const MAP: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
 };
 
 export function escapeHtml(value: unknown): string {
-  return String(value ?? '').replace(/[&<>"']/g, (c) => MAP[c] ?? c);
+  return String(value ?? "").replace(/[&<>"']/g, (c) => MAP[c] ?? c);
 }

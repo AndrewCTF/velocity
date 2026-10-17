@@ -3,15 +3,15 @@
 // sidecar). In a plain browser the image still renders; the Detect button is
 // inert and the caveat says why.
 
-import { useEffect, useRef, useState } from 'react';
-import { Btn, Caveat, MicroLabel } from '../shell/instruments.js';
-import { apiFetch } from '../transport/http.js';
-import { detectImage, isDesktop } from '../transport/desktop.js';
-import { useGround } from './groundStore.js';
-import { useCaptures } from '../state/captures.js';
-import { BboxOverlay, colorFor } from './detectionOverlay.js';
-import { safeHttpUrl } from '../shell/safeUrl.js';
-import { dict } from '../shell/safeKeys.js';
+import { useEffect, useRef, useState } from "react";
+import { Btn, Caveat, MicroLabel } from "../shell/instruments.js";
+import { apiFetch } from "../transport/http.js";
+import { detectImage, isDesktop } from "../transport/desktop.js";
+import { useGround } from "./groundStore.js";
+import { useCaptures } from "../state/captures.js";
+import { BboxOverlay, colorFor } from "./detectionOverlay.js";
+import { safeHttpUrl } from "../shell/safeUrl.js";
+import { dict } from "../shell/safeKeys.js";
 
 export function PanoramaViewer(): JSX.Element | null {
   const selectedId = useGround((s) => s.selectedId);
@@ -22,9 +22,10 @@ export function PanoramaViewer(): JSX.Element | null {
   const [err, setErr] = useState<string | null>(null);
   const imgWrapRef = useRef<HTMLDivElement>(null);
 
-  const photo = photos.find((p) => `${p.source}:${p.photo_id}` === selectedId) ?? null;
+  const photo =
+    photos.find((p) => `${p.source}:${p.photo_id}` === selectedId) ?? null;
   const detKey = photo ? `${photo.source}:${photo.photo_id}` : null;
-  const dets = detKey ? detections[detKey] ?? [] : [];
+  const dets = detKey ? (detections[detKey] ?? []) : [];
 
   // Clear transient errors when the selection changes.
   useEffect(() => {
@@ -52,7 +53,7 @@ export function PanoramaViewer(): JSX.Element | null {
       // Auto-pin the ground capture as a map entity (dedup'd per photo).
       if (out && out.length > 0) {
         useCaptures.getState().pin({
-          source: 'pano',
+          source: "pano",
           srcId: `${photo.source}:${photo.photo_id}`,
           photoUrl: photo.photo_url,
           lat: photo.lat,
@@ -62,7 +63,7 @@ export function PanoramaViewer(): JSX.Element | null {
         });
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not run detection.');
+      setErr(e instanceof Error ? e.message : "Could not run detection.");
     } finally {
       setDetecting(false);
     }
@@ -80,8 +81,16 @@ export function PanoramaViewer(): JSX.Element | null {
           {photo.source} · {photo.photo_id.slice(0, 16)}
         </span>
         {isDesktop() ? (
-          <Btn size="sm" tone={detecting ? 'neutral' : 'accent'} onClick={() => void handleDetect()}>
-            {detecting ? 'detecting…' : dets.length ? `redetect (${dets.length})` : 'detect'}
+          <Btn
+            size="sm"
+            tone={detecting ? "neutral" : "accent"}
+            onClick={() => void handleDetect()}
+          >
+            {detecting
+              ? "detecting…"
+              : dets.length
+                ? `redetect (${dets.length})`
+                : "detect"}
           </Btn>
         ) : (
           <MicroLabel>desktop-only</MicroLabel>
@@ -89,13 +98,13 @@ export function PanoramaViewer(): JSX.Element | null {
       </div>
 
       <div ref={imgWrapRef} className="relative overflow-x-auto bg-black">
-        <div className="relative" style={{ minWidth: '100%' }}>
+        <div className="relative" style={{ minWidth: "100%" }}>
           <img
             src={safeHttpUrl(photo.photo_url)}
             alt={photo.name}
             draggable={false}
             className="block w-full select-none"
-            style={{ imageRendering: 'auto' }}
+            style={{ imageRendering: "auto" }}
           />
           <div className="absolute inset-0">
             <BboxOverlay dets={dets} />
@@ -115,7 +124,11 @@ export function PanoramaViewer(): JSX.Element | null {
             </span>
           ))
         ) : (
-          <MicroLabel>{isDesktop() ? 'no detections yet: run detect' : 'detection needs desktop app'}</MicroLabel>
+          <MicroLabel>
+            {isDesktop()
+              ? "no detections yet: run detect"
+              : "detection needs desktop app"}
+          </MicroLabel>
         )}
         {!isDesktop() && <Caveat level="NO CV // WEBSITE" tone="warn" />}
         {err && <span className="mono text-[10px] text-alert">{err}</span>}

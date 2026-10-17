@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, X } from 'lucide-react';
-import type * as Cesium from 'cesium';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, X } from "lucide-react";
+import type * as Cesium from "cesium";
 import {
   useAlerts,
   useFeeds,
@@ -8,13 +8,13 @@ import {
   useSelection,
   type FilterFacet,
   type FilterMode,
-} from '../state/stores.js';
-import { useAoi } from '../state/aoi.js';
-import { useAgent } from '../state/agent.js';
-import { apiFetch } from '../transport/http.js';
-import { flyToPosition } from '../globe/camera.js';
-import { useIsMobile } from '../shell/useIsMobile.js';
-import { Badge, Btn, StatusDot, type BadgeTone } from '../shell/instruments.js';
+} from "../state/stores.js";
+import { useAoi } from "../state/aoi.js";
+import { useAgent } from "../state/agent.js";
+import { apiFetch } from "../transport/http.js";
+import { flyToPosition } from "../globe/camera.js";
+import { useIsMobile } from "../shell/useIsMobile.js";
+import { Badge, Btn, StatusDot, type BadgeTone } from "../shell/instruments.js";
 
 // ── Velocity analyst console (the "AI bar") ─────────────────────────────────
 // A real, streaming tool-calling agent. The operator types a prompt; the
@@ -61,7 +61,7 @@ interface TraceRow {
   thought?: string;
   summary?: string;
   ms?: number;
-  status: 'run' | 'ok';
+  status: "run" | "ok";
   note?: string;
   narration?: string;
   // An audited write-back the agent performed (flag/promote/nominate/watch).
@@ -75,7 +75,7 @@ interface TraceRow {
     action: string;
     params: Record<string, unknown>;
     confidence: number;
-    state: 'pending' | 'approved' | 'rejected' | 'error';
+    state: "pending" | "approved" | "rejected" | "error";
   };
 }
 
@@ -84,30 +84,48 @@ interface TraceRow {
 interface AppVar {
   fly_to?: { lat: number; lon: number; alt_m?: number };
   select?: string;
-  filter?: { clear?: boolean; facet?: FilterFacet; value?: string; mode?: FilterMode };
+  filter?: {
+    clear?: boolean;
+    facet?: FilterFacet;
+    value?: string;
+    mode?: FilterMode;
+  };
 }
 
-type Phase = 'idle' | 'gathering' | 'synthesizing' | 'done' | 'error';
+type Phase = "idle" | "gathering" | "synthesizing" | "done" | "error";
 
-const SLASH = ['/investigate', '/correlate', '/detect', '/factcheck', '/scene'] as const;
+const SLASH = [
+  "/investigate",
+  "/correlate",
+  "/detect",
+  "/factcheck",
+  "/scene",
+] as const;
 
 function threatTone(t?: string): BadgeTone {
-  const s = (t || '').toLowerCase();
-  if (s === 'high' || s === 'critical') return 'alert';
-  if (s === 'elevated' || s === 'medium') return 'warn';
-  if (s === 'low') return 'accent';
-  return 'neutral';
+  const s = (t || "").toLowerCase();
+  if (s === "high" || s === "critical") return "alert";
+  if (s === "elevated" || s === "medium") return "warn";
+  if (s === "low") return "accent";
+  return "neutral";
 }
 
 function argStr(args?: Record<string, unknown>): string {
-  if (!args) return '';
+  if (!args) return "";
   const parts = Object.entries(args)
-    .filter(([k]) => k !== 'scope')
-    .map(([k, v]) => `${k}:${typeof v === 'number' ? (v as number).toFixed(2).replace(/\.00$/, '') : v}`);
-  return parts.join(' ');
+    .filter(([k]) => k !== "scope")
+    .map(
+      ([k, v]) =>
+        `${k}:${typeof v === "number" ? (v as number).toFixed(2).replace(/\.00$/, "") : v}`,
+    );
+  return parts.join(" ");
 }
 
-export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
+export function AgentConsole({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element {
   const isMobile = useIsMobile();
   const open = useAgent((s) => s.open);
   const setOpen = useAgent((s) => s.setOpen);
@@ -118,20 +136,20 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   const activeAoi = useAoi((s) => s.active);
   const feeds = useFeeds((s) => s.feeds);
 
-  const [q, setQ] = useState('');
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [q, setQ] = useState("");
+  const [phase, setPhase] = useState<Phase>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [trace, setTrace] = useState<TraceRow[]>([]);
   const [result, setResult] = useState<FinalResult | null>(null);
   const [meta, setMeta] = useState<DoneMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [ranQuery, setRanQuery] = useState('');
+  const [ranQuery, setRanQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const lastSeq = useRef(0);
 
-  const running = phase === 'gathering' || phase === 'synthesizing';
+  const running = phase === "gathering" || phase === "synthesizing";
   const expanded = open || running || result !== null || error !== null;
 
   // Auto-scroll the trace as it streams.
@@ -147,9 +165,15 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   const applyAppVar = useCallback(
     (v: AppVar): void => {
       if (v.fly_to && viewer && !viewer.isDestroyed()) {
-        flyToPosition(viewer, v.fly_to.lon, v.fly_to.lat, v.fly_to.alt_m ?? 350_000, 1.2);
+        flyToPosition(
+          viewer,
+          v.fly_to.lon,
+          v.fly_to.lat,
+          v.fly_to.alt_m ?? 350_000,
+          1.2,
+        );
       }
-      if (typeof v.select === 'string' && v.select) {
+      if (typeof v.select === "string" && v.select) {
         useSelection.getState().select(v.select);
       }
       if (v.filter) {
@@ -157,7 +181,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
         if (v.filter.clear) {
           f.clear();
         } else if (v.filter.facet && v.filter.value) {
-          const mode: FilterMode = v.filter.mode === 'not' ? 'not' : 'only';
+          const mode: FilterMode = v.filter.mode === "not" ? "not" : "only";
           // toggleClause flips; guard with isActive so an agent "set filter" is
           // idempotent (it never accidentally toggles an existing clause off).
           if (!f.isActive(v.filter.facet, v.filter.value, mode)) {
@@ -171,36 +195,57 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   );
 
   const handleEvent = (ev: Record<string, unknown>): void => {
-    const type = ev['type'] as string;
+    const type = ev["type"] as string;
     switch (type) {
-      case 'start':
-        setRanQuery(String(ev['query'] ?? ''));
-        setPhase('gathering');
+      case "start":
+        setRanQuery(String(ev["query"] ?? ""));
+        setPhase("gathering");
         break;
-      case 'tool_call':
+      case "tool_call":
         setTrace((t) => {
-          const row: TraceRow = { id: Number(ev['step'] ?? t.length), tool: String(ev['tool'] ?? ''), status: 'run' };
-          if (ev['args']) row.args = ev['args'] as Record<string, unknown>;
-          if (ev['thought']) row.thought = String(ev['thought']);
+          const row: TraceRow = {
+            id: Number(ev["step"] ?? t.length),
+            tool: String(ev["tool"] ?? ""),
+            status: "run",
+          };
+          if (ev["args"]) row.args = ev["args"] as Record<string, unknown>;
+          if (ev["thought"]) row.thought = String(ev["thought"]);
           return [...t, row];
         });
         break;
-      case 'tool_result':
+      case "tool_result":
         setTrace((t) =>
           t.map((r) =>
-            r.id === Number(ev['step']) && r.tool === ev['tool'] && r.status === 'run'
-              ? { ...r, status: 'ok', summary: String(ev['summary'] ?? ''), ms: Number(ev['ms'] ?? 0) }
+            r.id === Number(ev["step"]) &&
+            r.tool === ev["tool"] &&
+            r.status === "run"
+              ? {
+                  ...r,
+                  status: "ok",
+                  summary: String(ev["summary"] ?? ""),
+                  ms: Number(ev["ms"] ?? 0),
+                }
               : r,
           ),
         );
         break;
-      case 'note':
-        setTrace((t) => [...t, { id: 1000 + t.length, status: 'ok', note: String(ev['text'] ?? '') }]);
+      case "note":
+        setTrace((t) => [
+          ...t,
+          { id: 1000 + t.length, status: "ok", note: String(ev["text"] ?? "") },
+        ]);
         break;
-      case 'narration':
-        setTrace((t) => [...t, { id: 2000 + t.length, status: 'ok', narration: String(ev['text'] ?? '') }]);
+      case "narration":
+        setTrace((t) => [
+          ...t,
+          {
+            id: 2000 + t.length,
+            status: "ok",
+            narration: String(ev["text"] ?? ""),
+          },
+        ]);
         break;
-      case 'app_var': {
+      case "app_var": {
         // Drive the map (camera / selection / filter). Strip the SSE envelope
         // keys, then apply whatever fields the agent sent.
         const { type: _t, step: _s, ...rest } = ev;
@@ -209,69 +254,75 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
         applyAppVar(rest as AppVar);
         break;
       }
-      case 'action': {
+      case "action": {
         // An audited write-back landed (or failed). Record it as a distinct row.
         // Build the action object without undefined keys (exactOptionalPropertyTypes).
-        const action: NonNullable<TraceRow['action']> = {
-          name: String(ev['action'] ?? ''),
-          ok: Boolean(ev['ok']),
+        const action: NonNullable<TraceRow["action"]> = {
+          name: String(ev["action"] ?? ""),
+          ok: Boolean(ev["ok"]),
         };
-        if (ev['target_id'] != null) action.targetId = String(ev['target_id']);
-        if (ev['error'] != null) action.error = String(ev['error']);
-        setTrace((t) => [...t, { id: 3000 + t.length, status: 'ok', action }]);
+        if (ev["target_id"] != null) action.targetId = String(ev["target_id"]);
+        if (ev["error"] != null) action.error = String(ev["error"]);
+        setTrace((t) => [...t, { id: 3000 + t.length, status: "ok", action }]);
         break;
       }
-      case 'action_proposal':
+      case "action_proposal":
         // A write-back was QUEUED for operator approval instead of executing.
         setTrace((t) => [
           ...t,
           {
             id: 5000 + t.length,
-            status: 'ok',
+            status: "ok",
             proposal: {
-              id: String(ev['proposal_id'] ?? ''),
-              action: String(ev['action'] ?? ''),
-              params: (ev['params'] ?? {}) as Record<string, unknown>,
-              confidence: Number(ev['confidence'] ?? 0),
-              state: 'pending',
+              id: String(ev["proposal_id"] ?? ""),
+              action: String(ev["action"] ?? ""),
+              params: (ev["params"] ?? {}) as Record<string, unknown>,
+              confidence: Number(ev["confidence"] ?? 0),
+              state: "pending",
             },
           },
         ]);
         break;
-      case 'clarification':
+      case "clarification":
         setTrace((t) => [
           ...t,
           {
             id: 4000 + t.length,
-            status: 'ok',
+            status: "ok",
             clarification: {
-              question: String(ev['question'] ?? ''),
-              options: Array.isArray(ev['options']) ? (ev['options'] as string[]).map(String) : [],
+              question: String(ev["question"] ?? ""),
+              options: Array.isArray(ev["options"])
+                ? (ev["options"] as string[]).map(String)
+                : [],
             },
           },
         ]);
         break;
-      case 'synthesizing':
-        setPhase('synthesizing');
+      case "synthesizing":
+        setPhase("synthesizing");
         break;
-      case 'final': {
+      case "final": {
         const fr: FinalResult = {
-          findings: (ev['findings'] as Finding[]) ?? [],
-          follow_up: (ev['follow_up'] as string[]) ?? [],
-          derived: Boolean(ev['derived']),
+          findings: (ev["findings"] as Finding[]) ?? [],
+          follow_up: (ev["follow_up"] as string[]) ?? [],
+          derived: Boolean(ev["derived"]),
         };
-        if (ev['assessment'] != null) fr.assessment = String(ev['assessment']);
-        if (ev['recommended_detection']) fr.recommended_detection = ev['recommended_detection'] as { rule?: string; scope?: string };
+        if (ev["assessment"] != null) fr.assessment = String(ev["assessment"]);
+        if (ev["recommended_detection"])
+          fr.recommended_detection = ev["recommended_detection"] as {
+            rule?: string;
+            scope?: string;
+          };
         setResult(fr);
         break;
       }
-      case 'done':
+      case "done":
         setMeta(ev as DoneMeta);
-        setPhase('done');
+        setPhase("done");
         break;
-      case 'error':
-        setError(String(ev['text'] ?? 'agent error'));
-        setPhase('error');
+      case "error":
+        setError(String(ev["text"] ?? "agent error"));
+        setPhase("error");
         break;
       default:
         break;
@@ -279,54 +330,68 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   };
 
   const run = async (raw: string): Promise<void> => {
-    const text = raw.trim().replace(/^\/(investigate|correlate|detect|factcheck|scene)\s*/i, '').trim();
+    const text = raw
+      .trim()
+      .replace(/^\/(investigate|correlate|detect|factcheck|scene)\s*/i, "")
+      .trim();
     if (!text) return;
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setOpen(true);
-    setPhase('gathering');
+    setPhase("gathering");
     setTrace([]);
     setResult(null);
     setMeta(null);
     setError(null);
     setElapsed(0);
     const t0 = Date.now();
-    const timer = window.setInterval(() => setElapsed(Math.round((Date.now() - t0) / 1000)), 250);
-    const scope = activeAoi ? `&lat=${activeAoi.center[1]}&lon=${activeAoi.center[0]}&radius_nm=300` : '';
+    const timer = window.setInterval(
+      () => setElapsed(Math.round((Date.now() - t0) / 1000)),
+      250,
+    );
+    const scope = activeAoi
+      ? `&lat=${activeAoi.center[1]}&lon=${activeAoi.center[0]}&radius_nm=300`
+      : "";
     try {
-      const r = await apiFetch(`/api/intel/agent?q=${encodeURIComponent(text)}${scope}`, {
-        signal: ctrl.signal,
-        headers: { Accept: 'text/event-stream' },
-      });
-      if (!r.ok || !r.body) throw new Error(`Agent request failed (HTTP ${r.status})`);
+      const r = await apiFetch(
+        `/api/intel/agent?q=${encodeURIComponent(text)}${scope}`,
+        {
+          signal: ctrl.signal,
+          headers: { Accept: "text/event-stream" },
+        },
+      );
+      if (!r.ok || !r.body)
+        throw new Error(`Agent request failed (HTTP ${r.status})`);
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
-      let buf = '';
+      let buf = "";
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
-        const frames = buf.split('\n\n');
-        buf = frames.pop() ?? '';
+        const frames = buf.split("\n\n");
+        buf = frames.pop() ?? "";
         for (const frame of frames) {
-          const line = frame.split('\n').find((l) => l.startsWith('data:'));
+          const line = frame.split("\n").find((l) => l.startsWith("data:"));
           if (!line) continue;
           try {
-            handleEvent(JSON.parse(line.slice(5).trim()) as Record<string, unknown>);
+            handleEvent(
+              JSON.parse(line.slice(5).trim()) as Record<string, unknown>,
+            );
           } catch {
             /* skip malformed frame */
           }
         }
       }
     } catch (e) {
-      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) {
         setError(e instanceof Error ? e.message : String(e));
-        setPhase('error');
+        setPhase("error");
       }
     } finally {
       window.clearInterval(timer);
-      setPhase((p) => (p === 'done' || p === 'error' ? p : 'done'));
+      setPhase((p) => (p === "done" || p === "error" ? p : "done"));
     }
   };
 
@@ -337,12 +402,12 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   const collapse = useCallback((): void => {
     abortRef.current?.abort();
     setOpen(false);
-    setPhase('idle');
+    setPhase("idle");
     setTrace([]);
     setResult(null);
     setMeta(null);
     setError(null);
-    setRanQuery('');
+    setRanQuery("");
     setElapsed(0);
   }, [setOpen]);
 
@@ -360,16 +425,16 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   // ⌘J / Ctrl+J focuses the prompt (⌘K is the global Omnibar); Esc collapses.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key === 'j' || e.key === 'J') && (e.metaKey || e.ctrlKey)) {
+      if ((e.key === "j" || e.key === "J") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setOpen(true);
         requestAnimationFrame(() => inputRef.current?.focus());
-      } else if (e.key === 'Escape' && expanded && open) {
+      } else if (e.key === "Escape" && expanded && open) {
         collapse();
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [expanded, open, setOpen, collapse]);
 
   const flyToFinding = (f: Finding): void => {
@@ -380,13 +445,24 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
 
   // Approve/reject a queued write-back proposal (HITL gate). Approve executes
   // the audited action server-side; both mark the row's state for the operator.
-  const decide = async (pid: string, verb: 'approve' | 'reject'): Promise<void> => {
+  const decide = async (
+    pid: string,
+    verb: "approve" | "reject",
+  ): Promise<void> => {
     try {
-      await apiFetch(`/api/actions/proposals/${pid}/${verb}`, { method: 'POST' });
+      await apiFetch(`/api/actions/proposals/${pid}/${verb}`, {
+        method: "POST",
+      });
       setTrace((prev) =>
         prev.map((r) =>
           r.proposal && r.proposal.id === pid
-            ? { ...r, proposal: { ...r.proposal, state: verb === 'approve' ? 'approved' : 'rejected' } }
+            ? {
+                ...r,
+                proposal: {
+                  ...r.proposal,
+                  state: verb === "approve" ? "approved" : "rejected",
+                },
+              }
             : r,
         ),
       );
@@ -394,20 +470,24 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
       setTrace((prev) =>
         prev.map((r) =>
           r.proposal && r.proposal.id === pid
-            ? { ...r, proposal: { ...r.proposal, state: 'error' } }
+            ? { ...r, proposal: { ...r.proposal, state: "error" } }
             : r,
         ),
       );
     }
   };
 
-  const greenFeeds = Object.values(feeds).filter((f) => f.status === 'green').length;
+  const greenFeeds = Object.values(feeds).filter(
+    (f) => f.status === "green",
+  ).length;
   const totalFeeds = Object.values(feeds).length;
-  const worstSev = alerts.some((a) => a.severity === 'critical' || a.severity === 'high')
-    ? 'red'
-    : alerts.some((a) => a.severity === 'medium')
-      ? 'amber'
-      : 'green';
+  const worstSev = alerts.some(
+    (a) => a.severity === "critical" || a.severity === "high",
+  )
+    ? "red"
+    : alerts.some((a) => a.severity === "medium")
+      ? "amber"
+      : "green";
 
   // ── mobile: a FAB opens a full-screen console ──
   if (isMobile && !open) {
@@ -420,7 +500,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
         }}
         aria-label="Open analyst agent"
         className="on-dark fixed bottom-3 right-3 z-(--z-dock) flex items-center gap-2 mono text-[13px] px-4 py-2.5 rounded-md border border-accent-line text-accent"
-        style={{ background: 'rgba(9,12,18,0.95)' }}
+        style={{ background: "rgba(9,12,18,0.95)" }}
       >
         <span className="w-2 h-2 bg-accent rotate-45" /> Agent
       </button>
@@ -430,17 +510,18 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
   // `on-dark`: this panel pins its own near-black background regardless of the
   // colour scheme, so its text ramp has to stay the dark one (see tokens.css).
   const containerCls = isMobile
-    ? 'on-dark fixed inset-0 z-(--z-overlay) flex flex-col'
-    : 'on-dark map-banner flex flex-col';
+    ? "on-dark fixed inset-0 z-(--z-overlay) flex flex-col"
+    : "on-dark map-banner flex flex-col";
   const containerStyle = isMobile
-    ? { background: 'rgba(9,12,18,0.98)' }
+    ? { background: "rgba(9,12,18,0.98)" }
     : {
         width: expanded ? 724 : 600,
-        maxHeight: '76vh',
-        background: 'rgba(9,12,18,0.96)',
-        border: '1px solid var(--line-2)',
-        borderRadius: 'var(--r-md)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 0 0 1px rgba(0,0,0,0.4)',
+        maxHeight: "76vh",
+        background: "rgba(9,12,18,0.96)",
+        border: "1px solid var(--line-2)",
+        borderRadius: "var(--r-md)",
+        boxShadow:
+          "inset 0 1px 0 rgba(255,255,255,0.05), 0 0 0 1px rgba(0,0,0,0.4)",
       };
 
   return (
@@ -449,34 +530,49 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
       {(expanded || isMobile) && (
         <div className="flex items-center gap-2.5 px-2.5 py-2 border-b border-line-2 bg-bg-1 shrink-0">
           <span className="mono text-accent text-[11px]">▸</span>
-          <span className="mono text-[11px] tracking-[1px] text-txt-1">ANALYST</span>
+          <span className="mono text-[11px] tracking-[1px] text-txt-1">
+            ANALYST
+          </span>
           <span className="mono text-[10px] tracking-[0.6px] uppercase text-accent-fg border border-accent-line bg-accent-dim rounded-sm px-1.5 py-px">
-            {phase === 'gathering' ? 'tool loop' : phase === 'synthesizing' ? 'reasoning' : phase === 'done' ? 'plan mode' : 'analyst'}
+            {phase === "gathering"
+              ? "tool loop"
+              : phase === "synthesizing"
+                ? "reasoning"
+                : phase === "done"
+                  ? "plan mode"
+                  : "analyst"}
           </span>
           {meta?.model && (
-            <span className="mono text-[10px] text-txt-3 border border-line rounded-sm px-1.5 py-px" title={`backend: ${meta.backend}`}>
-              {String(meta.model).split('/').pop()}
+            <span
+              className="mono text-[10px] text-txt-3 border border-line rounded-sm px-1.5 py-px"
+              title={`backend: ${meta.backend}`}
+            >
+              {String(meta.model).split("/").pop()}
             </span>
           )}
           <div className="flex-1" />
           <span className="flex items-center gap-1.5 mono text-[10px] tracking-[0.4px] text-accent">
-            <StatusDot tone={running ? 'amber' : error ? 'red' : 'ok'} />
+            <StatusDot tone={running ? "amber" : error ? "red" : "ok"} />
             {running
-              ? `${phase === 'synthesizing' ? 'reasoning' : 'gathering'} · ${elapsed}s`
+              ? `${phase === "synthesizing" ? "reasoning" : "gathering"} · ${elapsed}s`
               : error
-                ? 'error'
+                ? "error"
                 : meta
                   ? `done · ${((meta.latency_ms ?? 0) / 1000).toFixed(1)}s`
-                  : 'ready'}
+                  : "ready"}
           </span>
           <button
             type="button"
             onClick={collapse}
             aria-label="Close analyst console"
-            title={isMobile ? 'Close' : 'Minimize'}
+            title={isMobile ? "Close" : "Minimize"}
             className="mono text-[12px] text-txt-3 border border-line rounded-sm w-[24px] h-[22px] flex items-center justify-center hover:text-txt-1"
           >
-            {isMobile ? <X size={13} strokeWidth={1.75} aria-hidden /> : <ChevronDown size={13} strokeWidth={1.75} aria-hidden />}
+            {isMobile ? (
+              <X size={13} strokeWidth={1.75} aria-hidden />
+            ) : (
+              <ChevronDown size={13} strokeWidth={1.75} aria-hidden />
+            )}
           </button>
         </div>
       )}
@@ -509,7 +605,10 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                     {r.narration}
                   </div>
                 ) : r.note !== undefined ? (
-                  <div key={r.id} className="flex gap-2 text-[10px] text-txt-3 leading-[1.4] pl-[22px]">
+                  <div
+                    key={r.id}
+                    className="flex gap-2 text-[10px] text-txt-3 leading-[1.4] pl-[22px]"
+                  >
                     <span>{r.note}</span>
                   </div>
                 ) : r.action !== undefined ? (
@@ -518,20 +617,32 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                   <div
                     key={r.id}
                     className={`rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-normal border ${
-                      r.action.ok ? 'border-warn-line bg-warn-bg' : 'border-alert-line bg-alert-bg'
+                      r.action.ok
+                        ? "border-warn-line bg-warn-bg"
+                        : "border-alert-line bg-alert-bg"
                     }`}
                   >
-                    <span className={`mono ${r.action.ok ? 'text-warn-fg' : 'text-alert-fg'}`}>
-                      {r.action.ok ? 'action' : 'action failed'} · {r.action.name}
+                    <span
+                      className={`mono ${r.action.ok ? "text-warn-fg" : "text-alert-fg"}`}
+                    >
+                      {r.action.ok ? "action" : "action failed"} ·{" "}
+                      {r.action.name}
                     </span>
                     {r.action.targetId && (
-                      <span className="mono text-txt-3"> → {r.action.targetId}</span>
+                      <span className="mono text-txt-3">
+                        {" "}
+                        → {r.action.targetId}
+                      </span>
                     )}
                     {r.action.error && (
-                      <div className="text-[10px] text-alert-fg mt-0.5">{r.action.error}</div>
+                      <div className="text-[10px] text-alert-fg mt-0.5">
+                        {r.action.error}
+                      </div>
                     )}
                     {r.action.ok && (
-                      <span className="mono text-[10px] text-txt-4 ml-1.5">audited · logged</span>
+                      <span className="mono text-[10px] text-txt-4 ml-1.5">
+                        audited · logged
+                      </span>
                     )}
                   </div>
                 ) : r.clarification !== undefined ? (
@@ -540,7 +651,10 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                   <div
                     key={r.id}
                     className="rounded-sm my-1 px-3 py-2 text-[11px] leading-normal"
-                    style={{ border: '1px solid var(--accent-line)', background: 'var(--accent-dim)' }}
+                    style={{
+                      border: "1px solid var(--accent-line)",
+                      background: "var(--accent-dim)",
+                    }}
                   >
                     <div className="mono text-[10px] tracking-[0.7px] uppercase text-accent-fg mb-1">
                       Clarification needed
@@ -570,20 +684,28 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                     className="rounded-sm my-1 px-2.5 py-1.5 text-[10.5px] leading-normal border border-warn-line bg-warn-bg"
                   >
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="mono text-warn-fg">Proposed · {r.proposal.action}</span>
-                      <span className="mono text-[10px] text-txt-4">conf {r.proposal.confidence.toFixed(2)}</span>
-                      {r.proposal.state === 'pending' ? (
+                      <span className="mono text-warn-fg">
+                        Proposed · {r.proposal.action}
+                      </span>
+                      <span className="mono text-[10px] text-txt-4">
+                        conf {r.proposal.confidence.toFixed(2)}
+                      </span>
+                      {r.proposal.state === "pending" ? (
                         <span className="flex gap-1.5 ml-auto">
                           <button
                             type="button"
-                            onClick={() => void decide(r.proposal!.id, 'approve')}
+                            onClick={() =>
+                              void decide(r.proposal!.id, "approve")
+                            }
                             className="mono text-[10px] text-warn-fg border border-accent-line rounded-sm px-2 py-0.5 hover:text-accent hover:border-accent"
                           >
                             Approve
                           </button>
                           <button
                             type="button"
-                            onClick={() => void decide(r.proposal!.id, 'reject')}
+                            onClick={() =>
+                              void decide(r.proposal!.id, "reject")
+                            }
                             className="mono text-[10px] text-alert-fg border border-line rounded-sm px-2 py-0.5 hover:border-alert-line"
                           >
                             Reject
@@ -592,11 +714,11 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                       ) : (
                         <span
                           className={`mono text-[10px] ml-auto ${
-                            r.proposal.state === 'approved'
-                              ? 'text-ok'
-                              : r.proposal.state === 'error'
-                                ? 'text-alert-fg'
-                                : 'text-txt-3'
+                            r.proposal.state === "approved"
+                              ? "text-ok"
+                              : r.proposal.state === "error"
+                                ? "text-alert-fg"
+                                : "text-txt-3"
                           }`}
                         >
                           {r.proposal.state}
@@ -608,29 +730,45 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                     </div>
                   </div>
                 ) : (
-                  <div key={`${r.id}-${r.tool}`} className="text-[10.5px] leading-normal">
-                    <div className="grid items-baseline gap-2" style={{ gridTemplateColumns: '14px 1fr auto' }}>
-                      <span aria-hidden className={`mono text-center ${r.status === 'ok' ? 'text-ok' : 'text-accent'}`}>
-                        {r.status === 'ok' ? '✓' : '⟳'}
+                  <div
+                    key={`${r.id}-${r.tool}`}
+                    className="text-[10.5px] leading-normal"
+                  >
+                    <div
+                      className="grid items-baseline gap-2"
+                      style={{ gridTemplateColumns: "14px 1fr auto" }}
+                    >
+                      <span
+                        aria-hidden
+                        className={`mono text-center ${r.status === "ok" ? "text-ok" : "text-accent"}`}
+                      >
+                        {r.status === "ok" ? "✓" : "⟳"}
                       </span>
                       <span className="mono text-txt-1">
                         {r.tool}
                         <span className="text-txt-4">({argStr(r.args)})</span>
                       </span>
                       <span className="mono text-[10px] text-txt-3 whitespace-nowrap">
-                        {r.status === 'ok' ? `${r.summary ?? ''}${r.ms != null ? ` · ${r.ms}ms` : ''}` : '…'}
+                        {r.status === "ok"
+                          ? `${r.summary ?? ""}${r.ms != null ? ` · ${r.ms}ms` : ""}`
+                          : "…"}
                       </span>
                     </div>
-                    {r.thought && <div className="pl-[22px] text-[10px] text-txt-3 italic">{r.thought}</div>}
+                    {r.thought && (
+                      <div className="pl-[22px] text-[10px] text-txt-3 italic">
+                        {r.thought}
+                      </div>
+                    )}
                   </div>
                 ),
               )}
             </div>
           )}
 
-          {phase === 'synthesizing' && (
+          {phase === "synthesizing" && (
             <div className="text-[11px] text-accent mt-2">
-              MiniMax-M3 reasoning over the gathered evidence… <span className="mono text-txt-3">· {elapsed}s</span>
+              MiniMax-M3 reasoning over the gathered evidence…{" "}
+              <span className="mono text-txt-3">· {elapsed}s</span>
             </div>
           )}
 
@@ -646,16 +784,19 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                 <div className="relative rounded-sm my-2.5 px-3 py-2.5 pl-3.5 border border-warn-line bg-warn-bg">
                   <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-warn" />
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="mono text-[10px] tracking-[0.7px] uppercase text-warn-fg">Detection proposed</span>
+                    <span className="mono text-[10px] tracking-[0.7px] uppercase text-warn-fg">
+                      Detection proposed
+                    </span>
                     {result.recommended_detection.scope && (
-                      <span className="mono text-[10px] tracking-[0.5px] uppercase text-txt-3 ml-auto truncate max-w-[55%]" title={result.recommended_detection.scope}>
+                      <span
+                        className="mono text-[10px] tracking-[0.5px] uppercase text-txt-3 ml-auto truncate max-w-[55%]"
+                        title={result.recommended_detection.scope}
+                      >
                         {result.recommended_detection.scope}
                       </span>
                     )}
                   </div>
-                  <div
-                    className="mono text-[10px] leading-[1.55] text-warn-fg rounded-sm px-2.5 py-2 border border-warn-line bg-bg-0"
-                  >
+                  <div className="mono text-[10px] leading-[1.55] text-warn-fg rounded-sm px-2.5 py-2 border border-warn-line bg-bg-0">
                     {result.recommended_detection.rule}
                   </div>
                 </div>
@@ -673,16 +814,22 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
                         type="button"
                         onClick={() => flyToFinding(f)}
                         disabled={!f.centroid}
-                        title={f.centroid ? 'fly to incident' : undefined}
+                        title={f.centroid ? "fly to incident" : undefined}
                         className="grid items-baseline gap-2 py-1.5 text-left border-b border-line hover:bg-bg-2/50 disabled:cursor-default"
-                        style={{ gridTemplateColumns: 'auto 1fr auto' }}
+                        style={{ gridTemplateColumns: "auto 1fr auto" }}
                       >
-                        <span className="mono text-[10px] text-txt-3">{f.id.slice(0, 8)}</span>
+                        <span className="mono text-[10px] text-txt-3">
+                          {f.id.slice(0, 8)}
+                        </span>
                         <span className="text-[10.5px] text-txt-1">
                           <span className="text-txt-0">{f.label}</span>
-                          {f.why && <span className="text-txt-3"> · {f.why}</span>}
+                          {f.why && (
+                            <span className="text-txt-3"> · {f.why}</span>
+                          )}
                         </span>
-                        <Badge tone={threatTone(f.threat)}>{f.threat ?? '—'}</Badge>
+                        <Badge tone={threatTone(f.threat)}>
+                          {f.threat ?? "—"}
+                        </Badge>
                       </button>
                     ))}
                   </div>
@@ -691,10 +838,15 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
 
               {result.follow_up && result.follow_up.length > 0 && (
                 <>
-                  <div className="mono text-[10px] tracking-[0.7px] uppercase text-txt-4 mt-3 mb-1.5">next steps</div>
+                  <div className="mono text-[10px] tracking-[0.7px] uppercase text-txt-4 mt-3 mb-1.5">
+                    next steps
+                  </div>
                   <ul className="flex flex-col gap-1">
                     {result.follow_up.map((s, i) => (
-                      <li key={i} className="flex gap-2 text-[10.5px] text-txt-1 leading-[1.45]">
+                      <li
+                        key={i}
+                        className="flex gap-2 text-[10.5px] text-txt-1 leading-[1.45]"
+                      >
                         <span className="text-accent mono">▸</span>
                         <span>{s}</span>
                       </li>
@@ -705,7 +857,8 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
 
               {result.derived && (
                 <div className="mono text-[10px] text-txt-4 mt-3">
-                  synthesised from the brief (the reasoning model did not return a clean final). Findings are the fused incidents.
+                  synthesised from the brief (the reasoning model did not return
+                  a clean final). Findings are the fused incidents.
                 </div>
               )}
             </>
@@ -716,36 +869,72 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
       {/* ── cost / governance bar ── */}
       {(expanded || isMobile) && meta && (
         <div className="flex items-center gap-3 px-3 py-1.5 border-t border-line bg-bg-1 mono text-[10px] tracking-[0.3px] text-txt-4 shrink-0 flex-wrap">
-          <span>backend <b className="text-txt-2 font-medium">{meta.backend ?? '—'}</b></span>
+          <span>
+            backend{" "}
+            <b className="text-txt-2 font-medium">{meta.backend ?? "—"}</b>
+          </span>
           {meta.usage?.total_tokens != null && (
             <span>
-              tok <b className="text-txt-2 font-medium">{meta.usage.total_tokens.toLocaleString()}</b>
+              tok{" "}
+              <b className="text-txt-2 font-medium">
+                {meta.usage.total_tokens.toLocaleString()}
+              </b>
               {meta.usage.prompt_tokens != null && (
-                <span className="text-txt-4"> ({meta.usage.prompt_tokens}↑/{meta.usage.completion_tokens ?? 0}↓)</span>
+                <span className="text-txt-4">
+                  {" "}
+                  ({meta.usage.prompt_tokens}↑/
+                  {meta.usage.completion_tokens ?? 0}↓)
+                </span>
               )}
             </span>
           )}
-          <span>scope <b className="text-txt-2 font-medium">{meta.scope}</b></span>
-          <span>incidents <b className="text-txt-2 font-medium">{meta.incident_count ?? '—'}</b></span>
-          <span>signals <b className="text-txt-2 font-medium">{meta.signals_considered ?? '—'}</b></span>
-          <span className="ml-auto">runtime <b className="text-txt-2 font-medium">{((meta.latency_ms ?? 0) / 1000).toFixed(1)}s</b></span>
+          <span>
+            scope <b className="text-txt-2 font-medium">{meta.scope}</b>
+          </span>
+          <span>
+            incidents{" "}
+            <b className="text-txt-2 font-medium">
+              {meta.incident_count ?? "—"}
+            </b>
+          </span>
+          <span>
+            signals{" "}
+            <b className="text-txt-2 font-medium">
+              {meta.signals_considered ?? "—"}
+            </b>
+          </span>
+          <span className="ml-auto">
+            runtime{" "}
+            <b className="text-txt-2 font-medium">
+              {((meta.latency_ms ?? 0) / 1000).toFixed(1)}s
+            </b>
+          </span>
         </div>
       )}
 
       {/* ── standing pills (desktop) ── */}
       {!isMobile && (
         <div className="flex items-center gap-2 px-2.5 py-1.5 border-t border-line overflow-hidden shrink-0">
-          <span className="mono text-[10px] tracking-[0.6px] uppercase text-txt-4">Standing</span>
-          <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-sm px-2 py-[3px] whitespace-nowrap">
-            <StatusDot tone={worstSev} />alerts <b className="text-txt-1 font-medium">{alerts.length}</b>
+          <span className="mono text-[10px] tracking-[0.6px] uppercase text-txt-4">
+            Standing
           </span>
           <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-sm px-2 py-[3px] whitespace-nowrap">
-            AOI <b className="text-txt-1 font-medium">{activeAoi ? activeAoi.name : 'global'}</b>
+            <StatusDot tone={worstSev} />
+            alerts <b className="text-txt-1 font-medium">{alerts.length}</b>
+          </span>
+          <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-sm px-2 py-[3px] whitespace-nowrap">
+            AOI{" "}
+            <b className="text-txt-1 font-medium">
+              {activeAoi ? activeAoi.name : "global"}
+            </b>
           </span>
           {totalFeeds > 0 && (
             <span className="flex items-center gap-1.5 mono text-[10px] text-txt-2 border border-line rounded-sm px-2 py-[3px] whitespace-nowrap">
-              <StatusDot tone={greenFeeds === totalFeeds ? 'green' : 'amber'} />feeds{' '}
-              <b className="text-txt-1 font-medium">{greenFeeds}/{totalFeeds}</b>
+              <StatusDot tone={greenFeeds === totalFeeds ? "green" : "amber"} />
+              feeds{" "}
+              <b className="text-txt-1 font-medium">
+                {greenFeeds}/{totalFeeds}
+              </b>
             </span>
           )}
         </div>
@@ -760,7 +949,7 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !running) void run(q);
+            if (e.key === "Enter" && !running) void run(q);
           }}
           placeholder="investigate · query the snapshot · correlate · locate the emitter"
           aria-label="Analyst console prompt"
@@ -768,11 +957,17 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
           className="flex-1 mono text-[11px] text-txt-1 placeholder:text-txt-3 bg-transparent border-none outline-hidden disabled:opacity-60"
         />
         {running ? (
-          <Btn size="sm" onClick={() => abortRef.current?.abort()}>stop</Btn>
+          <Btn size="sm" onClick={() => abortRef.current?.abort()}>
+            stop
+          </Btn>
         ) : (
-          <Btn size="sm" tone="accent" onClick={() => void run(q)}>↵ run</Btn>
+          <Btn size="sm" tone="accent" onClick={() => void run(q)}>
+            ↵ run
+          </Btn>
         )}
-        <span className="mono text-[10px] text-txt-3 border border-line-2 rounded-sm px-1.5 py-px">⌘J</span>
+        <span className="mono text-[10px] text-txt-3 border border-line-2 rounded-sm px-1.5 py-px">
+          ⌘J
+        </span>
       </div>
 
       {/* ── slash hints (resting desktop only) ── */}
@@ -783,7 +978,9 @@ export function AgentConsole({ viewer }: { viewer: Cesium.Viewer | null }): JSX.
               key={s}
               type="button"
               onClick={() => {
-                setQ((cur) => (cur.startsWith('/') ? `${s} ` : `${s} ${cur}`).trimStart());
+                setQ((cur) =>
+                  (cur.startsWith("/") ? `${s} ` : `${s} ${cur}`).trimStart(),
+                );
                 inputRef.current?.focus();
               }}
               className="text-txt-2 hover:text-accent"

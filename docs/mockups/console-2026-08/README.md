@@ -16,12 +16,12 @@ The operator's verdict on the previous set was that it read as a cheap
 imitation. Four things were wrong with it, and each one is now a check that
 fails loudly rather than a claim in prose.
 
-| Complaint | What was actually wrong | What is here |
-|---|---|---|
+| Complaint                                                       | What was actually wrong                                                                                                                                                                                                       | What is here                                                                                                                                                    |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | "why do the UI have to have so many icons, they're just emojis" | The app has **190 emoji-as-icon sites across 63 files**. `✕` alone appears at **27**. Meanwhile `apps/web/src/normal/Icon.tsx` is a 48-name registry backed by 46 lucide imports, and `lucide-react` is already a dependency. | **131 real SVG symbols**, extracted from lucide-react's own path data by `_icons.mjs` into `_sprite.svg`. **897 icon uses across the set, zero emoji.** Gate 1. |
-| "stop just showing me numbers, I want graph" | The Layers panel renders `ON` / `OFF` and `3/4` with no mark anywhere. Gotham's Histogram puts a bar on **every** row, carrying filtered share as well as magnitude. | **208 marks.** Every count sits inside a `.mark` with a bar, sparkline, dot matrix or meter beside it. Gate 3. |
-| "I want my images" | 18 image surfaces already exist in the app, none of them on the surfaces Gotham puts pictures on: object lists and graph nodes. | Every object card carries a thumbnail, using the app's own silhouettes from `globe/icons.ts`. Gate 4. |
-| "the replay feature is so bad, so hard to rewind" | One hardcoded number. See below. | The full transport from `tmp/palantir/parts/video-transport.png`, and a strip that spans the loaded range. |
+| "stop just showing me numbers, I want graph"                    | The Layers panel renders `ON` / `OFF` and `3/4` with no mark anywhere. Gotham's Histogram puts a bar on **every** row, carrying filtered share as well as magnitude.                                                          | **208 marks.** Every count sits inside a `.mark` with a bar, sparkline, dot matrix or meter beside it. Gate 3.                                                  |
+| "I want my images"                                              | 18 image surfaces already exist in the app, none of them on the surfaces Gotham puts pictures on: object lists and graph nodes.                                                                                               | Every object card carries a thumbnail, using the app's own silhouettes from `globe/icons.ts`. Gate 4.                                                           |
+| "the replay feature is so bad, so hard to rewind"               | One hardcoded number. See below.                                                                                                                                                                                              | The full transport from `tmp/palantir/parts/video-transport.png`, and a strip that spans the loaded range.                                                      |
 
 Plus the basemap: the previous set drew its coastlines. This one uses **real
 Carto dark-matter raster tiles**, the same source `apps/api/app/routes/tiles.py:138`
@@ -58,13 +58,13 @@ defects are drawn into it:
 
 ## The pages
 
-| | |
-|---|---|
-| `00-index.html` | the board |
-| `01-kit.html` | every primitive at 1:1, with the measurement that produced it |
-| `10` to `15` | map console: live, selected, replay, histogram, find, info |
-| `16-states.html` | loading, empty, error, **degraded**, four up |
-| `20` to `31` | the twelve analytical apps |
+|                  |                                                               |
+| ---------------- | ------------------------------------------------------------- |
+| `00-index.html`  | the board                                                     |
+| `01-kit.html`    | every primitive at 1:1, with the measurement that produced it |
+| `10` to `15`     | map console: live, selected, replay, histogram, find, info    |
+| `16-states.html` | loading, empty, error, **degraded**, four up                  |
+| `20` to `31`     | the twelve analytical apps                                    |
 
 The app list is `AppId` from `apps/web/src/state/appView.ts:14-28`, so the set
 covers every app exactly once. What each panel contains is predicted from
@@ -77,18 +77,18 @@ shows the shipping product, and it carries devices those captures never did.
 Applied here to this repo's own domain, with its own content, symbology,
 palette and identity:
 
-| Device | Why it earns its place |
-|---|---|
-| **Panel title as an ALL-CAPS subject with a live state line** (`COLLECTION QUEUE` / `Last refresh 4 s ago · Refresh`) | A panel that states its own freshness is instrumented. One that just says "Layers" is furniture. |
-| **Icon tab strip + filter chip row** at the top of a panel | Sibling views and scope filters are one row each, above the content, instead of a menu. |
-| **Work card**: status chip, label-ABOVE-value micro grid, nested sub-cards, footer holding the deciding fact | In a decision queue the label is the question and the value is the answer, so stacking reads faster than the console's right-aligned column. |
-| **Decision dock** with Reject / Re-task / Approve | Every other page in this set shows what is true. None of them let anyone decide anything, and a console whose only verb is "look" is a viewer. |
-| **Gantt with hour columns and a red now-line** | A tasking window is a span against a clock, which a list cannot show. |
-| **Toast at the top of the surface the action changed** | Confirmation lands where the change happened. |
-| **Map labels as chips** rather than shadowed text | Bare text disappears over bright imagery; a chip does not. |
-| **Bearing readout** on the map edge | North-up is an assumption, and an instrument states its assumptions. |
-| **A distinct hue for model output** (indigo, off the map data palette) | An operator should never have to work out whether a number is a reading or a recommendation. |
-| **Half-dial + stepper** for weights | A weight is a quantity you nudge, so the control shows the quantity and the nudge together. |
+| Device                                                                                                                | Why it earns its place                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Panel title as an ALL-CAPS subject with a live state line** (`COLLECTION QUEUE` / `Last refresh 4 s ago · Refresh`) | A panel that states its own freshness is instrumented. One that just says "Layers" is furniture.                                               |
+| **Icon tab strip + filter chip row** at the top of a panel                                                            | Sibling views and scope filters are one row each, above the content, instead of a menu.                                                        |
+| **Work card**: status chip, label-ABOVE-value micro grid, nested sub-cards, footer holding the deciding fact          | In a decision queue the label is the question and the value is the answer, so stacking reads faster than the console's right-aligned column.   |
+| **Decision dock** with Reject / Re-task / Approve                                                                     | Every other page in this set shows what is true. None of them let anyone decide anything, and a console whose only verb is "look" is a viewer. |
+| **Gantt with hour columns and a red now-line**                                                                        | A tasking window is a span against a clock, which a list cannot show.                                                                          |
+| **Toast at the top of the surface the action changed**                                                                | Confirmation lands where the change happened.                                                                                                  |
+| **Map labels as chips** rather than shadowed text                                                                     | Bare text disappears over bright imagery; a chip does not.                                                                                     |
+| **Bearing readout** on the map edge                                                                                   | North-up is an assumption, and an instrument states its assumptions.                                                                           |
+| **A distinct hue for model output** (indigo, off the map data palette)                                                | An operator should never have to work out whether a number is a reading or a recommendation.                                                   |
+| **Half-dial + stepper** for weights                                                                                   | A weight is a quantity you nudge, so the control shows the quantity and the nudge together.                                                    |
 
 `32-decide.html` is the page built from it.
 
@@ -97,7 +97,7 @@ palette and identity:
 The first cut of this set had everything sharing an edge: panels butted against
 the map with a 1px border, groups ran straight into each other, and the time
 dock was pinned to `left: 0; right: 0; bottom: 0`. That was deliberate and it
-was wrong. Gotham's *window chrome* is welded, which is what the reference crops
+was wrong. Gotham's _window chrome_ is welded, which is what the reference crops
 show, but two things inside it are not, and copying the outer grammar without
 the inner one is how density becomes a wall:
 
@@ -133,7 +133,7 @@ checks. Four real defects came out of turning that on, none of them visible at
 the size the set was drawn at:
 
 1. **A number was silently wrong.** `.kv dd` is right-aligned with
-   `text-overflow: ellipsis`, and a right-aligned ellipsis eats the *leading*
+   `text-overflow: ellipsis`, and a right-aligned ellipsis eats the _leading_
    characters. At 1366 the Altitude row rendered **"8,975 ft" for 38,975** with
    nothing on screen saying it had been cut. Values now never truncate; the
    label yields instead. Gate check `clipped` distinguishes the two cases: a
@@ -181,7 +181,7 @@ and every icon was cropped.
 ```
 
 1. **emoji** — no codepoint above U+00FF in rendered text. Sixteen typographic
-   characters are allowed by name (the lone `—` no-value sentinel, the ` · `
+   characters are allowed by name (the lone `—` no-value sentinel, the `·`
    separator, curly quotes, `…`); everything else is a pictograph standing in
    for an icon.
 2. **basemap** — the map well resolves real tile images and none failed to load.
@@ -191,7 +191,7 @@ and every icon was cropped.
 5. **floor / viewbox / a11y** — no text under 12px outside a named exemption
    list; every symbol-referencing `<svg>` has its own `viewBox`; every
    focusable has an accessible name and none is keyboard-unreachable.
-6. **copy** — no ` — `; the em dash survives only alone.
+6. **copy** — no `—`; the em dash survives only alone.
 7. **overflow** — no horizontal scroll at any of the five viewports.
 8. **clipped** — no value is truncated; no name is hard-clipped without an
    ellipsis.
@@ -260,17 +260,17 @@ not-Gotham.
 Measured on this machine's GPU, headful, `--profile all-toggles --seconds 75`,
 backend and `pnpm dev` both live:
 
-| | |
-|---|---|
-| **renderMsEMA p95** | **33.7 ms** (budget 16.7) — verdict **POOR** |
-| renderMsEMA p50 | 10.6 ms |
-| rendersPerSec | p05 20 · p50 55 · max 151 |
-| entities | p50 34,392 · max 54,685 |
-| dataSources | 78 |
-| ScriptDuration / TaskDuration | 66.5 s of 69.9 s = **95 % JS-bound** |
-| heap | p50 1.76 GB · **p95 3.31 GB** |
-| longtasks | p50 70/min |
-| drainMsLast | p95 20.8 ms |
+|                               |                                              |
+| ----------------------------- | -------------------------------------------- |
+| **renderMsEMA p95**           | **33.7 ms** (budget 16.7) — verdict **POOR** |
+| renderMsEMA p50               | 10.6 ms                                      |
+| rendersPerSec                 | p05 20 · p50 55 · max 151                    |
+| entities                      | p50 34,392 · max 54,685                      |
+| dataSources                   | 78                                           |
+| ScriptDuration / TaskDuration | 66.5 s of 69.9 s = **95 % JS-bound**         |
+| heap                          | p50 1.76 GB · **p95 3.31 GB**                |
+| longtasks                     | p50 70/min                                   |
+| drainMsLast                   | p95 20.8 ms                                  |
 
 **The remedy this plan was built on is already done.** `docs/perf-results-2026-07-27.md:221-227`
 names the fix as "extend `PrimitiveEntityLayer` to the other ~45 layers". Counted
@@ -303,10 +303,10 @@ collections / 53,934 entities measured 11.26 ms.
 It is wrong. Removing the empty ones at runtime, under continuous camera
 rotation so frames actually render, changed nothing:
 
-| | renderMsEMA p50 | p95 | DataSources |
-|---|---|---|---|
-| before | 28.8 ms | 30.5 ms | 78 |
-| after removing 38 empty | 27.7 ms | 31.1 ms | 40 |
+|                         | renderMsEMA p50 | p95     | DataSources |
+| ----------------------- | --------------- | ------- | ----------- |
+| before                  | 28.8 ms         | 30.5 ms | 78          |
+| after removing 38 empty | 27.7 ms         | 31.1 ms | 40          |
 
 Within noise, and p95 moved the wrong way. **Empty DataSources are free.** Do not
 spend a refactor on them; that measurement is the whole point of running the

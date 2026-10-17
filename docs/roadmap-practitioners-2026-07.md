@@ -17,7 +17,7 @@ reports' load-bearing claims are reproduced below with their evidence tags.
 
 ---
 
-## 1. The headline finding — we built the *seeing*, they need the *proving*
+## 1. The headline finding — we built the _seeing_, they need the _proving_
 
 Velocity today is an excellent instrument for **watching the world**: live
 multi-domain globe, unlimited local replay, facility layers, alerts. The
@@ -46,7 +46,7 @@ investigation loop **works until the moment you have to prove something**:
   (`routes/ontology.py:109-152`) and build a real case file (Situations,
   `routes/situations.py`, with typed evidence links) — but **no export
   operates on the case**. `/api/export` and `/api/report/pptx`
-  (`routes/export.py:144,194`) only serialize the *live snapshot*; there is
+  (`routes/export.py:144,194`) only serialize the _live snapshot_; there is
   no path from a Situation's linked evidence graph to a shareable document.
 - There is **no evidence-capture primitive** — no page/screenshot/media
   attachment with hash, timestamp, and provenance. Annotations are text
@@ -64,7 +64,7 @@ investigation loop **works until the moment you have to prove something**:
 **Thesis:** the ranked universal unmet needs across segments are (1)
 chain-of-custody evidence preservation, (3) a unified
 collection→graph→case→report record, and (6) report generation from case
-data — and a self-hosted local-first platform is *structurally advantaged*
+data — and a self-hosted local-first platform is _structurally advantaged_
 at all three (local storage IS the custody boundary; open-source is what
 courts increasingly demand over black-box tools; the Hunchly acquisition by
 Maltego 5/2025 proves willingness-to-pay for exactly this). Needs (2)
@@ -82,21 +82,21 @@ out the other end as evidence you can hand to someone."**
 
 ## 2. What each segment needs, in one line each (evidence-ranked)
 
-| Segment | Binding pain | What Velocity should do about it |
-|---|---|---|
-| Journalists / conflict researchers | Tool graveyard + evidence deleted before capture + reproducible method | Evidence locker (P1), case export with method/provenance (P2), photo geolocation surfaced (P3) |
-| Corporate CTI | 45-tool sprawl, manual intel→case handoff, fingerprint-then-alert | Unified record (already the ontology) + case export (P2) + CT/typosquat watch triggers (P5) |
-| LE / Trace Labs | Evidence logging is manual DIY; username tooling breaks constantly; 2–5 hrs/case reporting | Evidence locker (P1), report generation (P2), WhatsMyName *consumption* not reimplementation (P4) |
-| Hobbyist trackers / self-hosters | History paywalls, single-domain stacks, webhook alerts | Already served (replay, fusion, alerts) — they are the launch audience, keep them |
-| Human-rights / NGO | Berkeley Protocol compliance: hash at collection, custody log, court-grade auditability | Evidence locker designed against the Protocol checklist (P1); open-source auditability is free |
+| Segment                            | Binding pain                                                                               | What Velocity should do about it                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| Journalists / conflict researchers | Tool graveyard + evidence deleted before capture + reproducible method                     | Evidence locker (P1), case export with method/provenance (P2), photo geolocation surfaced (P3)    |
+| Corporate CTI                      | 45-tool sprawl, manual intel→case handoff, fingerprint-then-alert                          | Unified record (already the ontology) + case export (P2) + CT/typosquat watch triggers (P5)       |
+| LE / Trace Labs                    | Evidence logging is manual DIY; username tooling breaks constantly; 2–5 hrs/case reporting | Evidence locker (P1), report generation (P2), WhatsMyName _consumption_ not reimplementation (P4) |
+| Hobbyist trackers / self-hosters   | History paywalls, single-domain stacks, webhook alerts                                     | Already served (replay, fusion, alerts) — they are the launch audience, keep them                 |
+| Human-rights / NGO                 | Berkeley Protocol compliance: hash at collection, custody log, court-grade auditability    | Evidence locker designed against the Protocol checklist (P1); open-source auditability is free    |
 
 Design constraints carried forward (all sourced, all unchanged from the
 predecessor doc): unlabeled AI output is a liability to this audience —
-accepted uses are translation/transcription/summarization/triage *labeled
-and human-signed*; rejected are unlabeled inference, generative output in
+accepted uses are translation/transcription/summarization/triage _labeled
+and human-signed_; rejected are unlabeled inference, generative output in
 evidentiary contexts, AI attribution stated as fact, and facial recognition
 (14+ wrongful arrests). Local models are not just private — for LE they are
-a sourced *requirement* (never paste subject data into logged cloud AI).
+a sourced _requirement_ (never paste subject data into logged cloud AI).
 The local-LLM engine (PR #36) is therefore a strategic asset, not a toy:
 it is the only enrichment engine this audience can legally/ethically use on
 subject data.
@@ -107,13 +107,14 @@ Ordering principle: hygiene debts first (hours), then the one feature that
 is universal + advantaged + proven-paid (evidence locker), then the export
 that makes every existing feature legible (case→report), then wiring what's
 already built, then the lanes that broaden reach. Launch (predecessor W2
-packaging → r/selfhosted + Show HN) remains the gating *external* event and
+packaging → r/selfhosted + Show HN) remains the gating _external_ event and
 can fire between any two waves; P1+P2 give the launch story a second act —
 "not just watch: prove."
 
 ### P0 — Debts that undermine trust (≈1 day)
+
 - **decisions.md backfill** for PRs #27, #30–32, #36–38 and the UI/bug-fix
-  wave — the guard-doc contract is stale for six merges *again* (last entry
+  wave — the guard-doc contract is stale for six merges _again_ (last entry
   2026-07-11, `decisions.md:582`). One dated paragraph each.
 - **Fix the 503 wall on the pitched path**: document local mode in README +
   `.env.example` + compose comments; decide and document the compose default
@@ -126,6 +127,7 @@ can fire between any two waves; P1+P2 give the launch story a second act —
   largest non-geo use case and currently needs archaeology to find.
 
 ### P1 — The evidence locker (chain-of-custody capture) (≈2 weeks)
+
 The single largest sourced unserved need, universal across four of five
 segments, structurally local-first, willingness-to-pay proven (Hunchly).
 Berkeley Protocol as the spec checklist (OHCHR: "the collection tool should
@@ -156,6 +158,7 @@ automatically add — a hash value").
   — a capture tool that silently loses pages is worse than none.
 
 ### P2 — Case → report: the other end of the loop (≈1 week)
+
 - **`/api/situations/{id}/export`** walking the situation's linked children,
   their sourced assertions, attached evidence + hashes, and the relevant
   replay window into: (a) HTML/PDF dossier with per-claim provenance
@@ -172,7 +175,9 @@ automatically add — a hash value").
   footnote; AI-drafted text carries the label through to output.
 
 ### P3 — Wire what's already built (≈1 week)
+
 Cheapest capability-per-effort in the repo:
+
 - **Photo geolocation gets a surface**: API route + UI (drop a photo into a
   case → forensics report + candidate poses as evidence objects). 107 tests
   exist; the feature is done, it's just unreachable.
@@ -185,10 +190,12 @@ Cheapest capability-per-effort in the repo:
   hollow because case-starting requires prior knowledge of two UI gestures.
 
 ### P4 — The person/company lane: consume, don't compete (≈1 week, capped)
+
 Username/social correlation is a real need but **structurally disadvantaged
 self-hosted** — keeping 700+ site detections alive is a centralized
 community problem (WhatsMyName maintains a literal "Problem-Removed Sites"
 page; Sherlock's false-positive issue is structurally unsolved). So:
+
 - Consume the WhatsMyName community JSON for username checks (attribution +
   refresh-on-boot), HIBP k-anonymity range API for email exposure — never
   host breach data (legal exposure, identity violation).
@@ -203,6 +210,7 @@ page; Sherlock's false-positive issue is structurally unsolved). So:
   maintain site-detection logic.
 
 ### P5 — Fingerprint-then-alert (demand-gated, ≈1 week when pulled)
+
 Extend the shipped keyless alert engine (`alert_rules_local.py` + webhook
 sinks) from geofence/watch-list triggers to the CTI watch patterns the
 research found practitioners hand-rolling: cert-transparency watch,
@@ -212,15 +220,15 @@ post-launch feedback skews CTI; otherwise it queues behind P1–P3.
 
 ## 4. Dispositions (nothing silently dropped)
 
-| Predecessor item | Disposition |
-|---|---|
-| W2 launch (r/selfhosted, Show HN, README/GIF) | **Still the gating external event** — unblocked, can fire after P0 or after P1 for the stronger story. The <200-star reassessment gate stands. |
+| Predecessor item                                            | Disposition                                                                                                                                                                             |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W2 launch (r/selfhosted, Show HN, README/GIF)               | **Still the gating external event** — unblocked, can fire after P0 or after P1 for the stronger story. The <200-star reassessment gate stands.                                          |
 | W4 slice 2 (mint budget/prune, detector-bus hook, backfill) | Rides into P3 (the graph must not grow unboundedly once cases start landing evidence). The inverted `evidence_of` in `actions.py:191` gets fixed when P1 touches evidence links anyway. |
-| W5 MCP rate-limit + listing | Unchanged, still capped parity work; queue after P2. The MCP angle improves with P1/P2: "the agent can *preserve and cite*, not just look." |
-| W6 dark-fleet productization | Still demand-gated. Note P1 makes it better: a dark-fleet event that auto-preserves its evidence window clears the FleetLeaks explainability bar by construction. |
-| Ontology Home / analyst agent (Phases 3/5) | Still deferred until real users; unchanged reasoning. |
-| Country catalog 53/249 gap | Not a wave — add an in-UI coverage indicator (P0-adjacent polish) and grow the catalog opportunistically; do not block anything on it. |
-| Targeting app ("notional") | Leave as-is; it self-labels honestly. Revisit only if a user segment asks. |
+| W5 MCP rate-limit + listing                                 | Unchanged, still capped parity work; queue after P2. The MCP angle improves with P1/P2: "the agent can _preserve and cite_, not just look."                                             |
+| W6 dark-fleet productization                                | Still demand-gated. Note P1 makes it better: a dark-fleet event that auto-preserves its evidence window clears the FleetLeaks explainability bar by construction.                       |
+| Ontology Home / analyst agent (Phases 3/5)                  | Still deferred until real users; unchanged reasoning.                                                                                                                                   |
+| Country catalog 53/249 gap                                  | Not a wave — add an in-UI coverage indicator (P0-adjacent polish) and grow the catalog opportunistically; do not block anything on it.                                                  |
+| Targeting app ("notional")                                  | Leave as-is; it self-labels honestly. Revisit only if a user segment asks.                                                                                                              |
 
 ## 5. What NOT to do (all evidence-backed, several new)
 
@@ -258,8 +266,8 @@ post-launch feedback skews CTI; otherwise it queues behind P1–P3.
 
 Unchanged mechanics (one workstream = one cycle, explore → spec with
 file:line integration points → vertical slice → verify → screenshots →
-memory). The lens sharpens one more time. The predecessor asked: *does it
+memory). The lens sharpens one more time. The predecessor asked: _does it
 turn what we already see into something a stranger can run, trust, and
-keep?* This one asks: **does it help a practitioner prove something to a
+keep?_ This one asks: **does it help a practitioner prove something to a
 skeptic — with the hash, the source, and the label to back it?** Every wave
 above either answers yes or exists to unblock one that does.

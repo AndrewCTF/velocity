@@ -1,10 +1,17 @@
 // apps/web/src/news/VelocityNewsPage.tsx
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { apiFetch } from '../transport/http.js';
-import type { Brief, Edition, FeedArticle, FeedResponse, Story, Verification } from './types.js';
-import './news.css';
-import { safeHttpUrl } from '../shell/safeUrl.js';
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { apiFetch } from "../transport/http.js";
+import type {
+  Brief,
+  Edition,
+  FeedArticle,
+  FeedResponse,
+  Story,
+  Verification,
+} from "./types.js";
+import "./news.css";
+import { safeHttpUrl } from "../shell/safeUrl.js";
 
 const TICKER_REFRESH_MS = 60_000;
 
@@ -32,7 +39,7 @@ export function chipUrl(geo: StoryGeo): string {
     lon: geo.lon.toFixed(4),
     radius_km: geo.radius_km.toFixed(1),
     date: d,
-    source: 'auto',
+    source: "auto",
   });
   return `/api/imagery/chip?${p.toString()}`;
 }
@@ -40,9 +47,11 @@ export function chipUrl(geo: StoryGeo): string {
 function Media({ src, title }: { src: string; title: string }): JSX.Element {
   return (
     <div className="vn-media">
-      {src
-        ? <img src={safeHttpUrl(src)} alt="" loading="lazy" />
-        : <div className="vn-media-ph">{(title[0] || 'V').toUpperCase()}</div>}
+      {src ? (
+        <img src={safeHttpUrl(src)} alt="" loading="lazy" />
+      ) : (
+        <div className="vn-media-ph">{(title[0] || "V").toUpperCase()}</div>
+      )}
     </div>
   );
 }
@@ -51,15 +60,26 @@ function Media({ src, title }: { src: string; title: string }): JSX.Element {
 // resolved location, use a real satellite chip of that place instead of the
 // blank placeholder tile. Falls back to the ordinary placeholder on a chip
 // load failure (chip can 404/timeout) — never a broken-image icon.
-function HeroMedia({ story }: { story: Story & { geo?: StoryGeo } }): JSX.Element {
+function HeroMedia({
+  story,
+}: {
+  story: Story & { geo?: StoryGeo };
+}): JSX.Element {
   const [chipFailed, setChipFailed] = useState(false);
   if (story.image || !story.geo || chipFailed) {
     return <Media src={story.image} title={story.title} />;
   }
   return (
     <div className="vn-media vn-hero-chip">
-      <img src={chipUrl(story.geo)} alt="" loading="lazy" onError={() => setChipFailed(true)} />
-      <div className="vn-cap vn-orbit-cap">{story.geo.place} · Sentinel-2 · latest clear pass</div>
+      <img
+        src={chipUrl(story.geo)}
+        alt=""
+        loading="lazy"
+        onError={() => setChipFailed(true)}
+      />
+      <div className="vn-cap vn-orbit-cap">
+        {story.geo.place} · Sentinel-2 · latest clear pass
+      </div>
     </div>
   );
 }
@@ -71,12 +91,17 @@ function TrustRow({ s }: { s: Story }): JSX.Element {
     <div className="vn-trust">
       <span className="vn-dots" title={`${n} corroborating sources`}>
         {Array.from({ length: 5 }, (_, i) => (
-          <span key={i} className={`vn-dot${i < filled ? '' : ' off'}`} />
+          <span key={i} className={`vn-dot${i < filled ? "" : " off"}`} />
         ))}
       </span>
-      <span className="vn-corr">{n} {n === 1 ? 'source' : 'sources'}</span>
+      <span className="vn-corr">
+        {n} {n === 1 ? "source" : "sources"}
+      </span>
       {s.whats_wrong?.length > 0 && (
-        <span className="vn-flag">{s.whats_wrong.length} bias {s.whats_wrong.length === 1 ? 'flag' : 'flags'}</span>
+        <span className="vn-flag">
+          {s.whats_wrong.length} bias{" "}
+          {s.whats_wrong.length === 1 ? "flag" : "flags"}
+        </span>
       )}
       <StatusBadge s={s} />
     </div>
@@ -84,19 +109,20 @@ function TrustRow({ s }: { s: Story }): JSX.Element {
 }
 
 export const STATUS_LABEL: Record<string, string> = {
-  'verified-neutral': 'verified',
-  'reviewed-revised': 'revised',
-  contested: 'contested',
-  reviewed: 'reviewed',
-  unverified: 'unverified',
+  "verified-neutral": "verified",
+  "reviewed-revised": "revised",
+  contested: "contested",
+  reviewed: "reviewed",
+  unverified: "unverified",
 };
-export const STATUS_TONE: Record<string, 'ok' | 'warn' | 'alert' | 'neutral'> = {
-  'verified-neutral': 'ok',
-  'reviewed-revised': 'warn',
-  contested: 'alert',
-  reviewed: 'neutral',
-  unverified: 'neutral',
-};
+export const STATUS_TONE: Record<string, "ok" | "warn" | "alert" | "neutral"> =
+  {
+    "verified-neutral": "ok",
+    "reviewed-revised": "warn",
+    contested: "alert",
+    reviewed: "neutral",
+    unverified: "neutral",
+  };
 
 /** Verification badge with a click-to-open evidence popover. Degrades to
  * nothing when a story has no verification (skipped, or field absent). */
@@ -104,18 +130,28 @@ function StatusBadge({ s }: { s: Story }): JSX.Element | null {
   const v: Verification | undefined = s.verification;
   const status = v?.status;
   if (!status) return null;
-  const tone = STATUS_TONE[status] ?? 'neutral';
+  const tone = STATUS_TONE[status] ?? "neutral";
   const label = STATUS_LABEL[status] ?? status;
   const outlets = v.diversity?.buckets ?? [];
   const sources = s.corroboration?.sources ?? [];
   return (
-    <details className={`vn-badge vn-badge-${tone}`} onClick={(e) => e.stopPropagation()}>
+    <details
+      className={`vn-badge vn-badge-${tone}`}
+      onClick={(e) => e.stopPropagation()}
+    >
       <summary>{label}</summary>
       <div className="vn-evidence">
-        {v.models?.length ? <div>Reviewed by {v.verdicts ?? v.models.length} model{(v.verdicts ?? v.models.length) === 1 ? '' : 's'}</div> : null}
-        {outlets.length > 0 && <div>Leanings seen: {outlets.join(' · ')}</div>}
-        {sources.length > 0 && <div>Outlets: {sources.join(' · ')}</div>}
-        {!outlets.length && !sources.length && <div>No outlet evidence recorded.</div>}
+        {v.models?.length ? (
+          <div>
+            Reviewed by {v.verdicts ?? v.models.length} model
+            {(v.verdicts ?? v.models.length) === 1 ? "" : "s"}
+          </div>
+        ) : null}
+        {outlets.length > 0 && <div>Leanings seen: {outlets.join(" · ")}</div>}
+        {sources.length > 0 && <div>Outlets: {sources.join(" · ")}</div>}
+        {!outlets.length && !sources.length && (
+          <div>No outlet evidence recorded.</div>
+        )}
       </div>
     </details>
   );
@@ -123,11 +159,13 @@ function StatusBadge({ s }: { s: Story }): JSX.Element | null {
 
 function Card({ s, lead = false }: { s: Story; lead?: boolean }): JSX.Element {
   return (
-    <Link to={`/news/${s.id}`} className={`vn-card${lead ? ' lead' : ''}`}>
+    <Link to={`/news/${s.id}`} className={`vn-card${lead ? " lead" : ""}`}>
       <Media src={s.image} title={s.title} />
       <div className="vn-kicker">{s.category}</div>
       <h3 className="vn-h">{s.title}</h3>
-      {(lead || s.neutral_summary) && <p className="vn-dek">{s.neutral_summary}</p>}
+      {(lead || s.neutral_summary) && (
+        <p className="vn-dek">{s.neutral_summary}</p>
+      )}
       <TrustRow s={s} />
     </Link>
   );
@@ -135,14 +173,22 @@ function Card({ s, lead = false }: { s: Story; lead?: boolean }): JSX.Element {
 
 /** BBC-style category block: lead card (image) on the left, a headline-only
  * list of the next few stories on the right. */
-function CategoryBlock({ category, stories }: { category: string; stories: Story[] }): JSX.Element | null {
+function CategoryBlock({
+  category,
+  stories,
+}: {
+  category: string;
+  stories: Story[];
+}): JSX.Element | null {
   if (stories.length === 0) return null;
   const lead = stories[0] as Story;
   const list = stories.slice(1, 5);
   return (
     <section id={`cat-${category}`} className="vn-section">
       <div className="vn-section-head">
-        <span className="vn-section-title"><span>/</span> {category}</span>
+        <span className="vn-section-title">
+          <span>/</span> {category}
+        </span>
         <span className="vn-section-count">{stories.length} stories</span>
       </div>
       <div className="vn-catblock">
@@ -166,9 +212,9 @@ function CategoryBlock({ category, stories }: { category: string; stories: Story
 }
 
 function relativeTime(iso?: string | null): string {
-  if (!iso) return '';
+  if (!iso) return "";
   const t = Date.parse(iso);
-  if (Number.isNaN(t)) return '';
+  if (Number.isNaN(t)) return "";
   const secs = Math.max(0, Math.round((Date.now() - t) / 1000));
   if (secs < 60) return `${secs}s ago`;
   const mins = Math.round(secs / 60);
@@ -179,7 +225,7 @@ function relativeTime(iso?: string | null): string {
 }
 
 function ageLabel(secs?: number | null): string {
-  if (secs == null) return '';
+  if (secs == null) return "";
   if (secs < 90) return `${Math.round(secs)}s ago`;
   const mins = Math.round(secs / 60);
   if (mins < 60) return `${mins} min ago`;
@@ -194,11 +240,20 @@ function BriefStrip(): JSX.Element | null {
 
   useEffect(() => {
     let alive = true;
-    apiFetch('/api/news/brief')
+    apiFetch("/api/news/brief")
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: Brief | null) => { if (alive) { setBrief(j); setChecked(true); } })
-      .catch(() => { if (alive) setChecked(true); });
-    return () => { alive = false; };
+      .then((j: Brief | null) => {
+        if (alive) {
+          setBrief(j);
+          setChecked(true);
+        }
+      })
+      .catch(() => {
+        if (alive) setChecked(true);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   if (!checked || !brief || !brief.synthesis) return null;
@@ -206,23 +261,34 @@ function BriefStrip(): JSX.Element | null {
   const parts: string[] = [];
   const age = ageLabel(f.articles_age_s);
   if (age) parts.push(`updated ${age}`);
-  if (f.feeds_fetched != null && f.feeds_total != null) parts.push(`${f.feeds_fetched} of ${f.feeds_total} feeds`);
+  if (f.feeds_fetched != null && f.feeds_total != null)
+    parts.push(`${f.feeds_fetched} of ${f.feeds_total} feeds`);
   if (f.verified_count != null) parts.push(`${f.verified_count} verified`);
 
   return (
     <section className="vn-brief">
       <span className="vn-kicker">Today’s brief</span>
       <p className="vn-brief-text">{brief.synthesis}</p>
-      {parts.length > 0 && <div className="vn-brief-meta">{parts.join(' · ')}</div>}
+      {parts.length > 0 && (
+        <div className="vn-brief-meta">{parts.join(" · ")}</div>
+      )}
     </section>
   );
 }
 
 /** Top-6 rail ranked by corroboration source count — "most covered". */
-function MostCoveredRail({ stories }: { stories: Story[] }): JSX.Element | null {
+function MostCoveredRail({
+  stories,
+}: {
+  stories: Story[];
+}): JSX.Element | null {
   const top = [...stories]
     .filter((s) => (s.corroboration?.source_count ?? 0) > 0)
-    .sort((a, b) => (b.corroboration?.source_count ?? 0) - (a.corroboration?.source_count ?? 0))
+    .sort(
+      (a, b) =>
+        (b.corroboration?.source_count ?? 0) -
+        (a.corroboration?.source_count ?? 0),
+    )
     .slice(0, 6);
   if (top.length === 0) return null;
   return (
@@ -232,7 +298,9 @@ function MostCoveredRail({ stories }: { stories: Story[] }): JSX.Element | null 
         {top.map((s) => (
           <li key={s.id}>
             <Link to={`/news/${s.id}`}>
-              <span className="vn-rail-count">{s.corroboration?.source_count ?? 0}</span>
+              <span className="vn-rail-count">
+                {s.corroboration?.source_count ?? 0}
+              </span>
               <span className="vn-rail-title">{s.title}</span>
             </Link>
           </li>
@@ -251,17 +319,21 @@ function LatestTicker(): JSX.Element | null {
     let cancelled = false;
     const tick = async (): Promise<void> => {
       try {
-        const r = await apiFetch('/api/news/feed');
+        const r = await apiFetch("/api/news/feed");
         if (!r.ok || cancelled) return;
         const j = (await r.json()) as FeedResponse;
-        if (!cancelled && Array.isArray(j.articles)) setItems(j.articles.slice(0, 12));
+        if (!cancelled && Array.isArray(j.articles))
+          setItems(j.articles.slice(0, 12));
       } catch {
         /* swallow — keep the last good list */
       }
     };
     void tick();
     const id = window.setInterval(() => void tick(), TICKER_REFRESH_MS);
-    return () => { cancelled = true; window.clearInterval(id); };
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, []);
 
   if (items.length === 0) return null;
@@ -291,15 +363,24 @@ export function VelocityNewsPage(): JSX.Element {
 
   useEffect(() => {
     let alive = true;
-    apiFetch('/api/news/edition')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad status'))))
-      .then((j: Edition) => { if (alive) setEd(j); })
-      .catch(() => { if (alive) setErr(true); });
-    return () => { alive = false; };
+    apiFetch("/api/news/edition")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad status"))))
+      .then((j: Edition) => {
+        if (alive) setEd(j);
+      })
+      .catch(() => {
+        if (alive) setErr(true);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const today = new Date().toLocaleDateString(undefined, {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 
   const stories = ed?.stories ?? [];
@@ -319,12 +400,20 @@ export function VelocityNewsPage(): JSX.Element {
         </div>
 
         <div className="vn-masthead">
-          <Link to="/news" className="vn-brand">VELOCITY <mark>NEWS</mark></Link>
-          <div className="vn-tagline">Every story, de-spun: bias &amp; propaganda flagged, sources shown</div>
+          <Link to="/news" className="vn-brand">
+            VELOCITY <mark>NEWS</mark>
+          </Link>
+          <div className="vn-tagline">
+            Every story, de-spun: bias &amp; propaganda flagged, sources shown
+          </div>
         </div>
 
         <nav className="vn-nav">
-          {cats.map((c) => <a key={c} href={`#cat-${c}`}>{c}</a>)}
+          {cats.map((c) => (
+            <a key={c} href={`#cat-${c}`}>
+              {c}
+            </a>
+          ))}
         </nav>
 
         <BriefStrip />
@@ -332,15 +421,30 @@ export function VelocityNewsPage(): JSX.Element {
         {!ed && !err && (
           <>
             <div className="vn-hero">
-              <div><div className="vn-media vn-skel" style={{ aspectRatio: '16/9' }} /></div>
+              <div>
+                <div
+                  className="vn-media vn-skel"
+                  style={{ aspectRatio: "16/9" }}
+                />
+              </div>
               <div className="vn-hero-side">
-                {[0, 1, 2].map((i) => <div key={i} className="vn-skel" style={{ height: 88 }} />)}
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="vn-skel" style={{ height: 88 }} />
+                ))}
               </div>
             </div>
           </>
         )}
-        {err && <div className="vn-state">News is unavailable right now. Please try again shortly.</div>}
-        {ed && stories.length === 0 && <div className="vn-state">Today’s edition is still being assembled.</div>}
+        {err && (
+          <div className="vn-state">
+            News is unavailable right now. Please try again shortly.
+          </div>
+        )}
+        {ed && stories.length === 0 && (
+          <div className="vn-state">
+            Today’s edition is still being assembled.
+          </div>
+        )}
 
         {lead && (
           <section className="vn-hero">
@@ -374,14 +478,22 @@ export function VelocityNewsPage(): JSX.Element {
         )}
 
         {cats.map((c) => (
-          <CategoryBlock key={c} category={c} stories={stories.filter((s) => s.category === c && !heroIds.has(s.id))} />
+          <CategoryBlock
+            key={c}
+            category={c}
+            stories={stories.filter(
+              (s) => s.category === c && !heroIds.has(s.id),
+            )}
+          />
         ))}
 
         {ed && stories.length > 0 && (
           <div className="vn-foot">
             <span>{stories.length} stories</span>
-            <span>{ed.article_count} articles · {ed.source_count} sources</span>
-            <span>Analysis: {ed.backend ?? 'pending'}</span>
+            <span>
+              {ed.article_count} articles · {ed.source_count} sources
+            </span>
+            <span>Analysis: {ed.backend ?? "pending"}</span>
           </div>
         )}
       </div>

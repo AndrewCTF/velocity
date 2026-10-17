@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as Cesium from "cesium";
 
 // 45° hatch fill for controlled areas. Cesium has no diagonal-stripe material
 // (StripeMaterialProperty is only horizontal/vertical, two-colour), so we render a
@@ -10,8 +10,11 @@ const _cache = new Map<string, Cesium.ImageMaterialProperty>();
 
 /** Build (or reuse) a 45° diagonal-hatch material in `cssColor`. `dense` doubles the
  *  stripe frequency — used for CONTESTED zones so they read as busier at a glance. */
-export function hatchMaterial(cssColor: string, dense = false): Cesium.ImageMaterialProperty {
-  const key = `${cssColor}|${dense ? 'd' : 'n'}`;
+export function hatchMaterial(
+  cssColor: string,
+  dense = false,
+): Cesium.ImageMaterialProperty {
+  const key = `${cssColor}|${dense ? "d" : "n"}`;
   const cached = _cache.get(key);
   if (cached) return cached;
 
@@ -28,11 +31,15 @@ export function hatchMaterial(cssColor: string, dense = false): Cesium.ImageMate
 }
 
 /** The raw canvas — separated so it is unit-testable without a Cesium viewer. */
-export function makeHatchCanvas(cssColor: string, dense: boolean, size = 12): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
+export function makeHatchCanvas(
+  cssColor: string,
+  dense: boolean,
+  size = 12,
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
   ctx.clearRect(0, 0, size, size);
   ctx.strokeStyle = cssColor;

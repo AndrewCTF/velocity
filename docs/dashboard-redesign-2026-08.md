@@ -43,22 +43,22 @@ Reference: `docs/palantir-reference-2026-07.md`. Prior design authority:
 
 Velocity has more capability than navigation. Measured from source:
 
-| Fact | Evidence |
-|---|---|
-| 41 entry points compete: 14 apps, 18 rail items, 9 routes | `state/appView.ts:14`, `App.tsx:179-204`, `AppRouter.tsx:55-65` |
-| The ⌘K palette indexes **zero** apps, routes, rail items or settings | `command-bar/Omnibar.tsx:41-46,82-110` |
-| 12 unrelated `keydown` listeners, 4 binding `Esc` | Omnibar, AgentConsole, App, SearchField, GlobeToolbar, ContextMenu, SettingsModal, AlertsPanel, Onboarding, InboxPanel, AnnotationPanel, WorkbenchTabs |
-| The richer of two layer UIs is buried in a "more" drawer | `App.tsx:181` vs `App.tsx:197` |
-| `LayerRegistry.setTimeWindow` has no UI at all | `registry/LayerRegistry.ts:65` |
-| `rightTabs` (9) and `leftTabs` (10) are rebuilt every render for the mobile chooser only | `App.tsx:156-222`, `ConsoleShell.tsx:225-233` |
-| `ConsoleShell`'s `overlayLeft` slot is implemented and never passed | `ConsoleShell.tsx:36,296` |
-| 780 sub-11px font-size literals against a documented 11px floor | 748 at `text-[10px]`, 31 at `text-[9px]`, 1 at `text-[8px]` |
-| `--sp-*` spacing scale: 0 consumers. `--fs-*`: 10, all in `Markdown.tsx` | `theme/tokens.css:71-78,102-107` |
-| Three parallel primitive sets, no shared form controls | `shell/instruments.tsx` (79 importers), `foundry/ui.tsx` (3), `country/shared.tsx` (0) |
+| Fact                                                                                     | Evidence                                                                                                                                               |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 41 entry points compete: 14 apps, 18 rail items, 9 routes                                | `state/appView.ts:14`, `App.tsx:179-204`, `AppRouter.tsx:55-65`                                                                                        |
+| The ⌘K palette indexes **zero** apps, routes, rail items or settings                     | `command-bar/Omnibar.tsx:41-46,82-110`                                                                                                                 |
+| 12 unrelated `keydown` listeners, 4 binding `Esc`                                        | Omnibar, AgentConsole, App, SearchField, GlobeToolbar, ContextMenu, SettingsModal, AlertsPanel, Onboarding, InboxPanel, AnnotationPanel, WorkbenchTabs |
+| The richer of two layer UIs is buried in a "more" drawer                                 | `App.tsx:181` vs `App.tsx:197`                                                                                                                         |
+| `LayerRegistry.setTimeWindow` has no UI at all                                           | `registry/LayerRegistry.ts:65`                                                                                                                         |
+| `rightTabs` (9) and `leftTabs` (10) are rebuilt every render for the mobile chooser only | `App.tsx:156-222`, `ConsoleShell.tsx:225-233`                                                                                                          |
+| `ConsoleShell`'s `overlayLeft` slot is implemented and never passed                      | `ConsoleShell.tsx:36,296`                                                                                                                              |
+| 780 sub-11px font-size literals against a documented 11px floor                          | 748 at `text-[10px]`, 31 at `text-[9px]`, 1 at `text-[8px]`                                                                                            |
+| `--sp-*` spacing scale: 0 consumers. `--fs-*`: 10, all in `Markdown.tsx`                 | `theme/tokens.css:71-78,102-107`                                                                                                                       |
+| Three parallel primitive sets, no shared form controls                                   | `shell/instruments.tsx` (79 importers), `foundry/ui.tsx` (3), `country/shared.tsx` (0)                                                                 |
 
 Two persona waves reached the same verdict independently: capability that is
-*"reachable but invisible"*, that *"fails silently"*, with *"no in-app way to
-discover"* a degraded feed. Finding six of
+_"reachable but invisible"_, that _"fails silently"_, with _"no in-app way to
+discover"_ a degraded feed. Finding six of
 `docs/user-feedback-personas-2026-07.md` is titled **"Built-but-unreachable
 capability keeps not converting."**
 
@@ -81,16 +81,16 @@ carried over unchanged.
 The second pass departs on each, and **every departure closes something already
 recorded as a defect**:
 
-| Axis | Today | Proposed | The problem it fixes |
-|---|---|---|---|
-| **Colour** | warm ink `#191817`, accent `#6fb1dd` | instrument grey `#182026`, muted steel accent `#2B95D6` | Colour is the strongest signal of "same product". |
-| **Analytical apps** | dark, same as the map | **light** (`#FFFFFF` / `#F5F7FA`) | Gotham is dark because it is operational; Foundry is light because it is analytical. The mode switch is itself information: dark when you are watching, light when you are building. |
-| **Layout** | three columns; opening a panel makes the map narrower | **edge-to-edge map with panels docked flush over it**; nothing owns a grid track | The map is the product. A 336px column that permanently steals width is exactly the "covered by permanent chrome" that `docs/frontend.md:99` forbids. |
-| **Shell** | 26px classification band + 42px bar + 158px timeline footer | a floating 52px bar, marking as an inline pill, time as a collapsible dock over the map | Four grid rows down to zero, about 230px of vertical returned to the map. |
-| **Type** | body 13px, floor 11px, uppercase tracked labels | body 14px, floor 12px, 20px panel titles, sentence case | `docs/decisions.md:1017` already concluded the density, not the typeface, was what read as "AI dashboard". This finishes that argument instead of leaving 780 literals below the floor. |
-| **Chrome** | tinted label bars with a 3px accent edge, nested bordered boxes, rules between rows | grouping by space and weight; hairlines only where two surfaces meet | The tinted eyebrow is the most recognisable ornament of the current UI and carries no information. |
-| **Navigation** | 44px icon rail with tooltips | named text tabs, apps behind one launcher, palette over everything | An icon with a tooltip is exactly the reachable-but-invisible pattern the persona studies kept finding. |
-| **Radii / rows** | 2/3/5px, ~24px rows | 2/3/4px, 30px rows | Hard corners at that density read as instrument cosplay; 24px rows put counts into labels. |
+| Axis                | Today                                                                               | Proposed                                                                                | The problem it fixes                                                                                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Colour**          | warm ink `#191817`, accent `#6fb1dd`                                                | instrument grey `#182026`, muted steel accent `#2B95D6`                                 | Colour is the strongest signal of "same product".                                                                                                                                       |
+| **Analytical apps** | dark, same as the map                                                               | **light** (`#FFFFFF` / `#F5F7FA`)                                                       | Gotham is dark because it is operational; Foundry is light because it is analytical. The mode switch is itself information: dark when you are watching, light when you are building.    |
+| **Layout**          | three columns; opening a panel makes the map narrower                               | **edge-to-edge map with panels docked flush over it**; nothing owns a grid track        | The map is the product. A 336px column that permanently steals width is exactly the "covered by permanent chrome" that `docs/frontend.md:99` forbids.                                   |
+| **Shell**           | 26px classification band + 42px bar + 158px timeline footer                         | a floating 52px bar, marking as an inline pill, time as a collapsible dock over the map | Four grid rows down to zero, about 230px of vertical returned to the map.                                                                                                               |
+| **Type**            | body 13px, floor 11px, uppercase tracked labels                                     | body 14px, floor 12px, 20px panel titles, sentence case                                 | `docs/decisions.md:1017` already concluded the density, not the typeface, was what read as "AI dashboard". This finishes that argument instead of leaving 780 literals below the floor. |
+| **Chrome**          | tinted label bars with a 3px accent edge, nested bordered boxes, rules between rows | grouping by space and weight; hairlines only where two surfaces meet                    | The tinted eyebrow is the most recognisable ornament of the current UI and carries no information.                                                                                      |
+| **Navigation**      | 44px icon rail with tooltips                                                        | named text tabs, apps behind one launcher, palette over everything                      | An icon with a tooltip is exactly the reachable-but-invisible pattern the persona studies kept finding.                                                                                 |
+| **Radii / rows**    | 2/3/5px, ~24px rows                                                                 | 2/3/4px, 30px rows                                                                      | Hard corners at that density read as instrument cosplay; 24px rows put counts into labels.                                                                                              |
 
 | **Map** | an abstract globe with blob landmasses | a **real basemap at the zoom the data implies**: Baltic approaches, 100 km scale bar, coastlines including the Hel peninsula and Vistula Spit, named places, labelled graticule, north arrow | The scenario reads 54.3181 N 018.7122 E. A globe at that scale is the wrong instrument. A geoint console is judged on its map before anything else, and a cartoon globe undoes every other decision. |
 | **Density** | rows ~24px | rows 26px, two-line rows 38px, panel padding 16px, 17 layer rows per screen | Professional density is not small type. The type scale is unchanged; only the whitespace moved. |
@@ -120,17 +120,17 @@ delta of 0. Gotham is built on Blueprint, which Palantir publishes as
 whose ramp was modernised for contrast and therefore differs from the 2024
 screenshots. This design uses the current values, not the ones in the PDFs:
 
-| Role | Token | Blueprint name |
-|---|---|---|
-| page | `#111418` | black |
-| panels | `#1c2127` | dark-gray1 |
-| inset, hover | `#252a31` | dark-gray2 |
-| raised | `#2f343c` | dark-gray3 |
-| edge | `#383e47` | dark-gray4 |
-| primary text | `#f6f7f9` | light-gray5 |
-| secondary | `#c5cbd3` / `#abb3bf` | gray5 / gray4 |
-| muted | `#8f99a8` | gray3 |
-| accent | `#2d72d2` | blue3 |
+| Role            | Token                           | Blueprint name        |
+| --------------- | ------------------------------- | --------------------- |
+| page            | `#111418`                       | black                 |
+| panels          | `#1c2127`                       | dark-gray1            |
+| inset, hover    | `#252a31`                       | dark-gray2            |
+| raised          | `#2f343c`                       | dark-gray3            |
+| edge            | `#383e47`                       | dark-gray4            |
+| primary text    | `#f6f7f9`                       | light-gray5           |
+| secondary       | `#c5cbd3` / `#abb3bf`           | gray5 / gray4         |
+| muted           | `#8f99a8`                       | gray3                 |
+| accent          | `#2d72d2`                       | blue3                 |
 | ok, warn, alert | `#32a467`, `#ec9a3c`, `#e76a6e` | green4, orange4, red4 |
 
 Light surface uses light-gray5/4/3, black, dark-gray1, gray1 and blue2. Every
@@ -139,20 +139,20 @@ tokens outside the published palette.
 
 **Every UI screenshot in both PDFs was examined**, not a sample. Catalogue:
 
-| Screenshot | Surface | Light or dark | What it contributed |
-|---|---|---|---|
-| gotham p6 | Browser, object view | light | property list layout |
-| gotham p7 | **Object Explorer** | dark | shortcut rail, menu bar, tabs with count badges, property list with mini bars, **filter-path cards**, bottom action bar |
-| gotham p8 | Chat | dark | message rows, channel grouping |
-| gotham p9 | **Inbox** | light | channel list with collapsible groups, message list with filled-accent selection and unread dots, **entity tab strip with count badges and More overflow**, **change history with date gutter and plus-marked groups**, redaction bars |
-| gotham p10 | Slides | light | deck chrome, not adopted |
-| gotham p11 | **Dossier** | light | document surface, confirms Gotham is not uniformly dark |
-| gotham p12 | Graph | dark | window chrome, classification strip, five labelled toolbar groups, histogram with two sections |
-| gotham p13 | **Graph** | dark | **context menu with submenu**, **histogram tree**, panel header and icon bar |
-| gotham p14 | **Gaia** | light panel over satellite | tab strip, tree, **map tool cluster top-left**, **status strip**, real basemap |
-| gotham p15 | **Video** | dark | transport bar with time ruler and density histogram, left card stack |
-| foundry p3, p7 | diagrams | light | not UI |
-| foundry p18, gotham p24 | cover art | dark | not UI |
+| Screenshot              | Surface              | Light or dark              | What it contributed                                                                                                                                                                                                                   |
+| ----------------------- | -------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| gotham p6               | Browser, object view | light                      | property list layout                                                                                                                                                                                                                  |
+| gotham p7               | **Object Explorer**  | dark                       | shortcut rail, menu bar, tabs with count badges, property list with mini bars, **filter-path cards**, bottom action bar                                                                                                               |
+| gotham p8               | Chat                 | dark                       | message rows, channel grouping                                                                                                                                                                                                        |
+| gotham p9               | **Inbox**            | light                      | channel list with collapsible groups, message list with filled-accent selection and unread dots, **entity tab strip with count badges and More overflow**, **change history with date gutter and plus-marked groups**, redaction bars |
+| gotham p10              | Slides               | light                      | deck chrome, not adopted                                                                                                                                                                                                              |
+| gotham p11              | **Dossier**          | light                      | document surface, confirms Gotham is not uniformly dark                                                                                                                                                                               |
+| gotham p12              | Graph                | dark                       | window chrome, classification strip, five labelled toolbar groups, histogram with two sections                                                                                                                                        |
+| gotham p13              | **Graph**            | dark                       | **context menu with submenu**, **histogram tree**, panel header and icon bar                                                                                                                                                          |
+| gotham p14              | **Gaia**             | light panel over satellite | tab strip, tree, **map tool cluster top-left**, **status strip**, real basemap                                                                                                                                                        |
+| gotham p15              | **Video**            | dark                       | transport bar with time ruler and density histogram, left card stack                                                                                                                                                                  |
+| foundry p3, p7          | diagrams             | light                      | not UI                                                                                                                                                                                                                                |
+| foundry p18, gotham p24 | cover art            | dark                       | not UI                                                                                                                                                                                                                                |
 
 **Component-level parity.** `tmp/redesign/gotham-parity.html` puts each rebuilt
 component beside the original crop at a normalised scale, with the measurement
@@ -275,7 +275,7 @@ per-direction click depths are in `tmp/redesign/00-index.html`. The pattern:
 
 **Left panels absorb the rail.** `layers` + `allsources` merge into one **Layers**
 panel keeping `LayerRail`'s health dots, live counts, opacity and four mission
-presets *and* `LayerCatalog`'s folders, and finally exposing `setTimeWindow` plus
+presets _and_ `LayerCatalog`'s folders, and finally exposing `setTimeWindow` plus
 a per-layer **loading method** (Auto · Tile · Object). `search-objects` +
 `chokepoints` + `extract` + `countries` merge into **Find**, behind one input
 that sniffs its own content: a string parsing as DD, DMS, MGRS or UTM flies
@@ -315,8 +315,8 @@ covering 61 ids with 3 hidden (`normal/layerCatalog.ts:159`).
 > (`packages/shared/src/layer.ts:5-19`).
 
 The most load-bearing line in the reference (§2) is that Palantir's answer to too
-many objects is not a faster renderer, it is *changing what you load per layer
-based on how much there is*. The measured evidence agrees: the largest layer on
+many objects is not a faster renderer, it is _changing what you load per layer
+based on how much there is_. The measured evidence agrees: the largest layer on
 screen was **NASA FIRMS at 14,818 fire detections**, an off-by-default long-tail
 layer costing exactly what the primary feed costs
 (`docs/perf-results-2026-07-27.md:186-206`). The Layers panel therefore surfaces
@@ -331,11 +331,11 @@ loader behind it is a separate, measured decision.
 survives, restyled. The missing half is **form and interaction** atoms.
 Specified in `tmp/redesign/components.html`:
 
-| Primitive | Today |
-|---|---|
-| `Tooltip` | does not exist; every hover explanation is a native `title=` |
-| `Select`, `Tabs`, `Field`, `EmptyState`, `FilterChips` | exist **only** inside `foundry/ui.tsx`, not shared |
-| `Input`, `Checkbox`, `Radio`, `Slider`, `Table`, `Menu`, `Pagination`, `Skeleton` | do not exist at the shared layer |
+| Primitive                                                                         | Today                                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `Tooltip`                                                                         | does not exist; every hover explanation is a native `title=` |
+| `Select`, `Tabs`, `Field`, `EmptyState`, `FilterChips`                            | exist **only** inside `foundry/ui.tsx`, not shared           |
+| `Input`, `Checkbox`, `Radio`, `Slider`, `Table`, `Menu`, `Pagination`, `Skeleton` | do not exist at the shared layer                             |
 
 Two consolidations come with it: `country/shared.tsx` (0 external importers) is
 absorbed or deleted, and `foundry/ui.tsx` re-exports from the shared layer.
@@ -373,7 +373,7 @@ selection (clears). The order is the existing z-scale in `theme/tokens.css:85-10
 ## 7. Copy and states
 
 The voice rules are already law (`CLAUDE.md`, `docs/decisions.md:1137+`) and are
-inherited unchanged: no em dashes in dashboard copy; ` · ` separators in
+inherited unchanged: no em dashes in dashboard copy; `·` separators in
 subject-first order; a lone `—` means "no value reported" and is guarded by
 `entity-panel/placeCards.test.tsx`; errors are sentences that keep the code
 (`Cameras unavailable (HTTP 503)`, never `cams 503`); lowercase micro-labels
@@ -389,21 +389,21 @@ count that reads low because one of two sources is wedged must say so.
 
 ## 8. Where this lands in `apps/web/src`
 
-| Work | Files |
-|---|---|
-| Token rewrite | `theme/tokens.css` values change; names do not. A `.light` scope (or `data-theme` at the app-surface level) drives the analytical apps |
-| Shell rebuild | `shell/ConsoleShell.tsx` goes from 4 grid rows to 2; classification moves into `command-bar/CommandBar.tsx`; the timeline footer becomes `timeline/TimeDock.tsx` |
-| Panel registry | new `shell/panels.ts`; `App.tsx:156-222` deleted; `ConsoleShell.tsx:225-233` reads the registry |
-| Four left panels | `shell/LeftIconRail.tsx` replaced by a text tab strip; `layer-rail/LayerCatalog.tsx` + `layer-rail/LayerRail.tsx` merge; new `find/FindPanel.tsx`; `explorer/HistogramPanel.tsx` renamed in the UI only; new `info/InfoPanel.tsx` absorbing `FeedsPanel`, `OpsPanel`, `CommandBar.tsx:224` `SysStats`, `ConsoleShell.tsx:483` `MapHealthStrip` |
-| Three right panels | `entity-panel/ObjectInspector.tsx` gains compact mode and the multi-select header; new `series/SeriesPanel.tsx` reading `/api/history/tracks`; time controls split out of `timeline/Timeline.tsx` |
-| App launcher | new `shell/AppLauncher.tsx`, replacing `shell/AppSwitcher.tsx` |
-| Seven tools | `globe/GlobeToolbar.tsx` and `globe/mapTools.ts` gain `select`, `around`, `capture`, `delete`; `globe/draw.ts` modes exposed directly rather than through the annotation kind picker |
-| Multi-select | `state/stores.ts:42` `useSelection` widens from one id to a set, single-id read kept for compatibility |
-| Palette index | `command-bar/Omnibar.tsx` sources from `shell/panels.ts`, `state/appView.ts:30`, `registry/LayerRegistry`, `globe/mapTools.ts`, `state/settings.ts` |
-| Keyboard registry | new `shell/keys.ts`; the 12 `keydown` sites collapse into it; new `shell/ShortcutSheet.tsx` |
-| Primitives | new `shell/ui/`; `foundry/ui.tsx` re-exports; `country/shared.tsx` absorbed |
-| Settings as a place | `settings/SettingsModal.tsx` becomes `settings/SettingsApp.tsx`; the 8 stray localStorage keys move behind `state/settings.ts` |
-| Foundry | light surface; `foundry/nav.ts` gains `health`, `lineage`, `analysis`; new `foundry/HealthView.tsx`, `LineageView.tsx`, `AnalysisView.tsx` |
+| Work                | Files                                                                                                                                                                                                                                                                                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token rewrite       | `theme/tokens.css` values change; names do not. A `.light` scope (or `data-theme` at the app-surface level) drives the analytical apps                                                                                                                                                                                                         |
+| Shell rebuild       | `shell/ConsoleShell.tsx` goes from 4 grid rows to 2; classification moves into `command-bar/CommandBar.tsx`; the timeline footer becomes `timeline/TimeDock.tsx`                                                                                                                                                                               |
+| Panel registry      | new `shell/panels.ts`; `App.tsx:156-222` deleted; `ConsoleShell.tsx:225-233` reads the registry                                                                                                                                                                                                                                                |
+| Four left panels    | `shell/LeftIconRail.tsx` replaced by a text tab strip; `layer-rail/LayerCatalog.tsx` + `layer-rail/LayerRail.tsx` merge; new `find/FindPanel.tsx`; `explorer/HistogramPanel.tsx` renamed in the UI only; new `info/InfoPanel.tsx` absorbing `FeedsPanel`, `OpsPanel`, `CommandBar.tsx:224` `SysStats`, `ConsoleShell.tsx:483` `MapHealthStrip` |
+| Three right panels  | `entity-panel/ObjectInspector.tsx` gains compact mode and the multi-select header; new `series/SeriesPanel.tsx` reading `/api/history/tracks`; time controls split out of `timeline/Timeline.tsx`                                                                                                                                              |
+| App launcher        | new `shell/AppLauncher.tsx`, replacing `shell/AppSwitcher.tsx`                                                                                                                                                                                                                                                                                 |
+| Seven tools         | `globe/GlobeToolbar.tsx` and `globe/mapTools.ts` gain `select`, `around`, `capture`, `delete`; `globe/draw.ts` modes exposed directly rather than through the annotation kind picker                                                                                                                                                           |
+| Multi-select        | `state/stores.ts:42` `useSelection` widens from one id to a set, single-id read kept for compatibility                                                                                                                                                                                                                                         |
+| Palette index       | `command-bar/Omnibar.tsx` sources from `shell/panels.ts`, `state/appView.ts:30`, `registry/LayerRegistry`, `globe/mapTools.ts`, `state/settings.ts`                                                                                                                                                                                            |
+| Keyboard registry   | new `shell/keys.ts`; the 12 `keydown` sites collapse into it; new `shell/ShortcutSheet.tsx`                                                                                                                                                                                                                                                    |
+| Primitives          | new `shell/ui/`; `foundry/ui.tsx` re-exports; `country/shared.tsx` absorbed                                                                                                                                                                                                                                                                    |
+| Settings as a place | `settings/SettingsModal.tsx` becomes `settings/SettingsApp.tsx`; the 8 stray localStorage keys move behind `state/settings.ts`                                                                                                                                                                                                                 |
+| Foundry             | light surface; `foundry/nav.ts` gains `health`, `lineage`, `analysis`; new `foundry/HealthView.tsx`, `LineageView.tsx`, `AnalysisView.tsx`                                                                                                                                                                                                     |
 
 **Not touched:** `globe/adapters/styles.ts`, `globe/adapters/PollGeoJsonAdapter.ts`,
 `globe/GlobeCanvas.tsx` viewer options, `globe/adapters/deadReckon.ts`, the
@@ -420,7 +420,7 @@ decision deliberately by changing **both** the guard and `CLAUDE.md`.
 
 - **`globe/invariants.test.ts` scans source text, not behaviour.** `styles.ts`
   must literally contain `#facc15 #2dd4bf #c084fc #93c5fd #f59e0b #ef4444
-  #14b8a6 #d97706` and must not contain `PointGraphics`. `GlobeCanvas.tsx` must
+#14b8a6 #d97706` and must not contain `PointGraphics`. `GlobeCanvas.tsx` must
   contain `requestRenderMode: true`, `maximumRenderTimeChange: 0`, and the exact
   five-visualizer callback. `PollGeoJsonAdapter.ts` must not contain
   `.removeAll(`. Every `new WebSocket(` must have `withWsKey(` within 250
@@ -438,13 +438,13 @@ The palette was solved against `theme/contrast.test.ts` rather than around it,
 and computing it caught a real failure in the light surface. Every `--txt-*`
 tier, worst case across `--bg-1` and `--bg-2`:
 
-| Tier | Dark | Light |
-|---|---|---|
+| Tier      | Dark  | Light |
+| --------- | ----- | ----- |
 | `--txt-0` | 16.11 | 16.54 |
-| `--txt-1` | 11.69 | 9.35 |
-| `--txt-2` | 8.08 | 5.25 |
-| `--txt-3` | 5.36 | 4.64 |
-| `--txt-4` | 5.36 | 4.64 |
+| `--txt-1` | 11.69 | 9.35  |
+| `--txt-2` | 8.08  | 5.25  |
+| `--txt-3` | 5.36  | 4.64  |
+| `--txt-4` | 5.36  | 4.64  |
 
 All clear the 4.5:1 floor and the muted ramp stays monotonic in both themes.
 The light `--txt-3` started at `#66738a`, which measured **4.26:1 on `--bg-2`**
@@ -463,14 +463,14 @@ console alone**, and 8 toolbar tools whose only name was a `title` attribute.
 The mockups now demonstrate the contract rather than asserting it
 (`tmp/redesign/_a11y.py` performs the upgrade and the generator applies it):
 
-| Element | Was | Now |
-|---|---|---|
-| Map tool | `<div title>` | `<button aria-label>` |
-| Layer switch | `<span class="toggle">` | `<button role="switch" aria-checked>` |
-| Filter chip | `<span class="chip">` | `<button aria-pressed>` |
-| Layer row | `<div>` | focusable; rows owning a switch become `role="group"` and focus moves to the label, so a control is never nested inside another control |
-| Palette result | `<div>` | `role="option" tabindex="0"` |
-| Status dot | `<span>` | `aria-hidden`, the adjacent word carries the meaning |
+| Element        | Was                     | Now                                                                                                                                     |
+| -------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Map tool       | `<div title>`           | `<button aria-label>`                                                                                                                   |
+| Layer switch   | `<span class="toggle">` | `<button role="switch" aria-checked>`                                                                                                   |
+| Filter chip    | `<span class="chip">`   | `<button aria-pressed>`                                                                                                                 |
+| Layer row      | `<div>`                 | focusable; rows owning a switch become `role="group"` and focus moves to the label, so a control is never nested inside another control |
+| Palette result | `<div>`                 | `role="option" tabindex="0"`                                                                                                            |
+| Status dot     | `<span>`                | `aria-hidden`, the adjacent word carries the meaning                                                                                    |
 
 Measured across all nine pages: **0 text nodes below 12px, 0 unreachable
 controls, 0 focusable elements without an accessible name.** The map console has
@@ -563,6 +563,6 @@ Re-verify each gap against current source before building a panel for it.
   `globe/adapters/styles.ts`, kept as a deliberately separate colour system.
 - Contrast for the new chrome palette was computed by hand against the rule
   `theme/contrast.test.ts` enforces, before the mockups were drawn.
-- Copy rules checked mechanically: no ` — ` anywhere; em dashes appear only as
+- Copy rules checked mechanically: no `—` anywhere; em dashes appear only as
   the lone `—` meaning "no value reported", plus one deliberate wrong-example row
   in `components.html`.

@@ -5,31 +5,31 @@
 // entirely inert when selection AI is OFF (the common case) — no network
 // activity at all in that state. Collapsed by default so it doesn't push the
 // rest of the panel down on every click; matches the Widget card idiom.
-import { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
-import { useSettings } from '../state/settings.js';
-import { Badge } from '../shell/instruments.js';
-import { Markdown } from '../shell/Markdown.js';
-import type { SelectionBriefResponse } from '../settings/localAi/types.js';
-import { Icon } from '../normal/Icon.js';
-import { AiLabel } from '../shell/aiLabel.js';
+import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../transport/http.js";
+import { useSettings } from "../state/settings.js";
+import { Badge } from "../shell/instruments.js";
+import { Markdown } from "../shell/Markdown.js";
+import type { SelectionBriefResponse } from "../settings/localAi/types.js";
+import { Icon } from "../normal/Icon.js";
+import { AiLabel } from "../shell/aiLabel.js";
 
 // The backend is gaining an `enrichment` field on the selection-brief response
 // ("full" | "partial" | "skipped"); older backends omit it. Read it through a
 // widened view of the shared contract type so its absence stays valid.
 type BriefWithEnrichment = SelectionBriefResponse & {
-  enrichment?: 'full' | 'partial' | 'skipped';
+  enrichment?: "full" | "partial" | "skipped";
 };
 
 const DEBOUNCE_MS = 500;
 const CACHE_TTL_MS = 60_000;
 // Never dump the raw entity property bag into the prompt — only these
 // well-known fields, first-match-wins across common feed field-name variants.
-const CALLSIGN_KEYS = ['callsign', 'callSign', 'name'];
-const TYPE_KEYS = ['type', 'shipType', 'ship_type', 'category'];
-const SPEED_KEYS = ['velocity_ms', 'gs', 'sog', 'speed'];
-const HEADING_KEYS = ['track_deg', 'heading', 'cog'];
-const ORIGIN_KEYS = ['icao24', 'mmsi', 'source'];
+const CALLSIGN_KEYS = ["callsign", "callSign", "name"];
+const TYPE_KEYS = ["type", "shipType", "ship_type", "category"];
+const SPEED_KEYS = ["velocity_ms", "gs", "sog", "speed"];
+const HEADING_KEYS = ["track_deg", "heading", "cog"];
+const ORIGIN_KEYS = ["icao24", "mmsi", "source"];
 const MAX_FIELD_LEN = 64;
 
 interface CacheEntry {
@@ -43,13 +43,14 @@ const briefCache = new Map<string, CacheEntry>();
 function pick(props: Record<string, unknown>, keys: string[]): unknown {
   for (const k of keys) {
     const v = props[k];
-    if (v !== undefined && v !== null && v !== '') return v;
+    if (v !== undefined && v !== null && v !== "") return v;
   }
   return undefined;
 }
 
 function clampStr(v: unknown): unknown {
-  if (typeof v === 'string' && v.length > MAX_FIELD_LEN) return v.slice(0, MAX_FIELD_LEN);
+  if (typeof v === "string" && v.length > MAX_FIELD_LEN)
+    return v.slice(0, MAX_FIELD_LEN);
   return v;
 }
 
@@ -61,16 +62,17 @@ export function compactSelectionProps(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const callsign = pick(properties, CALLSIGN_KEYS);
-  if (callsign !== undefined) out['callsign'] = clampStr(callsign);
+  if (callsign !== undefined) out["callsign"] = clampStr(callsign);
   const type = pick(properties, TYPE_KEYS);
-  if (type !== undefined) out['type'] = clampStr(type);
+  if (type !== undefined) out["type"] = clampStr(type);
   const speed = pick(properties, SPEED_KEYS);
-  if (typeof speed === 'number' && Number.isFinite(speed)) out['speed'] = speed;
-  if (typeof altM === 'number' && Number.isFinite(altM)) out['alt'] = altM;
+  if (typeof speed === "number" && Number.isFinite(speed)) out["speed"] = speed;
+  if (typeof altM === "number" && Number.isFinite(altM)) out["alt"] = altM;
   const heading = pick(properties, HEADING_KEYS);
-  if (typeof heading === 'number' && Number.isFinite(heading)) out['heading'] = heading;
+  if (typeof heading === "number" && Number.isFinite(heading))
+    out["heading"] = heading;
   const origin = pick(properties, ORIGIN_KEYS);
-  if (origin !== undefined) out['origin'] = clampStr(origin);
+  if (origin !== undefined) out["origin"] = clampStr(origin);
   return out;
 }
 
@@ -81,7 +83,12 @@ interface Props {
   altM?: number;
 }
 
-export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Element | null {
+export function AiAssessmentCard({
+  id,
+  kind,
+  properties,
+  altM,
+}: Props): JSX.Element | null {
   const enabled = useSettings((s) => s.selectionAiEnabled);
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<SelectionBriefResponse | null>(null);
@@ -118,13 +125,16 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
     const body = {
       // Backend requires a non-empty kind (min_length=1); fall back so an
       // entity with no 'kind' prop still yields a valid request, not a 422.
-      kind: propsRef.current.kind || kind || 'entity',
+      kind: propsRef.current.kind || kind || "entity",
       id,
-      props: compactSelectionProps(propsRef.current.properties, propsRef.current.altM),
+      props: compactSelectionProps(
+        propsRef.current.properties,
+        propsRef.current.altM,
+      ),
     };
-    apiFetch('/api/ai/selection/brief', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+    apiFetch("/api/ai/selection/brief", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
       signal,
     })
@@ -138,8 +148,8 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
         setData(resp);
       })
       .catch((e: unknown) => {
-        if (e instanceof DOMException && e.name === 'AbortError') return;
-        setErr('Network error. Check your connection.');
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        setErr("Network error. Check your connection.");
       })
       .finally(() => {
         // An aborted request's `.finally` can still fire AFTER the next
@@ -159,7 +169,10 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
       return;
     }
     const aborter = new AbortController();
-    const timer = window.setTimeout(() => run(false, aborter.signal), DEBOUNCE_MS);
+    const timer = window.setTimeout(
+      () => run(false, aborter.signal),
+      DEBOUNCE_MS,
+    );
     return () => {
       window.clearTimeout(timer);
       aborter.abort();
@@ -188,22 +201,32 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
         className="w-full flex items-center justify-between gap-2 text-left"
       >
         <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2 flex items-center gap-1.5">
-          <span aria-hidden><Icon name={open ? 'chevron-down' : 'chevron-right'} className="w-3.5 h-3.5" /></span>
+          <span aria-hidden>
+            <Icon
+              name={open ? "chevron-down" : "chevron-right"}
+              className="w-3.5 h-3.5"
+            />
+          </span>
           AI assessment
         </span>
         {loading && <span className="mono text-[10px] text-txt-3">…</span>}
         {!loading && data && (
-          <span className="mono text-[10px] text-txt-3 tabular-nums">{data.latency_ms.toFixed(0)}ms</span>
+          <span className="mono text-[10px] text-txt-3 tabular-nums">
+            {data.latency_ms.toFixed(0)}ms
+          </span>
         )}
       </button>
 
       {open && (
         <div className="mt-1.5 space-y-1.5">
-          {loading && !data && <p className="mono text-[10px] text-txt-3">assessing…</p>}
+          {loading && !data && (
+            <p className="mono text-[10px] text-txt-3">assessing…</p>
+          )}
           {err && <p className="mono text-[10px] text-alert">{err}</p>}
           {data && data.ok === false && (
             <p className="mono text-[10px] text-warn">
-              {data.detail ?? 'Assessment withheld: it cited evidence that was not provided.'}
+              {data.detail ??
+                "Assessment withheld: it cited evidence that was not provided."}
             </p>
           )}
           {data && data.ok !== false && (
@@ -212,19 +235,25 @@ export function AiAssessmentCard({ id, kind, properties, altM }: Props): JSX.Ele
               <AiLabel />
               {data.grounded === false && (
                 <p className="mono text-[10px] text-txt-3">
-                  Unsourced: this assessment cited no object ids, so nothing in it can be
-                  traced back to a specific contact.
+                  Unsourced: this assessment cited no object ids, so nothing in
+                  it can be traced back to a specific contact.
                 </p>
               )}
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="mono text-[10px] text-txt-2 break-all min-w-0">{data.model}</span>
-                <span className="mono text-[10px] text-txt-3">{data.backend}</span>
-                <span className="mono text-[10px] text-txt-3 tabular-nums">{data.latency_ms.toFixed(0)}ms</span>
+                <span className="mono text-[10px] text-txt-2 break-all min-w-0">
+                  {data.model}
+                </span>
+                <span className="mono text-[10px] text-txt-3">
+                  {data.backend}
+                </span>
+                <span className="mono text-[10px] text-txt-3 tabular-nums">
+                  {data.latency_ms.toFixed(0)}ms
+                </span>
                 {data.cached && <Badge tone="neutral">cached</Badge>}
-                {(data as BriefWithEnrichment).enrichment === 'partial' && (
+                {(data as BriefWithEnrichment).enrichment === "partial" && (
                   <Badge tone="neutral">partial context</Badge>
                 )}
-                {(data as BriefWithEnrichment).enrichment === 'skipped' && (
+                {(data as BriefWithEnrichment).enrichment === "skipped" && (
                   <Badge tone="neutral">no context</Badge>
                 )}
                 <button

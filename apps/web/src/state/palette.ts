@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 // Open state for the ⌘K command palette (command-bar/Omnibar).
 //

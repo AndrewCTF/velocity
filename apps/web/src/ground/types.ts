@@ -17,7 +17,7 @@ export interface DetectStatus {
 
 /** A normalised ground photo point from /api/ground/nearby. */
 export interface GroundPhotoFeature {
-  source: 'panoramax' | 'kartaview' | string;
+  source: "panoramax" | "kartaview" | string;
   photo_id: string;
   name: string;
   lat: number;

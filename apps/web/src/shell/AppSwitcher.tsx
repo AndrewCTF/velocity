@@ -14,8 +14,13 @@ import {
   Waypoints,
   Workflow,
   type LucideIcon,
-} from 'lucide-react';
-import { useAppView, APP_GROUPS, APP_META, type AppId } from '../state/appView.js';
+} from "lucide-react";
+import {
+  useAppView,
+  APP_GROUPS,
+  APP_META,
+  type AppId,
+} from "../state/appView.js";
 
 // Icon per app — lives here (not in state/appView.ts) so the store stays
 // UI-free. Exhaustive Record: adding an app without an icon fails typecheck.
@@ -50,12 +55,12 @@ export function AppSwitcher(): JSX.Element {
       {APP_GROUPS.map((group, gi) => (
         <div
           key={group.id}
-          className={`flex items-stretch h-full ${gi > 0 ? 'border-l border-line-2 ml-1 pl-1' : ''}`}
+          className={`flex items-stretch h-full ${gi > 0 ? "border-l border-line-2 ml-1 pl-1" : ""}`}
         >
           <span
             aria-hidden
             className="hidden min-[1440px]:flex items-center justify-center pl-px pr-px font-label uppercase tracking-[0.5px] text-[8px] leading-none text-txt-4 select-none"
-            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+            style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
           >
             {group.label}
           </span>
@@ -72,15 +77,27 @@ export function AppSwitcher(): JSX.Element {
                 type="button"
                 onClick={() => setApp(id)}
                 title={`${APP_META[id].label} · ${APP_META[id].hint}`}
-                aria-current={active ? 'page' : undefined}
+                aria-current={active ? "page" : undefined}
                 aria-label={APP_META[id].label}
                 className={`relative h-full flex items-center gap-1.5 font-label uppercase tracking-[0.9px] text-[11px] transition-colors ${
-                  active ? 'px-2.5 text-txt-0 bg-bg-2/60' : 'px-2 text-txt-3 hover:text-txt-1 hover:bg-bg-2/40'
+                  active
+                    ? "px-2.5 text-txt-0 bg-bg-2/60"
+                    : "px-2 text-txt-3 hover:text-txt-1 hover:bg-bg-2/40"
                 }`}
               >
-                <Ico aria-hidden className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                {active && <span className="whitespace-nowrap">{APP_META[id].label}</span>}
-                {active && <span className="absolute left-2 right-2 bottom-0 h-[2px] bg-accent rounded-t-sm" />}
+                <Ico
+                  aria-hidden
+                  className="h-4 w-4 shrink-0"
+                  strokeWidth={1.75}
+                />
+                {active && (
+                  <span className="whitespace-nowrap">
+                    {APP_META[id].label}
+                  </span>
+                )}
+                {active && (
+                  <span className="absolute left-2 right-2 bottom-0 h-[2px] bg-accent rounded-t-sm" />
+                )}
               </button>
             );
           })}

@@ -5,7 +5,7 @@
 // cleanly — no card at all — when the country has no reported figures or the
 // upstream is degraded, rather than rendering an empty shell.
 
-import { Card, Skeleton, formatCompact, useCachedFetch } from './shared.js';
+import { Card, Skeleton, formatCompact, useCachedFetch } from "./shared.js";
 
 export interface DisplacementItem {
   iso3: string;
@@ -22,17 +22,32 @@ export interface DisplacementResponse {
   unavailable: boolean;
 }
 
-function CountChip({ label, value }: { label: string; value: number }): JSX.Element {
+function CountChip({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}): JSX.Element {
   return (
     <div className="flex items-baseline gap-1.5 px-2 py-1 rounded-sm border border-line-2 bg-bg-2">
-      <span className="mono text-[13px] text-txt-0">{formatCompact(value)}</span>
-      <span className="text-[9.5px] uppercase tracking-[0.5px] text-txt-3">{label}</span>
+      <span className="mono text-[13px] text-txt-0">
+        {formatCompact(value)}
+      </span>
+      <span className="text-[9.5px] uppercase tracking-[0.5px] text-txt-3">
+        {label}
+      </span>
     </div>
   );
 }
 
-export function DisplacementCard({ iso3 }: { iso3: string }): JSX.Element | null {
-  const { loading, error, data } = useCachedFetch<DisplacementResponse>('/api/displacement');
+export function DisplacementCard({
+  iso3,
+}: {
+  iso3: string;
+}): JSX.Element | null {
+  const { loading, error, data } =
+    useCachedFetch<DisplacementResponse>("/api/displacement");
 
   if (loading) {
     return (
@@ -63,11 +78,13 @@ export function DisplacementCard({ iso3 }: { iso3: string }): JSX.Element | null
     <Card title="Displacement" meta={item.source}>
       <div className="mono text-[14px] text-txt-0 mb-2">
         {formatCompact(total)} displaced
-        {asofMonth ? ` · as of ${asofMonth}` : ''}
+        {asofMonth ? ` · as of ${asofMonth}` : ""}
       </div>
       <div className="flex flex-wrap gap-2">
         {item.idps != null && <CountChip label="IDPs" value={item.idps} />}
-        {item.refugees != null && <CountChip label="refugees" value={item.refugees} />}
+        {item.refugees != null && (
+          <CountChip label="refugees" value={item.refugees} />
+        )}
       </div>
     </Card>
   );

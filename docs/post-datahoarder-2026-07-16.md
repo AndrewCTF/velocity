@@ -48,7 +48,6 @@ Repost path (do these in order, no shortcuts):
 
 ---
 
-
 Replaces the r/osinttools attempt (2026-07-06, "I built Palantir Gotham", 23K
 views, 26 upvotes, top comments "AI slop dashboard" / "you definitely didn't
 build Gotham"). That post led with fusion and AI, never mentioned owned history,

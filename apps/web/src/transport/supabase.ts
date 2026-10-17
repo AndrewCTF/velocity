@@ -28,17 +28,19 @@
 // object-src 'none'), plus short JWT expiry, the idle sign-out
 // (auth/useIdleSignOut.ts) and MFA for operator routes. A backend-for-frontend
 // with an httpOnly cookie was considered and not built.
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 function readEnv(name: string): string | undefined {
   // Spelled `import.meta.env` literally: vitest's stubEnv (supabase.test.ts)
   // only rewrites that exact token, not a cast-wrapped `(import.meta).env`.
-  const v = (import.meta.env as Record<string, string | boolean | undefined>)[name];
-  return typeof v === 'string' ? v : undefined;
+  const v = (import.meta.env as Record<string, string | boolean | undefined>)[
+    name
+  ];
+  return typeof v === "string" ? v : undefined;
 }
 
-const URL = readEnv('VITE_SUPABASE_URL');
-const ANON = readEnv('VITE_SUPABASE_ANON_KEY');
+const URL = readEnv("VITE_SUPABASE_URL");
+const ANON = readEnv("VITE_SUPABASE_ANON_KEY");
 
 export const isSupabaseConfigured = Boolean(URL && ANON);
 
@@ -48,7 +50,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        flowType: 'pkce',
+        flowType: "pkce",
       },
     })
   : null;
@@ -66,7 +68,7 @@ export function createReauthClient(): SupabaseClient | null {
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
-      storageKey: 'velocity-reauth',
+      storageKey: "velocity-reauth",
     },
   });
 }
@@ -103,7 +105,7 @@ export async function getAccessTokenAsync(): Promise<string | null> {
 // action and no PKCE binding (ASVS V7.6.2), and signOut never removed them
 // (V7.4.1). Nothing writes them any more; clear any leftovers on load and on
 // every sign-out.
-export const LEGACY_TOKEN_KEYS = ['vel_tok', 'vel_refresh'] as const;
+export const LEGACY_TOKEN_KEYS = ["vel_tok", "vel_refresh"] as const;
 
 export function clearLegacyTokens(): void {
   try {
@@ -118,7 +120,7 @@ clearLegacyTokens();
 if (supabase) {
   supabase.auth.onAuthStateChange((event, session) => {
     _accessToken = session?.access_token ?? null;
-    if (event === 'SIGNED_OUT') clearLegacyTokens();
+    if (event === "SIGNED_OUT") clearLegacyTokens();
   });
   // Watchdog: a hung getSession() — possible under a dead/slow network, since
   // auth-js serializes it behind navigator.locks with no timeout (and on a PKCE

@@ -4,9 +4,9 @@
 // tools drive the shared DrawController (globe/draw.ts) and publish their result
 // here so the floating toolbar can show a live distance / bounds readout without
 // prop-drilling. Mirrors the geoScope / annotations store pattern.
-import { create } from 'zustand';
+import { create } from "zustand";
 
-export type MapTool = 'pan' | 'measure' | 'area' | 'annotate' | 'move';
+export type MapTool = "pan" | "measure" | "area" | "annotate" | "move";
 
 export interface MeasureResult {
   /** Cumulative great-circle length of the drawn polyline, kilometres. */
@@ -40,7 +40,7 @@ interface MapToolsState {
 }
 
 export const useMapTools = create<MapToolsState>((set) => ({
-  tool: 'pan',
+  tool: "pan",
   setTool: (tool) => set({ tool }),
   measure: null,
   setMeasure: (measure) => set({ measure }),
@@ -49,6 +49,7 @@ export const useMapTools = create<MapToolsState>((set) => ({
 }));
 
 // DEV handle for live verification (mirrors __useSelection / __useGeoScope).
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useMapTools: typeof useMapTools }).__useMapTools = useMapTools;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (window as unknown as { __useMapTools: typeof useMapTools }).__useMapTools =
+    useMapTools;
 }

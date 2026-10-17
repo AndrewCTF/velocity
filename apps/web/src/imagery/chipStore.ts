@@ -16,7 +16,7 @@
 //   - radiusKm: AOI half-extent. EntityPanel passes 4 (a ~8 km box); the chip
 //     endpoint clamps to [0.1, 100].
 
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface ChipFocus {
   entityId: string | null;
@@ -38,6 +38,6 @@ export const useChip = create<ChipState>((set) => ({
 }));
 
 // DEV-only handle for debugging/introspection (mirrors __useSelection).
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
   (window as unknown as { __useChip: typeof useChip }).__useChip = useChip;
 }

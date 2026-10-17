@@ -1,21 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
-import type * as Cesium from 'cesium';
+import { useEffect, useRef, useState } from "react";
+import type * as Cesium from "cesium";
 import {
   search,
   KIND_BADGE_LABEL,
   KIND_BADGE_CLASS,
   LOCATION_KINDS,
   type SearchResult,
-} from '../transport/search.js';
-import { useSelection, useSearchTarget } from '../state/stores.js';
-import { flyToPosition } from '../globe/camera.js';
+} from "../transport/search.js";
+import { useSelection, useSearchTarget } from "../state/stores.js";
+import { flyToPosition } from "../globe/camera.js";
 
 interface Props {
   viewer: Cesium.Viewer | null;
 }
 
 export function SearchField({ viewer }: Props): JSX.Element {
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -25,13 +25,13 @@ export function SearchField({ viewer }: Props): JSX.Element {
   // `/` global focus
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT") {
         e.preventDefault();
         inputRef.current?.focus();
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
   // Debounced query
@@ -59,12 +59,15 @@ export function SearchField({ viewer }: Props): JSX.Element {
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
   const pick = (r: SearchResult) => {
@@ -73,32 +76,37 @@ export function SearchField({ viewer }: Props): JSX.Element {
       // Static location — no live entity to select. Drop a pinned marker at the
       // exact coordinate so the operator sees WHICH icon they searched for.
       useSelection.getState().select(null);
-      useSearchTarget.getState().setTarget(
-        located ? { lon: r.lon, lat: r.lat, label: r.label, kind: r.kind } : null,
-      );
+      useSearchTarget
+        .getState()
+        .setTarget(
+          located
+            ? { lon: r.lon, lat: r.lat, label: r.label, kind: r.kind }
+            : null,
+        );
     } else {
       // Live entity — the selection reticle locks onto it; retire any search pin.
       useSelection.getState().select(r.id);
       useSearchTarget.getState().setTarget(null);
     }
     if (viewer && located) {
-      const altKm = r.kind === 'chokepoint' ? 800 : 200;
+      const altKm = r.kind === "chokepoint" ? 800 : 200;
       flyToPosition(viewer, r.lon, r.lat, altKm * 1000, 1.2);
     }
     setOpen(false);
-    setQ('');
+    setQ("");
   };
 
   const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
       setActive((a) => Math.min(a + 1, results.length - 1));
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActive((a) => Math.max(a - 1, 0));
-    } else if (e.key === 'Enter') {
+    } else if (e.key === "Enter") {
       e.preventDefault();
-      const LATLON_RE = /^\s*(-?\d+(?:\.\d+)?)\s*[,/\s]\s*(-?\d+(?:\.\d+)?)\s*$/;
+      const LATLON_RE =
+        /^\s*(-?\d+(?:\.\d+)?)\s*[,/\s]\s*(-?\d+(?:\.\d+)?)\s*$/;
       const m = q.match(LATLON_RE);
       if (m && m[1] && m[2]) {
         const lat = parseFloat(m[1]);
@@ -112,25 +120,28 @@ export function SearchField({ viewer }: Props): JSX.Element {
             lon,
             lat,
             label: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
-            kind: 'place',
+            kind: "place",
           });
           if (viewer) flyToPosition(viewer, lon, lat, 200_000, 1.2);
           setOpen(false);
-          setQ('');
+          setQ("");
           return;
         }
       }
       const r = results[active];
       if (r) pick(r);
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       setOpen(false);
-      setQ('');
+      setQ("");
       inputRef.current?.blur();
     }
   };
 
   return (
-    <div ref={containerRef} className="relative w-40 min-[1440px]:w-56 min-[1920px]:w-80">
+    <div
+      ref={containerRef}
+      className="relative w-40 min-[1440px]:w-56 min-[1920px]:w-80"
+    >
       <input
         ref={inputRef}
         type="text"
@@ -152,7 +163,7 @@ export function SearchField({ viewer }: Props): JSX.Element {
           className="absolute z-(--z-dropdown) top-full mt-1 left-0 w-[420px] max-w-[92vw] bg-bg-1 border border-line rounded-md max-h-[60vh] overflow-y-auto"
           style={{
             boxShadow:
-              'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.5)',
+              "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.5)",
           }}
         >
           {results.map((r, i) => (
@@ -161,13 +172,19 @@ export function SearchField({ viewer }: Props): JSX.Element {
               type="button"
               onMouseEnter={() => setActive(i)}
               onClick={() => pick(r)}
-              className={`w-full text-left px-2 py-2 flex items-center gap-3 ${i === active ? 'bg-bg-2' : ''}`}
+              className={`w-full text-left px-2 py-2 flex items-center gap-3 ${i === active ? "bg-bg-2" : ""}`}
             >
-              <span className={KIND_BADGE_CLASS[r.kind]}>{KIND_BADGE_LABEL[r.kind]}</span>
+              <span className={KIND_BADGE_CLASS[r.kind]}>
+                {KIND_BADGE_LABEL[r.kind]}
+              </span>
               <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                <span className="truncate text-[12px] text-txt-0">{r.label}</span>
+                <span className="truncate text-[12px] text-txt-0">
+                  {r.label}
+                </span>
                 {r.detail && (
-                  <span className="truncate text-[10px] text-txt-3">{r.detail}</span>
+                  <span className="truncate text-[10px] text-txt-3">
+                    {r.detail}
+                  </span>
                 )}
               </span>
               <span className="mono micro tabular-nums">

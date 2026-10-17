@@ -7,7 +7,7 @@ export const DEFAULT_IDLE_MINUTES = 30;
 export const IDLE_WARNING_MS = 60_000;
 
 /** localStorage key holding the time of the last input, in epoch ms. */
-export const LAST_ACTIVITY_KEY = 'velocity.auth.lastActivity';
+export const LAST_ACTIVITY_KEY = "velocity.auth.lastActivity";
 
 /** Where the last input time survives the tab. */
 export interface ActivityStore {
@@ -123,6 +123,9 @@ export function createIdleTimer(opts: IdleTimerOptions): IdleTimer {
 
 /** Minutes from runtime config when the backend sends a sane number, else the default. */
 export function idleMinutesFrom(config: unknown): number {
-  const v = (config as { sessionIdleTimeoutMin?: unknown } | null)?.sessionIdleTimeoutMin;
-  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : DEFAULT_IDLE_MINUTES;
+  const v = (config as { sessionIdleTimeoutMin?: unknown } | null)
+    ?.sessionIdleTimeoutMin;
+  return typeof v === "number" && Number.isFinite(v) && v > 0
+    ? v
+    : DEFAULT_IDLE_MINUTES;
 }

@@ -1,6 +1,6 @@
 ---
 description: Stand a watch over an area — baseline once, then report only what changes
-argument-hint: [place | lat,lon]
+argument-hint: [place | lat, lon]
 ---
 
 Stand a watch over: **$ARGUMENTS**

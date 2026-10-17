@@ -12,7 +12,7 @@ not regress any of them. If unsure, leave the relevant code path alone.
   `apps/web/src/globe/adapters/styles.ts` (`aircraftStyle`, `vesselStyle`).
 - Aircraft categories (with their colors):
   - airliner — `#facc15`
-  - private  — `#2dd4bf`
+  - private — `#2dd4bf`
   - helicopter — `#c084fc`
   - glider — `#93c5fd`
   - military — `#f59e0b`
@@ -237,7 +237,7 @@ shipping.
 ### "Configured" ≠ "working"
 
 - `/api/intel/sources` showed `opensky_authed: true` simply because creds were
-  *set* — but the creds were expired and every authed call 401'd. A `bool(key)`
+  _set_ — but the creds were expired and every authed call 401'd. A `bool(key)`
   check proves nothing about whether the upstream actually answers.
 - RULE: to claim a source works, hit it and read the status/count. A set key is
   not a working key.

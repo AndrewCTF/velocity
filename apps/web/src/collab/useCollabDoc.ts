@@ -7,15 +7,19 @@
 // 0xFF = server heartbeat (ignored). The server is a dumb relay — see
 // apps/api/app/routes/collab.py.
 
-import { useEffect, useRef, useState } from 'react';
-import * as Y from 'yjs';
+import { useEffect, useRef, useState } from "react";
+import * as Y from "yjs";
 import {
   applyAwarenessUpdate,
   Awareness,
   encodeAwarenessUpdate,
-} from 'y-protocols/awareness';
+} from "y-protocols/awareness";
 
-import { apiFetch, backendWsUrl, openAuthedWebSocket } from '../transport/http.js';
+import {
+  apiFetch,
+  backendWsUrl,
+  openAuthedWebSocket,
+} from "../transport/http.js";
 
 const TAG_SYNC = 0x00;
 const TAG_AWARE = 0x01;
@@ -32,11 +36,11 @@ export interface CollabUser {
 }
 
 function wsBase(): string {
-  return backendWsUrl('/').replace(/\/$/, '');
+  return backendWsUrl("/").replace(/\/$/, "");
 }
 
 function bytesToBase64(b: Uint8Array): string {
-  let s = '';
+  let s = "";
   for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i] as number);
   return btoa(s);
 }
@@ -59,7 +63,10 @@ export interface CollabHandle {
   online: boolean;
 }
 
-export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHandle {
+export function useCollabDoc(
+  docId: string | null,
+  opts?: CollabOpts,
+): CollabHandle {
   const [doc] = useState(() => new Y.Doc());
   const [peers, setPeers] = useState<CollabPeer[]>([]);
   const [online, setOnline] = useState(false);
@@ -69,7 +76,7 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
   useEffect(() => {
     if (!docId) return;
     const awareness = new Awareness(doc);
-    if (opts?.user) awareness.setLocalStateField('user', opts.user);
+    if (opts?.user) awareness.setLocalStateField("user", opts.user);
 
     let ws: WebSocket | null = null;
     let closed = false;
@@ -94,8 +101,8 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
     const persist = async () => {
       try {
         await apiFetch(`/api/collab/${encodeURIComponent(docId)}/snapshot`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             state: bytesToBase64(Y.encodeStateAsUpdate(doc)),
             classification: optsRef.current?.classification ?? 0,
@@ -108,7 +115,7 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
     };
 
     const onDocUpdate = (update: Uint8Array, origin: unknown) => {
-      if (origin === 'remote') return; // don't echo merged-in remote updates
+      if (origin === "remote") return; // don't echo merged-in remote updates
       send(TAG_SYNC, update);
       if (saveTimer) window.clearTimeout(saveTimer);
       saveTimer = window.setTimeout(() => void persist(), 1500);
@@ -119,31 +126,38 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
       origin: unknown,
     ) => {
       setPeers(roster());
-      if (origin === 'remote') return;
+      if (origin === "remote") return;
       const ids = changes.added.concat(changes.updated, changes.removed);
       send(TAG_AWARE, encodeAwarenessUpdate(awareness, ids));
     };
 
-    doc.on('update', onDocUpdate);
-    awareness.on('update', onAwareUpdate);
+    doc.on("update", onDocUpdate);
+    awareness.on("update", onAwareUpdate);
 
     // Load any persisted snapshot first (RLS hides it if we're not cleared).
-    void apiFetch(`/api/collab/${encodeURIComponent(docId)}`).then(async (r) => {
-      if (!r.ok) return;
-      const j = (await r.json()) as { exists?: boolean; state?: string | null };
-      if (j.exists && typeof j.state === 'string') {
-        try {
-          Y.applyUpdate(doc, base64ToBytes(j.state), 'remote');
-        } catch {
-          /* ignore corrupt snapshot */
+    void apiFetch(`/api/collab/${encodeURIComponent(docId)}`).then(
+      async (r) => {
+        if (!r.ok) return;
+        const j = (await r.json()) as {
+          exists?: boolean;
+          state?: string | null;
+        };
+        if (j.exists && typeof j.state === "string") {
+          try {
+            Y.applyUpdate(doc, base64ToBytes(j.state), "remote");
+          } catch {
+            /* ignore corrupt snapshot */
+          }
         }
-      }
-    });
+      },
+    );
 
     const connect = () => {
       if (closed) return; // effect torn down while a reconnect was pending
-      const sock = openAuthedWebSocket(`${wsBase()}/ws/collab?doc=${encodeURIComponent(docId)}`);
-      sock.binaryType = 'arraybuffer';
+      const sock = openAuthedWebSocket(
+        `${wsBase()}/ws/collab?doc=${encodeURIComponent(docId)}`,
+      );
+      sock.binaryType = "arraybuffer";
       ws = sock;
       sock.onopen = () => {
         setOnline(true);
@@ -159,8 +173,9 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
         if (buf.length === 0) return;
         const tag = buf[0];
         const payload = buf.subarray(1);
-        if (tag === TAG_SYNC) Y.applyUpdate(doc, payload, 'remote');
-        else if (tag === TAG_AWARE) applyAwarenessUpdate(awareness, payload, 'remote');
+        if (tag === TAG_SYNC) Y.applyUpdate(doc, payload, "remote");
+        else if (tag === TAG_AWARE)
+          applyAwarenessUpdate(awareness, payload, "remote");
         // 0xFF heartbeat → ignore
       };
     };
@@ -170,8 +185,8 @@ export function useCollabDoc(docId: string | null, opts?: CollabOpts): CollabHan
       closed = true;
       if (saveTimer) window.clearTimeout(saveTimer);
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
-      doc.off('update', onDocUpdate);
-      awareness.off('update', onAwareUpdate);
+      doc.off("update", onDocUpdate);
+      awareness.off("update", onAwareUpdate);
       awareness.destroy();
       ws?.close();
     };

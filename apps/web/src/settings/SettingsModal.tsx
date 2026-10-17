@@ -1,26 +1,29 @@
 // In-console settings overlay. Primary job: the BYOK key panel ("config panel
 // for keys, there now"). Also surfaces the current plan and links out to the
 // full account dashboard (limits / renew / alerts) on the marketing site.
-import { useEffect, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
-import { apiFetch } from '../transport/http.js';
-import { KeysPanel } from './KeysPanel.js';
-import { useDashboardMode, type DashboardMode } from '../state/dashboardMode.js';
-import { useSettings } from '../state/settings.js';
+import { useEffect, useState } from "react";
+import { RotateCcw } from "lucide-react";
+import { apiFetch } from "../transport/http.js";
+import { KeysPanel } from "./KeysPanel.js";
+import {
+  useDashboardMode,
+  type DashboardMode,
+} from "../state/dashboardMode.js";
+import { useSettings } from "../state/settings.js";
 import {
   MAP_QUALITIES,
   QUALITY_LABELS,
   presetKnobs,
   type MapQuality,
-} from '../globe/qualityPresets.js';
-import { resetOnboarding } from '../onboarding/Onboarding.js';
-import { LocalAiSection } from './localAi/LocalAiSection.js';
-import { AlertRulesSection } from './AlertRulesSection.js';
-import { useTheme } from '../state/theme.js';
-import { SCHEMES } from '../theme/schemes.js';
-import { AccountSecurity } from '../auth/AuthForm.js';
-import { useAuth } from '../auth/AuthContext.js';
-import { isSupabaseConfigured } from '../transport/supabase.js';
+} from "../globe/qualityPresets.js";
+import { resetOnboarding } from "../onboarding/Onboarding.js";
+import { LocalAiSection } from "./localAi/LocalAiSection.js";
+import { AlertRulesSection } from "./AlertRulesSection.js";
+import { useTheme } from "../state/theme.js";
+import { SCHEMES } from "../theme/schemes.js";
+import { AccountSecurity } from "../auth/AuthForm.js";
+import { useAuth } from "../auth/AuthContext.js";
+import { isSupabaseConfigured } from "../transport/supabase.js";
 
 interface Me {
   email?: string;
@@ -29,9 +32,13 @@ interface Me {
 }
 
 // The console runs under /app on the gateway; the account dashboard is /account.
-const ACCOUNT_URL = '/account';
+const ACCOUNT_URL = "/account";
 
-export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element {
+export function SettingsModal({
+  onClose,
+}: {
+  onClose: () => void;
+}): JSX.Element {
   const [me, setMe] = useState<Me | null>(null);
   const { user } = useAuth();
 
@@ -39,7 +46,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
     let live = true;
     void (async () => {
       try {
-        const r = await apiFetch('/api/me');
+        const r = await apiFetch("/api/me");
         if (live && r.ok) setMe(await r.json());
       } catch {
         /* non-fatal */
@@ -52,10 +59,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   return (
@@ -84,9 +91,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
           {me && (
             <div className="flex items-center justify-between mb-3 pb-3 border-b border-line">
               <div className="flex flex-col">
-                <span className="mono text-[11px] text-txt-1">{me.email ?? 'signed in'}</span>
+                <span className="mono text-[11px] text-txt-1">
+                  {me.email ?? "signed in"}
+                </span>
                 <span className="mono text-[10px] text-txt-3 uppercase tracking-[0.6px]">
-                  {me.tier ?? 'none'} · {me.status ?? '—'}
+                  {me.tier ?? "none"} · {me.status ?? "—"}
                 </span>
               </div>
               <a
@@ -122,7 +131,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
             Aircraft motion
           </div>
           <DeadReckonToggle />
-      <CorroborationToggle />
+          <CorroborationToggle />
 
           <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
             Display
@@ -161,7 +170,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }): JSX.Element
             }}
             className="flex w-full items-center justify-center gap-1.5 mt-3.5 mono text-[10px] px-2 py-1.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
           >
-            <RotateCcw size={12} strokeWidth={1.75} aria-hidden /> Replay welcome tour
+            <RotateCcw size={12} strokeWidth={1.75} aria-hidden /> Replay
+            welcome tour
           </button>
 
           <a
@@ -184,7 +194,11 @@ function SchemePicker(): JSX.Element {
   const mode = useTheme((s) => s.mode);
   const setMode = useTheme((s) => s.setMode);
   return (
-    <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Colour scheme">
+    <div
+      className="grid grid-cols-2 gap-1.5"
+      role="radiogroup"
+      aria-label="Colour scheme"
+    >
       {SCHEMES.map((s) => {
         const on = mode === s.id;
         return (
@@ -197,8 +211,8 @@ function SchemePicker(): JSX.Element {
             onClick={() => setMode(s.id)}
             className={`flex items-center gap-2 rounded-sm border px-2 py-1.5 text-left transition-colors ${
               on
-                ? 'border-accent-line bg-accent-dim text-txt-0'
-                : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+                ? "border-accent-line bg-accent-dim text-txt-0"
+                : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
             }`}
           >
             <span
@@ -206,11 +220,19 @@ function SchemePicker(): JSX.Element {
               className="flex h-5 w-5 shrink-0 overflow-hidden rounded-sm border border-line-2"
               style={{ background: s.swatch.bg }}
             >
-              <span className="mt-auto h-2.5 w-full" style={{ background: s.swatch.panel }}>
-                <span className="block h-full w-1/3" style={{ background: s.swatch.accent }} />
+              <span
+                className="mt-auto h-2.5 w-full"
+                style={{ background: s.swatch.panel }}
+              >
+                <span
+                  className="block h-full w-1/3"
+                  style={{ background: s.swatch.accent }}
+                />
               </span>
             </span>
-            <span className="mono min-w-0 flex-1 truncate text-[11px]">{s.label}</span>
+            <span className="mono min-w-0 flex-1 truncate text-[11px]">
+              {s.label}
+            </span>
           </button>
         );
       })}
@@ -225,11 +247,19 @@ function DashboardToggle(): JSX.Element {
   const mode = useDashboardMode((s) => s.mode);
   const setMode = useDashboardMode((s) => s.setMode);
   const opts: { id: DashboardMode; label: string; hint: string }[] = [
-    { id: 'professional', label: 'Professional', hint: 'Dense, full-tool COP (default)' },
-    { id: 'normal', label: 'Normal', hint: 'Clean, guided layout' },
+    {
+      id: "professional",
+      label: "Professional",
+      hint: "Dense, full-tool COP (default)",
+    },
+    { id: "normal", label: "Normal", hint: "Clean, guided layout" },
   ];
   return (
-    <div className="flex gap-1.5" role="radiogroup" aria-label="Dashboard layout">
+    <div
+      className="flex gap-1.5"
+      role="radiogroup"
+      aria-label="Dashboard layout"
+    >
       {opts.map((o) => {
         const on = mode === o.id;
         return (
@@ -241,8 +271,8 @@ function DashboardToggle(): JSX.Element {
             onClick={() => setMode(o.id)}
             className={`flex-1 text-left rounded-sm border px-2.5 py-2 transition-colors ${
               on
-                ? 'border-accent-line bg-accent-dim text-txt-0'
-                : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+                ? "border-accent-line bg-accent-dim text-txt-0"
+                : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
             }`}
           >
             <div className="mono text-[11px] font-medium">{o.label}</div>
@@ -274,27 +304,29 @@ function CorroborationToggle(): JSX.Element {
       type="button"
       role="switch"
       aria-checked={on}
-      onClick={() => set('corroboratedOnly', !on)}
+      onClick={() => set("corroboratedOnly", !on)}
       className={`w-full text-left rounded-sm border px-2.5 py-2 transition-colors ${
         on
-          ? 'border-accent-line bg-accent-dim text-txt-0'
-          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+          ? "border-accent-line bg-accent-dim text-txt-0"
+          : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
       }`}
     >
       <div className="flex items-center justify-between">
-        <span className="mono text-[11px] font-medium">Fade single-source contacts</span>
+        <span className="mono text-[11px] font-medium">
+          Fade single-source contacts
+        </span>
         <span
           className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-            on ? 'border-accent-line text-accent' : 'border-line text-txt-3'
+            on ? "border-accent-line text-accent" : "border-line text-txt-3"
           }`}
         >
-          {on ? 'ON' : 'OFF'}
+          {on ? "ON" : "OFF"}
         </span>
       </div>
       <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
-        Dim contacts only one feed reported, so what stays bright is corroborated by
-        two or more. Single-source is normal over open ocean, so this is an
-        investigative lens rather than a filter. Off by default.
+        Dim contacts only one feed reported, so what stays bright is
+        corroborated by two or more. Single-source is normal over open ocean, so
+        this is an investigative lens rather than a filter. Off by default.
       </div>
     </button>
   );
@@ -308,27 +340,30 @@ function DeadReckonToggle(): JSX.Element {
       type="button"
       role="switch"
       aria-checked={on}
-      onClick={() => set('aircraftDeadReckon', !on)}
+      onClick={() => set("aircraftDeadReckon", !on)}
       className={`w-full text-left rounded-sm border px-2.5 py-2 transition-colors ${
         on
-          ? 'border-accent-line bg-accent-dim text-txt-0'
-          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+          ? "border-accent-line bg-accent-dim text-txt-0"
+          : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
       }`}
     >
       <div className="flex items-center justify-between">
-        <span className="mono text-[11px] font-medium">Keep planes moving between updates</span>
+        <span className="mono text-[11px] font-medium">
+          Keep planes moving between updates
+        </span>
         <span
           className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-            on ? 'border-accent-line text-accent' : 'border-line text-txt-3'
+            on ? "border-accent-line text-accent" : "border-line text-txt-3"
           }`}
         >
-          {on ? 'ON' : 'OFF'}
+          {on ? "ON" : "OFF"}
         </span>
       </div>
       <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
-        FlightRadar24-style: glide aircraft along their last heading &amp; speed between
-        ADS-B fixes. Positions shown are <span className="text-accent">estimated</span>, not
-        observed. Off by default.
+        FlightRadar24-style: glide aircraft along their last heading &amp; speed
+        between ADS-B fixes. Positions shown are{" "}
+        <span className="text-accent">estimated</span>, not observed. Off by
+        default.
       </div>
     </button>
   );
@@ -346,27 +381,30 @@ function GovernorToggle(): JSX.Element {
       type="button"
       role="switch"
       aria-checked={on}
-      onClick={() => set('continuousRenderGovernor', !on)}
+      onClick={() => set("continuousRenderGovernor", !on)}
       className={`w-full text-left rounded-sm border px-2.5 py-2 transition-colors ${
         on
-          ? 'border-accent-line bg-accent-dim text-txt-0'
-          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+          ? "border-accent-line bg-accent-dim text-txt-0"
+          : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
       }`}
     >
       <div className="flex items-center justify-between">
-        <span className="mono text-[11px] font-medium">Idle render governor</span>
+        <span className="mono text-[11px] font-medium">
+          Idle render governor
+        </span>
         <span
           className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-            on ? 'border-accent-line text-accent' : 'border-line text-txt-3'
+            on ? "border-accent-line text-accent" : "border-line text-txt-3"
           }`}
         >
-          {on ? 'ON' : 'OFF'}
+          {on ? "ON" : "OFF"}
         </span>
       </div>
       <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
-        Stop re-rendering the globe every frame when nothing is moving (world view,
-        teleport aircraft). Cuts idle GPU burn; motion stays smooth. Off by default;
-        confirm glide/pulse look right on your hardware before relying on it.
+        Stop re-rendering the globe every frame when nothing is moving (world
+        view, teleport aircraft). Cuts idle GPU burn; motion stays smooth. Off
+        by default; confirm glide/pulse look right on your hardware before
+        relying on it.
       </div>
     </button>
   );
@@ -395,7 +433,7 @@ function LocalAiToggle(): JSX.Element {
     let live = true;
     void (async () => {
       try {
-        const r = await apiFetch('/api/ai/local');
+        const r = await apiFetch("/api/ai/local");
         if (live && r.ok) setSt((await r.json()) as LocalAiState);
       } catch {
         /* non-fatal */
@@ -413,9 +451,9 @@ function LocalAiToggle(): JSX.Element {
     if (gated || busy) return;
     setBusy(true);
     try {
-      const r = await apiFetch('/api/ai/local', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+      const r = await apiFetch("/api/ai/local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ enabled: !on }),
       });
       if (r.ok) setSt((await r.json()) as LocalAiState);
@@ -427,14 +465,14 @@ function LocalAiToggle(): JSX.Element {
   };
 
   const reason = !st
-    ? 'checking local engine…'
+    ? "checking local engine…"
     : !st.ollama_up
-      ? 'Ollama not running on this machine'
+      ? "Ollama not running on this machine"
       : !st.tool_capable
-        ? 'no tool-capable model installed'
+        ? "no tool-capable model installed"
         : on
           ? `local (${st.model_reason})`
-          : 'using cloud';
+          : "using cloud";
 
   return (
     <button
@@ -445,24 +483,26 @@ function LocalAiToggle(): JSX.Element {
       onClick={() => void toggle()}
       className={`w-full text-left rounded-sm border px-2.5 py-2 transition-colors ${
         on
-          ? 'border-accent-line bg-accent-dim text-txt-0'
-          : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
-      } ${gated ? 'opacity-50 cursor-not-allowed' : ''}`}
+          ? "border-accent-line bg-accent-dim text-txt-0"
+          : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
+      } ${gated ? "opacity-50 cursor-not-allowed" : ""}`}
     >
       <div className="flex items-center justify-between">
-        <span className="mono text-[11px] font-medium">Run AI locally (GPU)</span>
+        <span className="mono text-[11px] font-medium">
+          Run AI locally (GPU)
+        </span>
         <span
           className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-            on ? 'border-accent-line text-accent' : 'border-line text-txt-3'
+            on ? "border-accent-line text-accent" : "border-line text-txt-3"
           }`}
         >
-          {on ? 'ON' : 'OFF'}
+          {on ? "ON" : "OFF"}
         </span>
       </div>
       <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
-        Route narrative, agent &amp; sim reasoning to a local Ollama model instead of the
-        cloud, with no API rate limits. Needs a capable GPU + Ollama running.{' '}
-        <span className="text-accent">{reason}</span>.
+        Route narrative, agent &amp; sim reasoning to a local Ollama model
+        instead of the cloud, with no API rate limits. Needs a capable GPU +
+        Ollama running. <span className="text-accent">{reason}</span>.
       </div>
     </button>
   );
@@ -477,13 +517,19 @@ function MapQualityPreset(): JSX.Element {
   const q = useSettings((s) => s.mapQuality);
   const set = useSettings((s) => s.set);
   const choose = (next: MapQuality): void => {
-    set('mapQuality', next);
-    set('renderPixelCap', presetKnobs(next).pixelCap);
+    set("mapQuality", next);
+    set("renderPixelCap", presetKnobs(next).pixelCap);
   };
   return (
     <div className="w-full rounded-sm border border-line px-2.5 py-2">
-      <div className="mono text-[11px] font-medium text-txt-1 mb-2">Map quality</div>
-      <div className="flex gap-1.5" role="radiogroup" aria-label="Map quality preset">
+      <div className="mono text-[11px] font-medium text-txt-1 mb-2">
+        Map quality
+      </div>
+      <div
+        className="flex gap-1.5"
+        role="radiogroup"
+        aria-label="Map quality preset"
+      >
         {MAP_QUALITIES.map((id) => {
           const on = q === id;
           const meta = QUALITY_LABELS[id];
@@ -496,19 +542,22 @@ function MapQualityPreset(): JSX.Element {
               onClick={() => choose(id)}
               className={`flex-1 text-left rounded-sm border px-2 py-1.5 transition-colors ${
                 on
-                  ? 'border-accent-line bg-accent-dim text-txt-0'
-                  : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+                  ? "border-accent-line bg-accent-dim text-txt-0"
+                  : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
               }`}
             >
               <div className="mono text-[11px] font-medium">{meta.label}</div>
-              <div className="mono text-[9px] text-txt-3 mt-0.5 leading-tight">{meta.hint}</div>
+              <div className="mono text-[9px] text-txt-3 mt-0.5 leading-tight">
+                {meta.hint}
+              </div>
             </button>
           );
         })}
       </div>
       <div className="mono text-[10px] text-txt-3 mt-1.5 leading-snug">
-        Lower quality renders fewer pixels, coarser terrain and fewer vessels/satellites for a
-        higher frame rate. On a weak GPU choose Performance. Aircraft coverage is unaffected.
+        Lower quality renders fewer pixels, coarser terrain and fewer
+        vessels/satellites for a higher frame rate. On a weak GPU choose
+        Performance. Aircraft coverage is unaffected.
       </div>
     </div>
   );
@@ -521,11 +570,14 @@ function MapQualityPreset(): JSX.Element {
 function RenderQualitySlider(): JSX.Element {
   const cap = useSettings((s) => s.renderPixelCap);
   const set = useSettings((s) => s.set);
-  const label = cap >= 1.95 ? 'Sharp (native)' : cap <= 1.05 ? 'Fastest' : 'Balanced';
+  const label =
+    cap >= 1.95 ? "Sharp (native)" : cap <= 1.05 ? "Fastest" : "Balanced";
   return (
     <div className="w-full rounded-sm border border-line px-2.5 py-2">
       <div className="flex items-center justify-between">
-        <span className="mono text-[11px] font-medium text-txt-1">Globe render quality</span>
+        <span className="mono text-[11px] font-medium text-txt-1">
+          Globe render quality
+        </span>
         <span className="mono text-[10px] px-1.5 py-0.5 rounded-sm border border-accent-line text-accent">
           {label} · {cap.toFixed(2)}×
         </span>
@@ -537,12 +589,13 @@ function RenderQualitySlider(): JSX.Element {
         step={0.25}
         value={cap}
         aria-label="Globe render quality (resolution vs FPS)"
-        onChange={(e) => set('renderPixelCap', Number(e.target.value))}
+        onChange={(e) => set("renderPixelCap", Number(e.target.value))}
         className="w-full mt-2 accent-accent"
       />
       <div className="mono text-[10px] text-txt-3 mt-1 leading-snug">
-        Higher = sharper (renders at native device pixels); lower = higher FPS (fewer
-        pixels). Resolution and frame rate trade off directly. Default 2.0×.
+        Higher = sharper (renders at native device pixels); lower = higher FPS
+        (fewer pixels). Resolution and frame rate trade off directly. Default
+        2.0×.
       </div>
     </div>
   );

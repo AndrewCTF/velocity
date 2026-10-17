@@ -1,6 +1,6 @@
 ---
 description: Cross-domain intelligence brief for an area (or global) from the live OSINT feeds
-argument-hint: [place | lat,lon | global]
+argument-hint: [place | lat, lon | global]
 ---
 
 Produce an intelligence brief for: **$ARGUMENTS**

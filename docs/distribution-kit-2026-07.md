@@ -11,15 +11,15 @@ name stays **velocity**.
 
 ## 1. Baseline (measured 2026-07-26, re-measure before claiming movement)
 
-| Metric | Value |
-|---|---|
-| Stars | 39 |
-| Views / uniques, 14 d | 511 / 254 |
-| Clones / uniques, 14 d | 1,068 / 234 |
-| Referrers, 14 d | reddit 42 uniques, HN 21, github 14 |
-| First Show HN (2026-07-11) | 4 points, 2 comments |
-| External backlinks | none outside the repo itself |
-| Directory listings | none |
+| Metric                     | Value                               |
+| -------------------------- | ----------------------------------- |
+| Stars                      | 39                                  |
+| Views / uniques, 14 d      | 511 / 254                           |
+| Clones / uniques, 14 d     | 1,068 / 234                         |
+| Referrers, 14 d            | reddit 42 uniques, HN 21, github 14 |
+| First Show HN (2026-07-11) | 4 points, 2 comments                |
+| External backlinks         | none outside the repo itself        |
+| Directory listings         | none                                |
 
 ```bash
 gh repo view --json stargazerCount -q .stargazerCount
@@ -98,19 +98,19 @@ Re-check before pasting: aircraft and vessel counts drift with time of day.
 
 Status column is the record. Do not re-litigate what was filed.
 
-| Channel | How | Status |
-|---|---|---|
-| awesome-selfhosted | PR, category "Maps & GPS"; read CONTRIBUTING first (license, docs, active maintenance, no self-promo language) | not filed |
-| awesome-osint | PR | not filed |
-| awesome-geospatial | PR | not filed |
-| awesome-cesium | PR | not filed |
-| OSINT Framework | submission form / PR | not filed |
-| Bellingcat toolkit | their submission form; lead with the evidence locker and custody chain, not the globe | not filed |
-| selfh.st apps directory | submission form | not filed |
-| LibHunt | claim/submit the project | not filed |
-| OpenAlternative | submit as an alternative to Flightradar24 | not filed |
-| alternativeto.net | three entries: alternative to Flightradar24, MarineTraffic, ADS-B Exchange | not filed |
-| GitHub Discussions | enable in repo settings; gives readers a landing spot that is not an issue | off |
+| Channel                 | How                                                                                                            | Status    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- | --------- |
+| awesome-selfhosted      | PR, category "Maps & GPS"; read CONTRIBUTING first (license, docs, active maintenance, no self-promo language) | not filed |
+| awesome-osint           | PR                                                                                                             | not filed |
+| awesome-geospatial      | PR                                                                                                             | not filed |
+| awesome-cesium          | PR                                                                                                             | not filed |
+| OSINT Framework         | submission form / PR                                                                                           | not filed |
+| Bellingcat toolkit      | their submission form; lead with the evidence locker and custody chain, not the globe                          | not filed |
+| selfh.st apps directory | submission form                                                                                                | not filed |
+| LibHunt                 | claim/submit the project                                                                                       | not filed |
+| OpenAlternative         | submit as an alternative to Flightradar24                                                                      | not filed |
+| alternativeto.net       | three entries: alternative to Flightradar24, MarineTraffic, ADS-B Exchange                                     | not filed |
+| GitHub Discussions      | enable in repo settings; gives readers a landing spot that is not an issue                                     | off       |
 
 Listing rules that get submissions rejected if ignored: awesome-* lists want
 a one-line neutral description with no marketing adjectives, a real license,
@@ -120,11 +120,11 @@ and evidence of maintenance. Nitpicks arrive fast; comply the same day.
 
 They publish about projects and need a video, not a demo.
 
-| Channel | Angle | Status |
-|---|---|---|
-| Hackaday tip line | SDR / ADS-B / 3D globe is their beat; one paragraph plus the mp4 | not sent |
-| RTL-SDR.com | their readers physically run ADS-B feeders; highest audience fit anywhere in this kit | not sent |
-| Lobste.rs | invite-only; ask a maintainer or via HN. Small, but often pulls a second HN look | no invite |
+| Channel           | Angle                                                                                 | Status    |
+| ----------------- | ------------------------------------------------------------------------------------- | --------- |
+| Hackaday tip line | SDR / ADS-B / 3D globe is their beat; one paragraph plus the mp4                      | not sent  |
+| RTL-SDR.com       | their readers physically run ADS-B feeders; highest audience fit anywhere in this kit | not sent  |
+| Lobste.rs         | invite-only; ask a maintainer or via HN. Small, but often pulls a second HN look      | no invite |
 
 ## 5. Newsletters and creators
 
@@ -132,20 +132,20 @@ One personalized email each. Two sentences of what it is, the video, the
 press-kit link, the install one-liner, an offer to help with setup. One nudge
 after two weeks, then stop.
 
-| Target | Kind | Status |
-|---|---|---|
-| selfh.st / Self-Host Weekly | newsletter | not sent |
-| Sector035, "Week in OSINT" | newsletter | not sent |
-| Console.dev | newsletter | not sent |
-| Changelog News | newsletter | not sent |
-| TLDR | newsletter (long shot) | not sent |
-| DB Tech | YouTube | not sent |
-| Techno Tim | YouTube | not sent |
-| Jim's Garage | YouTube | not sent |
-| Christian Lempa | YouTube | not sent |
-| Hardware Haven | YouTube | not sent |
-| Awesome Open Source | YouTube | not sent |
-| NetworkChuck | YouTube (long shot; "track the planes over your house from your homelab") | not sent |
+| Target                      | Kind                                                                      | Status   |
+| --------------------------- | ------------------------------------------------------------------------- | -------- |
+| selfh.st / Self-Host Weekly | newsletter                                                                | not sent |
+| Sector035, "Week in OSINT"  | newsletter                                                                | not sent |
+| Console.dev                 | newsletter                                                                | not sent |
+| Changelog News              | newsletter                                                                | not sent |
+| TLDR                        | newsletter (long shot)                                                    | not sent |
+| DB Tech                     | YouTube                                                                   | not sent |
+| Techno Tim                  | YouTube                                                                   | not sent |
+| Jim's Garage                | YouTube                                                                   | not sent |
+| Christian Lempa             | YouTube                                                                   | not sent |
+| Hardware Haven              | YouTube                                                                   | not sent |
+| Awesome Open Source         | YouTube                                                                   | not sent |
+| NetworkChuck                | YouTube (long shot; "track the planes over your house from your homelab") | not sent |
 
 **Template**
 

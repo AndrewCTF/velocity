@@ -4,11 +4,11 @@
 // clearance. Keep the ladder + marking format in sync with the backend.
 
 export const LEVELS = [
-  'UNCLASSIFIED',
-  'CUI',
-  'CONFIDENTIAL',
-  'SECRET',
-  'TOP SECRET',
+  "UNCLASSIFIED",
+  "CUI",
+  "CONFIDENTIAL",
+  "SECRET",
+  "TOP SECRET",
 ] as const;
 
 export type Level = 0 | 1 | 2 | 3 | 4;
@@ -21,11 +21,11 @@ export const TOP_SECRET: Level = 4;
 
 // US-standard banner accent colours.
 export const LEVEL_COLOR: Record<number, string> = {
-  0: '#007a33', // green
-  1: '#6b2fa0', // purple
-  2: '#0033a0', // blue
-  3: '#c8102e', // red
-  4: '#ff8c00', // orange
+  0: "#007a33", // green
+  1: "#6b2fa0", // purple
+  2: "#0033a0", // blue
+  3: "#c8102e", // red
+  4: "#ff8c00", // orange
 };
 
 export function clampLevel(n: number): Level {
@@ -46,7 +46,7 @@ function normComps(compartments?: string[]): string[] {
 
 export function marking(level: number, compartments?: string[]): string {
   const comps = normComps(compartments);
-  return label(level) + (comps.length ? `//${comps.join('/')}` : '');
+  return label(level) + (comps.length ? `//${comps.join("/")}` : "");
 }
 
 export function canRead(

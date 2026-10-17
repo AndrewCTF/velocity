@@ -2,18 +2,20 @@
 // the original App) or the approachable "Normal" console. Persisted so the
 // operator's choice survives reloads. The map/globe stack is identical between
 // them; only the surrounding chrome differs.
-import { create } from 'zustand';
+import { create } from "zustand";
 
-export type DashboardMode = 'normal' | 'professional';
+export type DashboardMode = "normal" | "professional";
 
-const LS_KEY = 'velocity.dashboardMode';
+const LS_KEY = "velocity.dashboardMode";
 
 function readMode(): DashboardMode {
   try {
     // Professional is the default; only an explicit 'normal' opts out.
-    return localStorage.getItem(LS_KEY) === 'normal' ? 'normal' : 'professional';
+    return localStorage.getItem(LS_KEY) === "normal"
+      ? "normal"
+      : "professional";
   } catch {
-    return 'professional';
+    return "professional";
   }
 }
 
@@ -39,7 +41,8 @@ export const useDashboardMode = create<DashboardModeState>((set) => ({
   },
   toggle: () =>
     set((s) => {
-      const mode: DashboardMode = s.mode === 'normal' ? 'professional' : 'normal';
+      const mode: DashboardMode =
+        s.mode === "normal" ? "professional" : "normal";
       persist(mode);
       return { mode };
     }),

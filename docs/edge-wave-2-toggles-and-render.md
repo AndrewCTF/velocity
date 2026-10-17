@@ -1,7 +1,7 @@
 # Edge wave 2 — the toggle storm, and the render cost under it
 
-Operator report: *"when I turn on the backend options from the UI panel, it just
-causes CPU lag to spike and it lags too much."*
+Operator report: _"when I turn on the backend options from the UI panel, it just
+causes CPU lag to spike and it lags too much."_
 
 Two changes. Measured separately **neither looked like a fix** — one made the
 frame-time tail worse — and that is reported here rather than netted out,
@@ -27,7 +27,7 @@ writes its numbers to `--out` as JSON so the result is gradable by command.
 The first version of the profile paced enables at 8 layers every 3 s, which was
 wrong: that pacing spreads the load enough to hide the spike. Measured gated vs
 ungated under it, the difference was inside the noise (frameMs p50 81.8 vs 89.4;
-worst window 131.7 vs 141.6 — the "improved" run was *slower*). It now enables
+worst window 131.7 vs 141.6 — the "improved" run was _slower_). It now enables
 the whole set in one call, which is the shape `LayerCatalog.toggleFolder` and
 `LayerRail`'s mission presets actually produce.
 
@@ -46,13 +46,13 @@ The first fetch now goes through `onMoveSettle`, and `detach()` calls
 
 Bulk toggle, same session, code flipped between runs:
 
-| | ungated | gated |
-|---|---|---|
-| requests | 247.9/min | **228.1/min** (−8 %) |
-| `longtasksPerMin` p50 | 67.0 | **49.0** (−27 %) |
-| `frameMsEMA` p50 | 70.5 | **61.4** (−13 %) |
-| `frameMsEMA` p95 | **90.7** | 128.1 (**worse**) |
-| worst 5-sample window | **77.5 ms** | 84.1 ms (**worse**) |
+|                       | ungated     | gated                |
+| --------------------- | ----------- | -------------------- |
+| requests              | 247.9/min   | **228.1/min** (−8 %) |
+| `longtasksPerMin` p50 | 67.0        | **49.0** (−27 %)     |
+| `frameMsEMA` p50      | 70.5        | **61.4** (−13 %)     |
+| `frameMsEMA` p95      | **90.7**    | 128.1 (**worse**)    |
+| worst 5-sample window | **77.5 ms** | 84.1 ms (**worse**)  |
 
 **On its own the tail got worse.** Deferring the fetches clusters the entity
 builds behind them, so the p50 improved and the p95 did not. That is why the
@@ -61,11 +61,11 @@ gate is not presented as the fix by itself.
 **With §3's batching it is a different result**, and this is the one that
 matters — the entity builds the gate defers are now cheap:
 
-| toggle storm | frameMs p50 | p95 | longtasks p50 | worst 5 s window |
-|---|---|---|---|---|
-| ungated, Entity API (baseline) | 70.5 | 90.7 | 67.0 | 77.5 ms |
-| gated, Entity API | 61.4 | **128.1** | 49.0 | 84.1 ms |
-| **gated + batched** | **22.5** | **50.1** | **16.0** | **48.9 ms** |
+| toggle storm                   | frameMs p50 | p95       | longtasks p50 | worst 5 s window |
+| ------------------------------ | ----------- | --------- | ------------- | ---------------- |
+| ungated, Entity API (baseline) | 70.5        | 90.7      | 67.0          | 77.5 ms          |
+| gated, Entity API              | 61.4        | **128.1** | 49.0          | 84.1 ms          |
+| **gated + batched**            | **22.5**    | **50.1**  | **16.0**      | **48.9 ms**      |
 
 Against the baseline: **frame time −68 %, p95 −45 %, longtasks −76 %, worst
 window −37 %.** The two changes only pay together — the gate spreads the work,
@@ -100,15 +100,15 @@ that, a facility whose category changed would have kept its first-seen icon.
 
 **Controlled A/B, same session, same box, code flipped between runs:**
 
-| Metric | Entity API | **batched** | change |
-|---|---|---|---|
-| `rendersPerSec` p50 | 8.0 | **10.0** | **+25 %** |
-| `rendersPerSec` p05 | 4.0 | **5.0** | **+25 %** |
-| `frameMsEMA` p95 | 200.7 ms | **179.9 ms** | **−10 %** |
-| `frameMsEMA` p50 | 127.4 ms | **123.2 ms** | −3 % |
-| entities p50 | 37 578 | **44 179** | **+17 % MORE load** |
-| `longtasksPerMin` p50 | 428 | 514 | worse |
-| heap p50 | 2 100 MB | 2 475 MB | worse |
+| Metric                | Entity API | **batched**  | change              |
+| --------------------- | ---------- | ------------ | ------------------- |
+| `rendersPerSec` p50   | 8.0        | **10.0**     | **+25 %**           |
+| `rendersPerSec` p05   | 4.0        | **5.0**      | **+25 %**           |
+| `frameMsEMA` p95      | 200.7 ms   | **179.9 ms** | **−10 %**           |
+| `frameMsEMA` p50      | 127.4 ms   | **123.2 ms** | −3 %                |
+| entities p50          | 37 578     | **44 179**   | **+17 % MORE load** |
+| `longtasksPerMin` p50 | 428        | 514          | worse               |
+| heap p50              | 2 100 MB   | 2 475 MB     | worse               |
 
 The improvement is delivered while carrying **17 % more entities**, so
 normalised per entity the frame rate is roughly 47 % better. Longtasks and heap
@@ -125,12 +125,12 @@ Two rounds of batching had moved the median a little and left `p05` at 5. Rather
 than batch a third time, a CDP `Profiler` run over an all-toggles session was
 aggregated by self-time. It changed the diagnosis completely.
 
-| cluster | self-time |
-|---|---|
-| BillboardCollection vertex writes (`write*`, `recomputeActualPositions`, `encodeRGB8`) | ~21 % |
-| Entity visualizers (`ConstantProperty.getValue`, `Billboard/LabelVisualizer.update`) | ~11 % |
-| Label / cluster screen-space work (`getScreenSpaceBoundingBox`, `worldWithEyeOffsetToWindowCoordinates`, `getScreenSpacePositions`) | ~6 % |
-| GC | ~5 % |
+| cluster                                                                                                                             | self-time |
+| ----------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| BillboardCollection vertex writes (`write*`, `recomputeActualPositions`, `encodeRGB8`)                                              | ~21 %     |
+| Entity visualizers (`ConstantProperty.getValue`, `Billboard/LabelVisualizer.update`)                                                | ~11 %     |
+| Label / cluster screen-space work (`getScreenSpaceBoundingBox`, `worldWithEyeOffsetToWindowCoordinates`, `getScreenSpacePositions`) | ~6 %      |
+| GC                                                                                                                                  | ~5 %      |
 
 A live probe explained why entity work was not the lever: with everything on the
 scene held **55 BillboardCollections + 55 LabelCollections**, and **78 data
@@ -144,13 +144,13 @@ nothing.
 
 Four changes, each measured:
 
-| change | | frameMs p50 | fps p50 | fps p05 |
-|---|---|---|---|---|
-| — | starting point (Entity API) | 127.4 | 8 | 4 |
-| shared collections | 110 → 48 collections | 111.8 | 9 | 5 |
-| trimmed visualizers | 624 → 390 updates/frame | 99.3 | 10 | 7 |
-| **AISStream → primitives** | + drop its Cesium `EntityCluster` | **21.6** | **54** | **18** |
-| full data restored | budget removed | 28.5 | 48 | 17 |
+| change                     |                                   | frameMs p50 | fps p50 | fps p05 |
+| -------------------------- | --------------------------------- | ----------- | ------- | ------- |
+| —                          | starting point (Entity API)       | 127.4       | 8       | 4       |
+| shared collections         | 110 → 48 collections              | 111.8       | 9       | 5       |
+| trimmed visualizers        | 624 → 390 updates/frame           | 99.3        | 10      | 7       |
+| **AISStream → primitives** | + drop its Cesium `EntityCluster` | **21.6**    | **54**  | **18**  |
+| full data restored         | budget removed                    | 28.5        | 48      | 17      |
 
 **AISStream was the whole thing.** It was the last large layer on the Entity API
 (~6 000 vessels with real billboard and label graphics) and the only data source
@@ -160,13 +160,13 @@ took frame time from 99.3 ms to 21.6 ms in one change.
 
 ### Against the recorded 2026-07-27 baseline
 
-| | 2026-07-27 | now |
-|---|---|---|
-| `frameMsEMA` p50 | 239.3 ms | **28.5 ms** (−88 %) |
-| `rendersPerSec` p50 | 5 | **48** |
-| `rendersPerSec` p05 | 3 | **17** |
-| `longtasksPerMin` p50 | 294 | **97** |
-| entities p50 | 60 826 | 29 054 |
+|                       | 2026-07-27 | now                 |
+| --------------------- | ---------- | ------------------- |
+| `frameMsEMA` p50      | 239.3 ms   | **28.5 ms** (−88 %) |
+| `rendersPerSec` p50   | 5          | **48**              |
+| `rendersPerSec` p05   | 3          | **17**              |
+| `longtasksPerMin` p50 | 294        | **97**              |
+| entities p50          | 60 826     | 29 054              |
 
 ---
 

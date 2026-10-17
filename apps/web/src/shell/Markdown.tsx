@@ -5,26 +5,34 @@
 // `<img onerror>` in model output must never become a live DOM node.
 // Styling maps each markdown element onto the token system (tokens.css):
 // --fs-* type scale, txt/bg/line/accent color tokens, compact panel margins.
-import ReactMarkdown, { type Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { safeHttpUrl } from './safeUrl.js';
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { safeHttpUrl } from "./safeUrl.js";
 
-const BODY = 'text-(length:--fs-dense) text-txt-1 leading-snug';
+const BODY = "text-(length:--fs-dense) text-txt-1 leading-snug";
 
 // Headings compressed onto the 3-step token scale (nothing below the 10px
 // floor): h1/h2 → body size, h3/h4 → dense, h5/h6 → caption eyebrow.
 const components: Components = {
   h1: ({ children }) => (
-    <h1 className="text-(length:--fs-body) font-semibold text-txt-0 mt-2 mb-1 first:mt-0">{children}</h1>
+    <h1 className="text-(length:--fs-body) font-semibold text-txt-0 mt-2 mb-1 first:mt-0">
+      {children}
+    </h1>
   ),
   h2: ({ children }) => (
-    <h2 className="text-(length:--fs-body) font-semibold text-txt-0 mt-2 mb-1 first:mt-0">{children}</h2>
+    <h2 className="text-(length:--fs-body) font-semibold text-txt-0 mt-2 mb-1 first:mt-0">
+      {children}
+    </h2>
   ),
   h3: ({ children }) => (
-    <h3 className="text-(length:--fs-dense) font-semibold text-txt-0 mt-1.5 mb-0.5 first:mt-0">{children}</h3>
+    <h3 className="text-(length:--fs-dense) font-semibold text-txt-0 mt-1.5 mb-0.5 first:mt-0">
+      {children}
+    </h3>
   ),
   h4: ({ children }) => (
-    <h4 className="text-(length:--fs-dense) font-semibold text-txt-0 mt-1.5 mb-0.5 first:mt-0">{children}</h4>
+    <h4 className="text-(length:--fs-dense) font-semibold text-txt-0 mt-1.5 mb-0.5 first:mt-0">
+      {children}
+    </h4>
   ),
   h5: ({ children }) => (
     <h5 className="text-(length:--fs-caption) font-semibold uppercase tracking-[0.06em] text-txt-2 mt-1.5 mb-0.5 first:mt-0">
@@ -36,11 +44,23 @@ const components: Components = {
       {children}
     </h6>
   ),
-  p: ({ children }) => <p className={`${BODY} my-1 first:mt-0 last:mb-0`}>{children}</p>,
-  ul: ({ children }) => <ul className="list-disc pl-4 my-1 space-y-0.5 first:mt-0 last:mb-0">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal pl-4 my-1 space-y-0.5 first:mt-0 last:mb-0">{children}</ol>,
+  p: ({ children }) => (
+    <p className={`${BODY} my-1 first:mt-0 last:mb-0`}>{children}</p>
+  ),
+  ul: ({ children }) => (
+    <ul className="list-disc pl-4 my-1 space-y-0.5 first:mt-0 last:mb-0">
+      {children}
+    </ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="list-decimal pl-4 my-1 space-y-0.5 first:mt-0 last:mb-0">
+      {children}
+    </ol>
+  ),
   li: ({ children }) => <li className={BODY}>{children}</li>,
-  strong: ({ children }) => <strong className="font-semibold text-txt-0">{children}</strong>,
+  strong: ({ children }) => (
+    <strong className="font-semibold text-txt-0">{children}</strong>
+  ),
   a: ({ children, href }) => (
     <a
       href={safeHttpUrl(href)}
@@ -64,19 +84,27 @@ const components: Components = {
     </pre>
   ),
   blockquote: ({ children }) => (
-    <blockquote className="border-l-2 border-line-2 pl-2 my-1 text-txt-2">{children}</blockquote>
+    <blockquote className="border-l-2 border-line-2 pl-2 my-1 text-txt-2">
+      {children}
+    </blockquote>
   ),
   hr: () => <hr className="border-line my-2" />,
   // GFM tables scroll inside their own container — never widen the panel.
   table: ({ children }) => (
     <div className="overflow-x-auto my-1.5">
-      <table className="border-collapse text-(length:--fs-caption)">{children}</table>
+      <table className="border-collapse text-(length:--fs-caption)">
+        {children}
+      </table>
     </div>
   ),
   th: ({ children }) => (
-    <th className="border border-line bg-bg-2 px-1.5 py-0.5 text-left font-semibold text-txt-2">{children}</th>
+    <th className="border border-line bg-bg-2 px-1.5 py-0.5 text-left font-semibold text-txt-2">
+      {children}
+    </th>
   ),
-  td: ({ children }) => <td className="border border-line px-1.5 py-0.5 text-txt-1">{children}</td>,
+  td: ({ children }) => (
+    <td className="border border-line px-1.5 py-0.5 text-txt-1">{children}</td>
+  ),
 };
 
 interface Props {
@@ -86,7 +114,7 @@ interface Props {
 
 // <Markdown text={...} /> — drop-in replacement for the plain <p> that AI
 // text used to render through; compact enough to live inside dense panels.
-export function Markdown({ text, className = '' }: Props): JSX.Element {
+export function Markdown({ text, className = "" }: Props): JSX.Element {
   return (
     <div className={`min-w-0 ${className}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>

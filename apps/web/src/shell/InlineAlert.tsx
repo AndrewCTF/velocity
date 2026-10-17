@@ -4,22 +4,22 @@
 // tone drives the colour family; everything reads from tokens.css so both the
 // dark and light themes stay correct. Use this instead of re-deriving the
 // classes inline.
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
-export type AlertTone = 'info' | 'warn' | 'alert' | 'ok';
+export type AlertTone = "info" | "warn" | "alert" | "ok";
 
 const TONE: Record<AlertTone, string> = {
-  info: 'text-accent-fg bg-accent-dim border-accent-line',
-  warn: 'text-warn-fg bg-warn-bg border-warn-line',
-  alert: 'text-alert-fg bg-alert-bg border-alert-line',
-  ok: 'text-ok bg-ok-bg border-ok-line',
+  info: "text-accent-fg bg-accent-dim border-accent-line",
+  warn: "text-warn-fg bg-warn-bg border-warn-line",
+  alert: "text-alert-fg bg-alert-bg border-alert-line",
+  ok: "text-ok bg-ok-bg border-ok-line",
 };
 
 export function InlineAlert({
-  tone = 'info',
+  tone = "info",
   children,
   icon,
-  className = '',
+  className = "",
   role,
 }: {
   tone?: AlertTone;
@@ -27,11 +27,11 @@ export function InlineAlert({
   icon?: ReactNode;
   className?: string;
   // Defaults to "alert" (assertive-ish) for the alert tone, "status" otherwise.
-  role?: 'alert' | 'status' | 'note';
+  role?: "alert" | "status" | "note";
 }): JSX.Element {
   return (
     <div
-      role={role ?? (tone === 'alert' ? 'alert' : 'status')}
+      role={role ?? (tone === "alert" ? "alert" : "status")}
       className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-[11px] leading-snug ${TONE[tone]} ${className}`}
     >
       {icon != null && <span className="flex-none mt-px">{icon}</span>}

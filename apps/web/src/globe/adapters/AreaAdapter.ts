@@ -1,7 +1,7 @@
-import * as Cesium from 'cesium';
-import { apiFetch } from '../../transport/http.js';
-import { eventIcon, type EventGlyph } from '../eventIcons.js';
-import { conflictSymbol, incidentSymbol, outageSymbol } from './eventStyle.js';
+import * as Cesium from "cesium";
+import { apiFetch } from "../../transport/http.js";
+import { eventIcon, type EventGlyph } from "../eventIcons.js";
+import { conflictSymbol, incidentSymbol, outageSymbol } from "./eventStyle.js";
 import {
   cachedShape,
   requestEventShapes,
@@ -10,8 +10,8 @@ import {
   type ShapeGeometry,
   type ShapeLevel,
   type ShapeQuery,
-} from './eventShapes.js';
-import type { AdapterCtx, LayerAdapter } from './types.js';
+} from "./eventShapes.js";
+import type { AdapterCtx, LayerAdapter } from "./types.js";
 
 // Renders cross-domain incidents (the fusion brief), GDELT/ACLED armed-conflict
 // events, and internet outages (CAIDA IODA) as CATEGORY ICONS — a bombing star,
@@ -37,7 +37,7 @@ import type { AdapterCtx, LayerAdapter } from './types.js';
 // fresh random `id` every poll — keying on it would churn every entity each
 // refresh.
 
-type AreaKind = 'incidents' | 'ioda' | 'conflict';
+type AreaKind = "incidents" | "ioda" | "conflict";
 
 interface Area {
   key: string;
@@ -56,11 +56,11 @@ interface Area {
 }
 
 function shapeLevelOf(v: unknown): ShapeLevel | null {
-  return v === 'adm1' || v === 'adm2' ? v : null;
+  return v === "adm1" || v === "adm2" ? v : null;
 }
 
 function iso3Of(v: unknown): string | null {
-  return typeof v === 'string' && v.length > 0 ? v : null;
+  return typeof v === "string" && v.length > 0 ? v : null;
 }
 
 function round(n: number, p = 2): number {
@@ -75,8 +75,8 @@ const MAX_RADIUS_M = 120_000;
 
 /** Validate a backend `radius_m` value: finite, > 0, <= 120 km — else null. */
 function uncertaintyRadiusM(v: unknown): number | null {
-  const n = typeof v === 'string' ? parseFloat(v) : (v as number);
-  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
+  const n = typeof v === "string" ? parseFloat(v) : (v as number);
+  if (typeof n !== "number" || !Number.isFinite(n)) return null;
   if (n <= 0 || n > MAX_RADIUS_M) return null;
   return n;
 }
@@ -85,7 +85,10 @@ function uncertaintyRadiusM(v: unknown): number | null {
 // glyph. Ground-clamped the same way as the jamming/TFR polygons in
 // PollGeoJsonAdapter.applyStyle (height 0 + TERRAIN classification). Constant
 // properties only — never a CallbackProperty (requestRenderMode invariant).
-function uncertaintyEllipse(radiusM: number, color: string): Cesium.EllipseGraphics {
+function uncertaintyEllipse(
+  radiusM: number,
+  color: string,
+): Cesium.EllipseGraphics {
   const c = Cesium.Color.fromCssColorString(color);
   return new Cesium.EllipseGraphics({
     semiMajorAxis: radiusM,
@@ -118,7 +121,11 @@ function ringContains(ring: number[][], lon: number, lat: number): boolean {
     const yi = ring[i]![1]!;
     const xj = ring[j]![0]!;
     const yj = ring[j]![1]!;
-    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+    if (
+      yi > lat !== yj > lat &&
+      lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
+    )
+      inside = !inside;
   }
   return inside;
 }
@@ -135,13 +142,17 @@ function polygonHierarchy(
 ): Cesium.PolygonHierarchy | null {
   try {
     let rings: number[][][];
-    if (geom.type === 'Polygon') {
+    if (geom.type === "Polygon") {
       rings = geom.coordinates as number[][][];
     } else {
       const parts = geom.coordinates as number[][][][];
-      let pick = parts.find((p) => p[0] != null && ringContains(p[0], lon, lat));
+      let pick = parts.find(
+        (p) => p[0] != null && ringContains(p[0], lon, lat),
+      );
       if (!pick) {
-        pick = [...parts].sort((a, b) => ringArea(b[0] ?? []) - ringArea(a[0] ?? []))[0];
+        pick = [...parts].sort(
+          (a, b) => ringArea(b[0] ?? []) - ringArea(a[0] ?? []),
+        )[0];
       }
       if (!pick) return null;
       rings = pick;
@@ -150,7 +161,9 @@ function polygonHierarchy(
     if (!outer || outer.length < 3) return null;
     const toCart = (ring: number[][]): Cesium.Cartesian3[] =>
       Cesium.Cartesian3.fromDegreesArray(ring.flatMap(([x, y]) => [x!, y!]));
-    const holes = rings.slice(1).map((h) => new Cesium.PolygonHierarchy(toCart(h)));
+    const holes = rings
+      .slice(1)
+      .map((h) => new Cesium.PolygonHierarchy(toCart(h)));
     return new Cesium.PolygonHierarchy(toCart(outer), holes);
   } catch {
     return null;
@@ -186,29 +199,39 @@ function iodaPoint(
 ): { lon: number; lat: number; name: string; score: number } | null {
   const entity = (it.entity as Record<string, unknown>) ?? {};
   const attrs = (entity.attrs as Record<string, unknown>) ?? {};
-  const geo = (it.geo as Record<string, unknown>) ?? (attrs.geo as Record<string, unknown>) ?? {};
+  const geo =
+    (it.geo as Record<string, unknown>) ??
+    (attrs.geo as Record<string, unknown>) ??
+    {};
   const num = (...vals: unknown[]): number | null => {
     for (const v of vals) {
-      const n = typeof v === 'string' ? parseFloat(v) : (v as number);
-      if (typeof n === 'number' && Number.isFinite(n)) return n;
+      const n = typeof v === "string" ? parseFloat(v) : (v as number);
+      if (typeof n === "number" && Number.isFinite(n)) return n;
     }
     return null;
   };
   const lat = num(it.lat, geo.lat, geo.latitude, attrs.latitude);
-  const lon = num(it.lon, it.lng, geo.lng, geo.lon, geo.longitude, attrs.longitude);
+  const lon = num(
+    it.lon,
+    it.lng,
+    geo.lng,
+    geo.lon,
+    geo.longitude,
+    attrs.longitude,
+  );
   if (lat == null || lon == null) return null;
   const name =
     (it.location_name as string) ||
     (entity.name as string) ||
     (it.location as string) ||
-    'unknown';
+    "unknown";
   const score = num(it.score) ?? 0;
   return { lon, lat, name, score };
 }
 
 export function buildAreas(kind: AreaKind, json: unknown): Area[] {
   const j = (json ?? {}) as Record<string, unknown>;
-  if (kind === 'conflict') {
+  if (kind === "conflict") {
     // Real GDELT armed-conflict events (GeoJSON points). GDELT places many
     // reports at the same city/country centroid, so we MERGE by a ~11 km cell
     // (keep the strongest, sum the mentions) to stop a smear of stacked discs +
@@ -230,10 +253,10 @@ export function buildAreas(kind: AreaKind, json: unknown): Area[] {
     for (const f of feats) {
       const g = (f.geometry as { coordinates?: [number, number] }) ?? {};
       const c = g.coordinates;
-      if (!c || typeof c[0] !== 'number' || typeof c[1] !== 'number') continue;
+      if (!c || typeof c[0] !== "number" || typeof c[1] !== "number") continue;
       const p = (f.properties as Record<string, unknown>) ?? {};
-      const ment = typeof p.mentions === 'number' ? p.mentions : 1;
-      const root = String(p.root ?? '');
+      const ment = typeof p.mentions === "number" ? p.mentions : 1;
+      const root = String(p.root ?? "");
       const rad = uncertaintyRadiusM(p.radius_m);
       const iso3 = iso3Of(p.iso3);
       const lvl = shapeLevelOf(p.shape_level);
@@ -245,7 +268,7 @@ export function buildAreas(kind: AreaKind, json: unknown): Area[] {
           lat: c[1],
           ment,
           root,
-          label: String(p.label ?? 'armed clash'),
+          label: String(p.label ?? "armed clash"),
           rad,
           // Merged-cell shape CHOICE: the DOMINANT member is the FIRST one —
           // its coords anchor the cell (and the glyph), so the admin lookup
@@ -256,13 +279,14 @@ export function buildAreas(kind: AreaKind, json: unknown): Area[] {
         });
       } else {
         prev.ment += ment;
-        if (ment > 0 && String(p.label ?? '').length) {
+        if (ment > 0 && String(p.label ?? "").length) {
           // keep the highest-intensity event's wording as the headline
           if (ment >= prev.ment - ment) prev.label = String(p.label);
         }
-        if (root === '20') prev.root = '20';
+        if (root === "20") prev.root = "20";
         // merged cell keeps the LARGEST plausible area of its member events
-        if (rad != null) prev.rad = prev.rad == null ? rad : Math.max(prev.rad, rad);
+        if (rad != null)
+          prev.rad = prev.rad == null ? rad : Math.max(prev.rad, rad);
         if (prev.iso3 == null && iso3 && lvl) {
           prev.iso3 = iso3;
           prev.lvl = lvl;
@@ -283,25 +307,31 @@ export function buildAreas(kind: AreaKind, json: unknown): Area[] {
         // the glyph still marks every cell and the panels still list them all,
         // so raising it hides no data, only text.
         // strip the per-event "(Nx)" the backend baked in, show the merged total.
-        label: v.ment >= 20 ? `${v.label.replace(/\s*\(\d+x\)\s*$/, '')} (${v.ment}x)`.slice(0, 80) : '',
+        label:
+          v.ment >= 20
+            ? `${v.label.replace(/\s*\(\d+x\)\s*$/, "")} (${v.ment}x)`.slice(
+                0,
+                80,
+              )
+            : "",
         radiusM: v.rad,
         iso3: v.iso3,
         shapeLevel: v.lvl,
       };
     });
   }
-  if (kind === 'incidents') {
+  if (kind === "incidents") {
     const incidents = (j.incidents as Record<string, unknown>[]) ?? [];
     return incidents
       .map((inc): Area | null => {
         const c = (inc.centroid as { lon?: number; lat?: number }) ?? {};
-        if (typeof c.lon !== 'number' || typeof c.lat !== 'number') return null;
-        const level = String(inc.threat_level ?? 'low');
+        if (typeof c.lon !== "number" || typeof c.lat !== "number") return null;
+        const level = String(inc.threat_level ?? "low");
         const domains = (inc.domains as string[]) ?? [];
-        const narrative = String(inc.narrative ?? 'incident');
+        const narrative = String(inc.narrative ?? "incident");
         const sym = incidentSymbol(domains, narrative, level);
         return {
-          key: `${round(c.lon)}|${round(c.lat)}|${domains.join(',')}`,
+          key: `${round(c.lon)}|${round(c.lat)}|${domains.join(",")}`,
           lon: c.lon,
           lat: c.lat,
           glyph: sym.glyph,
@@ -329,7 +359,7 @@ export function buildAreas(kind: AreaKind, json: unknown): Area[] {
         glyph: sym.glyph,
         color: sym.color,
         pulse: sym.pulse,
-        label: `INTERNET OUTAGE · ${p.name}${p.score ? ` (${Math.round(p.score)})` : ''}`,
+        label: `INTERNET OUTAGE · ${p.name}${p.score ? ` (${Math.round(p.score)})` : ""}`,
         // IODA events carry no meaningful point-uncertainty radius or shape.
         radiusM: null,
         iso3: null,
@@ -343,7 +373,10 @@ export class AreaAdapter implements LayerAdapter {
   readonly ds: Cesium.CustomDataSource;
   private readonly entities = new Map<string, Cesium.Entity>();
   // entity key → admin shape currently APPLIED as polygon graphics.
-  private readonly appliedShape = new Map<string, { sk: string; color: string }>();
+  private readonly appliedShape = new Map<
+    string,
+    { sk: string; color: string }
+  >();
   // entity key → shape the latest render pass WANTS (drives the async apply).
   private readonly shapeWant = new Map<
     string,
@@ -374,7 +407,10 @@ export class AreaAdapter implements LayerAdapter {
       if (this.pulsingCount > 0) viewer.scene.requestRender();
     }, 333);
     await this.poll();
-    this.timer = window.setInterval(() => void this.poll(), this.props.intervalSec * 1000);
+    this.timer = window.setInterval(
+      () => void this.poll(),
+      this.props.intervalSec * 1000,
+    );
   }
 
   detach(): void {
@@ -393,10 +429,10 @@ export class AreaAdapter implements LayerAdapter {
     try {
       // no-store: these are live feeds; a stale 200 (e.g. an SPA fallback cached
       // before the route existed) would otherwise pin forever.
-      const r = await apiFetch(endpoint, { cache: 'no-store' });
+      const r = await apiFetch(endpoint, { cache: "no-store" });
       if (this.disposed) return;
       if (!r.ok) {
-        ctx.reportStatus({ status: 'red', note: `HTTP ${r.status}` });
+        ctx.reportStatus({ status: "red", note: `HTTP ${r.status}` });
         return;
       }
       const json = await r.json();
@@ -405,12 +441,13 @@ export class AreaAdapter implements LayerAdapter {
       // For IODA, surface how many events actually carried coordinates so thin
       // geo coverage reads as thin, not as "all clear".
       const note =
-        kind === 'ioda'
+        kind === "ioda"
           ? `${((json?.items as unknown[]) ?? []).length} events, ${areas.length} located`
           : `${areas.length} areas`;
-      ctx.reportStatus({ status: 'green', lastSeen: Date.now(), note });
+      ctx.reportStatus({ status: "green", lastSeen: Date.now(), note });
     } catch (e) {
-      if (!this.disposed) ctx.reportStatus({ status: 'red', note: String(e).slice(0, 80) });
+      if (!this.disposed)
+        ctx.reportStatus({ status: "red", note: String(e).slice(0, 80) });
     }
   }
 
@@ -440,14 +477,20 @@ export class AreaAdapter implements LayerAdapter {
         existing.position = new Cesium.ConstantPositionProperty(
           Cesium.Cartesian3.fromDegrees(a.lon, a.lat),
         );
-        if (existing.billboard) existing.billboard.image = new Cesium.ConstantProperty(image);
-        if (existing.label) existing.label.text = new Cesium.ConstantProperty(a.label);
+        if (existing.billboard)
+          existing.billboard.image = new Cesium.ConstantProperty(image);
+        if (existing.label)
+          existing.label.text = new Cesium.ConstantProperty(a.label);
         // Goal state: the resolved admin polygon (swapped IN PLACE on the same
         // entity — billboard/label untouched, never remove+add).
         let polygonized = false;
         if (sk && cached && cached !== SHAPE_MISS) {
           const applied = this.appliedShape.get(a.key);
-          if (applied?.sk === sk && applied.color === a.color && existing.polygon) {
+          if (
+            applied?.sk === sk &&
+            applied.color === a.color &&
+            existing.polygon
+          ) {
             polygonized = true; // already showing the right shape+colour
           } else {
             const hier = polygonHierarchy(cached, a.lon, a.lat);
@@ -468,9 +511,9 @@ export class AreaAdapter implements LayerAdapter {
           // (re)appears or changes, drop it when the feature loses it.
           // Replacing the whole EllipseGraphics only on a radius change avoids
           // a geometry rebuild on every poll for the steady case.
-          const prevR = existing.ellipse?.semiMajorAxis?.getValue(Cesium.JulianDate.now()) as
-            | number
-            | undefined;
+          const prevR = existing.ellipse?.semiMajorAxis?.getValue(
+            Cesium.JulianDate.now(),
+          ) as number | undefined;
           if (a.radiusM == null) {
             if (existing.ellipse) existing.ellipse = undefined;
           } else if (prevR !== a.radiusM) {
@@ -515,7 +558,8 @@ export class AreaAdapter implements LayerAdapter {
         }
       }
       if (!polygonized) {
-        if (a.radiusM != null) opts.ellipse = uncertaintyEllipse(a.radiusM, a.color);
+        if (a.radiusM != null)
+          opts.ellipse = uncertaintyEllipse(a.radiusM, a.color);
         if (query && cached === undefined) shapeQueue.push(query);
       }
       // Label only the prominent events (low-intensity cells stay a bare glyph
@@ -525,11 +569,12 @@ export class AreaAdapter implements LayerAdapter {
           text: a.label,
           font: 'bold 11px "IBM Plex Mono", monospace',
           fillColor: Cesium.Color.WHITE,
-          outlineColor: Cesium.Color.fromCssColorString('#05070b'),
+          outlineColor: Cesium.Color.fromCssColorString("#05070b"),
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           showBackground: true,
-          backgroundColor: Cesium.Color.fromCssColorString('#05070b').withAlpha(0.7),
+          backgroundColor:
+            Cesium.Color.fromCssColorString("#05070b").withAlpha(0.7),
           pixelOffset: new Cesium.Cartesian2(0, -16),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
@@ -539,8 +584,16 @@ export class AreaAdapter implements LayerAdapter {
           // opacity at once and the map became a wall of overlapping text.
           // Aircraft labels have carried a 400 km distanceDisplayCondition for
           // exactly this reason (labelStyle.ts); event labels never got one.
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 9.0e5),
-          translucencyByDistance: new Cesium.NearFarScalar(5.0e5, 1.0, 9.0e5, 0.0),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+            0,
+            9.0e5,
+          ),
+          translucencyByDistance: new Cesium.NearFarScalar(
+            5.0e5,
+            1.0,
+            9.0e5,
+            0.0,
+          ),
           // Let Cesium drop a label rather than overprint one already drawn.
           disableDepthTestDistance: 0,
         };
@@ -576,7 +629,8 @@ export class AreaAdapter implements LayerAdapter {
       const ent = this.entities.get(key);
       if (!ent) continue;
       const prev = this.appliedShape.get(key);
-      if (prev?.sk === want.sk && prev.color === want.color && ent.polygon) continue;
+      if (prev?.sk === want.sk && prev.color === want.color && ent.polygon)
+        continue;
       const cached = cachedShape(want.sk);
       if (!cached || cached === SHAPE_MISS) continue; // miss/pending → ellipse stays
       const hier = polygonHierarchy(cached, want.query.lon, want.query.lat);

@@ -34,7 +34,7 @@ provenance and the custody log are the parts nobody cloned in a weekend.
 
 **One-line message:**
 
-> God's Eye View is the best way to *see* the planet right now. Velocity is what
+> God's Eye View is the best way to _see_ the planet right now. Velocity is what
 > you run when you need to prove what you saw, six weeks later.
 
 ## Claims, with receipts
@@ -42,20 +42,20 @@ provenance and the custody log are the parts nobody cloned in a weekend.
 Every row below was verified this session. Do not add a row without a receipt —
 one wrong claim about a 12.7k-star project ends the campaign's credibility.
 
-| Claim | Receipt |
-| --- | --- |
-| GEV requires a metered Google Maps key | GEV README line 72 (`set GOOGLE_MAPS_API_KEY`), line 290 (marked 🔴 required, metered) |
-| Velocity needs no key for any core feed | `README.md:110-127`, `docker-compose.yml` (`.env` marked `required: false`) |
-| GEV self-describes as not production-hardened | GEV README line 346 |
+| Claim                                               | Receipt                                                                                                                                |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| GEV requires a metered Google Maps key              | GEV README line 72 (`set GOOGLE_MAPS_API_KEY`), line 290 (marked 🔴 required, metered)                                                 |
+| Velocity needs no key for any core feed             | `README.md:110-127`, `docker-compose.yml` (`.env` marked `required: false`)                                                            |
+| GEV self-describes as not production-hardened       | GEV README line 346                                                                                                                    |
 | GEV keeps ~24 h of per-target trace, not an archive | GEV README line 212 ("silently backfills ~24 h of real trace history"); launch replay at line 220 is labelled `RECONSTRUCTED ESTIMATE` |
-| Velocity records position history you keep | `README.md:121-127` (`ARCHIVE_MODE=1`, named Docker volume, replay scrubber) |
-| Velocity scores what it shows | `/api/status/provenance`, per-contact source count + fix age (`README.md:20-28`) |
-| Velocity has chain-of-custody evidence export | SHA-256 evidence locker + append-only custody log → self-contained HTML/PPTX case report (`README.md:37-44`, `README.md:264-266`) |
-| Both refuse person-tracking | GEV README line 342; Velocity fuses public broadcasts only |
+| Velocity records position history you keep          | `README.md:121-127` (`ARCHIVE_MODE=1`, named Docker volume, replay scrubber)                                                           |
+| Velocity scores what it shows                       | `/api/status/provenance`, per-contact source count + fix age (`README.md:20-28`)                                                       |
+| Velocity has chain-of-custody evidence export       | SHA-256 evidence locker + append-only custody log → self-contained HTML/PPTX case report (`README.md:37-44`, `README.md:264-266`)      |
+| Both refuse person-tracking                         | GEV README line 342; Velocity fuses public broadcasts only                                                                             |
 
 **Do not claim** that GEV has "no replay" — it has per-target backfill and a
-scrubbable reconstructed launch replay. The true distinction is *ephemeral
-per-target backfill* versus *a persistent archive on your disk*. Say it that way
+scrubbable reconstructed launch replay. The true distinction is _ephemeral
+per-target backfill_ versus _a persistent archive on your disk_. Say it that way
 or not at all.
 
 **Do not weaponise GEV's ~25 open security issues** (SSRF, unauthenticated
@@ -74,15 +74,15 @@ thread we did not have to start. **Mine the language. Do not post in their
 issues** — showing up in a competitor's tracker to pitch is the one move that
 turns goodwill into a grudge.
 
-| What GEV users are asking for | Issues | Velocity today |
-| --- | --- | --- |
-| Docker / one-click deploy for non-developers | #43, #48 | `docker compose up` — api + web + nginx (`README.md:110`) |
-| npm install / `.env` / API-key setup pain | #86, #76, #74, #69, #90 | Boots keyless, nothing to configure |
-| An option to not use Google's 3D tiles | #64, #59 | 8-way keyless basemap picker (`README.md:635`), no Google dependency |
-| Google 3D tiles blocked in the EEA | #71 (7 comments) | No Google account involved at all |
-| Live weather / satellite imagery overlay | #85 | Partial — fires and hazards, no radar. Don't claim radar. |
-| Local RTL-SDR / dump1090 receiver tap | #57 | Not built. Honest roadmap answer. |
-| TAK / ATAK Cursor-on-Target | #7 | Not built. Real gap; the highest-value one on this list. |
+| What GEV users are asking for                | Issues                  | Velocity today                                                       |
+| -------------------------------------------- | ----------------------- | -------------------------------------------------------------------- |
+| Docker / one-click deploy for non-developers | #43, #48                | `docker compose up` — api + web + nginx (`README.md:110`)            |
+| npm install / `.env` / API-key setup pain    | #86, #76, #74, #69, #90 | Boots keyless, nothing to configure                                  |
+| An option to not use Google's 3D tiles       | #64, #59                | 8-way keyless basemap picker (`README.md:635`), no Google dependency |
+| Google 3D tiles blocked in the EEA           | #71 (7 comments)        | No Google account involved at all                                    |
+| Live weather / satellite imagery overlay     | #85                     | Partial — fires and hazards, no radar. Don't claim radar.            |
+| Local RTL-SDR / dump1090 receiver tap        | #57                     | Not built. Honest roadmap answer.                                    |
+| TAK / ATAK Cursor-on-Target                  | #7                      | Not built. Real gap; the highest-value one on this list.             |
 
 The first four rows are the campaign. "It runs with one command and no Google
 account" answers five separate open issues, and it is already true.
@@ -92,13 +92,13 @@ account" answers five separate open issues, and it is already true.
 Existing drafts are good and were never fired — the July problem was a missing
 news hook, and the wave is that hook. **Retool, do not rewrite.**
 
-| # | Channel | Asset | State |
-| --- | --- | --- | --- |
-| 1 | **Show HN** | `docs/post-hn-2026-07.md` | **Retooled 2026-08-30.** Wave paragraph opens the first comment; a prepared "how is this different from GEV" answer is now #2 in the answer list. Title unchanged — history/replay already leads. |
-| 2 | **r/OSINT** | `docs/post-osint-2026-07.md` | **Retooled 2026-08-30.** Wave paragraph opens the body; a GEV-framed title option added. Evidence-trail section already carried the weight. |
-| 3 | **r/selfhosted** | `docs/post-selfhosted-2026-07.md` | **Retooled 2026-08-30.** No-Google-key paragraph added above the cost table, plus a GEV title option. |
-| 4 | **X** | this doc | Drafted below. Fire from the user's account. |
-| 5 | **README** | `README.md:61` table | Drafted below, **deliberately not applied** — a positioning call, not a mechanical edit. |
+| #   | Channel          | Asset                             | State                                                                                                                                                                                             |
+| --- | ---------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Show HN**      | `docs/post-hn-2026-07.md`         | **Retooled 2026-08-30.** Wave paragraph opens the first comment; a prepared "how is this different from GEV" answer is now #2 in the answer list. Title unchanged — history/replay already leads. |
+| 2   | **r/OSINT**      | `docs/post-osint-2026-07.md`      | **Retooled 2026-08-30.** Wave paragraph opens the body; a GEV-framed title option added. Evidence-trail section already carried the weight.                                                       |
+| 3   | **r/selfhosted** | `docs/post-selfhosted-2026-07.md` | **Retooled 2026-08-30.** No-Google-key paragraph added above the cost table, plus a GEV title option.                                                                                             |
+| 4   | **X**            | this doc                          | Drafted below. Fire from the user's account.                                                                                                                                                      |
+| 5   | **README**       | `README.md:61` table              | Drafted below, **deliberately not applied** — a positioning call, not a mechanical edit.                                                                                                          |
 
 Everything from `docs/star-campaign-2026-07.md` still applies: never ask for
 upvotes, re-measure the live counts with the one-liner in the HN draft before
@@ -116,16 +116,16 @@ Today is **Sunday 2026-08-30**. The Reddit account needs a 3-4 day cooldown
 for the two Reddit dates. HN carries none of that heat and wants Tue/Wed/Thu
 08:00-10:00 ET.
 
-| When | Action | Gate before firing |
-| --- | --- | --- |
-| **Sun 2026-08-30** | Push master. Boot the stack and re-measure the live counts (one-liner in `docs/post-hn-2026-07.md`). | Nothing fires until master is pushed. |
-| **Sun 2026-08-30 or Mon 08-31** | X post (draft below). No account heat here, and X is where the wave actually is. | Repo pushed. |
-| **Mon 2026-08-31** | DM the r/selfhosted and r/OSINT mods, one honest paragraph each. Zero promo posts from the Reddit account today. | — |
-| **Tue 2026-09-01, 08:00-10:00 ET** | Show HN, `https://projectvelocity.org`. Repo link in the first comment. Stay in the thread all day. | Numbers re-measured that morning; GEV README lines re-checked. |
-| **Wed 2026-09-02, 09:00-11:00 ET** | r/selfhosted (the #1 planned channel, never fired). | Account cold 3 days; mod pre-ack or accept filter risk. Check logged-out at +30 min. |
-| **Thu 2026-09-03, 09:00-11:00 ET** | r/OSINT. | Same visibility check. |
-| **Fri 2026-09-04 - Sun 09-06** | Hold. No posting. Answer threads only. | — |
-| **Tue 2026-09-08** | Measure against the baseline below. Decide whether r/osinttools and r/DataHoarder get a second run. | — |
+| When                               | Action                                                                                                           | Gate before firing                                                                   |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Sun 2026-08-30**                 | Push master. Boot the stack and re-measure the live counts (one-liner in `docs/post-hn-2026-07.md`).             | Nothing fires until master is pushed.                                                |
+| **Sun 2026-08-30 or Mon 08-31**    | X post (draft below). No account heat here, and X is where the wave actually is.                                 | Repo pushed.                                                                         |
+| **Mon 2026-08-31**                 | DM the r/selfhosted and r/OSINT mods, one honest paragraph each. Zero promo posts from the Reddit account today. | —                                                                                    |
+| **Tue 2026-09-01, 08:00-10:00 ET** | Show HN, `https://projectvelocity.org`. Repo link in the first comment. Stay in the thread all day.              | Numbers re-measured that morning; GEV README lines re-checked.                       |
+| **Wed 2026-09-02, 09:00-11:00 ET** | r/selfhosted (the #1 planned channel, never fired).                                                              | Account cold 3 days; mod pre-ack or accept filter risk. Check logged-out at +30 min. |
+| **Thu 2026-09-03, 09:00-11:00 ET** | r/OSINT.                                                                                                         | Same visibility check.                                                               |
+| **Fri 2026-09-04 - Sun 09-06**     | Hold. No posting. Answer threads only.                                                                           | —                                                                                    |
+| **Tue 2026-09-08**                 | Measure against the baseline below. Decide whether r/osinttools and r/DataHoarder get a second run.              | —                                                                                    |
 
 If a post is filtered, message the mods — never repost. If Show HN stalls under
 20 points, mail `hn@ycombinator.com` for the second-chance pool and say the angle
@@ -135,12 +135,12 @@ changed since the 2026-07-11 attempt (4 points).
 
 Measured today via the GitHub API, so the delta is checkable rather than felt:
 
-| Metric | 2026-08-30 |
-| --- | --- |
-| `AndrewCTF/velocity` stars | **81** |
-| `AndrewCTF/velocity` forks | 12 |
-| `bilawalsidhu/gods-eye-view` stars | **12,772** |
-| `bilawalsidhu/gods-eye-view` open issues (excl. PRs) | 59 |
+| Metric                                               | 2026-08-30 |
+| ---------------------------------------------------- | ---------- |
+| `AndrewCTF/velocity` stars                           | **81**     |
+| `AndrewCTF/velocity` forks                           | 12         |
+| `bilawalsidhu/gods-eye-view` stars                   | **12,772** |
+| `bilawalsidhu/gods-eye-view` open issues (excl. PRs) | 59         |
 
 Re-run on 2026-09-08:
 
@@ -185,13 +185,13 @@ Do not tag Sidhu into a comparison. If he engages, be useful and stay factual.
 
 ### README comparison row (draft only — not applied)
 
-The existing table at `README.md:61` runs four columns: *History you can replay ·
-Self-hosted · Account / API key · Who owns the archive*. A GEV row merges into it
+The existing table at `README.md:61` runs four columns: _History you can replay ·
+Self-hosted · Account / API key · Who owns the archive_. A GEV row merges into it
 without inventing axes:
 
-| | History you can replay | Self-hosted | Account / API key | Who owns the archive |
-|---|---|---|---|---|
-| God's Eye View | ~24 h per-target backfill, nothing stored | Yes | Google Maps (metered) | Nothing is kept |
+|                | History you can replay                    | Self-hosted | Account / API key     | Who owns the archive |
+| -------------- | ----------------------------------------- | ----------- | --------------------- | -------------------- |
+| God's Eye View | ~24 h per-target backfill, nothing stored | Yes         | Google Maps (metered) | Nothing is kept      |
 
 Left unapplied deliberately: the README is public-facing and this branch carries
 other work. Adding a competitor row is a positioning call, not a mechanical edit

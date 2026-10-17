@@ -7,11 +7,11 @@
 // with a pointer at Settings → Local AI — successful briefs are cached per
 // iso3 in a module map, failures are not (so fixing the model config retries).
 
-import { useEffect, useRef, useState } from 'react';
-import { Markdown } from '../shell/Markdown.js';
-import { apiFetch } from '../transport/http.js';
-import { Card, type BriefResponse } from './shared.js';
-import { AiLabel } from '../shell/aiLabel.js';
+import { useEffect, useRef, useState } from "react";
+import { Markdown } from "../shell/Markdown.js";
+import { apiFetch } from "../transport/http.js";
+import { Card, type BriefResponse } from "./shared.js";
+import { AiLabel } from "../shell/aiLabel.js";
 
 const briefCache = new Map<string, BriefResponse>();
 
@@ -47,20 +47,29 @@ export function BriefCard({ iso3 }: { iso3: string }): JSX.Element {
     abortRef.current = ctrl;
     setState({ busy: true, error: null, data: null });
     try {
-      const r = await apiFetch(`/api/country/${iso3}/brief`, { signal: ctrl.signal });
-      if (!r.ok) throw new Error(`Country brief unavailable (HTTP ${r.status})`);
+      const r = await apiFetch(`/api/country/${iso3}/brief`, {
+        signal: ctrl.signal,
+      });
+      if (!r.ok)
+        throw new Error(`Country brief unavailable (HTTP ${r.status})`);
       const body = (await r.json()) as BriefResponse;
       if (body.ok) briefCache.set(iso3, body);
-      if (!ctrl.signal.aborted) setState({ busy: false, error: null, data: body });
+      if (!ctrl.signal.aborted)
+        setState({ busy: false, error: null, data: body });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setState({ busy: false, error: e instanceof Error ? e.message : String(e), data: null });
+      setState({
+        busy: false,
+        error: e instanceof Error ? e.message : String(e),
+        data: null,
+      });
     }
   }
 
   const meta =
     state.data?.ok === true
-      ? [state.data.backend, state.data.model].filter(Boolean).join(' · ') || undefined
+      ? [state.data.backend, state.data.model].filter(Boolean).join(" · ") ||
+        undefined
       : undefined;
 
   return (
@@ -72,26 +81,34 @@ export function BriefCard({ iso3 }: { iso3: string }): JSX.Element {
           onClick={() => void generate()}
           className="px-2.5 py-1.5 text-[11px] rounded-sm border border-line-2 bg-bg-2 text-txt-1 hover:text-txt-0 hover:border-accent disabled:opacity-50"
         >
-          {state.busy ? 'Generating…' : state.data?.ok === true ? 'Regenerate brief' : 'Generate brief'}
+          {state.busy
+            ? "Generating…"
+            : state.data?.ok === true
+              ? "Regenerate brief"
+              : "Generate brief"}
         </button>
         {state.busy && (
           <span className="mono text-[10px] text-txt-3">
-            fusing indicators + leadership + security… {elapsed} s (local model, up to ~90 s)
+            fusing indicators + leadership + security… {elapsed} s (local model,
+            up to ~90 s)
           </span>
         )}
         {!state.busy && !state.data && !state.error && (
           <span className="mono text-[10px] text-txt-4">
-            All-source markdown assessment grounded only in this page&#39;s data.
+            All-source markdown assessment grounded only in this page&#39;s
+            data.
           </span>
         )}
       </div>
       {state.error && (
-        <div className="mono text-[10px] text-alert-fg mt-2">Brief failed: {state.error}</div>
+        <div className="mono text-[10px] text-alert-fg mt-2">
+          Brief failed: {state.error}
+        </div>
       )}
       {state.data && state.data.ok === false && (
         <div className="mt-2 border border-warn-line bg-warn-bg rounded-sm p-2">
           <div className="text-[11px] text-warn-fg">
-            Brief unavailable: {state.data.reason || 'no LLM backend answered'}.
+            Brief unavailable: {state.data.reason || "no LLM backend answered"}.
           </div>
           <div className="text-[10px] text-txt-3 mt-0.5">
             Configure a local model in Settings → Local AI, then retry.

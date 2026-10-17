@@ -19,11 +19,11 @@
 // Reuses: apiFetch, the shared instruments (Widget / KV / Badge / ScoreBar / Caveat /
 // MicroLabel / Btn), and camera.flyToPosition (only when a viewer is passed).
 
-import { useEffect, useState } from 'react';
-import * as Cesium from 'cesium';
+import { useEffect, useState } from "react";
+import * as Cesium from "cesium";
 
-import { apiFetch } from '../transport/http.js';
-import { flyToPosition } from '../globe/camera.js';
+import { apiFetch } from "../transport/http.js";
+import { flyToPosition } from "../globe/camera.js";
 import {
   Widget,
   KV,
@@ -33,8 +33,8 @@ import {
   Caveat,
   MicroLabel,
   Btn,
-} from '../shell/instruments.js';
-import { dict } from '../shell/safeKeys.js';
+} from "../shell/instruments.js";
+import { dict } from "../shell/safeKeys.js";
 
 // ── tolerant POL contract ─────────────────────────────────────────────────────
 // One z-scored baseline metric, the shape intel/baseline.assess emits per key.
@@ -91,7 +91,9 @@ interface PolResponse {
   anomaly_label?: string | null;
   // baseline: either the assess() envelope ({metrics:{...}, anomalies:[...]}) or a
   // flat metric map; plus an optional flat list of human anomaly strings.
-  baseline?: { metrics?: Record<string, BaselineMetric>; anomalies?: string[] } | Record<string, BaselineMetric>;
+  baseline?:
+    | { metrics?: Record<string, BaselineMetric>; anomalies?: string[] }
+    | Record<string, BaselineMetric>;
   anomalies?: string[];
   waypoints?: Dwell[];
   dwells?: Dwell[];
@@ -108,25 +110,32 @@ function scorePct(raw: number | undefined): number | null {
 
 // Score tone/label thresholds (percentage). Conservative so a benign track reads
 // "nominal", not red — the alert-red ScoreBar fill already signals magnitude.
-function scoreTone(pct: number): { label: string; tone: 'ok' | 'warn' | 'alert' } {
-  if (pct >= 70) return { label: 'anomalous', tone: 'alert' };
-  if (pct >= 40) return { label: 'elevated', tone: 'warn' };
-  return { label: 'nominal', tone: 'ok' };
+function scoreTone(pct: number): {
+  label: string;
+  tone: "ok" | "warn" | "alert";
+} {
+  if (pct >= 70) return { label: "anomalous", tone: "alert" };
+  if (pct >= 40) return { label: "elevated", tone: "warn" };
+  return { label: "nominal", tone: "ok" };
 }
 
 // Pull the per-key baseline metrics whether the backend nested them under
 // `metrics` (the assess() envelope) or returned a flat map at `baseline`. Reads
 // the raw value as `unknown` so the union narrowing stays simple/sound.
-function baselineMetrics(b: PolResponse['baseline']): Record<string, BaselineMetric> {
-  if (!b || typeof b !== 'object') return {};
+function baselineMetrics(
+  b: PolResponse["baseline"],
+): Record<string, BaselineMetric> {
+  if (!b || typeof b !== "object") return {};
   const envelope = b as { metrics?: Record<string, BaselineMetric> };
-  if (envelope.metrics && typeof envelope.metrics === 'object') return envelope.metrics;
+  if (envelope.metrics && typeof envelope.metrics === "object")
+    return envelope.metrics;
   // Flat map — keep only object-valued entries (skip an 'anomalies' array if the
   // backend returned the assess() envelope shape without a `metrics` wrapper).
   const out = dict<BaselineMetric>();
   for (const [k, v] of Object.entries(b as Record<string, unknown>)) {
-    if (k === 'anomalies') continue;
-    if (v && typeof v === 'object' && !Array.isArray(v)) out[k] = v as BaselineMetric;
+    if (k === "anomalies") continue;
+    if (v && typeof v === "object" && !Array.isArray(v))
+      out[k] = v as BaselineMetric;
   }
   return out;
 }
@@ -136,20 +145,24 @@ function baselineMetrics(b: PolResponse['baseline']): Record<string, BaselineMet
 function baselineAnomalies(data: PolResponse): string[] {
   const b = data.baseline;
   const fromEnvelope =
-    b && typeof b === 'object' && Array.isArray((b as { anomalies?: unknown }).anomalies)
+    b &&
+    typeof b === "object" &&
+    Array.isArray((b as { anomalies?: unknown }).anomalies)
       ? ((b as { anomalies?: string[] }).anomalies as string[])
       : undefined;
   const list = fromEnvelope ?? data.anomalies ?? [];
-  return Array.isArray(list) ? list.filter((s): s is string => typeof s === 'string') : [];
+  return Array.isArray(list)
+    ? list.filter((s): s is string => typeof s === "string")
+    : [];
 }
 
 function dwellMinutes(d: Dwell): number | null {
   const v = d.dwell_minutes ?? d.dwell_min ?? d.minutes;
-  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 function dwellVisits(d: Dwell): number | null {
   const v = d.visits ?? d.count;
-  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 function dwellLabel(d: Dwell, i: number): string {
   return d.label || d.name || d.place || `Dwell ${i + 1}`;
@@ -160,10 +173,12 @@ function fmtMinutes(min: number): string {
   return `${Math.round(min)}m`;
 }
 
-function stateBadgeTone(state: string | undefined): 'alert' | 'warn' | 'neutral' {
-  if (state === 'high') return 'alert';
-  if (state === 'low') return 'warn';
-  return 'neutral';
+function stateBadgeTone(
+  state: string | undefined,
+): "alert" | "warn" | "neutral" {
+  if (state === "high") return "alert";
+  if (state === "low") return "warn";
+  return "neutral";
 }
 
 export function PatternOfLifeCard({
@@ -176,18 +191,18 @@ export function PatternOfLifeCard({
   viewer?: Cesium.Viewer | null;
 }): JSX.Element | null {
   const [data, setData] = useState<PolResponse | null>(null);
-  const [phase, setPhase] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [phase, setPhase] = useState<"idle" | "loading" | "error">("idle");
 
   // Only aircraft/vessels have a position history POL can analyse; skip the rest
   // (cameras / quakes / sim agents) so the panel stays tight.
-  const trackable = kind === 'aircraft' || kind === 'vessel';
+  const trackable = kind === "aircraft" || kind === "vessel";
 
   useEffect(() => {
     setData(null);
-    setPhase('idle');
+    setPhase("idle");
     if (!id || !trackable) return;
     const ab = new AbortController();
-    setPhase('loading');
+    setPhase("loading");
     // The POL route is id-keyed on the canonical entity id (aircraft:<icao24> /
     // vessel:<mmsi>) — the same id history.py / incidents.py use. The panel's
     // selection id already IS that canonical id, so pass it through verbatim.
@@ -195,22 +210,22 @@ export function PatternOfLifeCard({
       .then((r) => (r.ok ? (r.json() as Promise<PolResponse>) : null))
       .then((j) => {
         if (!j) {
-          setPhase('error');
+          setPhase("error");
           return;
         }
         setData(j);
-        setPhase('idle');
+        setPhase("idle");
       })
       .catch((e: unknown) => {
-        if ((e as { name?: string }).name === 'AbortError') return;
-        setPhase('error');
+        if ((e as { name?: string }).name === "AbortError") return;
+        setPhase("error");
       });
     return () => ab.abort();
   }, [id, trackable]);
 
   if (!trackable) return null;
 
-  if (phase === 'loading' && !data) {
+  if (phase === "loading" && !data) {
     return (
       <Widget title="Pattern of life">
         <MicroLabel className="block">analysing track…</MicroLabel>
@@ -220,7 +235,7 @@ export function PatternOfLifeCard({
 
   // Route missing / errored — quiet, honest, no crash. (The sibling route may not
   // be wired yet; degrade gracefully rather than blank the whole panel.)
-  if (phase === 'error' && !data) return null;
+  if (phase === "error" && !data) return null;
   if (!data) return null;
 
   const note = data.note ?? null;
@@ -246,9 +261,18 @@ export function PatternOfLifeCard({
   // Track-summary KV rows (legacy fields; render only what's present).
   const trackRows: JSX.Element[] = [];
   if (t.profile) trackRows.push(<KVRow key="prof" k="Profile" v={t.profile} />);
-  if (durMin != null) trackRows.push(<KVRow key="dur" k="Track" v={`${Math.round(durMin)} min`} />);
+  if (durMin != null)
+    trackRows.push(
+      <KVRow key="dur" k="Track" v={`${Math.round(durMin)} min`} />,
+    );
   if (t.distance_km != null)
-    trackRows.push(<KVRow key="dist" k="Distance" v={`${Math.round(t.distance_km).toLocaleString()} km`} />);
+    trackRows.push(
+      <KVRow
+        key="dist"
+        k="Distance"
+        v={`${Math.round(t.distance_km).toLocaleString()} km`}
+      />,
+    );
   if (fixes != null) trackRows.push(<KVRow key="fix" k="Fixes" v={fixes} />);
   if (t.gap_count != null && t.gap_count > 0)
     trackRows.push(<KVRow key="gap" k="ADS-B gaps" v={t.gap_count} warn />);
@@ -271,7 +295,8 @@ export function PatternOfLifeCard({
           {retention != null && <Caveat level={`HISTORY ~${retention}H`} />}
         </div>
         <MicroLabel className="block mt-1.5 text-txt-3">
-          {note ?? 'no pattern-of-life baseline for this entity in the retained window'}
+          {note ??
+            "no pattern-of-life baseline for this entity in the retained window"}
         </MicroLabel>
       </Widget>
     );
@@ -286,7 +311,9 @@ export function PatternOfLifeCard({
         </div>
       )}
 
-      {assessment && <p className="text-[11px] text-txt-1 leading-snug mb-2">{assessment}</p>}
+      {assessment && (
+        <p className="text-[11px] text-txt-1 leading-snug mb-2">{assessment}</p>
+      )}
 
       {/* 1 — anomaly score */}
       {pct != null && (
@@ -295,8 +322,18 @@ export function PatternOfLifeCard({
             <MicroLabel>Anomaly</MicroLabel>
             <div className="flex items-center gap-2">
               <ScoreBar pct={pct} />
-              <span className="mono text-[10px] text-txt-1 tabular-nums">{Math.round(pct)}</span>
-              <Badge tone={scoreTone(pct).tone === 'ok' ? 'ok' : scoreTone(pct).tone === 'warn' ? 'warn' : 'alert'}>
+              <span className="mono text-[10px] text-txt-1 tabular-nums">
+                {Math.round(pct)}
+              </span>
+              <Badge
+                tone={
+                  scoreTone(pct).tone === "ok"
+                    ? "ok"
+                    : scoreTone(pct).tone === "warn"
+                      ? "warn"
+                      : "alert"
+                }
+              >
                 {data.anomaly_label || scoreTone(pct).label}
               </Badge>
             </div>
@@ -311,25 +348,35 @@ export function PatternOfLifeCard({
           <KV>
             {metricKeys.map((k) => {
               const m = metrics[k]!;
-              const insufficient = m.baseline === 'insufficient' || m.state === 'insufficient' || m.z == null;
+              const insufficient =
+                m.baseline === "insufficient" ||
+                m.state === "insufficient" ||
+                m.z == null;
               const v = insufficient ? (
                 <span className="text-txt-3">
-                  {m.now != null ? `${m.now} · ` : ''}
-                  baselining{m.samples != null ? ` (${m.samples})` : ''}
+                  {m.now != null ? `${m.now} · ` : ""}
+                  baselining{m.samples != null ? ` (${m.samples})` : ""}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5">
-                  <span>{m.now != null ? m.now : '—'}</span>
+                  <span>{m.now != null ? m.now : "—"}</span>
                   <span className="text-txt-3">
-                    μ{typeof m.mean === 'number' ? m.mean : m.mean ?? '—'}
-                    {m.z != null ? ` · ${m.z >= 0 ? '+' : ''}${m.z}σ` : ''}
+                    μ{typeof m.mean === "number" ? m.mean : (m.mean ?? "—")}
+                    {m.z != null ? ` · ${m.z >= 0 ? "+" : ""}${m.z}σ` : ""}
                   </span>
-                  {m.state && m.state !== 'normal' && (
+                  {m.state && m.state !== "normal" && (
                     <Badge tone={stateBadgeTone(m.state)}>{m.state}</Badge>
                   )}
                 </span>
               );
-              return <KVRow key={k} k={k.replace(/_/g, ' ')} v={v} warn={m.state === 'high'} />;
+              return (
+                <KVRow
+                  key={k}
+                  k={k.replace(/_/g, " ")}
+                  v={v}
+                  warn={m.state === "high"}
+                />
+              );
             })}
           </KV>
         </div>
@@ -354,15 +401,31 @@ export function PatternOfLifeCard({
             {waypoints.slice(0, 8).map((d, i) => {
               const min = dwellMinutes(d);
               const visits = dwellVisits(d);
-              const canSlew = viewer != null && typeof d.lat === 'number' && typeof d.lon === 'number';
+              const canSlew =
+                viewer != null &&
+                typeof d.lat === "number" &&
+                typeof d.lon === "number";
               return (
-                <li key={i} className="border border-line rounded-sm p-1.5 bg-bg-2/60">
+                <li
+                  key={i}
+                  className="border border-line rounded-sm p-1.5 bg-bg-2/60"
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10.5px] text-txt-1 truncate">{dwellLabel(d, i)}</span>
+                    <span className="text-[10.5px] text-txt-1 truncate">
+                      {dwellLabel(d, i)}
+                    </span>
                     {canSlew && (
                       <Btn
                         size="sm"
-                        onClick={() => flyToPosition(viewer!, d.lon as number, d.lat as number, 120_000, 1.0)}
+                        onClick={() =>
+                          flyToPosition(
+                            viewer!,
+                            d.lon as number,
+                            d.lat as number,
+                            120_000,
+                            1.0,
+                          )
+                        }
                         title="Slew to this dwell"
                       >
                         → Slew
@@ -372,7 +435,11 @@ export function PatternOfLifeCard({
                   {(min != null || visits != null) && (
                     <div className="flex items-center gap-3 mt-1 mono text-[10px] text-txt-3 tabular-nums">
                       {min != null && <span>dwell {fmtMinutes(min)}</span>}
-                      {visits != null && <span>{visits} visit{visits === 1 ? '' : 's'}</span>}
+                      {visits != null && (
+                        <span>
+                          {visits} visit{visits === 1 ? "" : "s"}
+                        </span>
+                      )}
                     </div>
                   )}
                 </li>
@@ -391,7 +458,9 @@ export function PatternOfLifeCard({
         </div>
       )}
 
-      {note && <p className="mono text-[10px] text-txt-3 leading-snug mt-2">{note}</p>}
+      {note && (
+        <p className="mono text-[10px] text-txt-3 leading-snug mt-2">{note}</p>
+      )}
     </Widget>
   );
 }
@@ -399,11 +468,21 @@ export function PatternOfLifeCard({
 // A tiny sub-section label inside the card (the shared SectionLabel is a touch
 // heavy here; this matches the card's micro rhythm). Local to keep the file
 // self-contained (ownership: I only own EntityPanel + these two card files).
-function SectionMicro({ title, count }: { title: string; count?: number }): JSX.Element {
+function SectionMicro({
+  title,
+  count,
+}: {
+  title: string;
+  count?: number;
+}): JSX.Element {
   return (
     <div className="flex items-center justify-between gap-2">
       <MicroLabel>{title}</MicroLabel>
-      {count !== undefined && <span className="mono text-[10px] text-txt-3 tabular-nums">{count}</span>}
+      {count !== undefined && (
+        <span className="mono text-[10px] text-txt-3 tabular-nums">
+          {count}
+        </span>
+      )}
     </div>
   );
 }

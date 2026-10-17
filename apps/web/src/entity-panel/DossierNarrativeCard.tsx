@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { Widget, Btn, Badge, Caveat } from '../shell/instruments.js';
-import { apiFetch } from '../transport/http.js';
+import { useEffect, useRef, useState } from "react";
+import { Widget, Btn, Badge, Caveat } from "../shell/instruments.js";
+import { apiFetch } from "../transport/http.js";
 
 // Grounded analytic narrative for a tracked entity (the Gotham "Dossier" prose).
 // On-demand ONLY (a button, not auto-fetch) so the reasoning tier isn't hit on
@@ -44,8 +44,8 @@ export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
   }, [id, kind]);
 
   // Only aircraft / vessels have a pattern-of-life dossier to narrate.
-  if (kind !== 'aircraft' && kind !== 'vessel') return null;
-  const entityId = id.includes(':') ? id : `${kind}:${id}`;
+  if (kind !== "aircraft" && kind !== "vessel") return null;
+  const entityId = id.includes(":") ? id : `${kind}:${id}`;
 
   const generate = async (): Promise<void> => {
     inflightRef.current?.abort();
@@ -55,14 +55,14 @@ export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
     try {
       const r = await apiFetch(
         `/api/intel/dossier/narrative?entity_id=${encodeURIComponent(entityId)}`,
-        { method: 'POST', signal: aborter.signal },
+        { method: "POST", signal: aborter.signal },
       );
       const body = (await r.json().catch(() => null)) as Narrative | null;
       if (aborter.signal.aborted) return;
-      setData(body ?? { ok: false, error: 'Could not load the assessment.' });
+      setData(body ?? { ok: false, error: "Could not load the assessment." });
     } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return;
-      setData({ ok: false, error: 'Could not load the assessment.' });
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setData({ ok: false, error: "Could not load the assessment." });
     } finally {
       if (!aborter.signal.aborted) setBusy(false);
     }
@@ -72,8 +72,13 @@ export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
     <Widget
       title="Analytic assessment"
       action={
-        <Btn size="sm" tone="accent" disabled={busy} onClick={() => void generate()}>
-          {busy ? 'Generating…' : data ? '↻ Regenerate' : '⚙ Generate'}
+        <Btn
+          size="sm"
+          tone="accent"
+          disabled={busy}
+          onClick={() => void generate()}
+        >
+          {busy ? "Generating…" : data ? "↻ Regenerate" : "⚙ Generate"}
         </Btn>
       }
     >
@@ -81,14 +86,14 @@ export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
         <Caveat level="ANALYTIC ASSESSMENT" note="grounded" tone="warn" />
         {!data && (
           <p className="text-[10.5px] text-txt-3">
-            Reasoning model summarises this entity's observed pattern-of-life. Every claim cites the
-            dossier field it came from.
+            Reasoning model summarises this entity's observed pattern-of-life.
+            Every claim cites the dossier field it came from.
           </p>
         )}
         {data && data.ok === false && (
           <p className="text-[10.5px] text-warn">
-            {data.error === 'model unavailable' || !data.error
-              ? 'Assessment unavailable. No reasoning model configured.'
+            {data.error === "model unavailable" || !data.error
+              ? "Assessment unavailable. No reasoning model configured."
               : data.error}
           </p>
         )}
@@ -97,14 +102,24 @@ export function DossierNarrativeCard({ id, kind }: Props): JSX.Element | null {
             {data.assessment && (
               <div
                 className="relative rounded-sm border border-line bg-bg-1/60 pl-3 pr-2.5 py-2 overflow-hidden"
-                style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4)' }}
+                style={{ boxShadow: "inset 0 1px 3px rgba(0,0,0,0.4)" }}
               >
                 <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-warn/60" />
-                <p className="text-[11px] text-txt-1 leading-relaxed">{data.assessment}</p>
+                <p className="text-[11px] text-txt-1 leading-relaxed">
+                  {data.assessment}
+                </p>
               </div>
             )}
             {data.confidence && (
-              <Badge tone={data.confidence === 'high' ? 'accent' : data.confidence === 'low' ? 'neutral' : 'warn'}>
+              <Badge
+                tone={
+                  data.confidence === "high"
+                    ? "accent"
+                    : data.confidence === "low"
+                      ? "neutral"
+                      : "warn"
+                }
+              >
                 confidence: {data.confidence}
               </Badge>
             )}

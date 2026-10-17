@@ -3,9 +3,9 @@
 // TYPING a coordinate/place or DRAWING on the map. The SearchObjectsSidebar unions
 // the non-null circles into one bbox for the backend query, then re-filters the
 // results to the exact circles client-side. Mirrors geoScope.ts's zustand style.
-import { create } from 'zustand';
+import { create } from "zustand";
 
-export type Slot = 'A' | 'B' | 'C' | 'D';
+export type Slot = "A" | "B" | "C" | "D";
 
 export interface Region {
   center: { lat: number; lon: number };
@@ -21,18 +21,19 @@ interface State {
   clearAll: () => void;
 }
 
-export const SLOTS: readonly Slot[] = ['A', 'B', 'C', 'D'];
+export const SLOTS: readonly Slot[] = ["A", "B", "C", "D"];
 
 export const useSearchRegions = create<State>((set) => ({
   regions: { A: null, B: null, C: null, D: null },
-  active: 'A',
+  active: "A",
   setActive: (active) => set({ active }),
   setRegion: (s, r) => set((st) => ({ regions: { ...st.regions, [s]: r } })),
   clearAll: () => set({ regions: { A: null, B: null, C: null, D: null } }),
 }));
 
 // DEV handle for live verification (mirrors __useGeoScope / __useSelection).
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useSearchRegions: typeof useSearchRegions }).__useSearchRegions =
-    useSearchRegions;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (
+    window as unknown as { __useSearchRegions: typeof useSearchRegions }
+  ).__useSearchRegions = useSearchRegions;
 }

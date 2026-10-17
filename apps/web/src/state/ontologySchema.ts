@@ -9,8 +9,8 @@
 //
 // ponytail: a module-scope promise, not a store. The payload is static per
 // deployment, so there is nothing to invalidate and nobody to notify.
-import { apiFetch } from '../transport/http.js';
-import { useEffect, useState } from 'react';
+import { apiFetch } from "../transport/http.js";
+import { useEffect, useState } from "react";
 
 export interface RelType {
   forward: string;
@@ -37,7 +37,7 @@ export function __resetOntologySchema(): void {
 export async function loadOntologySchema(): Promise<OntologySchema | null> {
   if (cached) return cached;
   if (!inflight) {
-    inflight = apiFetch('/api/ontology/schema')
+    inflight = apiFetch("/api/ontology/schema")
       .then((r) => (r.ok ? (r.json() as Promise<OntologySchema>) : null))
       .then((s) => {
         cached = s;
@@ -65,7 +65,7 @@ export function relLabel(
   reverse = false,
 ): string {
   const rt = schema?.relations?.[rel];
-  if (!rt) return rel.replace(/_/g, ' ');
+  if (!rt) return rel.replace(/_/g, " ");
   return reverse ? rt.inverse : rt.forward;
 }
 

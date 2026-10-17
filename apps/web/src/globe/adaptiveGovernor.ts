@@ -7,8 +7,8 @@
 // The governor tracks which layers IT shed separately from user toggles, so a
 // user re-enabling a layer mid-pressure overrides the governor for that layer.
 
-import type { LayerRegistry } from '../registry/LayerRegistry';
-import { perfSnapshot } from './perf';
+import type { LayerRegistry } from "../registry/LayerRegistry";
+import { perfSnapshot } from "./perf";
 
 // ponytail: thresholds calibrated from the RAM benchmark (2026-08-08).
 // 14ms = 83% of a 60Hz frame; 10ms = comfortable headroom.
@@ -35,18 +35,18 @@ const CONSECUTIVE = 3;
 // ponytail: a flat map beats a per-layer field on the shared contract — no
 // migration, no annotation of 100 descriptors.
 const GROUP_SHED_ORDER: [string, number][] = [
-  ['infra.', 0],
-  ['places.', 0],
-  ['reference.', 1],
-  ['signals.', 1],
-  ['rf.', 1],
-  ['news.', 2],
-  ['cyber.', 2],
-  ['env.', 3],
-  ['hazards.', 4],
-  ['seismic.', 5],
-  ['space.', 6],
-  ['conflict.', 7],
+  ["infra.", 0],
+  ["places.", 0],
+  ["reference.", 1],
+  ["signals.", 1],
+  ["rf.", 1],
+  ["news.", 2],
+  ["cyber.", 2],
+  ["env.", 3],
+  ["hazards.", 4],
+  ["seismic.", 5],
+  ["space.", 6],
+  ["conflict.", 7],
 ];
 
 function shedOrder(id: string): number | null {
@@ -63,22 +63,23 @@ let overCount = 0;
 let underCount = 0;
 let vsyncMs = 1000 / 60;
 
-export type GovernorReading = 'shed' | 'restore' | 'hold' | 'idle';
+export type GovernorReading = "shed" | "restore" | "hold" | "idle";
 
 export function readLoad(
   frameMsEMA: number,
   rendersPerSec: number,
   refreshMs: number,
 ): GovernorReading {
-  if (frameMsEMA <= 0 || rendersPerSec < MIN_RENDERS_PER_SEC) return 'idle';
-  if (frameMsEMA > Math.max(SHED_MS, refreshMs * SHED_VSYNC)) return 'shed';
-  if (frameMsEMA < Math.max(RESTORE_MS, refreshMs * RESTORE_VSYNC)) return 'restore';
-  return 'hold';
+  if (frameMsEMA <= 0 || rendersPerSec < MIN_RENDERS_PER_SEC) return "idle";
+  if (frameMsEMA > Math.max(SHED_MS, refreshMs * SHED_VSYNC)) return "shed";
+  if (frameMsEMA < Math.max(RESTORE_MS, refreshMs * RESTORE_VSYNC))
+    return "restore";
+  return "hold";
 }
 
 // Median of 30 animation-frame gaps. Hidden tab = no rAF = keep the 60 Hz default.
 function measureVsync(): void {
-  if (typeof requestAnimationFrame !== 'function') return;
+  if (typeof requestAnimationFrame !== "function") return;
   const gaps: number[] = [];
   let last = 0;
   const step = (t: number): void => {
@@ -99,20 +100,20 @@ function tick(): void {
   if (!registry) return;
   const { frameMsEMA, rendersPerSec } = perfSnapshot();
   const reading = readLoad(frameMsEMA, rendersPerSec, vsyncMs);
-  if (reading === 'idle') {
+  if (reading === "idle") {
     overCount = 0;
     underCount = 0;
     return;
   }
 
-  if (reading === 'shed') {
+  if (reading === "shed") {
     overCount++;
     underCount = 0;
     if (overCount >= CONSECUTIVE) {
       overCount = 0;
       shed();
     }
-  } else if (reading === 'restore') {
+  } else if (reading === "restore") {
     underCount++;
     overCount = 0;
     if (underCount >= CONSECUTIVE) {

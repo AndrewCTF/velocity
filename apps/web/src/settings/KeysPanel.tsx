@@ -1,8 +1,8 @@
 // BYOK key manager. Lists the provider catalog from GET /api/keys, lets the
 // user set (PUT) or remove (DELETE) a key. Plaintext is write-only — the server
 // only ever returns a masked last-4 `hint`.
-import { useCallback, useEffect, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "../transport/http.js";
 
 interface Provider {
   id: string;
@@ -26,25 +26,28 @@ export function KeysPanel(): JSX.Element {
     setLoading(true);
     setError(null);
     try {
-      const r = await apiFetch('/api/keys');
+      const r = await apiFetch("/api/keys");
       if (r.status === 401) {
-        setError('Sign in to manage keys.');
+        setError("Sign in to manage keys.");
         setProviders([]);
         return;
       }
       if (!r.ok) {
         setError(
           r.status === 502
-            ? 'Key store not ready (run the user_keys migration).'
+            ? "Key store not ready (run the user_keys migration)."
             : `Could not load keys (${r.status}).`,
         );
         return;
       }
-      const data = (await r.json()) as { providers: Provider[]; keys: StoredKey[] };
+      const data = (await r.json()) as {
+        providers: Provider[];
+        keys: StoredKey[];
+      };
       setProviders(data.providers);
       setKeys(Object.fromEntries(data.keys.map((k) => [k.provider, k])));
     } catch {
-      setError('Gateway unreachable.');
+      setError("Gateway unreachable.");
     } finally {
       setLoading(false);
     }
@@ -60,7 +63,12 @@ export function KeysPanel(): JSX.Element {
   return (
     <div className="flex flex-col gap-2.5">
       {providers.map((p) => (
-        <KeyRow key={p.id} provider={p} stored={keys[p.id] ?? null} onChanged={load} />
+        <KeyRow
+          key={p.id}
+          provider={p}
+          stored={keys[p.id] ?? null}
+          onChanged={load}
+        />
       ))}
     </div>
   );
@@ -75,7 +83,7 @@ function KeyRow({
   stored: StoredKey | null;
   onChanged: () => void;
 }): JSX.Element {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -85,18 +93,18 @@ function KeyRow({
     setErr(null);
     try {
       const r = await apiFetch(`/api/keys/${provider.id}`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
+        method: "PUT",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ value: value.trim() }),
       });
       if (!r.ok) {
         setErr(`Could not save the key (HTTP ${r.status}).`);
         return;
       }
-      setValue('');
+      setValue("");
       onChanged();
     } catch {
-      setErr('Could not save the key.');
+      setErr("Could not save the key.");
     } finally {
       setBusy(false);
     }
@@ -106,14 +114,16 @@ function KeyRow({
     setBusy(true);
     setErr(null);
     try {
-      const r = await apiFetch(`/api/keys/${provider.id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/keys/${provider.id}`, {
+        method: "DELETE",
+      });
       if (!r.ok && r.status !== 204) {
         setErr(`Could not remove the key (HTTP ${r.status}).`);
         return;
       }
       onChanged();
     } catch {
-      setErr('Could not remove the key.');
+      setErr("Could not remove the key.");
     } finally {
       setBusy(false);
     }
@@ -125,20 +135,26 @@ function KeyRow({
         <span className="mono text-[11px] text-txt-1">{provider.label}</span>
         <span
           className={`mono text-[10px] uppercase tracking-[0.6px] px-1.5 py-0.5 rounded-sm border ${
-            provider.wired
-              ? 'text-ok border-ok-line'
-              : 'text-txt-3 border-line'
+            provider.wired ? "text-ok border-ok-line" : "text-txt-3 border-line"
           }`}
-          title={provider.wired ? 'Used by a live layer' : 'Stored securely; wiring pending'}
+          title={
+            provider.wired
+              ? "Used by a live layer"
+              : "Stored securely; wiring pending"
+          }
         >
-          {provider.wired ? 'active' : 'stored'}
+          {provider.wired ? "active" : "stored"}
         </span>
       </div>
-      <p className="mono text-[10px] text-txt-3 mt-0.5 leading-snug">{provider.help}</p>
+      <p className="mono text-[10px] text-txt-3 mt-0.5 leading-snug">
+        {provider.help}
+      </p>
 
       {stored ? (
         <div className="flex items-center justify-between gap-2 mt-1.5">
-          <span className="mono text-[10px] text-txt-2">•••• {stored.hint}</span>
+          <span className="mono text-[10px] text-txt-2">
+            •••• {stored.hint}
+          </span>
           <button
             type="button"
             disabled={busy}
@@ -155,7 +171,7 @@ function KeyRow({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') void save();
+              if (e.key === "Enter") void save();
             }}
             placeholder="paste key…"
             autoComplete="off"

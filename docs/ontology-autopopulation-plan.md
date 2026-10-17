@@ -3,7 +3,7 @@
 Spec for `docs/roadmap-users-2026-07.md` §W4 / `docs/roadmap-ontology-2026-07.md`
 "Phase 2 — The world flows into the graph". Scope is deliberately the smallest
 honest slice: the watch-officer's already-running fusion loop also mints each
-*actionable* incident into the local ontology as an `incident:<id>` object with
+_actionable_ incident into the local ontology as an `incident:<id>` object with
 sourced assertions and `evidence_of` reason links to its member entities, so
 `GRAPH` is non-empty on a keyless boot with zero operator setup. Everything
 else Phase 2 describes (budget/prune pass, detector-bus hook, standing-watch
@@ -50,7 +50,7 @@ pruning, and does not add a config setting.
   `source=` explicitly so it's honestly attributed, not defaulted.
 - **`ObjectKind` already has `"incident"`** (`ontology.py:58`) and
   `KNOWN_RELS` already has `"evidence_of"` (`ontology.py:83`, comment: `#
-  signal/track → incident it supports`) — no schema change needed.
+signal/track → incident it supports`) — no schema change needed.
 - **The manual template, and a direction inconsistency in it.**
   `actions.py:171-198 _handle_promote_incident` mints `incident:<uuid>` and
   writes `Link(src=p.target_id, dst=incident_id, rel="promoted_to")` then
@@ -90,55 +90,55 @@ pruning, and does not add a config setting.
   - `dark-vessel` (line 132-138): `ref` has `mmsi` → translates to
     `vessel:<mmsi>`.
   - `gps-jamming` raw cells (line 120-129): `ref = {"cell": [lon, lat],
-    "percent_bad": ...}` — **no entity id, not translatable.**
+"percent_bad": ...}` — **no entity id, not translatable.**
   - `quake` (line 141-160): `ref = {"mag": mag}` — **no entity id.**
   - `event` (EONET/GDELT/ACLED, line 205-239): `ref = {"source": src, "id":
-    f.get("id")}` — the `id` is the EXTERNAL feed's id (a GDELT/EONET/ACLED
+f.get("id")}` — the `id` is the EXTERNAL feed's id (a GDELT/EONET/ACLED
     key), not a canonical Velocity ontology id — **not translatable** without
     a new `event:<source>:<id>` kind this slice does not add.
   - `spoofing` (line 195-199): `ref = {"type": f["type"]}` — **no entity id.**
   - Alert-bus-sourced signals (`ais_gap_in_aoi`, `proximity_mil_vessel`,
     `mil_in_aoi`, `gps_jam_cluster`, `emergency_squawk`, `major_quake` — the
     `rule_domain` map, line 164-171): `ref = {"alert_id": al.id, "rule":
-    al.rule_id}` (line 178-183) — the alert's own id, **not** the underlying
+al.rule_id}` (line 178-183) — the alert's own id, **not** the underlying
     aircraft/vessel id, so **not translatable** even though some of these
     logically concern a specific airframe (the id isn't carried through).
-  Net: **only `air-emergency`, `military`, and `dark-vessel` evidence items
-  are translatable this slice.** An incident whose evidence is entirely
-  `quake`/`event`/`gps-jamming`/`spoofing`/alert-only has zero translatable
-  members and — per §3.A below — is skipped, not minted with zero reason
-  links.
+    Net: **only `air-emergency`, `military`, and `dark-vessel` evidence items
+    are translatable this slice.** An incident whose evidence is entirely
+    `quake`/`event`/`gps-jamming`/`spoofing`/alert-only has zero translatable
+    members and — per §3.A below — is skipped, not minted with zero reason
+    links.
 - **Keyless-ctx precedent (the Q7 answer).** `get_registry(ctx, settings)`
   (`ontology.py:392-402`) needs a `UserCtx`; the browser path resolves one via
   `current_user_or_local` (`apps/api/app/keys.py:157-173`), which needs a
   `Request` the background loop doesn't have. Two other headless background
   modules already solved exactly this, with the identical fallback:
   - `apps/api/app/workflows/scheduler.py:29`: `_LOCAL_CTX =
-    UserCtx(user_id="local", token="")`, comment: "Same shared local identity
+UserCtx(user_id="local", token="")`, comment: "Same shared local identity
     Foundry's build-runner defaults to (keys.py:172's keyless fallback) —
     schedules run headless, with no request/caller ctx." Used at line 48.
   - `apps/api/app/foundry/builds.py:21`: identical `_LOCAL_CTX =
-    UserCtx(user_id="local", token="")`, comment: "Default identity for
+UserCtx(user_id="local", token="")`, comment: "Default identity for
     auto-sync when a caller doesn't thread one through yet … same fallback
     `current_user_or_local` uses on a keyless boot, keys.py:172." Used at
     line 169.
-  This is the exact, already-blessed pattern — not a new idea. **Honest
-  limitation, inherited, not novel to this slice**: on a Supabase-configured
-  (per-user) deployment, `current_user_or_local` resolves the *signed-in
-  user's* ctx, but this background loop always uses `"local"` — auto-minted
-  incidents would land in a graph no real per-user session queries. Since
-  `get_registry()` is the *only* store as of 2026-07-07 (Supabase/PostgREST
-  backend deleted, `docs/decisions.md`) and always returns a `SqliteRegistry`
-  scoped by `ctx.user_id` regardless of Supabase config, this only matters as
-  a *data-visibility* question, not an availability one — and it's the
-  identical tradeoff `scheduler.py`/`builds.py` already accepted. On the
-  target scenario this slice exists for (a keyless boot — CLAUDE.md: "Keyless
-  layers keep working with no API key"; W4's stated goal: "kills the
-  photographed empty-graph demo failure" on exactly that boot), `"local"` is
-  precisely the id `current_user_or_local` itself returns
-  (`keys.py:172`), so the auto-minted graph and the browser's GRAPH page are
-  the SAME graph. Multi-user Supabase deployments are out of scope for this
-  slice, exactly as they are for `scheduler.py`/`builds.py` today.
+    This is the exact, already-blessed pattern — not a new idea. **Honest
+    limitation, inherited, not novel to this slice**: on a Supabase-configured
+    (per-user) deployment, `current_user_or_local` resolves the _signed-in
+    user's_ ctx, but this background loop always uses `"local"` — auto-minted
+    incidents would land in a graph no real per-user session queries. Since
+    `get_registry()` is the _only_ store as of 2026-07-07 (Supabase/PostgREST
+    backend deleted, `docs/decisions.md`) and always returns a `SqliteRegistry`
+    scoped by `ctx.user_id` regardless of Supabase config, this only matters as
+    a _data-visibility_ question, not an availability one — and it's the
+    identical tradeoff `scheduler.py`/`builds.py` already accepted. On the
+    target scenario this slice exists for (a keyless boot — CLAUDE.md: "Keyless
+    layers keep working with no API key"; W4's stated goal: "kills the
+    photographed empty-graph demo failure" on exactly that boot), `"local"` is
+    precisely the id `current_user_or_local` itself returns
+    (`keys.py:172`), so the auto-minted graph and the browser's GRAPH page are
+    the SAME graph. Multi-user Supabase deployments are out of scope for this
+    slice, exactly as they are for `scheduler.py`/`builds.py` today.
 - **Test isolation idiom.** `apps/api/tests/conftest.py:75-88`
   `_isolate_ontology_db` is `autouse=True` and points
   `app.intel.ontology_local.override_db_path()` at a per-test temp file — any
@@ -286,6 +286,7 @@ async def promote_incidents(
 ```
 
 Notes on this design:
+
 - `reg` is typed as the concrete `SqliteRegistry` (`ontology.py:392`'s
   `get_registry` return type), not a protocol — none exists yet
   (`roadmap-ontology-2026-07.md` Phase 1 mentions extracting one; it hasn't
@@ -311,6 +312,7 @@ new/escalated brief-filing loop (currently starts line 107). `incs` (line
 already-fetched incident list — reuse it, don't re-fetch.
 
 Imports to add at the top (currently lines 17-24):
+
 ```python
 from app.config import get_settings
 from app.intel import promotion
@@ -319,6 +321,7 @@ from app.keys import UserCtx
 ```
 
 Module constant, mirroring `scheduler.py:29` / `builds.py:21` verbatim:
+
 ```python
 # Same shared local identity Foundry's build-runner / workflow scheduler
 # default to (keys.py:172's keyless fallback) — this loop runs headless, with
@@ -329,6 +332,7 @@ _LOCAL_CTX = UserCtx(user_id="local", token="")
 The one added call inside `run_once()`, isolated exactly like the existing
 `brief()` call (line 96-100) and `_playbook()` call (line 63) already are —
 a promotion bug must not sink the loop that files briefs:
+
 ```python
     actionable = [i for i in incs if i.get("threat_level") in _ACTIONABLE]
     try:
@@ -368,21 +372,21 @@ Reuse the `_reg()` / `Settings(supabase_url="")` idiom from
 (`conftest.py:75-88`) needs no explicit invocation. Cases:
 
 1. **Build a fake incident dict** with `threat_level="high"`, `domains=
-   ["air-emergency", "dark-vessel"]`, a `centroid`, a `narrative`, a `score`,
+["air-emergency", "dark-vessel"]`, a `centroid`, a `narrative`, a `score`,
    and `evidence=[{"domain": "air-emergency", "ref": {"icao24": "4ca7b3",
-   "squawk": "7700"}, ...}, {"domain": "dark-vessel", "ref": {"mmsi":
-   "636092000", ...}, ...}]` — ≥2 translatable members.
+"squawk": "7700"}, ...}, {"domain": "dark-vessel", "ref": {"mmsi":
+"636092000", ...}, ...}]` — ≥2 translatable members.
 2. **Call `promotion.promote_incident(reg, incident, source="agent:watch_officer")`.**
    Assert it returns a non-`None` `incident:<id>` string.
 3. **The object exists**: `await reg.get(incident_id)` is not `None`, `kind
-   == "incident"`.
+== "incident"`.
 4. **≥1 assertion carries the passed source**, not the generic `"analyst"`
    default: `rows = await reg.get_assertions(incident_id)`; assert
    `any(r.source == "agent:watch_officer" for r in rows)`.
 5. **≥1 `evidence_of` link exists from a translated member to the incident**:
    `links = await reg._links_touching(["aircraft:4ca7b3"])`; assert one has
    `.src == "aircraft:4ca7b3"`, `.dst == incident_id`, `.rel ==
-   "evidence_of"` (direction per §3.A — NOT `actions.py`'s inverted
+"evidence_of"` (direction per §3.A — NOT `actions.py`'s inverted
    convention; a regression here silently flips which node is "evidence for"
    which, so assert the direction explicitly, not just link existence).
 6. **Determinism / no duplication**: call `promote_incident` a second time
@@ -397,7 +401,7 @@ Reuse the `_reg()` / `Settings(supabase_url="")` idiom from
    centroids so each has a distinct `incident_key`/id and ≥1 translatable
    member each), each with a distinct `score`/`threat_level` so best-first
    order is unambiguous. Call `promotion.promote_incidents(reg, incidents,
-   source=...)`. Assert `len(result) == MAX_INCIDENT_MINTS_PER_CYCLE`. Since
+source=...)`. Assert `len(result) == MAX_INCIDENT_MINTS_PER_CYCLE`. Since
    `brief()` already returns incidents best-first (sorted by threat_level/
    score descending) and the cap slices `incidents[:budget]`, also assert
    WHICH incidents survive: the minted ids correspond to the highest-ranked
@@ -412,7 +416,7 @@ Reuse the `_reg()` / `Settings(supabase_url="")` idiom from
    `{"domain": "quake", "ref": {"mag": 6.1}}` → `promote_incident` returns
    `None`, and no `incident:*` row for its `incident_key` exists.
 9. **All keyless**: no Supabase config anywhere in the test (`Settings(
-   supabase_url="")`, matching every other test in the file this mirrors).
+supabase_url="")`, matching every other test in the file this mirrors).
 
 Existing tests that must stay green: **the whole of
 `test_ontology_local.py`** (it is the guard for the `assert_props`/`upsert`
@@ -438,7 +442,7 @@ full suite — `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api
 - **Detector-bus hook** (`bus.on_publish`, `apps/api/app/correlate/bus.py:42`
   — real, verified this session) and **standing-watch link**
   (`apps/api/app/intel/watch.py:537-566 _persist_firing`, `apps/api/app/
-  intel/watch.py:585 reg = get_registry(ctx, s)` — already writes
+intel/watch.py:585 reg = get_registry(ctx, s)` — already writes
   `source=f"rule:watchbox:{rule.get('id')}"` assertions per firing, a second,
   independent precedent for the ontology-write pattern). Wiring either into
   auto-promotion is slice 2, not this one; `watch.py` is not touched here
@@ -486,7 +490,7 @@ full suite — `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api
   e.g. a live GPS-jamming+dark-vessel cluster or an emergency squawk — which
   is not guaranteed to exist at any given moment; this is a **probe**, not a
   deterministic live test). Verify: `curl -s localhost:8000/api/ontology/
-  search-around/incident:<id>` (or the GRAPH page) shows the incident object
+search-around/incident:<id>` (or the GRAPH page) shows the incident object
   with ≥1 assertion and ≥1 `evidence_of` link. This runtime check is honestly
   **not exercised as part of this spec** — it requires a live incident to
   exist during the observation window, which the implementer must probe for
@@ -497,11 +501,11 @@ full suite — `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api
 
 ## 4. Final file list for the implementer
 
-| File | Change |
-|---|---|
-| `apps/api/app/intel/promotion.py` | **New.** `promote_incident`, `promote_incidents`, `_entity_id_from_evidence`, `_stable_incident_id`, `MAX_INCIDENT_MINTS_PER_CYCLE`. |
+| File                                  | Change                                                                                                                                                                                             |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api/app/intel/promotion.py`     | **New.** `promote_incident`, `promote_incidents`, `_entity_id_from_evidence`, `_stable_incident_id`, `MAX_INCIDENT_MINTS_PER_CYCLE`.                                                               |
 | `apps/api/app/intel/watch_officer.py` | **Edit.** Add 4 imports, one `_LOCAL_CTX` module constant, one isolated `try/except` block inside `run_once()` after the existing `diff = incident_store.record(...)` line. No other line touched. |
-| `apps/api/tests/test_promotion.py` | **New.** Guard test per §C, reusing `test_ontology_local.py`'s `_reg()`/`Settings(supabase_url="")` idiom and the autouse `_isolate_ontology_db` fixture. |
+| `apps/api/tests/test_promotion.py`    | **New.** Guard test per §C, reusing `test_ontology_local.py`'s `_reg()`/`Settings(supabase_url="")` idiom and the autouse `_isolate_ontology_db` fixture.                                          |
 
 No changes to `apps/api/app/intel/ontology.py`, `ontology_local.py`,
 `actions.py`, `watch.py`, `main.py`, `config.py`, or any frontend file.

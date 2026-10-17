@@ -12,14 +12,14 @@
 // "what's the threshold function?", and the same author led with a four-day
 // data lag and was rewarded for it. Hiding either is how a verdict stops being
 // believed.
-import { useEffect, useState } from 'react';
-import { Widget, ErrorLine } from '../markets/primitives.js';
-import { apiFetch } from '../transport/http.js';
+import { useEffect, useState } from "react";
+import { Widget, ErrorLine } from "../markets/primitives.js";
+import { apiFetch } from "../transport/http.js";
 
 export interface AnswerItem {
   id: string;
   question: string;
-  verdict: 'open' | 'reduced' | 'closed' | 'unknown';
+  verdict: "open" | "reduced" | "closed" | "unknown";
   threshold: string;
   as_of: number;
   // null means NO EVIDENCE WAS OBSERVED. It never means fresh - see the
@@ -33,16 +33,16 @@ export interface AnswerItem {
 }
 
 const VERDICT_TONE: Record<string, string> = {
-  open: 'text-ok-fg',
-  reduced: 'text-warn-fg',
-  closed: 'text-alert-fg',
-  unknown: 'text-txt-3',
+  open: "text-ok-fg",
+  reduced: "text-warn-fg",
+  closed: "text-alert-fg",
+  unknown: "text-txt-3",
 };
 
 /** Coarse on purpose: second precision on a six-hour-old fix implies certainty
  *  we do not have. Mirrors agoText in globe/adapters/freshness.ts. */
 export function lagText(seconds: number | null): string {
-  if (seconds == null) return 'no evidence recorded';
+  if (seconds == null) return "no evidence recorded";
   const s = Math.max(0, Math.floor(seconds));
   if (s < 60) return `${s}s old`;
   if (s < 3600) return `${Math.floor(s / 60)}m old`;
@@ -51,14 +51,19 @@ export function lagText(seconds: number | null): string {
 }
 
 function AnswerRow({ item }: { item: AnswerItem }): JSX.Element {
-  const tone = VERDICT_TONE[item.verdict] ?? 'text-txt-3';
+  const tone = VERDICT_TONE[item.verdict] ?? "text-txt-3";
   return (
     <div className="py-2 border-b border-line/60 last:border-b-0 min-w-0">
       <div className="flex items-baseline gap-2 min-w-0">
-        <span className="text-[11px] text-txt-1 flex-1 min-w-0 truncate" title={item.question}>
+        <span
+          className="text-[11px] text-txt-1 flex-1 min-w-0 truncate"
+          title={item.question}
+        >
           {item.question}
         </span>
-        <span className={`mono text-[13px] uppercase tracking-[0.5px] shrink-0 ${tone}`}>
+        <span
+          className={`mono text-[13px] uppercase tracking-[0.5px] shrink-0 ${tone}`}
+        >
           {item.verdict}
         </span>
       </div>
@@ -67,14 +72,18 @@ function AnswerRow({ item }: { item: AnswerItem }): JSX.Element {
           staleness you have to hunt for is a verdict that gets believed too long. */}
       <div className="mt-0.5 flex items-center gap-2 min-w-0">
         <span
-          className={`mono text-[10px] tabular-nums ${item.stale ? 'text-warn-fg' : 'text-txt-4'}`}
+          className={`mono text-[10px] tabular-nums ${item.stale ? "text-warn-fg" : "text-txt-4"}`}
         >
           {lagText(item.data_lag_s)}
         </span>
-        <span className="mono text-[10px] text-txt-4">· confidence {item.confidence}</span>
+        <span className="mono text-[10px] text-txt-4">
+          · confidence {item.confidence}
+        </span>
       </div>
 
-      <div className="mt-1 text-[10px] text-txt-3 leading-snug">{item.detail}</div>
+      <div className="mt-1 text-[10px] text-txt-3 leading-snug">
+        {item.detail}
+      </div>
 
       {/* The rule, in full. Not truncated and not hidden: it is the difference
           between a verdict and an assertion. */}
@@ -93,7 +102,7 @@ export function AnswersCard(): JSX.Element {
     let cancelled = false;
     const load = async (): Promise<void> => {
       try {
-        const r = await apiFetch('/api/answers');
+        const r = await apiFetch("/api/answers");
         if (!r.ok) {
           if (!cancelled) setError(`HTTP ${r.status}`);
           return;
@@ -104,7 +113,7 @@ export function AnswersCard(): JSX.Element {
           setError(null);
         }
       } catch {
-        if (!cancelled) setError('unreachable');
+        if (!cancelled) setError("unreachable");
       }
     };
     void load();
@@ -119,10 +128,14 @@ export function AnswersCard(): JSX.Element {
 
   return (
     <Widget title="Answers">
-      {items == null && !error && <div className="mono text-[10px] text-txt-4">Loading…</div>}
+      {items == null && !error && (
+        <div className="mono text-[10px] text-txt-4">Loading…</div>
+      )}
       {error && <ErrorLine>Answers unavailable ({error}).</ErrorLine>}
       {items != null && items.length === 0 && (
-        <div className="mono text-[10px] text-txt-4">No questions registered.</div>
+        <div className="mono text-[10px] text-txt-4">
+          No questions registered.
+        </div>
       )}
       {items != null && items.length > 0 && (
         <div className="flex flex-col">

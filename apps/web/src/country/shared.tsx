@@ -5,8 +5,8 @@
 // presentational atoms (Card, Skeleton, Sparkline, IndicatorCard, chips).
 // All backend calls go through apiFetch (transport invariant).
 
-import { useEffect, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
+import { useEffect, useState } from "react";
+import { apiFetch } from "../transport/http.js";
 
 // ── Payload shapes ──────────────────────────────────────────────────────────
 
@@ -100,40 +100,47 @@ export type BriefResponse =
 
 // Regional-indicator flag emoji from iso2 (same guard as CountriesPanel).
 export function flagEmoji(iso2: string | undefined | null): string {
-  if (!iso2 || iso2.length !== 2) return '\u{1F310}';
+  if (!iso2 || iso2.length !== 2) return "\u{1F310}";
   const upper = iso2.toUpperCase();
-  if (!/^[A-Z]{2}$/.test(upper)) return '\u{1F310}';
-  return String.fromCodePoint(...[...upper].map((c) => 0x1f1e6 + (c.charCodeAt(0) - 65)));
+  if (!/^[A-Z]{2}$/.test(upper)) return "\u{1F310}";
+  return String.fromCodePoint(
+    ...[...upper].map((c) => 0x1f1e6 + (c.charCodeAt(0) - 65)),
+  );
 }
 
 // Compact number: 1.2T / 340M / 12.3 — trims trailing ".0".
 export function formatCompact(v: number): string {
   v = Number(v);
-  if (!Number.isFinite(v)) return '—';
+  if (!Number.isFinite(v)) return "—";
   const abs = Math.abs(v);
   const fmt = (n: number, suffix: string): string => {
-    const s = n >= 100 ? n.toFixed(0) : n.toFixed(1).replace(/\.0$/, '');
+    const s = n >= 100 ? n.toFixed(0) : n.toFixed(1).replace(/\.0$/, "");
     return `${s}${suffix}`;
   };
-  if (abs >= 1e12) return fmt(v / 1e12, 'T');
-  if (abs >= 1e9) return fmt(v / 1e9, 'B');
-  if (abs >= 1e6) return fmt(v / 1e6, 'M');
-  if (abs >= 1e4) return fmt(v / 1e3, 'k');
-  if (abs >= 100 || Number.isInteger(v)) return v.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  return v.toFixed(abs >= 1 ? 1 : 2).replace(/\.0+$/, '');
+  if (abs >= 1e12) return fmt(v / 1e12, "T");
+  if (abs >= 1e9) return fmt(v / 1e9, "B");
+  if (abs >= 1e6) return fmt(v / 1e6, "M");
+  if (abs >= 1e4) return fmt(v / 1e3, "k");
+  if (abs >= 100 || Number.isInteger(v))
+    return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return v.toFixed(abs >= 1 ? 1 : 2).replace(/\.0+$/, "");
 }
 
 // Role labels arrive humanized from Wikidata ("Head of state") but handle the
 // snake_case form ("head_of_state") defensively, plus first-letter casing.
 export function humanizeRole(role: string): string {
-  const cleaned = role.replace(/_/g, ' ').trim();
+  const cleaned = role.replace(/_/g, " ").trim();
   if (!cleaned) return role;
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
 // ── Cached fetch hook ───────────────────────────────────────────────────────
 
-export type FetchState<T> = { loading: boolean; error: string | null; data: T | null };
+export type FetchState<T> = {
+  loading: boolean;
+  error: string | null;
+  data: T | null;
+};
 
 // One module-level response cache keyed by URL (URLs embed the iso3, so this
 // IS the per-country cache). Switching back to a country renders instantly;
@@ -187,14 +194,25 @@ export function useCachedFetch<T>(url: string | null): FetchState<T> {
     const ctrl = new AbortController();
     setState({ loading: true, error: null, data: null });
     apiFetch(url, { signal: ctrl.signal })
-      .then((r) => (r.ok ? (r.json() as Promise<T>) : Promise.reject(new Error(`Country data unavailable (HTTP ${r.status})`))))
+      .then((r) =>
+        r.ok
+          ? (r.json() as Promise<T>)
+          : Promise.reject(
+              new Error(`Country data unavailable (HTTP ${r.status})`),
+            ),
+      )
       .then((data) => {
         cacheSet(url, data);
-        if (!ctrl.signal.aborted) setState({ loading: false, error: null, data });
+        if (!ctrl.signal.aborted)
+          setState({ loading: false, error: null, data });
       })
       .catch((e: unknown) => {
         if (ctrl.signal.aborted) return;
-        setState({ loading: false, error: e instanceof Error ? e.message : String(e), data: null });
+        setState({
+          loading: false,
+          error: e instanceof Error ? e.message : String(e),
+          data: null,
+        });
       });
     return () => ctrl.abort();
   }, [url]);
@@ -216,8 +234,14 @@ export function Card({
   return (
     <section className="border border-line-2 bg-bg-1 rounded-md min-w-0">
       <header className="flex items-baseline gap-2 px-3 pt-2 pb-1.5 border-b border-line">
-        <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-0">{title}</span>
-        {meta && <span className="mono text-[9.5px] text-txt-4 ml-auto shrink-0">{meta}</span>}
+        <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-0">
+          {title}
+        </span>
+        {meta && (
+          <span className="mono text-[9.5px] text-txt-4 ml-auto shrink-0">
+            {meta}
+          </span>
+        )}
       </header>
       <div className="p-3">{children}</div>
     </section>
@@ -225,12 +249,27 @@ export function Card({
 }
 
 // Skeleton shimmer block — loading placeholder, never a spinner.
-export function Skeleton({ className = '' }: { className?: string }): JSX.Element {
-  return <div className={`animate-pulse bg-bg-3 rounded-sm ${className}`} aria-hidden />;
+export function Skeleton({
+  className = "",
+}: {
+  className?: string;
+}): JSX.Element {
+  return (
+    <div
+      className={`animate-pulse bg-bg-3 rounded-sm ${className}`}
+      aria-hidden
+    />
+  );
 }
 
-export function Sparkline({ series }: { series: SeriesPoint[] }): JSX.Element | null {
-  const pts = series.filter((p): p is { year: number; value: number } => p.value != null);
+export function Sparkline({
+  series,
+}: {
+  series: SeriesPoint[];
+}): JSX.Element | null {
+  const pts = series.filter(
+    (p): p is { year: number; value: number } => p.value != null,
+  );
   if (pts.length < 2) return null;
   const w = 96;
   const h = 24;
@@ -240,12 +279,27 @@ export function Sparkline({ series }: { series: SeriesPoint[] }): JSX.Element | 
   const x1 = Math.max(...xs);
   const y0 = Math.min(...ys);
   const y1 = Math.max(...ys);
-  const sx = (x: number): number => (x1 === x0 ? w / 2 : ((x - x0) / (x1 - x0)) * (w - 2) + 1);
-  const sy = (y: number): number => (y1 === y0 ? h / 2 : h - 1 - ((y - y0) / (y1 - y0)) * (h - 2));
-  const path = pts.map((p) => `${sx(p.year).toFixed(1)},${sy(p.value).toFixed(1)}`).join(' ');
+  const sx = (x: number): number =>
+    x1 === x0 ? w / 2 : ((x - x0) / (x1 - x0)) * (w - 2) + 1;
+  const sy = (y: number): number =>
+    y1 === y0 ? h / 2 : h - 1 - ((y - y0) / (y1 - y0)) * (h - 2);
+  const path = pts
+    .map((p) => `${sx(p.year).toFixed(1)},${sy(p.value).toFixed(1)}`)
+    .join(" ");
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="block" aria-hidden>
-      <polyline points={path} fill="none" stroke="var(--accent)" strokeWidth="1.25" />
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      className="block"
+      aria-hidden
+    >
+      <polyline
+        points={path}
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="1.25"
+      />
     </svg>
   );
 }
@@ -255,7 +309,10 @@ export function IndicatorCard({ ind }: { ind: Indicator }): JSX.Element {
   const noData = ind.unavailable || !latest;
   return (
     <div className="border border-line-2 bg-bg-1 rounded-sm p-2.5 flex flex-col gap-1 min-w-0">
-      <div className="text-[10px] uppercase tracking-[0.5px] text-txt-3 truncate" title={`${ind.label}${ind.unit ? ` (${ind.unit})` : ''}`}>
+      <div
+        className="text-[10px] uppercase tracking-[0.5px] text-txt-3 truncate"
+        title={`${ind.label}${ind.unit ? ` (${ind.unit})` : ""}`}
+      >
         {ind.label}
       </div>
       {noData ? (
@@ -263,9 +320,17 @@ export function IndicatorCard({ ind }: { ind: Indicator }): JSX.Element {
       ) : (
         <>
           <div className="flex items-baseline gap-1.5">
-            <span className="mono text-[16px] text-txt-0">{formatCompact(latest.value as number)}</span>
-            {ind.unit && <span className="text-[10px] text-txt-3 truncate">{ind.unit}</span>}
-            <span className="mono text-[9.5px] text-txt-4 ml-auto shrink-0">{latest.year}</span>
+            <span className="mono text-[16px] text-txt-0">
+              {formatCompact(latest.value as number)}
+            </span>
+            {ind.unit && (
+              <span className="text-[10px] text-txt-3 truncate">
+                {ind.unit}
+              </span>
+            )}
+            <span className="mono text-[9.5px] text-txt-4 ml-auto shrink-0">
+              {latest.year}
+            </span>
           </div>
           <Sparkline series={ind.series} />
         </>

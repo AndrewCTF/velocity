@@ -1,21 +1,27 @@
-import { useEffect } from 'react';
-import type * as Cesium from 'cesium';
-import { useSituations, type Severity } from './situationStore.js';
-import { useSelection } from '../state/stores.js';
-import { flyToPosition } from '../globe/camera.js';
-import { CoordEntry } from '../globe/CoordEntry.js';
-import { SectionLabel, Badge, Btn, MicroLabel, type BadgeTone } from '../shell/instruments.js';
-import { ControlSection } from './ControlSection.js';
+import { useEffect } from "react";
+import type * as Cesium from "cesium";
+import { useSituations, type Severity } from "./situationStore.js";
+import { useSelection } from "../state/stores.js";
+import { flyToPosition } from "../globe/camera.js";
+import { CoordEntry } from "../globe/CoordEntry.js";
+import {
+  SectionLabel,
+  Badge,
+  Btn,
+  MicroLabel,
+  type BadgeTone,
+} from "../shell/instruments.js";
+import { ControlSection } from "./ControlSection.js";
 
 // Left-rail list of the analyst's Situations (Gotham case files). Click one to
 // open its detail in the Selection tab (EntityPanel delegates on a situation: id)
 // and fly to its AOI. "+ New" mints an empty situation centred on the globe view.
 
 const SEV_TONE: Record<Severity, BadgeTone> = {
-  critical: 'alert',
-  high: 'warn',
-  med: 'accent',
-  low: 'neutral',
+  critical: "alert",
+  high: "warn",
+  med: "accent",
+  low: "neutral",
 };
 
 interface Props {
@@ -34,13 +40,13 @@ export function SituationsPanel({ viewer }: Props = {}): JSX.Element {
 
   const open = (id: string, lat?: number | null, lon?: number | null): void => {
     useSelection.getState().select(id);
-    if (viewer && typeof lat === 'number' && typeof lon === 'number') {
+    if (viewer && typeof lat === "number" && typeof lon === "number") {
       flyToPosition(viewer, lon, lat, 1_200_000, 1.0);
     }
   };
 
   const onNew = async (): Promise<void> => {
-    const id = await create({ name: 'New situation' });
+    const id = await create({ name: "New situation" });
     open(id);
   };
 
@@ -48,7 +54,11 @@ export function SituationsPanel({ viewer }: Props = {}): JSX.Element {
     <div className="p-3 space-y-3">
       <ControlSection viewer={viewer ?? null} />
       <div className="flex items-center gap-2">
-        <SectionLabel title="Situations" count={situations.length} className="flex-1" />
+        <SectionLabel
+          title="Situations"
+          count={situations.length}
+          className="flex-1"
+        />
         <Btn tone="accent" size="sm" onClick={() => void onNew()}>
           + New
         </Btn>
@@ -59,7 +69,7 @@ export function SituationsPanel({ viewer }: Props = {}): JSX.Element {
           viewer={viewer ?? null}
           onPlace={async (lat, lon, label) => {
             const id = await useSituations.getState().create({
-              name: label ? `Situation · ${label}` : 'Situation',
+              name: label ? `Situation · ${label}` : "Situation",
               centroid: { lat, lon },
             });
             useSelection.getState().select(id);
@@ -69,8 +79,8 @@ export function SituationsPanel({ viewer }: Props = {}): JSX.Element {
       {error && <p className="text-[10px] text-warn">{error}</p>}
       {situations.length === 0 && (
         <p className="text-txt-3 text-[11px]">
-          No situations yet. Create one here, right-click the map → "Create situation here", or
-          promote an incident from the Intel tab.
+          No situations yet. Create one here, right-click the map → "Create
+          situation here", or promote an incident from the Intel tab.
         </p>
       )}
       <ul className="space-y-1.5">
@@ -83,7 +93,9 @@ export function SituationsPanel({ viewer }: Props = {}): JSX.Element {
             >
               <div className="flex items-center gap-2">
                 <Badge tone={SEV_TONE[s.severity]}>{s.severity}</Badge>
-                <span className="text-[11px] text-txt-0 truncate flex-1">{s.name}</span>
+                <span className="text-[11px] text-txt-0 truncate flex-1">
+                  {s.name}
+                </span>
               </div>
               <div className="mt-1 flex items-center gap-2">
                 <MicroLabel>{s.status}</MicroLabel>

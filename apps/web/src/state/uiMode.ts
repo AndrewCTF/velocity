@@ -5,9 +5,9 @@
 // surface: Targeting as a full-width bottom dock, Tasking as a left instrument
 // dock, FMV as a centered sensor window. The right rail keeps the four CONTEXT
 // tabs (Selection/Alerts/Intel/News). One mode at a time; null = none.
-import { create } from 'zustand';
+import { create } from "zustand";
 
-export type UiMode = 'tasking' | 'targeting' | 'fmv' | 'cop' | null;
+export type UiMode = "tasking" | "targeting" | "fmv" | "cop" | null;
 
 interface UiModeState {
   mode: UiMode;

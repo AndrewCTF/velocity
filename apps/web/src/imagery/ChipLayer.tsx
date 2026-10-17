@@ -22,12 +22,12 @@
 //   - Touches NONE of requestRenderMode / maximumRenderTimeChange / the motion
 //     model / the SVG-icon dispatch.
 
-import { useEffect, useRef, useState } from 'react';
-import * as Cesium from 'cesium';
+import { useEffect, useRef, useState } from "react";
+import * as Cesium from "cesium";
 
-import { useChip, type ChipFocus } from './chipStore.js';
-import { Widget, Caveat, MicroLabel } from '../shell/instruments.js';
-import { Icon } from '../normal/Icon.js';
+import { useChip, type ChipFocus } from "./chipStore.js";
+import { Widget, Caveat, MicroLabel } from "../shell/instruments.js";
+import { Icon } from "../normal/Icon.js";
 
 // How long (ms) to wait between re-frames once the entity has drifted out of
 // the current chip rectangle. Imagery is static per pass; re-fetching faster
@@ -93,13 +93,16 @@ function swarmAoiFromEntity(
   const carto = Cesium.Cartographic.fromCartesian(pos);
   if (!carto) return null;
   const semiMajor = entity.ellipse?.semiMajorAxis?.getValue(t);
-  const radiusM = typeof semiMajor === 'number' && semiMajor > 0 ? semiMajor : null;
+  const radiusM =
+    typeof semiMajor === "number" && semiMajor > 0 ? semiMajor : null;
   return {
     lat: Cesium.Math.toDegrees(carto.latitude),
     lon: Cesium.Math.toDegrees(carto.longitude),
     // Pad the bounding circle a touch so the chip frames the whole swarm AOI
     // with margin; clamp to the endpoint's range.
-    radiusKm: radiusM ? Math.max(0.5, Math.min(100, (radiusM / 1000) * 1.15)) : 4,
+    radiusKm: radiusM
+      ? Math.max(0.5, Math.min(100, (radiusM / 1000) * 1.15))
+      : 4,
   };
 }
 
@@ -121,8 +124,9 @@ function resolveAoi(
 ): { lat: number; lon: number; radiusKm: number } {
   if (focus.entityId) {
     const ent = findEntity(viewer, focus.entityId);
-    const kind = ent?.properties?.getValue(viewer.clock.currentTime)?.kind as string | undefined;
-    if (ent && kind === 'sim-swarm') {
+    const kind = ent?.properties?.getValue(viewer.clock.currentTime)?.kind as
+      string | undefined;
+    if (ent && kind === "sim-swarm") {
       const aoi = swarmAoiFromEntity(ent, viewer.clock.currentTime);
       if (aoi) return aoi;
     }
@@ -130,13 +134,16 @@ function resolveAoi(
   return aoiCenterRadius(focus.lat, focus.lon, focus.radiusKm);
 }
 
-function chipUrl(aoi: { lat: number; lon: number; radiusKm: number }, date: string): string {
+function chipUrl(
+  aoi: { lat: number; lon: number; radiusKm: number },
+  date: string,
+): string {
   const p = new URLSearchParams({
     lat: aoi.lat.toFixed(5),
     lon: aoi.lon.toFixed(5),
     radius_km: aoi.radiusKm.toFixed(3),
     date,
-    source: 'auto',
+    source: "auto",
   });
   return `/api/imagery/chip?${p.toString()}`;
 }
@@ -153,13 +160,13 @@ async function fetchChip(
   const blob = await r.blob();
   let meta: ChipMeta;
   try {
-    meta = JSON.parse(r.headers.get('X-Chip') ?? '{}') as ChipMeta;
+    meta = JSON.parse(r.headers.get("X-Chip") ?? "{}") as ChipMeta;
   } catch {
     meta = {
-      provider: r.headers.get('X-Imagery-Provider') ?? 'unknown',
+      provider: r.headers.get("X-Imagery-Provider") ?? "unknown",
       bbox: { min_lon: 0, min_lat: 0, max_lon: 0, max_lat: 0 },
-      datetime: r.headers.get('X-Imagery-Datetime') || null,
-      gsd_m: Number(r.headers.get('X-Imagery-Gsd-M')) || null,
+      datetime: r.headers.get("X-Imagery-Datetime") || null,
+      gsd_m: Number(r.headers.get("X-Imagery-Gsd-M")) || null,
       cloud_pct: null,
       layer: null,
       note: null,
@@ -171,7 +178,10 @@ async function fetchChip(
 // Wait for a freshly-added ImageryLayer's provider + first tiles, so the swap
 // reveals a painted layer (no blank hole). Resolves on readyEvent or a hard
 // timeout (never hangs the swap).
-function awaitLayerReady(viewer: Cesium.Viewer, layer: Cesium.ImageryLayer): Promise<void> {
+function awaitLayerReady(
+  viewer: Cesium.Viewer,
+  layer: Cesium.ImageryLayer,
+): Promise<void> {
   return new Promise((resolve) => {
     let done = false;
     const finish = (): void => {
@@ -198,24 +208,30 @@ function awaitLayerReady(viewer: Cesium.Viewer, layer: Cesium.ImageryLayer): Pro
 
 // Human-readable acquisition stamp from the chip metadata.
 function acquiredLabel(meta: ChipMeta): string {
-  if (!meta.datetime) return 'archive';
+  if (!meta.datetime) return "archive";
   // datetime may be a full ISO timestamp or a date; keep the date part.
   return meta.datetime.slice(0, 10);
 }
 
 function providerLabel(provider: string): string {
-  if (provider === 'maxar') return 'MAXAR';
-  if (provider === 'sentinel') return 'SENTINEL-2';
-  if (provider === 'gibs') return 'GIBS VIIRS';
+  if (provider === "maxar") return "MAXAR";
+  if (provider === "sentinel") return "SENTINEL-2";
+  if (provider === "gibs") return "GIBS VIIRS";
   return provider.toUpperCase();
 }
 
 function gsdLabel(meta: ChipMeta): string {
-  if (meta.gsd_m == null) return '— m';
-  return meta.gsd_m >= 1 ? `${Math.round(meta.gsd_m)} m` : `${meta.gsd_m.toFixed(1)} m`;
+  if (meta.gsd_m == null) return "— m";
+  return meta.gsd_m >= 1
+    ? `${Math.round(meta.gsd_m)} m`
+    : `${meta.gsd_m.toFixed(1)} m`;
 }
 
-export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element | null {
+export function ChipLayer({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element | null {
   const focus = useChip((s) => s.focus);
   const clear = useChip((s) => s.clear);
 
@@ -228,7 +244,7 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
   const lastReframeRef = useRef(0);
 
   const [meta, setMeta] = useState<ChipMeta | null>(null);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [opacity, setOpacity] = useState(0.85);
 
   // Tear down the current drape (layer + object URL). Safe to call when empty.
@@ -258,7 +274,7 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
   ): Promise<void> => {
     const v = viewer;
     if (!v || v.isDestroyed()) return;
-    setStatus('loading');
+    setStatus("loading");
     let blob: Blob;
     let chipMeta: ChipMeta;
     try {
@@ -266,8 +282,8 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
       blob = res.blob;
       chipMeta = res.meta;
     } catch (e) {
-      if ((e as { name?: string }).name === 'AbortError') return;
-      if (gen === genRef.current) setStatus('error');
+      if ((e as { name?: string }).name === "AbortError") return;
+      if (gen === genRef.current) setStatus("error");
       return;
     }
     if (gen !== genRef.current || v.isDestroyed()) return;
@@ -276,15 +292,22 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
     // Degenerate bbox (parse fell back to zeros) → don't drape a world-spanning
     // rectangle; surface the metadata only.
     const hasRect =
-      b && (b.max_lon !== b.min_lon || b.max_lat !== b.min_lat) && Number.isFinite(b.min_lon);
+      b &&
+      (b.max_lon !== b.min_lon || b.max_lat !== b.min_lat) &&
+      Number.isFinite(b.min_lon);
     if (!hasRect) {
       setMeta(chipMeta);
-      setStatus('idle');
+      setStatus("idle");
       return;
     }
 
     const objectUrl = URL.createObjectURL(blob);
-    const rectangle = Cesium.Rectangle.fromDegrees(b.min_lon, b.min_lat, b.max_lon, b.max_lat);
+    const rectangle = Cesium.Rectangle.fromDegrees(
+      b.min_lon,
+      b.min_lat,
+      b.max_lon,
+      b.max_lat,
+    );
     let newLayer: Cesium.ImageryLayer;
     try {
       newLayer = Cesium.ImageryLayer.fromProviderAsync(
@@ -293,7 +316,7 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
       );
     } catch {
       URL.revokeObjectURL(objectUrl);
-      if (gen === genRef.current) setStatus('error');
+      if (gen === genRef.current) setStatus("error");
       return;
     }
     // Add the new layer (on top), preload it, THEN remove the old one — so the
@@ -329,11 +352,16 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
       layer: newLayer,
       objectUrl,
       meta: chipMeta,
-      rect: { west: b.min_lon, south: b.min_lat, east: b.max_lon, north: b.max_lat },
+      rect: {
+        west: b.min_lon,
+        south: b.min_lat,
+        east: b.max_lon,
+        north: b.max_lat,
+      },
     };
     v.scene.requestRender();
     setMeta(chipMeta);
-    setStatus('idle');
+    setStatus("idle");
     lastReframeRef.current = Date.now();
   };
 
@@ -344,7 +372,7 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
       genRef.current++;
       teardown();
       setMeta(null);
-      setStatus('idle');
+      setStatus("idle");
       return;
     }
     const gen = ++genRef.current;
@@ -386,7 +414,7 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
       const kind = ent.properties?.getValue(t)?.kind as string | undefined;
       let aoi: { lat: number; lon: number; radiusKm: number } | null = null;
       let inside = true;
-      if (kind === 'sim-swarm') {
+      if (kind === "sim-swarm") {
         aoi = swarmAoiFromEntity(ent, t);
         if (aoi) {
           // Re-frame when the swarm centroid nears/exits the chip edge.
@@ -403,7 +431,10 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
           const lon = Cesium.Math.toDegrees(c.longitude);
           const lat = Cesium.Math.toDegrees(c.latitude);
           inside =
-            lon > d.rect.west && lon < d.rect.east && lat > d.rect.south && lat < d.rect.north;
+            lon > d.rect.west &&
+            lon < d.rect.east &&
+            lat > d.rect.south &&
+            lat < d.rect.north;
           aoi = aoiCenterRadius(lat, lon, focus.radiusKm);
         }
       }
@@ -439,12 +470,18 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
             onClick={clear}
             className="mono text-[10px] text-txt-3 hover:text-alert px-1"
             title="Clear chip"
-          ><Icon name="x" className="w-3 h-3" /></button>
+          >
+            <Icon name="x" className="w-3 h-3" />
+          </button>
         }
       >
-        {status === 'loading' && !meta && <MicroLabel>fetching chip…</MicroLabel>}
-        {status === 'error' && !meta && (
-          <MicroLabel className="block text-warn">no imagery for this AOI</MicroLabel>
+        {status === "loading" && !meta && (
+          <MicroLabel>fetching chip…</MicroLabel>
+        )}
+        {status === "error" && !meta && (
+          <MicroLabel className="block text-warn">
+            no imagery for this AOI
+          </MicroLabel>
         )}
         {meta && (
           <div className="space-y-2">
@@ -452,18 +489,22 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
               <Caveat
                 level={providerLabel(meta.provider)}
                 note={gsdLabel(meta)}
-                tone={meta.provider === 'maxar' ? 'neutral' : 'warn'}
+                tone={meta.provider === "maxar" ? "neutral" : "warn"}
               />
               <Caveat level={`ACQ ${acquiredLabel(meta)}`} />
-              {meta.cloud_pct != null && <Caveat level={`CLOUD ${Math.round(meta.cloud_pct)}%`} />}
+              {meta.cloud_pct != null && (
+                <Caveat level={`CLOUD ${Math.round(meta.cloud_pct)}%`} />
+              )}
             </div>
             {/* Honesty: this is an archived pass, not live collection. */}
             <MicroLabel className="block">
-              {meta.provider === 'gibs'
-                ? 'coarse daily mosaic · not live · archived pass'
-                : 'archived satellite pass · not live'}
+              {meta.provider === "gibs"
+                ? "coarse daily mosaic · not live · archived pass"
+                : "archived satellite pass · not live"}
             </MicroLabel>
-            {meta.note && <MicroLabel className="block text-txt-3">{meta.note}</MicroLabel>}
+            {meta.note && (
+              <MicroLabel className="block text-txt-3">{meta.note}</MicroLabel>
+            )}
             <div className="flex items-center gap-2">
               <MicroLabel>Opacity</MicroLabel>
               <input
@@ -477,7 +518,9 @@ export function ChipLayer({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Ele
                 aria-label="chip opacity"
               />
             </div>
-            {status === 'loading' && <MicroLabel className="block">re-framing…</MicroLabel>}
+            {status === "loading" && (
+              <MicroLabel className="block">re-framing…</MicroLabel>
+            )}
           </div>
         )}
       </Widget>

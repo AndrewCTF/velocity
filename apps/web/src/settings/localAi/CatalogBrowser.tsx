@@ -5,11 +5,16 @@
 // A custom-repo field below lets an operator pull any other unsloth/* GGUF
 // repo — client-side regex-gated (defence in depth; the server enforces the
 // same org restriction and is the actual security boundary, 422 surfaced here).
-import { useState } from 'react';
-import { apiFetch } from '../../transport/http.js';
-import { Badge, Btn } from '../../shell/instruments.js';
-import { DownloadProgress } from './DownloadProgress.js';
-import { UNSLOTH_REPO_RE, type CatalogEntry, type DownloadJob, type InstalledModel } from './types.js';
+import { useState } from "react";
+import { apiFetch } from "../../transport/http.js";
+import { Badge, Btn } from "../../shell/instruments.js";
+import { DownloadProgress } from "./DownloadProgress.js";
+import {
+  UNSLOTH_REPO_RE,
+  type CatalogEntry,
+  type DownloadJob,
+  type InstalledModel,
+} from "./types.js";
 
 interface ActiveJob {
   repoId: string;
@@ -28,31 +33,44 @@ export function CatalogBrowser({
 }): JSX.Element {
   const [jobs, setJobs] = useState<Record<string, ActiveJob>>({});
 
-  const startDownload = async (repoId: string, quant: string): Promise<void> => {
+  const startDownload = async (
+    repoId: string,
+    quant: string,
+  ): Promise<void> => {
     const rowKey = repoId;
     try {
-      const r = await apiFetch('/api/ai/models/download', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+      const r = await apiFetch("/api/ai/models/download", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ repo_id: repoId, quant }),
       });
       if (r.status !== 202) {
         const detail = await readError(r);
-        setJobs((j) => ({ ...j, [rowKey]: { repoId, quant, jobId: `error:${detail}` } }));
+        setJobs((j) => ({
+          ...j,
+          [rowKey]: { repoId, quant, jobId: `error:${detail}` },
+        }));
         return;
       }
       const body = (await r.json()) as { job_id: string };
-      setJobs((j) => ({ ...j, [rowKey]: { repoId, quant, jobId: body.job_id } }));
+      setJobs((j) => ({
+        ...j,
+        [rowKey]: { repoId, quant, jobId: body.job_id },
+      }));
     } catch {
       setJobs((j) => ({
         ...j,
-        [rowKey]: { repoId, quant, jobId: 'error:Network error. Check your connection.' },
+        [rowKey]: {
+          repoId,
+          quant,
+          jobId: "error:Network error. Check your connection.",
+        },
       }));
     }
   };
 
   const clearJob = (job: DownloadJob): void => {
-    if (job.status === 'done') onDownloaded();
+    if (job.status === "done") onDownloaded();
   };
 
   return (
@@ -62,7 +80,11 @@ export function CatalogBrowser({
           key={entry.repo_id}
           entry={entry}
           alreadyInstalledQuants={
-            new Set(installed.filter((m) => m.repo_id === entry.repo_id).map((m) => m.quant))
+            new Set(
+              installed
+                .filter((m) => m.repo_id === entry.repo_id)
+                .map((m) => m.quant),
+            )
           }
           job={jobs[entry.repo_id] ?? null}
           onDownload={(quant) => void startDownload(entry.repo_id, quant)}
@@ -89,7 +111,7 @@ function CatalogCard({
 }): JSX.Element {
   const [quant, setQuant] = useState(entry.recommended_quant);
   const q = entry.quants.find((x) => x.q === quant) ?? entry.quants[0];
-  const isErrorJob = job?.jobId.startsWith('error:');
+  const isErrorJob = job?.jobId.startsWith("error:");
   const installed = alreadyInstalledQuants.has(quant);
 
   return (
@@ -97,15 +119,22 @@ function CatalogCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="mono text-[11px] text-txt-1 font-medium">{entry.label}</span>
+            <span className="mono text-[11px] text-txt-1 font-medium">
+              {entry.label}
+            </span>
             <Badge tone="neutral">{entry.tier}</Badge>
           </div>
-          <div className="mono text-[10px] text-txt-3 mt-0.5 truncate" title={entry.repo_id}>
+          <div
+            className="mono text-[10px] text-txt-3 mt-0.5 truncate"
+            title={entry.repo_id}
+          >
             {entry.repo_id}
           </div>
           <div className="mono text-[10px] text-txt-3 mt-0.5">
             {entry.params}
-            {entry.active_params ? ` (${entry.active_params} active)` : ''} · {entry.ctx} ctx
+            {entry.active_params
+              ? ` (${entry.active_params} active)`
+              : ""} · {entry.ctx} ctx
           </div>
         </div>
         <Badge tone="neutral">{entry.license}</Badge>
@@ -120,16 +149,21 @@ function CatalogCard({
         >
           {entry.quants.map((qq) => (
             <option key={qq.q} value={qq.q}>
-              {qq.q} · {qq.size_gb.toFixed(1)} GB{qq.fits_now ? '' : ' (won’t fit)'}
+              {qq.q} · {qq.size_gb.toFixed(1)} GB
+              {qq.fits_now ? "" : " (won’t fit)"}
             </option>
           ))}
         </select>
         {q && (
           <span
-            className={`mono text-[10px] ${q.fits_now ? 'text-ok' : 'text-alert'}`}
-            title={q.fits_now ? 'fits current hardware' : 'exceeds available VRAM/RAM/disk'}
+            className={`mono text-[10px] ${q.fits_now ? "text-ok" : "text-alert"}`}
+            title={
+              q.fits_now
+                ? "fits current hardware"
+                : "exceeds available VRAM/RAM/disk"
+            }
           >
-            {q.fits_now ? '✓ fits' : '✗ won’t fit'}
+            {q.fits_now ? "✓ fits" : "✗ won’t fit"}
           </span>
         )}
         <div className="flex-1" />
@@ -159,7 +193,9 @@ function CatalogCard({
         </div>
       )}
       {job && isErrorJob && (
-        <p className="mono text-[10px] text-alert mt-1.5">{job.jobId.slice('error:'.length)}</p>
+        <p className="mono text-[10px] text-alert mt-1.5">
+          {job.jobId.slice("error:".length)}
+        </p>
       )}
     </div>
   );
@@ -170,8 +206,8 @@ function CustomRepoField({
 }: {
   onDownload: (repoId: string, quant: string) => void;
 }): JSX.Element {
-  const [repoId, setRepoId] = useState('');
-  const [quant, setQuant] = useState('');
+  const [repoId, setRepoId] = useState("");
+  const [quant, setQuant] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
 
   const valid = UNSLOTH_REPO_RE.test(repoId.trim()) && quant.trim().length > 0;
@@ -182,9 +218,9 @@ function CustomRepoField({
     const trimmedRepo = repoId.trim();
     const trimmedQuant = quant.trim();
     try {
-      const r = await apiFetch('/api/ai/models/download', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+      const r = await apiFetch("/api/ai/models/download", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ repo_id: trimmedRepo, quant: trimmedQuant }),
       });
       if (r.status === 422) {
@@ -196,16 +232,18 @@ function CustomRepoField({
         return;
       }
       onDownload(trimmedRepo, trimmedQuant);
-      setRepoId('');
-      setQuant('');
+      setRepoId("");
+      setQuant("");
     } catch {
-      setServerError('Network error. Check your connection.');
+      setServerError("Network error. Check your connection.");
     }
   };
 
   return (
     <div className="rounded-sm border border-line-2 border-dashed bg-bg-2/30 p-2.5">
-      <p className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1.5">Custom unsloth repo</p>
+      <p className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1.5">
+        Custom unsloth repo
+      </p>
       <div className="flex items-center gap-1.5">
         <input
           value={repoId}
@@ -223,14 +261,23 @@ function CustomRepoField({
           autoComplete="off"
           className="flex-1 mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 outline-hidden focus:border-accent-line"
         />
-        <Btn size="sm" tone="accent" disabled={!valid} onClick={() => void submit()}>
+        <Btn
+          size="sm"
+          tone="accent"
+          disabled={!valid}
+          onClick={() => void submit()}
+        >
           Fetch
         </Btn>
       </div>
       {repoId.trim() && !UNSLOTH_REPO_RE.test(repoId.trim()) && (
-        <p className="mono text-[10px] text-warn mt-1">must match unsloth/&lt;name&gt; (org-restricted)</p>
+        <p className="mono text-[10px] text-warn mt-1">
+          must match unsloth/&lt;name&gt; (org-restricted)
+        </p>
       )}
-      {serverError && <p className="mono text-[10px] text-alert mt-1">{serverError}</p>}
+      {serverError && (
+        <p className="mono text-[10px] text-alert mt-1">{serverError}</p>
+      )}
     </div>
   );
 }
@@ -239,7 +286,7 @@ async function readError(r: Response): Promise<string> {
   try {
     const j = (await r.json()) as { detail?: unknown };
     const d = j.detail;
-    if (typeof d === 'string') return d;
+    if (typeof d === "string") return d;
     if (Array.isArray(d) && d.length > 0) {
       const first = d[0] as { msg?: string };
       if (first?.msg) return first.msg;
@@ -247,6 +294,6 @@ async function readError(r: Response): Promise<string> {
   } catch {
     /* non-JSON body */
   }
-  if (r.status === 507) return 'Not enough free disk space.';
+  if (r.status === 507) return "Not enough free disk space.";
   return `Download failed (HTTP ${r.status}).`;
 }

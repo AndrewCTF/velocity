@@ -36,26 +36,28 @@
  *   MAX_VESSELS  hard cap on the union (default 60000)
  *   CHROME_PATH  system Chrome path (no bundled Playwright Chromium on this distro)
  */
-'use strict';
+"use strict";
 
-const http = require('http');
-const { chromium } = require('playwright');
+const http = require("http");
+const { chromium } = require("playwright");
 
-const SITE = process.env.SITE || 'https://www.marinetraffic.com/en/ais/home/centerx:0/centery:20/zoom:3';
-const PORT = parseInt(process.env.PORT || '8092', 10);
+const SITE =
+  process.env.SITE ||
+  "https://www.marinetraffic.com/en/ais/home/centerx:0/centery:20/zoom:3";
+const PORT = parseInt(process.env.PORT || "8092", 10);
 // ZOOM 2 = 16 world tiles (~10k vessels), a gentle sweep that finishes in ~8s and
 // idles ~50s — sustainable against MarineTraffic's Cloudflare throttle. ZOOM 3 (64
 // tiles ~15k) or 4 (256 tiles) get denser but the near-continuous request rate
 // eventually trips an IP-level block. Prefer widening ZOOM only if you also raise
 // READ_MS to keep the average request rate low.
-const ZOOM = parseInt(process.env.ZOOM || '2', 10);
-const CONCURRENCY = parseInt(process.env.CONCURRENCY || '1', 10);
-const PACE_MS = parseInt(process.env.PACE_MS || '400', 10); // gap between tile fetches — MarineTraffic burst-throttles /getData
-const READ_MS = parseInt(process.env.READ_MS || '60000', 10);
-const MIN_VESSELS = parseInt(process.env.MIN_VESSELS || '200', 10);
-const MAX_VESSELS = parseInt(process.env.MAX_VESSELS || '60000', 10);
+const ZOOM = parseInt(process.env.ZOOM || "2", 10);
+const CONCURRENCY = parseInt(process.env.CONCURRENCY || "1", 10);
+const PACE_MS = parseInt(process.env.PACE_MS || "400", 10); // gap between tile fetches — MarineTraffic burst-throttles /getData
+const READ_MS = parseInt(process.env.READ_MS || "60000", 10);
+const MIN_VESSELS = parseInt(process.env.MIN_VESSELS || "200", 10);
+const MAX_VESSELS = parseInt(process.env.MAX_VESSELS || "60000", 10);
 const UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 /* eslint-disable no-undef */
 // fetchTileInPage runs IN THE PAGE (via page.evaluate) — it uses the page's own
@@ -76,12 +78,16 @@ async function fetchTileInPage(cfg) {
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 12000);
   try {
-    const r = await fetch(`/getData/get_data_json_4/z:${cfg.zoom}/X:${cfg.x}/Y:${cfg.y}/station:0`, {
-      headers: { accept: '*/*' }, signal: ac.signal,
-    });
+    const r = await fetch(
+      `/getData/get_data_json_4/z:${cfg.zoom}/X:${cfg.x}/Y:${cfg.y}/station:0`,
+      {
+        headers: { accept: "*/*" },
+        signal: ac.signal,
+      },
+    );
     if (!r.ok) return { fail: true };
-    const ct = r.headers.get('content-type') || '';
-    if (!ct.includes('json')) return { fail: true };
+    const ct = r.headers.get("content-type") || "";
+    if (!ct.includes("json")) return { fail: true };
     const j = await r.json();
     const raw = j && j.data && Array.isArray(j.data.rows) ? j.data.rows : [];
     const out = [];
@@ -96,40 +102,51 @@ async function fetchTileInPage(cfg) {
       const heading = parseFloat(v.HEADING);
       const shipType = parseInt(v.SHIPTYPE, 10);
       const length = parseFloat(v.LENGTH);
-      const nm = (v.SHIPNAME || '').trim();
+      const nm = (v.SHIPNAME || "").trim();
       out.push({
         ship_id: String(id),
-        lat, lon,
-        name: nm && nm !== '[SAT-AIS]' ? nm : undefined,
+        lat,
+        lon,
+        name: nm && nm !== "[SAT-AIS]" ? nm : undefined,
         sog: Number.isFinite(speed) ? speed / 10 : undefined,
         cog: Number.isFinite(course) ? course : undefined,
         heading: Number.isFinite(heading) ? heading : undefined,
         shipType: Number.isFinite(shipType) ? shipType : undefined,
         flag: v.FLAG || undefined,
         length: Number.isFinite(length) ? length : undefined,
-        destination: (v.DESTINATION || '').trim() || undefined,
+        destination: (v.DESTINATION || "").trim() || undefined,
       });
     }
     return { rows: out };
   } catch (e) {
     return { fail: true };
-  } finally { clearTimeout(to); }
+  } finally {
+    clearTimeout(to);
+  }
 }
 /* eslint-enable no-undef */
 
 let browser = null;
 let page = null;
-let latest = { vessels: [], lastGood: 0, tilesOk: 0, tilesFail: 0, tilesTotal: 0 };
+let latest = {
+  vessels: [],
+  lastGood: 0,
+  tilesOk: 0,
+  tilesFail: 0,
+  tilesTotal: 0,
+};
 
-function log(...a) { console.log(new Date().toISOString(), ...a); }
+function log(...a) {
+  console.log(new Date().toISOString(), ...a);
+}
 
 function launchOpts() {
   const o = {
     headless: true,
-    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    args: ["--no-sandbox", "--disable-dev-shm-usage"],
   };
   if (process.env.CHROME_PATH) o.executablePath = process.env.CHROME_PATH;
-  else o.channel = 'chrome';
+  else o.channel = "chrome";
   return o;
 }
 
@@ -137,11 +154,18 @@ function launchOpts() {
 // VesselFinder feeders (a dead browser otherwise makes every newContext() throw).
 async function ensureBrowser() {
   if (browser && browser.isConnected()) return;
-  if (browser) { try { await browser.close(); } catch (e) {} }
+  if (browser) {
+    try {
+      await browser.close();
+    } catch (e) {}
+  }
   browser = null;
   browser = await chromium.launch(launchOpts());
-  browser.on('disconnected', () => { browser = null; log('browser disconnected — will relaunch'); });
-  log('browser launched');
+  browser.on("disconnected", () => {
+    browser = null;
+    log("browser disconnected — will relaunch");
+  });
+  log("browser launched");
 }
 
 // Confirm the tile API answers JSON from THIS browser context (Cloudflare cleared
@@ -154,13 +178,23 @@ async function waitForApi(p) {
         const ac = new AbortController();
         const to = setTimeout(() => ac.abort(), 8000);
         try {
-          const r = await fetch('/getData/get_data_json_4/z:2/X:1/Y:1/station:0', { headers: { accept: '*/*' }, signal: ac.signal });
-          const ct = r.headers.get('content-type') || '';
-          if (!ct.includes('json')) return { ok: false };
+          const r = await fetch(
+            "/getData/get_data_json_4/z:2/X:1/Y:1/station:0",
+            { headers: { accept: "*/*" }, signal: ac.signal },
+          );
+          const ct = r.headers.get("content-type") || "";
+          if (!ct.includes("json")) return { ok: false };
           const j = await r.json();
-          return { ok: r.ok, json: true, n: j && j.data && j.data.rows ? j.data.rows.length : 0 };
-        } catch (e) { return { err: String(e) }; }
-        finally { clearTimeout(to); }
+          return {
+            ok: r.ok,
+            json: true,
+            n: j && j.data && j.data.rows ? j.data.rows.length : 0,
+          };
+        } catch (e) {
+          return { err: String(e) };
+        } finally {
+          clearTimeout(to);
+        }
       });
       if (res && res.ok && res.json && res.n > 0) return true;
     } catch (e) {}
@@ -171,7 +205,10 @@ async function waitForApi(p) {
 
 async function openPage() {
   await ensureBrowser();
-  const context = await browser.newContext({ userAgent: UA, viewport: { width: 1366, height: 900 } });
+  const context = await browser.newContext({
+    userAgent: UA,
+    viewport: { width: 1366, height: 900 },
+  });
   const p = await context.newPage();
   try {
     // 'commit' returns as soon as the response starts — the map SPA never reaches
@@ -181,12 +218,14 @@ async function openPage() {
     // navigates (zoom/center route change) shortly after commit, and a probe fired
     // during that navigation throws "Execution context was destroyed" — probing
     // immediately catches the page before the reroute.
-    await p.goto(SITE, { waitUntil: 'commit', timeout: 45000 });
+    await p.goto(SITE, { waitUntil: "commit", timeout: 45000 });
   } catch (e) {
-    log('goto warning -', e.message, '- probing API anyway');
+    log("goto warning -", e.message, "- probing API anyway");
   }
   if (!(await waitForApi(p))) {
-    throw new Error('marinetraffic tile API not reachable (challenge not cleared yet)');
+    throw new Error(
+      "marinetraffic tile API not reachable (challenge not cleared yet)",
+    );
   }
   // The map SPA does ONE client-side reroute (URL normalization) ~0.5s after
   // commit that destroys the JS execution context; after that the page is stable
@@ -199,11 +238,15 @@ async function openPage() {
 
 async function initPage() {
   try {
-    if (page) { try { await page.context().close(); } catch (e) {} }
+    if (page) {
+      try {
+        await page.context().close();
+      } catch (e) {}
+    }
     page = await openPage();
-    log('page opened', SITE);
+    log("page opened", SITE);
   } catch (e) {
-    log('init failed -', e.message);
+    log("init failed -", e.message);
     page = null;
   }
 }
@@ -222,12 +265,17 @@ async function fetchTile(x, y) {
 }
 
 async function pump() {
-  if (!page) { await initPage(); if (!page) return; }
+  if (!page) {
+    await initPage();
+    if (!page) return;
+  }
   const n = 1 << ZOOM; // 2^zoom tiles per axis
   const tiles = [];
   for (let x = 0; x < n; x++) for (let y = 0; y < n; y++) tiles.push([x, y]);
   const union = new Map();
-  let idx = 0, tilesOk = 0, tilesFail = 0;
+  let idx = 0,
+    tilesOk = 0,
+    tilesFail = 0;
 
   async function worker() {
     while (idx < tiles.length && union.size < MAX_VESSELS) {
@@ -238,8 +286,12 @@ async function pump() {
         await new Promise((f) => setTimeout(f, 600)); // back off a throttle / let a nav settle
         rows = await fetchTile(x, y);
       }
-      if (rows === null) { tilesFail++; }
-      else { for (const v of rows) union.set(v.ship_id, v); tilesOk++; }
+      if (rows === null) {
+        tilesFail++;
+      } else {
+        for (const v of rows) union.set(v.ship_id, v);
+        tilesOk++;
+      }
       await new Promise((f) => setTimeout(f, PACE_MS)); // pace — MarineTraffic burst-throttles /getData
     }
   }
@@ -249,18 +301,33 @@ async function pump() {
     for (let i = 0; i < CONCURRENCY; i++) ws.push(worker());
     await Promise.all(ws);
   } catch (e) {
-    log('sweep error -', e.message);
+    log("sweep error -", e.message);
   }
 
   if (union.size >= MIN_VESSELS) {
-    latest = { vessels: [...union.values()], lastGood: Date.now(), tilesOk, tilesFail, tilesTotal: tiles.length };
-    log('scraped', union.size, 'vessels', `(${tilesOk}/${tiles.length} tiles ok, ${tilesFail} failed)`);
+    latest = {
+      vessels: [...union.values()],
+      lastGood: Date.now(),
+      tilesOk,
+      tilesFail,
+      tilesTotal: tiles.length,
+    };
+    log(
+      "scraped",
+      union.size,
+      "vessels",
+      `(${tilesOk}/${tiles.length} tiles ok, ${tilesFail} failed)`,
+    );
   } else if (Date.now() - latest.lastGood > 180000) {
     // Persistent under-floor (Cloudflare re-challenge, cookies expired) — rebuild page.
-    log('stalled (' + union.size + ' vessels) — reloading page');
+    log("stalled (" + union.size + " vessels) — reloading page");
     await initPage();
   } else {
-    log('partial scrape', union.size, 'vessels (below floor, keeping last good)');
+    log(
+      "partial scrape",
+      union.size,
+      "vessels (below floor, keeping last good)",
+    );
   }
 }
 
@@ -269,30 +336,45 @@ async function pump() {
 // open because supervision's liveness probe must answer whoever holds the
 // token. Every route needs a loopback Host header (a DNS-rebinding page names
 // its own host). Without SIDECAR_TOKEN (a manual run) only the Host check applies.
-const SIDECAR_TOKEN = process.env.SIDECAR_TOKEN || '';
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+const SIDECAR_TOKEN = process.env.SIDECAR_TOKEN || "";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 function hostOk(req) {
-  const host = String(req.headers.host || '').toLowerCase();
-  const i = host.lastIndexOf(':');
+  const host = String(req.headers.host || "").toLowerCase();
+  const i = host.lastIndexOf(":");
   if (i <= 0) return false;
-  return LOOPBACK_HOSTS.has(host.slice(0, i)) && host.slice(i + 1) === String(req.socket.localPort);
+  return (
+    LOOPBACK_HOSTS.has(host.slice(0, i)) &&
+    host.slice(i + 1) === String(req.socket.localPort)
+  );
 }
 
 function tokenOk(req) {
   if (!SIDECAR_TOKEN) return true;
-  const got = Buffer.from(String(req.headers.authorization || ''));
+  const got = Buffer.from(String(req.headers.authorization || ""));
   const want = Buffer.from(`Bearer ${SIDECAR_TOKEN}`);
-  return got.length === want.length && require('crypto').timingSafeEqual(got, want);
+  return (
+    got.length === want.length && require("crypto").timingSafeEqual(got, want)
+  );
 }
 
 // Answers for the gate, or false when the request may proceed.
 function refuse(req, res, dataRoute) {
-  if (!hostOk(req)) { res.statusCode = 421; res.end('host not allowed'); return true; }
-  if (req.url.startsWith('/auth') && SIDECAR_TOKEN) {
-    res.statusCode = tokenOk(req) ? 204 : 401; res.end(); return true;
+  if (!hostOk(req)) {
+    res.statusCode = 421;
+    res.end("host not allowed");
+    return true;
   }
-  if (dataRoute && !tokenOk(req)) { res.statusCode = 401; res.end('unauthorized'); return true; }
+  if (req.url.startsWith("/auth") && SIDECAR_TOKEN) {
+    res.statusCode = tokenOk(req) ? 204 : 401;
+    res.end();
+    return true;
+  }
+  if (dataRoute && !tokenOk(req)) {
+    res.statusCode = 401;
+    res.end("unauthorized");
+    return true;
+  }
   return false;
 }
 
@@ -300,21 +382,36 @@ async function main() {
   // Serve IMMEDIATELY — before browser init — so a slow challenge clear can never
   // block the port. The union is empty until the first scrape lands; the backend
   // poller tolerates an empty/200 response.
-  http.createServer((req, res) => {
-    if (refuse(req, res, req.url.startsWith('/vessels.json'))) return;
-    if (req.url.startsWith('/vessels.json')) {
-      res.setHeader('content-type', 'application/json');
-      res.setHeader('access-control-allow-origin', '*');
-      res.end(JSON.stringify({ now: Date.now() / 1000, vessels: latest.vessels }));
-    } else if (req.url.startsWith('/health')) {
-      res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({
-        total: latest.vessels.length,
-        age_s: latest.lastGood ? ((Date.now() - latest.lastGood) / 1000) | 0 : null,
-        tiles_ok: latest.tilesOk, tiles_fail: latest.tilesFail, tiles_total: latest.tilesTotal,
-      }));
-    } else { res.statusCode = 404; res.end('not found'); }
-  }).listen(PORT, '127.0.0.1', () => log(`serving vessels.json on http://127.0.0.1:${PORT}`));
+  http
+    .createServer((req, res) => {
+      if (refuse(req, res, req.url.startsWith("/vessels.json"))) return;
+      if (req.url.startsWith("/vessels.json")) {
+        res.setHeader("content-type", "application/json");
+        res.setHeader("access-control-allow-origin", "*");
+        res.end(
+          JSON.stringify({ now: Date.now() / 1000, vessels: latest.vessels }),
+        );
+      } else if (req.url.startsWith("/health")) {
+        res.setHeader("content-type", "application/json");
+        res.end(
+          JSON.stringify({
+            total: latest.vessels.length,
+            age_s: latest.lastGood
+              ? ((Date.now() - latest.lastGood) / 1000) | 0
+              : null,
+            tiles_ok: latest.tilesOk,
+            tiles_fail: latest.tilesFail,
+            tiles_total: latest.tilesTotal,
+          }),
+        );
+      } else {
+        res.statusCode = 404;
+        res.end("not found");
+      }
+    })
+    .listen(PORT, "127.0.0.1", () =>
+      log(`serving vessels.json on http://127.0.0.1:${PORT}`),
+    );
 
   await initPage();
   for (;;) {
@@ -323,4 +420,7 @@ async function main() {
   }
 }
 
-main().catch((e) => { log('fatal', e); process.exit(1); });
+main().catch((e) => {
+  log("fatal", e);
+  process.exit(1);
+});

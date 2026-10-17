@@ -4,10 +4,10 @@
 // answers 403 with a message naming MFA. apiFetch reports that here once, and
 // MfaBanner routes the user by `mfaStep`: someone who already has a TOTP factor
 // but holds an aal1 session needs the code challenge, not a second enrolment.
-import { create } from 'zustand';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { create } from "zustand";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type MfaStep = 'ok' | 'verify' | 'enrol';
+export type MfaStep = "ok" | "verify" | "enrol";
 
 export interface AalLike {
   currentLevel: string | null;
@@ -21,16 +21,21 @@ export interface FactorLike {
 
 /** `verify`: a verified factor exists and this session has not stepped up.
  *  `enrol`: no verified TOTP factor. `ok`: the session is already aal2. */
-export function mfaStep(aal: AalLike | null, factors: readonly FactorLike[]): MfaStep {
-  if (aal?.currentLevel === 'aal2') return 'ok';
-  if (aal?.nextLevel === 'aal2') return 'verify';
-  const hasTotp = factors.some((f) => f.factor_type === 'totp' && f.status === 'verified');
-  return hasTotp ? 'verify' : 'enrol';
+export function mfaStep(
+  aal: AalLike | null,
+  factors: readonly FactorLike[],
+): MfaStep {
+  if (aal?.currentLevel === "aal2") return "ok";
+  if (aal?.nextLevel === "aal2") return "verify";
+  const hasTotp = factors.some(
+    (f) => f.factor_type === "totp" && f.status === "verified",
+  );
+  return hasTotp ? "verify" : "enrol";
 }
 
 /** True when the login step-up challenge must run before entering the console. */
 export function needsStepUp(aal: AalLike | null): boolean {
-  return aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2';
+  return aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2";
 }
 
 /** A 403 whose body names MFA / aal2. Other 403s (tier gates, CSRF) are not ours. */
@@ -69,7 +74,7 @@ export const useMfaNeeded = create<MfaNeededState>((set, get) => ({
 export function mfaDetail(body: string): string {
   try {
     const parsed = JSON.parse(body) as { detail?: unknown };
-    if (typeof parsed.detail === 'string') return parsed.detail;
+    if (typeof parsed.detail === "string") return parsed.detail;
   } catch {
     /* not JSON */
   }

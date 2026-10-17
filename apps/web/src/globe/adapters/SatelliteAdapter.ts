@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as Cesium from "cesium";
 import {
   twoline2satrec,
   propagate,
@@ -7,17 +7,20 @@ import {
   degreesLat,
   degreesLong,
   type SatRec,
-} from 'satellite.js';
-import type { LayerAdapter, AdapterCtx } from './types.js';
-import { satelliteStyle } from './styles.js';
-import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
-import { labelFor } from './labelStyle.js';
-import { PrimitiveEntityLayer, dropVisualizers } from './PrimitiveEntityLayer.js';
-import { apiFetch } from '../../transport/http.js';
-import { isMobileDevice } from '../../shell/device.js';
-import { useSettings } from '../../state/settings.js';
-import { presetKnobs } from '../qualityPresets.js';
-import { setRenderNeed } from '../renderNeeds.js';
+} from "satellite.js";
+import type { LayerAdapter, AdapterCtx } from "./types.js";
+import { satelliteStyle } from "./styles.js";
+import { frameBudgetRemaining, recordFrameSpend } from "../frameBudget.js";
+import { labelFor } from "./labelStyle.js";
+import {
+  PrimitiveEntityLayer,
+  dropVisualizers,
+} from "./PrimitiveEntityLayer.js";
+import { apiFetch } from "../../transport/http.js";
+import { isMobileDevice } from "../../shell/device.js";
+import { useSettings } from "../../state/settings.js";
+import { presetKnobs } from "../qualityPresets.js";
+import { setRenderNeed } from "../renderNeeds.js";
 
 interface Props {
   ctx: AdapterCtx;
@@ -67,7 +70,7 @@ const SAMPLE_BUDGET_MS = 5;
 // spent, so a busy frame can't stall orbit propagation entirely.
 const SAT_MIN_SLICE_MS = 2;
 
-const EPOCH_START = Cesium.JulianDate.fromIso8601('1970-01-01T00:00:00Z');
+const EPOCH_START = Cesium.JulianDate.fromIso8601("1970-01-01T00:00:00Z");
 
 export interface OrbitSample {
   tMs: number;
@@ -92,7 +95,7 @@ export function sampleOrbit(
     const tMs = startMs + i * stepSec * 1000;
     const date = new Date(tMs);
     const pv = propagate(rec, date);
-    if (!pv || !pv.position || typeof pv.position === 'boolean') continue;
+    if (!pv || !pv.position || typeof pv.position === "boolean") continue;
     const gmst = gstime(date);
     const g = eciToGeodetic(pv.position, gmst);
     const lat = degreesLat(g.latitude);
@@ -124,7 +127,10 @@ export class SatelliteAdapter implements LayerAdapter {
   // for 4 k satellites is a ~100 ms synchronous block; instead we keep the lines
   // and build the SatRec lazily in the chunked pump (recCache), so even the
   // parse is spread across frames.
-  private satrecs = new Map<string, { l1: string; l2: string; name: string; norad: string }>();
+  private satrecs = new Map<
+    string,
+    { l1: string; l2: string; name: string; norad: string }
+  >();
   private recCache = new Map<string, SatRec>();
   // entityId → tMs of the furthest sample currently buffered for that satellite.
   private lastSampleMs = new Map<string, number>();
@@ -147,20 +153,35 @@ export class SatelliteAdapter implements LayerAdapter {
     if (this.detached || viewer.isDestroyed()) return;
     dropVisualizers(this.ds);
     this.prim = new PrimitiveEntityLayer(viewer.scene, {
-      poolKey: 'satellite', // SGP4 pump ticks on its own cadence
+      poolKey: "satellite", // SGP4 pump ticks on its own cadence
       // Satellites carry no heading and a fixed accent tint; one style for all.
       styleFn: () => {
         const s = satelliteStyle();
-        return { imageUri: s.imageUri, scale: s.scale, color: s.color, rotationRad: 0 };
+        return {
+          imageUri: s.imageUri,
+          scale: s.scale,
+          color: s.color,
+          rotationRad: 0,
+        };
       },
-      labelFn: (props) => (props['name'] as string) || `NORAD ${props['noradId'] ?? ''}`,
+      labelFn: (props) =>
+        (props["name"] as string) || `NORAD ${props["noradId"] ?? ""}`,
       billboardBase: () => ({
         verticalOrigin: Cesium.VerticalOrigin.CENTER,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 60_000_000),
-        scaleByDistance: new Cesium.NearFarScalar(2_000_000, 1.2, 40_000_000, 0.5),
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+          0,
+          60_000_000,
+        ),
+        scaleByDistance: new Cesium.NearFarScalar(
+          2_000_000,
+          1.2,
+          40_000_000,
+          0.5,
+        ),
       }),
-      labelBase: (text) => labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
+      labelBase: (text) =>
+        labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
       getClock: () => viewer.clock.currentTime,
       // Orbits move continuously — mirror each frame the clock advances (rides
       // the existing render; paused timeline freezes the constellation correctly).
@@ -202,16 +223,24 @@ export class SatelliteAdapter implements LayerAdapter {
     this.aborter?.abort();
     this.aborter = new AbortController();
     try {
-      const r = await apiFetch(this.props.endpoint, { signal: this.aborter.signal });
+      const r = await apiFetch(this.props.endpoint, {
+        signal: this.aborter.signal,
+      });
       if (!r.ok) {
-        this.props.ctx.reportStatus({ status: 'red', note: `upstream ${r.status}` });
+        this.props.ctx.reportStatus({
+          status: "red",
+          note: `upstream ${r.status}`,
+        });
         this.scheduleRetry();
         return;
       }
       const j = (await r.json()) as { items: OmmRecord[] };
       const items = (j.items ?? []).slice(0, maxSats());
       const descriptorId = this.props.ctx.descriptor.id;
-      const next = new Map<string, { l1: string; l2: string; name: string; norad: string }>();
+      const next = new Map<
+        string,
+        { l1: string; l2: string; name: string; norad: string }
+      >();
       for (const rec0 of items) {
         const l1 = rec0.TLE_LINE1;
         const l2 = rec0.TLE_LINE2;
@@ -220,7 +249,7 @@ export class SatelliteAdapter implements LayerAdapter {
         next.set(`${descriptorId}:sat:${norad}`, {
           l1,
           l2,
-          name: (rec0.OBJECT_NAME || '').trim(),
+          name: (rec0.OBJECT_NAME || "").trim(),
           norad,
         });
       }
@@ -246,13 +275,13 @@ export class SatelliteAdapter implements LayerAdapter {
       for (const id of next.keys()) this.enqueue(id);
 
       this.props.ctx.reportStatus({
-        status: items.length > 0 ? 'green' : 'amber',
+        status: items.length > 0 ? "green" : "amber",
         lastSeen: Date.now(),
-        ...(items.length === 0 && { note: 'no TLEs returned' }),
+        ...(items.length === 0 && { note: "no TLEs returned" }),
       });
     } catch (e) {
-      if ((e as DOMException)?.name === 'AbortError') return;
-      this.props.ctx.reportStatus({ status: 'red', note: 'transport error' });
+      if ((e as DOMException)?.name === "AbortError") return;
+      this.props.ctx.reportStatus({ status: "red", note: "transport error" });
       this.scheduleRetry();
     }
   }
@@ -293,7 +322,10 @@ export class SatelliteAdapter implements LayerAdapter {
     this.pumpScheduled = false;
     if (this.detached) return;
     const start = performance.now();
-    const budget = Math.max(SAT_MIN_SLICE_MS, Math.min(SAMPLE_BUDGET_MS, frameBudgetRemaining(ts)));
+    const budget = Math.max(
+      SAT_MIN_SLICE_MS,
+      Math.min(SAMPLE_BUDGET_MS, frameBudgetRemaining(ts)),
+    );
     const entities = this.ds.entities;
     entities.suspendEvents();
     let processed = 0;
@@ -386,7 +418,9 @@ export class SatelliteAdapter implements LayerAdapter {
     if (ex) {
       if (ex.position !== sampled) ex.position = sampled;
       // Bounded memory: drop samples well behind the clock.
-      const cut = Cesium.JulianDate.fromDate(new Date(clockMs - PRUNE_BEHIND_S * 1000));
+      const cut = Cesium.JulianDate.fromDate(
+        new Date(clockMs - PRUNE_BEHIND_S * 1000),
+      );
       sampled.removeSamples(
         new Cesium.TimeInterval({
           start: EPOCH_START,
@@ -399,8 +433,13 @@ export class SatelliteAdapter implements LayerAdapter {
       // Graphics-less entity (position + name + props); the icon + label are
       // painted by the batched primitive layer. props feed its style/label fns.
       const label = name || `NORAD ${norad}`;
-      const props = { kind: 'satellite', name, noradId: norad };
-      const ent = this.ds.entities.add({ id, position: sampled, name: label, properties: props });
+      const props = { kind: "satellite", name, noradId: norad };
+      const ent = this.ds.entities.add({
+        id,
+        position: sampled,
+        name: label,
+        properties: props,
+      });
       this.prim?.sync(ent, props);
     }
   }

@@ -6,8 +6,8 @@
 // switching countries is its own cache entry the same way the other
 // per-country cards work.
 
-import { Card, Skeleton, useCachedFetch } from './shared.js';
-import { safeHttpUrl } from '../shell/safeUrl.js';
+import { Card, Skeleton, useCachedFetch } from "./shared.js";
+import { safeHttpUrl } from "../shell/safeUrl.js";
 
 interface NewsArticle {
   title: string;
@@ -45,13 +45,19 @@ function NewsRow({ a }: { a: NewsArticle }): JSX.Element {
         <span className="text-[10px] text-txt-3"> · {a.source}</span>
       </div>
       {a.published && (
-        <span className="mono text-[9.5px] text-txt-4 shrink-0">{a.published.slice(0, 10)}</span>
+        <span className="mono text-[9.5px] text-txt-4 shrink-0">
+          {a.published.slice(0, 10)}
+        </span>
       )}
     </div>
   );
 }
 
-export function CountryNewsCard({ iso3 }: { iso3: string }): JSX.Element | null {
+export function CountryNewsCard({
+  iso3,
+}: {
+  iso3: string;
+}): JSX.Element | null {
   const { loading, error, data } = useCachedFetch<NewsFeedResponse>(
     iso3 ? `/api/news/feed?iso3=${encodeURIComponent(iso3)}` : null,
   );
@@ -76,7 +82,10 @@ export function CountryNewsCard({ iso3 }: { iso3: string }): JSX.Element | null 
 
   const rows = articles.slice(0, MAX_ROWS);
   return (
-    <Card title="News" meta={`${articles.length} headline${articles.length === 1 ? '' : 's'}`}>
+    <Card
+      title="News"
+      meta={`${articles.length} headline${articles.length === 1 ? "" : "s"}`}
+    >
       <div className="flex flex-col">
         {rows.map((a, i) => (
           <NewsRow key={`${a.link || a.title}-${i}`} a={a} />

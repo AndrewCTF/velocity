@@ -15,8 +15,8 @@ import {
   type FilterClause,
   type FilterFacet,
   type FacetResolver,
-} from '../state/stores.js';
-import { aircraftStyle, vesselStyle } from '../globe/adapters/styles.js';
+} from "../state/stores.js";
+import { aircraftStyle, vesselStyle } from "../globe/adapters/styles.js";
 
 // Altitude bands (metres). Aviation-flavoured but expressed in the metric the
 // feed carries (`baro_alt_m`/`geo_alt_m`). Ground + unknown are their own
@@ -29,21 +29,25 @@ export interface AltBand {
   hi: number | null;
 }
 export const ALT_BANDS: readonly AltBand[] = [
-  { id: 'fl000_010', label: '0–1 km', lo: 0, hi: 1_000 },
-  { id: 'fl010_030', label: '1–3 km', lo: 1_000, hi: 3_000 },
-  { id: 'fl030_080', label: '3–8 km', lo: 3_000, hi: 8_000 },
-  { id: 'fl080_120', label: '8–12 km', lo: 8_000, hi: 12_000 },
-  { id: 'fl120_up', label: '12 km+', lo: 12_000, hi: null },
+  { id: "fl000_010", label: "0–1 km", lo: 0, hi: 1_000 },
+  { id: "fl010_030", label: "1–3 km", lo: 1_000, hi: 3_000 },
+  { id: "fl030_080", label: "3–8 km", lo: 3_000, hi: 8_000 },
+  { id: "fl080_120", label: "8–12 km", lo: 8_000, hi: 12_000 },
+  { id: "fl120_up", label: "12 km+", lo: 12_000, hi: null },
 ];
-const ALT_GROUND = 'ground';
-const ALT_UNKNOWN = 'alt_unknown';
+const ALT_GROUND = "ground";
+const ALT_UNKNOWN = "alt_unknown";
 
 function altBucketId(props: Record<string, unknown>): string {
-  if (props['on_ground'] === true) return ALT_GROUND;
+  if (props["on_ground"] === true) return ALT_GROUND;
   const alt =
-    (typeof props['geo_alt_m'] === 'number' ? (props['geo_alt_m'] as number) : null) ??
-    (typeof props['baro_alt_m'] === 'number' ? (props['baro_alt_m'] as number) : null) ??
-    (typeof props['alt'] === 'number' ? (props['alt'] as number) : null);
+    (typeof props["geo_alt_m"] === "number"
+      ? (props["geo_alt_m"] as number)
+      : null) ??
+    (typeof props["baro_alt_m"] === "number"
+      ? (props["baro_alt_m"] as number)
+      : null) ??
+    (typeof props["alt"] === "number" ? (props["alt"] as number) : null);
   if (alt == null || !Number.isFinite(alt)) return ALT_UNKNOWN;
   for (const b of ALT_BANDS) {
     if (alt >= b.lo && (b.hi == null || alt < b.hi)) return b.id;
@@ -54,12 +58,12 @@ function altBucketId(props: Record<string, unknown>): string {
 // Squawk: the literal Mode-A code, plus a synthetic 'emergency' bucket so the
 // 7500/7600/7700 codes roll up into one clickable "emergencies" slice as well
 // as showing individually.
-const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700']);
+const EMERGENCY_SQUAWKS = new Set(["7500", "7600", "7700"]);
 function squawkValues(props: Record<string, unknown>): string[] {
-  const raw = props['squawk'];
-  if (raw == null || raw === '') return [];
+  const raw = props["squawk"];
+  if (raw == null || raw === "") return [];
   const code = String(raw);
-  return EMERGENCY_SQUAWKS.has(code) ? [code, 'emergency'] : [code];
+  return EMERGENCY_SQUAWKS.has(code) ? [code, "emergency"] : [code];
 }
 
 // Flag / country, derived CLIENT-SIDE — the feeds do NOT send a flag field, so
@@ -69,31 +73,31 @@ function squawkValues(props: Record<string, unknown>): string[] {
 // a small high-traffic table + an "other" fallback, never a fabricated value.
 const ICAO24_BLOCKS: ReadonlyArray<{ lo: number; hi: number; cc: string }> = [
   // A small, high-traffic subset of ICAO Annex 10 24-bit address allocations.
-  { lo: 0xa00000, hi: 0xafffff, cc: 'US' },
-  { lo: 0x400000, hi: 0x43ffff, cc: 'GB' },
-  { lo: 0x3c0000, hi: 0x3fffff, cc: 'DE' },
-  { lo: 0x380000, hi: 0x3bffff, cc: 'FR' },
-  { lo: 0x300000, hi: 0x33ffff, cc: 'IT' },
-  { lo: 0x340000, hi: 0x37ffff, cc: 'ES' },
-  { lo: 0x480000, hi: 0x4bffff, cc: 'NL' },
-  { lo: 0x140000, hi: 0x1bffff, cc: 'RU' },
-  { lo: 0x780000, hi: 0x7bffff, cc: 'CN' },
-  { lo: 0x840000, hi: 0x87ffff, cc: 'JP' },
-  { lo: 0x7c0000, hi: 0x7fffff, cc: 'AU' },
-  { lo: 0xc00000, hi: 0xc3ffff, cc: 'CA' },
-  { lo: 0xe00000, hi: 0xe3ffff, cc: 'AR' },
-  { lo: 0x0a0000, hi: 0x0affff, cc: 'EG' },
-  { lo: 0x440000, hi: 0x447fff, cc: 'AT' },
-  { lo: 0x460000, hi: 0x467fff, cc: 'FI' },
-  { lo: 0x468000, hi: 0x46ffff, cc: 'GR' },
-  { lo: 0x4a0000, hi: 0x4a7fff, cc: 'SE' },
-  { lo: 0x4b0000, hi: 0x4b7fff, cc: 'CH' },
-  { lo: 0x500000, hi: 0x5003ff, cc: 'PL' },
-  { lo: 0x710000, hi: 0x717fff, cc: 'SA' },
-  { lo: 0x738000, hi: 0x73ffff, cc: 'IL' },
-  { lo: 0x896000, hi: 0x896fff, cc: 'AE' },
-  { lo: 0x800000, hi: 0x83ffff, cc: 'IN' },
-  { lo: 0x88_0000, hi: 0x887fff, cc: 'TR' },
+  { lo: 0xa00000, hi: 0xafffff, cc: "US" },
+  { lo: 0x400000, hi: 0x43ffff, cc: "GB" },
+  { lo: 0x3c0000, hi: 0x3fffff, cc: "DE" },
+  { lo: 0x380000, hi: 0x3bffff, cc: "FR" },
+  { lo: 0x300000, hi: 0x33ffff, cc: "IT" },
+  { lo: 0x340000, hi: 0x37ffff, cc: "ES" },
+  { lo: 0x480000, hi: 0x4bffff, cc: "NL" },
+  { lo: 0x140000, hi: 0x1bffff, cc: "RU" },
+  { lo: 0x780000, hi: 0x7bffff, cc: "CN" },
+  { lo: 0x840000, hi: 0x87ffff, cc: "JP" },
+  { lo: 0x7c0000, hi: 0x7fffff, cc: "AU" },
+  { lo: 0xc00000, hi: 0xc3ffff, cc: "CA" },
+  { lo: 0xe00000, hi: 0xe3ffff, cc: "AR" },
+  { lo: 0x0a0000, hi: 0x0affff, cc: "EG" },
+  { lo: 0x440000, hi: 0x447fff, cc: "AT" },
+  { lo: 0x460000, hi: 0x467fff, cc: "FI" },
+  { lo: 0x468000, hi: 0x46ffff, cc: "GR" },
+  { lo: 0x4a0000, hi: 0x4a7fff, cc: "SE" },
+  { lo: 0x4b0000, hi: 0x4b7fff, cc: "CH" },
+  { lo: 0x500000, hi: 0x5003ff, cc: "PL" },
+  { lo: 0x710000, hi: 0x717fff, cc: "SA" },
+  { lo: 0x738000, hi: 0x73ffff, cc: "IL" },
+  { lo: 0x896000, hi: 0x896fff, cc: "AE" },
+  { lo: 0x800000, hi: 0x83ffff, cc: "IN" },
+  { lo: 0x88_0000, hi: 0x887fff, cc: "TR" },
 ];
 function flagFromIcao24(icao24: string): string | null {
   const n = Number.parseInt(icao24, 16);
@@ -101,31 +105,84 @@ function flagFromIcao24(icao24: string): string | null {
   for (const b of ICAO24_BLOCKS) {
     if (n >= b.lo && n <= b.hi) return b.cc;
   }
-  return 'other';
+  return "other";
 }
 
 // MMSI MID (first three digits) → flag. Subset of ITU-R M.585 Table 1, the
 // busiest maritime flags; everything else collapses to 'other'.
 const MID_TO_CC: Readonly<Record<string, string>> = {
-  '201': 'AL', '205': 'BE', '209': 'CY', '211': 'DE', '219': 'DK',
-  '224': 'ES', '226': 'FR', '227': 'FR', '228': 'FR', '230': 'FI',
-  '232': 'GB', '233': 'GB', '234': 'GB', '235': 'GB', '236': 'GI',
-  '237': 'GR', '238': 'HR', '244': 'NL', '245': 'NL', '246': 'NL',
-  '247': 'IT', '248': 'MT', '249': 'MT', '256': 'MT', '257': 'NO',
-  '258': 'NO', '259': 'NO', '265': 'SE', '266': 'SE', '269': 'CH',
-  '273': 'RU', '304': 'AG', '305': 'AG', '309': 'BS', '311': 'BS',
-  '338': 'US', '366': 'US', '367': 'US', '368': 'US', '369': 'US',
-  '316': 'CA', '370': 'PA', '371': 'PA', '372': 'PA', '373': 'PA',
-  '412': 'CN', '413': 'CN', '414': 'CN', '431': 'JP', '432': 'JP',
-  '440': 'KR', '441': 'KR', '477': 'HK', '563': 'SG', '564': 'SG',
-  '565': 'SG', '538': 'MH', '525': 'ID', '574': 'VN', '636': 'LR',
-  '710': 'BR', '512': 'NZ', '503': 'AU', '423': 'AZ', '422': 'IR',
-  '470': 'AE', '403': 'SA',
+  "201": "AL",
+  "205": "BE",
+  "209": "CY",
+  "211": "DE",
+  "219": "DK",
+  "224": "ES",
+  "226": "FR",
+  "227": "FR",
+  "228": "FR",
+  "230": "FI",
+  "232": "GB",
+  "233": "GB",
+  "234": "GB",
+  "235": "GB",
+  "236": "GI",
+  "237": "GR",
+  "238": "HR",
+  "244": "NL",
+  "245": "NL",
+  "246": "NL",
+  "247": "IT",
+  "248": "MT",
+  "249": "MT",
+  "256": "MT",
+  "257": "NO",
+  "258": "NO",
+  "259": "NO",
+  "265": "SE",
+  "266": "SE",
+  "269": "CH",
+  "273": "RU",
+  "304": "AG",
+  "305": "AG",
+  "309": "BS",
+  "311": "BS",
+  "338": "US",
+  "366": "US",
+  "367": "US",
+  "368": "US",
+  "369": "US",
+  "316": "CA",
+  "370": "PA",
+  "371": "PA",
+  "372": "PA",
+  "373": "PA",
+  "412": "CN",
+  "413": "CN",
+  "414": "CN",
+  "431": "JP",
+  "432": "JP",
+  "440": "KR",
+  "441": "KR",
+  "477": "HK",
+  "563": "SG",
+  "564": "SG",
+  "565": "SG",
+  "538": "MH",
+  "525": "ID",
+  "574": "VN",
+  "636": "LR",
+  "710": "BR",
+  "512": "NZ",
+  "503": "AU",
+  "423": "AZ",
+  "422": "IR",
+  "470": "AE",
+  "403": "SA",
 };
 function flagFromMmsi(mmsi: string | number): string | null {
   const s = String(mmsi);
   if (s.length < 3) return null;
-  return MID_TO_CC[s.slice(0, 3)] ?? 'other';
+  return MID_TO_CC[s.slice(0, 3)] ?? "other";
 }
 
 // The full set of facet values an entity carries. `kind` (aircraft/vessel) is
@@ -133,7 +190,7 @@ function flagFromMmsi(mmsi: string | number): string | null {
 // SAME classifiers the renderer uses (`aircraftStyle`/`vesselStyle`), so a bar
 // labelled "military" filters exactly the icons drawn as military.
 export interface EntityFacets {
-  kind: 'aircraft' | 'vessel' | 'other';
+  kind: "aircraft" | "vessel" | "other";
   /** Provenance tier, derived from the feed's own `tier` stamp. Null when the
    *  contact does not carry one: an unknown tier is not a tier, and bucketing
    *  it as `sensor` would be the exact laundering the tier model exists to
@@ -147,39 +204,47 @@ export interface EntityFacets {
 }
 
 export function deriveFacets(props: Record<string, unknown>): EntityFacets {
-  const kindRaw = typeof props['kind'] === 'string' ? (props['kind'] as string) : '';
-  const kind: EntityFacets['kind'] =
-    kindRaw === 'aircraft' ? 'aircraft' : kindRaw === 'vessel' ? 'vessel' : 'other';
+  const kindRaw =
+    typeof props["kind"] === "string" ? (props["kind"] as string) : "";
+  const kind: EntityFacets["kind"] =
+    kindRaw === "aircraft"
+      ? "aircraft"
+      : kindRaw === "vessel"
+        ? "vessel"
+        : "other";
 
   let aircraftCategory: string | null = null;
   let vesselType: string | null = null;
   let flag: string | null = null;
 
-  if (kind === 'aircraft') {
+  if (kind === "aircraft") {
     // aircraftStyle is a pure classifier (icon factory aside); reuse its `kind`.
     aircraftCategory = aircraftStyle(props).kind;
-    const icao24 = props['icao24'];
-    if (typeof icao24 === 'string' && icao24.length > 0) flag = flagFromIcao24(icao24);
-  } else if (kind === 'vessel') {
+    const icao24 = props["icao24"];
+    if (typeof icao24 === "string" && icao24.length > 0)
+      flag = flagFromIcao24(icao24);
+  } else if (kind === "vessel") {
     vesselType = vesselStyle(props).kind;
-    const mmsi = props['mmsi'];
-    if (typeof mmsi === 'number' || typeof mmsi === 'string') flag = flagFromMmsi(mmsi);
+    const mmsi = props["mmsi"];
+    if (typeof mmsi === "number" || typeof mmsi === "string")
+      flag = flagFromMmsi(mmsi);
   }
 
-  const rawTier = props['tier'];
+  const rawTier = props["tier"];
   const tier =
-    typeof rawTier === 'string' && ['sensor', 'registry', 'filing', 'claim'].includes(rawTier)
+    typeof rawTier === "string" &&
+    ["sensor", "registry", "filing", "claim"].includes(rawTier)
       ? rawTier
       : null;
 
   return {
     kind,
     tier,
-    altBucket: kind === 'aircraft' ? altBucketId(props) : null,
+    altBucket: kind === "aircraft" ? altBucketId(props) : null,
     aircraftCategory,
     vesselType,
     flag,
-    squawks: kind === 'aircraft' ? squawkValues(props) : [],
+    squawks: kind === "aircraft" ? squawkValues(props) : [],
   };
 }
 
@@ -188,17 +253,17 @@ export function deriveFacets(props: Record<string, unknown>): EntityFacets {
 export function facetResolver(f: EntityFacets): FacetResolver {
   return (facet: FilterFacet): readonly string[] => {
     switch (facet) {
-      case 'altBucket':
+      case "altBucket":
         return f.altBucket ? [f.altBucket] : [];
-      case 'aircraftCategory':
+      case "aircraftCategory":
         return f.aircraftCategory ? [f.aircraftCategory] : [];
-      case 'vesselType':
+      case "vesselType":
         return f.vesselType ? [f.vesselType] : [];
-      case 'flag':
+      case "flag":
         return f.flag ? [f.flag] : [];
-      case 'squawk':
+      case "squawk":
         return f.squawks;
-      case 'tier':
+      case "tier":
         return f.tier ? [f.tier] : [];
       default:
         return [];
@@ -230,38 +295,38 @@ export interface Histogram {
 }
 
 export const ALT_LABELS: Record<string, string> = {
-  [ALT_GROUND]: 'On ground',
-  [ALT_UNKNOWN]: 'Unknown alt',
+  [ALT_GROUND]: "On ground",
+  [ALT_UNKNOWN]: "Unknown alt",
   ...Object.fromEntries(ALT_BANDS.map((b) => [b.id, b.label])),
 };
 const ALT_ORDER = [ALT_GROUND, ...ALT_BANDS.map((b) => b.id), ALT_UNKNOWN];
 
 export const AC_CAT_LABELS: Record<string, string> = {
-  airliner: 'Airliner',
-  private: 'Private / light',
-  helicopter: 'Helicopter',
-  glider: 'Glider',
-  military: 'Military',
-  emergency: 'Emergency',
+  airliner: "Airliner",
+  private: "Private / light",
+  helicopter: "Helicopter",
+  glider: "Glider",
+  military: "Military",
+  emergency: "Emergency",
 };
 export const VES_TYPE_LABELS: Record<string, string> = {
-  cargo: 'Cargo',
-  tanker: 'Tanker',
-  fishing: 'Fishing',
-  passenger: 'Passenger',
-  military: 'Military',
-  sailing: 'Sailing',
-  pleasure: 'Pleasure',
-  tug: 'Tug / service',
-  sar: 'SAR',
-  generic: 'Other',
+  cargo: "Cargo",
+  tanker: "Tanker",
+  fishing: "Fishing",
+  passenger: "Passenger",
+  military: "Military",
+  sailing: "Sailing",
+  pleasure: "Pleasure",
+  tug: "Tug / service",
+  sar: "SAR",
+  generic: "Other",
 };
 
 export function bucketLabel(facet: FilterFacet, value: string): string {
-  if (facet === 'tier') return TIER_LABELS[value] ?? value;
-  if (facet === 'altBucket') return ALT_LABELS[value] ?? value;
-  if (facet === 'aircraftCategory') return AC_CAT_LABELS[value] ?? value;
-  if (facet === 'vesselType') return VES_TYPE_LABELS[value] ?? value;
+  if (facet === "tier") return TIER_LABELS[value] ?? value;
+  if (facet === "altBucket") return ALT_LABELS[value] ?? value;
+  if (facet === "aircraftCategory") return AC_CAT_LABELS[value] ?? value;
+  if (facet === "vesselType") return VES_TYPE_LABELS[value] ?? value;
   return value;
 }
 
@@ -279,12 +344,12 @@ export interface FacetTally {
 }
 
 const TIER_LABELS: Record<string, string> = {
-  sensor: 'T0 · Sensor',
-  registry: 'T1 · Registry',
-  filing: 'T2 · Filing',
-  claim: 'T3 · Claim',
+  sensor: "T0 · Sensor",
+  registry: "T1 · Registry",
+  filing: "T2 · Filing",
+  claim: "T3 · Claim",
 };
-const TIER_ORDER_IDS = ['sensor', 'registry', 'filing', 'claim'];
+const TIER_ORDER_IDS = ["sensor", "registry", "filing", "claim"];
 
 export function newFacetTally(): FacetTally {
   return {
@@ -315,19 +380,25 @@ function bump(m: Map<string, number>, k: string | null): void {
  *  expose claim-tier sources could not see the only claim-tier source that was
  *  on. The tier comes from the DataSource name, not from the bag, so it does not
  *  need the bag at all. */
-export function tallyTier(t: FacetTally, tier: string | null | undefined): void {
+export function tallyTier(
+  t: FacetTally,
+  tier: string | null | undefined,
+): void {
   bump(t.tier, tier ?? null);
 }
 
-export function tallyFacets(t: FacetTally, props: Record<string, unknown>): void {
+export function tallyFacets(
+  t: FacetTally,
+  props: Record<string, unknown>,
+): void {
   const f = deriveFacets(props);
-  if (f.kind === 'other') return;
+  if (f.kind === "other") return;
   t.counted++;
-  if (f.kind === 'aircraft') {
+  if (f.kind === "aircraft") {
     bump(t.alt, f.altBucket);
     bump(t.acCat, f.aircraftCategory);
     for (const sq of f.squawks) bump(t.squawk, sq);
-  } else if (f.kind === 'vessel') {
+  } else if (f.kind === "vessel") {
     bump(t.vesType, f.vesselType);
   }
   bump(t.flag, f.flag);
@@ -359,15 +430,45 @@ function sum(m: Map<string, number>): number {
 
 export function buildHistograms(t: FacetTally): Histogram[] {
   return [
-    { facet: 'aircraftCategory', title: 'Aircraft category', buckets: sortedBuckets(t.acCat, AC_CAT_LABELS), total: sum(t.acCat) },
-    { facet: 'altBucket', title: 'Altitude band', buckets: sortedBuckets(t.alt, ALT_LABELS, ALT_ORDER), total: sum(t.alt) },
-    { facet: 'vesselType', title: 'Vessel type', buckets: sortedBuckets(t.vesType, VES_TYPE_LABELS), total: sum(t.vesType) },
-    { facet: 'flag', title: 'Flag (derived)', buckets: sortedBuckets(t.flag).slice(0, 12), total: sum(t.flag) },
-    { facet: 'squawk', title: 'Squawk', buckets: sortedBuckets(t.squawk).slice(0, 12), total: sum(t.squawk) },
+    {
+      facet: "aircraftCategory",
+      title: "Aircraft category",
+      buckets: sortedBuckets(t.acCat, AC_CAT_LABELS),
+      total: sum(t.acCat),
+    },
+    {
+      facet: "altBucket",
+      title: "Altitude band",
+      buckets: sortedBuckets(t.alt, ALT_LABELS, ALT_ORDER),
+      total: sum(t.alt),
+    },
+    {
+      facet: "vesselType",
+      title: "Vessel type",
+      buckets: sortedBuckets(t.vesType, VES_TYPE_LABELS),
+      total: sum(t.vesType),
+    },
+    {
+      facet: "flag",
+      title: "Flag (derived)",
+      buckets: sortedBuckets(t.flag).slice(0, 12),
+      total: sum(t.flag),
+    },
+    {
+      facet: "squawk",
+      title: "Squawk",
+      buckets: sortedBuckets(t.squawk).slice(0, 12),
+      total: sum(t.squawk),
+    },
     // Provenance last in the list and first in importance. It is the one facet
     // that is about the SOURCE rather than the object, and putting it in the
     // cross-filter is what turns the tier from a label into a question the
     // operator can ask of the map: show me only what an instrument saw.
-    { facet: 'tier', title: 'Provenance', buckets: sortedBuckets(t.tier, TIER_LABELS, TIER_ORDER_IDS), total: sum(t.tier) },
+    {
+      facet: "tier",
+      title: "Provenance",
+      buckets: sortedBuckets(t.tier, TIER_LABELS, TIER_ORDER_IDS),
+      total: sum(t.tier),
+    },
   ];
 }

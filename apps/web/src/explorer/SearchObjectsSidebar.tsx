@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { SearchX } from 'lucide-react';
-import * as Cesium from 'cesium';
-import { searchObjects, type ObjectResult } from '../transport/search.js';
-import { useSelection } from '../state/stores.js';
-import { useSearchRegions, SLOTS, type Slot } from '../state/searchRegions.js';
-import { haversineKm, getDrawController } from '../globe/draw.js';
-import { flyToPosition } from '../globe/camera.js';
-import { CoordEntry } from '../globe/CoordEntry.js';
-import { Icon } from '../normal/Icon.js';
-import { dict } from '../shell/safeKeys.js';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SearchX } from "lucide-react";
+import * as Cesium from "cesium";
+import { searchObjects, type ObjectResult } from "../transport/search.js";
+import { useSelection } from "../state/stores.js";
+import { useSearchRegions, SLOTS, type Slot } from "../state/searchRegions.js";
+import { haversineKm, getDrawController } from "../globe/draw.js";
+import { flyToPosition } from "../globe/camera.js";
+import { CoordEntry } from "../globe/CoordEntry.js";
+import { Icon } from "../normal/Icon.js";
+import { dict } from "../shell/safeKeys.js";
 
 // Palantir-Gotham "Search Objects" left sidebar. A single scoping surface: object
 // type + intrinsic date (static range OR rolling window) + keyword + up to four
@@ -18,35 +18,35 @@ import { dict } from '../shell/safeKeys.js';
 // Renders inside a ~300px LeftIconRail flyout — compact, vertically scrollable.
 
 const OBJECT_TYPES: Array<{ v: string; label: string }> = [
-  { v: 'all', label: 'All objects' },
-  { v: 'vessel', label: 'Vessel' },
-  { v: 'aircraft', label: 'Aircraft' },
-  { v: 'satellite', label: 'Satellite' },
-  { v: 'emitter', label: 'Emitter' },
-  { v: 'event', label: 'Event' },
-  { v: 'outage', label: 'Outage' },
-  { v: 'detection', label: 'Detection' },
-  { v: 'quake', label: 'Quake' },
-  { v: 'fire', label: 'Fire' },
+  { v: "all", label: "All objects" },
+  { v: "vessel", label: "Vessel" },
+  { v: "aircraft", label: "Aircraft" },
+  { v: "satellite", label: "Satellite" },
+  { v: "emitter", label: "Emitter" },
+  { v: "event", label: "Event" },
+  { v: "outage", label: "Outage" },
+  { v: "detection", label: "Detection" },
+  { v: "quake", label: "Quake" },
+  { v: "fire", label: "Fire" },
 ];
 
 // Rolling-window presets (mirror ExplorerApp WINDOWS) → sinceS seconds.
 const WINDOWS: Array<{ label: string; s: number | undefined }> = [
-  { label: 'All', s: undefined },
-  { label: '15m', s: 900 },
-  { label: '1h', s: 3600 },
-  { label: '6h', s: 21600 },
-  { label: '24h', s: 86400 },
-  { label: '7d', s: 604800 },
+  { label: "All", s: undefined },
+  { label: "15m", s: 900 },
+  { label: "1h", s: 3600 },
+  { label: "6h", s: 21600 },
+  { label: "24h", s: 86400 },
+  { label: "7d", s: 604800 },
 ];
 
 const DEFAULT_RADIUS_KM = 25;
-const REGION_FILL = Cesium.Color.fromCssColorString('#4fa0d8').withAlpha(0.1);
-const REGION_LINE = Cesium.Color.fromCssColorString('#4fa0d8');
-const REGION_LINE_ACTIVE = Cesium.Color.fromCssColorString('#d946ef'); // selection magenta
+const REGION_FILL = Cesium.Color.fromCssColorString("#4fa0d8").withAlpha(0.1);
+const REGION_LINE = Cesium.Color.fromCssColorString("#4fa0d8");
+const REGION_LINE_ACTIVE = Cesium.Color.fromCssColorString("#d946ef"); // selection magenta
 
-type Mode = 'view' | 'draw' | 'select';
-type DateMode = 'static' | 'rolling';
+type Mode = "view" | "draw" | "select";
+type DateMode = "static" | "rolling";
 
 function ageLabel(t: number): string {
   const sec = Math.max(0, Date.now() / 1000 - t);
@@ -61,26 +61,42 @@ function circleBbox(
   radiusKm: number,
 ): [number, number, number, number] {
   const dLat = radiusKm / 111;
-  const dLon = radiusKm / (111 * Math.max(0.05, Math.cos((center.lat * Math.PI) / 180)));
-  return [center.lon - dLon, center.lat - dLat, center.lon + dLon, center.lat + dLat];
+  const dLon =
+    radiusKm / (111 * Math.max(0.05, Math.cos((center.lat * Math.PI) / 180)));
+  return [
+    center.lon - dLon,
+    center.lat - dLat,
+    center.lon + dLon,
+    center.lat + dLat,
+  ];
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }): JSX.Element {
+function SectionLabel({
+  children,
+}: {
+  children: React.ReactNode;
+}): JSX.Element {
   return (
-    <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mt-1">{children}</div>
+    <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mt-1">
+      {children}
+    </div>
   );
 }
 
-export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
-  const [mode, setMode] = useState<Mode>('view');
-  const [type, setType] = useState<string>('all');
-  const [dateMode, setDateMode] = useState<DateMode>('rolling');
-  const [start, setStart] = useState<string>(''); // YYYY-MM-DD
-  const [end, setEnd] = useState<string>('');
+export function SearchObjectsSidebar({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element {
+  const [mode, setMode] = useState<Mode>("view");
+  const [type, setType] = useState<string>("all");
+  const [dateMode, setDateMode] = useState<DateMode>("rolling");
+  const [start, setStart] = useState<string>(""); // YYYY-MM-DD
+  const [end, setEnd] = useState<string>("");
   const [winIdx, setWinIdx] = useState(0);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState("");
   const [liveUpdate, setLiveUpdate] = useState(false);
-  const [title, setTitle] = useState('Untitled search');
+  const [title, setTitle] = useState("Untitled search");
 
   const regions = useSearchRegions((s) => s.regions);
   const active = useSearchRegions((s) => s.active);
@@ -114,7 +130,9 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
     setLoading(true);
     setErr(null);
 
-    const live = SLOTS.map((s) => regions[s]).filter((r): r is NonNullable<typeof r> => r != null);
+    const live = SLOTS.map((s) => regions[s]).filter(
+      (r): r is NonNullable<typeof r> => r != null,
+    );
 
     // Union every region circle's envelope into one bbox for the backend.
     let bbox: [number, number, number, number] | undefined;
@@ -133,7 +151,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
 
     // Date facets: only one mode's values are sent.
     const dateFacets: { sinceS?: number; startS?: number; endS?: number } = {};
-    if (dateMode === 'rolling') {
+    if (dateMode === "rolling") {
       const win = WINDOWS[winIdx];
       if (win && win.s != null) dateFacets.sinceS = win.s;
     } else {
@@ -156,18 +174,23 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
       .then((d) => {
         if (live.length > 0) {
           const inside = d.results.filter((res) =>
-            live.some((rg) => haversineKm({ lat: res.lat, lon: res.lon }, rg.center) <= rg.radiusKm),
+            live.some(
+              (rg) =>
+                haversineKm({ lat: res.lat, lon: res.lon }, rg.center) <=
+                rg.radiusKm,
+            ),
           );
           const by_type = dict<number>();
-          for (const res of inside) by_type[res.kind] = (by_type[res.kind] ?? 0) + 1;
+          for (const res of inside)
+            by_type[res.kind] = (by_type[res.kind] ?? 0) + 1;
           setData({ results: inside, count: inside.length, by_type });
         } else {
           setData(d);
         }
       })
       .catch((e: unknown) => {
-        if (e instanceof DOMException && e.name === 'AbortError') return;
-        setErr('Search failed.');
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        setErr("Search failed.");
       })
       .finally(() => setLoading(false));
   };
@@ -189,7 +212,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
   const dsRef = useRef<Cesium.CustomDataSource | null>(null);
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
-    const ds = new Cesium.CustomDataSource('__search_regions');
+    const ds = new Cesium.CustomDataSource("__search_regions");
     void viewer.dataSources.add(ds);
     dsRef.current = ds;
     return () => {
@@ -239,7 +262,8 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
 
   const onRow = (r: ObjectResult): void => {
     useSelection.getState().select(r.id);
-    if (viewer && !viewer.isDestroyed()) flyToPosition(viewer, r.lon, r.lat, 200_000, 0.8);
+    if (viewer && !viewer.isDestroyed())
+      flyToPosition(viewer, r.lon, r.lat, 200_000, 0.8);
   };
 
   const byTypeSummary = useMemo(
@@ -251,9 +275,9 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
   );
 
   const modeHint =
-    mode === 'select'
-      ? 'Click an object on the map to select it.'
-      : mode === 'draw'
+    mode === "select"
+      ? "Click an object on the map to select it."
+      : mode === "draw"
         ? 'Use a region’s "draw" button, then click a centre + edge on the map.'
         : null;
 
@@ -265,25 +289,29 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
           <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-0">
             Search Objects
           </span>
-          <span className="mono text-[10px] text-txt-3">{data.count.toLocaleString()} match</span>
+          <span className="mono text-[10px] text-txt-3">
+            {data.count.toLocaleString()} match
+          </span>
         </div>
         <div className="flex items-center gap-1">
-          {(['view', 'draw', 'select'] as Mode[]).map((m) => (
+          {(["view", "draw", "select"] as Mode[]).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMode(m)}
               className={`flex-1 mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-1 rounded-sm border ${
                 mode === m
-                  ? 'border-accent-line text-accent bg-accent-dim'
-                  : 'border-line text-txt-3 hover:text-txt-1'
+                  ? "border-accent-line text-accent bg-accent-dim"
+                  : "border-line text-txt-3 hover:text-txt-1"
               }`}
             >
               {m}
             </button>
           ))}
         </div>
-        {modeHint && <div className="mono text-[10px] text-txt-3">{modeHint}</div>}
+        {modeHint && (
+          <div className="mono text-[10px] text-txt-3">{modeHint}</div>
+        )}
       </div>
 
       {/* scrollable controls */}
@@ -309,23 +337,23 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
           <div className="flex items-center justify-between">
             <SectionLabel>Intrinsic date</SectionLabel>
             <div className="flex items-center gap-1">
-              {(['static', 'rolling'] as DateMode[]).map((dm) => (
+              {(["static", "rolling"] as DateMode[]).map((dm) => (
                 <button
                   key={dm}
                   type="button"
                   onClick={() => setDateMode(dm)}
                   className={`mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-sm border ${
                     dateMode === dm
-                      ? 'border-accent-line text-accent bg-accent-dim'
-                      : 'border-line text-txt-3 hover:text-txt-1'
+                      ? "border-accent-line text-accent bg-accent-dim"
+                      : "border-line text-txt-3 hover:text-txt-1"
                   }`}
                 >
-                  {dm === 'static' ? 'Static' : 'Rolling'}
+                  {dm === "static" ? "Static" : "Rolling"}
                 </button>
               ))}
             </div>
           </div>
-          {dateMode === 'static' ? (
+          {dateMode === "static" ? (
             <div className="flex items-center gap-1">
               <input
                 type="date"
@@ -352,8 +380,8 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                   onClick={() => setWinIdx(i)}
                   className={`mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-1 rounded-sm border ${
                     i === winIdx
-                      ? 'border-accent-line text-accent bg-accent-dim'
-                      : 'border-line text-txt-3 hover:text-txt-1'
+                      ? "border-accent-line text-accent bg-accent-dim"
+                      : "border-line text-txt-3 hover:text-txt-1"
                   }`}
                 >
                   {w.label}
@@ -370,7 +398,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') runSearch();
+              if (e.key === "Enter") runSearch();
             }}
             placeholder="callsign / name / id…"
             className="bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 placeholder:text-txt-4 focus:border-accent-line outline-hidden"
@@ -397,24 +425,32 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                 key={slot}
                 onClick={() => setActive(slot)}
                 className={`flex flex-col gap-1 rounded-sm border p-1.5 cursor-pointer ${
-                  isActive ? 'border-accent-line bg-accent-dim/40' : 'border-line hover:border-line-2'
+                  isActive
+                    ? "border-accent-line bg-accent-dim/40"
+                    : "border-line hover:border-line-2"
                 }`}
               >
                 <div className="flex items-center gap-1.5">
                   <span
                     className={`mono text-[11px] font-bold w-4 text-center rounded-sm ${
-                      isActive ? 'text-accent' : 'text-txt-2'
+                      isActive ? "text-accent" : "text-txt-2"
                     }`}
                   >
                     {slot}
                   </span>
-                  <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="flex-1 min-w-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <CoordEntry
                       viewer={viewer}
                       fly={false}
                       placeholder={`Region ${slot} (coord or place)`}
                       onPlace={(lat, lon) =>
-                        setRegion(slot, { center: { lat, lon }, radiusKm: radii[slot] })
+                        setRegion(slot, {
+                          center: { lat, lon },
+                          radiusKm: radii[slot],
+                        })
                       }
                     />
                   </div>
@@ -430,7 +466,8 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                     onChange={(e) => {
                       const km = Math.max(1, Number(e.target.value) || 1);
                       setRadii((prev) => ({ ...prev, [slot]: km }));
-                      if (r) setRegion(slot, { center: r.center, radiusKm: km });
+                      if (r)
+                        setRegion(slot, { center: r.center, radiusKm: km });
                     }}
                     aria-label={`Region ${slot} radius km`}
                     className="w-14 mono bg-bg-0 border border-line rounded-sm px-1.5 py-0.5 text-[11px] text-txt-0 focus:border-accent-line outline-hidden"
@@ -442,7 +479,10 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                       setActive(slot);
                       getDrawController()?.drawCircle((c, rk) => {
                         setRegion(slot, { center: c, radiusKm: rk });
-                        setRadii((prev) => ({ ...prev, [slot]: Math.round(rk) }));
+                        setRadii((prev) => ({
+                          ...prev,
+                          [slot]: Math.round(rk),
+                        }));
                       });
                     }}
                     className="mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-sm border border-line text-txt-2 hover:border-accent-line hover:text-accent"
@@ -455,12 +495,15 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                       onClick={() => setRegion(slot, null)}
                       aria-label={`Clear region ${slot}`}
                       className="mono text-[11px] px-1 text-txt-3 hover:text-alert"
-                    ><Icon name="x" className="w-3 h-3" /></button>
+                    >
+                      <Icon name="x" className="w-3 h-3" />
+                    </button>
                   )}
                 </div>
                 {r && (
                   <div className="mono text-[10px] text-txt-2 pl-5">
-                    {r.center.lat.toFixed(2)}, {r.center.lon.toFixed(2)} · {r.radiusKm}km
+                    {r.center.lat.toFixed(2)}, {r.center.lon.toFixed(2)} ·{" "}
+                    {r.radiusKm}km
                   </div>
                 )}
               </div>
@@ -492,7 +535,7 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
           onClick={runSearch}
           className="mono text-[11px] uppercase tracking-[0.6px] py-1.5 rounded-sm border border-accent-line text-accent bg-accent-dim hover:bg-accent-dim/70"
         >
-          {loading ? 'Searching…' : 'Search'}
+          {loading ? "Searching…" : "Search"}
         </button>
 
         {err && <div className="mono text-[10px] text-alert">{err}</div>}
@@ -500,10 +543,12 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
         {/* results */}
         <div className="flex flex-col gap-1 mt-1">
           <div className="flex items-center justify-between">
-            <SectionLabel>Results · {data.results.length.toLocaleString()}</SectionLabel>
+            <SectionLabel>
+              Results · {data.results.length.toLocaleString()}
+            </SectionLabel>
             {byTypeSummary.length > 0 && (
               <div className="mono text-[10px] text-txt-3 truncate max-w-[160px]">
-                {byTypeSummary.map(([k, n]) => `${k} ${n}`).join(' · ')}
+                {byTypeSummary.map(([k, n]) => `${k} ${n}`).join(" · ")}
               </div>
             )}
           </div>
@@ -518,7 +563,9 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
                 <span className="mono text-[10px] uppercase text-txt-3 w-14 shrink-0 truncate">
                   {r.kind}
                 </span>
-                <span className="text-[12px] text-txt-0 truncate flex-1 min-w-0">{r.label}</span>
+                <span className="text-[12px] text-txt-0 truncate flex-1 min-w-0">
+                  {r.label}
+                </span>
                 <span className="mono text-[10px] text-txt-3 tabular-nums shrink-0">
                   {ageLabel(r.t)}
                 </span>
@@ -526,8 +573,15 @@ export function SearchObjectsSidebar({ viewer }: { viewer: Cesium.Viewer | null 
             ))}
             {data.results.length === 0 && (
               <div className="mono text-[11px] text-txt-3 py-4 text-center">
-                {!loading && <SearchX aria-hidden className="h-5 w-5 mx-auto mb-1.5 text-txt-4" />}
-                {loading ? 'searching…' : 'No results yet. Set your scope and select Search.'}
+                {!loading && (
+                  <SearchX
+                    aria-hidden
+                    className="h-5 w-5 mx-auto mb-1.5 text-txt-4"
+                  />
+                )}
+                {loading
+                  ? "searching…"
+                  : "No results yet. Set your scope and select Search."}
               </div>
             )}
           </div>

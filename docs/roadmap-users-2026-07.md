@@ -4,7 +4,7 @@ Successor to `docs/roadmap-ontology-2026-07.md` (2026-07-07). That document's
 architecture analysis stands; this one re-sequences it, because the operator's
 question changed from "what should the product become" to **"what's next, what
 do people want, what value does this bring to people, best path forward."**
-The moment the goal includes *people*, the constraint that dominates everything
+The moment the goal includes _people_, the constraint that dominates everything
 else is: **Velocity has approximately zero external users.** Every choice below
 is ordered by what converts the existing depth into users, without betraying
 the identity (keyless, self-hosted, no synthesis, evidence-first).
@@ -46,7 +46,7 @@ the strongest unmet needs — is Velocity's actual position:
    percentage unverified).
 2. **Unlimited local history + replay.** History depth is the single most
    universally paywalled feature in the space: FR24 gates it at 7 days free,
-   RadarBox at 365 days paid, MarineTraffic *cut* its free window 72h→24h in
+   RadarBox at 365 days paid, MarineTraffic _cut_ its free window 72h→24h in
    2025, ADS-B Exchange killed its free API tier in Mar 2025. World Monitor
    has **no replay at all** (verified). Nobody offers unlimited history free —
    structurally, a cloud vendor can't. A self-hosted tool can.
@@ -69,19 +69,20 @@ From the demand research (r/OSINT ~242k, r/selfhosted ~798k, ADS-B Exchange
 20k+ feeders, Bellingcat toolkit ecosystem, OCCRP/FleetLeaks workflows,
 Maltego CE/SpiderFoot pain threads):
 
-| Rank | Want | Evidence strength | Velocity today |
-|---|---|---|---|
-| 1 | Unlimited history/playback | Strongest — universally paywalled by every commercial player | `history.py` positions store + retention/byte caps + `HistoryPlayback.ts`/`Timeline.tsx` exist; "plumbed, not sold" |
-| 2 | Alerts pushed to Discord/phone/webhook | Strong — competitors gate this behind paid tiers | Geofence evaluator exists but is dead on keyless boot (`watch.py:504`); Workflows has `op.http`/webhook blocks |
-| 3 | One console instead of tool sprawl / API-key rot | Strong — "OSINT tool graveyard" is a running community theme | Core identity, already shipped |
-| 4 | AI-agent/MCP access | Real and growing (~10k MCP servers by Apr 2026) — but now parity, not differentiation | `plugin/osint-geoint` already built |
-| 5 | Dark-fleet/AIS-gap detection | Real (OCCRP does it by hand; FleetLeaks serves it free) | Detectors exist in `intel/`; not productized |
-| 6 | Evidence export w/ chain-of-custody | Real, niche (journalists/legal) | Assertions table is the right substrate; no export |
+| Rank | Want                                             | Evidence strength                                                                     | Velocity today                                                                                                      |
+| ---- | ------------------------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| 1    | Unlimited history/playback                       | Strongest — universally paywalled by every commercial player                          | `history.py` positions store + retention/byte caps + `HistoryPlayback.ts`/`Timeline.tsx` exist; "plumbed, not sold" |
+| 2    | Alerts pushed to Discord/phone/webhook           | Strong — competitors gate this behind paid tiers                                      | Geofence evaluator exists but is dead on keyless boot (`watch.py:504`); Workflows has `op.http`/webhook blocks      |
+| 3    | One console instead of tool sprawl / API-key rot | Strong — "OSINT tool graveyard" is a running community theme                          | Core identity, already shipped                                                                                      |
+| 4    | AI-agent/MCP access                              | Real and growing (~10k MCP servers by Apr 2026) — but now parity, not differentiation | `plugin/osint-geoint` already built                                                                                 |
+| 5    | Dark-fleet/AIS-gap detection                     | Real (OCCRP does it by hand; FleetLeaks serves it free)                               | Detectors exist in `intel/`; not productized                                                                        |
+| 6    | Evidence export w/ chain-of-custody              | Real, niche (journalists/legal)                                                       | Assertions table is the right substrate; no export                                                                  |
 
 Red flags the same research surfaced (treat as design constraints):
+
 - **Unlabeled AI "insights" are a liability, not a feature** to this exact
   audience — practitioner backlash is active and documented; AI-confidence
-  correlates with *less* verification (CMU/MSR). Everything automated must be
+  correlates with _less_ verification (CMU/MSR). Everything automated must be
   visibly labeled automated; everything verified must show its provenance.
   Velocity's assertion schema was built for precisely this — lean into it.
 - The self-hosted community **calls out fakery fast** (the PRISM dashboard
@@ -97,6 +98,7 @@ remains the long-term product thesis; it is **re-sequenced, not abandoned**
 (§4). Nothing below touches a guarded invariant.
 
 ### W0 — Repo hygiene (half a day, immediately)
+
 - `docs/decisions.md` has no dated entries for PRs #24–#32 (country catalog,
   MCP plugin, photo geolocation, Workflows/City apps, external-actuation,
   city foundry overhaul, keyless splats). Backfill one dated paragraph each —
@@ -107,10 +109,12 @@ remains the long-term product thesis; it is **re-sequenced, not abandoned**
 - Re-verify the 939-test baseline live before the next feature commit.
 
 ### W1 — "The world, recorded": unlimited replay as the headline (≈2 weeks)
+
 The substrate exists (`apps/api/app/history.py`: positions table, WAL,
 operator-tunable `history_retention_hours` with clamp + RAM-sized byte cap;
 frontend `globe/HistoryPlayback.ts`, `timeline/Timeline.tsx`). The work is to
 turn a bounded internal buffer into the product's flagship:
+
 - **Disk-first archive profile:** a config preset (`VELOCITY_ARCHIVE=1` or
   similar) that lifts the time clamp (ceiling 0 already disables it —
   `history.py:75`) and sizes the byte cap to a disk budget instead of RAM.
@@ -129,20 +133,22 @@ turn a bounded internal buffer into the product's flagship:
   aircraft-only replay and still lead with it.
 
 ### W2 — Launch packaging (≈1 week, overlaps W1)
+
 Zero users is the actual problem; the product is deep but invisible.
+
 - **Docker Compose one-liner** that boots API + web + sidecars keyless on one
   box, with the archive profile on by default. This is the #1 stickiness
   factor in every adoption case study (Uptime Kuma, Dawarich, ArchiveBox).
 - **README rebuild:** 60-second pitch — hero GIF (globe → click → dossier →
-  *rewind yesterday*), three sentences, `docker compose up`, honest
+  _rewind yesterday_), three sentences, `docker compose up`, honest
   keyless-feeds caveats. The `docs/media/` 1440p set is already strong.
 - **Launch posts:** r/selfhosted + Show HN (same week as W1 completion), then
   awesome-selfhosted / awesome-OSINT PRs, Sector035 Week-in-OSINT pitch,
   Bellingcat toolkit submission, Trace Labs Discord. (Per-channel star
   forecasts from the research are vibes, not commitments — the sequence is
   sound, the numbers are not.)
-- **Pitch discipline:** lead with *self-hosted + keyless + unlimited replay
-  you own*. Do not lead with "multi-domain fusion" or "AI-powered" (§1, §2
+- **Pitch discipline:** lead with _self-hosted + keyless + unlimited replay
+  you own_. Do not lead with "multi-domain fusion" or "AI-powered" (§1, §2
   red flags).
 - **No public live demo instance** at launch: redistribution ToS (adsb.lol,
   airplanes.live, AIS providers), OPSEC/DDoS exposure, Strava precedent.
@@ -153,7 +159,9 @@ Zero users is the actual problem; the product is deep but invisible.
   work and reassess positioning before building more.
 
 ### W3 — Keyless alert push (≈3–5 days)
+
 Demand rank #2 and mostly wiring:
+
 - Fix the keyless-dead path: `_list_enabled_rules` returns `[]` when
   `supabase_url` is unset (`apps/api/app/intel/watch.py:504`) and firing
   requires a live `/ws/alerts` session — alerts must evaluate server-side on
@@ -166,9 +174,11 @@ Demand rank #2 and mostly wiring:
   flaky notifier is worse than none.
 
 ### W4 — Ontology Phase 2: the graph fills itself (≈3–4 days + 1 day backfill)
+
 The only ontology work justified pre-users, pulled forward because it kills
 the photographed empty-graph demo failure (`ui-graph.png`, "No investigation
 open"):
+
 - Auto-promotion on significance exactly as specced in
   `roadmap-ontology-2026-07.md` Phase 2: detector trips, incident membership,
   analyst selection, standing-watch matches → `get_registry().upsert` with
@@ -186,8 +196,10 @@ open"):
   sourced assertion + ≥1 reason link.
 
 ### W5 — MCP hardening + marketplace listing (≈3–5 days, capped)
+
 Parity work, not differentiation (World Monitor has 39 MCP tools) — so cap
 the investment:
+
 - **Rate-limit the MCP layer first**: agent traffic must not hammer the
   rate-limited upstreams (adsb.lol UA rules, airplanes.live 200+text
   throttle, CelesTrak burst 403s). Load-test before listing; if MCP exposure
@@ -197,6 +209,7 @@ the investment:
   self-hosted world model — live + recorded, no API keys."
 
 ### W6 — Dark-fleet productization (DEFER; demand-gated)
+
 Closest true differentiator after replay (bundled, cross-domain,
 self-hosted), and the detectors exist — but FleetLeaks already serves
 explainable AIS-gap/loitering/STS scoring free with SAR corroboration. Hold
@@ -204,19 +217,19 @@ until post-launch feedback asks for it; when built, it must clear
 FleetLeaks' explainability bar (per-event "why flagged" with evidence) or it
 stays an internal detector, not a marketing pillar. Natural shape when it
 comes: detector events → ontology objects (W4) → replay windows (W1) →
-webhook alerts (W3) — i.e., the first three workstreams *are* the dark-fleet
+webhook alerts (W3) — i.e., the first three workstreams _are_ the dark-fleet
 product's chassis.
 
 ## 4. Where the ontology roadmap lands (nothing silently dropped)
 
-| roadmap-ontology-2026-07 item | Disposition |
-|---|---|
-| Phase 2 auto-population | **Pulled forward** → W4 (fixes hollow demo; cheap) |
-| Phase 3 Ontology Home / default surface | **Deferred until real users exist.** Building the analyst workspace for an imagined persona consumes the exact window in which launch must happen; the graph it fronts is hollow until W4 beds in. Revisit at the 90-day mark with user feedback. |
-| Phase 4 kinetics/audit UI | Deferred with Phase 3; the `actions.py` audit rewrite to the local store (named-deferred in `decisions.md:340`) rides along when Phase 4 wakes. |
-| Phase 5 analyst agent | Deferred; the MCP surface (W5) is the interim answer — external agents over typed tools, which is also the honest one (labeled automation, user's own model). |
-| Continuous design track (label collision, replay bar) | Replay bar → W1 core. Label declutter → fold into W1/W2 polish. |
-| Assertion schema, provenance, budgets | Unchanged — it is the chain-of-custody substrate (§2 want #6) and the anti-"unlabeled AI" answer. |
+| roadmap-ontology-2026-07 item                         | Disposition                                                                                                                                                                                                                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 2 auto-population                               | **Pulled forward** → W4 (fixes hollow demo; cheap)                                                                                                                                                                                                |
+| Phase 3 Ontology Home / default surface               | **Deferred until real users exist.** Building the analyst workspace for an imagined persona consumes the exact window in which launch must happen; the graph it fronts is hollow until W4 beds in. Revisit at the 90-day mark with user feedback. |
+| Phase 4 kinetics/audit UI                             | Deferred with Phase 3; the `actions.py` audit rewrite to the local store (named-deferred in `decisions.md:340`) rides along when Phase 4 wakes.                                                                                                   |
+| Phase 5 analyst agent                                 | Deferred; the MCP surface (W5) is the interim answer — external agents over typed tools, which is also the honest one (labeled automation, user's own model).                                                                                     |
+| Continuous design track (label collision, replay bar) | Replay bar → W1 core. Label declutter → fold into W1/W2 polish.                                                                                                                                                                                   |
+| Assertion schema, provenance, budgets                 | Unchanged — it is the chain-of-custody substrate (§2 want #6) and the anti-"unlabeled AI" answer.                                                                                                                                                 |
 
 ## 5. What NOT to do (evidence-backed)
 
@@ -243,7 +256,7 @@ product's chassis.
 - Replay: archive-mode instance holding ≥30 days of multi-domain history
   within its disk budget, scrub-to-any-hour proven live.
 - Launch: the gate in W2 (stars + qualitative engagement — are self-hosters
-  filing issues about *their* use cases?).
+  filing issues about _their_ use cases?).
 - Alerts: ≥1 real watch-list rule firing to a phone via Discord on a keyless
   boot, no browser attached.
 - Graph: object count in budget band with 100% reason-link coverage after a

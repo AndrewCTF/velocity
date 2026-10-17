@@ -1,7 +1,7 @@
-import * as Cesium from 'cesium';
-import { create } from 'zustand';
-import { useSelection } from '../state/stores.js';
-import { reachableRing, destinationPoint, KN_TO_KMH } from './projection.js';
+import * as Cesium from "cesium";
+import { create } from "zustand";
+import { useSelection } from "../state/stores.js";
+import { reachableRing, destinationPoint, KN_TO_KMH } from "./projection.js";
 
 // Route-projection overlay — the "Project ship location" decision-support layer.
 //
@@ -14,7 +14,7 @@ import { reachableRing, destinationPoint, KN_TO_KMH } from './projection.js';
 // labelled "where could it be" projection, NOT synthesised observed motion, so it
 // can never be mistaken for a track. See CLAUDE.md.
 
-const AMBER = Cesium.Color.fromCssColorString('#f59e0b');
+const AMBER = Cesium.Color.fromCssColorString("#f59e0b");
 const HOURS = [1, 3, 6] as const;
 
 interface ProjectionState {
@@ -24,7 +24,13 @@ interface ProjectionState {
   speedKn: number;
   cog: number | null; // course over ground (deg), if known
   show: boolean;
-  project: (p: { entityId: string; lat: number; lon: number; speedKn: number; cog?: number | null }) => void;
+  project: (p: {
+    entityId: string;
+    lat: number;
+    lon: number;
+    speedKn: number;
+    cog?: number | null;
+  }) => void;
   clear: () => void;
 }
 
@@ -36,12 +42,19 @@ export const useProjection = create<ProjectionState>((set) => ({
   cog: null,
   show: false,
   project: (p) =>
-    set({ entityId: p.entityId, lat: p.lat, lon: p.lon, speedKn: p.speedKn, cog: p.cog ?? null, show: true }),
+    set({
+      entityId: p.entityId,
+      lat: p.lat,
+      lon: p.lon,
+      speedKn: p.speedKn,
+      cog: p.cog ?? null,
+      show: true,
+    }),
   clear: () => set({ show: false, entityId: null }),
 }));
 
 export function installProjection(viewer: Cesium.Viewer): () => void {
-  const ds = new Cesium.CustomDataSource('__projection');
+  const ds = new Cesium.CustomDataSource("__projection");
   viewer.dataSources.add(ds);
 
   const rebuild = (): void => {
@@ -87,13 +100,26 @@ export function installProjection(viewer: Cesium.Viewer): () => void {
     }
     // Heading ray to the +6h reachable edge, if a course is known.
     if (s.cog != null) {
-      const far = destinationPoint(s.lat, s.lon, s.cog, s.speedKn * KN_TO_KMH * 6);
+      const far = destinationPoint(
+        s.lat,
+        s.lon,
+        s.cog,
+        s.speedKn * KN_TO_KMH * 6,
+      );
       ds.entities.add({
-        id: '__projection__cog',
+        id: "__projection__cog",
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray([s.lon, s.lat, far.lon, far.lat]),
+          positions: Cesium.Cartesian3.fromDegreesArray([
+            s.lon,
+            s.lat,
+            far.lon,
+            far.lat,
+          ]),
           width: 1.5,
-          material: new Cesium.PolylineDashMaterialProperty({ color: AMBER.withAlpha(0.5), dashLength: 8 }),
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: AMBER.withAlpha(0.5),
+            dashLength: 8,
+          }),
         },
       });
     }

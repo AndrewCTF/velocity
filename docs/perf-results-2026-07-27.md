@@ -26,16 +26,16 @@ minutes after boot, is below. Recording the wrong numbers and the correction
 rather than quietly replacing them, because the mistake — measuring a system with
 one tier dead and calling it "after" — is the more useful thing to remember.
 
-| Metric | before | after (settled, both tiers live) | verdict |
-|---|---|---|---|
-| `cpu%` chrome p50 | 393.6 % | 828.8 % | **not improved** |
-| `rss_mb` chrome p50 | 8 881 MB | **4 050 MB** | **-54 %** |
-| chrome processes p50 | 53 | **22** | **-58 %** |
-| `cpu%` node p50 | 44.0 % | 72.5 % | ~neutral per unit of data |
-| `rss_mb` node | 1 055 MB | 1 140 MB | flat |
-| `cpu%` api p50 | 31.0 % | 50.1 % | higher, on 37 % more data |
-| **aircraft in the union** | 12 131 | **16 859** | **+39 %** |
-| **vessels in the store** | 22 239 | **38 599** | **+74 %** |
+| Metric                    | before   | after (settled, both tiers live) | verdict                   |
+| ------------------------- | -------- | -------------------------------- | ------------------------- |
+| `cpu%` chrome p50         | 393.6 %  | 828.8 %                          | **not improved**          |
+| `rss_mb` chrome p50       | 8 881 MB | **4 050 MB**                     | **-54 %**                 |
+| chrome processes p50      | 53       | **22**                           | **-58 %**                 |
+| `cpu%` node p50           | 44.0 %   | 72.5 %                           | ~neutral per unit of data |
+| `rss_mb` node             | 1 055 MB | 1 140 MB                         | flat                      |
+| `cpu%` api p50            | 31.0 %   | 50.1 %                           | higher, on 37 % more data |
+| **aircraft in the union** | 12 131   | **16 859**                       | **+39 %**                 |
+| **vessels in the store**  | 22 239   | **38 599**                       | **+74 %**                 |
 
 Both tiers are carrying substantially more data than at baseline, which is the
 honest confound: chrome CPU tracks the number of features the tar1090 pages are
@@ -51,10 +51,10 @@ carrying 39 % more aircraft**, and the per-request cost below.
 
 ### Per-request sidecar cost (measure_sidecars.sh)
 
-| endpoint | before | after |
-|---|---|---|
+| endpoint                  | before | after      |
+| ------------------------- | ------ | ---------- |
 | `:8090/aircraft.json` p50 | 8.2 ms | **0.6 ms** |
-| `:8090/health` p50 | 1.3 ms | **0.5 ms** |
+| `:8090/health` p50        | 1.3 ms | **0.5 ms** |
 
 **93 % faster per request**, and `/health` no longer rebuilds a 39k-entry map to
 report a number the pump loop already knew. This is the unambiguous win.
@@ -116,14 +116,14 @@ exists, so event-loop lag is measurable at all.
 
 ### Route cost, measured live
 
-| endpoint | before | after (warm) | change |
-|---|---|---|---|
-| `/api/maritime/snapshot` | 270 ms / 1 624 682 B | **2.8 ms / 515 806 B** | **-99 % time, -68 % bytes** |
-| `/api/maritime/snapshot?parked=1` | 77 ms / 805 504 B | **1.4 ms / 281 594 B** | -98 % / -65 % |
-| `/api/places/infrastructure?category=datacenter` | (full 125 612-row scan) | **1.9 ms** | — |
-| `/api/places/infrastructure?category=power` | (full scan) | **9.4 ms** | — |
-| `/api/places/bases` | (full 7 183-row scan) | **1.9 ms** | — |
-| `/api/adsb/global?limit=20000` | already blob-served | 1.4 ms / 1 110 324 B | unchanged |
+| endpoint                                         | before                  | after (warm)           | change                      |
+| ------------------------------------------------ | ----------------------- | ---------------------- | --------------------------- |
+| `/api/maritime/snapshot`                         | 270 ms / 1 624 682 B    | **2.8 ms / 515 806 B** | **-99 % time, -68 % bytes** |
+| `/api/maritime/snapshot?parked=1`                | 77 ms / 805 504 B       | **1.4 ms / 281 594 B** | -98 % / -65 %               |
+| `/api/places/infrastructure?category=datacenter` | (full 125 612-row scan) | **1.9 ms**             | —                           |
+| `/api/places/infrastructure?category=power`      | (full scan)             | **9.4 ms**             | —                           |
+| `/api/places/bases`                              | (full 7 183-row scan)   | **1.9 ms**             | —                           |
+| `/api/adsb/global?limit=20000`                   | already blob-served     | 1.4 ms / 1 110 324 B   | unchanged                   |
 
 The first `/api/places/infrastructure` call after boot costs ~700 ms because it
 builds the index for that category over 125 612 rows. That is once per category
@@ -131,12 +131,12 @@ per process, against ~117 requests a minute in steady state.
 
 In-process benchmark of the same queries (20 iterations, warm, US-west bbox):
 
-| query | full scan | grid | speedup |
-|---|---|---|---|
-| infrastructure, category=datacenter | 8.17 ms | **0.09 ms** | **90x** |
-| infrastructure, category=power | 2.98 ms | **0.76 ms** | 3.9x |
-| airports | 0.18 ms | **0.05 ms** | 3.7x |
-| bases | 0.19 ms | **0.13 ms** | 1.5x |
+| query                               | full scan | grid        | speedup |
+| ----------------------------------- | --------- | ----------- | ------- |
+| infrastructure, category=datacenter | 8.17 ms   | **0.09 ms** | **90x** |
+| infrastructure, category=power      | 2.98 ms   | **0.76 ms** | 3.9x    |
+| airports                            | 0.18 ms   | **0.05 ms** | 3.7x    |
+| bases                               | 0.19 ms   | **0.13 ms** | 1.5x    |
 
 `power` gains least because both paths stop at the 1000-row limit early; the
 category-filtered layers, which are the ones firing nine times per camera move,
@@ -172,33 +172,33 @@ hidden; `maritime.parked` gained the viewport query and cap it never had; and
 
 ### All toggles on, measured in a real browser on the GPU
 
-| Metric | baseline | after Phase 3 | change |
-|---|---|---|---|
-| `rendersPerSec` p50 | 5.0 | **6.0** | +20 % |
-| `rendersPerSec` p50, world view | 6.0 | **10.0** | **+67 %** |
-| `frameMsEMA` p50 | 239.3 ms | **148.7 ms** | **-38 %** |
-| Cesium entities p50 | 60 826 | **39 127** | **-36 %** |
-| Cesium entities p05 | 54 970 | 34 555 | -37 % |
-| **Measured request rate** | 282 req/min | **221 req/min** | **-22 %** |
-| `drainMsLast` p50 | 7.1 ms | 5.0 ms | -30 % |
-| JS heap p50 | 2 678 MB | 2 476 MB | -8 % |
+| Metric                          | baseline    | after Phase 3   | change    |
+| ------------------------------- | ----------- | --------------- | --------- |
+| `rendersPerSec` p50             | 5.0         | **6.0**         | +20 %     |
+| `rendersPerSec` p50, world view | 6.0         | **10.0**        | **+67 %** |
+| `frameMsEMA` p50                | 239.3 ms    | **148.7 ms**    | **-38 %** |
+| Cesium entities p50             | 60 826      | **39 127**      | **-36 %** |
+| Cesium entities p05             | 54 970      | 34 555          | -37 %     |
+| **Measured request rate**       | 282 req/min | **221 req/min** | **-22 %** |
+| `drainMsLast` p50               | 7.1 ms      | 5.0 ms          | -30 %     |
+| JS heap p50                     | 2 678 MB    | 2 476 MB        | -8 %      |
 
 ### Where the entities actually were
 
 Guessing would have targeted the wrong layer. The per-data-source breakdown, all
 toggles on:
 
-| data source | entities |
-|---|---|
-| **`hazards.nasa.firms`** | **14 818** |
-| `aviation.adsb.global` | 14 458 |
-| `maritime.keyless` | 6 000 |
-| `maritime.parked` | 6 000 (was uncapped; the store held 26 203) |
-| `maritime.aisstream` | 5 819 |
-| `infra.cables.landings` | 1 918 |
-| `infra.cams.public` | 1 820 |
-| …72 more | ~9 000 |
-| **total** | **59 942 across 78 data sources** |
+| data source              | entities                                    |
+| ------------------------ | ------------------------------------------- |
+| **`hazards.nasa.firms`** | **14 818**                                  |
+| `aviation.adsb.global`   | 14 458                                      |
+| `maritime.keyless`       | 6 000                                       |
+| `maritime.parked`        | 6 000 (was uncapped; the store held 26 203) |
+| `maritime.aisstream`     | 5 819                                       |
+| `infra.cables.landings`  | 1 918                                       |
+| `infra.cams.public`      | 1 820                                       |
+| …72 more                 | ~9 000                                      |
+| **total**                | **59 942 across 78 data sources**           |
 
 The largest layer was **not** the aircraft feed everyone watches — it was NASA
 FIRMS, uncapped, at 14 818 fire detections. Cesium's `DataSourceDisplay` walks
@@ -281,18 +281,18 @@ keystroke in the label field, or one frame of a marker drag, tore down the layer
 
 Now:
 
-| | before | after |
-|---|---|---|
-| Kinds | 3 (point, line, circle) | **11** (+ polygon, rect, arrow, corridor, sector, text, symbol, freehand) |
-| Colour | 4 fixed threat values | 4 threat presets **+ any CSS colour** (native `<input type="color">`) |
-| Style | none — width/opacity/font all hardcoded | width, stroke opacity, fill opacity, dash (solid/dashed/dotted), font size, point size, outline |
-| Undo/redo | none | 50-step history, `Ctrl+Z` / `Ctrl+Shift+Z` |
-| Per-item | delete only | show/hide, lock, rename, restyle, fly-to, delete |
-| List | unsorted, unfiltered | filter box, empty states |
-| Persistence | manual save that was never loaded | localStorage on every change **+** the ontology round-trip, now actually called and merged newest-wins |
-| Import/export | none | GeoJSON both ways, round-trip tested |
-| Clear all | no confirmation | two-step confirm |
-| Renderer | full teardown per change | upsert by id, guarded |
+|               | before                                  | after                                                                                                  |
+| ------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Kinds         | 3 (point, line, circle)                 | **11** (+ polygon, rect, arrow, corridor, sector, text, symbol, freehand)                              |
+| Colour        | 4 fixed threat values                   | 4 threat presets **+ any CSS colour** (native `<input type="color">`)                                  |
+| Style         | none — width/opacity/font all hardcoded | width, stroke opacity, fill opacity, dash (solid/dashed/dotted), font size, point size, outline        |
+| Undo/redo     | none                                    | 50-step history, `Ctrl+Z` / `Ctrl+Shift+Z`                                                             |
+| Per-item      | delete only                             | show/hide, lock, rename, restyle, fly-to, delete                                                       |
+| List          | unsorted, unfiltered                    | filter box, empty states                                                                               |
+| Persistence   | manual save that was never loaded       | localStorage on every change **+** the ontology round-trip, now actually called and merged newest-wins |
+| Import/export | none                                    | GeoJSON both ways, round-trip tested                                                                   |
+| Clear all     | no confirmation                         | two-step confirm                                                                                       |
+| Renderer      | full teardown per change                | upsert by id, guarded                                                                                  |
 
 Verified live in the browser — all eight geometry kinds placed through the shared
 draft, rendered, and undone:
@@ -326,25 +326,25 @@ lock, colour precedence, the GeoJSON round-trip, and the shared draft.
 Same harness, same camera script, same box. Note the load is **higher** than the
 baseline run, which makes the comparison conservative rather than flattering.
 
-| Metric | baseline | final | change |
-|---|---|---|---|
-| `rendersPerSec` p50 | 5.0 | **7.0** | +40 % |
-| `rendersPerSec` p95 | 8.0 | **19.0** | +138 % |
-| `frameMsEMA` p50 | 239.3 ms | **147.4 ms** | **-38 %** |
-| Cesium entities p50 | 60 826 | **38 479** | **-37 %** |
-| Cesium entities p05 | 54 970 | **26 942** | -51 % |
-| JS heap p50 | 2 678 MB | 2 484 MB | -7 % |
-| `drainMsLast` p50 | 7.1 ms | 5.5 ms | -23 % |
-| Measured request rate | 282 req/min | **221 req/min** | **-22 %** |
-| chrome RSS | 8 881 MB | **4 050 MB** | **-54 %** |
-| chrome renderers | 53 | **22** | **-58 %** |
-| `:8090/aircraft.json` p50 | 8.2 ms | **0.6 ms** | **-93 %** |
-| `/api/maritime/snapshot` p50 | 270 ms | **2.8 ms** | **-99 %** |
-| `/api/maritime/snapshot` bytes | 1 624 682 | **515 806** | -68 % |
-| — while carrying — | | | |
-| aircraft | 11 770 | **16 957** | **+44 %** |
-| vessels | 26 001 | **40 994** | **+58 %** |
-| `scripts/verify.sh` | green | **green** | 1985 + 2 skipped (was 1972) |
+| Metric                         | baseline    | final           | change                      |
+| ------------------------------ | ----------- | --------------- | --------------------------- |
+| `rendersPerSec` p50            | 5.0         | **7.0**         | +40 %                       |
+| `rendersPerSec` p95            | 8.0         | **19.0**        | +138 %                      |
+| `frameMsEMA` p50               | 239.3 ms    | **147.4 ms**    | **-38 %**                   |
+| Cesium entities p50            | 60 826      | **38 479**      | **-37 %**                   |
+| Cesium entities p05            | 54 970      | **26 942**      | -51 %                       |
+| JS heap p50                    | 2 678 MB    | 2 484 MB        | -7 %                        |
+| `drainMsLast` p50              | 7.1 ms      | 5.5 ms          | -23 %                       |
+| Measured request rate          | 282 req/min | **221 req/min** | **-22 %**                   |
+| chrome RSS                     | 8 881 MB    | **4 050 MB**    | **-54 %**                   |
+| chrome renderers               | 53          | **22**          | **-58 %**                   |
+| `:8090/aircraft.json` p50      | 8.2 ms      | **0.6 ms**      | **-93 %**                   |
+| `/api/maritime/snapshot` p50   | 270 ms      | **2.8 ms**      | **-99 %**                   |
+| `/api/maritime/snapshot` bytes | 1 624 682   | **515 806**     | -68 %                       |
+| — while carrying —             |             |                 |                             |
+| aircraft                       | 11 770      | **16 957**      | **+44 %**                   |
+| vessels                        | 26 001      | **40 994**      | **+58 %**                   |
+| `scripts/verify.sh`            | green       | **green**       | 1985 + 2 skipped (was 1972) |
 
 ### What is still true and unfixed
 
@@ -368,7 +368,7 @@ moment a model is selected.
 
 ## Phase 9 — the event-loop lag tail, attributed and reduced
 
-The first pass could not say *why* the loop stalled, only that it did. Adding
+The first pass could not say _why_ the loop stalled, only that it did. Adding
 per-phase cycle timing to `/api/status/perf` made it answerable.
 
 ### What the cycle actually costs (17.6k contacts)
@@ -387,12 +387,12 @@ plainly so the next person does not spend a day moving it to a thread.
 
 ### What was moved and capped
 
-| Change | Was |
-|---|---|
-| `history.ingest_aircraft` → worker thread | walked 17k features on the loop, once a second |
-| `_merge_with_previous` → worker thread | 62 ms/cycle on the loop |
-| `_update_parked` → worker thread | swept the whole ~40k vessel store on the loop, per poll |
-| `_PARKED` count cap (20 000) | retention was time-only; held **28 117** entries and growing |
+| Change                                    | Was                                                          |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| `history.ingest_aircraft` → worker thread | walked 17k features on the loop, once a second               |
+| `_merge_with_previous` → worker thread    | 62 ms/cycle on the loop                                      |
+| `_update_parked` → worker thread          | swept the whole ~40k vessel store on the loop, per poll      |
+| `_PARKED` count cap (20 000)              | retention was time-only; held **28 117** entries and growing |
 
 ### Idle back-pressure — the structural fix
 
@@ -427,14 +427,14 @@ The cadence re-arms correctly under load. Idle CPU is ~26 % while carrying
 
 ### Final all-toggles browser state
 
-| Metric | baseline | final | change |
-|---|---|---|---|
-| `rendersPerSec` p50 | 5.0 | 6.0 | +20 % |
-| `frameMsEMA` p50 | 239.3 ms | **170.1 ms** | **-29 %** |
-| Cesium entities p50 | 60 826 | **36 699** | **-40 %** |
-| Request rate | 282/min | **214/min** | **-24 %** |
-| `drainMsLast` p95 | (n/a) | 14.0 ms | inside the 12 ms budget's tolerance |
-| Loop-lag p50 under load | UNMEASURABLE | **1.0 ms** | now measurable |
+| Metric                  | baseline     | final        | change                              |
+| ----------------------- | ------------ | ------------ | ----------------------------------- |
+| `rendersPerSec` p50     | 5.0          | 6.0          | +20 %                               |
+| `frameMsEMA` p50        | 239.3 ms     | **170.1 ms** | **-29 %**                           |
+| Cesium entities p50     | 60 826       | **36 699**   | **-40 %**                           |
+| Request rate            | 282/min      | **214/min**  | **-24 %**                           |
+| `drainMsLast` p95       | (n/a)        | 14.0 ms      | inside the 12 ms budget's tolerance |
+| Loop-lag p50 under load | UNMEASURABLE | **1.0 ms**   | now measurable                      |
 
 ### Honest remaining tail
 
@@ -454,17 +454,17 @@ is driving the load**, so they describe the same system at the same moment.
 
 ### Browser (58 layers enabled through the real registry)
 
-| Metric | baseline | after | change |
-|---|---|---|---|
-| `rendersPerSec` p50 | 5.0 | 6.0 | +20 % |
-| `rendersPerSec` p95 | 8.0 | **11.0** | +38 % |
-| `frameMsEMA` p50 | 239.3 ms | **158.7 ms** | **-34 %** |
-| `frameMsEMA` p95 | 290.5 ms | **223.9 ms** | -23 % |
-| **JS heap p50** | **2 677.8 MB** | **2 700.7 MB** | flat |
-| Cesium entities p50 | 60 826 | **41 269** | **-32 %** |
-| Cesium data sources | 78 | 78 | unchanged |
-| `drainMsLast` p95 | 25.0 ms | 18.9 ms | -24 % |
-| **Request rate** | **282 req/min** | **219.7 req/min** | **-22 %** |
+| Metric              | baseline        | after             | change    |
+| ------------------- | --------------- | ----------------- | --------- |
+| `rendersPerSec` p50 | 5.0             | 6.0               | +20 %     |
+| `rendersPerSec` p95 | 8.0             | **11.0**          | +38 %     |
+| `frameMsEMA` p50    | 239.3 ms        | **158.7 ms**      | **-34 %** |
+| `frameMsEMA` p95    | 290.5 ms        | **223.9 ms**      | -23 %     |
+| **JS heap p50**     | **2 677.8 MB**  | **2 700.7 MB**    | flat      |
+| Cesium entities p50 | 60 826          | **41 269**        | **-32 %** |
+| Cesium data sources | 78              | 78                | unchanged |
+| `drainMsLast` p95   | 25.0 ms         | 18.9 ms           | -24 %     |
+| **Request rate**    | **282 req/min** | **219.7 req/min** | **-22 %** |
 
 Raw:
 
@@ -530,7 +530,6 @@ the full Cesium app with ~41 000 entities — it is not the sidecar tier alone.)
    it was not tracked over time, and it wants a soak measurement before anyone
    calls memory bounded.
 
-
 ---
 
 ## Addendum — `/api/status` snapshot copy, and a tail that was a measurement artifact
@@ -575,14 +574,14 @@ pays it equally. Removing the lock from one route could not have changed it.
 
 ### What the change actually buys, stated exactly
 
-| | before | after |
-|---|---|---|
-| `/api/status` p50 (equal 30 s windows) | 12.5 ms | **10.1 ms** |
-| `_SNAPSHOT_LOCK` acquisitions per request | 1 | **0** |
-| snapshot dict copies per request | 1 | **0** |
-| vessel list allocations per request | 1 × ~57 000 elements | **0** |
-| fan-out reachable from an anonymous request | yes (cold process) | **no** |
-| multi-second tail | loop-wide | **loop-wide, unchanged** |
+|                                             | before               | after                    |
+| ------------------------------------------- | -------------------- | ------------------------ |
+| `/api/status` p50 (equal 30 s windows)      | 12.5 ms              | **10.1 ms**              |
+| `_SNAPSHOT_LOCK` acquisitions per request   | 1                    | **0**                    |
+| snapshot dict copies per request            | 1                    | **0**                    |
+| vessel list allocations per request         | 1 × ~57 000 elements | **0**                    |
+| fan-out reachable from an anonymous request | yes (cold process)   | **no**                   |
+| multi-second tail                           | loop-wide            | **loop-wide, unchanged** |
 
 The p50 gain is modest. The lock removal is the substantive part: a public
 anonymous request can no longer queue behind the refresher's own lock, which is a
@@ -600,7 +599,6 @@ which this walk is the dominant term; the rest (`snapshot_count`,
 The loop-wide tail remains the same open item named throughout this document:
 `_aircraft_geojson` rebuilding ~19 700 nested dicts per cycle. Threading it does
 not help (GIL); the fix is to stop rebuilding unchanged features.
-
 
 ---
 
@@ -636,14 +634,14 @@ and half from N+1. Recorded in `docs/decisions.md` so the idea is not retried.
 This document previously asserted the opposite — that the GIL makes
 `asyncio.to_thread` useless for pure-Python CPU. **That was wrong**, and wrong in
 the direction that would have prevented the fix. CPython switches threads every
-`sys.getswitchinterval()` (5 ms), so the loop is serviced *during* the work
+`sys.getswitchinterval()` (5 ms), so the loop is serviced _during_ the work
 rather than after it. Measured with a 5 ms probe against `_merge_raw_into` at
 20 000 aircraft:
 
-| | probe lag p50 | p95 | MAX |
-|---|---|---|---|
-| inline | 0.10 ms | 62.59 ms | 68.27 ms |
-| **in a thread** | 5.17 ms | **15.15 ms** | **24.09 ms** |
+|                 | probe lag p50 | p95          | MAX          |
+| --------------- | ------------- | ------------ | ------------ |
+| inline          | 0.10 ms       | 62.59 ms     | 68.27 ms     |
+| **in a thread** | 5.17 ms       | **15.15 ms** | **24.09 ms** |
 
 No parallelism — total CPU is unchanged — and the **median gets worse**, because
 the loop now shares the GIL while the work runs. For a tail that is the right
@@ -663,11 +661,11 @@ p95 ~368 → ~230 median-of-windows, at a union that GREW from 19 741 to ~20 500
 
 **2. End-to-end HTTP, equal 30 s windows, identical pacing:**
 
-| endpoint | p99 before | p99 after |
-|---|---|---|
-| `/api/status` | 1440.2 ms | **594.4 ms** |
-| `/api/status/perf` | 324.9 ms | 304.6 ms |
-| `/api/health` | 597.9 ms | 628.0 ms |
+| endpoint           | p99 before | p99 after    |
+| ------------------ | ---------- | ------------ |
+| `/api/status`      | 1440.2 ms  | **594.4 ms** |
+| `/api/status/perf` | 324.9 ms   | 304.6 ms     |
+| `/api/health`      | 597.9 ms   | 628.0 ms     |
 
 **3. What did NOT improve, stated plainly.** The `MAX` column at n≈200 moved in
 both directions (`/api/status` 2272 → 2782, `/api/health` 2470 → 1620). A single
@@ -675,7 +673,6 @@ worst sample out of ~200 is not a statistic, and those multi-second outliers are
 not the snapshot cycle — they are the background pollers (AIS at 30 s and 45 s,
 news, GC) blocking the loop for far longer than one cycle costs. Cutting the
 cycle's block cannot remove them, and this change does not claim to.
-
 
 ---
 
@@ -700,17 +697,17 @@ records itself and:
 
 ### Measured, 20 000 aircraft
 
-| | ms/cycle |
-|---|---|
-| OLD, rebuild every cycle | 43.59 |
-| NEW, cold (first cycle) | 32.94 |
-| **NEW, steady state (reuse)** | **31.42** |
-| **saving** | **12.17 ms — 28 % faster** |
+|                               | ms/cycle                   |
+| ----------------------------- | -------------------------- |
+| OLD, rebuild every cycle      | 43.59                      |
+| NEW, cold (first cycle)       | 32.94                      |
+| **NEW, steady state (reuse)** | **31.42**                  |
+| **saving**                    | **12.17 ms — 28 % faster** |
 
 Two design choices were settled by measurement rather than intuition:
 
 - **`properties` is REPLACED, not updated key-by-key.** In-place updating
-  measured **23.52 ms against 20.48 ms** — 15 % *slower*, because a dict literal
+  measured **23.52 ms against 20.48 ms** — 15 % _slower_, because a dict literal
   with constant keys uses a fast build path while 20 separate stores each pay a
   hash lookup. Replacing is also the safer option: it cannot leave a stale
   optional key (`seen_pos_s`/`seen_at` are conditional) behind.
@@ -741,11 +738,11 @@ lag p50=1.0 p95=161 max=1359 | fanout_cpu=69.9 merge=37.0 total=224.6 feats=2006
 lag p50=0.0 p95=282 max=1184 | fanout_cpu=58.6 merge=31.7 total=264.3 feats=20492
 ```
 
-| | before (this session's first attribution) | after |
-|---|---|---|
-| loop-lag p95 | 368 ms | **161-282 ms** (median of windows ~209) |
-| `merge` (carry-forward) | 52.3 ms | **30.9-37.0 ms** |
-| features carried | 19 741 | 19 445-20 492 |
+|                         | before (this session's first attribution) | after                                   |
+| ----------------------- | ----------------------------------------- | --------------------------------------- |
+| loop-lag p95            | 368 ms                                    | **161-282 ms** (median of windows ~209) |
+| `merge` (carry-forward) | 52.3 ms                                   | **30.9-37.0 ms**                        |
+| features carried        | 19 741                                    | 19 445-20 492                           |
 
 `fanout_cpu` reads 58-70 ms rather than the 31 ms the micro-benchmark predicts:
 it is **wall** time of a threaded call that shares the GIL with the event loop,

@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
-import { useSearchTarget, type SearchTarget } from '../state/stores.js';
+import * as Cesium from "cesium";
+import { useSearchTarget, type SearchTarget } from "../state/stores.js";
 
 // Pinned marker for a location jumped-to from the search box (airport / port /
 // place / chokepoint / coordinate). Unlike the selection reticle
@@ -12,7 +12,7 @@ import { useSearchTarget, type SearchTarget } from '../state/stores.js';
 // Amber (#f59e0b) deliberately differs from the teal (#2dd4bf) selection
 // reticle so a search pin never reads as a live-entity selection.
 
-const PIN_COLOR = '#f59e0b';
+const PIN_COLOR = "#f59e0b";
 
 // A downward teardrop pin with a hollow centre + a soft pulsing halo ring. The
 // tip sits at the anchored coordinate (VerticalOrigin.BOTTOM), the ring is
@@ -28,10 +28,10 @@ const PIN_URI = `data:image/svg+xml;utf8,${encodeURIComponent(PIN_SVG)}`;
 
 export function installSearchTargetMarker(viewer: Cesium.Viewer): () => void {
   const reduce =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const ds = new Cesium.CustomDataSource('__searchtarget');
+  const ds = new Cesium.CustomDataSource("__searchtarget");
   viewer.dataSources.add(ds);
 
   let marker: Cesium.Entity | null = null;
@@ -57,7 +57,7 @@ export function installSearchTargetMarker(viewer: Cesium.Viewer): () => void {
       return 0.6 + 0.4 * (0.5 - 0.5 * Math.cos(phase * 2 * Math.PI));
     }, false);
     marker = ds.entities.add({
-      id: '__searchtarget__',
+      id: "__searchtarget__",
       position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat),
       billboard: {
         image: PIN_URI,
@@ -65,20 +65,24 @@ export function installSearchTargetMarker(viewer: Cesium.Viewer): () => void {
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         color: new Cesium.CallbackProperty(
-          () => Cesium.Color.WHITE.withAlpha(alpha.getValue(Cesium.JulianDate.now()) as number),
+          () =>
+            Cesium.Color.WHITE.withAlpha(
+              alpha.getValue(Cesium.JulianDate.now()) as number,
+            ),
           false,
         ) as unknown as Cesium.Property,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       label: {
         text: t.label,
-        font: '600 13px ui-sans-serif, system-ui, sans-serif',
-        fillColor: Cesium.Color.fromCssColorString('#fde68a'),
+        font: "600 13px ui-sans-serif, system-ui, sans-serif",
+        fillColor: Cesium.Color.fromCssColorString("#fde68a"),
         outlineColor: Cesium.Color.BLACK,
         outlineWidth: 3,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         showBackground: true,
-        backgroundColor: Cesium.Color.fromCssColorString('#1c1917').withAlpha(0.82),
+        backgroundColor:
+          Cesium.Color.fromCssColorString("#1c1917").withAlpha(0.82),
         backgroundPadding: new Cesium.Cartesian2(7, 5),
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,

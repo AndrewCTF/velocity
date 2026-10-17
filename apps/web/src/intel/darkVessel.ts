@@ -10,7 +10,7 @@
 // any MMSI whose last_seen was within `lookbackMs` of `now - gapMs` (so the
 // gap is fresh, not ancient) and whose last position lies in any active AOI.
 
-import type { Chokepoint } from '../registry/chokepoints.js';
+import type { Chokepoint } from "../registry/chokepoints.js";
 
 export interface VesselFix {
   mmsi: string;

@@ -21,7 +21,7 @@ import {
   type SatRec,
   type EciVec3,
   type Kilometer,
-} from 'satellite.js';
+} from "satellite.js";
 
 // Note on the satellite.js API: ecfToLookAngles takes the observer as a geodetic
 // location (lon/lat in radians, height in km) directly — geodeticToEcf is only
@@ -83,7 +83,7 @@ function lookAt(
   date: Date,
 ): { azDeg: number; elDeg: number; rangeKm: number } | null {
   const pv = propagate(rec, date);
-  if (!pv || !pv.position || typeof pv.position === 'boolean') return null;
+  if (!pv || !pv.position || typeof pv.position === "boolean") return null;
   const gmst = gstime(date);
   const ecf = eciToEcf(pv.position as EciVec3<Kilometer>, gmst);
   const look = ecfToLookAngles(observer, ecf);
@@ -94,7 +94,11 @@ function lookAt(
   return { azDeg, elDeg, rangeKm: look.rangeSat };
 }
 
-function observerGd(aoi: AoiPoint): { longitude: number; latitude: number; height: number } {
+function observerGd(aoi: AoiPoint): {
+  longitude: number;
+  latitude: number;
+  height: number;
+} {
   return {
     longitude: aoi.lon * RAD,
     latitude: aoi.lat * RAD,
@@ -145,7 +149,8 @@ export function passesOverAoi(
       inPass = false;
     }
   }
-  if (inPass) out.push(finishPass(name, passStartMs, lastAboveMs, passMaxEl, step));
+  if (inPass)
+    out.push(finishPass(name, passStartMs, lastAboveMs, passMaxEl, step));
   return out;
 }
 
@@ -185,7 +190,8 @@ export function skyView(
   const out: SkyPoint[] = [];
   for (let tMs = win.startMs; tMs <= win.endMs; tMs += step) {
     const look = lookAt(rec, obs, new Date(tMs));
-    if (look && look.elDeg >= 0) out.push({ tMs, azDeg: look.azDeg, elDeg: look.elDeg });
+    if (look && look.elDeg >= 0)
+      out.push({ tMs, azDeg: look.azDeg, elDeg: look.elDeg });
   }
   return out;
 }
@@ -193,10 +199,18 @@ export function skyView(
 // Aggregate revisit / coverage stats from a set of passes over a window.
 // `passes` may span multiple satellites; they're sorted by start time so the
 // revisit/gap figures describe the COMBINED collection cadence over the AOI.
-export function coverageStats(passes: readonly Pass[], win: Window): CoverageStats {
+export function coverageStats(
+  passes: readonly Pass[],
+  win: Window,
+): CoverageStats {
   const winMin = Math.max(0, (win.endMs - win.startMs) / 60000);
   if (passes.length === 0) {
-    return { passCount: 0, avgRevisitMin: 0, maxGapMin: winMin, coveragePct: 0 };
+    return {
+      passCount: 0,
+      avgRevisitMin: 0,
+      maxGapMin: winMin,
+      coveragePct: 0,
+    };
   }
 
   const sorted = [...passes].sort((a, b) => a.startMs - b.startMs);

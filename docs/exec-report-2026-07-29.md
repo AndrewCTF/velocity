@@ -15,12 +15,12 @@ A pull request is open at
 
 ## 1. Gates
 
-| Gate | Command | Result |
-|---|---|---|
-| G1 unit | `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q` | **2105 passed, 2 skipped** (inherited baseline 2047) |
-| G2 static | `pnpm -r typecheck` | clean |
-| G3 full | `bash scripts/verify.sh` | **ALL GREEN** |
-| G4 live | per item, §2 | run this session against :8000 |
+| Gate      | Command                                                            | Result                                               |
+| --------- | ------------------------------------------------------------------ | ---------------------------------------------------- |
+| G1 unit   | `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q` | **2105 passed, 2 skipped** (inherited baseline 2047) |
+| G2 static | `pnpm -r typecheck`                                                | clean                                                |
+| G3 full   | `bash scripts/verify.sh`                                           | **ALL GREEN**                                        |
+| G4 live   | per item, §2                                                       | run this session against :8000                       |
 
 CLAUDE.md records the baseline as 2006; the tree actually inherited **2047**, and
 that is the number this wave must not regress below. Worth correcting in
@@ -45,7 +45,7 @@ Tagged `proven-live` (behaviour observed this session), `plumbed-unverified`
 
 Root cause was documented in the code as an accepted ceiling
 (`apps/api/app/routes/adsb.py:632`): OpenSky is pulled once per UTC day and served
-from memory, but it stamped `seen_pos_s` — a *duration* — once, at pull time. The
+from memory, but it stamped `seen_pos_s` — a _duration_ — once, at pull time. The
 number froze while the clock kept moving, so an aircraft whose fix was 5 s old at
 0000 UTC still claimed 5 s old at 2300 UTC and rode the union all day as a
 live-looking icon parked on the morning's position.
@@ -89,7 +89,7 @@ The bbox was computed to three decimals straight from the camera rectangle, so
 every pixel of movement produced a different URL. The adapter's move-refresh only
 short-circuits when the URL matches the last fetched one, so that essentially
 never held and every nudge was a fresh request over mostly the same ground. Fixed
-by widening the prefetch ring 15% → 35% *and* snapping the padded edges outward to
+by widening the prefetch ring 15% → 35% _and_ snapping the padded edges outward to
 a zoom-relative grid, so a pan under ~1/8 of a screen reproduces the same URL.
 Fixing either alone does not fix the symptom.
 
@@ -110,8 +110,13 @@ observer; filtered records do not.
 Live `/api/status/provenance`:
 
 ```json
-{"total": 4546, "attributed": 4546, "corroborated": 0, "corroborated_pct": 0.0,
- "tiers": {"grid": {"contacts": 4546, "exclusive": 4546}}}
+{
+  "total": 4546,
+  "attributed": 4546,
+  "corroborated": 0,
+  "corroborated_pct": 0.0,
+  "tiers": { "grid": { "contacts": 4546, "exclusive": 4546 } }
+}
 ```
 
 **This endpoint earned its place on its first run.** It says that 100% of tonight's
@@ -306,7 +311,7 @@ data_lag_s = 0.0   stale = false   confidence = high
 **That is the whole argument for this wave in one response.** The console was
 showing a tenth of the expected picture, and before tonight nothing said so.
 The published rule includes the part that matters most: a picture this thin is a
-source problem, so absence of contacts in it is *unknown*, not evidence.
+source problem, so absence of contacts in it is _unknown_, not evidence.
 
 ### Positioning (item 48) — done
 
@@ -347,7 +352,7 @@ git ls-files | grep '\.env'  → .env.example only
 
 Phase 1: **10, 13** — but note `apps/api/app/intel/deception.py` already ships
 duplicate-MMSI, teleport, spoof-cluster and kinematic detection, so the genuine
-remainder is only *cross-tier* disagreement (two tiers placing one id far apart
+remainder is only _cross-tier_ disagreement (two tiers placing one id far apart
 in the same cycle), not the detectors themselves.
 
 Phase 2: **15, 17, 18, 19, 20** (replay permalink, auto-pause at events,

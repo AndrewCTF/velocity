@@ -1,9 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
 
-import { useImagery } from '../state/stores.js';
-import { useDetections, featuresToDetections } from '../state/detections.js';
-import { apiFetch } from '../transport/http.js';
-import { SectionLabel, MicroLabel, Btn, Badge, Caveat } from '../shell/instruments.js';
+import { useImagery } from "../state/stores.js";
+import { useDetections, featuresToDetections } from "../state/detections.js";
+import { apiFetch } from "../transport/http.js";
+import {
+  SectionLabel,
+  MicroLabel,
+  Btn,
+  Badge,
+  Caveat,
+} from "../shell/instruments.js";
 
 interface CatalogLayer {
   provider: string;
@@ -30,17 +36,20 @@ interface EventFeature {
 interface EventsAllResponse {
   features: EventFeature[];
   count: number;
-  sources: Record<string, { ok: boolean; kept?: number; note?: string; error?: string }>;
+  sources: Record<
+    string,
+    { ok: boolean; kept?: number; note?: string; error?: string }
+  >;
 }
 
 // Shared field styling — tokenised mono inputs/selects matching the console.
 const FIELD =
-  'mono text-[11px] bg-bg-1 border border-line rounded-sm px-1.5 py-1 text-txt-1 placeholder:text-txt-3/60 focus:outline-hidden focus:border-accent-line disabled:opacity-40';
+  "mono text-[11px] bg-bg-1 border border-line rounded-sm px-1.5 py-1 text-txt-1 placeholder:text-txt-3/60 focus:outline-hidden focus:border-accent-line disabled:opacity-40";
 
 // Square mono step button for the day stepper — matches the Btn neutral look
 // but stays a native <button> so the aria-label is forwarded.
 const STEP_BTN =
-  'mono text-[11px] w-7 py-[5px] rounded-sm border border-line-2 bg-bg-2 text-txt-1 hover:border-accent-line disabled:opacity-40 transition-colors';
+  "mono text-[11px] w-7 py-[5px] rounded-sm border border-line-2 bg-bg-2 text-txt-1 hover:border-accent-line disabled:opacity-40 transition-colors";
 
 function eventLabel(f: EventFeature): string {
   const p = f.properties ?? {};
@@ -49,13 +58,13 @@ function eventLabel(f: EventFeature): string {
     (p.name as string) ||
     (p.event_type as string) ||
     (p.html as string) ||
-    'event';
-  const src = (p.source as string) ?? '';
+    "event";
+  const src = (p.source as string) ?? "";
   return src ? `${title} · ${src}` : title;
 }
 
 function shiftDate(date: string, days: number): string {
-  const d = new Date(date + 'T00:00:00Z');
+  const d = new Date(date + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
@@ -82,24 +91,24 @@ interface ChangeMeta {
   note?: string | null;
 }
 
-type ChangeMode = 'optical' | 'radar';
+type ChangeMode = "optical" | "radar";
 
 function changeProviderLabel(provider: string): string {
-  if (provider === 'sentinel') return 'SENTINEL-2 Δ';
-  if (provider === 'sentinel-sar') return 'SENTINEL-1 Δ';
+  if (provider === "sentinel") return "SENTINEL-2 Δ";
+  if (provider === "sentinel-sar") return "SENTINEL-1 Δ";
   return provider.toUpperCase();
 }
 
 // Curated war-damage AOIs (Sentinel-1 SAR collapse candidates, red). Each maps
 // to a backend AOI key in app/intel/sar_damage.py.
 const DAMAGE_AOIS: { id: string; label: string }[] = [
-  { id: 'beirut-dahieh', label: 'Beirut · Dahieh (2024)' },
-  { id: 'south-lebanon', label: 'South Lebanon (2024)' },
-  { id: 'gaza-city', label: 'Gaza City (2023–24)' },
-  { id: 'khan-younis', label: 'Khan Younis (2023–24)' },
-  { id: 'rafah', label: 'Rafah (2024)' },
-  { id: 'mariupol', label: 'Mariupol (2022)' },
-  { id: 'bakhmut', label: 'Bakhmut (2022–23)' },
+  { id: "beirut-dahieh", label: "Beirut · Dahieh (2024)" },
+  { id: "south-lebanon", label: "South Lebanon (2024)" },
+  { id: "gaza-city", label: "Gaza City (2023–24)" },
+  { id: "khan-younis", label: "Khan Younis (2023–24)" },
+  { id: "rafah", label: "Rafah (2024)" },
+  { id: "mariupol", label: "Mariupol (2022)" },
+  { id: "bakhmut", label: "Bakhmut (2022–23)" },
 ];
 
 // Satellite imagery overlay picker + day stepper + opacity. Drives the
@@ -127,21 +136,23 @@ export function ImageryControl() {
   const [layers, setLayers] = useState<CatalogLayer[]>([]);
 
   // ── Location / events search state (local UI, applied to the store on submit).
-  const [cityQuery, setCityQuery] = useState('');
+  const [cityQuery, setCityQuery] = useState("");
   const [geocodeHits, setGeocodeHits] = useState<GeocodeHit[]>([]);
   const [geocoding, setGeocoding] = useState(false);
-  const [latInput, setLatInput] = useState('');
-  const [lonInput, setLonInput] = useState('');
+  const [latInput, setLatInput] = useState("");
+  const [lonInput, setLonInput] = useState("");
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [events, setEvents] = useState<EventFeature[]>([]);
-  const [eventsSummary, setEventsSummary] = useState<EventsAllResponse['sources'] | null>(null);
+  const [eventsSummary, setEventsSummary] = useState<
+    EventsAllResponse["sources"] | null
+  >(null);
 
   // ── Change detection (A/B) local state. Drapes a Sentinel before/after diff
   // for the active location; previews it inline with honest labels.
   const [changeBefore, setChangeBefore] = useState(() => daysAgo(30));
   const [changeAfter, setChangeAfter] = useState(() => daysAgo(1));
-  const [changeMode, setChangeMode] = useState<ChangeMode>('optical');
+  const [changeMode, setChangeMode] = useState<ChangeMode>("optical");
   const [changeLoading, setChangeLoading] = useState(false);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changeImg, setChangeImg] = useState<string | null>(null);
@@ -155,11 +166,11 @@ export function ImageryControl() {
   async function runChange(): Promise<void> {
     const loc = eventsLocation;
     if (!loc) {
-      setChangeError('set a location first (search above)');
+      setChangeError("set a location first (search above)");
       return;
     }
     if (changeBefore >= changeAfter) {
-      setChangeError('before date must be earlier than after');
+      setChangeError("before date must be earlier than after");
       return;
     }
     setChangeLoading(true);
@@ -168,7 +179,7 @@ export function ImageryControl() {
       const p = new URLSearchParams({
         lat: loc.lat.toFixed(5),
         lon: loc.lon.toFixed(5),
-        radius_km: '4',
+        radius_km: "4",
         before: changeBefore,
         after: changeAfter,
         mode: changeMode,
@@ -178,15 +189,15 @@ export function ImageryControl() {
         // Honest upstream states: 503 = needs CDSE creds, 502 = no pair found.
         const reason =
           r.status === 503
-            ? 'needs Sentinel/CDSE credentials'
+            ? "needs Sentinel/CDSE credentials"
             : r.status === 502
-              ? 'no Sentinel pair for this AOI/dates'
+              ? "no Sentinel pair for this AOI/dates"
               : `change ${r.status}`;
         throw new Error(reason);
       }
       let meta: ChangeMeta | null = null;
       try {
-        meta = JSON.parse(r.headers.get('X-Chip') ?? 'null') as ChangeMeta;
+        meta = JSON.parse(r.headers.get("X-Chip") ?? "null") as ChangeMeta;
       } catch {
         meta = null;
       }
@@ -202,7 +213,9 @@ export function ImageryControl() {
         return null;
       });
       setChangeMeta(null);
-      setChangeError(e instanceof Error ? e.message : 'change detection failed');
+      setChangeError(
+        e instanceof Error ? e.message : "change detection failed",
+      );
     } finally {
       setChangeLoading(false);
     }
@@ -222,7 +235,8 @@ export function ImageryControl() {
     if (!loc) return;
     const radiusKm = 4;
     const dLat = radiusKm / 111.0;
-    const dLon = radiusKm / (111.0 * Math.max(0.1, Math.cos((loc.lat * Math.PI) / 180)));
+    const dLon =
+      radiusKm / (111.0 * Math.max(0.1, Math.cos((loc.lat * Math.PI) / 180)));
     const p = new URLSearchParams({
       min_lon: (loc.lon - dLon).toFixed(5),
       min_lat: (loc.lat - dLat).toFixed(5),
@@ -233,11 +247,14 @@ export function ImageryControl() {
     useDetections.getState().setPending(true);
     try {
       const r = await apiFetch(`/api/imagery/detect?${p.toString()}`);
-      const b: { features?: never[]; summary?: { note?: string } } = await r.json();
-      useDetections.getState().set(featuresToDetections(b.features ?? []), b.summary?.note ?? '');
+      const b: { features?: never[]; summary?: { note?: string } } =
+        await r.json();
+      useDetections
+        .getState()
+        .set(featuresToDetections(b.features ?? []), b.summary?.note ?? "");
       if (loc) requestFlyTo(loc.lat, loc.lon);
     } catch {
-      useDetections.getState().set([], 'detect request failed');
+      useDetections.getState().set([], "detect request failed");
     }
   }
 
@@ -258,7 +275,11 @@ export function ImageryControl() {
 
   // Apply a location: sync the store, fly the camera there, and fetch every
   // event (eonet+gdelt+acled) within the radius around it.
-  async function applyLocation(lat: number, lon: number, name?: string): Promise<void> {
+  async function applyLocation(
+    lat: number,
+    lon: number,
+    name?: string,
+  ): Promise<void> {
     setEventsLocation({ lat, lon, ...(name !== undefined ? { name } : {}) });
     setLatInput(lat.toFixed(4));
     setLonInput(lon.toFixed(4));
@@ -276,7 +297,7 @@ export function ImageryControl() {
     } catch (e) {
       setEvents([]);
       setEventsSummary(null);
-      setEventsError(e instanceof Error ? e.message : 'events unavailable');
+      setEventsError(e instanceof Error ? e.message : "events unavailable");
     } finally {
       setEventsLoading(false);
     }
@@ -286,11 +307,11 @@ export function ImageryControl() {
     const lat = Number(latInput);
     const lon = Number(lonInput);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      setEventsError('lat/lon must be numbers');
+      setEventsError("lat/lon must be numbers");
       return;
     }
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-      setEventsError('lat ∈ [-90,90], lon ∈ [-180,180]');
+      setEventsError("lat ∈ [-90,90], lon ∈ [-180,180]");
       return;
     }
     void applyLocation(lat, lon);
@@ -298,7 +319,7 @@ export function ImageryControl() {
 
   useEffect(() => {
     let alive = true;
-    apiFetch('/api/imagery/catalog')
+    apiFetch("/api/imagery/catalog")
       // A non-2xx (e.g. 401 when signed out) still has a JSON body — guard so
       // `layers` is always an array and the grouping useMemo can't throw.
       .then((r) => (r.ok ? r.json() : { layers: [] }))
@@ -325,8 +346,10 @@ export function ImageryControl() {
   }, [layers]);
 
   const date = overlay?.date ?? today();
-  const selectedKey = overlay ? `${overlay.provider}:${overlay.layer}` : '';
-  const selectedLayer = layers.find((l) => `${l.provider}:${l.id}` === selectedKey);
+  const selectedKey = overlay ? `${overlay.provider}:${overlay.layer}` : "";
+  const selectedLayer = layers.find(
+    (l) => `${l.provider}:${l.id}` === selectedKey,
+  );
   const isStatic = selectedLayer?.static === true;
 
   return (
@@ -337,10 +360,17 @@ export function ImageryControl() {
         <select
           value={selectedKey}
           onChange={(e) => {
-            const hit = layers.find((l) => `${l.provider}:${l.id}` === e.target.value);
+            const hit = layers.find(
+              (l) => `${l.provider}:${l.id}` === e.target.value,
+            );
             setOverlay(
               hit
-                ? { provider: hit.provider, layer: hit.id, date, maxZ: hit.max_z }
+                ? {
+                    provider: hit.provider,
+                    layer: hit.id,
+                    date,
+                    maxZ: hit.max_z,
+                  }
                 : null,
             );
           }}
@@ -350,7 +380,10 @@ export function ImageryControl() {
           {grouped.map(([group, ls]) => (
             <optgroup key={group} label={group}>
               {ls.map((l) => (
-                <option key={`${l.provider}:${l.id}`} value={`${l.provider}:${l.id}`}>
+                <option
+                  key={`${l.provider}:${l.id}`}
+                  value={`${l.provider}:${l.id}`}
+                >
                   {l.title}
                 </option>
               ))}
@@ -377,14 +410,21 @@ export function ImageryControl() {
             aria-label="City name"
             className={`${FIELD} flex-1 min-w-0`}
           />
-          <Btn tone="accent" disabled={geocoding || !cityQuery.trim()} onClick={() => void runGeocode()}>
-            {geocoding ? '…' : 'Search'}
+          <Btn
+            tone="accent"
+            disabled={geocoding || !cityQuery.trim()}
+            onClick={() => void runGeocode()}
+          >
+            {geocoding ? "…" : "Search"}
           </Btn>
         </form>
         {geocodeHits.length > 0 && (
           <ul className="flex flex-col rounded-sm border border-line bg-bg-2 overflow-hidden">
             {geocodeHits.map((h) => (
-              <li key={`${h.lat},${h.lon},${h.name}`} className="border-b border-[rgba(255,255,255,0.035)] last:border-b-0">
+              <li
+                key={`${h.lat},${h.lon},${h.name}`}
+                className="border-b border-[rgba(255,255,255,0.035)] last:border-b-0"
+              >
                 <button
                   type="button"
                   title={`${h.lat.toFixed(4)}, ${h.lon.toFixed(4)} (${h.type})`}
@@ -423,7 +463,9 @@ export function ImageryControl() {
         </div>
         <div className="flex items-center justify-between gap-2">
           <MicroLabel>Radius</MicroLabel>
-          <span className="mono text-[10px] text-txt-1 tabular-nums">{eventsRadiusKm} km</span>
+          <span className="mono text-[10px] text-txt-1 tabular-nums">
+            {eventsRadiusKm} km
+          </span>
         </div>
         <input
           type="range"
@@ -434,7 +476,11 @@ export function ImageryControl() {
           onChange={(e) => setEventsRadiusKm(Number(e.target.value))}
           onMouseUp={() => {
             if (eventsLocation)
-              void applyLocation(eventsLocation.lat, eventsLocation.lon, eventsLocation.name);
+              void applyLocation(
+                eventsLocation.lat,
+                eventsLocation.lon,
+                eventsLocation.name,
+              );
           }}
           className="w-full accent-accent"
         />
@@ -447,14 +493,17 @@ export function ImageryControl() {
             ) : (
               <>
                 <span className="mono text-[10.5px] text-txt-1 tabular-nums">
-                  {events.length} event{events.length === 1 ? '' : 's'} within {eventsRadiusKm} km
-                  {eventsLocation.name ? ` of ${eventsLocation.name.split(',')[0]}` : ''}
+                  {events.length} event{events.length === 1 ? "" : "s"} within{" "}
+                  {eventsRadiusKm} km
+                  {eventsLocation.name
+                    ? ` of ${eventsLocation.name.split(",")[0]}`
+                    : ""}
                 </span>
                 {eventsSummary && (
                   <span className="mono text-[10px] text-txt-3 tabular-nums">
                     {Object.entries(eventsSummary)
-                      .map(([k, v]) => `${k}: ${v.ok ? (v.kept ?? 0) : '×'}`)
-                      .join('  ·  ')}
+                      .map(([k, v]) => `${k}: ${v.ok ? (v.kept ?? 0) : "×"}`)
+                      .join("  ·  ")}
                   </span>
                 )}
                 {events.length > 0 && (
@@ -463,7 +512,8 @@ export function ImageryControl() {
                       const c = f.geometry?.coordinates;
                       const flon = c?.[0];
                       const flat = c?.[1];
-                      const canFly = typeof flon === 'number' && typeof flat === 'number';
+                      const canFly =
+                        typeof flon === "number" && typeof flat === "number";
                       return (
                         <li
                           key={f.id ?? i}
@@ -473,7 +523,10 @@ export function ImageryControl() {
                             type="button"
                             disabled={!canFly}
                             onClick={() => {
-                              if (typeof flon === 'number' && typeof flat === 'number')
+                              if (
+                                typeof flon === "number" &&
+                                typeof flat === "number"
+                              )
                                 requestFlyTo(flat, flon);
                             }}
                             className="w-full text-left mono text-[10.5px] text-txt-1 py-[5px] hover:text-accent disabled:opacity-40 disabled:hover:text-txt-1 transition-colors truncate"
@@ -495,7 +548,8 @@ export function ImageryControl() {
       <div className="flex flex-col gap-1.5">
         <SectionLabel title="Change detection (A/B)" />
         <MicroLabel className="block text-txt-3">
-          Sentinel before/after diff at the active location · red = loss · green = gain
+          Sentinel before/after diff at the active location · red = loss · green
+          = gain
         </MicroLabel>
         <div className="flex items-center gap-1">
           <span className="mono text-[10px] text-txt-3 w-3 shrink-0">A</span>
@@ -533,11 +587,11 @@ export function ImageryControl() {
             onClick={() => void runChange()}
             title={
               eventsLocation
-                ? 'Compute the Sentinel change between dates A and B at the active location'
-                : 'Set a location above first'
+                ? "Compute the Sentinel change between dates A and B at the active location"
+                : "Set a location above first"
             }
           >
-            {changeLoading ? '…' : 'Compute'}
+            {changeLoading ? "…" : "Compute"}
           </Btn>
         </div>
         {!eventsLocation && (
@@ -551,7 +605,11 @@ export function ImageryControl() {
             <div className="flex flex-wrap items-center gap-1.5">
               <Caveat
                 level={changeProviderLabel(changeMeta.provider)}
-                note={changeMeta.gsd_m != null ? `${Math.round(changeMeta.gsd_m)} m` : '— m'}
+                note={
+                  changeMeta.gsd_m != null
+                    ? `${Math.round(changeMeta.gsd_m)} m`
+                    : "— m"
+                }
                 tone="warn"
               />
               <Caveat level={`A ${changeMeta.before}`} />
@@ -566,15 +624,16 @@ export function ImageryControl() {
             <div className="flex items-center gap-2 mono text-[10px] text-txt-3">
               <span className="inline-flex items-center gap-1">
                 <span className="inline-block w-2 h-2 rounded-sm bg-[#cc2828]" />
-                {changeMeta.legend?.red ?? 'loss'}
+                {changeMeta.legend?.red ?? "loss"}
               </span>
               <span className="inline-flex items-center gap-1">
                 <span className="inline-block w-2 h-2 rounded-sm bg-[#28cc46]" />
-                {changeMeta.legend?.green ?? 'gain'}
+                {changeMeta.legend?.green ?? "gain"}
               </span>
             </div>
             <MicroLabel className="block text-txt-3">
-              archived satellite passes · not live · each window mosaics nearby passes
+              archived satellite passes · not live · each window mosaics nearby
+              passes
             </MicroLabel>
           </div>
         )}
@@ -584,26 +643,40 @@ export function ImageryControl() {
       <div className="flex flex-col gap-1.5">
         <SectionLabel title="Detect objects (YOLO)" count={detectCount} />
         <MicroLabel className="block text-txt-3">
-          Runs YOLO over a Sentinel chip at the active location · detections drop on the globe.
+          Runs YOLO over a Sentinel chip at the active location · detections
+          drop on the globe.
         </MicroLabel>
         <Btn
           tone="accent"
           disabled={detectPending || !eventsLocation}
           onClick={() => void runDetect()}
-          title={eventsLocation ? 'Detect objects in a ~4 km chip at the active location' : 'Set a location above first'}
+          title={
+            eventsLocation
+              ? "Detect objects in a ~4 km chip at the active location"
+              : "Set a location above first"
+          }
           className="w-full"
         >
-          {detectPending ? 'Detecting…' : 'Detect objects here'}
+          {detectPending ? "Detecting…" : "Detect objects here"}
         </Btn>
         {!eventsLocation && (
-          <MicroLabel className="block text-txt-3">Set a location above to enable detection.</MicroLabel>
+          <MicroLabel className="block text-txt-3">
+            Set a location above to enable detection.
+          </MicroLabel>
         )}
         {detectNote && <Badge tone="warn">{detectNote}</Badge>}
         {detectCount > 0 && !detectNote && (
-          <span className="mono text-[10.5px] text-txt-1 tabular-nums">{detectCount} detections on the globe</span>
+          <span className="mono text-[10.5px] text-txt-1 tabular-nums">
+            {detectCount} detections on the globe
+          </span>
         )}
         {detectCount > 0 && (
-          <Btn onClick={() => useDetections.getState().clear()} className="w-full">Clear detections</Btn>
+          <Btn
+            onClick={() => useDetections.getState().clear()}
+            className="w-full"
+          >
+            Clear detections
+          </Btn>
         )}
       </div>
 
@@ -652,7 +725,7 @@ export function ImageryControl() {
         <div className="flex flex-col gap-1">
           <MicroLabel>War-damage 3D</MicroLabel>
           <select
-            value={lod1Aoi ?? ''}
+            value={lod1Aoi ?? ""}
             onChange={(e) => setLod1Aoi(e.target.value || null)}
             title="Curated AOI: red = Sentinel-1 SAR collapse candidate"
             className={`${FIELD} w-full`}
@@ -675,17 +748,23 @@ export function ImageryControl() {
           <button
             type="button"
             aria-label="Previous day"
-            onClick={() => setOverlay({ ...overlay, date: shiftDate(overlay.date, -1) })}
+            onClick={() =>
+              setOverlay({ ...overlay, date: shiftDate(overlay.date, -1) })
+            }
             className={STEP_BTN}
           >
             ◀
           </button>
-          <span className="mono text-[11px] text-txt-0 tabular-nums">{overlay.date}</span>
+          <span className="mono text-[11px] text-txt-0 tabular-nums">
+            {overlay.date}
+          </span>
           <button
             type="button"
             aria-label="Next day"
             disabled={overlay.date >= today()}
-            onClick={() => setOverlay({ ...overlay, date: shiftDate(overlay.date, 1) })}
+            onClick={() =>
+              setOverlay({ ...overlay, date: shiftDate(overlay.date, 1) })
+            }
             className={STEP_BTN}
           >
             ▶

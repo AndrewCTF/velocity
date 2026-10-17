@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { Icon } from '../normal/Icon.js';
-import { AC_CAT_LABELS, VES_TYPE_LABELS, bucketLabel } from '../explorer/facets.js';
-import { useFilters, useSelection, type FilterFacet } from '../state/stores.js';
+import { useEffect, useRef, useState } from "react";
+import { Icon } from "../normal/Icon.js";
+import {
+  AC_CAT_LABELS,
+  VES_TYPE_LABELS,
+  bucketLabel,
+} from "../explorer/facets.js";
+import { useFilters, useSelection, type FilterFacet } from "../state/stores.js";
 
 // ActionBar — the strip under the body that states the current query and
 // carries the verbs on it.
@@ -20,9 +24,13 @@ import { useFilters, useSelection, type FilterFacet } from '../state/stores.js';
 // the same label tables the histogram bars use, so a chip here names exactly
 // what a bar there counts.
 
-const TYPE_FACETS: ReadonlyArray<{ facet: FilterFacet; group: string; labels: Record<string, string> }> = [
-  { facet: 'aircraftCategory', group: 'Aircraft', labels: AC_CAT_LABELS },
-  { facet: 'vesselType', group: 'Vessels', labels: VES_TYPE_LABELS },
+const TYPE_FACETS: ReadonlyArray<{
+  facet: FilterFacet;
+  group: string;
+  labels: Record<string, string>;
+}> = [
+  { facet: "aircraftCategory", group: "Aircraft", labels: AC_CAT_LABELS },
+  { facet: "vesselType", group: "Vessels", labels: VES_TYPE_LABELS },
 ];
 
 /** A clause named so it is unambiguous outside its menu group. Both facets
@@ -30,13 +38,15 @@ const TYPE_FACETS: ReadonlyArray<{ facet: FilterFacet; group: string; labels: Re
  *  different filters and a chip could not be told from its twin. */
 function clauseLabel(facet: FilterFacet, value: string): string {
   const base = bucketLabel(facet, value);
-  if (facet === 'aircraftCategory') return `${base} aircraft`;
-  if (facet === 'vesselType') return `${base} vessels`;
+  if (facet === "aircraftCategory") return `${base} aircraft`;
+  if (facet === "vesselType") return `${base} vessels`;
   return base;
 }
 
 /** The query as English. Clauses on one facet are an OR; facets AND together. */
-function describe(clauses: ReturnType<typeof useFilters.getState>['clauses']): JSX.Element {
+function describe(
+  clauses: ReturnType<typeof useFilters.getState>["clauses"],
+): JSX.Element {
   if (clauses.length === 0) {
     return (
       <>
@@ -44,17 +54,19 @@ function describe(clauses: ReturnType<typeof useFilters.getState>['clauses']): J
       </>
     );
   }
-  const only = clauses.filter((c) => c.mode === 'only');
-  const not = clauses.filter((c) => c.mode === 'not');
+  const only = clauses.filter((c) => c.mode === "only");
+  const not = clauses.filter((c) => c.mode === "not");
   const join = (xs: string[], word: string): string =>
-    xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} ${word} ${xs[xs.length - 1]}`;
+    xs.length <= 1
+      ? (xs[0] ?? "")
+      : `${xs.slice(0, -1).join(", ")} ${word} ${xs[xs.length - 1]}`;
   const onlyText = join(
     only.map((c) => clauseLabel(c.facet, c.value)),
-    'or',
+    "or",
   );
   const notText = join(
     not.map((c) => clauseLabel(c.facet, c.value)),
-    'and',
+    "and",
   );
   return (
     <>
@@ -63,7 +75,7 @@ function describe(clauses: ReturnType<typeof useFilters.getState>['clauses']): J
         <>
           , hiding <b>{notText}</b>
         </>
-      ) : null}{' '}
+      ) : null}{" "}
       across the current view
     </>
   );
@@ -88,15 +100,15 @@ export function ActionBar(): JSX.Element {
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== "Escape") return;
       e.stopPropagation();
       setOpen(false);
     };
-    window.addEventListener('pointerdown', onDown, true);
-    window.addEventListener('keydown', onKey, true);
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey, true);
     return () => {
-      window.removeEventListener('pointerdown', onDown, true);
-      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey, true);
     };
   }, [open]);
 
@@ -111,8 +123,8 @@ export function ActionBar(): JSX.Element {
           title="Restrict the map to particular aircraft categories or vessel types"
           className={`flex h-6 items-center gap-[6px] rounded-sm border px-[9px] text-[12px] ${
             clauses.length > 0
-              ? 'border-accent-line bg-accent-dim text-accent-fg'
-              : 'border-line-2 text-txt-1 hover:bg-(--hover)'
+              ? "border-accent-line bg-accent-dim text-accent-fg"
+              : "border-line-2 text-txt-1 hover:bg-(--hover)"
           }`}
         >
           <Icon name="filter" className="h-3 w-3" />
@@ -133,7 +145,10 @@ export function ActionBar(): JSX.Element {
                 </div>
                 {Object.entries(labels).map(([value, label]) => {
                   const on = clauses.some(
-                    (c) => c.facet === facet && c.value === value && c.mode === 'only',
+                    (c) =>
+                      c.facet === facet &&
+                      c.value === value &&
+                      c.mode === "only",
                   );
                   return (
                     <button
@@ -147,12 +162,12 @@ export function ActionBar(): JSX.Element {
                       // `military` bucket, so the accessible name has to be the
                       // qualified one or two items announce identically.
                       aria-label={clauseLabel(facet, value)}
-                      onClick={() => toggleClause(facet, value, 'only')}
+                      onClick={() => toggleClause(facet, value, "only")}
                       className="flex w-full items-center gap-2 px-[10px] py-[5px] text-left text-[12px] text-txt-1 hover:bg-(--hover) hover:text-txt-0"
                     >
                       <Icon
                         name="check"
-                        className={`h-3 w-3 shrink-0 ${on ? 'text-accent-fg' : 'invisible'}`}
+                        className={`h-3 w-3 shrink-0 ${on ? "text-accent-fg" : "invisible"}`}
                       />
                       <span className="min-w-0 flex-1 truncate">{label}</span>
                     </button>
@@ -173,10 +188,10 @@ export function ActionBar(): JSX.Element {
           key={`${c.facet}:${c.value}:${c.mode}`}
           type="button"
           onClick={() => removeClause(c.facet, c.value, c.mode)}
-          title={`Remove this ${c.mode === 'only' ? 'include' : 'exclude'} filter`}
+          title={`Remove this ${c.mode === "only" ? "include" : "exclude"} filter`}
           className="flex h-6 shrink-0 items-center gap-[5px] rounded-sm border border-accent-line bg-accent-dim px-[8px] text-[12px] text-accent-fg hover:brightness-125"
         >
-          {c.mode === 'not' ? 'not ' : ''}
+          {c.mode === "not" ? "not " : ""}
           {clauseLabel(c.facet, c.value)}
           <Icon name="x" className="h-3 w-3" />
         </button>
@@ -188,9 +203,11 @@ export function ActionBar(): JSX.Element {
         type="button"
         disabled={!selected}
         onClick={() => select(null)}
-        title={selected ? `Deselect ${selected}` : 'Nothing is selected.'}
+        title={selected ? `Deselect ${selected}` : "Nothing is selected."}
         className={`h-6 rounded-sm border border-line-2 px-[9px] text-[12px] ${
-          selected ? 'text-txt-1 hover:bg-(--hover)' : 'cursor-not-allowed text-txt-3'
+          selected
+            ? "text-txt-1 hover:bg-(--hover)"
+            : "cursor-not-allowed text-txt-3"
         }`}
       >
         Clear selection
@@ -199,11 +216,15 @@ export function ActionBar(): JSX.Element {
         type="button"
         disabled={clauses.length === 0}
         onClick={() => clearFilters()}
-        title={clauses.length > 0 ? 'Drop every contact-type filter' : 'No filters are set.'}
+        title={
+          clauses.length > 0
+            ? "Drop every contact-type filter"
+            : "No filters are set."
+        }
         className={`flex h-6 items-center gap-[6px] rounded-sm px-[11px] text-[12px] ${
           clauses.length > 0
-            ? 'bg-accent text-(--on-accent) hover:brightness-110'
-            : 'cursor-not-allowed border border-line-2 text-txt-3'
+            ? "bg-accent text-(--on-accent) hover:brightness-110"
+            : "cursor-not-allowed border border-line-2 text-txt-3"
         }`}
       >
         <Icon name="x" className="h-3 w-3" />

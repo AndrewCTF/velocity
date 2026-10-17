@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 // Floating before/after imagery-diff popup state. Opened from the map context
 // menu ("Imagery diff here") with a clicked AOI; the inline <ImageryDiff> is also

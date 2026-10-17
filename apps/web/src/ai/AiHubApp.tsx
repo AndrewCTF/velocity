@@ -7,8 +7,8 @@
 // existing substrate wholesale (the `useAgent` store + AgentConsole, the
 // watch-officer hooks, and LocalAiSection) — one small backend add (the officer's
 // status endpoint) so the panel can prove the loop is alive.
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import * as Cesium from 'cesium';
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import * as Cesium from "cesium";
 import {
   Sparkles,
   Bell,
@@ -18,13 +18,13 @@ import {
   ChevronDown,
   ChevronRight,
   ShieldCheck,
-} from 'lucide-react';
-import { apiFetch } from '../transport/http.js';
-import { useAgent } from '../state/agent.js';
-import { useAppView } from '../state/appView.js';
-import { LocalAiSection } from '../settings/localAi/LocalAiSection.js';
-import { WatchOfficerPanel } from './WatchOfficerPanel.js';
-import { AnswersCard } from '../answers/AnswersCard.js';
+} from "lucide-react";
+import { apiFetch } from "../transport/http.js";
+import { useAgent } from "../state/agent.js";
+import { useAppView } from "../state/appView.js";
+import { LocalAiSection } from "../settings/localAi/LocalAiSection.js";
+import { WatchOfficerPanel } from "./WatchOfficerPanel.js";
+import { AnswersCard } from "../answers/AnswersCard.js";
 
 interface LocalStatus {
   engine?: string;
@@ -55,20 +55,24 @@ interface Guardrails {
 
 const SUGGESTED: readonly string[] = [
   "What's happening in this area right now?",
-  'Any GPS jamming or spoofing footprints?',
-  'Assess the top incident and cite the evidence',
-  'Any dark vessels or AIS gaps nearby?',
+  "Any GPS jamming or spoofing footprints?",
+  "Assess the top incident and cite the evidence",
+  "Any dark vessels or AIS gaps nearby?",
 ];
 
-export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
+export function AiHubApp({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element {
   const ask = useAgent((s) => s.ask);
   const setApp = useAppView((s) => s.setApp);
   const [status, setStatus] = useState<LocalStatus | null>(null);
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState("");
 
   const loadStatus = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/ai/local');
+      const r = await apiFetch("/api/ai/local");
       if (r.ok) setStatus((await r.json()) as LocalStatus);
     } catch {
       /* non-fatal — the strip degrades to "unavailable" */
@@ -86,7 +90,7 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
     (q: string) => {
       const text = q.trim();
       if (text.length < 2) return;
-      setApp('map');
+      setApp("map");
       ask(text);
     },
     [ask, setApp],
@@ -98,13 +102,20 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
         {/* Intro + live AI status strip */}
         <header className="space-y-2">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-accent" strokeWidth={1.75} aria-hidden />
-            <h1 className="text-[15px] font-semibold text-txt-0">AI workspace</h1>
+            <Sparkles
+              className="h-4 w-4 text-accent"
+              strokeWidth={1.75}
+              aria-hidden
+            />
+            <h1 className="text-[15px] font-semibold text-txt-0">
+              AI workspace
+            </h1>
           </div>
           <p className="text-[12px] text-txt-2 max-w-[70ch]">
-            Your Watch Officer runs autonomously below; ask the analyst agent for anything
-            on-demand; models run on your own GPU. The agents reason over live
-            ADS-B/AIS/SAR/jamming and the fused incident picture: grounded, cited, nothing invented.
+            Your Watch Officer runs autonomously below; ask the analyst agent
+            for anything on-demand; models run on your own GPU. The agents
+            reason over live ADS-B/AIS/SAR/jamming and the fused incident
+            picture: grounded, cited, nothing invented.
           </p>
           <StatusStrip status={status} />
         </header>
@@ -123,14 +134,15 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
         {/* Analyst agent — interactive, on-demand */}
         <CollapsibleSection title="Analyst agent">
           <p className="text-[11px] text-txt-3">
-            Ask a question. The agent runs a real tool-calling loop over the live data, flies the
-            map to what it finds, and cites incident ids. Nothing is invented.
+            Ask a question. The agent runs a real tool-calling loop over the
+            live data, flies the map to what it finds, and cites incident ids.
+            Nothing is invented.
           </p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               runAgent(prompt);
-              setPrompt('');
+              setPrompt("");
             }}
             className="flex items-center gap-2"
           >
@@ -146,7 +158,8 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
               disabled={prompt.trim().length < 2}
               className="flex items-center gap-1.5 mono text-[11px] px-3 py-1.5 rounded-sm border border-accent-line text-accent hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Run <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+              Run{" "}
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
             </button>
           </form>
           <div className="flex flex-wrap gap-1.5">
@@ -164,12 +177,16 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
           <button
             type="button"
             onClick={() => {
-              setApp('map');
+              setApp("map");
               useAgent.getState().setOpen(true);
             }}
             className="flex items-center gap-1.5 mono text-[10px] text-txt-3 hover:text-accent"
           >
-            <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            <MessageSquare
+              className="h-3.5 w-3.5"
+              strokeWidth={1.75}
+              aria-hidden
+            />
             Open the full console (⌘J)
           </button>
         </CollapsibleSection>
@@ -180,8 +197,9 @@ export function AiHubApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Elem
         {/* Engine & models */}
         <CollapsibleSection title="Engine & models" defaultOpen={false}>
           <p className="text-[11px] text-txt-3">
-            Run inference on your own GPU: pick an engine, download and hot-load a model, and turn
-            on the selection assessment that briefs whatever you click on the globe.
+            Run inference on your own GPU: pick an engine, download and hot-load
+            a model, and turn on the selection assessment that briefs whatever
+            you click on the globe.
           </p>
           <LocalAiSection />
         </CollapsibleSection>
@@ -203,8 +221,8 @@ function GuardrailsCard(): JSX.Element {
   const load = useCallback(async () => {
     try {
       const [g, c] = await Promise.all([
-        apiFetch('/api/ai/guardrails'),
-        apiFetch('/api/ai/calls?limit=500'),
+        apiFetch("/api/ai/guardrails"),
+        apiFetch("/api/ai/calls?limit=500"),
       ]);
       if (!g.ok) {
         setFailed(true);
@@ -224,16 +242,22 @@ function GuardrailsCard(): JSX.Element {
   return (
     <CollapsibleSection title="Guardrails" defaultOpen={false}>
       <p className="text-[11px] text-txt-3">
-        What the model is allowed to see, what it is allowed to do, and what it did. Read from the
-        running configuration, not from a document.
+        What the model is allowed to see, what it is allowed to do, and what it
+        did. Read from the running configuration, not from a document.
       </p>
-      {failed && <p className="mono text-[10px] text-txt-3">guardrail status unavailable</p>}
-      {!rails && !failed && <p className="mono text-[10px] text-txt-3">reading guardrails…</p>}
+      {failed && (
+        <p className="mono text-[10px] text-txt-3">
+          guardrail status unavailable
+        </p>
+      )}
+      {!rails && !failed && (
+        <p className="mono text-[10px] text-txt-3">reading guardrails…</p>
+      )}
       {rails && (
         <div className="space-y-3">
           <GuardrailRow
             label="Can see"
-            value={`clearance ${rails.clearance ?? 0} · ${(rails.compartments ?? []).length ? (rails.compartments ?? []).join(', ') : 'no compartments'} · ${(rails.tools ?? []).length} read tools`}
+            value={`clearance ${rails.clearance ?? 0} · ${(rails.compartments ?? []).length ? (rails.compartments ?? []).join(", ") : "no compartments"} · ${(rails.tools ?? []).length} read tools`}
           />
           <GuardrailRow
             label="Can do"
@@ -242,21 +266,25 @@ function GuardrailsCard(): JSX.Element {
           <GuardrailRow
             label="Under what rule"
             value={[
-              rails.action_approval ? 'every write needs operator approval' : 'direct dispatch',
+              rails.action_approval
+                ? "every write needs operator approval"
+                : "direct dispatch",
               (rails.action_auto_threshold ?? 1.01) > 1
-                ? 'no confidence auto-runs'
+                ? "no confidence auto-runs"
                 : `auto above ${rails.action_auto_threshold}`,
-              rails.control_enabled ? 'actuation armed' : 'actuation off',
-              rails.citations_required ? 'uncited briefs withheld' : 'uncited briefs served',
-              rails.local_only ? 'local models only' : 'cloud models allowed',
-            ].join(' · ')}
+              rails.control_enabled ? "actuation armed" : "actuation off",
+              rails.citations_required
+                ? "uncited briefs withheld"
+                : "uncited briefs served",
+              rails.local_only ? "local models only" : "cloud models allowed",
+            ].join(" · ")}
           />
           <GuardrailRow
             label="Audited"
             value={
               calls === null
-                ? 'model calls recorded locally: —'
-                : `${calls} model call${calls === 1 ? '' : 's'} recorded on this box`
+                ? "model calls recorded locally: —"
+                : `${calls} model call${calls === 1 ? "" : "s"} recorded on this box`
             }
           />
           <details>
@@ -264,20 +292,22 @@ function GuardrailsCard(): JSX.Element {
               every tool by name
             </summary>
             <div className="mt-2 flex flex-wrap gap-1">
-              {[...(rails.action_tools ?? []), ...(rails.control_tools ?? []), ...(rails.tools ?? [])].map(
-                (t) => (
-                  <span
-                    key={t}
-                    className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-                      (rails.action_tools ?? []).includes(t)
-                        ? 'border-accent-line text-accent'
-                        : 'border-line-2 text-txt-3'
-                    }`}
-                  >
-                    {t}
-                  </span>
-                ),
-              )}
+              {[
+                ...(rails.action_tools ?? []),
+                ...(rails.control_tools ?? []),
+                ...(rails.tools ?? []),
+              ].map((t) => (
+                <span
+                  key={t}
+                  className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
+                    (rails.action_tools ?? []).includes(t)
+                      ? "border-accent-line text-accent"
+                      : "border-line-2 text-txt-3"
+                  }`}
+                >
+                  {t}
+                </span>
+              ))}
             </div>
           </details>
         </div>
@@ -286,7 +316,13 @@ function GuardrailsCard(): JSX.Element {
   );
 }
 
-function GuardrailRow({ label, value }: { label: string; value: string }): JSX.Element {
+function GuardrailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}): JSX.Element {
   return (
     <div className="flex items-start gap-2">
       <ShieldCheck
@@ -324,9 +360,17 @@ function CollapsibleSection({
         aria-expanded={open}
       >
         {open ? (
-          <ChevronDown className="h-4 w-4 text-txt-3" strokeWidth={1.75} aria-hidden />
+          <ChevronDown
+            className="h-4 w-4 text-txt-3"
+            strokeWidth={1.75}
+            aria-hidden
+          />
         ) : (
-          <ChevronRight className="h-4 w-4 text-txt-3" strokeWidth={1.75} aria-hidden />
+          <ChevronRight
+            className="h-4 w-4 text-txt-3"
+            strokeWidth={1.75}
+            aria-hidden
+          />
         )}
         <span className="text-[12px] font-semibold text-txt-1">{title}</span>
       </button>
@@ -342,17 +386,23 @@ function StatusStrip({ status }: { status: LocalStatus | null }): JSX.Element {
   const chips: { icon: JSX.Element; label: string; on: boolean }[] = [
     {
       icon: <Cpu className="h-3 w-3" strokeWidth={1.75} aria-hidden />,
-      label: `engine: ${status.engine ?? 'auto'}`,
+      label: `engine: ${status.engine ?? "auto"}`,
       on: true,
     },
     {
       icon: <Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden />,
-      label: status.selection_enabled ? 'selection assess: on' : 'selection assess: off',
+      label: status.selection_enabled
+        ? "selection assess: on"
+        : "selection assess: off",
       on: Boolean(status.selection_enabled),
     },
     {
       icon: <Bell className="h-3 w-3" strokeWidth={1.75} aria-hidden />,
-      label: status.local_only ? 'local-only' : status.enabled ? 'local-first' : 'cloud-first',
+      label: status.local_only
+        ? "local-only"
+        : status.enabled
+          ? "local-first"
+          : "cloud-first",
       on: Boolean(status.enabled || status.local_only),
     },
   ];
@@ -362,7 +412,7 @@ function StatusStrip({ status }: { status: LocalStatus | null }): JSX.Element {
         <span
           key={c.label}
           className={`flex items-center gap-1 mono text-[10px] px-2 py-0.5 rounded-sm border ${
-            c.on ? 'border-accent-line text-accent' : 'border-line text-txt-3'
+            c.on ? "border-accent-line text-accent" : "border-line text-txt-3"
           }`}
         >
           {c.icon}

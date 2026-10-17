@@ -1,4 +1,4 @@
-import { apiFetch } from '../../transport/http.js';
+import { apiFetch } from "../../transport/http.js";
 
 // Client for `POST /api/geo/event-shapes` — resolves an event point + admin
 // level to the REAL admin polygon (GADM-style adm1/adm2), so conflict/incident
@@ -15,7 +15,7 @@ import { apiFetch } from '../../transport/http.js';
 // one request in flight at a time, and queued work is SUPERSEDED by a newer
 // call (a fresh poll's wants replace a stale queue, they don't pile up).
 
-export type ShapeLevel = 'adm1' | 'adm2';
+export type ShapeLevel = "adm1" | "adm2";
 
 export interface ShapeQuery {
   lat: number;
@@ -25,12 +25,12 @@ export interface ShapeQuery {
 }
 
 export interface ShapeGeometry {
-  type: 'Polygon' | 'MultiPolygon';
+  type: "Polygon" | "MultiPolygon";
   coordinates: number[][][] | number[][][][];
 }
 
 /** Cache sentinel: the server answered and has no shape for this key. */
-export const SHAPE_MISS = 'MISS' as const;
+export const SHAPE_MISS = "MISS" as const;
 type CacheValue = ShapeGeometry | typeof SHAPE_MISS;
 
 const BATCH_MAX = 200;
@@ -40,7 +40,12 @@ let inFlight = false;
 let queued: { queries: ShapeQuery[]; onApplied: () => void } | null = null;
 
 /** Build the server's cache key for a query (server rounds to 3 decimals). */
-export function shapeKey(q: { iso3: string; level: string; lat: number; lon: number }): string {
+export function shapeKey(q: {
+  iso3: string;
+  level: string;
+  lat: number;
+  lon: number;
+}): string {
   return `${q.iso3}|${q.level}|${q.lat.toFixed(3)}|${q.lon.toFixed(3)}`;
 }
 
@@ -63,9 +68,9 @@ function isRing(r: unknown): r is number[][] {
     r.every(
       (p) =>
         Array.isArray(p) &&
-        typeof p[0] === 'number' &&
+        typeof p[0] === "number" &&
         Number.isFinite(p[0]) &&
-        typeof p[1] === 'number' &&
+        typeof p[1] === "number" &&
         Number.isFinite(p[1]),
     )
   );
@@ -73,18 +78,21 @@ function isRing(r: unknown): r is number[][] {
 
 /** Structural validation of a server geometry blob; null when malformed. */
 export function validShapeGeometry(g: unknown): ShapeGeometry | null {
-  if (g == null || typeof g !== 'object') return null;
+  if (g == null || typeof g !== "object") return null;
   const geom = g as { type?: unknown; coordinates?: unknown };
   const c = geom.coordinates;
-  if (geom.type === 'Polygon') {
-    if (Array.isArray(c) && c.length >= 1 && c.every(isRing)) return geom as ShapeGeometry;
+  if (geom.type === "Polygon") {
+    if (Array.isArray(c) && c.length >= 1 && c.every(isRing))
+      return geom as ShapeGeometry;
     return null;
   }
-  if (geom.type === 'MultiPolygon') {
+  if (geom.type === "MultiPolygon") {
     if (
       Array.isArray(c) &&
       c.length >= 1 &&
-      c.every((part) => Array.isArray(part) && part.length >= 1 && part.every(isRing))
+      c.every(
+        (part) => Array.isArray(part) && part.length >= 1 && part.every(isRing),
+      )
     ) {
       return geom as ShapeGeometry;
     }
@@ -99,7 +107,10 @@ export function validShapeGeometry(g: unknown): ShapeGeometry | null {
  * can apply cached results to live entities and request ONE scene render.
  * While a request is in flight, a newer call replaces any queued one.
  */
-export function requestEventShapes(queries: ShapeQuery[], onApplied: () => void): void {
+export function requestEventShapes(
+  queries: ShapeQuery[],
+  onApplied: () => void,
+): void {
   const byKey = new Map<string, ShapeQuery>();
   for (const q of queries) {
     const k = shapeKey(q);
@@ -114,11 +125,16 @@ export function requestEventShapes(queries: ShapeQuery[], onApplied: () => void)
   void run(qs, onApplied);
 }
 
-async function run(queries: ShapeQuery[], onApplied: () => void): Promise<void> {
+async function run(
+  queries: ShapeQuery[],
+  onApplied: () => void,
+): Promise<void> {
   inFlight = true;
   try {
     for (let i = 0; i < queries.length; i += BATCH_MAX) {
-      const batch = queries.slice(i, i + BATCH_MAX).filter((q) => !cache.has(shapeKey(q)));
+      const batch = queries
+        .slice(i, i + BATCH_MAX)
+        .filter((q) => !cache.has(shapeKey(q)));
       if (batch.length) await fetchBatch(batch);
     }
   } finally {
@@ -136,11 +152,16 @@ async function run(queries: ShapeQuery[], onApplied: () => void): Promise<void> 
 
 async function fetchBatch(batch: ShapeQuery[]): Promise<void> {
   try {
-    const r = await apiFetch('/api/geo/event-shapes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const r = await apiFetch("/api/geo/event-shapes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        queries: batch.map((q) => ({ lat: q.lat, lon: q.lon, level: q.level, iso3: q.iso3 })),
+        queries: batch.map((q) => ({
+          lat: q.lat,
+          lon: q.lon,
+          level: q.level,
+          iso3: q.iso3,
+        })),
       }),
     });
     // Transient failure (5xx/429): leave keys uncached so a later poll retries.

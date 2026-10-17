@@ -14,11 +14,11 @@ it live, independently.
 
 ## Verdict trajectory
 
-| | 2026-07-22 study | Wave 2 | Wave 3 |
-|---|---|---|---|
-| Adopt today | 4/7 | 5/7 | 6/10 |
-| Star | 7/7 | 7/7 | 10/10 |
-| Recommend | 6/7 | 6/7 | 10/10 |
+|             | 2026-07-22 study | Wave 2 | Wave 3 |
+| ----------- | ---------------- | ------ | ------ |
+| Adopt today | 4/7              | 5/7    | 6/10   |
+| Star        | 7/7              | 7/7    | 10/10  |
+| Recommend   | 6/7              | 6/7    | 10/10  |
 
 Movement that matters: Riley (investigator) and Mika (sanctions journalist)
 flipped to adopt in wave 2 when identity-scoped history and keyless
@@ -37,18 +37,18 @@ the api suite rising 1916 → 1966 (now 1972) passed and `scripts/verify.sh`
 green at every commit. Wave 3 re-checked every one of these claims live and
 filed zero regressions against them.
 
-| Commit | Fixed |
-|---|---|
-| `b608323` | api ruff backlog cleared (102 errors → 0); per-file E501 ignore for the URL-registry |
-| `ca54844` | WebSocket upgrade to unmatched `/ws/*` → clean JSON-404 denial (was a bare 500) |
+| Commit    | Fixed                                                                                                                                                                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `b608323` | api ruff backlog cleared (102 errors → 0); per-file E501 ignore for the URL-registry                                                                                                                                                                                |
+| `ca54844` | WebSocket upgrade to unmatched `/ws/*` → clean JSON-404 denial (was a bare 500)                                                                                                                                                                                     |
 | `217bf6a` | GDELT honesty: word-boundary matcher (demonym "Ethiopian" ≠ Ethiopia), instability armed_conflict actor-matched not raw-iso3, renormalized weight clamped ≤ 0.40 without redistribution, GDELT citations carry a reporting-intensity caveat in the Sources footnote |
-| `ea562a4` | `/api/alerts/standing` + watch-session work keyless; Ops panel says "unavailable (HTTP n)" instead of a confident 0 |
-| `96cf864` | Identity-only alert rules: AOI optional with a real validator, no silent blank→0 coercion, "identity pin · global" badge, NOT NULL relaxed by migration |
-| `841dc2f` | `/api/eq` partial geo params → 422; `/api/history/track` accepts bare unambiguous ids, 422 on ambiguous |
-| `c180620` | Dossier gap window derives from configured retention and reports the EFFECTIVE available depth; AisGapCard discloses a shortened window |
-| `478b883` | Country brief no longer truncates mid-sentence before Sources (real cause: max_tokens 900; now 1600 + sentence-boundary trim) |
-| `3943d65` | Company screening counts (including zeros) persist to the org object; keyless deployments get a local audit trail (`data/audit_log.db`) |
-| `9d4f281` | Five new MCP tools (46 total): quakes_near, track_history, create/list/delete_watch_rule |
+| `ea562a4` | `/api/alerts/standing` + watch-session work keyless; Ops panel says "unavailable (HTTP n)" instead of a confident 0                                                                                                                                                 |
+| `96cf864` | Identity-only alert rules: AOI optional with a real validator, no silent blank→0 coercion, "identity pin · global" badge, NOT NULL relaxed by migration                                                                                                             |
+| `841dc2f` | `/api/eq` partial geo params → 422; `/api/history/track` accepts bare unambiguous ids, 422 on ambiguous                                                                                                                                                             |
+| `c180620` | Dossier gap window derives from configured retention and reports the EFFECTIVE available depth; AisGapCard discloses a shortened window                                                                                                                             |
+| `478b883` | Country brief no longer truncates mid-sentence before Sources (real cause: max_tokens 900; now 1600 + sentence-boundary trim)                                                                                                                                       |
+| `3943d65` | Company screening counts (including zeros) persist to the org object; keyless deployments get a local audit trail (`data/audit_log.db`)                                                                                                                             |
+| `9d4f281` | Five new MCP tools (46 total): quakes_near, track_history, create/list/delete_watch_rule                                                                                                                                                                            |
 | `477bb8c` | Retention truth: `/api/history/coverage` exposes `oldest_ts` (index-served), replay scrubber shows real depth, README states the byte-cap-binds-first math (~3 GB/h measured; ~150 GB for a true 48h global archive), version unified to 1.0.1, 46 tools everywhere |
 
 Live verification after the fixes (fresh boot, all four services up): ws-404,
@@ -65,15 +65,15 @@ errors). Headless GPU fps remains unverified by policy.
 
 Fixed before this report:
 
-| Commit | Finding | Fixed |
-|---|---|---|
-| `29330a9` | casey (BLOCKER) | Investigate/recon persistence stamps the real connector (rdap+dns, otx, …) as assertion source; case-report footnotes stop claiming "asserted by analyst" for automated collection |
+| Commit    | Finding         | Fixed                                                                                                                                                                                                                 |
+| --------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `29330a9` | casey (BLOCKER) | Investigate/recon persistence stamps the real connector (rdap+dns, otx, …) as assertion source; case-report footnotes stop claiming "asserted by analyst" for automated collection                                    |
 | `972cc9a` | riley (BLOCKER) | Screening data now has a live UI surface: ObjectInspector's Properties tab falls back to `GET /api/ontology/object/{id}` for positionless ontology nodes (was "No properties resolved." for every investigate result) |
-| `7adb764` | casey | Workflows `source.quakes` returned 0 rows forever (called the eq ROUTE in-process → Query-sentinel TypeError → swallowed). Now calls the internal loader, per the standing invariant |
-| `17e0b46` | marcus | Foundry upload with `?mode=append` in the query string was silently ignored → destructive snapshot replace. Now 422s with the fix named; response echoes the applied mode |
-| `c080bc3` | dana | `/api/history/track` matches ICAO24 hex case-insensitively (uppercase ids silently returned empty) |
-| `cfcf423` | priya | Brief progress copy promised "~60s" against a 90s server budget and 69–93s observed latency |
-| `11e6b53` | sam | README states measured sidecar RAM (~11 GB ADS-B tree, ~3–6 GB AIS) instead of "several GB" |
+| `7adb764` | casey           | Workflows `source.quakes` returned 0 rows forever (called the eq ROUTE in-process → Query-sentinel TypeError → swallowed). Now calls the internal loader, per the standing invariant                                  |
+| `17e0b46` | marcus          | Foundry upload with `?mode=append` in the query string was silently ignored → destructive snapshot replace. Now 422s with the fix named; response echoes the applied mode                                             |
+| `c080bc3` | dana            | `/api/history/track` matches ICAO24 hex case-insensitively (uppercase ids silently returned empty)                                                                                                                    |
+| `cfcf423` | priya           | Brief progress copy promised "~60s" against a 90s server budget and 69–93s observed latency                                                                                                                           |
+| `11e6b53` | sam             | README states measured sidecar RAM (~11 GB ADS-B tree, ~3–6 GB AIS) instead of "several GB"                                                                                                                           |
 
 ### Handoff queue (confirmed, not fixed tonight — ranked)
 
@@ -145,7 +145,7 @@ verifiers reproduced every finding independently (several personas' evidence
 was corrected or bounded by their verifier — disputes are recorded in the raw
 results). The wave-3 run started minutes after a machine reboot; personas were
 instructed not to file boot-warmup artifacts, and the one finding that
-depended on the blackout (mika-2) is about the *reporting* of gaps, not the
+depended on the blackout (mika-2) is about the _reporting_ of gaps, not the
 gap itself. Raw persona/verifier JSON for both waves lives in the session
 workflow journals; per-finding briefs with full evidence and repro commands
 were extracted alongside this report.

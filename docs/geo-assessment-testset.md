@@ -12,14 +12,15 @@ are the honest recalibration of the rule-fuser's uncalibrated softmax (Denmark 0
 
 ## Verdict (calibrated, evidence-tagged)
 
-| Level | Call | Confidence | Basis / tag |
-|---|---|---|---|
-| Country | **Denmark** | high *given the operator's "near Germany, not Germany" constraint* | rule-fuser #1 (beech-moraine); constraint excludes the image-only alternative (Sweden). `heuristic+constraint` |
-| Country (image-only) | Denmark ↔ **southern Sweden** ambiguous | ~medium | falu-red reads most Swedish; independent vision agent's own top guess was S-Sweden. `heuristic` |
-| Region | **eastern Denmark / Danish-islands moraine belt** (Zealand·Funen·E-Jutland; Bornholm a granite-fit candidate) | moderate | mossy granite erratics + beech + slopes. `heuristic` |
-| Sub-1 km point | **not warranted from pixels** | — | under-canopy; no plate/sign/skyline. Needs reference-image cross-match (Stage C). `not-built` |
+| Level                | Call                                                                                                          | Confidence                                                         | Basis / tag                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Country              | **Denmark**                                                                                                   | high _given the operator's "near Germany, not Germany" constraint_ | rule-fuser #1 (beech-moraine); constraint excludes the image-only alternative (Sweden). `heuristic+constraint` |
+| Country (image-only) | Denmark ↔ **southern Sweden** ambiguous                                                                       | ~medium                                                            | falu-red reads most Swedish; independent vision agent's own top guess was S-Sweden. `heuristic`                |
+| Region               | **eastern Denmark / Danish-islands moraine belt** (Zealand·Funen·E-Jutland; Bornholm a granite-fit candidate) | moderate                                                           | mossy granite erratics + beech + slopes. `heuristic`                                                           |
+| Sub-1 km point       | **not warranted from pixels**                                                                                 | —                                                                  | under-canopy; no plate/sign/skyline. Needs reference-image cross-match (Stage C). `not-built`                  |
 
 ## Evidence (what the photos actually show)
+
 - **Architecture:** falu-red (iron-oxide) horizontal-timber barn/cabin, white 6-pane window, round
   globe wall-lamp; a second dark-timber outbuilding with a **red clay-tile roof** + wall meter box.
   Nordic vernacular. (`Pasted image.png`, `(8)`.)
@@ -36,9 +37,11 @@ are the honest recalibration of the rule-fuser's uncalibrated softmax (Denmark 0
   cue weights 5–6) are therefore **all absent**; the call rests on architecture+vegetation+husbandry.
 
 ## Why Denmark, and the honest Sweden caveat
+
 Two independent paths reached the southern-Scandinavia beech belt:
+
 1. An **independent** Claude-vision agent (not shown any conclusion) read the raw photos and returned
-   the same cues; its *own* region guess led with **southern Sweden (Götaland)**, Denmark/Norway next.
+   the same cues; its _own_ region guess led with **southern Sweden (Götaland)**, Denmark/Norway next.
 2. The **rule-fuser** aggregated the injected attributes over 6 scenes → **Denmark p≈0.97,
    S-Scandinavia p≈0.03** (uncalibrated softmax — cue weights are relative boosts, not probabilities).
    Denmark wins because beech (Denmark's national tree, +3.0) fires on every forest shot while
@@ -49,16 +52,18 @@ given constraint **"near Germany, not in Germany"**: Sweden shares no land borde
 is excluded; Denmark (southern Jutland borders Germany; the islands are close) is the consistent fit.
 The "looks Swedish (granite erratics) but is Danish + near Germany" reconciliation makes **Bornholm**
 (Denmark's granite island in the southern Baltic, ~90 km off Germany/Poland) a notable specific
-candidate — but scattered erratics occur throughout eastern-Danish moraine too, so Bornholm is *one*
+candidate — but scattered erratics occur throughout eastern-Danish moraine too, so Bornholm is _one_
 hypothesis inside the region, not a favored pin.
 
 ## Live-network attempt (2026-07-10, network enabled)
+
 Ran the retrieval stages live + targeted OSINT once the network was enabled:
+
 - **Web (concept search):** returns unambiguously **Danish** smallholding/nature culture — Hereford
   extensive nature-grazing (hereford.dk), forest shelterpladser (naturstyrelsen.dk / bookenshelter.dk),
-  `skovhus`/`naturgrund`. A *Country Smallholding* feature describes a near-identical self-sufficient
+  `skovhus`/`naturgrund`. A _Country Smallholding_ feature describes a near-identical self-sufficient
   smallholding on **southern Funen** ("softly undulating Ice-Age hills", little forest, poultry) —
-  same *pattern*, different named family; not a confirmed match. Corroborates DK + moraine-island type.
+  same _pattern_, different named family; not a confirmed match. Corroborates DK + moraine-island type.
 - **OSM/Panoramax:** live-reachable, but co-occurrence ("timber building ∧ forest ∧ pasture") matches
   thousands of rural-DK cells and street-level coverage over private forest tracks is ~absent → cannot
   fingerprint this property.
@@ -69,10 +74,11 @@ Ran the retrieval stages live + targeted OSINT once the network was enabled:
   that (or a name / restored EXIF) is what a ≤1 km pin requires. Enabling the network did NOT add it.
 
 ## To go finer (the method the system implements)
+
 Sub-1 km localisation of these shots needs **reference-image cross-match**, not satellite geometry
 (the woodland interiors share ~zero visible geometry with nadir imagery — a physics limit). Concretely:
 (a) pull keyless street-level imagery (Panoramax/KartaView) + Esri-Wayback dated VHR over the eastern-DK
 prior; (b) match the distinctive signature — falu-red barn + tile-roofed outbuilding + adjacent
 forest-edge Hereford paddock + raised timber hide — by eye or CLIP retrieval; (c) if the operator can
 supply a reverse-image hit or a place name, confirm. The satellite→3DGS→pose branch (Stage D) would
-then refine camera pose on the *open* yard/barn frames only.
+then refine camera pose on the _open_ yard/barn frames only.

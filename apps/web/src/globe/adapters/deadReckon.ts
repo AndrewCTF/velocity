@@ -33,7 +33,10 @@ const WGS84_E2 = 6.69437999014e-3;
 function radii(latRad: number): { m: number; n: number } {
   const s = Math.sin(latRad);
   const w2 = 1 - WGS84_E2 * s * s;
-  return { m: (WGS84_A * (1 - WGS84_E2)) / (w2 * Math.sqrt(w2)), n: WGS84_A / Math.sqrt(w2) };
+  return {
+    m: (WGS84_A * (1 - WGS84_E2)) / (w2 * Math.sqrt(w2)),
+    n: WGS84_A / Math.sqrt(w2),
+  };
 }
 
 /**
@@ -163,7 +166,10 @@ export const DR_BACK_TOLERATE = 3;
 export const DR_FROZEN_BACK_M = 250;
 
 /** Where `s` renders at sim-clock time `tSec`. */
-export function projectAt(s: DrState, tSec: number): { lonRad: number; latRad: number } {
+export function projectAt(
+  s: DrState,
+  tSec: number,
+): { lonRad: number; latRad: number } {
   if (s.frozen || s.speedMs <= 0) return { lonRad: s.lonRad, latRad: s.latRad };
   // max(0, …) ⇒ never reverse; min(holdS, …) ⇒ HOLD past the coast limit.
   const dt = Math.max(0, Math.min(tSec - s.t0, s.holdS));
@@ -177,7 +183,11 @@ export function projectAt(s: DrState, tSec: number): { lonRad: number; latRad: n
  * `prev` is this contact's current state (undefined on first sight), `nowSec` the
  * sim-clock time the fix was applied. Returns the new anchor.
  */
-export function ingestFix(prev: DrState | undefined, fix: DrFix, nowSec: number): DrState {
+export function ingestFix(
+  prev: DrState | undefined,
+  fix: DrFix,
+  nowSec: number,
+): DrState {
   const lonRad = (fix.lonDeg * Math.PI) / 180;
   const latRad = (fix.latDeg * Math.PI) / 180;
 
@@ -228,7 +238,13 @@ export function ingestFix(prev: DrState | undefined, fix: DrFix, nowSec: number)
       Number.isFinite(fix.trackDeg);
     if (prev && guardable) {
       const cur = projectAt(prev, nowSec);
-      const back = alongTrackM(cur.lonRad, cur.latRad, lonRad, latRad, trackRad);
+      const back = alongTrackM(
+        cur.lonRad,
+        cur.latRad,
+        lonRad,
+        latRad,
+        trackRad,
+      );
       if (back < -DR_FROZEN_BACK_M && prev.backCount + 1 < DR_BACK_TOLERATE) {
         return { ...prev, backCount: prev.backCount + 1 };
       }
@@ -255,7 +271,13 @@ export function ingestFix(prev: DrState | undefined, fix: DrFix, nowSec: number)
   if (prev && !prev.frozen && prev.speedMs > 0) {
     const cur = projectAt(prev, nowSec);
     const next = projectAt(cand, nowSec);
-    const along = alongTrackM(cur.lonRad, cur.latRad, next.lonRad, next.latRad, cand.trackRad);
+    const along = alongTrackM(
+      cur.lonRad,
+      cur.latRad,
+      next.lonRad,
+      next.latRad,
+      cand.trackRad,
+    );
     const phaseS = along / cand.speedMs;
     if (Math.abs(phaseS) <= DR_PHASE_DEADBAND_S) {
       // Inside the deadband: shift the anchor in TIME so the icon keeps rendering

@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import type * as Cesium from 'cesium';
-import type { AlertSeverity } from '@osint/shared';
-import { Icon } from '../../normal/Icon.js';
-import { useFeeds, type FeedHealth } from '../../state/stores.js';
-import { useEntityStats, setStatsViewer, acquireStats } from '../../globe/entityStats.js';
-import { chokepoints } from '../../registry/chokepoints.js';
-import { apiFetch } from '../../transport/http.js';
+import { useEffect, useMemo, useState } from "react";
+import type * as Cesium from "cesium";
+import type { AlertSeverity } from "@osint/shared";
+import { Icon } from "../../normal/Icon.js";
+import { useFeeds, type FeedHealth } from "../../state/stores.js";
+import {
+  useEntityStats,
+  setStatsViewer,
+  acquireStats,
+} from "../../globe/entityStats.js";
+import { chokepoints } from "../../registry/chokepoints.js";
+import { apiFetch } from "../../transport/http.js";
 
 // Info, built from docs/mockups/console-2026-08 (`15-map-info.html`).
 //
@@ -20,32 +24,42 @@ import { apiFetch } from '../../transport/http.js';
 // a dot matrix rather than four numbers.
 
 const TONE: Record<string, { dot: string; text: string }> = {
-  green: { dot: 'bg-ok', text: 'text-ok' },
-  amber: { dot: 'bg-warn', text: 'text-warn-fg' },
-  red: { dot: 'bg-alert', text: 'text-alert-fg' },
-  unknown: { dot: 'bg-bg-4', text: 'text-txt-3' },
+  green: { dot: "bg-ok", text: "text-ok" },
+  amber: { dot: "bg-warn", text: "text-warn-fg" },
+  red: { dot: "bg-alert", text: "text-alert-fg" },
+  unknown: { dot: "bg-bg-4", text: "text-txt-3" },
 };
 
 /** Severity ordering and dot tone for the standing-detection rollup, carried
  *  over from the Ops panel this one replaces. */
-const SEVERITY_ORDER: readonly AlertSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
+const SEVERITY_ORDER: readonly AlertSeverity[] = [
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "info",
+];
 const SEV_DOT: Record<string, string> = {
-  critical: 'bg-alert',
-  high: 'bg-alert',
-  medium: 'bg-warn',
-  low: 'bg-accent',
-  info: 'bg-bg-4',
+  critical: "bg-alert",
+  high: "bg-alert",
+  medium: "bg-warn",
+  low: "bg-accent",
+  info: "bg-bg-4",
 };
 
 function ageOf(f: FeedHealth): string {
-  if (!f.lastSeen) return '—';
+  if (!f.lastSeen) return "—";
   const s = Math.max(0, Math.round((Date.now() - f.lastSeen) / 1000));
   if (s < 90) return `${s} s`;
   if (s < 5400) return `${Math.round(s / 60)} min`;
   return `${Math.round(s / 3600)} h`;
 }
 
-export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Element {
+export function InfoPanel({
+  viewer,
+}: {
+  viewer?: Cesium.Viewer | null;
+}): JSX.Element {
   const feedsMap = useFeeds((s) => s.feeds);
   const counted = useEntityStats((s) => s.counted);
   const aoiCounts = useEntityStats((s) => s.aoiCounts);
@@ -60,7 +74,10 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
   // so this survives reloads and reconnects the way the edge-triggered alert
   // buffer does not. `no-store`: never let the browser replay a stale body from
   // a backend blip and freeze the panel on wrong data.
-  const [standing, setStanding] = useState<{ counts: Record<string, number>; total: number }>({
+  const [standing, setStanding] = useState<{
+    counts: Record<string, number>;
+    total: number;
+  }>({
     counts: {},
     total: 0,
   });
@@ -69,16 +86,22 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
     let cancelled = false;
     const poll = async (): Promise<void> => {
       try {
-        const r = await apiFetch('/api/alerts/standing', { cache: 'no-store' });
+        const r = await apiFetch("/api/alerts/standing", { cache: "no-store" });
         if (cancelled) return;
         if (!r.ok) {
           setStandingErr(r.status);
           return;
         }
-        const d = (await r.json()) as { detections?: unknown[]; counts?: Record<string, number> };
+        const d = (await r.json()) as {
+          detections?: unknown[];
+          counts?: Record<string, number>;
+        };
         if (cancelled) return;
         setStandingErr(null);
-        setStanding({ counts: d.counts ?? {}, total: (d.detections ?? []).length });
+        setStanding({
+          counts: d.counts ?? {},
+          total: (d.detections ?? []).length,
+        });
       } catch {
         /* keep the last good counts on a transient failure */
       }
@@ -101,10 +124,12 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
   );
 
   const { feeds, live, total } = useMemo(() => {
-    const list = Object.values(feedsMap).sort((a, b) => a.label.localeCompare(b.label));
+    const list = Object.values(feedsMap).sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
     return {
       feeds: list,
-      live: list.filter((f) => f.status === 'green').length,
+      live: list.filter((f) => f.status === "green").length,
       total: list.length,
     };
   }, [feedsMap]);
@@ -131,11 +156,14 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           </span>
           {/* A dot matrix, not four numbers: at this N the shape of the failure
               is the information, and a bar would imply precision it lacks. */}
-          <span className="flex w-[66px] shrink-0 flex-wrap gap-[2px]" aria-hidden="true">
+          <span
+            className="flex w-[66px] shrink-0 flex-wrap gap-[2px]"
+            aria-hidden="true"
+          >
             {feeds.slice(0, 16).map((f) => (
               <span
                 key={f.id}
-                className={`h-[6px] w-[6px] rounded-[1px] ${TONE[f.status]?.dot ?? 'bg-bg-4'}`}
+                className={`h-[6px] w-[6px] rounded-[1px] ${TONE[f.status]?.dot ?? "bg-bg-4"}`}
               />
             ))}
           </span>
@@ -156,7 +184,9 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
         {feeds.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-8 text-center">
             <Icon name="feed" className="h-6 w-6 text-txt-3" />
-            <div className="text-[13px] text-txt-1">No sources reporting yet</div>
+            <div className="text-[13px] text-txt-1">
+              No sources reporting yet
+            </div>
             <p className="max-w-[220px] text-[12px] leading-relaxed text-txt-3">
               Feed health appears as each source answers for the first time.
             </p>
@@ -170,13 +200,18 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
                 className="flex min-h-[38px] items-center gap-2 px-[14px] py-1 hover:bg-(--hover)"
                 title={f.note ?? undefined}
               >
-                <span className={`h-[6px] w-[6px] shrink-0 rounded-full ${tone?.dot}`} />
+                <span
+                  className={`h-[6px] w-[6px] shrink-0 rounded-full ${tone?.dot}`}
+                />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12px] text-txt-1">{f.label}</span>
+                  <span className="block truncate text-[12px] text-txt-1">
+                    {f.label}
+                  </span>
                   {/* The reason, when there is one. A red dot with no sentence
                       is the silent failure both persona waves kept finding. */}
                   <span className="block truncate text-[12px] text-txt-3">
-                    {f.note ?? (f.status === 'green' ? 'reporting' : 'no reason given')}
+                    {f.note ??
+                      (f.status === "green" ? "reporting" : "no reason given")}
                   </span>
                 </span>
                 <span className="mono w-[52px] shrink-0 text-right text-[12px] tabular-nums text-txt-2">
@@ -190,7 +225,13 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
                     className={`absolute inset-y-0 left-0 block ${tone?.dot}`}
                     style={{
                       width:
-                        f.status === 'green' ? '100%' : f.status === 'amber' ? '45%' : f.status === 'red' ? '12%' : '4%',
+                        f.status === "green"
+                          ? "100%"
+                          : f.status === "amber"
+                            ? "45%"
+                            : f.status === "red"
+                              ? "12%"
+                              : "4%",
                     }}
                   />
                 </span>
@@ -205,7 +246,9 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
             AOI watch
           </span>
           <span className="flex-1" />
-          <span className="mono text-[12px] tabular-nums text-txt-3">{chokepoints.length}</span>
+          <span className="mono text-[12px] tabular-nums text-txt-3">
+            {chokepoints.length}
+          </span>
         </div>
         {chokepoints.map((c) => {
           const live = aoiCounts[c.id] ?? 0;
@@ -221,19 +264,25 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
             >
               <Icon name="route" className="h-3 w-3 shrink-0 text-txt-3" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] text-txt-1">{c.name}</span>
-                <span className="block truncate text-[12px] text-txt-3">{c.region}</span>
+                <span className="block truncate text-[12px] text-txt-1">
+                  {c.name}
+                </span>
+                <span className="block truncate text-[12px] text-txt-3">
+                  {c.region}
+                </span>
               </span>
               <span className="mono w-[52px] shrink-0 text-right text-[12px] tabular-nums text-txt-2">
-                {live > 0 ? live : '—'}
+                {live > 0 ? live : "—"}
               </span>
               <span
                 className="relative h-[10px] w-[66px] shrink-0 overflow-hidden rounded-[1px] bg-bg-0"
                 aria-hidden="true"
               >
                 <i
-                  className={`absolute inset-y-0 left-0 block ${frac > 0.9 ? 'bg-warn' : 'bg-accent'}`}
-                  style={{ width: `${Math.max(live > 0 ? 3 : 0, frac * 100)}%` }}
+                  className={`absolute inset-y-0 left-0 block ${frac > 0.9 ? "bg-warn" : "bg-accent"}`}
+                  style={{
+                    width: `${Math.max(live > 0 ? 3 : 0, frac * 100)}%`,
+                  }}
                 />
               </span>
             </div>
@@ -256,7 +305,7 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           </span>
           <span className="flex-1" />
           <span className="mono text-[12px] tabular-nums text-txt-3">
-            {standingErr !== null ? '—' : standing.total}
+            {standingErr !== null ? "—" : standing.total}
           </span>
         </div>
         {standingErr !== null ? (
@@ -264,14 +313,19 @@ export function InfoPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
             Standing detections unavailable (HTTP {standingErr})
           </p>
         ) : detections.length === 0 ? (
-          <p className="px-[14px] py-[4px] text-[12px] text-txt-3">No detections firing.</p>
+          <p className="px-[14px] py-[4px] text-[12px] text-txt-3">
+            No detections firing.
+          </p>
         ) : (
           detections.map(({ sev, n }) => (
             <div
               key={sev}
               className="flex min-h-[24px] items-center gap-2 px-[14px] py-[2px] text-[12px]"
             >
-              <span className={`h-[6px] w-[6px] shrink-0 rounded-full ${SEV_DOT[sev]}`} aria-hidden />
+              <span
+                className={`h-[6px] w-[6px] shrink-0 rounded-full ${SEV_DOT[sev]}`}
+                aria-hidden
+              />
               <span className="min-w-0 flex-1 truncate uppercase tracking-[0.4px] text-txt-2">
                 {sev}
               </span>
@@ -317,7 +371,7 @@ function SpaceWeather(): JSX.Element {
     let cancelled = false;
     const poll = async (): Promise<void> => {
       try {
-        const r = await apiFetch('/api/env/spaceweather');
+        const r = await apiFetch("/api/env/spaceweather");
         if (cancelled) return;
         if (!r.ok) {
           setErr(r.status);
@@ -346,33 +400,37 @@ function SpaceWeather(): JSX.Element {
         </span>
         <span className="flex-1" />
         <span className="mono text-[12px] tabular-nums text-txt-3">
-          {err !== null ? '—' : (wx?.kp?.band ?? '…')}
+          {err !== null ? "—" : (wx?.kp?.band ?? "…")}
         </span>
       </div>
       {err !== null ? (
         <p className="px-[14px] py-[6px] text-[12px] text-txt-2">
-          Space weather unavailable {err ? `(HTTP ${err})` : ''}
+          Space weather unavailable {err ? `(HTTP ${err})` : ""}
         </p>
       ) : (
         <>
           <div className="flex h-(--g-row-2) items-center gap-2 px-[14px]">
-            <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">Planetary Kp</span>
+            <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">
+              Planetary Kp
+            </span>
             <span
-              className={`mono shrink-0 text-[12px] tabular-nums ${stormy ? 'text-warn-fg' : 'text-txt-0'}`}
+              className={`mono shrink-0 text-[12px] tabular-nums ${stormy ? "text-warn-fg" : "text-txt-0"}`}
             >
-              {wx?.kp ? wx.kp.kp.toFixed(1) : '—'}
+              {wx?.kp ? wx.kp.kp.toFixed(1) : "—"}
             </span>
           </div>
           <div className="flex h-(--g-row-2) items-center gap-2 px-[14px]">
-            <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">GOES X-ray</span>
+            <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">
+              GOES X-ray
+            </span>
             <span className="mono shrink-0 text-[12px] tabular-nums text-txt-0">
-              {wx?.xray?.current_class ?? '—'}
+              {wx?.xray?.current_class ?? "—"}
             </span>
           </div>
           <p className="px-[14px] pb-[6px] pt-[2px] text-[12px] leading-relaxed text-txt-3">
             {stormy
-              ? 'GNSS accuracy and HF propagation are degraded. A jamming reading in this window has a second explanation.'
-              : 'Quiet. A GNSS or HF degradation right now is not space weather.'}
+              ? "GNSS accuracy and HF propagation are degraded. A jamming reading in this window has a second explanation."
+              : "Quiet. A GNSS or HF degradation right now is not space weather."}
           </p>
         </>
       )}

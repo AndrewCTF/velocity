@@ -3,15 +3,22 @@
 // the detected vehicle count (animated vehicles on the globe). Desktop-only —
 // the website shows a caveat. Shared by the Ground Recon panel (point = AOI) and
 // the Traffic sim right-rail tab (point = map centre).
-import { useEffect, useRef, useState } from 'react';
-import type * as Cesium from 'cesium';
-import { Widget, KV, KVRow, MicroLabel, Caveat, Btn } from '../shell/instruments.js';
-import { apiFetch } from '../transport/http.js';
-import { detectImage, detectStatus, isDesktop } from '../transport/desktop.js';
-import { TrafficController, type CamInfo } from './TrafficController.js';
-import type { DetectStatus } from '../ground/types.js';
-import type { LatLon } from '../globe/center.js';
-import { useCaptures } from '../state/captures.js';
+import { useEffect, useRef, useState } from "react";
+import type * as Cesium from "cesium";
+import {
+  Widget,
+  KV,
+  KVRow,
+  MicroLabel,
+  Caveat,
+  Btn,
+} from "../shell/instruments.js";
+import { apiFetch } from "../transport/http.js";
+import { detectImage, detectStatus, isDesktop } from "../transport/desktop.js";
+import { TrafficController, type CamInfo } from "./TrafficController.js";
+import type { DetectStatus } from "../ground/types.js";
+import type { LatLon } from "../globe/center.js";
+import { useCaptures } from "../state/captures.js";
 
 export function TrafficSimSection({
   viewer,
@@ -33,11 +40,14 @@ export function TrafficSimSection({
   // counts at real cam locations) instead of one live cam. Works on the website
   // too — captures already carry their detections.
   const [realData, setRealData] = useState(false);
-  const [jamInfo, setJamInfo] = useState<{ roads: number; jams: number } | null>(null);
+  const [jamInfo, setJamInfo] = useState<{
+    roads: number;
+    jams: number;
+  } | null>(null);
   // Select the STABLE array ref (a filtering selector returns a new array each
   // render → useSyncExternalStore infinite-loop). Filter in render (cheap).
   const allCaptures = useCaptures((s) => s.captures);
-  const camCaptures = allCaptures.filter((c) => c.source === 'cam');
+  const camCaptures = allCaptures.filter((c) => c.source === "cam");
 
   // Find the nearest cam to the point whenever it changes.
   useEffect(() => {
@@ -45,22 +55,31 @@ export function TrafficSimSection({
     setSimCount(null);
     if (!center) return;
     let cancelled = false;
-    apiFetch('/api/cams')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`cams ${r.status}`))))
+    apiFetch("/api/cams")
+      .then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(`cams ${r.status}`)),
+      )
       .then((fc: { features?: Array<Record<string, unknown>> }) => {
         if (cancelled) return;
         let best: CamInfo | null = null;
         let bestD = Infinity;
         for (const f of fc.features ?? []) {
           const p = (f.properties ?? {}) as Record<string, unknown>;
-          const coords = (f.geometry as { coordinates?: [number, number, number] } | undefined)?.coordinates;
+          const coords = (
+            f.geometry as { coordinates?: [number, number, number] } | undefined
+          )?.coordinates;
           if (!coords || !p.cam_id) continue;
           const lat = coords[1];
           const lon = coords[0];
           const d = Math.hypot(lat - center.lat, lon - center.lon);
           if (d < bestD) {
             bestD = d;
-            best = { cam_id: String(p.cam_id), name: String(p.name ?? p.cam_id), lat, lon };
+            best = {
+              cam_id: String(p.cam_id),
+              name: String(p.name ?? p.cam_id),
+              lat,
+              lon,
+            };
           }
         }
         if (best && bestD < 1.0) setCam(best); // within ~1° (~111 km) of the point
@@ -91,15 +110,18 @@ export function TrafficSimSection({
     const tc = tcRef.current;
     if (!tc) return;
     try {
-      const r = await apiFetch(`/api/cams/${encodeURIComponent(c.cam_id)}/snapshot`);
-      if (!r.ok) throw new Error(`Camera snapshot unavailable (HTTP ${r.status})`);
+      const r = await apiFetch(
+        `/api/cams/${encodeURIComponent(c.cam_id)}/snapshot`,
+      );
+      if (!r.ok)
+        throw new Error(`Camera snapshot unavailable (HTTP ${r.status})`);
       const bytes = new Uint8Array(await r.arrayBuffer());
       const dets = await detectImage(bytes);
       const res = await tc.seed(c, dets ?? []);
       setSimCount(res.count);
-      setMsg(res.road ? null : 'no road geometry, using fallback line');
+      setMsg(res.road ? null : "no road geometry, using fallback line");
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : 'sim failed');
+      setMsg(e instanceof Error ? e.message : "sim failed");
     }
   };
 
@@ -121,11 +143,17 @@ export function TrafficSimSection({
   const seedReal = async (): Promise<void> => {
     const tc = tcRef.current;
     if (!tc) return;
-    const caps = useCaptures.getState().captures.filter((c) => c.source === 'cam');
+    const caps = useCaptures
+      .getState()
+      .captures.filter((c) => c.source === "cam");
     const res = await tc.seedFromCaptures(caps);
     setSimCount(res.count);
     setJamInfo({ roads: res.roads, jams: res.jams });
-    setMsg(res.count === 0 ? 'no cam captures with vehicles yet; detect on some cams first' : null);
+    setMsg(
+      res.count === 0
+        ? "no cam captures with vehicles yet; detect on some cams first"
+        : null,
+    );
   };
 
   const onSimulateReal = async (): Promise<void> => {
@@ -155,14 +183,18 @@ export function TrafficSimSection({
   };
 
   const modeToggle = (
-    <div className="flex gap-1 mb-2" role="radiogroup" aria-label="Traffic source">
+    <div
+      className="flex gap-1 mb-2"
+      role="radiogroup"
+      aria-label="Traffic source"
+    >
       {(
         [
-          ['live', 'Live cam'],
-          ['real', 'Real data'],
+          ["live", "Live cam"],
+          ["real", "Real data"],
         ] as const
       ).map(([mid, label]) => {
-        const on = (mid === 'real') === realData;
+        const on = (mid === "real") === realData;
         return (
           <button
             key={mid}
@@ -171,12 +203,12 @@ export function TrafficSimSection({
             aria-checked={on}
             onClick={() => {
               onStop();
-              setRealData(mid === 'real');
+              setRealData(mid === "real");
             }}
             className={`flex-1 mono text-[10px] px-2 py-1 rounded-sm border transition-colors ${
               on
-                ? 'border-accent-line text-accent bg-accent-dim'
-                : 'border-line text-txt-2 hover:border-accent-line hover:text-txt-1'
+                ? "border-accent-line text-accent bg-accent-dim"
+                : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
             }`}
           >
             {label}
@@ -190,13 +222,20 @@ export function TrafficSimSection({
     return (
       <Widget
         title="Traffic sim · real data"
-        count={simCount != null ? `${simCount} veh` : `${camCaptures.length} caps`}
+        count={
+          simCount != null ? `${simCount} veh` : `${camCaptures.length} caps`
+        }
       >
         {modeToggle}
         <KV>
           <KVRow k="Captures" v={`${camCaptures.length} cam`} />
-          <KVRow k="Sim" v={simCount != null ? `${simCount} vehicles` : 'idle'} />
-          {jamInfo && <KVRow k="Roads" v={`${jamInfo.roads} · ${jamInfo.jams} jam`} />}
+          <KVRow
+            k="Sim"
+            v={simCount != null ? `${simCount} vehicles` : "idle"}
+          />
+          {jamInfo && (
+            <KVRow k="Roads" v={`${jamInfo.roads} · ${jamInfo.jams} jam`} />
+          )}
         </KV>
         {msg && <span className="mono text-[10px] text-alert">{msg}</span>}
         <div className="mt-2 flex gap-1.5">
@@ -206,42 +245,68 @@ export function TrafficSimSection({
             onClick={() => void onSimulateReal()}
             disabled={busy || !viewer || camCaptures.length === 0}
           >
-            {busy ? 'starting…' : '▶ simulate'}
+            {busy ? "starting…" : "▶ simulate"}
           </Btn>
           <Btn size="sm" onClick={onStop} disabled={simCount == null}>
             stop
           </Btn>
         </div>
         <MicroLabel>
-          real car-counts from pinned cam captures → vehicles on OSM roads + traffic-jam prediction
+          real car-counts from pinned cam captures → vehicles on OSM roads +
+          traffic-jam prediction
         </MicroLabel>
       </Widget>
     );
   }
 
   return (
-    <Widget title="Traffic sim" count={simCount != null ? `${simCount} veh` : status ? status.device : '—'}>
+    <Widget
+      title="Traffic sim"
+      count={
+        simCount != null ? `${simCount} veh` : status ? status.device : "—"
+      }
+    >
       {modeToggle}
       {!desktop ? (
         <>
           <Caveat level="DESKTOP-ONLY" tone="warn" />
-          <MicroLabel>live cam → CUDA detect runs in the desktop app; use Real data mode here</MicroLabel>
+          <MicroLabel>
+            live cam → CUDA detect runs in the desktop app; use Real data mode
+            here
+          </MicroLabel>
         </>
       ) : (
         <>
           {cam ? (
             <KV>
               <KVRow k="Cam" v={cam.name} />
-              <KVRow k="Detect" v={status ? `${status.device}${status.ready ? '' : ' (warming)'}` : '—'} />
-              <KVRow k="Sim" v={simCount != null ? `${simCount} vehicles` : 'idle'} />
+              <KVRow
+                k="Detect"
+                v={
+                  status
+                    ? `${status.device}${status.ready ? "" : " (warming)"}`
+                    : "—"
+                }
+              />
+              <KVRow
+                k="Sim"
+                v={simCount != null ? `${simCount} vehicles` : "idle"}
+              />
             </KV>
           ) : (
-            <MicroLabel>{center ? 'no public cam near this point' : 'set a location'}</MicroLabel>
+            <MicroLabel>
+              {center ? "no public cam near this point" : "set a location"}
+            </MicroLabel>
           )}
           {msg && <span className="mono text-[10px] text-alert">{msg}</span>}
           <div className="mt-2 flex gap-1.5">
-            <Btn size="sm" tone="accent" onClick={() => void onSimulate()} disabled={!cam || busy || !viewer}>
-              {busy ? 'starting…' : '▶ simulate'}
+            <Btn
+              size="sm"
+              tone="accent"
+              onClick={() => void onSimulate()}
+              disabled={!cam || busy || !viewer}
+            >
+              {busy ? "starting…" : "▶ simulate"}
             </Btn>
             <Btn size="sm" onClick={onStop} disabled={simCount == null}>
               stop

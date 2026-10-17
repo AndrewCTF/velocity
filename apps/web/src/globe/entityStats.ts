@@ -18,19 +18,19 @@
 // PollGeoJsonAdapter.drain, which already iterates every feature. YAGNI now: the
 // walk is off the critical path (idle-scheduled) and one pass is cheap enough.
 
-import * as Cesium from 'cesium';
-import { create } from 'zustand';
-import { chokepoints } from '../registry/chokepoints.js';
-import { isCameraMoving } from './cameraMotion.js';
+import * as Cesium from "cesium";
+import { create } from "zustand";
+import { chokepoints } from "../registry/chokepoints.js";
+import { isCameraMoving } from "./cameraMotion.js";
 import {
   newFacetTally,
   tallyFacets,
   tallyTier,
   buildHistograms,
   type Histogram,
-} from '../explorer/facets.js';
-import { tierOf } from '../registry/provenance.js';
-import { dict } from '../shell/safeKeys.js';
+} from "../explorer/facets.js";
+import { tierOf } from "../registry/provenance.js";
+import { dict } from "../shell/safeKeys.js";
 
 export interface EntityStats {
   histograms: Histogram[];
@@ -42,7 +42,12 @@ export interface EntityStats {
   sampledAt: number;
 }
 
-const EMPTY: EntityStats = { histograms: [], counted: 0, aoiCounts: {}, sampledAt: 0 };
+const EMPTY: EntityStats = {
+  histograms: [],
+  counted: 0,
+  aoiCounts: {},
+  sampledAt: 0,
+};
 
 export const useEntityStats = create<EntityStats>(() => ({ ...EMPTY }));
 
@@ -64,9 +69,13 @@ const IDLE_TIMEOUT_MS = 600; // run within this even if the main thread never id
 const WALK_CHUNK = 500;
 
 const ric: typeof window.requestIdleCallback | undefined =
-  typeof window !== 'undefined' ? window.requestIdleCallback?.bind(window) : undefined;
+  typeof window !== "undefined"
+    ? window.requestIdleCallback?.bind(window)
+    : undefined;
 const cic: typeof window.cancelIdleCallback | undefined =
-  typeof window !== 'undefined' ? window.cancelIdleCallback?.bind(window) : undefined;
+  typeof window !== "undefined"
+    ? window.cancelIdleCallback?.bind(window)
+    : undefined;
 
 function clearTimers(): void {
   job = null;
@@ -81,7 +90,7 @@ function clearTimers(): void {
 }
 
 function paused(): boolean {
-  return consumers <= 0 || (typeof document !== 'undefined' && document.hidden);
+  return consumers <= 0 || (typeof document !== "undefined" && document.hidden);
 }
 
 function scheduleNext(): void {
@@ -191,7 +200,9 @@ function* walk(v: Cesium.Viewer): Generator<void, EntityStats | null> {
       if (!names || names.length === 0) continue;
       const props = dict<unknown>();
       for (const nm of names) {
-        const p = (bag as unknown as Record<string, Cesium.Property | undefined>)[nm];
+        const p = (
+          bag as unknown as Record<string, Cesium.Property | undefined>
+        )[nm];
         if (!p) continue;
         try {
           props[nm] = p.getValue(time);
@@ -242,8 +253,8 @@ export function acquireStats(): () => void {
 
 // Resume promptly when the tab returns to the foreground; stop burning cycles
 // while hidden.
-if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => {
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       clearTimers();
     } else if (consumers > 0) {

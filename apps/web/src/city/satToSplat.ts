@@ -12,7 +12,7 @@
 // Single-view feed-forward yields a 2.5D relief splat (true multi-view stereo
 // would need per-city imagery that isn't keyless/global) — real Gaussians, honest
 // about the geometry.
-import { apiFetch, backendUrl } from '../transport/http.js';
+import { apiFetch, backendUrl } from "../transport/http.js";
 
 // --- Web-Mercator (XYZ) tile math ---------------------------------------------
 function lonToTileX(lon: number, z: number): number {
@@ -20,7 +20,9 @@ function lonToTileX(lon: number, z: number): number {
 }
 function latToTileY(lat: number, z: number): number {
   const r = (lat * Math.PI) / 180;
-  return Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z);
+  return Math.floor(
+    ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z,
+  );
 }
 
 // Pick a zoom so a grid×grid block of 256 px tiles spans ~2·radiusKm, clamped to
@@ -55,15 +57,20 @@ export async function stitchSatChip(
   const xc = lonToTileX(lon, z);
   const yc = latToTileY(lat, z);
   const half = Math.floor(grid / 2);
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = 256 * grid;
   canvas.height = 256 * grid;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Could not build the satellite chip: this browser has no 2D canvas support.');
+  const ctx = canvas.getContext("2d");
+  if (!ctx)
+    throw new Error(
+      "Could not build the satellite chip: this browser has no 2D canvas support.",
+    );
   const draws: Promise<void>[] = [];
   for (let dy = 0; dy < grid; dy++) {
     for (let dx = 0; dx < grid; dx++) {
-      const url = backendUrl(`/tiles/sat/${z}/${xc - half + dx}/${yc - half + dy}.jpg`);
+      const url = backendUrl(
+        `/tiles/sat/${z}/${xc - half + dx}/${yc - half + dy}.jpg`,
+      );
       draws.push(
         loadImg(url)
           .then((im) => {
@@ -77,9 +84,9 @@ export async function stitchSatChip(
   }
   await Promise.all(draws);
   const blob = await new Promise<Blob | null>((res) =>
-    canvas.toBlob((b) => res(b), 'image/jpeg', 0.92),
+    canvas.toBlob((b) => res(b), "image/jpeg", 0.92),
   );
-  if (!blob) throw new Error('Could not encode the satellite chip image.');
+  if (!blob) throw new Error("Could not encode the satellite chip image.");
   return blob;
 }
 
@@ -93,14 +100,17 @@ export async function splatCityFromSat(
 ): Promise<string> {
   const chip = await stitchSatChip(lat, lon, radiusKm);
   const fd = new FormData();
-  fd.append('files', chip, `city_${lat.toFixed(3)}_${lon.toFixed(3)}.jpg`);
-  fd.append('mode', 'mapany'); // single-image feed-forward (MapAnything)
-  const res = await apiFetch('/api/recon/jobs', { method: 'POST', body: fd });
+  fd.append("files", chip, `city_${lat.toFixed(3)}_${lon.toFixed(3)}.jpg`);
+  fd.append("mode", "mapany"); // single-image feed-forward (MapAnything)
+  const res = await apiFetch("/api/recon/jobs", { method: "POST", body: fd });
   if (res.status === 503) {
-    throw new Error('This server has no recon GPU lab. Run locally to generate splats.');
+    throw new Error(
+      "This server has no recon GPU lab. Run locally to generate splats.",
+    );
   }
-  if (!res.ok) throw new Error(`Recon job failed to start (HTTP ${res.status}).`);
+  if (!res.ok)
+    throw new Error(`Recon job failed to start (HTTP ${res.status}).`);
   const body = (await res.json()) as { job_id?: string };
-  if (!body.job_id) throw new Error('Recon job did not return a job ID.');
+  if (!body.job_id) throw new Error("Recon job did not return a job ID.");
   return body.job_id;
 }

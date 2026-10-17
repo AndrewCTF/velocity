@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
-import { useAoi } from '../state/aoi.js';
-import { useTaskingQuestions } from '../state/taskingQuestions.js';
-import { AoiSelector } from '../command-bar/AoiSelector.js';
-import { flyToPosition } from '../globe/camera.js';
+import { useMemo, useState } from "react";
+import { apiFetch } from "../transport/http.js";
+import { useAoi } from "../state/aoi.js";
+import { useTaskingQuestions } from "../state/taskingQuestions.js";
+import { AoiSelector } from "../command-bar/AoiSelector.js";
+import { flyToPosition } from "../globe/camera.js";
 import {
   SectionLabel,
   Widget,
@@ -14,13 +14,13 @@ import {
   Toggle,
   MicroLabel,
   Caveat,
-} from '../shell/instruments.js';
+} from "../shell/instruments.js";
 import {
   SENSOR_SATS,
   SENSOR_KINDS,
   sensorOf,
   type SensorKind,
-} from '../registry/sensorSats.js';
+} from "../registry/sensorSats.js";
 import {
   passesOverAoi,
   skyView,
@@ -28,9 +28,9 @@ import {
   type Pass,
   type SkyPoint,
   type Window as TaskWindow,
-} from '../sim/tasking.js';
-import { SkyViewPlot } from './SkyViewPlot.js';
-import { Icon } from '../normal/Icon.js';
+} from "../sim/tasking.js";
+import { SkyViewPlot } from "./SkyViewPlot.js";
+import { Icon } from "../normal/Icon.js";
 
 // Collection planner — "when can a sensor satellite see my AOI, and how often?"
 // Reuses the SGP4 stack (satellite.js) via pure tasking.ts math. Pulls CelesTrak
@@ -65,11 +65,11 @@ interface RunResult {
   sky: SkyPoint[];
 }
 
-const SENSOR_TONE: Record<SensorKind, 'accent' | 'mag' | 'warn' | 'ok'> = {
-  EO: 'accent',
-  MSI: 'ok',
-  SAR: 'warn',
-  RF: 'mag',
+const SENSOR_TONE: Record<SensorKind, "accent" | "mag" | "warn" | "ok"> = {
+  EO: "accent",
+  MSI: "ok",
+  SAR: "warn",
+  RF: "mag",
 };
 
 // Coarse step keeps the worst case (all chips, long window, dozens of sats)
@@ -82,7 +82,7 @@ const MAX_WINDOW_HOURS = 72;
 
 // Local datetime-local string (no seconds) for the default "From" value.
 function toLocalInput(d: Date): string {
-  const pad = (n: number): string => String(n).padStart(2, '0');
+  const pad = (n: number): string => String(n).padStart(2, "0");
   return (
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
     `T${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -91,9 +91,9 @@ function toLocalInput(d: Date): string {
 
 function fmtClock(ms: number): string {
   try {
-    return new Date(ms).toISOString().slice(11, 16) + 'Z';
+    return new Date(ms).toISOString().slice(11, 16) + "Z";
   } catch {
-    return '—';
+    return "—";
   }
 }
 
@@ -109,11 +109,11 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
 
   // AOI lat/lon: seeded from the active chokepoint center ([lon,lat]) but
   // independently editable for an ad-hoc point.
-  const [lat, setLat] = useState<string>(aoi ? String(aoi.center[1]) : '40.4');
-  const [lon, setLon] = useState<string>(aoi ? String(aoi.center[0]) : '-3.7');
+  const [lat, setLat] = useState<string>(aoi ? String(aoi.center[1]) : "40.4");
+  const [lon, setLon] = useState<string>(aoi ? String(aoi.center[0]) : "-3.7");
   const [fromStr, setFromStr] = useState<string>(toLocalInput(new Date()));
-  const [hours, setHours] = useState<string>('24');
-  const [minRevisit, setMinRevisit] = useState<string>('90');
+  const [hours, setHours] = useState<string>("24");
+  const [minRevisit, setMinRevisit] = useState<string>("90");
   const [chips, setChips] = useState<Record<SensorKind, boolean>>({
     EO: true,
     MSI: true,
@@ -153,32 +153,38 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
     setErr(null);
     const latN = Number(lat);
     const lonN = Number(lon);
-    const hoursN = Math.min(MAX_WINDOW_HOURS, Math.max(0.25, Number(hours) || 0));
+    const hoursN = Math.min(
+      MAX_WINDOW_HOURS,
+      Math.max(0.25, Number(hours) || 0),
+    );
     const fromMs = new Date(fromStr).getTime();
     if (!isFinite(latN) || latN < -90 || latN > 90) {
-      setErr('latitude must be between -90 and 90');
+      setErr("latitude must be between -90 and 90");
       return;
     }
     if (!isFinite(lonN) || lonN < -180 || lonN > 180) {
-      setErr('longitude must be between -180 and 180');
+      setErr("longitude must be between -180 and 180");
       return;
     }
     if (!isFinite(fromMs)) {
-      setErr('invalid start time');
+      setErr("invalid start time");
       return;
     }
     const selected = SENSOR_KINDS.filter((k) => chips[k]);
     if (selected.length === 0) {
-      setErr('select at least one sensor type');
+      setErr("select at least one sensor type");
       return;
     }
 
-    const win: TaskWindow = { startMs: fromMs, endMs: fromMs + hoursN * 3600_000 };
+    const win: TaskWindow = {
+      startMs: fromMs,
+      endMs: fromMs + hoursN * 3600_000,
+    };
     const aoiPt = { lat: latN, lon: lonN };
 
     setRunning(true);
     try {
-      const r = await apiFetch('/api/space/gp?group=active&limit=20000');
+      const r = await apiFetch("/api/space/gp?group=active&limit=20000");
       if (!r.ok) {
         setErr(`CelesTrak unavailable (HTTP ${r.status})`);
         setRunning(false);
@@ -203,7 +209,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
         const l1 = it.TLE_LINE1;
         const l2 = it.TLE_LINE2;
         if (!l1 || !l2) continue;
-        const name = (it.OBJECT_NAME ?? '').trim();
+        const name = (it.OBJECT_NAME ?? "").trim();
         const noradNum = Number(it.NORAD_CAT_ID);
         const hit = sensorOf(name, isFinite(noradNum) ? noradNum : undefined);
         if (!hit) continue;
@@ -228,7 +234,15 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
       const allPasses: Pass[] = [];
       for (let i = 0; i < targets.length; i++) {
         const t = targets[i]!;
-        const passes = passesOverAoi(t.l1, t.l2, aoiPt, win, STEP_SEC, MIN_ELEV_DEG, t.name);
+        const passes = passesOverAoi(
+          t.l1,
+          t.l2,
+          aoiPt,
+          win,
+          STEP_SEC,
+          MIN_ELEV_DEG,
+          t.name,
+        );
         if (passes.length > 0) {
           perSat.push({
             norad: t.norad,
@@ -246,8 +260,12 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
       // readable, plus note in the UI that it's a single sat's track.
       perSat.sort((a, b) => b.passes.length - a.passes.length);
       const top = perSat[0];
-      const tgtTop = top ? targets.find((t) => t.norad === top.norad) : undefined;
-      const sky = tgtTop ? skyView(tgtTop.l1, tgtTop.l2, aoiPt, win, STEP_SEC) : [];
+      const tgtTop = top
+        ? targets.find((t) => t.norad === top.norad)
+        : undefined;
+      const sky = tgtTop
+        ? skyView(tgtTop.l1, tgtTop.l2, aoiPt, win, STEP_SEC)
+        : [];
 
       perSat.sort((a, b) => {
         const ea = Math.max(...a.passes.map((p) => p.maxElevDeg), 0);
@@ -263,7 +281,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
         sky,
       });
     } catch {
-      setErr('Could not load satellite elements.');
+      setErr("Could not load satellite elements.");
     } finally {
       setRunning(false);
     }
@@ -272,7 +290,10 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
   const stats = useMemo(() => {
     if (!result) return null;
     const fromMs = new Date(fromStr).getTime();
-    const hoursN = Math.min(MAX_WINDOW_HOURS, Math.max(0.25, Number(hours) || 0));
+    const hoursN = Math.min(
+      MAX_WINDOW_HOURS,
+      Math.max(0.25, Number(hours) || 0),
+    );
     return coverageStats(result.allPasses, {
       startMs: fromMs,
       endMs: fromMs + hoursN * 3600_000,
@@ -290,18 +311,25 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
   // Flatten all passes into a single chronological flyover list.
   const flyovers = useMemo(() => {
     if (!result) return [];
-    return [...result.allPasses].sort((a, b) => a.startMs - b.startMs).slice(0, 60);
+    return [...result.allPasses]
+      .sort((a, b) => a.startMs - b.startMs)
+      .slice(0, 60);
   }, [result]);
 
   const topSatName = result?.perSat
-    ? [...result.perSat].sort((a, b) => b.passes.length - a.passes.length)[0]?.name
+    ? [...result.perSat].sort((a, b) => b.passes.length - a.passes.length)[0]
+        ?.name
     : undefined;
 
   return (
     <div className="px-3 py-2">
       <SectionLabel title="Satellite tasking" count="planner" />
       <div className="mt-1.5">
-        <Caveat level="PREDICTED" note="SGP4 forecast, not live track" tone="warn" />
+        <Caveat
+          level="PREDICTED"
+          note="SGP4 forecast, not live track"
+          tone="warn"
+        />
       </div>
 
       {/* ── Question queue (§8 MetaConstellation) — standing "can a sensor answer
@@ -315,8 +343,14 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
               const latN = Number(lat);
               const lonN = Number(lon);
               if (!isFinite(latN) || !isFinite(lonN)) return;
-              const label = aoi?.name ?? `${latN.toFixed(2)}, ${lonN.toFixed(2)}`;
-              addQuestion({ label, lat: latN, lon: lonN, hours: Math.max(0.25, Number(hours) || 24) });
+              const label =
+                aoi?.name ?? `${latN.toFixed(2)}, ${lonN.toFixed(2)}`;
+              addQuestion({
+                label,
+                lat: latN,
+                lon: lonN,
+                hours: Math.max(0.25, Number(hours) || 24),
+              });
             }}
             className="mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-sm border border-accent-line text-accent bg-accent-dim"
           >
@@ -330,7 +364,10 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
             {questions.map((q) => (
               <li key={q.id} className="flex items-center gap-2 py-1.5">
                 <span className="text-[11px] text-txt-1 flex-1 truncate">
-                  {q.label} <span className="mono text-[10px] text-txt-3">· {q.hours}h</span>
+                  {q.label}{" "}
+                  <span className="mono text-[10px] text-txt-3">
+                    · {q.hours}h
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -348,7 +385,9 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
                   onClick={() => removeQuestion(q.id)}
                   aria-label="Remove question"
                   className="mono text-[10px] text-txt-3 hover:text-alert"
-                ><Icon name="x" className="w-3 h-3" /></button>
+                >
+                  <Icon name="x" className="w-3 h-3" />
+                </button>
               </li>
             ))}
           </ul>
@@ -387,7 +426,8 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
             onClick={() => {
               const la = Number(lat);
               const lo = Number(lon);
-              if (isFinite(la) && isFinite(lo)) flyToPosition(viewer, lo, la, 800_000, 0.8);
+              if (isFinite(la) && isFinite(lo))
+                flyToPosition(viewer, lo, la, 800_000, 0.8);
             }}
             title="Center the globe on this AOI"
           >
@@ -437,16 +477,20 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
               <span className="flex items-center gap-2">
                 <Badge tone={SENSOR_TONE[k]}>{k}</Badge>
                 <span className="mono text-[10px] text-txt-3">
-                  {k === 'EO'
-                    ? 'electro-optical'
-                    : k === 'MSI'
-                      ? 'multispectral'
-                      : k === 'SAR'
-                        ? 'radar (all-weather)'
-                        : 'RF geolocation'}
+                  {k === "EO"
+                    ? "electro-optical"
+                    : k === "MSI"
+                      ? "multispectral"
+                      : k === "SAR"
+                        ? "radar (all-weather)"
+                        : "RF geolocation"}
                 </span>
               </span>
-              <Toggle on={chips[k]} onChange={() => toggleChip(k)} label={`toggle ${k}`} />
+              <Toggle
+                on={chips[k]}
+                onChange={() => toggleChip(k)}
+                label={`toggle ${k}`}
+              />
             </div>
           ))}
         </div>
@@ -458,10 +502,12 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
         disabled={running}
         onClick={() => void run()}
       >
-        {running ? 'computing passes…' : 'Run tasking'}
+        {running ? "computing passes…" : "Run tasking"}
       </Btn>
       {err && (
-        <p className="mono text-[10px] text-[#ffb3ae] mt-2 leading-snug">{err}</p>
+        <p className="mono text-[10px] text-[#ffb3ae] mt-2 leading-snug">
+          {err}
+        </p>
       )}
 
       {/* ── Results ─────────────────────────────────────────────────────── */}
@@ -475,7 +521,11 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
               <KVRow k="passes" v={stats.passCount} />
               <KVRow
                 k="avg revisit"
-                v={stats.passCount >= 2 ? `${stats.avgRevisitMin.toFixed(0)} min` : '—'}
+                v={
+                  stats.passCount >= 2
+                    ? `${stats.avgRevisitMin.toFixed(0)} min`
+                    : "—"
+                }
                 warn={revisitWarn}
               />
               <KVRow
@@ -488,31 +538,33 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
             </KV>
             {revisitWarn && (
               <p className="mono text-[10px] text-[#fcd9a0] mt-2 leading-snug">
-                avg revisit {stats.avgRevisitMin.toFixed(0)} min exceeds target{' '}
+                avg revisit {stats.avgRevisitMin.toFixed(0)} min exceeds target{" "}
                 {minRevisitN} min. Add sensors or widen the window.
               </p>
             )}
             <p className="mono text-[10px] text-txt-3 mt-2 leading-snug">
-              From the curated commercial-sensor catalogue ({catalogueTotal} constellations).
-              Not a complete catalogue of all imaging satellites.
+              From the curated commercial-sensor catalogue ({catalogueTotal}{" "}
+              constellations). Not a complete catalogue of all imaging
+              satellites.
             </p>
           </Widget>
 
-          <Widget title="Sky view" count={topSatName ?? ''}>
+          <Widget title="Sky view" count={topSatName ?? ""}>
             <div className="flex justify-center py-1">
               <SkyViewPlot samples={result.sky} size={220} />
             </div>
             <p className="mono text-[10px] text-txt-3 leading-snug text-center">
               {topSatName
                 ? `az/el track of ${topSatName} (most passes) over the AOI`
-                : 'no satellite rises above the horizon in this window'}
+                : "no satellite rises above the horizon in this window"}
             </p>
           </Widget>
 
           <Widget title="Flyovers" count={flyovers.length}>
             {flyovers.length === 0 ? (
               <p className="mono text-[10px] text-txt-3 leading-snug">
-                No sensor satellite passes above {MIN_ELEV_DEG}° over this AOI in the window.
+                No sensor satellite passes above {MIN_ELEV_DEG}° over this AOI
+                in the window.
               </p>
             ) : (
               <ul>
@@ -526,7 +578,7 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
                         className="mono text-[11px] text-txt-1 flex-1 truncate"
                         title={p.satName}
                       >
-                        {p.satName ?? '—'}
+                        {p.satName ?? "—"}
                       </span>
                       <span className="mono text-[10px] tabular-nums text-txt-3 shrink-0">
                         {fmtClock(p.startMs)}
@@ -534,10 +586,18 @@ export function TaskingPanel({ viewer }: Props): JSX.Element {
                     </div>
                     <div className="mono text-[10px] text-txt-3 mt-0.5 flex gap-3">
                       <span>
-                        el<span className="text-txt-1"> {p.maxElevDeg.toFixed(0)}°</span>
+                        el
+                        <span className="text-txt-1">
+                          {" "}
+                          {p.maxElevDeg.toFixed(0)}°
+                        </span>
                       </span>
                       <span>
-                        dur<span className="text-txt-1"> {fmtDur(p.durationS)}</span>
+                        dur
+                        <span className="text-txt-1">
+                          {" "}
+                          {fmtDur(p.durationS)}
+                        </span>
                       </span>
                     </div>
                   </li>

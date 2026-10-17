@@ -1,18 +1,18 @@
-import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { deviceTier } from '../shell/device.js';
-import { Icon } from '../normal/Icon.js';
+import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { deviceTier } from "../shell/device.js";
+import { Icon } from "../normal/Icon.js";
 
 // One-shot low-end suggestion. When the graded device probe (shell/device.ts:
 // deviceTier) reports a software / very-weak GPU, offer — but never force — the
 // 2D MapLibre map, which runs where the 3D globe can't (App2D / "/2d" is the
 // sanctioned resilience path). Dismissible; the choice sticks per browser. Shown
 // only on the 3D route ("/"); suggesting 2D while already on 2D would be absurd.
-const DISMISS_KEY = 'velocity.lowEndDismissed';
+const DISMISS_KEY = "velocity.lowEndDismissed";
 
 function alreadyDismissed(): boolean {
   try {
-    return localStorage.getItem(DISMISS_KEY) === '1';
+    return localStorage.getItem(DISMISS_KEY) === "1";
   } catch {
     return false;
   }
@@ -22,13 +22,13 @@ export function LowEndBanner(): JSX.Element | null {
   const loc = useLocation();
   const [dismissed, setDismissed] = useState(alreadyDismissed);
   // Only the 3D console home; never /2d, auth, news, studio.
-  if (loc.pathname !== '/') return null;
+  if (loc.pathname !== "/") return null;
   if (dismissed) return null;
-  if (deviceTier() !== 'low') return null;
+  if (deviceTier() !== "low") return null;
 
   const dismiss = (): void => {
     try {
-      localStorage.setItem(DISMISS_KEY, '1');
+      localStorage.setItem(DISMISS_KEY, "1");
     } catch {
       /* private mode — dismiss for this session only */
     }
@@ -42,8 +42,10 @@ export function LowEndBanner(): JSX.Element | null {
     >
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
       <span>
-        Low-end graphics detected. The <span className="text-accent">2D map</span> runs smoother
-        on this device. Or lower <span className="text-txt-0">Settings → Display → quality</span>.
+        Low-end graphics detected. The{" "}
+        <span className="text-accent">2D map</span> runs smoother on this
+        device. Or lower{" "}
+        <span className="text-txt-0">Settings → Display → quality</span>.
       </span>
       <Link
         to="/2d"
@@ -57,7 +59,9 @@ export function LowEndBanner(): JSX.Element | null {
         onClick={dismiss}
         aria-label="Dismiss"
         className="px-1.5 py-0.5 rounded-sm border border-line text-txt-3 hover:text-txt-1 hover:border-accent-line shrink-0"
-      ><Icon name="x" className="w-3 h-3" /></button>
+      >
+        <Icon name="x" className="w-3 h-3" />
+      </button>
     </div>
   );
 }

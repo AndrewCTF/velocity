@@ -3,11 +3,11 @@
 // contains links), local-first so the panels work read/write in-memory and only
 // PERSISTENCE degrades when Supabase / sign-in is absent (the 503 contract).
 
-import { create } from 'zustand';
-import { apiFetch } from '../transport/http.js';
+import { create } from "zustand";
+import { apiFetch } from "../transport/http.js";
 
-export type Severity = 'critical' | 'high' | 'med' | 'low';
-export type Status = 'active' | 'monitoring' | 'resolved' | 'archived';
+export type Severity = "critical" | "high" | "med" | "low";
+export type Status = "active" | "monitoring" | "resolved" | "archived";
 
 export interface Situation {
   id: string;
@@ -23,7 +23,8 @@ export interface Situation {
 }
 
 let _seq = 0;
-const localId = (): string => `situation:loc-${Date.now().toString(36)}-${(_seq++).toString(36)}`;
+const localId = (): string =>
+  `situation:loc-${Date.now().toString(36)}-${(_seq++).toString(36)}`;
 
 interface SituationState {
   situations: Situation[];
@@ -39,13 +40,13 @@ interface SituationState {
 function defaults(partial: Partial<Situation>): Situation {
   return {
     id: partial.id ?? localId(),
-    name: partial.name ?? 'Untitled situation',
-    severity: partial.severity ?? 'med',
-    status: partial.status ?? 'active',
+    name: partial.name ?? "Untitled situation",
+    severity: partial.severity ?? "med",
+    status: partial.status ?? "active",
     centroid: partial.centroid ?? null,
     radius_km: partial.radius_km ?? 50,
-    summary: partial.summary ?? '',
-    report: partial.report ?? '',
+    summary: partial.summary ?? "",
+    report: partial.report ?? "",
     updated_at: partial.updated_at ?? null,
     created_at: partial.created_at ?? null,
   };
@@ -54,9 +55,9 @@ function defaults(partial: Partial<Situation>): Situation {
 // Persist a situation; returns the server row on success, null on degrade.
 async function persist(sit: Situation): Promise<Situation | null> {
   try {
-    const r = await apiFetch('/api/situations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const r = await apiFetch("/api/situations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(sit),
     });
     if (!r.ok) return null;
@@ -73,12 +74,14 @@ export const useSituations = create<SituationState>((set, get) => ({
   load: async () => {
     set({ loading: true });
     try {
-      const r = await apiFetch('/api/situations');
+      const r = await apiFetch("/api/situations");
       if (r.ok) {
         const list = (await r.json()) as Situation[];
         set({ situations: list, error: null });
       } else {
-        set({ error: r.status === 401 ? 'Sign in to load saved situations.' : null });
+        set({
+          error: r.status === 401 ? "Sign in to load saved situations." : null,
+        });
       }
     } catch {
       /* offline — keep whatever is in memory */
@@ -98,27 +101,35 @@ export const useSituations = create<SituationState>((set, get) => ({
       }));
       return saved.id;
     }
-    set({ error: 'Not saved. Sign in to persist (kept locally for now).' });
+    set({ error: "Not saved. Sign in to persist (kept locally for now)." });
     return sit.id;
   },
   update: async (id, patch) => {
     const cur = get().situations.find((x) => x.id === id);
     if (!cur) return;
     const next = { ...cur, ...patch };
-    set((s) => ({ situations: s.situations.map((x) => (x.id === id ? next : x)) }));
+    set((s) => ({
+      situations: s.situations.map((x) => (x.id === id ? next : x)),
+    }));
     const saved = await persist(next);
-    if (!saved) set({ error: 'Changes not saved. Sign in to persist (kept locally for now).' });
+    if (!saved)
+      set({
+        error: "Changes not saved. Sign in to persist (kept locally for now).",
+      });
     else set({ error: null });
   },
-  linkChild: async (id, dst, rel = 'contains') => {
+  linkChild: async (id, dst, rel = "contains") => {
     try {
-      const r = await apiFetch(`/api/situations/${encodeURIComponent(id)}/link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dst, rel }),
-      });
+      const r = await apiFetch(
+        `/api/situations/${encodeURIComponent(id)}/link`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dst, rel }),
+        },
+      );
       if (!r.ok) {
-        set({ error: 'Link not saved. Sign in to persist.' });
+        set({ error: "Link not saved. Sign in to persist." });
         return false;
       }
       set({ error: null });
@@ -130,7 +141,9 @@ export const useSituations = create<SituationState>((set, get) => ({
   remove: async (id) => {
     set((s) => ({ situations: s.situations.filter((x) => x.id !== id) }));
     try {
-      await apiFetch(`/api/situations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await apiFetch(`/api/situations/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
     } catch {
       /* gone locally regardless */
     }

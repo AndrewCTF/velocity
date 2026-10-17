@@ -31,10 +31,10 @@ let inFlight = 0;
 
 /** Lower runs first. Aircraft and vessels before reference/facility data. */
 export function movePriority(layerId: string): number {
-  if (layerId.startsWith('aviation.')) return 0;
-  if (layerId.startsWith('maritime.')) return 1;
-  if (layerId.startsWith('places.')) return 3;
-  if (layerId.startsWith('infra.') || layerId.startsWith('military.')) return 4;
+  if (layerId.startsWith("aviation.")) return 0;
+  if (layerId.startsWith("maritime.")) return 1;
+  if (layerId.startsWith("places.")) return 3;
+  if (layerId.startsWith("infra.") || layerId.startsWith("military.")) return 4;
   return 2;
 }
 
@@ -84,10 +84,15 @@ export function cancelMoveSettle(run: () => void): void {
 }
 
 /** Test/diagnostic view of the gate. */
-export function gateState(): { pending: number; inFlight: number; armed: boolean } {
+export function gateState(): {
+  pending: number;
+  inFlight: number;
+  armed: boolean;
+} {
   return { pending: pending.length, inFlight, armed: settleTimer != null };
 }
 
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __pollGate: typeof gateState }).__pollGate = gateState;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (window as unknown as { __pollGate: typeof gateState }).__pollGate =
+    gateState;
 }

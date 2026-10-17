@@ -1,12 +1,12 @@
-import * as Cesium from 'cesium';
-import { useDetections, type Detection } from '../state/detections.js';
+import * as Cesium from "cesium";
+import { useDetections, type Detection } from "../state/detections.js";
 
 // Renders the imagery-CV detections store. Same cheap shape as CaptureLayer: one
 // CustomDataSource, UPSERT-BY-ID (never removeAll+add), SVG billboards (never
 // dots), STATIC positions (no per-frame mirror). Selection works via the entity
 // id; the id prefix `detect:` routes to the OSINT-less generic panel.
 
-const COLOR = '#38bdf8'; // cyan — distinct from vessel/aircraft/capture palettes
+const COLOR = "#38bdf8"; // cyan — distinct from vessel/aircraft/capture palettes
 
 const iconCache = new Map<string, string>();
 function iconFor(color: string): string {
@@ -25,7 +25,7 @@ function iconFor(color: string): string {
 
 function bagFor(d: Detection): Cesium.PropertyBag {
   return new Cesium.PropertyBag({
-    kind: 'detection',
+    kind: "detection",
     source: d.source,
     cls: d.cls,
     conf: d.conf,
@@ -37,7 +37,7 @@ function bagFor(d: Detection): Cesium.PropertyBag {
 }
 
 export function installDetections(viewer: Cesium.Viewer): () => void {
-  const ds = new Cesium.CustomDataSource('__detections');
+  const ds = new Cesium.CustomDataSource("__detections");
   void viewer.dataSources.add(ds);
 
   const sync = (): void => {
@@ -54,17 +54,25 @@ export function installDetections(viewer: Cesium.Viewer): () => void {
         e = ds.entities.add({
           id: d.id,
           position: Cesium.Cartesian3.fromDegrees(d.lon, d.lat),
-          billboard: { image: img, scale: 1, verticalOrigin: Cesium.VerticalOrigin.CENTER },
+          billboard: {
+            image: img,
+            scale: 1,
+            verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          },
           label: {
             text: txt,
             font: '600 11px "IBM Plex Mono", monospace',
             fillColor: Cesium.Color.fromCssColorString(COLOR),
             showBackground: true,
-            backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.78),
+            backgroundColor:
+              Cesium.Color.fromCssColorString("#0c0e11").withAlpha(0.78),
             backgroundPadding: new Cesium.Cartesian2(6, 3),
             pixelOffset: new Cesium.Cartesian2(0, -16),
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2_000_000),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+              0,
+              2_000_000,
+            ),
           },
         });
       } else if (e.label) {

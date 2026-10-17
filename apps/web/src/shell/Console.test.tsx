@@ -1,6 +1,6 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import { Console } from './Console.js';
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { Console } from "./Console.js";
 
 // Guards for two controls that rendered and did nothing.
 //
@@ -19,19 +19,21 @@ const panels = {
   info: <div>info-body</div>,
 };
 
-describe('Console left panels', () => {
-  it('a number key selects the panel its tooltip names', () => {
-    render(<Console map={<div>map</div>} leftPanels={panels} rightPanels={{}} />);
-    expect(screen.getByText('layers-body')).toBeInTheDocument();
+describe("Console left panels", () => {
+  it("a number key selects the panel its tooltip names", () => {
+    render(
+      <Console map={<div>map</div>} leftPanels={panels} rightPanels={{}} />,
+    );
+    expect(screen.getByText("layers-body")).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '2' });
-    expect(screen.getByText('find-body')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "2" });
+    expect(screen.getByText("find-body")).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '4' });
-    expect(screen.getByText('info-body')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "4" });
+    expect(screen.getByText("info-body")).toBeInTheDocument();
   });
 
-  it('a number key typed into a field is left alone', () => {
+  it("a number key typed into a field is left alone", () => {
     render(
       <Console
         map={<div>map</div>}
@@ -39,12 +41,12 @@ describe('Console left panels', () => {
         rightPanels={{}}
       />,
     );
-    const input = screen.getByLabelText('q');
-    fireEvent.keyDown(input, { key: '3' });
-    expect(screen.queryByText('histogram-body')).not.toBeInTheDocument();
+    const input = screen.getByLabelText("q");
+    fireEvent.keyDown(input, { key: "3" });
+    expect(screen.queryByText("histogram-body")).not.toBeInTheDocument();
   });
 
-  it('asking for a panel in full bleed reports it, so the caller can restore the map', () => {
+  it("asking for a panel in full bleed reports it, so the caller can restore the map", () => {
     const onPanelWhileBleed = vi.fn();
     render(
       <Console
@@ -56,19 +58,26 @@ describe('Console left panels', () => {
       />,
     );
     // The column really is gone — this is the state the tabs were lying about.
-    expect(screen.queryByLabelText('Left panel')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Left panel")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Find/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Find/ }));
     expect(onPanelWhileBleed).toHaveBeenCalledTimes(1);
 
-    fireEvent.keyDown(window, { key: '3' });
+    fireEvent.keyDown(window, { key: "3" });
     expect(onPanelWhileBleed).toHaveBeenCalledTimes(2);
   });
 
-  it('no tab claims the selected state while full bleed has the body', () => {
-    render(<Console map={<div>map</div>} leftPanels={panels} rightPanels={{}} bleed />);
-    for (const tab of screen.getAllByRole('tab')) {
-      expect(tab).toHaveAttribute('aria-selected', 'false');
+  it("no tab claims the selected state while full bleed has the body", () => {
+    render(
+      <Console
+        map={<div>map</div>}
+        leftPanels={panels}
+        rightPanels={{}}
+        bleed
+      />,
+    );
+    for (const tab of screen.getAllByRole("tab")) {
+      expect(tab).toHaveAttribute("aria-selected", "false");
     }
   });
 });

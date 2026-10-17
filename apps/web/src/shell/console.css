@@ -85,7 +85,7 @@
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
-.csl2-clas[data-kind='exercise'] {
+.csl2-clas[data-kind="exercise"] {
   border-color: var(--warn);
   color: var(--warn-fg);
 }
@@ -111,13 +111,15 @@
   font: inherit;
   font-size: var(--fs-body);
   cursor: pointer;
-  transition: color 100ms, border-color 100ms;
+  transition:
+    color 100ms,
+    border-color 100ms;
   white-space: nowrap;
 }
 .csl2-tab:hover {
   color: var(--txt-0);
 }
-.csl2-tab[aria-selected='true'] {
+.csl2-tab[aria-selected="true"] {
   color: var(--txt-0);
   border-bottom-color: var(--accent);
 }
@@ -139,7 +141,7 @@
   font-family: var(--font-mono);
   font-size: var(--fs-caption);
 }
-.csl2-tab[aria-selected='true'] .csl2-badge {
+.csl2-tab[aria-selected="true"] .csl2-badge {
   background: var(--accent-dim);
   color: var(--accent-fg);
 }
@@ -154,7 +156,7 @@
   min-height: 0;
   background: var(--bg-0);
 }
-.csl2-body[data-right='0'] {
+.csl2-body[data-right="0"] {
   grid-template-columns: var(--g-left) 1fr;
 }
 /* A full-bleed app hides both rails, so the map is the ONLY grid item — and a
@@ -162,7 +164,7 @@
    every `chrome: 'full'` app (AI, Foundry, Workflows, City 3D, Country,
    Markets) rendered inside a 336px column with 1,560px of empty console beside
    it. Measured: .csl2-map at 8,106 336x916 in a 1920px window. */
-.csl2-body[data-left='0'] {
+.csl2-body[data-left="0"] {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -277,7 +279,7 @@
   box-shadow: var(--sh-2);
   overflow: hidden;
 }
-.csl2-dock[data-collapsed='true'] {
+.csl2-dock[data-collapsed="true"] {
   max-height: var(--g-time);
 }
 

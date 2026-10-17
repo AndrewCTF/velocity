@@ -4,7 +4,7 @@
 // URLs; we request a 128px thumbnail, lazy-load, and fall back to an initials
 // avatar on error or when no image exists.
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Card,
   CaveatList,
@@ -13,32 +13,30 @@ import {
   type FetchState,
   type LeadershipEntry,
   type ProfileResponse,
-} from './shared.js';
-import { safeHttpUrl } from '../shell/safeUrl.js';
+} from "./shared.js";
+import { safeHttpUrl } from "../shell/safeUrl.js";
 
 // Stable strategic ordering: state > government > defence > foreign > CINC.
 function roleRank(role: string): number {
   const r = role.toLowerCase();
-  if (r.includes('head of state')) return 0;
-  if (r.includes('head of government')) return 1;
-  if (r.includes('defence') || r.includes('defense')) return 2;
-  if (r.includes('foreign')) return 3;
-  if (r.includes('commander')) return 4;
+  if (r.includes("head of state")) return 0;
+  if (r.includes("head of government")) return 1;
+  if (r.includes("defence") || r.includes("defense")) return 2;
+  if (r.includes("foreign")) return 3;
+  if (r.includes("commander")) return 4;
   return 5;
 }
 
 function initials(name: string): string {
-  const words = name
-    .split(/\s+/)
-    .filter((w) => /\p{L}/u.test(w.charAt(0)));
-  if (words.length === 0) return '?';
+  const words = name.split(/\s+/).filter((w) => /\p{L}/u.test(w.charAt(0)));
+  if (words.length === 0) return "?";
   const first = words[0]!.charAt(0);
-  const last = words.length > 1 ? words[words.length - 1]!.charAt(0) : '';
+  const last = words.length > 1 ? words[words.length - 1]!.charAt(0) : "";
   return (first + last).toUpperCase();
 }
 
 function thumbUrl(image: string): string {
-  return `${image}${image.includes('?') ? '&' : '?'}width=128`;
+  return `${image}${image.includes("?") ? "&" : "?"}width=128`;
 }
 
 function Portrait({ entry }: { entry: LeadershipEntry }): JSX.Element {
@@ -55,7 +53,10 @@ function Portrait({ entry }: { entry: LeadershipEntry }): JSX.Element {
           onError={() => setBroken(true)}
         />
       ) : (
-        <span data-testid="initials-avatar" className="font-label text-[14px] text-txt-2 select-none">
+        <span
+          data-testid="initials-avatar"
+          className="font-label text-[14px] text-txt-2 select-none"
+        >
           {initials(entry.person)}
         </span>
       )}
@@ -65,15 +66,22 @@ function Portrait({ entry }: { entry: LeadershipEntry }): JSX.Element {
 
 function LeaderTile({ entry }: { entry: LeadershipEntry }): JSX.Element {
   const role = humanizeRole(entry.role);
-  const position = entry.position && entry.position !== entry.role ? entry.position : null;
+  const position =
+    entry.position && entry.position !== entry.role ? entry.position : null;
   return (
     <div className="flex items-center gap-2.5 border border-line-2 bg-bg-2 rounded-sm p-2 min-w-0">
       <Portrait entry={entry} />
       <div className="min-w-0 flex flex-col gap-px">
-        <div className="text-[12px] font-semibold text-txt-0 truncate" title={entry.person}>
+        <div
+          className="text-[12px] font-semibold text-txt-0 truncate"
+          title={entry.person}
+        >
           {entry.person}
         </div>
-        <div className="text-[10px] uppercase tracking-[0.5px] text-txt-3 truncate" title={role}>
+        <div
+          className="text-[10px] uppercase tracking-[0.5px] text-txt-3 truncate"
+          title={role}
+        >
           {role}
         </div>
         {position && (
@@ -81,15 +89,28 @@ function LeaderTile({ entry }: { entry: LeadershipEntry }): JSX.Element {
             {position}
           </div>
         )}
-        {entry.start && <div className="mono text-[9.5px] text-txt-4">since {entry.start}</div>}
+        {entry.start && (
+          <div className="mono text-[9.5px] text-txt-4">
+            since {entry.start}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export function LeadershipCard({ state }: { state: FetchState<ProfileResponse> }): JSX.Element {
+export function LeadershipCard({
+  state,
+}: {
+  state: FetchState<ProfileResponse>;
+}): JSX.Element {
   const { loading, error, data } = state;
-  const leaders = data ? [...data.leadership].sort((a, b) => roleRank(a.role) - roleRank(b.role) || a.role.localeCompare(b.role)) : [];
+  const leaders = data
+    ? [...data.leadership].sort(
+        (a, b) =>
+          roleRank(a.role) - roleRank(b.role) || a.role.localeCompare(b.role),
+      )
+    : [];
   return (
     <Card title="Leadership" meta={data ? data.source : undefined}>
       {loading && (
@@ -105,15 +126,26 @@ export function LeadershipCard({ state }: { state: FetchState<ProfileResponse> }
           ))}
         </div>
       )}
-      {!loading && error && <div className="mono text-[10px] text-alert-fg">Failed to load leadership: {error}</div>}
-      {!loading && !error && data?.unavailable && (
-        <div className="mono text-[10px] text-txt-4">
-          Wikidata unavailable{data.note ? `: ${data.note}` : ''}; retries shortly.
+      {!loading && error && (
+        <div className="mono text-[10px] text-alert-fg">
+          Failed to load leadership: {error}
         </div>
       )}
-      {!loading && !error && data && !data.unavailable && leaders.length === 0 && (
-        <div className="mono text-[10px] text-txt-4">No leadership records on Wikidata for this country.</div>
+      {!loading && !error && data?.unavailable && (
+        <div className="mono text-[10px] text-txt-4">
+          Wikidata unavailable{data.note ? `: ${data.note}` : ""}; retries
+          shortly.
+        </div>
       )}
+      {!loading &&
+        !error &&
+        data &&
+        !data.unavailable &&
+        leaders.length === 0 && (
+          <div className="mono text-[10px] text-txt-4">
+            No leadership records on Wikidata for this country.
+          </div>
+        )}
       {!loading && leaders.length > 0 && (
         <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
           {leaders.map((l) => (
@@ -122,7 +154,11 @@ export function LeadershipCard({ state }: { state: FetchState<ProfileResponse> }
         </div>
       )}
       {!loading && !error && data && !data.unavailable && (
-        <CaveatList notes={['Wikidata current-holder inference: latest dated appointment per role wins.']} />
+        <CaveatList
+          notes={[
+            "Wikidata current-holder inference: latest dated appointment per role wins.",
+          ]}
+        />
       )}
     </Card>
   );

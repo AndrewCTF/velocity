@@ -5,12 +5,17 @@
 // doesn't need the 1 s cadence the globe uses. Each card owns its own
 // loading/error/degraded state so one failed upstream never blanks the page;
 // all calls go through apiFetch (transport invariant).
-import { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
-import { SnapshotCard } from './SnapshotCard.js';
-import { StressCard } from './StressCard.js';
-import { PredictionsCard } from './PredictionsCard.js';
-import type { FetchState, PredictionsResponse, SnapshotResponse, StressResponse } from './types.js';
+import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../transport/http.js";
+import { SnapshotCard } from "./SnapshotCard.js";
+import { StressCard } from "./StressCard.js";
+import { PredictionsCard } from "./PredictionsCard.js";
+import type {
+  FetchState,
+  PredictionsResponse,
+  SnapshotResponse,
+  StressResponse,
+} from "./types.js";
 
 const SNAPSHOT_STRESS_REFRESH_MS = 120_000;
 const PREDICTIONS_REFRESH_MS = 300_000;
@@ -18,7 +23,11 @@ const PREDICTIONS_REFRESH_MS = 300_000;
 // Polls `url` on `intervalMs`, fetching immediately on mount. Mirrors the
 // news-panel poll pattern (cancelled flag + setInterval, no ttl-elapsed math).
 function usePoll<T>(url: string, intervalMs: number): FetchState<T> {
-  const [state, setState] = useState<FetchState<T>>({ loading: true, error: null, data: null });
+  const [state, setState] = useState<FetchState<T>>({
+    loading: true,
+    error: null,
+    data: null,
+  });
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -29,7 +38,11 @@ function usePoll<T>(url: string, intervalMs: number): FetchState<T> {
         const r = await apiFetch(url);
         if (cancelled) return;
         if (!r.ok) {
-          setState({ loading: false, error: `HTTP ${r.status}`, data: stateRef.current.data });
+          setState({
+            loading: false,
+            error: `HTTP ${r.status}`,
+            data: stateRef.current.data,
+          });
           return;
         }
         const data = (await r.json()) as T;
@@ -55,9 +68,18 @@ function usePoll<T>(url: string, intervalMs: number): FetchState<T> {
 }
 
 export function MarketsApp(): JSX.Element {
-  const snapshot = usePoll<SnapshotResponse>('/api/markets/snapshot', SNAPSHOT_STRESS_REFRESH_MS);
-  const stress = usePoll<StressResponse>('/api/markets/stress', SNAPSHOT_STRESS_REFRESH_MS);
-  const predictions = usePoll<PredictionsResponse>('/api/markets/predictions', PREDICTIONS_REFRESH_MS);
+  const snapshot = usePoll<SnapshotResponse>(
+    "/api/markets/snapshot",
+    SNAPSHOT_STRESS_REFRESH_MS,
+  );
+  const stress = usePoll<StressResponse>(
+    "/api/markets/stress",
+    SNAPSHOT_STRESS_REFRESH_MS,
+  );
+  const predictions = usePoll<PredictionsResponse>(
+    "/api/markets/predictions",
+    PREDICTIONS_REFRESH_MS,
+  );
 
   return (
     <div className="h-full overflow-auto text-txt-1 bg-bg-0">

@@ -47,7 +47,7 @@ const state: PerfState = {
 
 // Always exposed (not DEV-gated): __perf is a diagnostic readout, cheap and
 // harmless, and the operator's fps HUD reads it in a production build too.
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   (window as unknown as { __perf: PerfState }).__perf = state;
 }
 
@@ -58,7 +58,7 @@ let lastRenderAt = 0;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 
 function ensureFlusher(): void {
-  if (flushTimer != null || typeof window === 'undefined') return;
+  if (flushTimer != null || typeof window === "undefined") return;
   flushTimer = setInterval(() => {
     state.rendersPerSec = renderCount;
     renderCount = 0;
@@ -96,7 +96,9 @@ export function perfOnRender(now: number): void {
     const dt = now - lastRenderAt;
     // EMA α=0.1; guard against the multi-second gap after an idle governor pause
     // dominating the average.
-    if (dt < 1000) state.frameMsEMA = state.frameMsEMA === 0 ? dt : state.frameMsEMA * 0.9 + dt * 0.1;
+    if (dt < 1000)
+      state.frameMsEMA =
+        state.frameMsEMA === 0 ? dt : state.frameMsEMA * 0.9 + dt * 0.1;
   }
   lastRenderAt = now;
   ensureFlusher();
@@ -121,18 +123,19 @@ let longtasks: number[] = [];
 function trimLongtasks(now: number): void {
   const cut = now - 60_000;
   const head = longtasks[0];
-  if (head !== undefined && head < cut) longtasks = longtasks.filter((t) => t >= cut);
+  if (head !== undefined && head < cut)
+    longtasks = longtasks.filter((t) => t >= cut);
   state.longtasksPerMin = longtasks.length;
 }
 
-if (typeof PerformanceObserver !== 'undefined') {
+if (typeof PerformanceObserver !== "undefined") {
   try {
     const po = new PerformanceObserver((list) => {
       const now = performance.now();
       for (const e of list.getEntries()) longtasks.push(e.startTime);
       trimLongtasks(now);
     });
-    po.observe({ entryTypes: ['longtask'] });
+    po.observe({ entryTypes: ["longtask"] });
   } catch {
     // longtask entry type unsupported (Firefox/Safari) — leave the counter at 0.
   }

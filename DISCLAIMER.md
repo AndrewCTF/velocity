@@ -39,9 +39,9 @@ Consequences you accept by running it:
 - **Each upstream carries its own licence and terms of service, and those terms
   bind you, not this project.** Several are non-commercial or academic-only
   (ACLED, OpenSky, community ADS-B feeds, and others). The AGPL covers this
-  repository's *source code* and relicenses no upstream data whatsoever.
+  repository's _source code_ and relicenses no upstream data whatsoever.
 - **Scraping may breach a source's terms of service, and terms change without
-  notice.** Verify each upstream's *current* terms yourself before you rely on
+  notice.** Verify each upstream's _current_ terms yourself before you rely on
   it, and before any commercial or redistributive use. That a connector exists
   here is not advice that using it is lawful or permitted for you.
 - **Rate limits, blocks, bans, and legal demands are yours to absorb.** Default

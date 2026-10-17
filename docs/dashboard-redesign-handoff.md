@@ -15,25 +15,25 @@ The problem it solves is not a missing feature. It is that 41 entry points
 compete (14 in-console apps, 18 left-rail items, 9 routes), the ⌘K palette
 indexes **zero** of them, twelve separate `keydown` listeners own the keyboard
 with four of them binding Escape, and two persona waves independently reported
-capability that is *"reachable but invisible"*.
+capability that is _"reachable but invisible"_.
 
 ---
 
 ## Where everything is
 
-| Path | What |
-|---|---|
+| Path                                 | What                                                                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | `docs/dashboard-redesign-2026-08.md` | **The spec.** 568 lines. The only committed artifact. Decision, departures, re-homing, keyboard registry, file mapping, guards. |
-| `tmp/redesign/00-index.html` | The board. Start here. Three directions side by side, comparison table, click depths. |
-| `tmp/redesign/a-panel-parity.html` | Direction A, the chosen one. |
-| `tmp/redesign/b-verb-first.html` | Direction B, retained. |
-| `tmp/redesign/c-palette-first.html` | Direction C, retained. |
-| `tmp/redesign/panels.html` | All seven Palantir panels at fidelity. |
-| `tmp/redesign/foundry.html` | Foundry on the light surface, plus Health, Lineage and Analysis. |
-| `tmp/redesign/gotham-parity.html` | 8 components beside the real Palantir crops. |
-| `tmp/redesign/rehoming.html` | Every surface mapped: 64 layers, 14 apps, 18 rail items, 9 routes. |
-| `tmp/redesign/states.html` | Four states per surface, Escape order, 39 keyboard bindings. |
-| `tmp/redesign/components.html` | Token sheet and the primitives that must be built. |
+| `tmp/redesign/00-index.html`         | The board. Start here. Three directions side by side, comparison table, click depths.                                           |
+| `tmp/redesign/a-panel-parity.html`   | Direction A, the chosen one.                                                                                                    |
+| `tmp/redesign/b-verb-first.html`     | Direction B, retained.                                                                                                          |
+| `tmp/redesign/c-palette-first.html`  | Direction C, retained.                                                                                                          |
+| `tmp/redesign/panels.html`           | All seven Palantir panels at fidelity.                                                                                          |
+| `tmp/redesign/foundry.html`          | Foundry on the light surface, plus Health, Lineage and Analysis.                                                                |
+| `tmp/redesign/gotham-parity.html`    | 8 components beside the real Palantir crops.                                                                                    |
+| `tmp/redesign/rehoming.html`         | Every surface mapped: 64 layers, 14 apps, 18 rail items, 9 routes.                                                              |
+| `tmp/redesign/states.html`           | Four states per surface, Escape order, 39 keyboard bindings.                                                                    |
+| `tmp/redesign/components.html`       | Token sheet and the primitives that must be built.                                                                              |
 
 > **`tmp/` is gitignored.** Only the spec is committed. This is exactly how the
 > previous mockups this codebase was built from (`tmp/mock.css`, `tmp/power.css`,

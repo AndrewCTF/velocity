@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { SectionLabel, MicroLabel, Caveat, Btn } from '../shell/instruments.js';
-import { useImageryDiff } from './imageryDiffStore.js';
-import { Icon } from '../normal/Icon.js';
+import { useState } from "react";
+import { SectionLabel, MicroLabel, Caveat, Btn } from "../shell/instruments.js";
+import { useImageryDiff } from "./imageryDiffStore.js";
+import { Icon } from "../normal/Icon.js";
 
 // Before/after satellite chips for an AOI (the Gotham "Satellite observation /
 // Ship Density Model" popup). Two dated chips side-by-side from the keyless chip
@@ -19,7 +19,11 @@ function chipUrl(lat: number, lon: number, date: string): string {
   return `/api/imagery/chip?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&radius_km=6&date=${date}&source=auto`;
 }
 
-export function ImageryDiff({ aoi }: { aoi: { lat: number; lon: number } }): JSX.Element {
+export function ImageryDiff({
+  aoi,
+}: {
+  aoi: { lat: number; lon: number };
+}): JSX.Element {
   const [before, setBefore] = useState(isoDaysAgo(21));
   const [after, setAfter] = useState(isoDaysAgo(2));
 
@@ -37,7 +41,11 @@ export function ImageryDiff({ aoi }: { aoi: { lat: number; lon: number } }): JSX
         <Chip date={before} url={chipUrl(aoi.lat, aoi.lon, before)} />
         <Chip date={after} url={chipUrl(aoi.lat, aoi.lon, after)} />
       </div>
-      <Caveat level="NOTIONAL" note="auto-detection illustrative (no model wired)" tone="warn" />
+      <Caveat
+        level="NOTIONAL"
+        note="auto-detection illustrative (no model wired)"
+        tone="warn"
+      />
     </div>
   );
 }
@@ -94,7 +102,9 @@ export function ImageryDiffPopup(): JSX.Element | null {
   return (
     <div className="fixed z-(--z-modal) left-1/2 top-20 -translate-x-1/2 w-[360px] rounded-md border border-line-2 bg-bg-1/95 backdrop-blur-sm shadow-2xl p-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="mono text-[10px] tracking-[0.6px] uppercase text-txt-2">Imagery diff</span>
+        <span className="mono text-[10px] tracking-[0.6px] uppercase text-txt-2">
+          Imagery diff
+        </span>
         <Btn size="sm" onClick={close}>
           <Icon name="x" className="w-3 h-3" />
           Close

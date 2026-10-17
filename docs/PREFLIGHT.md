@@ -30,10 +30,10 @@ Re-reviewed adversarially against the running stack (api :8000 + web :5173).
   correct required-param validation (frontend calls it right); cyber outages
   `{items:[],note:"CLOUDFLARE_TOKEN not configured"}` = correct graceful-degrade.
 - **Fusion depth — NOT stubs (read the code):** incidents = ≥2-domain convergence
-  + union-find/seed clustering + cited narrative; jamming = real GPSJam rule
-  (nac_p<8/nic<7, 1° bins); emitter = severity-weighted centroid + CEP, honestly
-  labelled "not RF DF, ~tens of km"; deception = dup-MMSI/teleport/spoof-cluster;
-  baseline = rolling z-score. The DEEP labels hold.
+  - union-find/seed clustering + cited narrative; jamming = real GPSJam rule
+    (nac_p<8/nic<7, 1° bins); emitter = severity-weighted centroid + CEP, honestly
+    labelled "not RF DF, ~tens of km"; deception = dup-MMSI/teleport/spoof-cluster;
+    baseline = rolling z-score. The DEEP labels hold.
 - **Honesty sweep — clean:** no unbacked global/complete/parity claims in
   code/docs; `events.py` explicitly disclaims completeness.
 - **Security — clean:** no eval/exec/os.system/shell=True/pickle/yaml.load/
@@ -46,6 +46,7 @@ Re-reviewed adversarially against the running stack (api :8000 + web :5173).
   click → panel + magenta track ≤4s; click-empty → clears; 15s soak → no blink.
 
 **Findings:**
+
 1. _(open — coverage limitation)_ Vessel AIS is REGIONAL (N. Europe/Baltic, ~4.7k
    keyless). The Strait of Hormuz marquee case has **0 keyless AIS** — dark
    vessels there are SAR-only. README table is honest; keep launch copy honest.
@@ -60,19 +61,19 @@ Re-reviewed adversarially against the running stack (api :8000 + web :5173).
 
 ## Measured snapshot
 
-| Metric | Value | How measured |
-|---|---|---|
-| Age | 6 days | first commit 2026-06-10 → 2026-06-16 |
-| Commits | 98 (93 primary author) | `git log` |
-| Velocity | ~16 commits/day, peak 41 (06-14) | `git log` cadence |
-| Code | ~24.2k LOC (web 10.4k TS/TSX + api 13.8k Py) | `wc -l` |
-| Backend routes | 31 modules (added export), ~60 endpoints | route grep |
-| Agent API surface | 20 `/api/intel/*` endpoints + 22 MCP tools | route grep + README |
-| Fusion engine | 13 modules, 2.8k LOC | `wc -l app/intel` |
-| Upstream sources | 58 distinct hosts (~45 logical) | host grep |
-| API tests | **210 passed in ~2.2s** (was 199; +11 export/space/sources) | `pytest -q` |
-| Type safety | web + shared `tsc --noEmit` **clean** | `pnpm -r typecheck` |
-| Live aircraft (boot) | 9,283 and climbing toward ~13k | live `/api/adsb/global` |
+| Metric               | Value                                                       | How measured                         |
+| -------------------- | ----------------------------------------------------------- | ------------------------------------ |
+| Age                  | 6 days                                                      | first commit 2026-06-10 → 2026-06-16 |
+| Commits              | 98 (93 primary author)                                      | `git log`                            |
+| Velocity             | ~16 commits/day, peak 41 (06-14)                            | `git log` cadence                    |
+| Code                 | ~24.2k LOC (web 10.4k TS/TSX + api 13.8k Py)                | `wc -l`                              |
+| Backend routes       | 31 modules (added export), ~60 endpoints                    | route grep                           |
+| Agent API surface    | 20 `/api/intel/*` endpoints + 22 MCP tools                  | route grep + README                  |
+| Fusion engine        | 13 modules, 2.8k LOC                                        | `wc -l app/intel`                    |
+| Upstream sources     | 58 distinct hosts (~45 logical)                             | host grep                            |
+| API tests            | **210 passed in ~2.2s** (was 199; +11 export/space/sources) | `pytest -q`                          |
+| Type safety          | web + shared `tsc --noEmit` **clean**                       | `pnpm -r typecheck`                  |
+| Live aircraft (boot) | 9,283 and climbing toward ~13k                              | live `/api/adsb/global`              |
 
 **Verdict: the spine is real, tested, and runs.** Gaps below are
 go-to-market/hardening, not "does the core work."
@@ -97,7 +98,7 @@ go-to-market/hardening, not "does the core work."
 - [x] **Name chosen: Velocity** (projectvelocity.org) — stamped in README title,
       `index.html`, showcase line. Internal `@osint/*` pkg names left as-is.
 - [x] **Secrets hygiene — verified clean.** No API key committed or in git history
-      (tracked-tree grep + `git log --all -S`). A prior *untracked* `opencode.jsonc`
+      (tracked-tree grep + `git log --all -S`). A prior _untracked_ `opencode.jsonc`
       held a DeepSeek key; not in the repo. Guarded via `.gitignore`. Rotate that
       key if it ever left this machine.
 - [x] **Persistence story stated.** README opens with an unmissable "Phase-1 state
@@ -115,8 +116,7 @@ go-to-market/hardening, not "does the core work."
 - [ ] **Abuse/cost guard** for hosted: per-IP rate limit + upstream budget caps.
       _DEFERRED — needs care: slowapi was removed before (CLAUDE.md); revisit
       together with the hosted-demo work so it's tested, not bolted on._
-- [x] **`/api/intel/sources` honesty** — added `key_gated_note` ("set ≠ working")
-      + a `degraded` block for datacenter-IP-dead firehoses. Verified live.
+- [x] **`/api/intel/sources` honesty** — added `key_gated_note` ("set ≠ working") + a `degraded` block for datacenter-IP-dead firehoses. Verified live.
 - [x] **Export** — `GET /api/export?fmt=geojson|csv|kml&kinds=&bbox=&limit=` with
       download headers; geojson + csv + **kml** (Google Earth/GIS) verified live;
       `limit` bound added. 6 hermetic tests. _PDF still open._

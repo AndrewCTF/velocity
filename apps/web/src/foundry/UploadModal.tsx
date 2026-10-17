@@ -2,14 +2,17 @@
 // Replaces the old window.prompt(name) + bare UploadZone flow. Surfaces the
 // upload's `types` (column type pinning) and `cascade` (rebuild downstream
 // transforms) params the backend already accepted but the UI never sent.
-import { useRef, useState } from 'react';
-import { useFoundry, type Build, type Dataset } from '../state/foundry.js';
-import { Badge, Btn } from '../shell/instruments.js';
-import { Modal } from '../shell/Modal.js';
-import { Field, Select, controlCls } from './ui.js';
-import { dict } from '../shell/safeKeys.js';
+import { useRef, useState } from "react";
+import { useFoundry, type Build, type Dataset } from "../state/foundry.js";
+import { Badge, Btn } from "../shell/instruments.js";
+import { Modal } from "../shell/Modal.js";
+import { Field, Select, controlCls } from "./ui.js";
+import { dict } from "../shell/safeKeys.js";
 
-const TYPE_OPTS = ['auto', 'str', 'int', 'float', 'bool'].map((v) => ({ value: v, label: v }));
+const TYPE_OPTS = ["auto", "str", "int", "float", "bool"].map((v) => ({
+  value: v,
+  label: v,
+}));
 
 // Read the first 64KB of a file as text. FileReader is the one read API that's
 // reliably implemented across browsers AND jsdom (File.text / Blob.slice().text
@@ -17,8 +20,8 @@ const TYPE_OPTS = ['auto', 'str', 'int', 'float', 'bool'].map((v) => ({ value: v
 function readHead(file: File): Promise<string> {
   return new Promise((resolve) => {
     const r = new FileReader();
-    r.onload = (): void => resolve(String(r.result ?? '').slice(0, 65536));
-    r.onerror = (): void => resolve('');
+    r.onload = (): void => resolve(String(r.result ?? "").slice(0, 65536));
+    r.onerror = (): void => resolve("");
     r.readAsText(file.slice(0, 65536));
   });
 }
@@ -28,10 +31,13 @@ function readHead(file: File): Promise<string> {
 async function parseColumns(file: File): Promise<string[]> {
   const head = await readHead(file);
   const name = file.name.toLowerCase();
-  if (name.endsWith('.csv') || name.endsWith('.txt')) {
-    const firstLine = head.split(/\r?\n/, 1)[0] ?? '';
+  if (name.endsWith(".csv") || name.endsWith(".txt")) {
+    const firstLine = head.split(/\r?\n/, 1)[0] ?? "";
     if (!firstLine) return [];
-    return firstLine.split(',').map((c) => c.trim().replace(/^"|"$/g, '')).filter(Boolean);
+    return firstLine
+      .split(",")
+      .map((c) => c.trim().replace(/^"|"$/g, ""))
+      .filter(Boolean);
   }
   // JSON or NDJSON: take the first {...} object and read its keys.
   const objMatch = head.match(/\{[^]*?\}/);
@@ -63,21 +69,23 @@ export function UploadModal({
   const error = useFoundry((s) => s.error);
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [mode, setMode] = useState<'snapshot' | 'append'>('snapshot');
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [mode, setMode] = useState<"snapshot" | "append">("snapshot");
   const [columns, setColumns] = useState<string[]>([]);
   const [pins, setPins] = useState<Record<string, string>>({});
   const [cascade, setCascade] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<Dataset & { cascade_build?: Build } | null>(null);
+  const [result, setResult] = useState<
+    (Dataset & { cascade_build?: Build }) | null
+  >(null);
 
   const versionMode = !!existing;
 
   const reset = (): void => {
     setFile(null);
-    setName('');
-    setDescription('');
+    setName("");
+    setDescription("");
     setColumns([]);
     setPins({});
     setCascade(false);
@@ -92,10 +100,10 @@ export function UploadModal({
   const onFile = async (f: File): Promise<void> => {
     setFile(f);
     setResult(null);
-    if (!versionMode && !name) setName(f.name.replace(/\.[^.]+$/, ''));
+    if (!versionMode && !name) setName(f.name.replace(/\.[^.]+$/, ""));
     const cols = await parseColumns(f);
     setColumns(cols);
-    setPins(Object.fromEntries(cols.map((c) => [c, 'auto'])));
+    setPins(Object.fromEntries(cols.map((c) => [c, "auto"])));
   };
 
   const submit = async (): Promise<void> => {
@@ -103,10 +111,13 @@ export function UploadModal({
     if (!versionMode && !name.trim()) return;
     setBusy(true);
     const types = dict<string>();
-    for (const [c, t] of Object.entries(pins)) if (t && t !== 'auto') types[c] = t;
+    for (const [c, t] of Object.entries(pins))
+      if (t && t !== "auto") types[c] = t;
     const d = versionMode
       ? await uploadVersion(existing!.id, file, mode, { types, cascade })
-      : await uploadDataset(file, name.trim(), description || undefined, { types });
+      : await uploadDataset(file, name.trim(), description || undefined, {
+          types,
+        });
     setBusy(false);
     if (d) {
       setResult(d);
@@ -114,13 +125,17 @@ export function UploadModal({
     }
   };
 
-  const pinnedCount = Object.values(pins).filter((t) => t && t !== 'auto').length;
+  const pinnedCount = Object.values(pins).filter(
+    (t) => t && t !== "auto",
+  ).length;
 
   return (
     <Modal
       open={open}
       onClose={close}
-      title={versionMode ? `Upload version · ${existing?.name}` : 'Upload dataset'}
+      title={
+        versionMode ? `Upload version · ${existing?.name}` : "Upload dataset"
+      }
       width={560}
       footer={
         result ? (
@@ -130,8 +145,16 @@ export function UploadModal({
         ) : (
           <>
             <Btn onClick={close}>Cancel</Btn>
-            <Btn tone="accent" disabled={busy || !file || (!versionMode && !name.trim())} onClick={() => void submit()}>
-              {busy ? 'Uploading…' : versionMode ? 'Upload version' : 'Create dataset'}
+            <Btn
+              tone="accent"
+              disabled={busy || !file || (!versionMode && !name.trim())}
+              onClick={() => void submit()}
+            >
+              {busy
+                ? "Uploading…"
+                : versionMode
+                  ? "Upload version"
+                  : "Create dataset"}
             </Btn>
           </>
         )
@@ -142,23 +165,45 @@ export function UploadModal({
           <div className="flex items-center gap-2 text-[11px] mono">
             <Badge tone="ok">uploaded</Badge>
             <span className="text-txt-1">
-              {result.name} · v{result.latest_version} · {result.row_count.toLocaleString()} rows
+              {result.name} · v{result.latest_version} ·{" "}
+              {result.row_count.toLocaleString()} rows
             </span>
           </div>
           {result.cascade_build && (
-            <div className="rounded-sm border border-line-2 bg-bg-2 px-2.5 py-2 text-[11px] mono space-y-1" data-testid="cascade-summary">
-              <div className="text-txt-3 uppercase tracking-[0.4px] text-[10px]">Cascade build</div>
+            <div
+              className="rounded-sm border border-line-2 bg-bg-2 px-2.5 py-2 text-[11px] mono space-y-1"
+              data-testid="cascade-summary"
+            >
+              <div className="text-txt-3 uppercase tracking-[0.4px] text-[10px]">
+                Cascade build
+              </div>
               <div className="flex items-center gap-2">
-                <Badge tone={result.cascade_build.status === 'succeeded' ? 'ok' : result.cascade_build.status === 'failed' ? 'alert' : 'accent'}>
+                <Badge
+                  tone={
+                    result.cascade_build.status === "succeeded"
+                      ? "ok"
+                      : result.cascade_build.status === "failed"
+                        ? "alert"
+                        : "accent"
+                  }
+                >
                   {result.cascade_build.status}
                 </Badge>
-                <span className="text-txt-2">{result.cascade_build.rows_out?.toLocaleString() ?? '—'} rows out</span>
+                <span className="text-txt-2">
+                  {result.cascade_build.rows_out?.toLocaleString() ?? "—"} rows
+                  out
+                </span>
               </div>
-              {result.cascade_build.error && <div className="text-alert text-[10px]">{result.cascade_build.error}</div>}
+              {result.cascade_build.error && (
+                <div className="text-alert text-[10px]">
+                  {result.cascade_build.error}
+                </div>
+              )}
             </div>
           )}
           <p className="text-[10px] text-txt-4">
-            Ontology auto-sync ran on enabled bindings. See the banner in Datasets.
+            Ontology auto-sync ran on enabled bindings. See the banner in
+            Datasets.
           </p>
         </div>
       ) : (
@@ -167,7 +212,7 @@ export function UploadModal({
           <div
             onClick={() => inputRef.current?.click()}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
+              if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 inputRef.current?.click();
               }
@@ -177,10 +222,13 @@ export function UploadModal({
             className="rounded-md border border-dashed border-line-2 bg-bg-1 hover:border-accent-line px-4 py-5 text-center cursor-pointer transition-colors focus:outline-hidden focus:border-accent-line"
           >
             <div className="text-[11px] text-txt-1">
-              {file ? file.name : 'Drop CSV / JSON / NDJSON / GeoJSON / KML, or click to browse'}
+              {file
+                ? file.name
+                : "Drop CSV / JSON / NDJSON / GeoJSON / KML, or click to browse"}
             </div>
             <div className="text-[10px] text-txt-3 mt-1">
-              25 MB cap · header row for CSV · one row per feature for GeoJSON and KML
+              25 MB cap · header row for CSV · one row per feature for GeoJSON
+              and KML
             </div>
             <input
               ref={inputRef}
@@ -190,7 +238,7 @@ export function UploadModal({
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) void onFile(f);
-                e.target.value = '';
+                e.target.value = "";
               }}
             />
           </div>
@@ -198,10 +246,19 @@ export function UploadModal({
           {!versionMode && (
             <div className="grid grid-cols-2 gap-3">
               <Field label="Dataset name">
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="my_dataset" className={controlCls} />
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="my_dataset"
+                  className={controlCls}
+                />
               </Field>
               <Field label="Description (optional)">
-                <input value={description} onChange={(e) => setDescription(e.target.value)} className={controlCls} />
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className={controlCls}
+                />
               </Field>
             </div>
           )}
@@ -211,16 +268,21 @@ export function UploadModal({
               <Field label="Mode">
                 <Select
                   value={mode}
-                  onChange={(v) => setMode(v as 'snapshot' | 'append')}
+                  onChange={(v) => setMode(v as "snapshot" | "append")}
                   options={[
-                    { value: 'snapshot', label: 'snapshot (replace)' },
-                    { value: 'append', label: 'append (concat)' },
+                    { value: "snapshot", label: "snapshot (replace)" },
+                    { value: "append", label: "append (concat)" },
                   ]}
                 />
               </Field>
               <Field label="Cascade" hint="Rebuild stale downstream transforms">
                 <label className="flex items-center gap-2 h-[26px] mono text-[11px] text-txt-1">
-                  <input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} className="accent-accent" />
+                  <input
+                    type="checkbox"
+                    checked={cascade}
+                    onChange={(e) => setCascade(e.target.checked)}
+                    className="accent-accent"
+                  />
                   rebuild downstream
                 </label>
               </Field>
@@ -230,14 +292,28 @@ export function UploadModal({
           {columns.length > 0 && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-[0.4px] text-txt-3">Column types</span>
-                <span className="mono text-[10px] text-txt-4">{pinnedCount} pinned · rest auto-inferred</span>
+                <span className="text-[10px] uppercase tracking-[0.4px] text-txt-3">
+                  Column types
+                </span>
+                <span className="mono text-[10px] text-txt-4">
+                  {pinnedCount} pinned · rest auto-inferred
+                </span>
               </div>
               <div className="grid grid-cols-2 gap-1.5 max-h-[180px] overflow-y-auto pr-1">
                 {columns.map((c) => (
                   <div key={c} className="flex items-center gap-1.5">
-                    <span className="mono text-[10px] text-txt-2 truncate flex-1" title={c}>{c}</span>
-                    <Select value={pins[c] ?? 'auto'} onChange={(v) => setPins((p) => ({ ...p, [c]: v }))} options={TYPE_OPTS} className="w-[88px]" />
+                    <span
+                      className="mono text-[10px] text-txt-2 truncate flex-1"
+                      title={c}
+                    >
+                      {c}
+                    </span>
+                    <Select
+                      value={pins[c] ?? "auto"}
+                      onChange={(v) => setPins((p) => ({ ...p, [c]: v }))}
+                      options={TYPE_OPTS}
+                      className="w-[88px]"
+                    />
                   </div>
                 ))}
               </div>

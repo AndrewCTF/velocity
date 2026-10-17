@@ -28,7 +28,7 @@ the decision deliberately by changing BOTH the guard and this file.
   toggle (OFF default), both in `state/settings.ts`. → `docs/decisions.md`
 - With `aircraftDeadReckon` ON the motion model is ANALYTIC
   (`globe/adapters/deadReckon.ts`): `pos(t) = advance(anchor, track_deg,
-  velocity_ms * max(0, t - t0))`. Speed is EXACTLY the reported `velocity_ms`
+velocity_ms * max(0, t - t0))`. Speed is EXACTLY the reported `velocity_ms`
   and it can NEVER reverse — both structural, both operator requirements
   (2026-07-14). Never ease/interpolate TOWARD a fix (makes speed arbitrary +
   glides backwards); never fit velocity from consecutive fixes (only 13.5% land
@@ -133,14 +133,14 @@ the decision deliberately by changing BOTH the guard and this file.
 
 ## Copy / voice (2026-07-15, docs/decisions.md#dashboard-copy-one-voice-no-em-dashes-2026-07-15)
 
-- Dashboard copy carries NO em dashes. Labels separate with ` · ` (subject-first
+- Dashboard copy carries NO em dashes. Labels separate with `·` (subject-first
   order clusters sibling layers in the rail); prose gets a real rewrite, not a
   blanket colon swap. Comments are NOT copy and keep their em dashes.
 - A lone `'—'` means "no value reported" and is the §7 never-guess rule in the
   UI. Never strip it while "removing em dashes".
   → `entity-panel/placeCards.test.tsx`
 - Errors the user sees are sentences that keep the code (`Cameras unavailable
-  (HTTP 503)`), never raw internals (`cams 503`). Lowercase micro-labels
+(HTTP 503)`), never raw internals (`cams 503`). Lowercase micro-labels
   (`loading…`, `saving…`) STAY: that register is deliberate, not sloppiness.
 - A thrown exception's `.message` is a stack fragment, so it is the raw-internals
   case, not the keep-the-code case. `ErrorBoundary` says which panel stopped and

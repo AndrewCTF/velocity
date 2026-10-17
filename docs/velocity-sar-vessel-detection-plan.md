@@ -13,9 +13,9 @@ without AIS at the chokepoint.
 **Honest capability ceiling (verified reasoning, not effort-limited):** keyless imagery
 is Sentinel-1 SAR + Sentinel-2 optical at **10 m/px**. At 10 m you can detect a vessel
 and estimate its length/heading, but you **cannot reliably classify warship vs merchant**
-— a frigate is ~12 px. Reliable military *classification* needs sub-meter VHR (keyless =
+— a frigate is ~12 px. Reliable military _classification_ needs sub-meter VHR (keyless =
 Maxar Open Data, event-gated) + a trained model. So detection + dark-correlation are fully
-real; military *class ID* is honestly bounded (size heuristic now; trained models later).
+real; military _class ID_ is honestly bounded (size heuristic now; trained models later).
 
 **Feasibility gates verified this turn:** CDSE OAuth `_token()` returns a live 1593-char
 token (imagery fetch works); `detect_targets` is a real CFAR detector; `_ais_match`
@@ -28,7 +28,9 @@ Decisions: **all three phases**, **scheduled auto-sweep**.
 The achievable real core. Everything here works on keyless Sentinel-1 today.
 
 ### 1a. Per-vessel estimation (extend `sar_vessels.py detect_targets`)
+
 Today each detection = `{row, col, area_px, peak}`. Add, from the component's pixel set:
+
 - **length_m / width_m / heading_deg** — principal-axis analysis: covariance of the blob's
   (row,col) pixels → eigenvectors give orientation (heading, 0–180° ambiguous — SAR can't
   see direction of travel) and major/minor extent; multiply px extent by the **ground
@@ -39,16 +41,19 @@ Today each detection = `{row, col, area_px, peak}`. Add, from the component's pi
   yields the right length + heading within tolerance).
 
 ### 1b. AIS correlation → honest dark flag (extend `detect_dark_vessels` / `_ais_match`)
+
 Per detection: match against ALL available AIS (whatever the store has for the AOI + time).
+
 - matched → `status: "ais-matched"` (+ the mmsi).
 - unmatched AND AIS coverage present in AOI → `status: "dark-candidate"` (a real
   non-broadcasting contact — this is the genuine article).
 - unmatched AND no AIS coverage → `status: "unverified"` (honest; can't call it dark).
-- Military *hint* (not classification): `length_m ≥ ~90` AND `status != ais-matched` →
+- Military _hint_ (not classification): `length_m ≥ ~90` AND `status != ais-matched` →
   `mil_hint: true` with `confidence: "low"` and a `basis` string ("large unlit SAR contact
   — size-only heuristic, NOT a classified warship"). Never asserts "military".
 
 ### 1c. Scheduled auto-sweep (new `sar_sweep` background module)
+
 - Background loop mirroring `intel/watch.py` (`_TASK`/`start`/`stop`/`_run_forever`),
   registered in `main.py` lifespan `if background:` + `finally`.
 - Sweeps the curated chokepoint AOIs (`sar_vessels.AOIS`) on a cadence tied to Sentinel-1
@@ -60,6 +65,7 @@ Per detection: match against ALL available AIS (whatever the store has for the A
   `dark-vessel` domain that already triggers `cue.run` → brief.
 
 ### 1d. Routes + frontend
+
 - `GET /api/intel/sar/sweep` — latest sweep results (all AOIs, cached).
 - Extend the existing dark-vessel SAR layer/card to render the richer fields (length,
   heading, status, mil_hint) with honest labels. Relabel the old AIS "dark-vessel
@@ -67,6 +73,7 @@ Per detection: match against ALL available AIS (whatever the store has for the A
   `incidents.py` basis already honest).
 
 ### Verification (Phase 1)
+
 - pytest: `detect_targets` estimation on a synthetic rotated-rectangle array (length +
   heading within tolerance); AIS-correlation status logic (matched / dark / unverified /
   mil_hint) on fixtures; sweep dedup (no re-store when scene id unchanged). From repo root.
@@ -76,19 +83,22 @@ Per detection: match against ALL available AIS (whatever the store has for the A
 - `pnpm -r typecheck` green; backend suite stays green.
 
 ## Phase 2 — Trained SAR ship classifier (LATER)
+
 Fine-tune a CNN on public SAR-ship datasets (OpenSARShip / FUSAR-Ship) on the local RTX
 5090 → class estimate from the SAR chip. Real ML; accuracy uncertain at 10 m; warship-vs-
 merchant remains hard. Own spec + dataset sourcing + training harness. Runs via the CUDA
 sidecar env (`~/.venv` torch, per memory `cuda-yolo-sidecar-env`).
 
 ## Phase 3 — VHR optical CNN where available (LATER)
+
 When Maxar Open Data VHR (<1 m) covers an AOI, run a ship-detection/classification CNN on
 optical chips → real silhouette-based class ID. Opportunistic (VHR is event-gated). Reuses
 the on-demand imagery path (`imagery/ondemand.py`) + the YOLO sidecar, but needs a
 ship/warship-tuned model, not generic COCO.
 
 ## Honest scope note
+
 Phase 1 delivers real detection of non-broadcasting vessels (incl. dark) + honest size-based
 military hints at the chokepoints, on keyless Sentinel-1, running on a schedule. Reliable
-military *classification* arrives only with Phase 2/3 and is bounded by sensor resolution +
+military _classification_ arrives only with Phase 2/3 and is bounded by sensor resolution +
 model accuracy — it will be tiered by confidence, never asserted.

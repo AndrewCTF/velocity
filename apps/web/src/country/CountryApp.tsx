@@ -10,17 +10,17 @@
 // module map (shared.tsx) so switching back is instant. All backend calls go
 // through apiFetch (transport invariant).
 
-import { useEffect, useMemo, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
-import { AdvisoryCard } from './AdvisoryCard.js';
-import { BriefCard } from './BriefCard.js';
-import { CountryNewsCard } from './CountryNewsCard.js';
-import { DisplacementCard } from './DisplacementCard.js';
-import { InstabilityCard } from './InstabilityCard.js';
-import { LeadershipCard } from './LeadershipCard.js';
-import { MilitaryCard } from './MilitaryCard.js';
-import { SecurityCard } from './SecurityCard.js';
-import { OsintSection, UnSection, WorldBankSection } from './StatsSections.js';
+import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "../transport/http.js";
+import { AdvisoryCard } from "./AdvisoryCard.js";
+import { BriefCard } from "./BriefCard.js";
+import { CountryNewsCard } from "./CountryNewsCard.js";
+import { DisplacementCard } from "./DisplacementCard.js";
+import { InstabilityCard } from "./InstabilityCard.js";
+import { LeadershipCard } from "./LeadershipCard.js";
+import { MilitaryCard } from "./MilitaryCard.js";
+import { SecurityCard } from "./SecurityCard.js";
+import { OsintSection, UnSection, WorldBankSection } from "./StatsSections.js";
 import {
   Skeleton,
   flagEmoji,
@@ -32,7 +32,7 @@ import {
   type SecurityResponse,
   type UnResponse,
   type WorldBankResponse,
-} from './shared.js';
+} from "./shared.js";
 
 // /api/osint/countries summary shape (mirrors osint/CountriesPanel.tsx).
 interface OsintCountrySummary {
@@ -47,12 +47,16 @@ interface OsintCatalog {
 
 // Header-band quick stats, pulled from the WB payload once it lands.
 const CHIP_IDS: [string, string][] = [
-  ['SP.POP.TOTL', 'Population'],
-  ['NY.GDP.MKTP.CD', 'GDP'],
-  ['MS.MIL.XPND.CD', 'Mil spend'],
+  ["SP.POP.TOTL", "Population"],
+  ["NY.GDP.MKTP.CD", "GDP"],
+  ["MS.MIL.XPND.CD", "Mil spend"],
 ];
 
-function QuickStats({ wb }: { wb: FetchState<WorldBankResponse> }): JSX.Element {
+function QuickStats({
+  wb,
+}: {
+  wb: FetchState<WorldBankResponse>;
+}): JSX.Element {
   if (wb.loading) {
     return (
       <div className="flex gap-2">
@@ -68,15 +72,26 @@ function QuickStats({ wb }: { wb: FetchState<WorldBankResponse> }): JSX.Element 
     <div className="flex gap-2 flex-wrap">
       {CHIP_IDS.map(([id, label]) => {
         const ind = byId.get(id);
-        const latest = ind ? [...ind.series].reverse().find((p) => p.value != null) : undefined;
+        const latest = ind
+          ? [...ind.series].reverse().find((p) => p.value != null)
+          : undefined;
         return (
-          <div key={id} className="px-2 py-1 rounded-sm border border-line-2 bg-bg-1 min-w-[88px]">
-            <div className="text-[9px] uppercase tracking-[0.5px] text-txt-4">{label}</div>
+          <div
+            key={id}
+            className="px-2 py-1 rounded-sm border border-line-2 bg-bg-1 min-w-[88px]"
+          >
+            <div className="text-[9px] uppercase tracking-[0.5px] text-txt-4">
+              {label}
+            </div>
             <div className="flex items-baseline gap-1">
               <span className="mono text-[13px] text-txt-0">
-                {latest ? formatCompact(latest.value as number) : '—'}
+                {latest ? formatCompact(latest.value as number) : "—"}
               </span>
-              {latest && <span className="mono text-[9px] text-txt-4">{latest.year}</span>}
+              {latest && (
+                <span className="mono text-[9px] text-txt-4">
+                  {latest.year}
+                </span>
+              )}
             </div>
           </div>
         );
@@ -99,14 +114,16 @@ function HeaderBand({
       </span>
       <div className="min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-[16px] font-semibold text-txt-0">{country.name}</span>
+          <span className="text-[16px] font-semibold text-txt-0">
+            {country.name}
+          </span>
           <span className="mono text-[10px] text-txt-4">
             {country.iso2} · {country.iso3} · m49 {country.m49}
           </span>
         </div>
         <div className="mono text-[10px] text-txt-3">
           {country.region}
-          {country.sub_region ? ` · ${country.sub_region}` : ''}
+          {country.sub_region ? ` · ${country.sub_region}` : ""}
         </div>
       </div>
       <div className="ml-auto">
@@ -120,16 +137,24 @@ export function CountryApp(): JSX.Element {
   const [countries, setCountries] = useState<CountryRow[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [osintCatalog, setOsintCatalog] = useState<OsintCatalog | null>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<CountryRow | null>(null);
 
   useEffect(() => {
-    apiFetch('/api/country/list')
-      .then((r) => (r.ok ? (r.json() as Promise<CountryRow[]>) : Promise.reject(new Error(`Country list unavailable (HTTP ${r.status})`))))
+    apiFetch("/api/country/list")
+      .then((r) =>
+        r.ok
+          ? (r.json() as Promise<CountryRow[]>)
+          : Promise.reject(
+              new Error(`Country list unavailable (HTTP ${r.status})`),
+            ),
+      )
       .then(setCountries)
-      .catch((e: unknown) => setListError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) =>
+        setListError(e instanceof Error ? e.message : String(e)),
+      );
     // OSINT catalog is optional — a failure only degrades the resources card.
-    apiFetch('/api/osint/countries')
+    apiFetch("/api/osint/countries")
       .then((r) => (r.ok ? (r.json() as Promise<OsintCatalog>) : null))
       .then((c) => c && setOsintCatalog(c))
       .catch(() => undefined);
@@ -147,12 +172,13 @@ export function CountryApp(): JSX.Element {
         !c.iso3.toLowerCase().includes(q)
       )
         continue;
-      const region = c.region || 'Other';
+      const region = c.region || "Other";
       const arr = byRegion.get(region) ?? [];
       arr.push(c);
       byRegion.set(region, arr);
     }
-    for (const arr of byRegion.values()) arr.sort((a, b) => a.name.localeCompare(b.name));
+    for (const arr of byRegion.values())
+      arr.sort((a, b) => a.name.localeCompare(b.name));
     return [...byRegion.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [countries, query]);
 
@@ -160,16 +186,28 @@ export function CountryApp(): JSX.Element {
   // the WB/UN stats; each hook aborts its in-flight request on switch and
   // serves repeat visits from the module cache.
   const iso3 = selected?.iso3 ?? null;
-  const profile = useCachedFetch<ProfileResponse>(iso3 ? `/api/country/${iso3}/profile` : null);
-  const security = useCachedFetch<SecurityResponse>(iso3 ? `/api/country/${iso3}/security?hours=24` : null);
-  const wb = useCachedFetch<WorldBankResponse>(iso3 ? `/api/country/${iso3}/worldbank` : null);
-  const un = useCachedFetch<UnResponse>(iso3 ? `/api/country/${iso3}/un` : null);
+  const profile = useCachedFetch<ProfileResponse>(
+    iso3 ? `/api/country/${iso3}/profile` : null,
+  );
+  const security = useCachedFetch<SecurityResponse>(
+    iso3 ? `/api/country/${iso3}/security?hours=24` : null,
+  );
+  const wb = useCachedFetch<WorldBankResponse>(
+    iso3 ? `/api/country/${iso3}/worldbank` : null,
+  );
+  const un = useCachedFetch<UnResponse>(
+    iso3 ? `/api/country/${iso3}/un` : null,
+  );
 
   // OSINT detail only when the catalog covers the selected country's iso2.
   const osintCode = useMemo(() => {
     if (!selected || !osintCatalog) return null;
     const code = selected.iso2.toLowerCase();
-    return osintCatalog.countries.some((c) => c.iso2.toLowerCase() === code || c.code === code) ? code : null;
+    return osintCatalog.countries.some(
+      (c) => c.iso2.toLowerCase() === code || c.code === code,
+    )
+      ? code
+      : null;
   }, [selected, osintCatalog]);
 
   return (
@@ -193,7 +231,11 @@ export function CountryApp(): JSX.Element {
               <Skeleton className="h-4 w-4/5" />
             </div>
           )}
-          {listError && <div className="mono text-[10px] text-alert-fg px-3 py-2">Failed to load: {listError}</div>}
+          {listError && (
+            <div className="mono text-[10px] text-alert-fg px-3 py-2">
+              Failed to load: {listError}
+            </div>
+          )}
           {grouped.map(([region, rows]) => (
             <div key={region} className="mb-1">
               <div className="px-3 pt-2 pb-1 text-[9.5px] uppercase tracking-[0.6px] text-txt-4 flex justify-between sticky top-0 bg-bg-1 z-5">
@@ -207,21 +249,23 @@ export function CountryApp(): JSX.Element {
                     key={c.iso3}
                     type="button"
                     onClick={() => setSelected(c)}
-                    aria-current={on ? 'true' : undefined}
+                    aria-current={on ? "true" : undefined}
                     className={[
-                      'w-full text-left px-3 py-1 flex items-center gap-2 text-[12px] border-l-2 transition-colors',
+                      "w-full text-left px-3 py-1 flex items-center gap-2 text-[12px] border-l-2 transition-colors",
                       on
-                        ? 'border-accent bg-accent-dim text-txt-0'
-                        : 'border-transparent text-txt-2 hover:text-txt-0 hover:bg-bg-2',
-                    ].join(' ')}
+                        ? "border-accent bg-accent-dim text-txt-0"
+                        : "border-transparent text-txt-2 hover:text-txt-0 hover:bg-bg-2",
+                    ].join(" ")}
                   >
                     <span aria-hidden>{flagEmoji(c.iso2)}</span>
                     <span className="truncate">{c.name}</span>
                     <span
                       className={[
-                        'mono text-[9.5px] ml-auto shrink-0 px-1 py-px rounded-sm border',
-                        on ? 'border-accent-line text-accent-fg' : 'border-line text-txt-4',
-                      ].join(' ')}
+                        "mono text-[9.5px] ml-auto shrink-0 px-1 py-px rounded-sm border",
+                        on
+                          ? "border-accent-line text-accent-fg"
+                          : "border-line text-txt-4",
+                      ].join(" ")}
                     >
                       {c.iso3}
                     </span>
@@ -231,7 +275,9 @@ export function CountryApp(): JSX.Element {
             </div>
           ))}
           {countries && grouped.length === 0 && (
-            <div className="mono text-[10px] text-txt-4 px-3 py-2">No match.</div>
+            <div className="mono text-[10px] text-txt-4 px-3 py-2">
+              No match.
+            </div>
           )}
         </div>
       </nav>
@@ -243,7 +289,8 @@ export function CountryApp(): JSX.Element {
             <div className="text-center">
               <div className="text-[13px] text-txt-2">Select a country</div>
               <div className="mono text-[10px] text-txt-4 mt-1">
-                leadership · military posture · security events · AI brief · statistics
+                leadership · military posture · security events · AI brief ·
+                statistics
               </div>
             </div>
           </div>
@@ -261,7 +308,10 @@ export function CountryApp(): JSX.Element {
             <BriefCard key={selected.iso3} iso3={selected.iso3} />
             <WorldBankSection state={wb} />
             <UnSection state={un} />
-            <OsintSection osintCode={osintCode} catalogLoaded={osintCatalog != null} />
+            <OsintSection
+              osintCode={osintCode}
+              catalogLoaded={osintCatalog != null}
+            />
           </div>
         )}
       </div>

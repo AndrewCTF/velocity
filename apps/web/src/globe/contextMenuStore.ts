@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 // Map right-click context-menu state. GlobeCanvas opens it at the screen point +
 // the picked ground lat/lon; ContextMenu renders the action list.
@@ -25,6 +25,8 @@ export const useContextMenu = create<ContextMenuState>((set) => ({
 
 // DEV-only handle so an e2e harness can open the menu without synthesising a
 // Cesium right-click (Cesium's ScreenSpaceEventHandler ignores synthetic input).
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useContextMenu: typeof useContextMenu }).__useContextMenu = useContextMenu;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (
+    window as unknown as { __useContextMenu: typeof useContextMenu }
+  ).__useContextMenu = useContextMenu;
 }

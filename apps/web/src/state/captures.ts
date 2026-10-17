@@ -6,12 +6,12 @@
 // Dedup: the id is derived from source+srcId, so re-detecting the SAME cam/pano
 // UPDATES its one entity (fresh counts + time) instead of piling up. Capped so
 // localStorage + the entity set stay bounded.
-import { create } from 'zustand';
-import type { GroundDetection } from '../ground/types.js';
+import { create } from "zustand";
+import type { GroundDetection } from "../ground/types.js";
 
 export interface Capture {
   id: string; // `capture:<source>:<srcId>`
-  source: 'cam' | 'pano';
+  source: "cam" | "pano";
   srcId: string;
   camId?: string; // live re-fetch thumbnail (cam snapshot proxy)
   photoUrl?: string; // ground-pano proxied image url
@@ -22,7 +22,7 @@ export interface Capture {
   capturedAt: number; // epoch ms
 }
 
-const LS_KEY = 'velocity.captures';
+const LS_KEY = "velocity.captures";
 const CAP = 200; // ponytail: LRU-ish cap; bump + switch to PrimitiveEntityLayer if this ever needs thousands
 
 function read(): Capture[] {
@@ -46,7 +46,9 @@ function persist(list: Capture[]): void {
 interface CaptureState {
   captures: Capture[];
   /** Upsert a capture (dedup by source+srcId). Returns the entity id. */
-  pin: (c: Omit<Capture, 'id' | 'capturedAt'> & { capturedAt?: number }) => string;
+  pin: (
+    c: Omit<Capture, "id" | "capturedAt"> & { capturedAt?: number },
+  ) => string;
   remove: (id: string) => void;
   clear: () => void;
 }

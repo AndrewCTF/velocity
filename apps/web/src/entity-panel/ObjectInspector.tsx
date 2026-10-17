@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import * as Cesium from 'cesium';
-import { useSelection } from '../state/stores.js';
-import { EntityPanel } from './EntityPanel.js';
-import { tracks } from '../intel/tracks.js';
-import { apiFetch } from '../transport/http.js';
-import { Badge, MicroLabel, Widget, type BadgeTone } from '../shell/instruments.js';
+import { useEffect, useMemo, useState } from "react";
+import * as Cesium from "cesium";
+import { useSelection } from "../state/stores.js";
+import { EntityPanel } from "./EntityPanel.js";
+import { tracks } from "../intel/tracks.js";
+import { apiFetch } from "../transport/http.js";
+import {
+  Badge,
+  MicroLabel,
+  Widget,
+  type BadgeTone,
+} from "../shell/instruments.js";
 
 // Object inspector (design §6.3) — a tabbed ObjectCard over the selected object.
 // OVERVIEW reuses the rich EntityPanel (profile/kinematics/ACARS/actions) unchanged;
@@ -15,12 +20,12 @@ import { Badge, MicroLabel, Widget, type BadgeTone } from '../shell/instruments.
 // ponytail: wraps EntityPanel rather than decomposing its 1,436 LOC — Overview is
 // already the right card; the new value is the Properties + History tabs.
 
-type Tab = 'overview' | 'properties' | 'history' | 'dossier';
+type Tab = "overview" | "properties" | "history" | "dossier";
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'properties', label: 'Properties' },
-  { id: 'history', label: 'History' },
-  { id: 'dossier', label: 'Dossier' },
+  { id: "overview", label: "Overview" },
+  { id: "properties", label: "Properties" },
+  { id: "history", label: "History" },
+  { id: "dossier", label: "Dossier" },
 ];
 
 function useEntityProps(
@@ -38,7 +43,12 @@ function useEntityProps(
       for (let i = 0; i < viewer.dataSources.length; i++) {
         const e = viewer.dataSources.get(i).entities.getById(id);
         if (e?.properties) {
-          setProps(e.properties.getValue(viewer.clock.currentTime) as Record<string, unknown>);
+          setProps(
+            e.properties.getValue(viewer.clock.currentTime) as Record<
+              string,
+              unknown
+            >,
+          );
           return;
         }
       }
@@ -51,10 +61,14 @@ function useEntityProps(
   return props;
 }
 
-export function ObjectInspector({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
+export function ObjectInspector({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element {
   const id = useSelection((s) => s.selectedEntityId);
-  const [tab, setTab] = useState<Tab>('overview');
-  useEffect(() => setTab('overview'), [id]);
+  const [tab, setTab] = useState<Tab>("overview");
+  useEffect(() => setTab("overview"), [id]);
 
   return (
     <div className="h-full flex flex-col">
@@ -65,26 +79,30 @@ export function ObjectInspector({ viewer }: { viewer: Cesium.Viewer | null }): J
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? 'page' : undefined}
+              aria-current={tab === t.id ? "page" : undefined}
               className={`relative px-3 h-7 font-label uppercase tracking-[0.6px] text-[10px] transition-colors ${
-                tab === t.id ? 'text-txt-0' : 'text-txt-3 hover:text-txt-1'
+                tab === t.id ? "text-txt-0" : "text-txt-3 hover:text-txt-1"
               }`}
             >
               {t.label}
-              {tab === t.id && <span className="absolute left-2 right-2 bottom-0 h-[2px] bg-accent" />}
+              {tab === t.id && (
+                <span className="absolute left-2 right-2 bottom-0 h-[2px] bg-accent" />
+              )}
             </button>
           ))}
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-auto">
         {/* Overview is always mounted (it owns the empty state + resolves selection). */}
-        <div style={{ display: tab === 'overview' || !id ? 'block' : 'none' }}>
+        <div style={{ display: tab === "overview" || !id ? "block" : "none" }}>
           <EntityPanel viewer={viewer} />
           {id && <RegistryAndFilings id={id} />}
         </div>
-        {id && tab === 'properties' && <PropertiesTab viewer={viewer} id={id} />}
-        {id && tab === 'history' && <HistoryTab id={id} />}
-        {id && tab === 'dossier' && <DossierTab id={id} />}
+        {id && tab === "properties" && (
+          <PropertiesTab viewer={viewer} id={id} />
+        )}
+        {id && tab === "history" && <HistoryTab id={id} />}
+        {id && tab === "dossier" && <DossierTab id={id} />}
       </div>
     </div>
   );
@@ -95,30 +113,35 @@ export function ObjectInspector({ viewer }: { viewer: Cesium.Viewer | null }): J
 // self-contained HTML dossier (→ Word/PDF via print). "Live-linked": re-fetched per
 // selection so it always reflects the current object.
 function DossierTab({ id }: { id: string }): JSX.Element {
-  const [kind, ident] = id.split(':');
+  const [kind, ident] = id.split(":");
   const [doss, setDoss] = useState<Record<string, unknown> | null>(null);
-  const [state, setState] = useState<'loading' | 'ok' | 'error' | 'unsupported'>('loading');
+  const [state, setState] = useState<
+    "loading" | "ok" | "error" | "unsupported"
+  >("loading");
 
   useEffect(() => {
-    if (kind !== 'aircraft' && kind !== 'vessel') {
-      setState('unsupported');
+    if (kind !== "aircraft" && kind !== "vessel") {
+      setState("unsupported");
       return;
     }
     let alive = true;
-    setState('loading');
+    setState("loading");
     (async () => {
       try {
-        const r = await apiFetch(`/api/intel/dossier/${kind}/${encodeURIComponent(ident ?? '')}`, { cache: 'no-store' });
+        const r = await apiFetch(
+          `/api/intel/dossier/${kind}/${encodeURIComponent(ident ?? "")}`,
+          { cache: "no-store" },
+        );
         if (!alive) return;
         if (!r.ok) {
-          setState('error');
+          setState("error");
           return;
         }
         const d = (await r.json()) as Record<string, unknown>;
         setDoss(d);
-        setState(d['found'] ? 'ok' : 'error');
+        setState(d["found"] ? "ok" : "error");
       } catch {
-        if (alive) setState('error');
+        if (alive) setState("error");
       }
     })();
     return () => {
@@ -129,43 +152,71 @@ function DossierTab({ id }: { id: string }): JSX.Element {
   const rows = useMemo(() => {
     if (!doss) return [];
     return Object.entries(doss)
-      .filter(([k, v]) => v != null && typeof v !== 'object' && k !== 'found' && k !== 'window_note')
+      .filter(
+        ([k, v]) =>
+          v != null &&
+          typeof v !== "object" &&
+          k !== "found" &&
+          k !== "window_note",
+      )
       .map(([k, v]) => [k, String(v)] as [string, string]);
   }, [doss]);
 
   const exportDossier = (): void => {
     if (!doss) return;
-    const esc = (s: string): string => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] ?? c);
+    const esc = (s: string): string =>
+      s.replace(
+        /[&<>]/g,
+        (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c] ?? c,
+      );
     const now = new Date().toISOString();
-    const kv = rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
-    const inc = Array.isArray(doss['in_incidents']) ? (doss['in_incidents'] as unknown[]).length : 0;
+    const kv = rows
+      .map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`)
+      .join("");
+    const inc = Array.isArray(doss["in_incidents"])
+      ? (doss["in_incidents"] as unknown[]).length
+      : 0;
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Dossier ${esc(ident ?? id)}</title>
 <style>body{font:13px/1.5 system-ui,sans-serif;color:#111;max-width:720px;margin:32px auto;padding:0 16px}
 h1{font-size:16px;border-bottom:2px solid #111;padding-bottom:6px}table{width:100%;border-collapse:collapse;font-size:12px}
 td{border-bottom:1px solid #ddd;padding:4px 6px}.cls{background:#0c3b1f;color:#86e0a6;text-align:center;font-weight:700;letter-spacing:.1em;padding:4px;text-transform:uppercase;font-size:11px}</style></head>
 <body><div class="cls">Unclassified // Open-source intelligence</div>
-<h1>Object dossier: ${esc(String(doss['callsign'] ?? doss['identity'] ?? ident ?? id))}</h1>
-<p>${esc(kind ?? '')} · generated ${now} · ${inc} live incident link(s)</p>
-${doss['assessment'] ? `<p><b>Assessment:</b> ${esc(String(doss['assessment']))}</p>` : ''}
+<h1>Object dossier: ${esc(String(doss["callsign"] ?? doss["identity"] ?? ident ?? id))}</h1>
+<p>${esc(kind ?? "")} · generated ${now} · ${inc} live incident link(s)</p>
+${doss["assessment"] ? `<p><b>Assessment:</b> ${esc(String(doss["assessment"]))}</p>` : ""}
 <table>${kv}</table></body></html>`;
-    const blob = new Blob([html], { type: 'text/html' });
+    const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `dossier-${(ident ?? id).replace(/[^a-z0-9]/gi, '')}.html`;
+    a.download = `dossier-${(ident ?? id).replace(/[^a-z0-9]/gi, "")}.html`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  if (state === 'unsupported')
-    return <div className="p-3 mono text-[11px] text-txt-3">Dossiers are available for aircraft + vessels.</div>;
-  if (state === 'loading') return <div className="p-3 mono text-[11px] text-txt-3">Compiling dossier…</div>;
-  if (state === 'error') return <div className="p-3 mono text-[11px] text-txt-3">No dossier available for this object.</div>;
+  if (state === "unsupported")
+    return (
+      <div className="p-3 mono text-[11px] text-txt-3">
+        Dossiers are available for aircraft + vessels.
+      </div>
+    );
+  if (state === "loading")
+    return (
+      <div className="p-3 mono text-[11px] text-txt-3">Compiling dossier…</div>
+    );
+  if (state === "error")
+    return (
+      <div className="p-3 mono text-[11px] text-txt-3">
+        No dossier available for this object.
+      </div>
+    );
 
   return (
     <div className="p-3 text-txt-1">
       <div className="flex items-center justify-between mb-2">
-        <span className="font-label uppercase tracking-[0.7px] text-[11px] text-txt-1">Intel dossier</span>
+        <span className="font-label uppercase tracking-[0.7px] text-[11px] text-txt-1">
+          Intel dossier
+        </span>
         <button
           type="button"
           onClick={exportDossier}
@@ -174,17 +225,21 @@ ${doss['assessment'] ? `<p><b>Assessment:</b> ${esc(String(doss['assessment']))}
           Export (Word/PDF)
         </button>
       </div>
-      {typeof doss?.['assessment'] === 'string' && (
+      {typeof doss?.["assessment"] === "string" && (
         <p className="text-[11px] text-txt-1 leading-snug mb-2.5 border-l-2 border-accent-line pl-2">
-          {String(doss['assessment'])}
+          {String(doss["assessment"])}
         </p>
       )}
       <table className="w-full">
         <tbody>
           {rows.map(([k, v]) => (
             <tr key={k} className="border-t border-line/60">
-              <td className="mono text-[10px] uppercase tracking-[0.3px] text-txt-3 py-1 pr-2 align-top">{k}</td>
-              <td className="mono text-[11px] text-txt-0 py-1 text-right break-all">{v}</td>
+              <td className="mono text-[10px] uppercase tracking-[0.3px] text-txt-3 py-1 pr-2 align-top">
+                {k}
+              </td>
+              <td className="mono text-[11px] text-txt-0 py-1 text-right break-all">
+                {v}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -200,35 +255,48 @@ ${doss['assessment'] ? `<p><b>Assessment:</b> ${esc(String(doss['assessment']))}
 // to that route — the same apiFetch DossierTab already uses — so the one
 // screening surface the backend computes has somewhere to render.
 type OntologyFallback =
-  | { kind: 'idle' | 'loading' | 'not-found' }
-  | { kind: 'ok'; props: Record<string, unknown> }
-  | { kind: 'error'; message: string };
+  | { kind: "idle" | "loading" | "not-found" }
+  | { kind: "ok"; props: Record<string, unknown> }
+  | { kind: "error"; message: string };
 
-function useOntologyFallbackProps(id: string, enabled: boolean): OntologyFallback {
-  const [state, setState] = useState<OntologyFallback>({ kind: 'idle' });
+function useOntologyFallbackProps(
+  id: string,
+  enabled: boolean,
+): OntologyFallback {
+  const [state, setState] = useState<OntologyFallback>({ kind: "idle" });
   useEffect(() => {
     if (!enabled) {
-      setState({ kind: 'idle' });
+      setState({ kind: "idle" });
       return;
     }
     let alive = true;
-    setState({ kind: 'loading' });
+    setState({ kind: "loading" });
     (async () => {
       try {
-        const r = await apiFetch(`/api/ontology/object/${encodeURIComponent(id)}`, { cache: 'no-store' });
+        const r = await apiFetch(
+          `/api/ontology/object/${encodeURIComponent(id)}`,
+          { cache: "no-store" },
+        );
         if (!alive) return;
         if (r.status === 404) {
-          setState({ kind: 'not-found' });
+          setState({ kind: "not-found" });
           return;
         }
         if (!r.ok) {
-          setState({ kind: 'error', message: `Properties unavailable (HTTP ${r.status}).` });
+          setState({
+            kind: "error",
+            message: `Properties unavailable (HTTP ${r.status}).`,
+          });
           return;
         }
         const obj = (await r.json()) as { props?: Record<string, unknown> };
-        setState({ kind: 'ok', props: obj.props ?? {} });
+        setState({ kind: "ok", props: obj.props ?? {} });
       } catch {
-        if (alive) setState({ kind: 'error', message: 'Properties unavailable. Network error.' });
+        if (alive)
+          setState({
+            kind: "error",
+            message: "Properties unavailable. Network error.",
+          });
       }
     })();
     return () => {
@@ -240,46 +308,67 @@ function useOntologyFallbackProps(id: string, enabled: boolean): OntologyFallbac
 
 // Exported for direct component testing (ObjectInspector.test.tsx) — the tab
 // switch UI has no test value of its own; the fallback logic does.
-export function PropertiesTab({ viewer, id }: { viewer: Cesium.Viewer | null; id: string }): JSX.Element {
+export function PropertiesTab({
+  viewer,
+  id,
+}: {
+  viewer: Cesium.Viewer | null;
+  id: string;
+}): JSX.Element {
   const entityProps = useEntityProps(viewer, id);
   const fallback = useOntologyFallbackProps(id, entityProps === null);
-  const props = entityProps ?? (fallback.kind === 'ok' ? fallback.props : null);
+  const props = entityProps ?? (fallback.kind === "ok" ? fallback.props : null);
 
   const rows = useMemo(() => {
     if (!props) return [];
     return Object.entries(props)
-      .filter(([, v]) => v != null && typeof v !== 'object')
+      .filter(([, v]) => v != null && typeof v !== "object")
       .sort(([a], [b]) => a.localeCompare(b));
   }, [props]);
 
-  const source = props?.['source'] ?? props?.['src'];
-  const seenAt = typeof props?.['seen_at'] === 'number' ? (props['seen_at'] as number) : null;
+  const source = props?.["source"] ?? props?.["src"];
+  const seenAt =
+    typeof props?.["seen_at"] === "number"
+      ? (props["seen_at"] as number)
+      : null;
 
   // No Cesium entity AND the ontology fallback hasn't settled into a
   // renderable state yet — surface its loading/error state instead of the
   // provenance box below (which has nothing to say about either). A 404 (id in
   // neither store) falls through to the same "No properties resolved." as
   // before this fix.
-  if (entityProps === null && fallback.kind === 'loading') {
-    return <div className="p-3"><p className="mono text-[11px] text-txt-3">loading…</p></div>;
+  if (entityProps === null && fallback.kind === "loading") {
+    return (
+      <div className="p-3">
+        <p className="mono text-[11px] text-txt-3">loading…</p>
+      </div>
+    );
   }
-  if (entityProps === null && fallback.kind === 'error') {
-    return <div className="p-3"><p className="mono text-[11px] text-alert">{fallback.message}</p></div>;
+  if (entityProps === null && fallback.kind === "error") {
+    return (
+      <div className="p-3">
+        <p className="mono text-[11px] text-alert">{fallback.message}</p>
+      </div>
+    );
   }
 
   return (
     <div className="p-3 text-txt-1">
       {/* record-level provenance (per-field provenance isn't carried by the merged feeds) */}
       <div className="mb-2.5 rounded-sm border border-line bg-bg-1 px-2.5 py-2">
-        <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">Provenance</div>
+        <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">
+          Provenance
+        </div>
         <div className="flex items-center justify-between text-[11px]">
           <span className="text-txt-2">source feed</span>
-          <span className="mono text-txt-0">{String(source ?? '—')}</span>
+          <span className="mono text-txt-0">{String(source ?? "—")}</span>
         </div>
         {seenAt != null && (
           <div className="flex items-center justify-between text-[11px] mt-0.5">
             <span className="text-txt-2">observation time</span>
-            <span className="mono text-txt-0 tabular-nums">{new Date(seenAt * 1000).toISOString().slice(11, 19)}Z</span>
+            <span className="mono text-txt-0 tabular-nums">
+              {new Date(seenAt * 1000).toISOString().slice(11, 19)}Z
+            </span>
           </div>
         )}
       </div>
@@ -290,8 +379,12 @@ export function PropertiesTab({ viewer, id }: { viewer: Cesium.Viewer | null; id
           <tbody>
             {rows.map(([k, v]) => (
               <tr key={k} className="border-t border-line/60">
-                <td className="mono text-[10px] uppercase tracking-[0.3px] text-txt-3 py-1 pr-2 align-top">{k}</td>
-                <td className="mono text-[11px] text-txt-0 py-1 text-right break-all tabular-nums">{formatVal(v)}</td>
+                <td className="mono text-[10px] uppercase tracking-[0.3px] text-txt-3 py-1 pr-2 align-top">
+                  {k}
+                </td>
+                <td className="mono text-[11px] text-txt-0 py-1 text-right break-all tabular-nums">
+                  {formatVal(v)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -330,22 +423,24 @@ type RegistryBlock = {
 // already plot (accent), registry = an authoritative registration (ok),
 // filing = a document on record (neutral), claim = somebody said so (warn).
 const TIER_TONE: Record<string, BadgeTone> = {
-  sensor: 'accent',
-  registry: 'ok',
-  filing: 'neutral',
-  claim: 'warn',
+  sensor: "accent",
+  registry: "ok",
+  filing: "neutral",
+  claim: "warn",
 };
 
 function utcStamp(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : `${d.toISOString().slice(0, 19).replace('T', ' ')}Z`;
+  return Number.isNaN(d.getTime())
+    ? null
+    : `${d.toISOString().slice(0, 19).replace("T", " ")}Z`;
 }
 
 // How far a statement sits from the live fix, in the largest honest unit.
 function lagLabel(lagS: number): string {
   const a = Math.abs(lagS);
-  if (a < 60) return 'at the fix';
+  if (a < 60) return "at the fix";
   const dur =
     a >= 86400
       ? `${Math.round(a / 86400)} d`
@@ -357,8 +452,8 @@ function lagLabel(lagS: number): string {
 
 // '—' is reserved for a value the source did not report (the §7 never-guess rule).
 function assertionValue(v: unknown): string {
-  if (v === null || v === undefined) return '—';
-  if (typeof v === 'object') return JSON.stringify(v);
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
 
@@ -369,7 +464,9 @@ export function RegistryAndFilings({ id }: { id: string }): JSX.Element | null {
     setBlock(null);
     (async () => {
       try {
-        const r = await apiFetch(`/api/entity/${encodeURIComponent(id)}`, { cache: 'no-store' });
+        const r = await apiFetch(`/api/entity/${encodeURIComponent(id)}`, {
+          cache: "no-store",
+        });
         if (!alive || !r.ok) return;
         const body = (await r.json()) as { registry?: RegistryBlock };
         if (alive) setBlock(body.registry ?? null);
@@ -398,12 +495,14 @@ export function RegistryAndFilings({ id }: { id: string }): JSX.Element | null {
       <Widget title="Registry and filings" count={assertions.length}>
         <div className="space-y-2.5">
           {[...groups.entries()].map(([source, rows]) => {
-            const tier = rows[0]?.tier ?? block?.tiers?.[source] ?? 'other';
+            const tier = rows[0]?.tier ?? block?.tiers?.[source] ?? "other";
             return (
               <div key={source}>
                 <MicroLabel className="flex items-center gap-1.5">
-                  <Badge tone={TIER_TONE[tier] ?? 'neutral'}>{tier}</Badge>
-                  <span className="mono normal-case tracking-normal text-txt-2">{source}</span>
+                  <Badge tone={TIER_TONE[tier] ?? "neutral"}>{tier}</Badge>
+                  <span className="mono normal-case tracking-normal text-txt-2">
+                    {source}
+                  </span>
                 </MicroLabel>
                 <div className="mt-1 space-y-0.5">
                   {rows.map((a, i) => (
@@ -417,7 +516,7 @@ export function RegistryAndFilings({ id }: { id: string }): JSX.Element | null {
                         a.lag_s != null ? lagLabel(a.lag_s) : null,
                       ]
                         .filter((p): p is string => p != null)
-                        .join(' · ')}
+                        .join(" · ")}
                     </div>
                   ))}
                 </div>
@@ -443,10 +542,12 @@ function HistoryTab({ id }: { id: string }): JSX.Element {
   return (
     <div className="p-3 text-txt-1">
       <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1.5">
-        Observed track · {pts.length} fix{pts.length === 1 ? '' : 'es'}
+        Observed track · {pts.length} fix{pts.length === 1 ? "" : "es"}
       </div>
       {recent.length === 0 ? (
-        <p className="mono text-[11px] text-txt-3">No track buffered yet. Fixes accumulate while selected.</p>
+        <p className="mono text-[11px] text-txt-3">
+          No track buffered yet. Fixes accumulate while selected.
+        </p>
       ) : (
         <table className="w-full">
           <thead>
@@ -460,10 +561,18 @@ function HistoryTab({ id }: { id: string }): JSX.Element {
           <tbody>
             {recent.map((p, i) => (
               <tr key={`${p.t}-${i}`} className="border-t border-line/60">
-                <td className="mono text-[11px] text-txt-1 py-1 tabular-nums">{new Date(p.t).toISOString().slice(11, 19)}Z</td>
-                <td className="mono text-[11px] text-txt-1 py-1 text-right tabular-nums">{p.lat.toFixed(3)}</td>
-                <td className="mono text-[11px] text-txt-1 py-1 text-right tabular-nums">{p.lon.toFixed(3)}</td>
-                <td className="mono text-[11px] text-txt-2 py-1 text-right tabular-nums">{p.sog != null ? `${Math.round(p.sog)}` : '—'}</td>
+                <td className="mono text-[11px] text-txt-1 py-1 tabular-nums">
+                  {new Date(p.t).toISOString().slice(11, 19)}Z
+                </td>
+                <td className="mono text-[11px] text-txt-1 py-1 text-right tabular-nums">
+                  {p.lat.toFixed(3)}
+                </td>
+                <td className="mono text-[11px] text-txt-1 py-1 text-right tabular-nums">
+                  {p.lon.toFixed(3)}
+                </td>
+                <td className="mono text-[11px] text-txt-2 py-1 text-right tabular-nums">
+                  {p.sog != null ? `${Math.round(p.sog)}` : "—"}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -474,6 +583,7 @@ function HistoryTab({ id }: { id: string }): JSX.Element {
 }
 
 function formatVal(v: unknown): string {
-  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(3);
+  if (typeof v === "number")
+    return Number.isInteger(v) ? String(v) : v.toFixed(3);
   return String(v);
 }

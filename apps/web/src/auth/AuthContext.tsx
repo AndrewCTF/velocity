@@ -7,23 +7,27 @@ import {
   useEffect,
   useState,
   type ReactNode,
-} from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { clearLegacyTokens, supabase } from '../transport/supabase.js';
-import { clearUserData } from './userData.js';
-import { useIdleSignOut } from './useIdleSignOut.js';
+} from "react";
+import type { Session, User } from "@supabase/supabase-js";
+import { clearLegacyTokens, supabase } from "../transport/supabase.js";
+import { clearUserData } from "./userData.js";
+import { useIdleSignOut } from "./useIdleSignOut.js";
 
 interface AuthState {
   session: Session | null;
   user: User | null;
   loading: boolean;
   /** 'local' (default) ends this browser's session; 'others' ends every other one. */
-  signOut: (scope?: 'local' | 'others') => Promise<void>;
+  signOut: (scope?: "local" | "others") => Promise<void>;
 }
 
 const Ctx = createContext<AuthState | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
+export function AuthProvider({
+  children,
+}: {
+  children: ReactNode;
+}): JSX.Element {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -47,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       // Every way a session ends lands here: the chip, the idle timer, an
       // expired refresh token, a sign-out in another tab. Clear the user's
       // investigation data with it (auth/userData.ts).
-      if (event === 'SIGNED_OUT') {
+      if (event === "SIGNED_OUT") {
         clearUserData();
         clearLegacyTokens();
       }
@@ -64,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     session,
     user: session?.user ?? null,
     loading,
-    signOut: async (scope = 'local') => {
+    signOut: async (scope = "local") => {
       await supabase?.auth.signOut({ scope });
     },
   };
@@ -74,6 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
 
 export function useAuth(): AuthState {
   const v = useContext(Ctx);
-  if (!v) throw new Error('useAuth must be used within <AuthProvider>');
+  if (!v) throw new Error("useAuth must be used within <AuthProvider>");
   return v;
 }

@@ -3,9 +3,9 @@
 // entities against each AOI and pushes a real Alert into useAlerts on a trigger.
 // (Server-side rule registration via /api/alerts is plumbed but needs login.)
 
-import { create } from 'zustand';
+import { create } from "zustand";
 
-export type WatchRule = 'enter' | 'exit' | 'loiter';
+export type WatchRule = "enter" | "exit" | "loiter";
 
 export interface Watchbox {
   id: string;
@@ -16,12 +16,13 @@ export interface Watchbox {
 }
 
 let _seq = 0;
-const uid = (): string => `wb-${Date.now().toString(36)}-${(_seq++).toString(36)}`;
+const uid = (): string =>
+  `wb-${Date.now().toString(36)}-${(_seq++).toString(36)}`;
 
 interface WatchboxState {
   watchboxes: Watchbox[];
-  add: (w: Omit<Watchbox, 'id'>) => string;
-  update: (id: string, patch: Partial<Omit<Watchbox, 'id'>>) => void;
+  add: (w: Omit<Watchbox, "id">) => string;
+  update: (id: string, patch: Partial<Omit<Watchbox, "id">>) => void;
   remove: (id: string) => void;
   clear: () => void;
 }
@@ -34,7 +35,12 @@ export const useWatchboxes = create<WatchboxState>((set) => ({
     return id;
   },
   update: (id, patch) =>
-    set((s) => ({ watchboxes: s.watchboxes.map((w) => (w.id === id ? { ...w, ...patch } : w)) })),
-  remove: (id) => set((s) => ({ watchboxes: s.watchboxes.filter((w) => w.id !== id) })),
+    set((s) => ({
+      watchboxes: s.watchboxes.map((w) =>
+        w.id === id ? { ...w, ...patch } : w,
+      ),
+    })),
+  remove: (id) =>
+    set((s) => ({ watchboxes: s.watchboxes.filter((w) => w.id !== id) })),
   clear: () => set({ watchboxes: [] }),
 }));

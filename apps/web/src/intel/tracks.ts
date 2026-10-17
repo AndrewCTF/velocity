@@ -83,7 +83,7 @@ class TrackStore {
     if (!force && last && dLon < 0.001 && dLat < 0.001 && dt < 5_000) {
       if (__DEBUG_FORCE_PUSH) {
         // eslint-disable-next-line no-console
-        console.info('[tracks] skip', id, { dLon, dLat, dt });
+        console.info("[tracks] skip", id, { dLon, dLat, dt });
       }
       return;
     }
@@ -91,7 +91,11 @@ class TrackStore {
     if (arr.length > MAX_POINTS_PER_ENTITY) arr.shift();
     if (__DEBUG_FORCE_PUSH) {
       // eslint-disable-next-line no-console
-      console.info('[tracks] push', id, { size: this.tracks.size, len: arr.length, force });
+      console.info("[tracks] push", id, {
+        size: this.tracks.size,
+        len: arr.length,
+        force,
+      });
     }
   }
 

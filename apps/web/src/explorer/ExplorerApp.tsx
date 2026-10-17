@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import * as Cesium from 'cesium';
-import { searchObjects, type ObjectResult } from '../transport/search.js';
-import { useSelection } from '../state/stores.js';
-import { useGeoScope } from '../state/geoScope.js';
-import { haversineKm } from '../globe/draw.js';
-import { useSavedSearches } from '../state/savedSearches.js';
-import { toast } from '../shell/toast.js';
-import { Icon } from '../normal/Icon.js';
-import { apiFetch } from '../transport/http.js';
-import { useOntologySchema, type OntologySchema } from '../state/ontologySchema.js';
-import { dict } from '../shell/safeKeys.js';
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as Cesium from "cesium";
+import { searchObjects, type ObjectResult } from "../transport/search.js";
+import { useSelection } from "../state/stores.js";
+import { useGeoScope } from "../state/geoScope.js";
+import { haversineKm } from "../globe/draw.js";
+import { useSavedSearches } from "../state/savedSearches.js";
+import { toast } from "../shell/toast.js";
+import { Icon } from "../normal/Icon.js";
+import { apiFetch } from "../transport/http.js";
+import {
+  useOntologySchema,
+  type OntologySchema,
+} from "../state/ontologySchema.js";
+import { dict } from "../shell/safeKeys.js";
 
 // Explorer app (design §6.1 / §8 "Object Explorer") — top-down analysis over the
 // live object store: type facets + keyword + rolling window, live counts, and a
@@ -31,10 +34,10 @@ import { dict } from '../shell/safeKeys.js';
 // so the properties shown are the ones the kind is known to carry.
 
 const WINDOWS: Array<{ label: string; s: number | undefined }> = [
-  { label: 'All time', s: undefined },
-  { label: '15 min', s: 900 },
-  { label: '1 hour', s: 3600 },
-  { label: '6 hours', s: 21600 },
+  { label: "All time", s: undefined },
+  { label: "15 min", s: 900 },
+  { label: "1 hour", s: 3600 },
+  { label: "6 hours", s: 21600 },
 ];
 
 function ageLabel(t: number): string {
@@ -51,7 +54,7 @@ interface OntObject {
   props: Record<string, unknown>;
 }
 
-type Source = 'live' | 'ontology';
+type Source = "live" | "ontology";
 
 /** The properties worth showing for a kind: the ones the schema declares, in
  *  declared order, falling back to whatever the object actually carries so an
@@ -73,23 +76,31 @@ function columnsFor(
 
 function cell(value: unknown): string {
   // A lone em dash is the repo's "no value reported" (apps/web/CLAUDE.md §copy).
-  if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'object') return JSON.stringify(value).slice(0, 40);
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value).slice(0, 40);
   return String(value);
 }
 
-export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
-  const [source, setSource] = useState<Source>('live');
+export function ExplorerApp({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element {
+  const [source, setSource] = useState<Source>("live");
   const [ont, setOnt] = useState<OntObject[]>([]);
-  const [ontStatus, setOntStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [ontStatus, setOntStatus] = useState<"idle" | "loading" | "error">(
+    "idle",
+  );
   const ontSchema = useOntologySchema();
-  const [type, setType] = useState<string>('all');
-  const [q, setQ] = useState('');
+  const [type, setType] = useState<string>("all");
+  const [q, setQ] = useState("");
   const [winIdx, setWinIdx] = useState(0);
   const [tick, setTick] = useState(0);
-  const [data, setData] = useState<{ results: ObjectResult[]; count: number; by_type: Record<string, number> }>(
-    { results: [], count: 0, by_type: {} },
-  );
+  const [data, setData] = useState<{
+    results: ObjectResult[];
+    count: number;
+    by_type: Record<string, number>;
+  }>({ results: [], count: 0, by_type: {} });
   const [loading, setLoading] = useState(false);
   const geoScope = useGeoScope((s) => s.scope);
   const clearGeo = useGeoScope((s) => s.setScope);
@@ -100,26 +111,32 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
   // FTS query, and skipped entirely on an empty box — /api/ontology/search takes
   // a query, and "everything ever promoted" is not a question this answers.
   useEffect(() => {
-    if (source !== 'ontology') return;
-    if (q.trim() === '') {
+    if (source !== "ontology") return;
+    if (q.trim() === "") {
       setOnt([]);
-      setOntStatus('idle');
+      setOntStatus("idle");
       return;
     }
     const ac = new AbortController();
-    setOntStatus('loading');
+    setOntStatus("loading");
     const id = window.setTimeout(() => {
-      const params = new URLSearchParams({ q, limit: '200' });
-      if (type !== 'all') params.append('kind', type);
-      apiFetch(`/api/ontology/search?${params.toString()}`, { signal: ac.signal })
-        .then((r) => (r.ok ? (r.json() as Promise<OntObject[]>) : Promise.reject(new Error('http'))))
+      const params = new URLSearchParams({ q, limit: "200" });
+      if (type !== "all") params.append("kind", type);
+      apiFetch(`/api/ontology/search?${params.toString()}`, {
+        signal: ac.signal,
+      })
+        .then((r) =>
+          r.ok
+            ? (r.json() as Promise<OntObject[]>)
+            : Promise.reject(new Error("http")),
+        )
         .then((rows) => {
           setOnt(rows);
-          setOntStatus('idle');
+          setOntStatus("idle");
         })
         .catch((e: unknown) => {
-          if ((e as { name?: string })?.name === 'AbortError') return;
-          setOntStatus('error');
+          if ((e as { name?: string })?.name === "AbortError") return;
+          setOntStatus("error");
         });
     }, 250);
     return () => {
@@ -129,7 +146,7 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
   }, [source, q, type]);
 
   useEffect(() => {
-    if (source !== 'live') return;
+    if (source !== "live") return;
     abort.current?.abort();
     const ac = new AbortController();
     abort.current = ac;
@@ -140,8 +157,15 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
     let bbox: [number, number, number, number] | undefined;
     if (geoScope) {
       const dLat = geoScope.radiusKm / 111;
-      const dLon = geoScope.radiusKm / (111 * Math.max(0.05, Math.cos((geoScope.lat * Math.PI) / 180)));
-      bbox = [geoScope.lon - dLon, geoScope.lat - dLat, geoScope.lon + dLon, geoScope.lat + dLat];
+      const dLon =
+        geoScope.radiusKm /
+        (111 * Math.max(0.05, Math.cos((geoScope.lat * Math.PI) / 180)));
+      bbox = [
+        geoScope.lon - dLon,
+        geoScope.lat - dLat,
+        geoScope.lon + dLon,
+        geoScope.lat + dLat,
+      ];
     }
     searchObjects(
       {
@@ -156,7 +180,11 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
       .then((d) => {
         if (geoScope) {
           const inside = d.results.filter(
-            (r) => haversineKm({ lat: r.lat, lon: r.lon }, { lat: geoScope.lat, lon: geoScope.lon }) <= geoScope.radiusKm,
+            (r) =>
+              haversineKm(
+                { lat: r.lat, lon: r.lon },
+                { lat: geoScope.lat, lon: geoScope.lon },
+              ) <= geoScope.radiusKm,
           );
           const by_type = dict<number>();
           for (const r of inside) by_type[r.kind] = (by_type[r.kind] ?? 0) + 1;
@@ -175,7 +203,7 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
   // Refresh on a slow tick so counts stay live without hammering. The ontology
   // is a durable store, not a feed, so it is not on this clock.
   useEffect(() => {
-    if (source !== 'live') return;
+    if (source !== "live") return;
     const id = window.setInterval(() => setTick((n) => n + 1), 5000);
     return () => window.clearInterval(id);
   }, [source]);
@@ -187,12 +215,12 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
   }, [ont]);
 
   const typeChips = useMemo(() => {
-    if (source === 'ontology') {
+    if (source === "ontology") {
       const entries = Object.entries(ontByKind).sort((a, b) => b[1] - a[1]);
-      return [['all', ont.length] as [string, number], ...entries];
+      return [["all", ont.length] as [string, number], ...entries];
     }
     const entries = Object.entries(data.by_type).sort((a, b) => b[1] - a[1]);
-    return [['all', data.count] as [string, number], ...entries];
+    return [["all", data.count] as [string, number], ...entries];
   }, [source, data, ont, ontByKind]);
 
   // In ontology mode the table's property columns follow the selected kind's
@@ -207,14 +235,18 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
     const rows = data.results;
     if (rows.length === 0) return;
     const esc = (v: unknown): string => {
-      const s = String(v ?? '');
+      const s = String(v ?? "");
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = ['id', 'label', 'kind', 'source', 't', 'lat', 'lon'];
-    const body = rows.map((r) => [r.id, r.label, r.kind, r.source, r.t, r.lat, r.lon].map(esc).join(','));
-    const blob = new Blob([[header.join(','), ...body].join('\n')], { type: 'text/csv' });
+    const header = ["id", "label", "kind", "source", "t", "lat", "lon"];
+    const body = rows.map((r) =>
+      [r.id, r.label, r.kind, r.source, r.t, r.lat, r.lon].map(esc).join(","),
+    );
+    const blob = new Blob([[header.join(","), ...body].join("\n")], {
+      type: "text/csv",
+    });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `objects-${type}-${rows.length}.csv`;
     a.click();
@@ -237,29 +269,38 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
       <div className="shrink-0 border-b border-line-2 bg-bg-1 px-3 py-2 flex flex-col gap-2">
         {geoScope && (
           <div className="flex items-center gap-2 self-start mono text-[10px] px-2 py-0.5 rounded-sm border border-accent-line bg-accent-dim text-accent">
-            within {geoScope.radiusKm} km of {geoScope.label ?? `${geoScope.lat.toFixed(2)}, ${geoScope.lon.toFixed(2)}`}
-            <button type="button" onClick={() => clearGeo(null)} aria-label="Clear geo scope" className="text-txt-2 hover:text-txt-0"><Icon name="x" className="w-3 h-3" /></button>
+            within {geoScope.radiusKm} km of{" "}
+            {geoScope.label ??
+              `${geoScope.lat.toFixed(2)}, ${geoScope.lon.toFixed(2)}`}
+            <button
+              type="button"
+              onClick={() => clearGeo(null)}
+              aria-label="Clear geo scope"
+              className="text-txt-2 hover:text-txt-0"
+            >
+              <Icon name="x" className="w-3 h-3" />
+            </button>
           </div>
         )}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 shrink-0">
-            {(['live', 'ontology'] as const).map((s) => (
+            {(["live", "ontology"] as const).map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => {
                   setSource(s);
-                  setType('all');
+                  setType("all");
                 }}
                 title={
-                  s === 'live'
-                    ? 'What is being emitted right now'
-                    : 'What was promoted into the graph and kept'
+                  s === "live"
+                    ? "What is being emitted right now"
+                    : "What was promoted into the graph and kept"
                 }
                 className={`mono text-[10px] uppercase tracking-[0.4px] px-2 py-1 rounded-sm border ${
                   source === s
-                    ? 'border-accent-line text-accent bg-accent-dim'
-                    : 'border-line text-txt-3 hover:text-txt-1'
+                    ? "border-accent-line text-accent bg-accent-dim"
+                    : "border-line text-txt-3 hover:text-txt-1"
                 }`}
               >
                 {s}
@@ -270,20 +311,24 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={
-              source === 'ontology'
-                ? 'Search the stored graph by any property…'
-                : 'Filter by callsign / name / id…'
+              source === "ontology"
+                ? "Search the stored graph by any property…"
+                : "Filter by callsign / name / id…"
             }
             className="flex-1 min-w-0 bg-bg-0 border border-line rounded-sm px-2 py-1 text-[12px] text-txt-0 placeholder:text-txt-4 focus:border-accent-line outline-hidden"
           />
-          <div className={`flex items-center gap-1 ${source === 'ontology' ? 'hidden' : ''}`}>
+          <div
+            className={`flex items-center gap-1 ${source === "ontology" ? "hidden" : ""}`}
+          >
             {WINDOWS.map((w, i) => (
               <button
                 key={w.label}
                 type="button"
                 onClick={() => setWinIdx(i)}
                 className={`mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-1 rounded-sm border ${
-                  i === winIdx ? 'border-accent-line text-accent bg-accent-dim' : 'border-line text-txt-3 hover:text-txt-1'
+                  i === winIdx
+                    ? "border-accent-line text-accent bg-accent-dim"
+                    : "border-line text-txt-3 hover:text-txt-1"
                 }`}
               >
                 {w.label}
@@ -299,7 +344,9 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
               type="button"
               onClick={() => setType(k)}
               className={`mono text-[10px] px-2 py-0.5 rounded-sm border ${
-                type === k ? 'border-accent-line text-accent bg-accent-dim' : 'border-line text-txt-2 hover:text-txt-0'
+                type === k
+                  ? "border-accent-line text-accent bg-accent-dim"
+                  : "border-line text-txt-2 hover:text-txt-0"
               }`}
             >
               {k} <b className="text-txt-0">{n.toLocaleString()}</b>
@@ -310,7 +357,7 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
 
       {/* result table */}
       <div className="flex-1 min-h-0 overflow-auto">
-        {source === 'ontology' ? (
+        {source === "ontology" ? (
           <table className="w-full border-collapse">
             <thead className="sticky top-0 bg-bg-1 z-1">
               <tr className="text-txt-3 mono text-[10px] uppercase tracking-[0.4px]">
@@ -330,10 +377,17 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
                   onClick={() => useSelection.getState().select(o.id)}
                   className="cursor-pointer border-t border-line hover:bg-bg-2"
                 >
-                  <td className="px-3 py-1 mono text-[11px] text-txt-0 truncate max-w-[220px]">{o.id}</td>
-                  <td className="px-2 py-1 mono text-[11px] text-txt-2">{o.kind}</td>
+                  <td className="px-3 py-1 mono text-[11px] text-txt-0 truncate max-w-[220px]">
+                    {o.id}
+                  </td>
+                  <td className="px-2 py-1 mono text-[11px] text-txt-2">
+                    {o.kind}
+                  </td>
                   {ontCols.map((c) => (
-                    <td key={c} className="px-2 py-1 mono text-[11px] text-txt-2 truncate max-w-[160px]">
+                    <td
+                      key={c}
+                      className="px-2 py-1 mono text-[11px] text-txt-2 truncate max-w-[160px]"
+                    >
                       {cell(o.props[c])}
                     </td>
                   ))}
@@ -341,62 +395,77 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
               ))}
               {ont.length === 0 && (
                 <tr>
-                  <td colSpan={2 + ontCols.length} className="px-3 py-6 text-center mono text-[11px] text-txt-3">
-                    {ontStatus === 'error'
-                      ? 'Ontology search unavailable. The backend did not answer.'
-                      : ontStatus === 'loading'
-                        ? 'searching…'
-                        : q.trim() === ''
-                          ? 'Type to search the stored graph. Any property value, property name or id matches.'
-                          : 'Nothing in the graph matches. Objects arrive here when something promotes them.'}
+                  <td
+                    colSpan={2 + ontCols.length}
+                    className="px-3 py-6 text-center mono text-[11px] text-txt-3"
+                  >
+                    {ontStatus === "error"
+                      ? "Ontology search unavailable. The backend did not answer."
+                      : ontStatus === "loading"
+                        ? "searching…"
+                        : q.trim() === ""
+                          ? "Type to search the stored graph. Any property value, property name or id matches."
+                          : "Nothing in the graph matches. Objects arrive here when something promotes them."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         ) : (
-        <table className="w-full border-collapse">
-
-          <thead className="sticky top-0 bg-bg-1 z-1">
-            <tr className="text-txt-3 mono text-[10px] uppercase tracking-[0.4px]">
-              <th className="text-left font-medium px-3 py-1.5">Label</th>
-              <th className="text-left font-medium px-2 py-1.5">Type</th>
-              <th className="text-left font-medium px-2 py-1.5">Source</th>
-              <th className="text-right font-medium px-2 py-1.5">Seen</th>
-              <th className="text-right font-medium px-3 py-1.5">Lat, Lon</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.results.map((r) => (
-              <tr
-                key={r.id}
-                onClick={() => onRow(r)}
-                className="cursor-pointer border-t border-line hover:bg-bg-2"
-              >
-                <td className="px-3 py-1 text-[12px] text-txt-0 truncate max-w-[180px]">{r.label}</td>
-                <td className="px-2 py-1 mono text-[11px] text-txt-2">{r.kind}</td>
-                <td className="px-2 py-1 mono text-[11px] text-txt-3 truncate max-w-[110px]">{r.source}</td>
-                <td className="px-2 py-1 mono text-[11px] text-txt-2 text-right tabular-nums">{ageLabel(r.t)}</td>
-                <td className="px-3 py-1 mono text-[10px] text-txt-3 text-right tabular-nums">
-                  {r.lat.toFixed(2)}, {r.lon.toFixed(2)}
-                </td>
+          <table className="w-full border-collapse">
+            <thead className="sticky top-0 bg-bg-1 z-1">
+              <tr className="text-txt-3 mono text-[10px] uppercase tracking-[0.4px]">
+                <th className="text-left font-medium px-3 py-1.5">Label</th>
+                <th className="text-left font-medium px-2 py-1.5">Type</th>
+                <th className="text-left font-medium px-2 py-1.5">Source</th>
+                <th className="text-right font-medium px-2 py-1.5">Seen</th>
+                <th className="text-right font-medium px-3 py-1.5">Lat, Lon</th>
               </tr>
-            ))}
-            {data.results.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center mono text-[11px] text-txt-3">
-                  {loading ? 'searching…' : 'No objects match. Widen the window or clear the filter.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.results.map((r) => (
+                <tr
+                  key={r.id}
+                  onClick={() => onRow(r)}
+                  className="cursor-pointer border-t border-line hover:bg-bg-2"
+                >
+                  <td className="px-3 py-1 text-[12px] text-txt-0 truncate max-w-[180px]">
+                    {r.label}
+                  </td>
+                  <td className="px-2 py-1 mono text-[11px] text-txt-2">
+                    {r.kind}
+                  </td>
+                  <td className="px-2 py-1 mono text-[11px] text-txt-3 truncate max-w-[110px]">
+                    {r.source}
+                  </td>
+                  <td className="px-2 py-1 mono text-[11px] text-txt-2 text-right tabular-nums">
+                    {ageLabel(r.t)}
+                  </td>
+                  <td className="px-3 py-1 mono text-[10px] text-txt-3 text-right tabular-nums">
+                    {r.lat.toFixed(2)}, {r.lon.toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+              {data.results.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-3 py-6 text-center mono text-[11px] text-txt-3"
+                  >
+                    {loading
+                      ? "searching…"
+                      : "No objects match. Widen the window or clear the filter."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         )}
       </div>
 
       <div className="shrink-0 border-t border-line-2 bg-bg-1 px-3 py-1.5 mono text-[10px] text-txt-3 flex items-center justify-between">
         <span>
-          {source === 'ontology'
+          {source === "ontology"
             ? `${ont.length.toLocaleString()} in the graph`
             : `${data.results.length.toLocaleString()} shown · ${data.count.toLocaleString()} match`}
         </span>
@@ -404,15 +473,21 @@ export function ExplorerApp({ viewer }: { viewer: Cesium.Viewer | null }): JSX.E
             holds the last live fetch — Export CSV would download rows that are
             not on screen and Save search would save a live-store subscription
             from an ontology view. They belong to the live source only. */}
-        <div className={`flex items-center gap-3 ${source === 'ontology' ? 'hidden' : ''}`}>
+        <div
+          className={`flex items-center gap-3 ${source === "ontology" ? "hidden" : ""}`}
+        >
           {loading && <span className="text-accent">updating…</span>}
           <button
             type="button"
             onClick={() => {
               const win = WINDOWS[winIdx];
-              const label = `${type}${q ? ` · "${q}"` : ''}${win && win.s != null ? ` · ${win.label}` : ''}`;
-              saveSearch(label, { type, q, ...(win && win.s != null ? { sinceS: win.s } : {}) });
-              toast.ok('Search saved');
+              const label = `${type}${q ? ` · "${q}"` : ""}${win && win.s != null ? ` · ${win.label}` : ""}`;
+              saveSearch(label, {
+                type,
+                q,
+                ...(win && win.s != null ? { sinceS: win.s } : {}),
+              });
+              toast.ok("Search saved");
             }}
             title="Save this filter as an Inbox subscription. You're notified when new objects match."
             className="mono text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line"

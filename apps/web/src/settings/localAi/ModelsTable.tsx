@@ -2,10 +2,10 @@
 // pin toggle (POST /api/ai/models/hot) and a delete button with a confirm
 // step (DELETE /api/ai/models/{key}). `key` is the server-issued opaque id —
 // never a filesystem path — so deletion is always by key.
-import { useState } from 'react';
-import { apiFetch } from '../../transport/http.js';
-import { Badge, Toggle } from '../../shell/instruments.js';
-import { humanBytes, type InstalledModel } from './types.js';
+import { useState } from "react";
+import { apiFetch } from "../../transport/http.js";
+import { Badge, Toggle } from "../../shell/instruments.js";
+import { humanBytes, type InstalledModel } from "./types.js";
 
 export function ModelsTable({
   installed,
@@ -17,7 +17,11 @@ export function ModelsTable({
   onChanged: () => void;
 }): JSX.Element {
   if (installed.length === 0) {
-    return <p className="mono text-[10px] text-txt-3">No models installed yet. Pick one from the catalog below.</p>;
+    return (
+      <p className="mono text-[10px] text-txt-3">
+        No models installed yet. Pick one from the catalog below.
+      </p>
+    );
   }
   return (
     <div className="space-y-1.5">
@@ -45,9 +49,9 @@ function ModelRow({
     setBusy(true);
     setErr(null);
     try {
-      const r = await apiFetch('/api/ai/models/hot', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+      const r = await apiFetch("/api/ai/models/hot", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ key: model.key, hot: !model.hot }),
       });
       if (!r.ok) {
@@ -56,7 +60,7 @@ function ModelRow({
       }
       onChanged();
     } catch {
-      setErr('Network error. Check your connection.');
+      setErr("Network error. Check your connection.");
     } finally {
       setBusy(false);
     }
@@ -66,7 +70,10 @@ function ModelRow({
     setBusy(true);
     setErr(null);
     try {
-      const r = await apiFetch(`/api/ai/models/${encodeURIComponent(model.key)}`, { method: 'DELETE' });
+      const r = await apiFetch(
+        `/api/ai/models/${encodeURIComponent(model.key)}`,
+        { method: "DELETE" },
+      );
       if (!r.ok) {
         setErr(`Could not delete the model (HTTP ${r.status}).`);
         setConfirming(false);
@@ -74,7 +81,7 @@ function ModelRow({
       }
       onChanged();
     } catch {
-      setErr('Network error. Check your connection.');
+      setErr("Network error. Check your connection.");
       setConfirming(false);
     } finally {
       setBusy(false);
@@ -88,12 +95,15 @@ function ModelRow({
     <div className="rounded-sm border border-line bg-bg-2/50 p-2">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="mono text-[10.5px] text-txt-1 truncate" title={model.repo_id}>
+          <div
+            className="mono text-[10.5px] text-txt-1 truncate"
+            title={model.repo_id}
+          >
             {model.repo_id}
           </div>
           <div className="mono text-[10px] text-txt-3 mt-0.5">
             {model.quant} · {humanBytes(model.size_bytes)}
-            {model.tier ? ` · ${model.tier}` : ''}
+            {model.tier ? ` · ${model.tier}` : ""}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -103,12 +113,18 @@ function ModelRow({
       </div>
       <div className="flex items-center justify-between gap-2 mt-1.5">
         <label className="flex items-center gap-1.5 mono text-[10px] text-txt-2">
-          <Toggle on={model.hot} onChange={() => void toggleHot()} label={`Hot-pin ${model.repo_id}`} />
+          <Toggle
+            on={model.hot}
+            onChange={() => void toggleHot()}
+            label={`Hot-pin ${model.repo_id}`}
+          />
           hot pin
         </label>
         {confirming ? (
           <div className="flex items-center gap-1.5">
-            <span className="mono text-[10px] text-warn">delete {model.quant}?</span>
+            <span className="mono text-[10px] text-warn">
+              delete {model.quant}?
+            </span>
             <button
               type="button"
               disabled={busy}

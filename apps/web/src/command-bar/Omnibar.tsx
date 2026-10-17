@@ -5,21 +5,21 @@
 // the SearchField uses). Enter on an entity flies the camera + selects it; Enter
 // on an action runs it. ⌘K toggles; ↑↓ navigate; Esc closes.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type * as Cesium from 'cesium';
+import { useEffect, useMemo, useRef, useState } from "react";
+import type * as Cesium from "cesium";
 import {
   search,
   KIND_BADGE_LABEL,
   KIND_BADGE_CLASS,
   LOCATION_KINDS,
   type SearchResult,
-} from '../transport/search.js';
-import { useSelection, useSearchTarget } from '../state/stores.js';
-import { useUiMode, type UiMode } from '../state/uiMode.js';
-import { useAppView, APP_IDS, APP_META } from '../state/appView.js';
-import { usePalette } from '../state/palette.js';
-import { flyToPosition } from '../globe/camera.js';
-import type { LayerRegistry } from '../registry/LayerRegistry.js';
+} from "../transport/search.js";
+import { useSelection, useSearchTarget } from "../state/stores.js";
+import { useUiMode, type UiMode } from "../state/uiMode.js";
+import { useAppView, APP_IDS, APP_META } from "../state/appView.js";
+import { usePalette } from "../state/palette.js";
+import { flyToPosition } from "../globe/camera.js";
+import type { LayerRegistry } from "../registry/LayerRegistry.js";
 
 interface Action {
   id: string;
@@ -41,10 +41,10 @@ function subseq(q: string, s: string): boolean {
 }
 
 const MODES: [NonNullable<UiMode>, string][] = [
-  ['tasking', 'Tasking'],
-  ['targeting', 'Targeting'],
-  ['fmv', 'FMV'],
-  ['cop', 'COP Editor'],
+  ["tasking", "Tasking"],
+  ["targeting", "Targeting"],
+  ["fmv", "FMV"],
+  ["cop", "COP Editor"],
 ];
 
 export function Omnibar({
@@ -56,7 +56,7 @@ export function Omnibar({
 }): JSX.Element | null {
   const open = usePalette((st) => st.open);
   const setOpen = usePalette((st) => st.setOpen);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState("");
   const [ents, setEnts] = useState<SearchResult[]>([]);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -64,18 +64,18 @@ export function Omnibar({
   // ⌘K / Ctrl+K toggles the palette (capture phase so it owns the gesture).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
+      if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         usePalette.getState().toggle();
       }
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
   useEffect(() => {
     if (open) {
-      setQ('');
+      setQ("");
       setActive(0);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
@@ -106,7 +106,7 @@ export function Omnibar({
       list.push({
         id: `mode:${m}`,
         label: `Open ${label} workspace`,
-        hint: 'mode',
+        hint: "mode",
         run: () => useUiMode.getState().setMode(m),
       });
     }
@@ -129,8 +129,8 @@ export function Omnibar({
       const on = registry.isEnabled(d.id);
       list.push({
         id: `layer:${d.id}`,
-        label: `${on ? 'Hide' : 'Show'} layer · ${d.title}`,
-        hint: 'layer',
+        label: `${on ? "Hide" : "Show"} layer · ${d.title}`,
+        hint: "layer",
         run: () => (on ? registry.disable(d.id) : registry.enable(d.id)),
       });
     }
@@ -142,23 +142,25 @@ export function Omnibar({
     // Empty query: workspaces AND every app, so opening the bar is a tour of
     // what the product contains rather than a blank prompt you have to already
     // know the answer to.
-    if (!term) return actions.filter((a) => a.id.startsWith('mode:') || a.id.startsWith('app:'));
+    if (!term)
+      return actions.filter(
+        (a) => a.id.startsWith("mode:") || a.id.startsWith("app:"),
+      );
     return actions.filter((a) => subseq(term, a.label)).slice(0, 8);
   }, [actions, q]);
 
   type Item =
-    | { type: 'action'; a: Action }
-    | { type: 'entity'; e: SearchResult };
+    { type: "action"; a: Action } | { type: "entity"; e: SearchResult };
   const items = useMemo<Item[]>(
     () => [
-      ...filteredActions.map((a) => ({ type: 'action' as const, a })),
-      ...ents.map((e) => ({ type: 'entity' as const, e })),
+      ...filteredActions.map((a) => ({ type: "action" as const, a })),
+      ...ents.map((e) => ({ type: "entity" as const, e })),
     ],
     [filteredActions, ents],
   );
 
   const runItem = (it: Item): void => {
-    if (it.type === 'action') {
+    if (it.type === "action") {
       it.a.run();
     } else {
       const r = it.e;
@@ -166,15 +168,25 @@ export function Omnibar({
       if (LOCATION_KINDS.has(r.kind)) {
         // Static location — pin the exact coordinate (see searchTargetMarker).
         useSelection.getState().select(null);
-        useSearchTarget.getState().setTarget(
-          located ? { lon: r.lon, lat: r.lat, label: r.label, kind: r.kind } : null,
-        );
+        useSearchTarget
+          .getState()
+          .setTarget(
+            located
+              ? { lon: r.lon, lat: r.lat, label: r.label, kind: r.kind }
+              : null,
+          );
       } else {
         useSelection.getState().select(r.id);
         useSearchTarget.getState().setTarget(null);
       }
       if (viewer && located) {
-        flyToPosition(viewer, r.lon, r.lat, (r.kind === 'chokepoint' ? 800 : 200) * 1000, 1.2);
+        flyToPosition(
+          viewer,
+          r.lon,
+          r.lat,
+          (r.kind === "chokepoint" ? 800 : 200) * 1000,
+          1.2,
+        );
       }
     }
     setOpen(false);
@@ -202,17 +214,17 @@ export function Omnibar({
             setActive(0);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') {
+            if (e.key === "ArrowDown") {
               e.preventDefault();
               setActive((a) => Math.min(a + 1, items.length - 1));
-            } else if (e.key === 'ArrowUp') {
+            } else if (e.key === "ArrowUp") {
               e.preventDefault();
               setActive((a) => Math.max(a - 1, 0));
-            } else if (e.key === 'Enter') {
+            } else if (e.key === "Enter") {
               e.preventDefault();
               const it = items[active];
               if (it) runItem(it);
-            } else if (e.key === 'Escape') {
+            } else if (e.key === "Escape") {
               setOpen(false);
             }
           }}
@@ -223,23 +235,24 @@ export function Omnibar({
         <div className="max-h-[52vh] overflow-y-auto py-1">
           {items.length === 0 && (
             <div className="px-3 py-3 text-[11px] text-txt-3 mono">
-              {q.trim() ? 'no match' : 'type to search entities · actions'}
+              {q.trim() ? "no match" : "type to search entities · actions"}
             </div>
           )}
           {items.map((it, i) => {
             const sel = i === active;
-            const label = it.type === 'action' ? it.a.label : it.e.label;
-            const hint = it.type === 'action' ? it.a.hint : it.e.kind;
-            const key = (it.type === 'action' ? it.a.id : `e:${it.e.id}`) + ':' + i;
+            const label = it.type === "action" ? it.a.label : it.e.label;
+            const hint = it.type === "action" ? it.a.hint : it.e.kind;
+            const key =
+              (it.type === "action" ? it.a.id : `e:${it.e.id}`) + ":" + i;
             return (
               <button
                 key={key}
                 type="button"
                 onMouseEnter={() => setActive(i)}
                 onClick={() => runItem(it)}
-                className={`w-full text-left px-3 py-2 flex items-center gap-3 ${sel ? 'bg-accent-dim' : ''}`}
+                className={`w-full text-left px-3 py-2 flex items-center gap-3 ${sel ? "bg-accent-dim" : ""}`}
               >
-                {it.type === 'entity' ? (
+                {it.type === "entity" ? (
                   <span className={KIND_BADGE_CLASS[it.e.kind]}>
                     {KIND_BADGE_LABEL[it.e.kind]}
                   </span>
@@ -249,12 +262,16 @@ export function Omnibar({
                   </span>
                 )}
                 <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                  <span className="truncate text-[12px] text-txt-0">{label}</span>
-                  {it.type === 'entity' && it.e.detail && (
-                    <span className="truncate text-[10px] text-txt-3">{it.e.detail}</span>
+                  <span className="truncate text-[12px] text-txt-0">
+                    {label}
+                  </span>
+                  {it.type === "entity" && it.e.detail && (
+                    <span className="truncate text-[10px] text-txt-3">
+                      {it.e.detail}
+                    </span>
                   )}
                 </span>
-                {it.type === 'entity' && (
+                {it.type === "entity" && (
                   <span className="mono text-[10px] text-txt-3 tabular-nums shrink-0">
                     {it.e.lat.toFixed(1)},{it.e.lon.toFixed(1)}
                   </span>

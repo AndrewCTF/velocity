@@ -5,7 +5,7 @@
 //
 // ponytail: persisted list of {place, window}; the feasibility engine is the
 // existing planner — the queue just holds the questions and re-loads them.
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface TaskingQuestion {
   id: string;
@@ -15,7 +15,7 @@ export interface TaskingQuestion {
   hours: number;
 }
 
-const LS_KEY = 'velocity.taskingQuestions';
+const LS_KEY = "velocity.taskingQuestions";
 
 function read(): TaskingQuestion[] {
   try {
@@ -35,7 +35,7 @@ function persist(list: TaskingQuestion[]): void {
 
 interface State {
   questions: TaskingQuestion[];
-  add: (q: Omit<TaskingQuestion, 'id'>) => void;
+  add: (q: Omit<TaskingQuestion, "id">) => void;
   remove: (id: string) => void;
 }
 

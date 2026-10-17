@@ -8,19 +8,19 @@
 // stands; the board stays fully usable for keyless local dev, like the other
 // stores in this app hold UI state without a round-trip.
 
-import { create } from 'zustand';
-import { apiFetch } from '../transport/http.js';
+import { create } from "zustand";
+import { apiFetch } from "../transport/http.js";
 
 // The kill-chain stages, in board order. MUST match the backend STAGES tuple in
 // apps/api/app/routes/targets.py.
 export const TARGET_STAGES = [
-  'confirm',
-  'attach_intel',
-  'approvals',
-  'weaponeer',
-  'execute',
-  'assess',
-  'complete',
+  "confirm",
+  "attach_intel",
+  "approvals",
+  "weaponeer",
+  "execute",
+  "assess",
+  "complete",
 ] as const;
 
 export type TargetStage = (typeof TARGET_STAGES)[number];
@@ -33,24 +33,29 @@ export function isTargetStage(s: string): s is TargetStage {
 // (REQUIREMENT_KEYS + STAGE_REQUIREMENTS) so the in-memory gate and the server
 // gate agree. A stage may not be entered until its gating requirements are met.
 export const REQUIREMENT_KEYS = [
-  'target_identity',
-  'location_verified',
-  'collateral_estimate',
-  'authority_signoff',
+  "target_identity",
+  "location_verified",
+  "collateral_estimate",
+  "authority_signoff",
 ] as const;
 export type RequirementKey = (typeof REQUIREMENT_KEYS)[number];
 
 export const REQUIREMENT_LABEL: Record<RequirementKey, string> = {
-  target_identity: 'Target identity confirmed',
-  location_verified: 'Location verified',
-  collateral_estimate: 'Collateral estimate',
-  authority_signoff: 'Authority sign-off',
+  target_identity: "Target identity confirmed",
+  location_verified: "Location verified",
+  collateral_estimate: "Collateral estimate",
+  authority_signoff: "Authority sign-off",
 };
 
 const STAGE_REQUIREMENTS: Partial<Record<TargetStage, RequirementKey[]>> = {
-  approvals: ['target_identity', 'location_verified'],
-  weaponeer: ['target_identity', 'location_verified'],
-  execute: ['target_identity', 'location_verified', 'collateral_estimate', 'authority_signoff'],
+  approvals: ["target_identity", "location_verified"],
+  weaponeer: ["target_identity", "location_verified"],
+  execute: [
+    "target_identity",
+    "location_verified",
+    "collateral_estimate",
+    "authority_signoff",
+  ],
 };
 
 export function nextStage(stage: TargetStage): TargetStage | null {
@@ -59,13 +64,19 @@ export function nextStage(stage: TargetStage): TargetStage | null {
 }
 
 // Requirement keys still unmet to ENTER `stage`, in order.
-export function unmetFor(stage: TargetStage, requirements: Record<string, boolean>): RequirementKey[] {
+export function unmetFor(
+  stage: TargetStage,
+  requirements: Record<string, boolean>,
+): RequirementKey[] {
   return (STAGE_REQUIREMENTS[stage] ?? []).filter((k) => !requirements[k]);
 }
 
 // Locked = advancing to the NEXT stage is currently blocked. Drives the badge +
 // drag refusal (mirrors the backend `locked`).
-export function isLocked(stage: TargetStage, requirements: Record<string, boolean>): boolean {
+export function isLocked(
+  stage: TargetStage,
+  requirements: Record<string, boolean>,
+): boolean {
   const nxt = nextStage(stage);
   return nxt != null && unmetFor(nxt, requirements).length > 0;
 }
@@ -110,7 +121,15 @@ interface TargetBoardState {
   entries: TargetEntry[];
   loaded: boolean;
   // Add the entity to the board (dedup by entityId). Optimistic + mirrored.
-  add: (entityId: string, opts?: { label?: string; kind?: string; stage?: TargetStage; priority?: number }) => void;
+  add: (
+    entityId: string,
+    opts?: {
+      label?: string;
+      kind?: string;
+      stage?: TargetStage;
+      priority?: number;
+    },
+  ) => void;
   // Move an entity to a new stage. Refused (returns false) when advancing into a
   // stage whose checklist is unmet, UNLESS `force` (audited override). Same-stage
   // / legal moves return true.
@@ -133,7 +152,8 @@ function uid(): string {
   return `tb_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-const clampPriority = (p: number): number => Math.min(5, Math.max(1, Math.round(p)));
+const clampPriority = (p: number): number =>
+  Math.min(5, Math.max(1, Math.round(p)));
 
 export const useTargetBoard = create<TargetBoardState>((set, get) => {
   // Fire-and-forget persistence helpers. They NEVER throw into the caller and
@@ -141,9 +161,9 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
   // local-only (works without Supabase). On a successful create we reconcile
   // the local uid to the server id so subsequent PATCH/DELETE hit the row.
   const persistCreate = (entry: TargetEntry): void => {
-    void apiFetch('/api/targets/board', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+    void apiFetch("/api/targets/board", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         entity_id: entry.entityId,
         stage: entry.stage,
@@ -168,18 +188,18 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
   const persistPatch = (id: string, patch: Record<string, unknown>): void => {
     // Only persist rows that have a server id (created locally-only rows have a
     // tb_ uid and will be created, not patched).
-    if (id.startsWith('tb_')) return;
+    if (id.startsWith("tb_")) return;
     void apiFetch(`/api/targets/board/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
     }).catch(() => undefined);
   };
 
   const persistDelete = (id: string): void => {
-    if (id.startsWith('tb_')) return;
+    if (id.startsWith("tb_")) return;
     void apiFetch(`/api/targets/board/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
+      method: "DELETE",
     }).catch(() => undefined);
   };
 
@@ -193,11 +213,11 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
       const entry: TargetEntry = {
         id: uid(),
         entityId,
-        stage: opts.stage ?? 'confirm',
+        stage: opts.stage ?? "confirm",
         priority: clampPriority(opts.priority ?? 3),
-        note: '',
+        note: "",
         requirements: emptyRequirements(),
-        classification: 'UNCLAS//FOUO',
+        classification: "UNCLAS//FOUO",
         ...(opts.label ? { label: opts.label } : {}),
         ...(opts.kind ? { kind: opts.kind } : {}),
       };
@@ -211,12 +231,19 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
       if (entry.stage === stage) return true; // no-op
       // Gate forward moves on the checklist (matches the backend 409). A step
       // back or a legal move with met requirements passes; `force` overrides.
-      const advancing = TARGET_STAGES.indexOf(stage) > TARGET_STAGES.indexOf(entry.stage);
-      if (advancing && !force && unmetFor(stage, entry.requirements).length > 0) {
+      const advancing =
+        TARGET_STAGES.indexOf(stage) > TARGET_STAGES.indexOf(entry.stage);
+      if (
+        advancing &&
+        !force &&
+        unmetFor(stage, entry.requirements).length > 0
+      ) {
         return false; // refused — caller surfaces "checklist incomplete"
       }
       set((s) => ({
-        entries: s.entries.map((e) => (e.entityId === entityId ? { ...e, stage } : e)),
+        entries: s.entries.map((e) =>
+          e.entityId === entityId ? { ...e, stage } : e,
+        ),
       }));
       persistPatch(entry.id, force ? { stage, force: true } : { stage });
       return true;
@@ -225,9 +252,14 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
     toggleRequirement: (entityId, key) => {
       const entry = get().entries.find((e) => e.entityId === entityId);
       if (!entry) return;
-      const requirements = { ...entry.requirements, [key]: !entry.requirements[key] };
+      const requirements = {
+        ...entry.requirements,
+        [key]: !entry.requirements[key],
+      };
       set((s) => ({
-        entries: s.entries.map((e) => (e.entityId === entityId ? { ...e, requirements } : e)),
+        entries: s.entries.map((e) =>
+          e.entityId === entityId ? { ...e, requirements } : e,
+        ),
       }));
       persistPatch(entry.id, { requirements });
     },
@@ -236,7 +268,9 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
       const entry = get().entries.find((e) => e.entityId === entityId);
       if (!entry || entry.classification === classification) return;
       set((s) => ({
-        entries: s.entries.map((e) => (e.entityId === entityId ? { ...e, classification } : e)),
+        entries: s.entries.map((e) =>
+          e.entityId === entityId ? { ...e, classification } : e,
+        ),
       }));
       persistPatch(entry.id, { classification });
     },
@@ -245,7 +279,9 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
       // In-memory only (no persisted column yet) — selection survives the session
       // and drives the Weaponeer tab; it is not mirrored to Supabase.
       set((s) => ({
-        entries: s.entries.map((e) => (e.entityId === entityId ? { ...e, weaponeering: systemId } : e)),
+        entries: s.entries.map((e) =>
+          e.entityId === entityId ? { ...e, weaponeering: systemId } : e,
+        ),
       }));
     },
 
@@ -254,7 +290,9 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
       const entry = get().entries.find((e) => e.entityId === entityId);
       if (!entry || entry.priority === p) return;
       set((s) => ({
-        entries: s.entries.map((e) => (e.entityId === entityId ? { ...e, priority: p } : e)),
+        entries: s.entries.map((e) =>
+          e.entityId === entityId ? { ...e, priority: p } : e,
+        ),
       }));
       persistPatch(entry.id, { priority: p });
     },
@@ -262,31 +300,33 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
     remove: (entityId) => {
       const entry = get().entries.find((e) => e.entityId === entityId);
       if (!entry) return;
-      set((s) => ({ entries: s.entries.filter((e) => e.entityId !== entityId) }));
+      set((s) => ({
+        entries: s.entries.filter((e) => e.entityId !== entityId),
+      }));
       persistDelete(entry.id);
     },
 
     load: async () => {
       try {
-        const r = await apiFetch('/api/targets/board');
+        const r = await apiFetch("/api/targets/board");
         if (!r.ok) return; // 401/503/502 → stay local
         const rows = (await r.json()) as ServerTarget[];
         if (!Array.isArray(rows)) return;
         const server: TargetEntry[] = rows.map((row) => ({
           id: row.id,
           entityId: row.entity_id,
-          stage: isTargetStage(row.stage) ? row.stage : 'confirm',
+          stage: isTargetStage(row.stage) ? row.stage : "confirm",
           priority: clampPriority(row.priority ?? 3),
-          note: row.note ?? '',
+          note: row.note ?? "",
           requirements: { ...emptyRequirements(), ...(row.requirements ?? {}) },
-          classification: row.classification ?? 'UNCLAS//FOUO',
+          classification: row.classification ?? "UNCLAS//FOUO",
         }));
         // Merge: server rows win on identity, but keep any local-only entries
         // (tb_ uid) the user added before this hydrate completed.
         set((s) => {
           const serverIds = new Set(server.map((e) => e.entityId));
           const localOnly = s.entries.filter(
-            (e) => e.id.startsWith('tb_') && !serverIds.has(e.entityId),
+            (e) => e.id.startsWith("tb_") && !serverIds.has(e.entityId),
           );
           // Preserve captured display hints (label/kind) from the local copy,
           // which the server row doesn't carry.
@@ -309,7 +349,8 @@ export const useTargetBoard = create<TargetBoardState>((set, get) => {
   };
 });
 
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useTargetBoard: typeof useTargetBoard }).__useTargetBoard =
-    useTargetBoard;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (
+    window as unknown as { __useTargetBoard: typeof useTargetBoard }
+  ).__useTargetBoard = useTargetBoard;
 }

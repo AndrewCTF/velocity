@@ -3,7 +3,7 @@
 // ("Search objects nearby"); the app switches to Explorer and scopes the live
 // object search to the circle. seq bumps on each set so listeners (App → switch
 // to Explorer) fire even when the same point is re-picked.
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface GeoScope {
   lat: number;
@@ -25,6 +25,7 @@ export const useGeoScope = create<GeoScopeState>((set) => ({
 }));
 
 // DEV handle for live verification (mirrors __useSelection).
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useGeoScope: typeof useGeoScope }).__useGeoScope = useGeoScope;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (window as unknown as { __useGeoScope: typeof useGeoScope }).__useGeoScope =
+    useGeoScope;
 }

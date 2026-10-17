@@ -1,20 +1,20 @@
-import * as Cesium from 'cesium';
-import type { Alert } from '@osint/shared';
-import { useWatchboxes, type Watchbox } from '../watchbox/watchboxStore.js';
-import { useAlerts } from '../state/stores.js';
-import { haversineKm } from './draw.js';
-import { isCameraMoving } from './cameraMotion.js';
+import * as Cesium from "cesium";
+import type { Alert } from "@osint/shared";
+import { useWatchboxes, type Watchbox } from "../watchbox/watchboxStore.js";
+import { useAlerts } from "../state/stores.js";
+import { haversineKm } from "./draw.js";
+import { isCameraMoving } from "./cameraMotion.js";
 
 // Renders watchbox AOIs (amber rings) and runs a client-side enter/exit/loiter
 // evaluator every 2 s against live aircraft/vessel/sim entities, pushing a real
 // Alert into useAlerts (so triggers show in the Alerts rail + ticker).
 
-const AOI = Cesium.Color.fromCssColorString('#f5a524');
+const AOI = Cesium.Color.fromCssColorString("#f5a524");
 const DWELL_MS = 45_000; // continuous-inside time before a loiter fires
-const KINDS = ['aircraft:', 'ais:', 'vessel:', 'sim:'];
+const KINDS = ["aircraft:", "ais:", "vessel:", "sim:"];
 
 export function installWatchboxes(viewer: Cesium.Viewer): () => void {
-  const ds = new Cesium.CustomDataSource('__watchbox');
+  const ds = new Cesium.CustomDataSource("__watchbox");
   void viewer.dataSources.add(ds);
 
   const inside = new Map<string, Set<string>>(); // wbId → entity ids currently inside
@@ -40,7 +40,8 @@ export function installWatchboxes(viewer: Cesium.Viewer): () => void {
         font: '600 10px "IBM Plex Mono", monospace',
         fillColor: AOI,
         showBackground: true,
-        backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.75),
+        backgroundColor:
+          Cesium.Color.fromCssColorString("#0c0e11").withAlpha(0.75),
         backgroundPadding: new Cesium.Cartesian2(5, 3),
         pixelOffset: new Cesium.Cartesian2(0, -8),
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
@@ -69,9 +70,9 @@ export function installWatchboxes(viewer: Cesium.Viewer): () => void {
     const a: Alert = {
       id: `watchbox:${w.id}:${entId}:${rule}:${t}`,
       ruleId: `watchbox_${rule}`,
-      severity: rule === 'loiter' ? 'high' : 'medium',
+      severity: rule === "loiter" ? "high" : "medium",
       t,
-      geom: { type: 'Point', coordinates: [lon, lat] },
+      geom: { type: "Point", coordinates: [lon, lat] },
       confidence: 1,
       message: `${label} ${rule.toUpperCase()} ${w.label}`,
       contributingObservations: entId ? [entId] : [],
@@ -79,11 +80,16 @@ export function installWatchboxes(viewer: Cesium.Viewer): () => void {
     useAlerts.getState().push(a);
   };
 
-  const entityLatLon = (e: Cesium.Entity): { lat: number; lon: number } | null => {
+  const entityLatLon = (
+    e: Cesium.Entity,
+  ): { lat: number; lon: number } | null => {
     const p = e.position?.getValue(viewer.clock.currentTime);
     if (!p) return null;
     const c = Cesium.Cartographic.fromCartesian(p);
-    return { lat: Cesium.Math.toDegrees(c.latitude), lon: Cesium.Math.toDegrees(c.longitude) };
+    return {
+      lat: Cesium.Math.toDegrees(c.latitude),
+      lon: Cesium.Math.toDegrees(c.longitude),
+    };
   };
 
   const evaluate = (): void => {
@@ -95,11 +101,12 @@ export function installWatchboxes(viewer: Cesium.Viewer): () => void {
     if (isCameraMoving()) return;
     const now = Date.now();
     // Gather candidate entities once per tick.
-    const ents: Array<{ id: string; label: string; lat: number; lon: number }> = [];
+    const ents: Array<{ id: string; label: string; lat: number; lon: number }> =
+      [];
     const seen = new Set<string>(); // dedup ids that appear in >1 data source (union feeds)
     for (let i = 0; i < viewer.dataSources.length; i++) {
       const d = viewer.dataSources.get(i);
-      if (d.name.startsWith('__')) continue;
+      if (d.name.startsWith("__")) continue;
       for (const e of d.entities.values) {
         const id = String(e.id);
         if (!KINDS.some((k) => id.startsWith(k))) continue;
@@ -126,13 +133,14 @@ export function installWatchboxes(viewer: Cesium.Viewer): () => void {
         if (!sinceW.has(en.id)) sinceW.set(en.id, now);
         if (!isBaselined) continue;
         const fresh = !prev.has(en.id);
-        if (fresh && w.rule === 'enter') fire('enter', w, en.id, en.label, en.lon, en.lat, now);
+        if (fresh && w.rule === "enter")
+          fire("enter", w, en.id, en.label, en.lon, en.lat, now);
         if (
-          w.rule === 'loiter' &&
+          w.rule === "loiter" &&
           !firedW.has(en.id) &&
           now - (sinceW.get(en.id) ?? now) >= DWELL_MS
         ) {
-          fire('loiter', w, en.id, en.label, en.lon, en.lat, now);
+          fire("loiter", w, en.id, en.label, en.lon, en.lat, now);
           firedW.add(en.id);
         }
       }
@@ -140,14 +148,23 @@ export function installWatchboxes(viewer: Cesium.Viewer): () => void {
         if (!cur.has(id)) {
           sinceW.delete(id);
           firedW.delete(id);
-          if (isBaselined && w.rule === 'exit') fire('exit', w, id, id, w.center.lon, w.center.lat, now);
+          if (isBaselined && w.rule === "exit")
+            fire("exit", w, id, id, w.center.lon, w.center.lat, now);
         }
       }
       inside.set(w.id, cur);
       if (!isBaselined) {
         baselined.add(w.id);
         // Immediate feedback: announce how many contacts are inside at arm time.
-        fire('armed', w, '', `${cur.size} contacts`, w.center.lon, w.center.lat, now);
+        fire(
+          "armed",
+          w,
+          "",
+          `${cur.size} contacts`,
+          w.center.lon,
+          w.center.lat,
+          now,
+        );
       }
     }
   };

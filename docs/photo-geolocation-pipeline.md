@@ -16,7 +16,7 @@ splat branch reserved for the cases where it can actually bite.
 
 1. **Free global VHR-with-RPC does not exist.** Building a Gaussian splat of an arbitrary place
    needs multiple off-nadir views + camera models (RPC). Free global imagery is Sentinel-2 (10 m —
-   cannot resolve a house) / Landsat (30 m). Free VHR *basemaps* (Esri/Google/Bing/Mapbox) are
+   cannot resolve a house) / Landsat (30 m). Free VHR _basemaps_ (Esri/Google/Bing/Mapbox) are
    single-view mosaics, no RPC, ToS-restricted for 3D derivation. True free stereo+RPC exists only
    for benchmark AOIs (IARPA MVS3DM, DFC2019, CORE3D — already in `apps/ml/fusion/.sat_data/`).
    → The pipeline **degrades gracefully**: cross-view retrieval + 2.5D DSM everywhere; full 3DGS
@@ -29,8 +29,8 @@ splat branch reserved for the cases where it can actually bite.
    implementation gap — the pipeline routes canopy shots to Stages A–C and says so.
 
 3. **Cross-view retrieval models are trained on urban/road panoramas** (CVUSA/CVACT/VIGOR/
-   University-1652). Rural-forest queries are out-of-distribution; retrieval is a *ranker of
-   candidates*, never a sole oracle. Always fused with scene priors + human-readable evidence.
+   University-1652). Rural-forest queries are out-of-distribution; retrieval is a _ranker of
+   candidates_, never a sole oracle. Always fused with scene priors + human-readable evidence.
 
 Every claim the pipeline emits is tagged `proven` / `plumbed-unverified` / `heuristic` and carries
 a calibrated probability. Being honestly uncertain beats a confident wrong pin.
@@ -63,7 +63,8 @@ whether C1/C3 and D are attempted or skipped-with-reason. No silent skips — ev
 
 ## 2. Stage specs
 
-### A. Forensics & scene understanding  (Sonnet build; runs per photo)
+### A. Forensics & scene understanding (Sonnet build; runs per photo)
+
 - **EXIF/XMP**: GPS, timestamp, camera make/model, orientation, lens focal → if GPS present, short-
   circuit to Stage E with `proven` tag. (Test set: stripped, none.)
 - **Scene caption + attributes** via a VLM (see §3 model choices): free-text + structured slots:
@@ -76,17 +77,19 @@ whether C1/C3 and D are attempted or skipped-with-reason. No silent skips — ev
 - **Perceptual hash + near-dup grouping** so a burst of one place isn't over-counted.
 - Emits `evidence/{photo}.json` (schema in §4) — the ONLY contract downstream stages consume.
 
-### B. Geo-prior fusion  (Sonnet build)
+### B. Geo-prior fusion (Sonnet build)
+
 - Turn A's cues into a probability distribution over regions. Two fusers, combined:
   - **Rule/knowledge fuser**: curated cue→region weights (architecture material, driving side,
     plate format, language, vegetation zone, utility-pole style, road markings). Data-driven, in a
-    YAML knowledge base — *generic*, extensible, no country hardcoded in code paths.
+    YAML knowledge base — _generic_, extensible, no country hardcoded in code paths.
   - **VLM geo-estimator**: ask the VLM directly "top-5 countries/regions + why + confidence" and
     calibrate/blend with the rule fuser (weighted log-opinion pool).
 - Output: ranked regions with rationale + the bounding boxes to hand Stage C. Explicitly represents
   uncertainty (may return several regions).
 
-### C. Candidate retrieval  (C2 Sonnet keyless-live; C1/C3 Opus)
+### C. Candidate retrieval (C2 Sonnet keyless-live; C1/C3 Opus)
+
 - **C1 cross-view embedding** — `Sample4Geo` (Skyy93/Sample4Geo, ConvNeXt + symmetric InfoNCE,
   released weights). Embed the ground photo; embed a grid of VHR reference tiles covering the prior
   bbox (basemap tiles are fine — retrieval needs appearance, not RPC); rank by cosine. Returns
@@ -99,7 +102,8 @@ whether C1/C3 and D are attempted or skipped-with-reason. No silent skips — ev
   DEM (Copernicus GLO-30, free) skyline profile within the prior. Rangeland/hill shots only.
 - Fuse C1–C3 → ranked AOI list (lat/lon, radius, fused score, contributing evidence).
 
-### D. Precise pose — the "VHR→3DGS→geolocate" branch  (Opus build)
+### D. Precise pose — the "VHR→3DGS→geolocate" branch (Opus build)
+
 - **D1 (full 3DGS)**: for an AOI with stereo+RPC coverage, build the scene once:
   reuse `apps/ml/fusion/recon/rpc_stereo.py` (proven plane-sweep DSM, 2.79 m RMSE) and/or wire
   **EOGS/EOGS++** (mezzelfo.github.io/EOGS, native RPC 3DGS) → a `.ply` splat + DSM. Then estimate
@@ -113,7 +117,8 @@ whether C1/C3 and D are attempted or skipped-with-reason. No silent skips — ev
   date/time) to pin position and heading without a full splat. Cheaper, works far more often.
 - Router only invokes D when Stage A tagged the scene "open/semi-open" AND an AOI survived C.
 
-### E. Verification, confidence & report  (Sonnet build)
+### E. Verification, confidence & report (Sonnet build)
+
 - Consistency checks across photos (do all AOIs fall within one ~1 km disk, as claimed?).
 - Calibrated final confidence per level (country/region/AOI/pose) from the fused evidence.
 - Emits `geo_assessment.md` (human report: verdict → evidence → limits) + `result.geojson`
@@ -124,23 +129,24 @@ whether C1/C3 and D are attempted or skipped-with-reason. No silent skips — ev
 
 ## 3. Model / data choices (concrete, mostly keyless)
 
-| Need | Choice | Why / where |
-|---|---|---|
-| VLM caption + geo-estimate | local reasoner (ollama) or hosted per repo config | reuse local-inference toggle; keyless local path |
-| OCR | tesseract / easyocr | keyless |
-| Object/veg detection | existing CUDA YOLO sidecar (`~/.venv`, RTX 5090) | reuse; do NOT use apps/api/.venv for torch |
-| Cross-view embedding | Sample4Geo (released weights) | ground↔aerial retrieval |
-| VHR reference tiles | Esri/Bing basemap tiles (retrieval only) + CDSE Sentinel Hub (owned creds) | appearance ranking; NOT for 3D redistribution |
-| Stereo+RPC 3D | repo `rpc_stereo.py` + EOGS/EOGS++; OpenSplat fallback | proven 2.79 m RMSE in-repo |
-| DEM | Copernicus GLO-30 (free) | terrain/skyline + D2 shadow |
-| Structured features | OSM Overpass (keyless, live) | C2 — the workhorse for rural |
-| Reverse-image (optional) | operator-supplied; not assumed | ethics/ToS gate |
+| Need                       | Choice                                                                     | Why / where                                      |
+| -------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------ |
+| VLM caption + geo-estimate | local reasoner (ollama) or hosted per repo config                          | reuse local-inference toggle; keyless local path |
+| OCR                        | tesseract / easyocr                                                        | keyless                                          |
+| Object/veg detection       | existing CUDA YOLO sidecar (`~/.venv`, RTX 5090)                           | reuse; do NOT use apps/api/.venv for torch       |
+| Cross-view embedding       | Sample4Geo (released weights)                                              | ground↔aerial retrieval                          |
+| VHR reference tiles        | Esri/Bing basemap tiles (retrieval only) + CDSE Sentinel Hub (owned creds) | appearance ranking; NOT for 3D redistribution    |
+| Stereo+RPC 3D              | repo `rpc_stereo.py` + EOGS/EOGS++; OpenSplat fallback                     | proven 2.79 m RMSE in-repo                       |
+| DEM                        | Copernicus GLO-30 (free)                                                   | terrain/skyline + D2 shadow                      |
+| Structured features        | OSM Overpass (keyless, live)                                               | C2 — the workhorse for rural                     |
+| Reverse-image (optional)   | operator-supplied; not assumed                                             | ethics/ToS gate                                  |
 
 ---
 
 ## 4. Contracts (stable interfaces so stages parallelise)
 
 `evidence/{photo}.json`:
+
 ```json
 { "photo": "...", "phash": "...", "exif": {"gps": null, "ts": null, "camera": null},
   "scene_type": "canopy_interior|open|semi_open|indoor",
@@ -149,6 +155,7 @@ whether C1/C3 and D are attempted or skipped-with-reason. No silent skips — ev
      "sun":{"shadow_az_deg":null,"solar_elev_deg":null},"terrain_slope":"..."},
   "confidence_notes": "..." }
 ```
+
 `geo_prior.json`: `[{ "region":"...", "bbox":[w,s,e,n], "p":0.0, "rationale":"..." }]`
 `candidates.json`: `[{ "lat":0,"lon":0,"radius_m":0,"score":0,"sources":["C2:..."],"evidence":"..." }]`
 `result.geojson` + `geo_assessment.md`.
@@ -160,6 +167,7 @@ Each stage reads/writes only these files → agents own separate modules, no sha
 ## 5. Repo integration & layout
 
 New package: `apps/ml/geolocate/` (sibling of `apps/ml/fusion`).
+
 ```
 geolocate/
   __init__.py
@@ -178,6 +186,7 @@ geolocate/
   knowledge/*.yaml
   tests/              # pytest; live-gated tests marked, keyless ones always run
 ```
+
 - CLI first (so it runs headless/CI). Optional thin `POST /api/geolocate` later, mirroring
   `recon.py` job scaffold. Do not block the CLI on the route.
 - Tests run from repo ROOT: `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/ml/geolocate -q`.
@@ -201,4 +210,7 @@ Success = keyless stages proven-live (forensics on the 6 photos, an OSM query re
 candidates, orchestrator emitting a report), and an honest geo-assessment with calibrated
 confidence. The splat branch is delivered runnable + tested on a benchmark AOI; it is NOT expected
 to resolve the canopy test photos (§0.2) and the report says so.
+
+```
+
 ```

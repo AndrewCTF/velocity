@@ -1,7 +1,7 @@
-import * as Cesium from 'cesium';
-import { useSelection } from '../state/stores.js';
-import { tracks, type TrackPoint } from '../intel/tracks.js';
-import { apiFetch } from '../transport/http.js';
+import * as Cesium from "cesium";
+import { useSelection } from "../state/stores.js";
+import { tracks, type TrackPoint } from "../intel/tracks.js";
+import { apiFetch } from "../transport/http.js";
 
 // Magenta/violet polyline through the selected entity's last ~60 positions,
 // mirroring the "purple line" flightradar24 draws through a selected flight.
@@ -17,7 +17,7 @@ import { apiFetch } from '../transport/http.js';
 // CLAUDE.md operator-visible spec: selection magenta polyline #d946ef
 // width 4 + black outline width 6. Do not "brighten" without updating the
 // guardrail doc — past drift here shipped an off-spec #ff2bd6/5/7 combo.
-const ACCENT = Cesium.Color.fromCssColorString('#d946ef').withAlpha(0.95);
+const ACCENT = Cesium.Color.fromCssColorString("#d946ef").withAlpha(0.95);
 const OUTLINE = Cesium.Color.BLACK.withAlpha(0.5);
 const REFRESH_MS = 250; // 4 Hz — line appears the moment the 2nd fix lands
 
@@ -26,7 +26,7 @@ const REFRESH_MS = 250; // 4 Hz — line appears the moment the 2nd fix lands
 const SHOW_RANGE = new Cesium.DistanceDisplayCondition(0, 200_000_000);
 
 export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
-  const ds = new Cesium.CustomDataSource('__selectionTrack');
+  const ds = new Cesium.CustomDataSource("__selectionTrack");
   viewer.dataSources.add(ds);
 
   let currentId: string | null = null;
@@ -50,14 +50,21 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
   let fetchToken = 0;
 
   const loadHistorical = async (id: string, token: number): Promise<void> => {
-    if (!id.startsWith('aircraft:')) return; // only aircraft have a trace upstream
-    const icao = id.slice('aircraft:'.length);
+    if (!id.startsWith("aircraft:")) return; // only aircraft have a trace upstream
+    const icao = id.slice("aircraft:".length);
     try {
       const r = await apiFetch(`/api/adsb/trace/${encodeURIComponent(icao)}`);
       if (!r.ok) return;
-      const b = (await r.json()) as { points?: { t: number; lon: number; lat: number; alt_m: number }[] };
+      const b = (await r.json()) as {
+        points?: { t: number; lon: number; lat: number; alt_m: number }[];
+      };
       if (token !== fetchToken) return; // selection changed while we were fetching
-      historical = (b.points ?? []).map((p) => ({ t: p.t, lon: p.lon, lat: p.lat, alt: p.alt_m }));
+      historical = (b.points ?? []).map((p) => ({
+        t: p.t,
+        lon: p.lon,
+        lat: p.lat,
+        alt: p.alt_m,
+      }));
       renderTrack(id);
     } catch {
       /* keep the live-only trail */
@@ -68,7 +75,9 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
   // newer tail; returns the point count.
   const rebuild = (id: string): number => {
     const ring = tracks.get(id) as TrackPoint[];
-    const lastHistT = historical.length ? historical[historical.length - 1]!.t : -Infinity;
+    const lastHistT = historical.length
+      ? historical[historical.length - 1]!.t
+      : -Infinity;
     const tail = historical.length ? ring.filter((p) => p.t > lastHistT) : ring;
     const merged = historical.length ? [...historical, ...tail] : ring;
     livePositions.length = 0;
@@ -120,7 +129,7 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
       const onlyPos = livePositions[0]!;
       if (!seedEntity) {
         seedEntity = ds.entities.add({
-          id: '__selectionTrack__seed',
+          id: "__selectionTrack__seed",
           position: new Cesium.ConstantPositionProperty(onlyPos),
           point: {
             color: ACCENT,
@@ -134,7 +143,9 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
           },
         });
       } else {
-        (seedEntity.position as Cesium.ConstantPositionProperty).setValue(onlyPos);
+        (seedEntity.position as Cesium.ConstantPositionProperty).setValue(
+          onlyPos,
+        );
       }
       viewer.scene.requestRender();
       return;
@@ -152,7 +163,7 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
       // zoom levels).
       const arc = liveClamp ? Cesium.ArcType.GEODESIC : Cesium.ArcType.NONE;
       outlineEntity = ds.entities.add({
-        id: '__selectionTrack__outline',
+        id: "__selectionTrack__outline",
         polyline: {
           positions: new Cesium.CallbackProperty(() => livePositions, false),
           width: 6,
@@ -166,7 +177,7 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
     if (!glowEntity) {
       const arc = liveClamp ? Cesium.ArcType.GEODESIC : Cesium.ArcType.NONE;
       glowEntity = ds.entities.add({
-        id: '__selectionTrack__',
+        id: "__selectionTrack__",
         polyline: {
           positions: new Cesium.CallbackProperty(() => livePositions, false),
           width: 4,
