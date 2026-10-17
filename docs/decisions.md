@@ -1256,6 +1256,7 @@ with real bodies rendered.
 ## Backend test baseline history
 
 - 2026-09-17: 2996 passed + 21 skipped in ~236 s (branch palantir-stack-2026-09); displaced 2026-10-04 by 3102 + 21 (AIS pipeline wave, measured on the shared working tree, which also carries the keyless Google 3D and clearance tests).
+- 2026-09-17: 2996 passed + 21 skipped in ~236 s (branch palantir-stack-2026-09, palantir-stack waves); displaced 2026-10-05 by 3007 + 21 (keyless Google 3D adds 11; the four MQTT tests that had been failing on master since late September pass again and were always in the count).
 - 2026-09-13: 2813 passed + 2 skipped in ~207 s (branch release-basemap-schemes-2026-09, adsb-feeder stall + heap fix); displaced 2026-09-17 by 2996 + 21 (palantir-stack waves; the 17 Timescale tests skip without HISTORY_PG_TEST_DSN).
 - 2810 + 2 skipped — 2026-09-13, release-basemap-schemes-2026-09, release-gate wave
 - 2804 + 2 skipped — 2026-09-13, compliance-2026-09, ASVS L2 wave
@@ -3208,6 +3209,40 @@ Same view, same tiles, three things compared on magnified crops:
 A finer level of detail than one texel per pixel (`GOOGLE_3D_DETAIL=48`) is
 only slightly sharper for 2.5 times the tiles, so it is not the default.
 
+**The mesh in use: a black map, a starved loader and a logo (2026-10-06).**
+The operator reported the basemap as buggy on a large display. Reproduced by
+doing what an operator does: pick Google 3D at world view, fly to a city.
+
+- **Black map on arrival.** The gate hid the globe the moment the camera went
+  under 30 km, before one mesh tile existed: about five seconds of black with
+  aircraft dots on it. Under the keyless mesh the globe now stays visible as
+  the backdrop. Left on under a loaded mesh it changes at most 0.01 % of
+  pixels (New York, San Francisco, Innsbruck, Rio), so nothing is gained by
+  hiding it. The licensed stream still hides it: its heights are ellipsoidal.
+- **The globe starved the mesh.** Cesium allows one server 18 requests at a
+  time. On a 3162 px wide canvas the satellite basemap took all 18 for four
+  seconds at a stretch and the mesh had none in flight. While the mesh is up
+  the globe now runs at screen-space error 16, a handful of coarse tiles.
+- **Too many tiles on a big canvas.** One texel per pixel at 3162x1994 wanted
+  3 140 tiles and 2.5 GB for one view and had not finished after 40 s. Above
+  2.5 MP the mesh's error now scales with the pixel count, and it skips the
+  chain of coarser tiles above the ones it needs (`skipLevelOfDetail`). Same
+  view: 1 365 tiles, 1.1 GB, loaded in 16 s; a full-resolution crop of the two
+  is hard to tell apart. A 1920 px fly-in went from 16 s to 6 s.
+- **A logo under the time dock.** Showing the mesh un-hid Cesium's credit
+  strip, which is right for the licensed stream and wrong here: it put the
+  Cesium ion logo half behind the dock. The strip stays hidden for this source.
+
+Two things that look like bugs and are Google's data: a hard colour line
+across Manhattan at 59th Street (two capture blocks; raw texture means
+81/69/70 south of it and 96/109/123 north, same node epoch), and a blurred
+patch on the left bank in Paris (a finest-level node, blurred at source).
+
+Tried and dropped again: warming sibling nodes from Google (cold first visit
+on a quiet API: 16/6/6 s with, 8/5/9 s without), and filling per column
+instead of per octant (the per-octant rule is Google's own; 1 416 of 1 426
+fillers in the cache are empty and the rest are small real slivers).
+
 **The spread is the backend, not this code.** A cached tile takes the API a
 median 8 ms but 319 ms at p99, with stalls to 1.9 s (4 072 requests, six at a
 time), because the event loop shares a process with the 1 s ADS-B cycle. Every
@@ -3224,10 +3259,10 @@ sixteen backdrop tiles held all of them in three waves and no mesh request
 could be sent. Manhattan from world view, 1 882 px canvas, EOX unreachable,
 same cache, quiet API:
 
-|                                   | first mesh tile | every tile loaded |
-| --------------------------------- | --------------- | ----------------- |
-| Before                            | 61.5 s          | 86.5 s            |
-| A dead host is skipped for 60 s   | 3.3 s, 2.8 s    | 9.3 s, 7.7 s      |
+|                                 | first mesh tile | every tile loaded |
+| ------------------------------- | --------------- | ----------------- |
+| Before                          | 61.5 s          | 86.5 s            |
+| A dead host is skipped for 60 s | 3.3 s, 2.8 s    | 9.3 s, 7.7 s      |
 
 On the live API the same evening, EOX still unreachable: first mesh tile at
 4.6 s and 3.7 s, every tile loaded at 16.0 s and 10.5 s, no failed request. A
@@ -3304,14 +3339,14 @@ view panned across from orbit.
 
 Manhattan at 900 m on a 1882 x 1134 canvas, flying in from world view (3 s):
 
-| | first mesh tile | 90 % of the picture final | every tile loaded |
-|---|---|---|---|
-| tiles from the API, two hours up | 5.0, 6.8 s | not measured | 27.4, 28.8 s |
-| tiles from the API, minutes up | 4.4, 5.4 s | 14.2, 18.1 s | 15.5, 18.0 s |
-| tile process, client unchanged (5 runs) | 3.9 to 4.6 s | 8.9 to 10.2 s | 9.2 to 10.5 s |
-| tile process and the client changes (6 runs, live) | 2.8 to 3.8 s | 5.5 to 7.3 s | 5.4 to 7.4 s |
-| already over the city, basemap switched on (2 runs) | 0.9, 1.5 s | 4.4, 4.8 s | 4.0, 4.5 s |
-| Chicago, never fetched (807 new files) | 2.8 s | 11.0 s | 11.4 s |
+|                                                     | first mesh tile | 90 % of the picture final | every tile loaded |
+| --------------------------------------------------- | --------------- | ------------------------- | ----------------- |
+| tiles from the API, two hours up                    | 5.0, 6.8 s      | not measured              | 27.4, 28.8 s      |
+| tiles from the API, minutes up                      | 4.4, 5.4 s      | 14.2, 18.1 s              | 15.5, 18.0 s      |
+| tile process, client unchanged (5 runs)             | 3.9 to 4.6 s    | 8.9 to 10.2 s             | 9.2 to 10.5 s     |
+| tile process and the client changes (6 runs, live)  | 2.8 to 3.8 s    | 5.5 to 7.3 s              | 5.4 to 7.4 s      |
+| already over the city, basemap switched on (2 runs) | 0.9, 1.5 s      | 4.4, 4.8 s                | 4.0, 4.5 s        |
+| Chicago, never fetched (807 new files)              | 2.8 s           | 11.0 s                    | 11.4 s            |
 
 The picture column is a screenshot a second compared block by block with the
 finished frame, so it counts what is on screen and not what was requested. On
@@ -3338,8 +3373,7 @@ load was the tree and the models, not the triangles and textures in them. What
 that was made of, and what came off:
 
 - One tileset document per bulk (four octree levels) made Cesium build a tile
-  object for every node of every bulk on the way down: 89 621 of them to draw
-  813. A document is now two levels (`_DOC_LEVELS`), 4 to 9 KB against 53 to
+  object for every node of every bulk on the way down: 89 621 of them to draw 813. A document is now two levels (`_DOC_LEVELS`), 4 to 9 KB against 53 to
   142 KB, 6 183 tile objects, 132 small requests against 85 large ones. 3.6 s
   became 2.5 s. The finished frame is the same one: 99.5 % of 16 px blocks
   within four grey levels of the old tree's (two runs of the new tree against
@@ -3364,24 +3398,24 @@ refines as a whole. Do not retry it for speed.
 
 Live, Manhattan at 900 m, 1882 x 1134:
 
-| | before this round | now |
-|---|---|---|
-| parked, basemap switched on: every tile loaded | 3.6 to 4.4 s | 2.3, 2.4 s |
-| fly-in (3 s): picture final on landing | about half | 96 % |
-| fly-in: every tile loaded | 5.4 to 7.4 s | 4.2 to 4.9 s |
-| Paris, never fetched (586 new files): every tile loaded | Chicago 11.4 s | 10.2 s |
+|                                                         | before this round | now          |
+| ------------------------------------------------------- | ----------------- | ------------ |
+| parked, basemap switched on: every tile loaded          | 3.6 to 4.4 s      | 2.3, 2.4 s   |
+| fly-in (3 s): picture final on landing                  | about half        | 96 %         |
+| fly-in: every tile loaded                               | 5.4 to 7.4 s      | 4.2 to 4.9 s |
+| Paris, never fetched (586 new files): every tile loaded | Chicago 11.4 s    | 10.2 s       |
 
 What is left is Cesium turning 616 glbs into models at about 3 ms each, and
 that scales with the number of tiles, which is the detail setting. Measured on
 the new tree, parked, sharpness as the mean luminance step of the finished
 frame against the 24 px default:
 
-| `maximumScreenSpaceError` | tiles | every tile loaded | sharpness |
-|---|---|---|---|
-| 24 (one texel a pixel, the default) | 616 | 2.3 to 2.5 s | 100 % |
-| 28 | 482 | 1.85 s | 94 % |
-| 32 | 395 | 1.4 to 1.5 s | 90 % |
-| 40 | 296 | 1.3 s | 83 % |
+| `maximumScreenSpaceError`           | tiles | every tile loaded | sharpness |
+| ----------------------------------- | ----- | ----------------- | --------- |
+| 24 (one texel a pixel, the default) | 616   | 2.3 to 2.5 s      | 100 %     |
+| 28                                  | 482   | 1.85 s            | 94 %      |
+| 32                                  | 395   | 1.4 to 1.5 s      | 90 %      |
+| 40                                  | 296   | 1.3 s             | 83 %      |
 
 Detail was not touched: the operator asked for resolution (see
 `GE_PER_TEXEL`), and this table is the price list if that changes.
@@ -3691,15 +3725,15 @@ graphics.
 A/B of exactly these commits: two worktrees, 1d3b6a0f and ff799e92, each on
 its own Vite against the same backend, runs alternated.
 
-| | before (1d3b6a0f) | after |
-|---|---|---|
-| `measure_ui --profile all-toggles` | POOR: fps p05 9, p50 50; renderMs p95 28.9; long tasks 73/min; 38k entities | OK: fps p05 51, p50 91; renderMs p95 9.2; 27/min; 43k entities |
-| `measure_ui --profile baseline`, two runs each | fps p05 76 and 70, p50 147 and 150; frame gap p95 18.4 and 18.3 ms; long tasks 24 and 26/min | fps p05 122 and 118, p50 164 and 151; 9.0 and 14.1 ms; 12 and 13/min |
-| fly-in, world view to the North Sea at 400 km, worst frame / frames over 50 ms, two runs each | 340 and 334 ms / 18 and 9 | 94 and 97 ms / 5 and 6 |
-| idle, main-thread time outside Cesium's frame loop (CDP profile), two runs each | 47 % and 67 % | 36 % and 41 % |
-| idle, aircraft drain CPU per 25 s (CDP profile) | 2.8 and 2.2 s | 1.8 and 1.9 s |
-| idle main thread, dev server / production build (shared tree) | 49 % / 41 % | 41 % / 37 % |
-| boot chunk | 2.78 MB, 746 KB gzipped | 1.46 MB, 434 KB gzipped |
+|                                                                                               | before (1d3b6a0f)                                                                            | after                                                                |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `measure_ui --profile all-toggles`                                                            | POOR: fps p05 9, p50 50; renderMs p95 28.9; long tasks 73/min; 38k entities                  | OK: fps p05 51, p50 91; renderMs p95 9.2; 27/min; 43k entities       |
+| `measure_ui --profile baseline`, two runs each                                                | fps p05 76 and 70, p50 147 and 150; frame gap p95 18.4 and 18.3 ms; long tasks 24 and 26/min | fps p05 122 and 118, p50 164 and 151; 9.0 and 14.1 ms; 12 and 13/min |
+| fly-in, world view to the North Sea at 400 km, worst frame / frames over 50 ms, two runs each | 340 and 334 ms / 18 and 9                                                                    | 94 and 97 ms / 5 and 6                                               |
+| idle, main-thread time outside Cesium's frame loop (CDP profile), two runs each               | 47 % and 67 %                                                                                | 36 % and 41 %                                                        |
+| idle, aircraft drain CPU per 25 s (CDP profile)                                               | 2.8 and 2.2 s                                                                                | 1.8 and 1.9 s                                                        |
+| idle main thread, dev server / production build (shared tree)                                 | 49 % / 41 %                                                                                  | 41 % / 37 %                                                          |
+| boot chunk                                                                                    | 2.78 MB, 746 KB gzipped                                                                      | 1.46 MB, 434 KB gzipped                                              |
 
 **Left alone, and why.** BillboardCollection's per-frame loop is Cesium's; the
 levers are fewer renders or fewer shown billboards. Cesium.js stays a blocking
