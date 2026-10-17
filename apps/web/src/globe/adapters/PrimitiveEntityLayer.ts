@@ -73,12 +73,44 @@ const VISIBLE_RECOMPUTE_MS = 500;
 // animatedPrims p50 of 22, so the cap never binds — the frustum-visible set is
 // tiny and the cost attributed to it was actually the 500 ms full pass below.
 const MAX_ANIMATED = 4000;
+// Moving icons are mirrored at most this often, whatever the display's refresh.
+// preUpdate fires on every rendered frame, so on this machine's 165 Hz panel the
+// mirror (SampledProperty interpolation + a billboard vertex rewrite per moved
+// icon) ran 165 times a second: 16 % of the main thread with every layer on,
+// measured 2026-10-17. At 30 Hz a vessel at 15 m/s moves 0.5 m a step and a
+// satellite seen from 800 km under a pixel; only an opt-in dead-reckoned
+// aircraft at street zoom steps visibly (a few px), and its position is still
+// exactly the analytic pos(t) at each step.
+// ponytail: one fixed rate for every pool; make it per-pool if DR aircraft at
+// street zoom ever need display-rate motion.
+const MIRROR_MIN_MS = 33;
+// Parsed once: the pulse used to re-parse this CSS string per emergency per frame.
+const EMERGENCY_COLOR = Cesium.Color.fromCssColorString(EMERGENCY_RED);
 // Chunking this full pass across frames was tried on 2026-07-29 and REVERTED:
 // spreading it kept the mirror busy every frame instead of leaving idle ones, and
 // measured renderMs p95 39.9 then 53.2 ms against 17.3 un-chunked. The periodic
 // full pass is cheaper than a permanently busy one.
 const _cullSphere = new Cesium.BoundingSphere();
 const _upScratch = new Cesium.Cartesian3();
+
+/** Strip the visualizers DataSourceDisplay gave a data source whose entities
+ * carry no graphics because this layer paints them. Call right after
+ * `viewer.dataSources.add(ds)`, before any entity is added.
+ *
+ * WHY: every data source gets the five visualizers GlobeCanvas installs, and
+ * Cesium updates all of them on every clock tick whether or not an entity has a
+ * billboard. GeometryVisualizer also builds a GeometryUpdaterSet per entity that
+ * re-checks ~13 geometry types on every property change, which the 1 Hz bag
+ * refresh raises thousands of times a poll. Measured 2026-10-17, all toggles,
+ * scripted pan, alternating runs: long-task time 5.4 and 5.9 s → 3.7 and 1.9 s,
+ * GC 1.3 s → 0.8 s. getBoundingSphere (trackedEntity follow) already answered
+ * FAILED for these graphics-less entities, so follow is unchanged. Uses
+ * `_visualizers`, the same Cesium internal DataSourceDisplay reads. */
+export function dropVisualizers(ds: Cesium.DataSource): void {
+  const d = ds as unknown as { _visualizers?: { destroy(): void }[] };
+  for (const v of d._visualizers ?? []) v.destroy();
+  d._visualizers = [];
+}
 
 export interface PrimitiveStyle {
   imageUri: string;
@@ -242,6 +274,7 @@ export class PrimitiveEntityLayer {
   // §5.4 animated-mirror LOD state.
   private readonly visibleIds = new Set<string>();
   private lastVisibleMs = 0;
+  private lastMirrorMs = 0;
   private wasAnimating = false;
   private layerOpacity = 1;
   private removePreUpdate: (() => void) | null = null;
@@ -610,9 +643,11 @@ export class PrimitiveEntityLayer {
     const pulsing = this.opts.pulse === true && this.emergencyIds.size > 0;
     if (!animate) this.wasAnimating = false;
     if (!animate && !pulsing) return;
+    const now = performance.now();
+    if (now - this.lastMirrorMs < MIRROR_MIN_MS) return;
+    this.lastMirrorMs = now;
     if (animate) {
       const t = this.opts.getClock();
-      const now = performance.now();
       // Motion just started (zoom crossed the glide altitude / deadReckon toggled
       // on): force a full pass NOW so the visible set isn't empty for up to 500 ms.
       if (!this.wasAnimating) { this.wasAnimating = true; this.lastVisibleMs = 0; }
@@ -663,7 +698,7 @@ export class PrimitiveEntityLayer {
       const a = 0.6 + 0.4 * Math.abs(Math.sin(Date.now() / 250)); // matches the old CallbackProperty
       for (const id of this.emergencyIds) {
         const p = this.prims.get(id);
-        if (p) p.bb.color = Cesium.Color.fromCssColorString(EMERGENCY_RED).withAlpha(a * this.layerOpacity * p.dimFactor);
+        if (p) p.bb.color = EMERGENCY_COLOR.withAlpha(a * this.layerOpacity * p.dimFactor);
       }
     }
   }

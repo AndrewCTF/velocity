@@ -8,7 +8,7 @@ import { useSelection } from '../../state/stores.js';
 import { openAuthedWebSocket } from '../../transport/http.js';
 import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { refreshBagInPlace } from './PollGeoJsonAdapter.js';
-import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
+import { PrimitiveEntityLayer, dropVisualizers } from './PrimitiveEntityLayer.js';
 
 
 interface VesselMsg {
@@ -75,6 +75,7 @@ export class AisWsAdapter implements LayerAdapter {
 
   async attach(viewer: Cesium.Viewer): Promise<void> {
     await viewer.dataSources.add(this.ds);
+    dropVisualizers(this.ds);
     this.prim = new PrimitiveEntityLayer(viewer.scene, {
       styleFn: (props) => {
         const st = vesselStyle(props);

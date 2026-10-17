@@ -12,7 +12,7 @@ import type { LayerAdapter, AdapterCtx } from './types.js';
 import { satelliteStyle } from './styles.js';
 import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { labelFor } from './labelStyle.js';
-import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
+import { PrimitiveEntityLayer, dropVisualizers } from './PrimitiveEntityLayer.js';
 import { apiFetch } from '../../transport/http.js';
 import { isMobileDevice } from '../../shell/device.js';
 import { useSettings } from '../../state/settings.js';
@@ -145,6 +145,7 @@ export class SatelliteAdapter implements LayerAdapter {
   async attach(viewer: Cesium.Viewer): Promise<void> {
     await viewer.dataSources.add(this.ds);
     if (this.detached || viewer.isDestroyed()) return;
+    dropVisualizers(this.ds);
     this.prim = new PrimitiveEntityLayer(viewer.scene, {
       poolKey: 'satellite', // SGP4 pump ticks on its own cadence
       // Satellites carry no heading and a fixed accent tint; one style for all.

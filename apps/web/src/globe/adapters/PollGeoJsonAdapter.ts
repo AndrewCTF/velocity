@@ -33,7 +33,7 @@ import {
   aircraftSilhouette,
   vesselSilhouette,
 } from '../../entity-panel/silhouettes.js';
-import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
+import { PrimitiveEntityLayer, dropVisualizers } from './PrimitiveEntityLayer.js';
 import { ingestFix, projectAt, type DrFix, type DrState } from './deadReckon.js';
 import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
 import { perfSetDrain } from '../perf.js';
@@ -764,6 +764,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         shouldAnimate: () => false,
       });
     }
+    // Every branch above paints this layer's pixels itself, and its entities are
+    // graphics-less (applyStyle sets polygon/point/label only for the Entity-API
+    // kinds), so the data source's visualizers would walk nothing every frame.
+    if (this.primRenderer) dropVisualizers(this.ds);
     if (this.props.refreshOnMove) {
       // ONE settle timer for the whole map, with a concurrency cap, instead of a
       // private 200 ms debounce per adapter. Sixteen layers register for
