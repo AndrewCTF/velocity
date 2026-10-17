@@ -19,6 +19,7 @@ export function useLayerCounts(viewer: Cesium.Viewer | null | undefined): Record
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
     const perDsUnsub = new Map<Cesium.DataSource, () => void>();
+    let last: Record<string, number> = {};
 
     const recount = (): void => {
       // A destroyed viewer (HMR / globe ErrorBoundary) throws on .dataSources.
@@ -28,6 +29,12 @@ export function useLayerCounts(viewer: Cesium.Viewer | null | undefined): Record
         const ds = viewer.dataSources.get(i);
         next[ds.name] = ds.entities.values.length;
       }
+      // collectionChanged also fires for entities that only CHANGED (every poll's
+      // property refresh), so most recounts find the same numbers. A new object
+      // each time re-rendered the whole Layers panel on every drain and every
+      // 2 s tick; keep the old one when nothing moved.
+      if (sameCounts(last, next)) return;
+      last = next;
       setCounts(next);
     };
 
@@ -65,6 +72,13 @@ export function useLayerCounts(viewer: Cesium.Viewer | null | undefined): Record
   }, [viewer]);
 
   return counts;
+}
+
+function sameCounts(a: Record<string, number>, b: Record<string, number>): boolean {
+  const keys = Object.keys(b);
+  if (Object.keys(a).length !== keys.length) return false;
+  for (const k of keys) if (a[k] !== b[k]) return false;
+  return true;
 }
 
 /** Sum of the live counts for every registry layer a catalog row maps to. */

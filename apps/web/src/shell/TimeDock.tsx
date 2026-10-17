@@ -112,6 +112,10 @@ export function stepSpeed(current: number, dir: 1 | -1): number {
   return SPEEDS[next] ?? SPEEDS[0];
 }
 
+// One shared empty series, so the memos below keep their inputs while no density
+// has loaded.
+const NO_BINS: never[] = [];
+
 export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Element {
   const playing = useTime((s) => s.playing);
   const togglePlay = useTime((s) => s.togglePlay);
@@ -349,9 +353,67 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
     return out;
   }, [from, span]);
 
-  const bars = density?.detections ?? [];
+  const bars = density?.detections ?? NO_BINS;
   const peak = Math.max(1, ...bars);
-  const alerts = density?.alerts ?? [];
+  const alerts = density?.alerts ?? NO_BINS;
+  // The lanes and density bars change when a poll lands (every 5 s), not when
+  // the clock moves, but the clock re-renders the dock: hundreds of marks
+  // rebuilt each time, the dock's whole render cost in a profile (2026-10-17).
+  // Only the playhead and its stamp depend on clockMs.
+  const laneRows = useMemo(
+    () =>
+      lanes.map((lane) => (
+        <div key={lane.id} className="relative h-[14px] border-t border-line">
+          {/* The label rides OVER the left of the track rather than taking a
+              gutter out of it, so a mark at 30% of the hour lines up with the
+              30% tick above it and the 30% density bar below it. */}
+          <span className="mono pointer-events-none absolute inset-y-0 left-0 z-1 flex items-center gap-[5px] bg-bg-1/90 pl-[10px] pr-[7px] text-[10px] uppercase tracking-[0.5px] text-txt-3">
+            <i
+              className="h-[6px] w-[6px] shrink-0 rounded-full"
+              style={{ background: lane.color || 'var(--warn)' }}
+            />
+            {lane.label}
+          </span>
+          <span className="absolute inset-0">
+            {lane.events.map((ev, i) => {
+              const pct = ((ev.t - from) / span) * 100;
+              if (pct < 0 || pct > 100) return null;
+              return (
+                <button
+                  key={`${lane.id}-${i}`}
+                  type="button"
+                  title={`${lane.label}: ${ev.label}`}
+                  onClick={() => seek(ev.t)}
+                  className="absolute top-[3px] h-[8px] w-[2px]"
+                  style={{ left: `${pct}%`, background: lane.color || 'var(--warn)' }}
+                />
+              );
+            })}
+          </span>
+        </div>
+      )),
+    [lanes, from, span, seek],
+  );
+  const densityBars = useMemo(
+    () => (
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="block h-full w-full">
+        {bars.map((v, i) => {
+          const h = (v / peak) * 100;
+          return (
+            <rect
+              key={i}
+              x={(i / bars.length) * 100}
+              y={100 - h}
+              width={(100 / bars.length) * 0.74}
+              height={h}
+              fill={alerts[i] ? 'var(--alert)' : 'var(--ok)'}
+            />
+          );
+        })}
+      </svg>
+    ),
+    [bars, peak, alerts],
+  );
 
   // Ownership chip — "recording since <date> · <N> GB · <M> fixes", sourced
   // from the /api/history/coverage response CoverageStrip already fetches
@@ -589,36 +651,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           lanes used to share a single 10px unlabelled band of 4px triangles:
           193 incidents and 200 signal events in the same hour drew as one
           undifferentiated sawtooth and nothing said which colour meant what. */}
-      {lanes.map((lane) => (
-        <div key={lane.id} className="relative h-[14px] border-t border-line">
-          {/* The label rides OVER the left of the track rather than taking a
-              gutter out of it, so a mark at 30% of the hour lines up with the
-              30% tick above it and the 30% density bar below it. */}
-          <span className="mono pointer-events-none absolute inset-y-0 left-0 z-1 flex items-center gap-[5px] bg-bg-1/90 pl-[10px] pr-[7px] text-[10px] uppercase tracking-[0.5px] text-txt-3">
-            <i
-              className="h-[6px] w-[6px] shrink-0 rounded-full"
-              style={{ background: lane.color || 'var(--warn)' }}
-            />
-            {lane.label}
-          </span>
-          <span className="absolute inset-0">
-            {lane.events.map((ev, i) => {
-              const pct = ((ev.t - from) / span) * 100;
-              if (pct < 0 || pct > 100) return null;
-              return (
-                <button
-                  key={`${lane.id}-${i}`}
-                  type="button"
-                  title={`${lane.label}: ${ev.label}`}
-                  onClick={() => seek(ev.t)}
-                  className="absolute top-[3px] h-[8px] w-[2px]"
-                  style={{ left: `${pct}%`, background: lane.color || 'var(--warn)' }}
-                />
-              );
-            })}
-          </span>
-        </div>
-      ))}
+      {laneRows}
 
       {/* Density is the drag surface. */}
       <div
@@ -638,21 +671,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
         }}
         className="relative h-[34px] cursor-ew-resize border-t border-line bg-bg-0"
       >
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="block h-full w-full">
-          {bars.map((v, i) => {
-            const h = (v / peak) * 100;
-            return (
-              <rect
-                key={i}
-                x={(i / bars.length) * 100}
-                y={100 - h}
-                width={(100 / bars.length) * 0.74}
-                height={h}
-                fill={alerts[i] ? 'var(--alert)' : 'var(--ok)'}
-              />
-            );
-          })}
-        </svg>
+        {densityBars}
         {/* The stamp hugs whichever side of the playhead has room. Centred on
             the line, it hung half outside the dock at the live end, which is
             where the playhead sits every time the console is opened. */}
