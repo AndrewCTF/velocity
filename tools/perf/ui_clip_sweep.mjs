@@ -49,7 +49,7 @@ const sockets = [], aircraftReqs = [];
 page.on('websocket', (ws) => sockets.push(ws.url()));
 page.on('request', (r) => { if (/\/api\/adsb\/(global|fi\/global)/.test(r.url())) aircraftReqs.push(r.url()); });
 if (CPU_THROTTLE > 1) await (await ctx.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
-await page.goto(`http://localhost:5173${ROUTE}`, { waitUntil: GRADE ? 'domcontentloaded' : 'networkidle', timeout: 90000 });
+await page.goto(`${process.env.BASE_URL || 'http://localhost:5173'}${ROUTE}`, { waitUntil: GRADE ? 'domcontentloaded' : 'networkidle', timeout: 90000 });
 await page.waitForTimeout(GRADE ? 25000 : 12000);
 
 if (GRADE) {
