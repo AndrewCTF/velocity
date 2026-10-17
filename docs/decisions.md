@@ -3054,3 +3054,86 @@ are fixed: write gates on situations and maps, the replay source chosen from the
 archive's `oldest_ts` (never the SQLite shard list), and a truncated heatmap
 cache treated as a miss rather than served. Public copy carries no comparison to
 other vendors; guard `apps/web/src/copy/noComparison.test.ts`.
+
+## Frontend speed: per-frame work, the stats walk, and the boot chunk (2026-10-17)
+
+Operator: "optimise the frontend, I want it fast", globe fps and panning first.
+Measured on this box (165 Hz panel, an unrelated GPU job holding it near 90 %),
+headed Chrome, alternating runs, against the Vite dev server unless stated.
+
+**Where the time went** (one-off CDP CPU profiles aggregated by self-time and
+by long task, not a committed harness; the table below is `measure_ui`). At the
+default view the main thread was 49 % busy
+while a Cesium frame cost about 1 ms: the rest was per-frame work multiplied by
+165 renders a second, the 1 Hz aircraft drain, a ~60 ms entity-stats walk once
+a second, and React re-renders of the Layers panel and time dock. With every
+layer on, during a pan, the main thread had 87 ms idle in 32 s: about 20 % was
+BillboardCollection.update's per-billboard texture-status loop (Cesium, every
+frame, every shown billboard), 16 % the moving-icon mirror in
+`PrimitiveEntityLayer.onPreUpdate`, and the long frames were mostly
+`DataSourceDisplay.update` → GeometryVisualizer walking entities that carry no
+graphics.
+
+**What changed** (ac577259..ff799e92):
+
+- Batched layers drop their data source's visualizers (`dropVisualizers`).
+  Falsified before any code changed: stripping them through `__viewer` in the
+  live page, alternating with a control, took long-task time from 5.4 and 5.9 s
+  to 3.7 and 1.9 s per 30 s and GC from 1.3 to 0.8 s.
+- The moving-icon mirror runs at most at 30 Hz instead of at display rate.
+- The adaptive governor's thresholds scale with the measured refresh interval
+  (it read every 60 Hz frame as overload and shed a layer every 6 s), and a
+  paused clock no longer counts as load. → `globe/adaptiveGovernor.test.ts`
+- The entity-stats walk yields every 500 entities and resumes at the next idle
+  period instead of forcing ~60 ms through the idle timeout.
+  → `globe/entityStats.test.ts`
+- `useLayerCounts` keeps its object when no count moved; the time dock's lanes
+  and density bars are memoised on the polled data.
+- Every console app is a lazy chunk, milsymbol loads on the COP layer's first
+  attach, and the World panel's two finding counts start 3 s after mount instead
+  of competing for the six API sockets with the aircraft snapshot.
+
+A/B of exactly these commits: two worktrees, 1d3b6a0f and ff799e92, each on
+its own Vite against the same backend, runs alternated.
+
+| | before (1d3b6a0f) | after |
+|---|---|---|
+| `measure_ui --profile all-toggles` | POOR: fps p05 9, p50 50; renderMs p95 28.9; long tasks 73/min; 38k entities | OK: fps p05 51, p50 91; renderMs p95 9.2; 27/min; 43k entities |
+| `measure_ui --profile baseline`, two runs each | fps p05 76 and 70, p50 147 and 150; frame gap p95 18.4 and 18.3 ms; long tasks 24 and 26/min | fps p05 122 and 118, p50 164 and 151; 9.0 and 14.1 ms; 12 and 13/min |
+| fly-in, world view to the North Sea at 400 km, worst frame / frames over 50 ms, two runs each | 340 and 334 ms / 18 and 9 | 94 and 97 ms / 5 and 6 |
+| idle, main-thread time outside Cesium's frame loop (CDP profile), two runs each | 47 % and 67 % | 36 % and 41 % |
+| idle, aircraft drain CPU per 25 s (CDP profile) | 2.8 and 2.2 s | 1.8 and 1.9 s |
+| idle main thread, dev server / production build (shared tree) | 49 % / 41 % | 41 % / 37 % |
+| boot chunk | 2.78 MB, 746 KB gzipped | 1.46 MB, 434 KB gzipped |
+
+**Left alone, and why.** BillboardCollection's per-frame loop is Cesium's; the
+levers are fewer renders or fewer shown billboards. Cesium.js stays a blocking
+script (the CSP meta is placed after it on purpose); in the production build
+DOMContentLoaded lands at ~390 ms and the first frame at ~870 ms. react-markdown and cesium-martini are still in the boot
+chunk: Markdown's tests render synchronously, and martini would need a guard
+against a mode switch landing before its import. `preloadSiblings` is still on.
+Planned and not done: creating the FOV/spotlight entities and the empty `__*`
+system sources lazily (the visualizer cost measured was the per-entity walk in
+large sources, not empty ones), `feedStatusSignature` for the nine whole-map
+`useFeeds` subscribers and a frame throttle on `GlobeOverlays`' cursor readout
+(both small in the profiles once the above landed). The idle time Cesium's own
+frame loop takes went UP (11-17 % → 32-36 %): the globe now gets to render the
+frames the app's tasks used to take from it, which is the fps gain above.
+
+Tried and dropped: caching the last props written into each PropertyBag so an
+unchanged key skips the getter + `getValue` round trip. Alternated against the
+committed code it moved `refreshBag` from 0.9-1.5 s to 1.1-1.2 s per 25 s, inside
+the noise; the cost left there is the setter events for values that did change.
+
+**Open for the operator.**
+
+- `continuousRenderGovernor` ON, idle world view, two alternating runs each:
+  main thread 41 % → 27 %, renders 113-130/s → 4-6/s. The default stays OFF
+  until signed off on hardware (2026-07-02 entry above).
+- `start.sh` serves the dev server. A production build idles at 37 % against
+  41 % and reaches first frame in 0.88 s against 1.2-1.4 s; it costs HMR and the
+  DEV globals the walkthroughs drive.
+- First data at ~2-3 s is backend-bound: event-loop lag p95 517 ms and max
+  1.7 s (stalls in `correlate/rules.py` and `intel/incidents.py`), and
+  `/api/sanctions/vessels` answers in 0.4-1.8 s. `/ws/adsb` refuses a browser
+  without an API key with a 403, so the aircraft feed polls at 1 Hz.
