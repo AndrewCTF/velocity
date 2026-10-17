@@ -26,12 +26,15 @@ import html
 import io
 import json
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.config import Settings, get_settings
 from app.intel import evidence as ev
 from app.intel.ontology import get_registry
 from app.keys import UserCtx
+
+if TYPE_CHECKING:
+    from app.security import Principal
 
 _SITUATION_KIND = "situation"
 
@@ -61,16 +64,26 @@ def _now_iso() -> str:
 
 
 async def build_bundle(
-    ctx: UserCtx, sit_id: str, *, settings: Settings | None = None
+    ctx: UserCtx,
+    sit_id: str,
+    *,
+    settings: Settings | None = None,
+    principal: Principal | None = None,
 ) -> dict[str, Any]:
     """Machine-readable case bundle: situation + children + assertions + manifest.
 
     Every child carries its full assertion history (each assertion has a source,
     observed_at, and confidence — the provenance-footnote data). Evidence
     children additionally get a hash-verified custody manifest.
+
+    ``principal`` is the caller's clearance, threaded into ``get_registry`` so
+    ``traverse`` cannot hand back a child above it — a bundle is a download, and
+    a level-4 child the caller cannot read must not be in it. The default
+    ``None`` stays the unfiltered internal path (a background writer's registry),
+    like every other ``get_registry`` call site.
     """
     settings = settings or get_settings()
-    reg = get_registry(ctx, settings)
+    reg = get_registry(ctx, settings, principal=principal)
     sit_obj = await reg.get(sit_id)
     if sit_obj is None or (sit_obj.props or {}).get("kind") != _SITUATION_KIND:
         raise CaseExportError(f"{sit_id} is not a situation")
@@ -93,7 +106,9 @@ async def build_bundle(
 
     sit_assertions = await reg.get_assertions(sit_id, limit=500)
     manifest = (
-        await ev.custody_manifest(ctx, evidence_ids, settings=settings)
+        await ev.custody_manifest(
+            ctx, evidence_ids, settings=settings, principal=principal
+        )
         if evidence_ids
         else None
     )

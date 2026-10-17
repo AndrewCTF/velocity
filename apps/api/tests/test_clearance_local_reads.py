@@ -33,7 +33,10 @@ still passes.
 from __future__ import annotations
 
 import asyncio
+import itertools
+import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -440,3 +443,283 @@ def test_export_and_coa_answer_like_absence_for_a_hidden_situation(
 
     obj = asyncio.run(_reg(None).get(_HIDDEN_SIT))
     assert obj is not None and obj.props["name"] == "SECRET OP"
+
+
+# ── 6. the case export (build_bundle) ─────────────────────────────────────────
+# ``build_bundle`` built its OWN registry, unfiltered, so a situation the caller
+# CAN read exported every linked child — including a level-4 one they cannot see,
+# with its assertion history (a download, not a glance). The bundle now takes the
+# caller's principal; ``principal=None`` stays the internal writer path.
+
+
+def test_a_case_export_omits_a_child_above_the_callers_clearance() -> None:
+    from app.intel import case_export as ce  # noqa: PLC0415
+
+    async def run() -> None:
+        writer = _reg(None)
+        await writer.upsert(
+            Object(id="situation:case", props={"kind": "situation", "name": "Case"})
+        )
+        await _seed()  # level-4 incident:ts-only + its level-0 neighbour
+        await writer.link(Link(src="situation:case", dst=_OPEN, rel="evidence_of"))
+        await writer.link(Link(src="situation:case", dst=_SECRET, rel="evidence_of"))
+
+        blind = await ce.build_bundle(
+            UserCtx(user_id=_USER, token=""), "situation:case", principal=_p(0)
+        )
+        assert {c["object"]["id"] for c in blind["children"]} == {_OPEN}
+        # The hidden row must not arrive by another door either: no link endpoint,
+        # no assertion (its props ride in the child entries).
+        assert all(_SECRET not in (lk["src"], lk["dst"]) for lk in blind["links"])
+        assert "the classified fact" not in json.dumps(blind)
+
+        # A cleared principal gets the child back; so does the internal path.
+        cleared = await ce.build_bundle(
+            UserCtx(user_id=_USER, token=""), "situation:case", principal=_p(4)
+        )
+        assert {c["object"]["id"] for c in cleared["children"]} == {_OPEN, _SECRET}
+        internal = await ce.build_bundle(UserCtx(user_id=_USER, token=""), "situation:case")
+        assert {c["object"]["id"] for c in internal["children"]} == {_OPEN, _SECRET}
+
+    asyncio.run(run())
+
+
+# ── 7. the evidence locker (list + the two POST reads) ───────────────────────
+# ``intel/evidence.py`` built its own registry for reads too, so the route applied
+# ``visible_to`` to the rows it got back — AFTER the SQL LIMIT, which is how a
+# hidden exhibit ate the page (``limit=1`` returned nothing at all).
+
+_EV_VISIBLE_SHA = "a" * 64
+_EV_HIDDEN_SHA = "b" * 64
+_EV_VISIBLE = "evidence:" + _EV_VISIBLE_SHA
+_EV_HIDDEN = "evidence:" + _EV_HIDDEN_SHA
+_EV_CASE = "situation:case"
+
+
+async def _seed_classified_evidence() -> None:
+    """One level-0 exhibit and one level-4 exhibit in the caller's locker."""
+    writer = _reg(None)
+    await writer.upsert(
+        Object(
+            id=_EV_VISIBLE,
+            props={
+                "kind": "evidence",
+                "title": "open exhibit",
+                "sha256": _EV_VISIBLE_SHA,
+            },
+        )
+    )
+    await writer.upsert(
+        Object(
+            id=_EV_HIDDEN,
+            props={
+                "kind": "evidence",
+                "title": "SECRET EXHIBIT",
+                "sha256": _EV_HIDDEN_SHA,
+            },
+            classification=4,
+        )
+    )
+    await writer.upsert(Object(id=_EV_CASE, props={"kind": "situation", "name": "Case"}))
+
+
+def test_the_evidence_list_spends_its_page_on_readable_rows(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The clearance clause has to be in the WHERE, not applied after the page:
+    post-filtering let ONE hidden exhibit consume ``limit`` and answer an empty
+    list to a caller who has readable evidence."""
+    from app.intel import ontology_local  # noqa: PLC0415
+
+    # ``created_at`` is second-precision, so two same-second rows tie and the
+    # LIMIT-1 assertion would depend on SQLite's tie-break. A fixed clock makes
+    # the HIDDEN row unambiguously newest (the pre-fix failure).
+    clock = itertools.count()
+    monkeypatch.setattr(ontology_local, "_now_iso", lambda: f"2026-09-17T00:00:{next(clock):02d}Z")
+    asyncio.run(_seed_classified_evidence())
+
+    rows = client.get("/api/evidence", params={"limit": 1}).json()
+    assert [r["id"] for r in rows] == [_EV_VISIBLE]
+
+
+def test_a_hidden_exhibit_cannot_be_attached_to_a_case(client: TestClient) -> None:
+    """A sha the caller cannot read must not be attachable: out of clearance reads
+    like absent (404), and no edge is written onto the case file."""
+    asyncio.run(_seed_classified_evidence())
+
+    r = client.post(f"/api/evidence/{_EV_HIDDEN_SHA}/attach", json={"situation_id": _EV_CASE})
+    assert r.status_code == 404, r.text
+
+    # ... and the level-0 exhibit still attaches (the gate is not blanket).
+    assert (
+        client.post(
+            f"/api/evidence/{_EV_VISIBLE_SHA}/attach", json={"situation_id": _EV_CASE}
+        ).status_code
+        == 200
+    )
+    links = asyncio.run(_reg(None).traverse(_EV_CASE, depth=1)).links
+    assert [lk.dst for lk in links] == [_EV_VISIBLE]
+
+
+def test_a_hidden_exhibit_is_not_enumerable_through_the_manifest(
+    client: TestClient,
+) -> None:
+    """The manifest walks a caller-supplied id list; a hidden member must be
+    dropped exactly like one that does not exist, or the hash-of-hashes is an
+    existence oracle."""
+    asyncio.run(_seed_classified_evidence())
+
+    body = client.post(
+        "/api/evidence/manifest",
+        json={"evidence_ids": [_EV_VISIBLE_SHA, _EV_HIDDEN_SHA]},
+    ).json()
+    assert [i["id"] for i in body["items"]] == [_EV_VISIBLE]
+    assert _EV_HIDDEN_SHA not in json.dumps(body)
+    assert "SECRET EXHIBIT" not in json.dumps(body)
+
+
+# ── 8. the caller-facing OSINT writes that upsert by a derived id ────────────
+# /investigate and /recon mint ids straight from the caller's target, and
+# countries/{code}/ingest from the country code. ``upsert`` replaces props
+# wholesale and rewrites ``classification``, so a level-4 row at one of those ids
+# was declassified and destroyed by a clearance-0 caller. Same refusal as
+# routes/ontology.py's id-keyed gate.
+
+
+def test_investigating_a_hidden_root_is_refused_and_leaves_it_intact(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.osint import connectors as C  # noqa: PLC0415
+
+    async def _no_upstream(url: str, ttl: float, **kw: object) -> object:
+        return None
+
+    monkeypatch.setattr(C, "fetch_json", _no_upstream)
+
+    async def seed() -> None:
+        await _reg(None).upsert(
+            Object(
+                id="domain:classified.example",
+                props={"narrative": "the classified fact", "entity_type": "Domain"},
+                classification=4,
+            )
+        )
+
+    asyncio.run(seed())
+    r = client.post("/api/osint/investigate", json={"target": "classified.example"})
+    assert r.status_code == 403, r.text
+    assert "the classified fact" not in r.text
+
+    obj = asyncio.run(_reg(None).get("domain:classified.example"))
+    assert obj is not None and obj.classification == 4
+    assert obj.props["narrative"] == "the classified fact"
+
+
+def test_ingesting_a_country_over_a_hidden_row_is_refused(client: TestClient) -> None:
+    from app.keys import current_user  # noqa: PLC0415
+
+    async def seed() -> None:
+        await _reg(None).upsert(
+            Object(
+                id="country:np",
+                props={"kind": "country", "name": "SECRET NP"},
+                classification=4,
+            )
+        )
+
+    asyncio.run(seed())
+    client.app.dependency_overrides[current_user] = lambda: UserCtx(user_id=_USER, token="")
+    try:
+        r = client.post("/api/osint/countries/np/ingest")
+        assert r.status_code == 403, r.text
+        assert "SECRET NP" not in r.text
+    finally:
+        client.app.dependency_overrides.pop(current_user, None)
+
+    obj = asyncio.run(_reg(None).get("country:np"))
+    assert obj is not None and obj.classification == 4
+    assert obj.props["name"] == "SECRET NP"
+
+
+# ── 9. the /ws/cop follow-along room ─────────────────────────────────────────
+
+
+def test_the_cop_room_reads_the_map_under_the_joiners_clearance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The multi-user gate read the map with an UNFILTERED registry, so a
+    signed-in clearance-0 caller could join the room of a level-4 COP it cannot
+    load — and receive every viewport/selection delta the cleared driver
+    published. There is no DI on a WebSocket, so the principal comes from the
+    credential the WS gate itself validates (``auth.ws_credential``) through
+    ``security.principal_for_token``, the helper that exists for WS handlers."""
+    from starlette.testclient import WebSocketDenialResponse  # noqa: PLC0415
+    from starlette.websockets import WebSocketDisconnect  # noqa: PLC0415
+
+    from app.main import create_app  # noqa: PLC0415
+    from tests._authkit import ALICE, mint, multi_user  # noqa: PLC0415
+
+    multi_user(monkeypatch, url=False)
+
+    async def seed() -> None:
+        writer = get_registry(UserCtx(user_id=ALICE, token=""), _S)
+        await writer.upsert(
+            Object(
+                id="map:secret",
+                props={"kind": "map", "name": "SECRET COP", "state": {}},
+                classification=4,
+            )
+        )
+        await writer.upsert(
+            Object(
+                id="map:open",
+                props={"kind": "map", "name": "open COP", "state": {}},
+            )
+        )
+
+    asyncio.run(seed())
+    with TestClient(create_app()) as c:
+        # The level-0 COP still joins — the filter must not empty the room.
+        with c.websocket_connect(f"/ws/cop?map=map:open&key={mint(ALICE)}") as ws:
+            assert ws.receive_json()["kind"] == "joined"
+        with pytest.raises((WebSocketDenialResponse, WebSocketDisconnect)):
+            with c.websocket_connect(f"/ws/cop?map=map:secret&key={mint(ALICE)}") as ws:
+                ws.receive_json()
+
+
+# ── 10. governed actions that hand object data back to the caller ────────────
+
+
+def test_flagging_a_hidden_object_neither_reads_nor_clobbers_it() -> None:
+    """``flag_entity`` opened the registry with no principal, so its ``get``
+    returned the hidden object, its props were merged into the flagged node, and
+    the merged object went back in the receipt — a read-back of any level-4
+    object's props for a clearance-0 caller. The registry is filtered now and a
+    write that would land on a row the caller cannot see is refused."""
+    from fastapi import HTTPException  # noqa: PLC0415
+
+    from app.intel.actions import dispatch  # noqa: PLC0415
+
+    asyncio.run(_seed())
+    ctx = UserCtx(user_id=_USER, token="")
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            dispatch("flag_entity", {"target_id": _SECRET, "note": "x", "severity": 1}, ctx)
+        )
+    assert exc.value.status_code == 403
+    assert "the classified fact" not in str(exc.value.detail)
+
+    obj = asyncio.run(_reg(None).get(_SECRET))
+    assert obj is not None and obj.classification == 4
+    assert obj.props["narrative"] == "the classified fact"
+
+    # A level-0 target still flags — the gate must not refuse the normal case.
+    res = asyncio.run(
+        dispatch(
+            "flag_entity",
+            {"target_id": _OPEN, "note": "watch this", "severity": 2},
+            ctx,
+        )
+    )
+    assert res.detail["object"]["props"]["flag"]["note"] == "watch this"

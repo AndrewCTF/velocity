@@ -36,7 +36,7 @@ from app import history
 from app.audit import audit_mutation
 from app.config import get_settings
 from app.intel import evidence as ev
-from app.intel.ontology import Object, visible_to
+from app.intel.ontology import Object
 from app.keys import UserCtx, current_user_or_local
 from app.security import Principal, current_principal_or_local
 from app.uploads import read_capped
@@ -145,23 +145,11 @@ async def _maybe_attach(ctx: UserCtx, obj: Object, situation_id: str | None) -> 
         pass
 
 
-
 def _ctx(p: Principal) -> UserCtx:
     """The user-scoping half of the principal — the identity these routes used
     before clearance reached them (``current_principal_or_local`` mirrors
     ``current_user_or_local``)."""
     return UserCtx(user_id=p.user_id, token=p.token)
-
-
-def _readable(p: Principal, obj: Object) -> bool:
-    """Is this evidence object within the caller's clearance?
-
-    The READ gate for the locker. ``intel/evidence.py`` builds its own registry
-    (it is the capture path too, and capture must not be clearance-filtered), so
-    these routes filter what comes back rather than pushing the principal down
-    — through the SAME predicate the registry uses, so the two cannot drift.
-    """
-    return visible_to(p, obj.classification, obj.compartments)
 
 
 def _capture_error(exc: ev.EvidenceError) -> HTTPException:
@@ -319,17 +307,20 @@ async def list_evidence(
     limit: int = Query(200, ge=1, le=1000),
     p: Principal = Depends(current_principal_or_local),
 ) -> list[Object]:
-    rows = await ev.list_evidence(_ctx(p), limit=limit)
-    return [o for o in rows if _readable(p, o)]
+    # The principal rides the registry (see intel/evidence.list_evidence), so
+    # ``limit`` pages over rows this caller may read. A post-hoc Python filter
+    # here would spend the page on hidden exhibits and answer a short/empty list.
+    return await ev.list_evidence(_ctx(p), limit=limit, principal=p)
 
 
 @router.get("/api/evidence/{sha}", response_model=EvidenceDetail)
 async def get_evidence_detail(
     sha: str, p: Principal = Depends(current_principal_or_local)
 ) -> EvidenceDetail:
-    obj, custody = await ev.get_evidence(_ctx(p), sha)
-    # Out of clearance answers exactly like absent, so a sha cannot be probed.
-    if obj is None or not _readable(p, obj):
+    # Out of clearance reads exactly like absent (the registry's `get` filters),
+    # so a sha cannot be probed.
+    obj, custody = await ev.get_evidence(_ctx(p), sha, principal=p)
+    if obj is None:
         raise HTTPException(status_code=404, detail="evidence not found")
     # read + re-hash off the loop: a blob can be up to 200 MB, and a synchronous
     # hash here would block the 1 s ADS-B poll / WS push for the whole read.
@@ -346,8 +337,8 @@ async def get_evidence_blob(
     """Return the original captured bytes. The hash is re-verified first, so a
     corrupted/tampered blob 409s rather than serving bad evidence."""
     settings = get_settings()
-    obj, _ = await ev.get_evidence(_ctx(p), sha)
-    if obj is None or not _readable(p, obj):
+    obj, _ = await ev.get_evidence(_ctx(p), sha, principal=p)
+    if obj is None:
         raise HTTPException(status_code=404, detail="evidence not found")
     canonical = obj.props.get("sha256", sha)
     # read + re-hash off the loop (blobs are up to 200 MB — see get_evidence_detail).
@@ -382,8 +373,8 @@ async def get_evidence_blob(
 async def verify_evidence(
     sha: str, p: Principal = Depends(current_principal_or_local)
 ) -> dict[str, Any]:
-    obj, _ = await ev.get_evidence(_ctx(p), sha)
-    if obj is None or not _readable(p, obj):
+    obj, _ = await ev.get_evidence(_ctx(p), sha, principal=p)
+    if obj is None:
         raise HTTPException(status_code=404, detail="evidence not found")
     canonical = obj.props.get("sha256", sha)
     ok = await asyncio.to_thread(ev.verify_blob, get_settings(), canonical)
@@ -392,14 +383,20 @@ async def verify_evidence(
 
 @router.post("/api/evidence/{sha}/attach")
 async def attach_evidence(
-    sha: str, body: AttachIn, ctx: UserCtx = Depends(current_user_or_local)
+    sha: str,
+    body: AttachIn,
+    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> dict[str, Any]:
-    obj, _ = await ev.get_evidence(ctx, sha)
+    # A hidden exhibit must not be attachable: it reads as absent here, and the
+    # situation it is being hung on is read through the same principal inside
+    # attach_to_situation (a hidden case file reads as absent too → 404).
+    obj, _ = await ev.get_evidence(ctx, sha, principal=p)
     if obj is None:
         raise HTTPException(status_code=404, detail="evidence not found")
     try:
         await ev.attach_to_situation(
-            ctx, sha, body.situation_id, rel=body.rel, note=body.note
+            ctx, sha, body.situation_id, rel=body.rel, note=body.note, principal=p
         )
     except ev.EvidenceError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -408,7 +405,13 @@ async def attach_evidence(
 
 @router.post("/api/evidence/manifest")
 async def evidence_manifest(
-    body: ManifestIn, ctx: UserCtx = Depends(current_user_or_local)
+    body: ManifestIn,
+    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> dict[str, Any]:
-    """Per-case hash-of-hashes custody manifest (Berkeley-checklist fields)."""
-    return await ev.custody_manifest(ctx, body.evidence_ids)
+    """Per-case hash-of-hashes custody manifest (Berkeley-checklist fields).
+
+    A member above the caller's clearance is dropped the same way a member that
+    does not exist is, so the manifest cannot be used to enumerate hidden hashes.
+    """
+    return await ev.custody_manifest(ctx, body.evidence_ids, principal=p)

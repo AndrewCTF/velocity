@@ -19,6 +19,8 @@ from app.config import get_settings
 from app.intel.ontology import get_registry
 from app.keys import UserCtx, current_user
 from app.osint import country_catalog
+from app.routes.ontology import _refuse_overwrite_of_hidden_row
+from app.security import Principal, current_principal_or_local
 
 router = APIRouter(tags=["osint-countries"], prefix="/api/osint/countries")
 
@@ -73,13 +75,28 @@ async def country_graph(code: str) -> dict[str, Any]:
 
 
 @router.post("/{code}/ingest")
-async def ingest_country(code: str, ctx: UserCtx = Depends(current_user)) -> dict[str, Any]:
-    """Persist ``build_graph(code)`` into the caller's ontology."""
+async def ingest_country(
+    code: str,
+    ctx: UserCtx = Depends(current_user),
+    p: Principal = Depends(current_principal_or_local),
+) -> dict[str, Any]:
+    """Persist ``build_graph(code)`` into the caller's ontology.
+
+    ``current_user`` stays the identity gate (a keyless box 401s, as the route
+    has always done); ``p`` is the CALLER's clearance, which the persist step
+    needs: the graph's ids are derived from ``code``, so without the gate a
+    clearance-0 caller could upsert over a level-4 ``country:xx`` /
+    ``resource:xx:…`` row — ``props`` is a wholesale replace and the write
+    rewrites ``classification``, so that declassifies and destroys it.
+    """
     graph = country_catalog.build_graph(code)
     if graph is None:
         raise HTTPException(status_code=404, detail=f"unknown country code: {code}")
 
-    reg = get_registry(ctx, get_settings())
+    for node in graph["nodes"]:
+        await _refuse_overwrite_of_hidden_row(p, node.id)
+
+    reg = get_registry(ctx, get_settings(), principal=p)
     for obj in graph["nodes"]:
         await reg.upsert(obj)
     for lk in graph["links"]:

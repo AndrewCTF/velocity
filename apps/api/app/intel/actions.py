@@ -46,7 +46,7 @@ import json
 import re
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException
@@ -54,9 +54,12 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from app.config import Settings, get_settings
 from app.intel import action_log_local, alert_rules_local
-from app.intel.ontology import Link, Object, get_registry
+from app.intel.ontology import Link, Object, get_registry, visible_to
 from app.intel.promotion import stable_id
 from app.keys import UserCtx, _client, _headers
+
+if TYPE_CHECKING:
+    from app.security import Principal
 
 # ── audit log ─────────────────────────────────────────────────────────────────
 
@@ -251,13 +254,51 @@ class WritebackParams(BaseModel):
 # THEN return an ActionResult. Handlers take already-validated params.
 
 
+async def _caller_principal(ctx: UserCtx) -> Principal:
+    """The clearance a handler-owned READ must run under, from the caller's ctx.
+
+    ``routes/actions.py`` resolves the same identity through
+    ``current_user_or_local`` and already holds a ``Principal`` (it uses it for
+    the operator gate), but ``dispatch`` is not handed it — so this resolves the
+    caller from the token they presented, through
+    ``security.principal_for_token``, the helper that exists for callers with no
+    ``Request``. It reads the caller's own profile (cached 60 s), so it cannot
+    exceed the caller's authority. No token (a keyless boot, a static
+    ``API_KEY``, the MCP internal token) degrades to the least-privilege local
+    identity, exactly the fallback ``security.current_principal_or_local``
+    makes — never to the unfiltered ``None``.
+    """
+    from app.security import Principal, principal_for_token  # noqa: PLC0415
+
+    if ctx.token:
+        p = await principal_for_token(ctx.token)
+        if p is not None:
+            return p
+    return Principal(user_id=ctx.user_id, token=ctx.token)
+
+
 async def _handle_flag_entity(
     ctx: UserCtx, s: Settings, p: FlagEntityParams
 ) -> ActionResult:
-    reg = get_registry(ctx, s)
+    principal = await _caller_principal(ctx)
+    # An unfiltered registry made this a read-back: ``existing`` carried the
+    # hidden object's props, they were merged into the flagged node, and the
+    # whole merged object went back to the caller in ``detail`` — so a
+    # clearance-0 caller could read any level-4 object's props by flagging it.
+    # The registry is filtered now, and a write that would land on a row the
+    # caller cannot see is refused (props is a wholesale replace, so the old
+    # shape also declassified and destroyed the row).
+    existing = await get_registry(ctx, s).get(p.target_id)
+    if existing is not None and not visible_to(
+        principal, existing.classification, existing.compartments
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="that object is classified above your clearance",
+        )
+    reg = get_registry(ctx, s, principal=principal)
     # Stamp the flag onto the object's props (creating the node if new) and add a
     # self-edge so a graph traversal surfaces the flag.
-    existing = await reg.get(p.target_id)
     props = dict(existing.props) if existing else {}
     props["flag"] = {"note": p.note, "severity": p.severity, "at": _now_iso()}
     obj = await reg.upsert(Object(id=p.target_id, props=props))
