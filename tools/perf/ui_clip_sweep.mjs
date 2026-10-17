@@ -1,27 +1,105 @@
 // Per surface: screenshot + clipping/readability metrics measured from the DOM.
 //   node tools/perf/ui_clip_sweep.mjs [width] [height]   (dev server on :5173)
+// Phone grade (one surface, exits 1 on a failed threshold, no app sweep):
+//   node tools/perf/ui_clip_sweep.mjs --device "Pixel 7" [--route /2d]
+//        [--first-visit] [--chrome-arg=--disable-3d-apis] [--cpu-throttle 4]
+//        [--checks layout,perf,data] --grade
+// checks: layout = map share / right edge / tap targets / dialogs (default);
+// perf = worst long task after the first 10 s < 300 ms (use --cpu-throttle);
+// data = no /ws/adsb socket and every aircraft request carries a bbox.
 // Limits: no scrolling, no hover states; the ancestor check stops at the first
 // non-visible-overflow ancestor. belowFold counts content outside the viewport,
 // which includes scrolled list rows and is NOT a clipping defect.
-import { chromium } from '../adsb-globe-feeder/node_modules/playwright/index.mjs';
+import { chromium, devices } from '../adsb-globe-feeder/node_modules/playwright/index.mjs';
 import fs from 'node:fs';
+
+const argv = process.argv.slice(2);
+const opt = (name) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined; };
+const DEVICE = opt('device');
+const ROUTE = opt('route') || '/';
+const FIRST_VISIT = argv.includes('--first-visit');
+const GRADE = argv.includes('--grade');
+const CPU_THROTTLE = +(opt('cpu-throttle') || 1);
+const CHECKS = new Set((opt('checks') || 'layout').split(','));
+const CHROME_ARGS = argv.filter((a) => a.startsWith('--chrome-arg=')).map((a) => a.slice('--chrome-arg='.length));
+const pos = argv.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--device', '--route', '--cpu-throttle', '--checks'].includes(argv[i - 1])));
 
 const OUT = process.env.OUT || 'scratchpad/sweep';
 fs.mkdirSync(OUT, { recursive: true });
-const W = +(process.argv[2] || 1920), H = +(process.argv[3] || 1080);
+const W = +(pos[0] || 1920), H = +(pos[1] || 1080);
 const browser = await chromium.launch({
   executablePath: '/usr/bin/google-chrome-stable',
-  args: ['--use-gl=angle', '--use-angle=vulkan', '--ignore-gpu-blocklist'],
+  args: ['--use-gl=angle', '--use-angle=vulkan', '--ignore-gpu-blocklist', ...CHROME_ARGS],
 });
-const ctx = await browser.newContext({ viewport: { width: W, height: H } });
+if (DEVICE && !devices[DEVICE]) { console.error(`unknown Playwright device "${DEVICE}"`); process.exit(2); }
+const ctx = await browser.newContext(DEVICE ? { ...devices[DEVICE] } : { viewport: { width: W, height: H } });
+if (!FIRST_VISIT) {
+  await ctx.addInitScript(() => {
+    localStorage.setItem('velocity.onboarded.v1', '1');
+    localStorage.setItem('velocity.aiSetupSeen', '1');
+    localStorage.setItem('velocity.openModeDismissed', '1');
+  });
+}
 await ctx.addInitScript(() => {
-  localStorage.setItem('velocity.onboarded.v1', '1');
-  localStorage.setItem('velocity.aiSetupSeen', '1');
-  localStorage.setItem('velocity.openModeDismissed', '1');
+  window.__lt = [];
+  try { new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__lt.push([e.startTime, e.duration]))).observe({ type: 'longtask', buffered: true }); } catch { /* no longtask API */ }
 });
 const page = await ctx.newPage();
-await page.goto('http://localhost:5173/', { waitUntil: 'networkidle', timeout: 90000 });
-await page.waitForTimeout(12000);
+const sockets = [], aircraftReqs = [];
+page.on('websocket', (ws) => sockets.push(ws.url()));
+page.on('request', (r) => { if (/\/api\/adsb\/(global|fi\/global)/.test(r.url())) aircraftReqs.push(r.url()); });
+if (CPU_THROTTLE > 1) await (await ctx.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
+await page.goto(`http://localhost:5173${ROUTE}`, { waitUntil: GRADE ? 'domcontentloaded' : 'networkidle', timeout: 90000 });
+await page.waitForTimeout(GRADE ? 25000 : 12000);
+
+if (GRADE) {
+  // Phone thresholds from the 2026-10-17 plan (baseline then: map 23%, 77 past
+  // the right edge, 276 controls under 24 px, two blocking dialogs on first visit).
+  const g = await page.evaluate(() => {
+    const vw = innerWidth, vh = innerHeight;
+    const vis = (e) => { const b = e.getBoundingClientRect(); const s = getComputedStyle(e); return b.width > 0 && b.height > 0 && b.bottom > 0 && b.top < vh && b.left < vw && b.right > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+    const lbl = (e) => (e.getAttribute('aria-label') || e.getAttribute('title') || e.textContent || e.tagName).trim().replace(/\s+/g, ' ').slice(0, 30);
+    const controls = [...document.querySelectorAll('button,a[href],[role=button],input,select,[role=tab],[role=menuitem],[role=switch],[role=radio],[role=checkbox]')].filter(vis);
+    const box = (e) => e.getBoundingClientRect();
+    const under24 = controls.filter((e) => box(e).width < 24 || box(e).height < 24);
+    const nav = controls.filter((e) => e.closest('nav,[role=navigation],[data-primary-nav]'));
+    const navUnder44 = nav.filter((e) => box(e).width < 44 || box(e).height < 44);
+    const pastRight = [...document.querySelectorAll('body *')].filter((e) => { const b = box(e); return b.width > 0 && b.height > 0 && b.right > vw + 2; });
+    const cvs = [...document.querySelectorAll('canvas')].filter(vis).sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    const cb = cvs && box(cvs);
+    const mapPct = cb ? Math.round(100 * Math.max(0, Math.min(cb.bottom, vh) - Math.max(cb.top, 0)) * Math.max(0, Math.min(cb.right, vw) - Math.max(cb.left, 0)) / (vw * vh)) : 0;
+    const dialog = [...document.querySelectorAll('[role=dialog],[aria-modal=true]')].filter(vis).map(lbl)[0] || null;
+    return { vw, vh, mapPct, pastRight: pastRight.length, pastRightSamples: pastRight.slice(0, 5).map(lbl), controls: controls.length,
+      under24: under24.length, under24Samples: under24.slice(0, 8).map((e) => `${lbl(e)} ${Math.round(box(e).width)}x${Math.round(box(e).height)}`),
+      navControls: nav.length, navUnder44: navUnder44.length, dialog,
+      worstLongTaskAfter10s: Math.round(Math.max(0, ...window.__lt.filter(([t]) => t > 10000).map(([, d]) => d))),
+      longTaskMsTotal: Math.round(window.__lt.reduce((a, [, d]) => a + d, 0)) };
+  });
+  g.cpuThrottle = CPU_THROTTLE;
+  g.adsbSockets = sockets.filter((u) => u.includes('/ws/adsb')).length;
+  g.aircraftRequests = aircraftReqs.length;
+  g.aircraftRequestsWithoutBbox = aircraftReqs.filter((u) => !/lamin=/.test(u)).length;
+  const fails = [];
+  if (CHECKS.has('layout')) {
+    if (g.mapPct < 70) fails.push(`map ${g.mapPct}% of screen (< 70%)`);
+    if (g.pastRight > 0) fails.push(`${g.pastRight} elements past the right edge`);
+    if (g.under24 > 0) fails.push(`${g.under24} controls under 24 px`);
+    if (g.navUnder44 > 0) fails.push(`${g.navUnder44} primary-nav controls under 44 px`);
+    if (g.navControls === 0) fails.push('no primary nav found (nav / [data-primary-nav])');
+    if (g.dialog) fails.push(`blocking dialog: ${g.dialog}`);
+  }
+  if (CHECKS.has('perf') && g.worstLongTaskAfter10s >= 300) fails.push(`worst long task after 10 s ${g.worstLongTaskAfter10s} ms (>= 300) at ${CPU_THROTTLE}x CPU`);
+  if (CHECKS.has('data')) {
+    if (g.adsbSockets > 0) fails.push(`${g.adsbSockets} /ws/adsb socket(s) opened`);
+    if (g.aircraftRequestsWithoutBbox > 0) fails.push(`${g.aircraftRequestsWithoutBbox} of ${g.aircraftRequests} aircraft requests without a bbox`);
+  }
+  fs.writeFileSync(`${OUT}/phone-grade.json`, JSON.stringify({ device: DEVICE || `${W}x${H}`, route: ROUTE, firstVisit: FIRST_VISIT, ...g, fails }, null, 1));
+  await page.screenshot({ path: `${OUT}/phone-grade.png` });
+  console.log(JSON.stringify({ device: DEVICE || `${W}x${H}`, route: ROUTE, ...g }));
+  console.log(fails.length ? `FAIL\n- ${fails.join('\n- ')}` : 'PASS');
+  await browser.close();
+  process.exit(fails.length ? 1 : 0);
+}
 
 function measure() {
   const out = { truncated: [], overflowing: [], tiny: 0, tinySamples: [], offscreen: [], overlaps: 0, overlapSamples: [], textNodes: 0, chars: 0 };
