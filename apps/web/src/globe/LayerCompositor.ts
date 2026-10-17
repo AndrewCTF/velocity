@@ -1,16 +1,23 @@
-import * as Cesium from 'cesium';
-import type { LayerDescriptor } from '@osint/shared';
-import type { LayerRegistry } from '../registry/LayerRegistry.js';
-import { useFeeds } from '../state/stores.js';
-import { useAoi } from '../state/aoi.js';
-import { isMobileDevice } from '../shell/device.js';
-import type { LayerAdapter, AdapterCtx, StatusReporter } from './adapters/types.js';
-import { PollGeoJsonAdapter, type StyleKind } from './adapters/PollGeoJsonAdapter.js';
-import { AisWsAdapter } from './adapters/AisWsAdapter.js';
-import { CablesAdapter } from './adapters/CablesAdapter.js';
-import { SatelliteAdapter } from './adapters/SatelliteAdapter.js';
-import { MilSymbolAdapter } from './adapters/MilSymbolAdapter.js';
-import { AreaAdapter } from './adapters/AreaAdapter.js';
+import * as Cesium from "cesium";
+import type { LayerDescriptor } from "@osint/shared";
+import type { LayerRegistry } from "../registry/LayerRegistry.js";
+import { useFeeds } from "../state/stores.js";
+import { useAoi } from "../state/aoi.js";
+import { isMobileDevice } from "../shell/device.js";
+import type {
+  LayerAdapter,
+  AdapterCtx,
+  StatusReporter,
+} from "./adapters/types.js";
+import {
+  PollGeoJsonAdapter,
+  type StyleKind,
+} from "./adapters/PollGeoJsonAdapter.js";
+import { AisWsAdapter } from "./adapters/AisWsAdapter.js";
+import { CablesAdapter } from "./adapters/CablesAdapter.js";
+import { SatelliteAdapter } from "./adapters/SatelliteAdapter.js";
+import { MilSymbolAdapter } from "./adapters/MilSymbolAdapter.js";
+import { AreaAdapter } from "./adapters/AreaAdapter.js";
 
 // AOI-aware bbox helper used by all adapters that accept a bbox query.
 function aoiBboxQuery(): string | null {
@@ -48,13 +55,14 @@ function viewportQuery(
       const n = Cesium.Math.toDegrees(rect.north);
       const w = Cesium.Math.toDegrees(rect.west);
       const e = Cesium.Math.toDegrees(rect.east);
-      const widthDeg = ((e - w) % 360 + 360) % 360;
+      const widthDeg = (((e - w) % 360) + 360) % 360;
       // ~world view: there's no bbox to scope by, and 14k individual dots are
       // visually indistinguishable at this zoom, so cap to worldLimit to keep the
       // entity-update loop cheap. Zooming in drops below the threshold and loads
       // the FULL local traffic (up to `limit`) for the viewport — so China/Russia
       // etc. show everything when you actually look at them.
-      if (widthDeg > 170 || n - s > 140) return alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`;
+      if (widthDeg > 170 || n - s > 140)
+        return alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`;
       return paddedQuantizedBbox(s, n, w, widthDeg, limit);
     }
     // computeViewRectangle() returns undefined when the globe doesn't cleanly
@@ -66,7 +74,10 @@ function viewportQuery(
     // camera height instead, so a zoomed-in oblique view always loads its own
     // traffic. Only when the screen centre misses the globe (pointed at space)
     // do we keep the world fallback.
-    return cameraCenterBbox(viewer, limit) ?? (alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`);
+    return (
+      cameraCenterBbox(viewer, limit) ??
+      (alwaysBbox ? GLOBAL_BBOX : `limit=${worldLimit}`)
+    );
   };
 }
 
@@ -108,9 +119,11 @@ const BBOX_QUANT = 0.125;
 /** Snap outward to a multiple of `step`, so the box only ever grows. Snapping to
  *  the nearest multiple instead would let an edge move INWARD and briefly hide
  *  contacts that were already loaded. */
-export function snapTo(v: number, step: number, dir: 'up' | 'down'): number {
+export function snapTo(v: number, step: number, dir: "up" | "down"): number {
   if (!Number.isFinite(step) || step <= 0) return v;
-  return dir === 'up' ? Math.ceil(v / step) * step : Math.floor(v / step) * step;
+  return dir === "up"
+    ? Math.ceil(v / step) * step
+    : Math.floor(v / step) * step;
 }
 
 /**
@@ -137,11 +150,16 @@ export function paddedQuantizedBbox(
   const padLon = widthDeg * PREFETCH_PAD;
   const stepLat = Math.max(heightDeg * BBOX_QUANT, 1e-3);
   const stepLon = Math.max(widthDeg * BBOX_QUANT, 1e-3);
-  const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
-  const S = clamp(snapTo(s - padLat, stepLat, 'down'), -90, 90).toFixed(3);
-  const N = clamp(snapTo(n + padLat, stepLat, 'up'), -90, 90).toFixed(3);
-  const W = clamp(snapTo(w - padLon, stepLon, 'down'), -180, 180).toFixed(3);
-  const E = clamp(snapTo(w + widthDeg + padLon, stepLon, 'up'), -180, 180).toFixed(3);
+  const clamp = (x: number, lo: number, hi: number): number =>
+    Math.max(lo, Math.min(hi, x));
+  const S = clamp(snapTo(s - padLat, stepLat, "down"), -90, 90).toFixed(3);
+  const N = clamp(snapTo(n + padLat, stepLat, "up"), -90, 90).toFixed(3);
+  const W = clamp(snapTo(w - padLon, stepLon, "down"), -180, 180).toFixed(3);
+  const E = clamp(
+    snapTo(w + widthDeg + padLon, stepLon, "up"),
+    -180,
+    180,
+  ).toFixed(3);
   return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
 }
 
@@ -164,16 +182,17 @@ function cameraCenterBbox(viewer: Cesium.Viewer, limit: number): string | null {
   // Half-span (deg) from camera height. A tilted view sees far ahead of the
   // ground point, so be generous; clamp so we never effectively go global.
   const spanDeg = Math.min(40, Math.max(0.5, height / 60_000));
-  const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+  const clamp = (x: number, lo: number, hi: number): number =>
+    Math.max(lo, Math.min(hi, x));
   const padLon = spanDeg / Math.max(0.25, Math.cos((lat * Math.PI) / 180));
   // Same quantisation as the rectangle path: an oblique view is the common case
   // when zoomed in, so it is exactly where a per-pixel URL hurts most.
   const stepLat = Math.max(spanDeg * BBOX_QUANT, 1e-3);
   const stepLon = Math.max(padLon * BBOX_QUANT, 1e-3);
-  const S = clamp(snapTo(lat - spanDeg, stepLat, 'down'), -90, 90).toFixed(3);
-  const N = clamp(snapTo(lat + spanDeg, stepLat, 'up'), -90, 90).toFixed(3);
-  const W = clamp(snapTo(lon - padLon, stepLon, 'down'), -180, 180).toFixed(3);
-  const E = clamp(snapTo(lon + padLon, stepLon, 'up'), -180, 180).toFixed(3);
+  const S = clamp(snapTo(lat - spanDeg, stepLat, "down"), -90, 90).toFixed(3);
+  const N = clamp(snapTo(lat + spanDeg, stepLat, "up"), -90, 90).toFixed(3);
+  const W = clamp(snapTo(lon - padLon, stepLon, "down"), -180, 180).toFixed(3);
+  const E = clamp(snapTo(lon + padLon, stepLon, "up"), -180, 180).toFixed(3);
   return `lamin=${S}&lomin=${W}&lamax=${N}&lomax=${E}&limit=${limit}`;
 }
 
@@ -190,16 +209,16 @@ const PLACES_LOD_ALT_M = 1_500_000;
 // (icon dispatched on props.category) and zoom-gated like places.*. NOT a
 // prefix match: infra.cables.* / infra.cams.public keep their own adapters.
 export const FACILITY_LAYER_IDS: ReadonlySet<string> = new Set([
-  'infra.power',
-  'infra.nuclear',
-  'infra.water',
-  'infra.desalination',
-  'infra.datacenters',
-  'infra.telecom',
-  'infra.ground_stations',
-  'infra.telescopes',
-  'infra.launch',
-  'military.installations',
+  "infra.power",
+  "infra.nuclear",
+  "infra.water",
+  "infra.desalination",
+  "infra.datacenters",
+  "infra.telecom",
+  "infra.ground_stations",
+  "infra.telescopes",
+  "infra.launch",
+  "military.installations",
 ]);
 
 // 2026-07-14 keyless data-layers wave. Point hazards/sensors → the category-tile
@@ -208,61 +227,62 @@ export const HAZARD_POINT_LAYER_IDS: ReadonlySet<string> = new Set([
   // Designated hulls and airframes. They are AIS and ADS-B contacts carrying a
   // registry fact, so they draw as a sanction (`style_kind`) and still resolve
   // as a vessel or an aircraft (`kind`).
-  'cyber.routing.national',
-  'space.launches',
-  'oceans.surge',
-  'intel.sanctions.vessels',
-  'intel.sanctions.aircraft',
-  'hazards.gdacs',
-  'hazards.cyclones',
-  'hazards.volcanoes',
-  'hazards.radiation',
-  'hazards.reliefweb',
-  'env.airquality',
-  'maritime.buoys',
-  'maritime.chokepoints',
-  'weather.spacewx.aurora',
-  'airspace.nasstatus',
-  'climate.anomalies',
+  "cyber.routing.national",
+  "space.launches",
+  "oceans.surge",
+  "intel.sanctions.vessels",
+  "intel.sanctions.aircraft",
+  "hazards.gdacs",
+  "hazards.cyclones",
+  "hazards.volcanoes",
+  "hazards.radiation",
+  "hazards.reliefweb",
+  "env.airquality",
+  "maritime.buoys",
+  "maritime.chokepoints",
+  "weather.spacewx.aurora",
+  "airspace.nasstatus",
+  "climate.anomalies",
   // 2026-08-06 mega-ledger wave. Each of these carries its own `kind` in the
   // feature properties, which is what hazardStyle dispatches the glyph on.
-  'alerts.ukraine',
-  'alerts.ukraine.alt',
-  'alerts.fema',
-  'hazards.spc.storms',
-  'deepstate.radiation',
-  'deepstate.news',
-  'space.satnogs.observations',
-  'space.satnogs.stations',
-  'sigint.pskreporter',
-  'env.sondes',
-  'rf.kiwisdr',
-  'infra.mines',
-  'osm.military',
-  'osm.wikimapia',
+  "alerts.ukraine",
+  "alerts.ukraine.alt",
+  "alerts.fema",
+  "hazards.spc.storms",
+  "deepstate.radiation",
+  "deepstate.news",
+  "space.satnogs.observations",
+  "space.satnogs.stations",
+  "sigint.pskreporter",
+  "env.sondes",
+  "rf.kiwisdr",
+  "infra.mines",
+  "osm.military",
+  "osm.wikimapia",
 ]);
 
 // Layers whose upstream answers a VIEWPORT and nothing at all without one, so
 // they share the zoom-gated bbox the reference markers use: no bbox above the
 // LOD altitude, and the route answers an empty collection rather than a 422.
 export const BBOX_GATED_LAYER_IDS: ReadonlySet<string> = new Set([
-  'infra.mines',
-  'osm.military',
-  'osm.wikimapia',
+  "infra.mines",
+  "osm.military",
+  "osm.wikimapia",
 ]);
 // The three airport catalogues draw as the same marker. `places.airports` is the
 // curated set the rest of the product resolves against; the ourAirports and
 // OpenFlights sets are the full public gazetteers, off by default, for when the
 // curated one does not carry the strip somebody is looking at.
 export const AIRPORT_LAYER_IDS: ReadonlySet<string> = new Set([
-  'places.airports',
-  'aviation.airports.full',
-  'aviation.airports.openflights',
+  "places.airports",
+  "aviation.airports.full",
+  "aviation.airports.openflights",
 ]);
 
 export const HAZARD_POLY_LAYER_IDS: ReadonlySet<string> = new Set([
-  'hazards.fireperimeters',
-  'aviation.sigmet',
+  "hazards.fireperimeters",
+  "aviation.sigmet",
+  "maritime.coverage",
 ]);
 
 function placesBboxQuery(viewer: Cesium.Viewer): () => string | null {
@@ -286,7 +306,8 @@ function placesBboxQuery(viewer: Cesium.Viewer): () => string | null {
     const padLat = (n - s) * 0.1;
     const widthDeg = (((e - w) % 360) + 360) % 360;
     const padLon = widthDeg * 0.1;
-    const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+    const clamp = (x: number, lo: number, hi: number): number =>
+      Math.max(lo, Math.min(hi, x));
     const minLon = clamp(w - padLon, -180, 180).toFixed(3);
     const minLat = clamp(s - padLat, -90, 90).toFixed(3);
     const maxLon = clamp(e + padLon, -180, 180).toFixed(3);
@@ -320,14 +341,14 @@ export class LayerCompositor {
 
   start(): void {
     this.unsubscribe = this.registry.subscribe((e) => {
-      if (e.type === 'register' && this.registry.isEnabled(e.layer.id)) {
+      if (e.type === "register" && this.registry.isEnabled(e.layer.id)) {
         this.spawn(e.layer);
-      } else if (e.type === 'enable') {
+      } else if (e.type === "enable") {
         const d = this.registry.get(e.id);
         if (d) this.spawn(d);
-      } else if (e.type === 'disable' || e.type === 'unregister') {
+      } else if (e.type === "disable" || e.type === "unregister") {
         this.kill(e.id);
-      } else if (e.type === 'opacity') {
+      } else if (e.type === "opacity") {
         this.setOpacity(e.id, e.opacity);
       }
     });
@@ -337,7 +358,11 @@ export class LayerCompositor {
     // Re-poll all bbox-aware adapters when the AOI changes.
     this.unsubAoi = useAoi.subscribe(() => {
       for (const [, a] of this.adapters) {
-        if ('refresh' in a && typeof (a as unknown as { refresh: () => void }).refresh === 'function') {
+        if (
+          "refresh" in a &&
+          typeof (a as unknown as { refresh: () => void }).refresh ===
+            "function"
+        ) {
           (a as unknown as { refresh: () => void }).refresh();
         }
       }
@@ -363,12 +388,16 @@ export class LayerCompositor {
         ...(s.note !== undefined && { note: s.note }),
       });
     };
-    const ctx: AdapterCtx = { viewer: this.viewer, descriptor: d, reportStatus };
+    const ctx: AdapterCtx = {
+      viewer: this.viewer,
+      descriptor: d,
+      reportStatus,
+    };
     const adapter = this.makeAdapter(d, ctx);
     if (!adapter) return;
     this.adapters.set(d.id, adapter);
     void adapter.attach(this.viewer);
-    reportStatus({ status: 'amber', note: 'connecting' });
+    reportStatus({ status: "amber", note: "connecting" });
     this.setOpacity(d.id, d.opacity);
     // Entities arrive on every poll/WS frame AFTER this point — keep the
     // layer's opacity applied to them as they are added.
@@ -397,7 +426,7 @@ export class LayerCompositor {
     this.desiredOpacity.delete(id);
     a.detach();
     this.adapters.delete(id);
-    useFeeds.getState().setFeed({ id, label: id, status: 'unknown' });
+    useFeeds.getState().setFeed({ id, label: id, status: "unknown" });
   }
 
   private setOpacity(id: string, opacity: number): void {
@@ -412,7 +441,9 @@ export class LayerCompositor {
     // the entity walk below can't dim them — the adapter exposes setLayerOpacity
     // to re-tint the primitive collection. No-op for adapters without it.
     (a as { setLayerOpacity?: (n: number) => void }).setLayerOpacity?.(opacity);
-    const ds = (a as { ds?: Cesium.CustomDataSource | Cesium.GeoJsonDataSource }).ds;
+    const ds = (
+      a as { ds?: Cesium.CustomDataSource | Cesium.GeoJsonDataSource }
+    ).ds;
     if (!ds) return;
     for (const e of ds.entities.values) {
       applyEntityOpacity(e, opacity);
@@ -420,29 +451,37 @@ export class LayerCompositor {
     this.viewer.scene.requestRender();
   }
 
-  private makeAdapter(d: LayerDescriptor, ctx: AdapterCtx): LayerAdapter | null {
+  private makeAdapter(
+    d: LayerDescriptor,
+    ctx: AdapterCtx,
+  ): LayerAdapter | null {
     // MIL-STD-2525 COP overlay — self-contained CustomDataSource, dispatched by
     // id so it never reaches the geojson/aircraft styling path (icon guardrail).
-    if (d.id.startsWith('mil.cop.')) {
+    if (d.id.startsWith("mil.cop.")) {
       return new MilSymbolAdapter({ ctx });
     }
     // Conflict events (GDELT), fused incidents, and internet outages (IODA) —
     // category glyph billboards (+ label for prominent ones), plus a translucent
     // severity-coloured uncertainty ellipse when the feature carries radius_m.
     if (
-      d.id.startsWith('intel.incidents') ||
-      d.id.startsWith('cyber.ioda') ||
-      d.id.startsWith('conflict.')
+      d.id.startsWith("intel.incidents") ||
+      d.id.startsWith("cyber.ioda") ||
+      d.id.startsWith("conflict.")
     ) {
-      const kind = d.id.startsWith('cyber.ioda')
-        ? 'ioda'
-        : d.id.startsWith('conflict.')
-          ? 'conflict'
-          : 'incidents';
-      return new AreaAdapter({ ctx, endpoint: d.endpoint, kind, intervalSec: d.refresh.ttlSec ?? 60 });
+      const kind = d.id.startsWith("cyber.ioda")
+        ? "ioda"
+        : d.id.startsWith("conflict.")
+          ? "conflict"
+          : "incidents";
+      return new AreaAdapter({
+        ctx,
+        endpoint: d.endpoint,
+        kind,
+        intervalSec: d.refresh.ttlSec ?? 60,
+      });
     }
     // websocket layers
-    if (d.kind === 'websocket' && d.id === 'maritime.aisstream') {
+    if (d.kind === "websocket" && d.id === "maritime.aisstream") {
       const adapter = new AisWsAdapter({ ctx, url: d.endpoint });
       // AISStream is a global vessel firehose — without EntityCluster on its
       // CustomDataSource the world view paints as one smeared green blob over
@@ -459,9 +498,10 @@ export class LayerCompositor {
     // satellites — any CelesTrak group layer (stations/starlink/gps/visual/…).
     // The group is encoded in the endpoint query; each enabled layer is its own
     // adapter instance with the SampledPositionProperty motion model.
-    if (d.group === 'space' && d.id.startsWith('space.celestrak.')) {
+    if (d.group === "space" && d.id.startsWith("space.celestrak.")) {
       const group =
-        new URLSearchParams(d.endpoint.split('?')[1] ?? '').get('group') ?? 'active';
+        new URLSearchParams(d.endpoint.split("?")[1] ?? "").get("group") ??
+        "active";
       return new SatelliteAdapter({
         ctx,
         endpoint: d.endpoint,
@@ -470,39 +510,39 @@ export class LayerCompositor {
       });
     }
     // submarine cables — polyline rendering
-    if (d.id === 'infra.cables.lines') {
-      return new CablesAdapter({ ctx, endpoint: d.endpoint, kind: 'lines' });
+    if (d.id === "infra.cables.lines") {
+      return new CablesAdapter({ ctx, endpoint: d.endpoint, kind: "lines" });
     }
-    if (d.id === 'infra.cables.landings') {
-      return new CablesAdapter({ ctx, endpoint: d.endpoint, kind: 'landings' });
+    if (d.id === "infra.cables.landings") {
+      return new CablesAdapter({ ctx, endpoint: d.endpoint, kind: "landings" });
     }
     // GeoJSON point layers — style derived from the emits tag
-    if (d.kind === 'geojson') {
+    if (d.kind === "geojson") {
       // Layer-id override for sources that share an emits kind but want a
       // distinct visual treatment. The jamming heat layer emits 'outage'
       // semantically (it's a GNSS service degradation) but renders as a
       // sized translucent point, not the generic outage icon.
       const style: StyleKind =
-        d.id === 'env.jamming.nacp'
-          ? 'jamming'
+        d.id === "env.jamming.nacp"
+          ? "jamming"
           : AIRPORT_LAYER_IDS.has(d.id)
-            ? 'airport'
-            : d.id === 'places.ports'
-              ? 'port'
-              : d.id === 'airspace.tfr'
-                ? 'tfr'
-                : d.id === 'places.bases'
-                  ? 'base'
-                  : d.id === 'maritime.warnings'
-                    ? 'warning'
+            ? "airport"
+            : d.id === "places.ports"
+              ? "port"
+              : d.id === "airspace.tfr"
+                ? "tfr"
+                : d.id === "places.bases"
+                  ? "base"
+                  : d.id === "maritime.warnings"
+                    ? "warning"
                     : HAZARD_POLY_LAYER_IDS.has(d.id)
-                      ? 'hazardpoly'
+                      ? "hazardpoly"
                       : HAZARD_POINT_LAYER_IDS.has(d.id)
-                        ? 'hazard'
-                        : d.id === 'infra.powerplants'
-                          ? 'facility'
+                        ? "hazard"
+                        : d.id === "infra.powerplants"
+                          ? "facility"
                           : FACILITY_LAYER_IDS.has(d.id)
-                            ? 'facility'
+                            ? "facility"
                             : styleFromEmits(d.emits);
       const ttl = d.refresh.ttlSec ?? 30;
       // A phone can't render/upsert the full ~13k world view every ~2 s (it
@@ -519,38 +559,58 @@ export class LayerCompositor {
       let bboxQuery: (() => string | null) | undefined;
       let refreshOnMove = false;
       let wsEndpoint: string | undefined;
-      if (d.id === 'aviation.opensky.states') {
+      if (d.id === "aviation.opensky.states") {
         bboxQuery = aoiBboxQuery;
-      } else if (d.id === 'aviation.adsb.global') {
+      } else if (d.id === "aviation.adsb.global") {
         // Desktop: up to 20000 (full union, served from the pre-built blob + WS
         // push). Mobile: always a bbox + 2000 cap so the backend decimates and
         // the phone gets a payload it can render and animate; no WS firehose.
-        bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 20000, mobile ? 2000 : 20000, mobile);
+        bboxQuery = viewportQuery(
+          ctx.viewer,
+          mobile ? 2000 : 20000,
+          mobile ? 2000 : 20000,
+          mobile,
+        );
         refreshOnMove = true;
-        if (!mobile) wsEndpoint = '/ws/adsb';
-      } else if (d.id === 'maritime.digitraffic') {
-        bboxQuery = viewportQuery(ctx.viewer, mobile ? 1500 : 6000, undefined, mobile);
+        if (!mobile) wsEndpoint = "/ws/adsb";
+      } else if (d.id === "maritime.digitraffic") {
+        bboxQuery = viewportQuery(
+          ctx.viewer,
+          mobile ? 1500 : 6000,
+          undefined,
+          mobile,
+        );
         refreshOnMove = true;
-      } else if (d.id === 'maritime.keyless') {
+      } else if (d.id === "maritime.keyless") {
         // §5.4 fetch-side LOD: the endpoint honours bbox (viewport_filter) AND
         // returns the FULL union when no bbox+limit is sent. Desktop: full union at
         // world view (operator count-truth), a local bbox when zoomed in below the
         // glide altitude so we parse/upsert only on-screen vessels. worldLimit
         // 20000 covers the ~4.5k union whole. Mobile: always a small bbox + cap.
-        bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 6000, mobile ? 2000 : 20000, mobile);
+        bboxQuery = viewportQuery(
+          ctx.viewer,
+          mobile ? 2000 : 6000,
+          mobile ? 2000 : 20000,
+          mobile,
+        );
         refreshOnMove = true;
-      } else if (d.id === 'maritime.parked') {
+      } else if (d.id === "maritime.parked") {
         // The ONE layer that asked for the world with no bbox and no client cap.
         // The parked cache is long-retained (12 h) and unbounded in count — it
         // held 26203 entries during the 2026-07-27 measurement — so with this
         // layer on it was the largest single contributor to the 60826-entity
         // world view. Same treatment as the live vessel layer.
-        bboxQuery = viewportQuery(ctx.viewer, mobile ? 2000 : 6000, mobile ? 2000 : 8000, mobile);
+        bboxQuery = viewportQuery(
+          ctx.viewer,
+          mobile ? 2000 : 6000,
+          mobile ? 2000 : 8000,
+          mobile,
+        );
         refreshOnMove = true;
       } else if (
-        d.id === 'places.airports' ||
-        d.id === 'places.ports' ||
-        d.id === 'places.bases' ||
+        d.id === "places.airports" ||
+        d.id === "places.ports" ||
+        d.id === "places.bases" ||
         BBOX_GATED_LAYER_IDS.has(d.id) ||
         FACILITY_LAYER_IDS.has(d.id)
       ) {
@@ -594,37 +654,43 @@ function applyEntityOpacity(e: Cesium.Entity, opacity: number): void {
     if (cur instanceof Cesium.CallbackProperty) {
       // Emergency pulse — leave it alone.
     } else if (cur) {
-      const orig = cur.getValue(Cesium.JulianDate.now()) as Cesium.Color | undefined;
+      const orig = cur.getValue(Cesium.JulianDate.now()) as
+        Cesium.Color | undefined;
       if (orig) {
-        e.billboard.color = new Cesium.ConstantProperty(orig.withAlpha(opacity));
+        e.billboard.color = new Cesium.ConstantProperty(
+          orig.withAlpha(opacity),
+        );
       }
     } else {
-      e.billboard.color = new Cesium.ConstantProperty(Cesium.Color.WHITE.withAlpha(opacity));
+      e.billboard.color = new Cesium.ConstantProperty(
+        Cesium.Color.WHITE.withAlpha(opacity),
+      );
     }
   }
   if (e.point && e.point.color) {
     if (e.point.color instanceof Cesium.CallbackProperty) {
       // Pulsing point colour — preserve.
     } else {
-      const orig = e.point.color.getValue(Cesium.JulianDate.now()) as Cesium.Color | undefined;
-      if (orig) e.point.color = new Cesium.ConstantProperty(orig.withAlpha(opacity));
+      const orig = e.point.color.getValue(Cesium.JulianDate.now()) as
+        Cesium.Color | undefined;
+      if (orig)
+        e.point.color = new Cesium.ConstantProperty(orig.withAlpha(opacity));
     }
   }
   if (e.polyline?.material) {
     e.polyline.material = new Cesium.ColorMaterialProperty(
-      Cesium.Color.fromCssColorString('#2dd4bf').withAlpha(opacity),
+      Cesium.Color.fromCssColorString("#2dd4bf").withAlpha(opacity),
     );
   }
 }
 
-
 function styleFromEmits(emits: readonly string[] | undefined): StyleKind {
-  if (!emits || emits.length === 0) return 'generic';
+  if (!emits || emits.length === 0) return "generic";
   const e = emits[0];
-  if (e === 'aircraft') return 'aircraft';
-  if (e === 'vessel') return 'vessel';
-  if (e === 'fire') return 'fire';
-  if (e === 'quake') return 'quake';
-  if (e === 'camera') return 'camera';
-  return 'generic';
+  if (e === "aircraft") return "aircraft";
+  if (e === "vessel") return "vessel";
+  if (e === "fire") return "fire";
+  if (e === "quake") return "quake";
+  if (e === "camera") return "camera";
+  return "generic";
 }

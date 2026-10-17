@@ -1,10 +1,21 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { describe, it, expect } from 'vitest';
-import { baseStyle, facilityStyle, tfrPolygonStyle, warningStyle } from './styles.js';
-import { baseLabelText, facilityLabelText, tfrLabelText, warningLabelText } from './labelStyle.js';
-import { defaultLayers } from '../../registry/defaults.js';
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, it, expect } from "vitest";
+import {
+  baseStyle,
+  facilityStyle,
+  hazardPolygonStyle,
+  tfrPolygonStyle,
+  warningStyle,
+} from "./styles.js";
+import {
+  baseLabelText,
+  facilityLabelText,
+  tfrLabelText,
+  warningLabelText,
+} from "./labelStyle.js";
+import { defaultLayers } from "../../registry/defaults.js";
 
 // W5 places/airspace enrichment wave: three new layers on the existing
 // PollGeoJsonAdapter — airspace.tfr (polygon), places.bases (icon by
@@ -14,24 +25,24 @@ import { defaultLayers } from '../../registry/defaults.js';
 // otherwise need a full Cesium Viewer to exercise).
 
 const ADAPTER_SRC = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'PollGeoJsonAdapter.ts'),
-  'utf8',
+  join(dirname(fileURLToPath(import.meta.url)), "PollGeoJsonAdapter.ts"),
+  "utf8",
 );
 const COMPOSITOR_SRC = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '..', 'LayerCompositor.ts'),
-  'utf8',
+  join(dirname(fileURLToPath(import.meta.url)), "..", "LayerCompositor.ts"),
+  "utf8",
 );
 
-describe('tfrPolygonStyle', () => {
-  it('returns a translucent fill + a solid-hue outline for every reason category', () => {
+describe("tfrPolygonStyle", () => {
+  it("returns a translucent fill + a solid-hue outline for every reason category", () => {
     const cases: Array<[string, string]> = [
-      ['SECURITY/VIP', '#ef4444'],
-      ['HAZARDS', '#f59e0b'],
-      ['AIR SHOWS', '#38bdf8'],
-      ['SPORTS', '#38bdf8'],
-      ['SPACE OPERATIONS', '#a78bfa'],
-      ['UAS PUBLIC GATHERING', '#2dd4bf'],
-      ['SOMETHING ELSE ENTIRELY', '#8b98a8'],
+      ["SECURITY/VIP", "#ef4444"],
+      ["HAZARDS", "#f59e0b"],
+      ["AIR SHOWS", "#38bdf8"],
+      ["SPORTS", "#38bdf8"],
+      ["SPACE OPERATIONS", "#a78bfa"],
+      ["UAS PUBLIC GATHERING", "#2dd4bf"],
+      ["SOMETHING ELSE ENTIRELY", "#8b98a8"],
     ];
     for (const [type, hex] of cases) {
       const s = tfrPolygonStyle({ type });
@@ -44,24 +55,24 @@ describe('tfrPolygonStyle', () => {
     }
   });
 
-  it('falls back to gray, never guessing a reason, when type is missing', () => {
-    expect(tfrPolygonStyle({}).fillColor).toBe('#8b98a8');
+  it("falls back to gray, never guessing a reason, when type is missing", () => {
+    expect(tfrPolygonStyle({}).fillColor).toBe("#8b98a8");
   });
 });
 
-describe('tfrLabelText', () => {
-  it('prefers facility, falls back to notam_id', () => {
-    expect(tfrLabelText({ facility: 'ZDC', notam_id: '6/4909' })).toBe('ZDC');
-    expect(tfrLabelText({ facility: null, notam_id: '6/4909' })).toBe('6/4909');
+describe("tfrLabelText", () => {
+  it("prefers facility, falls back to notam_id", () => {
+    expect(tfrLabelText({ facility: "ZDC", notam_id: "6/4909" })).toBe("ZDC");
+    expect(tfrLabelText({ facility: null, notam_id: "6/4909" })).toBe("6/4909");
     expect(tfrLabelText({})).toBeNull();
   });
 });
 
-describe('baseStyle', () => {
-  it('emits a billboard icon (data-URI SVG, never a bare point) per branch', () => {
-    const air = baseStyle({ branch: 'air' });
-    const naval = baseStyle({ branch: 'naval' });
-    const army = baseStyle({ branch: 'army' });
+describe("baseStyle", () => {
+  it("emits a billboard icon (data-URI SVG, never a bare point) per branch", () => {
+    const air = baseStyle({ branch: "air" });
+    const naval = baseStyle({ branch: "naval" });
+    const army = baseStyle({ branch: "army" });
     for (const s of [air, naval, army]) {
       expect(s.imageUri).toMatch(/^data:image\/svg\+xml/);
     }
@@ -69,22 +80,22 @@ describe('baseStyle', () => {
     expect(new Set([air.imageUri, naval.imageUri, army.imageUri]).size).toBe(3);
   });
 
-  it('falls back to the air glyph for an unrecognized branch rather than dropping the icon', () => {
-    const unknown = baseStyle({ branch: 'space-force' });
-    const air = baseStyle({ branch: 'air' });
+  it("falls back to the air glyph for an unrecognized branch rather than dropping the icon", () => {
+    const unknown = baseStyle({ branch: "space-force" });
+    const air = baseStyle({ branch: "air" });
     expect(unknown.imageUri).toBe(air.imageUri);
   });
 });
 
-describe('baseLabelText', () => {
-  it('labels by name', () => {
-    expect(baseLabelText({ name: 'RAF Lakenheath' })).toBe('RAF Lakenheath');
+describe("baseLabelText", () => {
+  it("labels by name", () => {
+    expect(baseLabelText({ name: "RAF Lakenheath" })).toBe("RAF Lakenheath");
     expect(baseLabelText({})).toBeNull();
   });
 });
 
-describe('warningStyle', () => {
-  it('emits a billboard icon, and the mine variant is visually distinct', () => {
+describe("warningStyle", () => {
+  it("emits a billboard icon, and the mine variant is visually distinct", () => {
     const std = warningStyle({ mine: false });
     const mine = warningStyle({ mine: true });
     expect(std.imageUri).toMatch(/^data:image\/svg\+xml/);
@@ -93,131 +104,218 @@ describe('warningStyle', () => {
   });
 });
 
-describe('warningLabelText', () => {
-  it('formats NAVAREA + msgNumber', () => {
-    expect(warningLabelText({ navArea: 4, msgNumber: 123 })).toBe('NAVAREA 4 #123');
+describe("warningLabelText", () => {
+  it("formats NAVAREA + msgNumber", () => {
+    expect(warningLabelText({ navArea: 4, msgNumber: 123 })).toBe(
+      "NAVAREA 4 #123",
+    );
     expect(warningLabelText({})).toBeNull();
   });
 });
 
-describe('registry: airspace.tfr / places.bases / maritime.warnings descriptors', () => {
+describe("registry: airspace.tfr / places.bases / maritime.warnings descriptors", () => {
   const byId = new Map(defaultLayers.map((l) => [l.id, l]));
 
-  it('airspace.tfr points at the B2 TFR route, off by default', () => {
-    const d = byId.get('airspace.tfr');
+  it("airspace.tfr points at the B2 TFR route, off by default", () => {
+    const d = byId.get("airspace.tfr");
     expect(d).toBeDefined();
-    expect(d?.endpoint).toBe('/api/airspace/tfr');
-    expect(d?.kind).toBe('geojson');
+    expect(d?.endpoint).toBe("/api/airspace/tfr");
+    expect(d?.kind).toBe("geojson");
     expect(d?.visibleByDefault).toBe(false);
     expect(d?.refresh.ttlSec).toBe(600);
   });
 
-  it('places.bases points at the B1 bases route with a bbox limit, off by default', () => {
-    const d = byId.get('places.bases');
+  it("places.bases points at the B1 bases route with a bbox limit, off by default", () => {
+    const d = byId.get("places.bases");
     expect(d).toBeDefined();
-    expect(d?.endpoint).toBe('/api/places/bases?limit=2000');
-    expect(d?.kind).toBe('geojson');
+    expect(d?.endpoint).toBe("/api/places/bases?limit=2000");
+    expect(d?.kind).toBe("geojson");
     expect(d?.visibleByDefault).toBe(false);
     expect(d?.refresh.ttlSec).toBe(86400);
   });
 
-  it('maritime.warnings points at the B2 NGA warnings route, off by default', () => {
-    const d = byId.get('maritime.warnings');
+  it("maritime.warnings points at the B2 NGA warnings route, off by default", () => {
+    const d = byId.get("maritime.warnings");
     expect(d).toBeDefined();
-    expect(d?.endpoint).toBe('/api/maritime/warnings');
-    expect(d?.kind).toBe('geojson');
+    expect(d?.endpoint).toBe("/api/maritime/warnings");
+    expect(d?.kind).toBe("geojson");
     expect(d?.visibleByDefault).toBe(false);
     expect(d?.refresh.ttlSec).toBe(900);
   });
 });
 
-describe('StyleKind dispatch reaches the new cases', () => {
-  it('the polygon path is widened to accept tfr + hazardpoly alongside jamming', () => {
+describe("maritime.coverage (AIS pipeline grid)", () => {
+  it("is a polygon layer on the geojson form of the coverage route, off by default", () => {
+    const d = defaultLayers.find((l) => l.id === "maritime.coverage");
+    expect(d).toBeDefined();
+    expect(d?.endpoint).toBe("/api/maritime/coverage?format=geojson");
+    expect(d?.kind).toBe("geojson");
+    expect(d?.visibleByDefault).toBe(false);
+    // Routed to the polygon style path, not the point path.
+    expect(COMPOSITOR_SRC).toMatch(
+      /HAZARD_POLY_LAYER_IDS[\s\S]*?new Set\(\[[^\]]*["']maritime\.coverage["']/,
+    );
+    // Dashboard copy carries no em dashes.
+    expect(d?.title).not.toContain("—");
+  });
+
+  it("shades a cell by its count bucket and never by hazard colour", () => {
+    const alphas = [0, 1, 2, 3].map(
+      (bucket) => hazardPolygonStyle({ kind: "coverage", bucket }).alpha,
+    );
+    expect([...alphas].sort((a, b) => a - b)).toEqual(alphas);
+    expect(new Set(alphas).size).toBe(4);
+    expect(alphas[3]).toBeLessThan(0.6);
+    const hue = hazardPolygonStyle({ kind: "coverage", bucket: 2 }).fillColor;
+    expect(hue).not.toBe(
+      hazardPolygonStyle({ kind: "sigmet", hazard: "TURB" }).fillColor,
+    );
+    // A missing or junk bucket falls to the faintest band, not NaN alpha.
+    expect(hazardPolygonStyle({ kind: "coverage" }).alpha).toBe(alphas[0]);
+    expect(hazardPolygonStyle({ kind: "coverage", bucket: "x" }).alpha).toBe(
+      alphas[0],
+    );
+  });
+});
+
+describe("maritime.satellite (unidentified satellite positions)", () => {
+  it("is a capped vessel layer on the satellite route, off by default", () => {
+    const d = defaultLayers.find((l) => l.id === "maritime.satellite");
+    expect(d).toBeDefined();
+    expect(d?.endpoint).toBe("/api/maritime/satellite");
+    expect(d?.emits).toEqual(["vessel"]);
+    expect(d?.visibleByDefault).toBe(false);
+    // About ten thousand positions worldwide: an uncapped layer costs what the
+    // primary vessel feed costs.
+    expect(d?.maxEntities).toBeLessThanOrEqual(6000);
+    expect(d?.title).toContain("unidentified");
+    expect(d?.title).not.toContain("—");
+  });
+});
+
+describe("StyleKind dispatch reaches the new cases", () => {
+  it("the polygon path is widened to accept tfr + hazardpoly alongside jamming", () => {
     expect(ADAPTER_SRC).toMatch(
       /styleKind === ["']jamming["'] \|\|[\s\S]*?styleKind === ["']tfr["'][\s\S]*?styleKind === ["']hazardpoly["']/,
     );
   });
 
-  it('StyleKind union includes tfr, base, warning', () => {
+  it("StyleKind union includes tfr, base, warning", () => {
     expect(ADAPTER_SRC).toMatch(/\|\s*["']tfr["']/);
     expect(ADAPTER_SRC).toMatch(/\|\s*["']base["']/);
     expect(ADAPTER_SRC).toMatch(/\|\s*["']warning["']/);
   });
 
-  it('applyStyle has dispatch cases for base and warning billboards', () => {
+  it("applyStyle has dispatch cases for base and warning billboards", () => {
     expect(ADAPTER_SRC).toMatch(/case ["']base["']: \{/);
     expect(ADAPTER_SRC).toMatch(/case ["']warning["']: \{/);
   });
 
-  it('LayerCompositor maps the three new layer ids to their StyleKind', () => {
-    expect(COMPOSITOR_SRC).toMatch(/d\.id === ["']airspace\.tfr["']\s*\n?\s*\?\s*["']tfr["']/);
-    expect(COMPOSITOR_SRC).toMatch(/d\.id === ["']places\.bases["']\s*\n?\s*\?\s*["']base["']/);
-    expect(COMPOSITOR_SRC).toMatch(/d\.id === ["']maritime\.warnings["']\s*\n?\s*\?\s*["']warning["']/);
+  it("LayerCompositor maps the three new layer ids to their StyleKind", () => {
+    expect(COMPOSITOR_SRC).toMatch(
+      /d\.id === ["']airspace\.tfr["']\s*\n?\s*\?\s*["']tfr["']/,
+    );
+    expect(COMPOSITOR_SRC).toMatch(
+      /d\.id === ["']places\.bases["']\s*\n?\s*\?\s*["']base["']/,
+    );
+    expect(COMPOSITOR_SRC).toMatch(
+      /d\.id === ["']maritime\.warnings["']\s*\n?\s*\?\s*["']warning["']/,
+    );
   });
 
-  it('places.bases participates in the bbox/LOD gate alongside airports/ports', () => {
+  it("places.bases participates in the bbox/LOD gate alongside airports/ports", () => {
     expect(COMPOSITOR_SRC).toMatch(/d\.id === ["']places\.bases["']/);
   });
 });
 
 // 2026-07-11 infrastructure wave: facility StyleKind + per-category icons.
-describe('facilityStyle', () => {
-  it('emits a distinct data-URI SVG per category, never a bare point', () => {
+describe("facilityStyle", () => {
+  it("emits a distinct data-URI SVG per category, never a bare point", () => {
     const cats = [
-      'power', 'nuclear', 'water_treatment', 'desalination', 'datacenter',
-      'telecom_hub', 'ground_station', 'telescope', 'launch',
-      'military_installation', 'garrison', 'training',
+      "power",
+      "nuclear",
+      "water_treatment",
+      "desalination",
+      "datacenter",
+      "telecom_hub",
+      "ground_station",
+      "telescope",
+      "launch",
+      "military_installation",
+      "garrison",
+      "training",
     ];
-    const uris = new Set(cats.map((c) => facilityStyle({ category: c }).imageUri));
+    const uris = new Set(
+      cats.map((c) => facilityStyle({ category: c }).imageUri),
+    );
     expect(uris.size).toBeGreaterThanOrEqual(11); // garrison shares the mil star
-    for (const u of uris) expect(u.startsWith('data:image/svg+xml')).toBe(true);
+    for (const u of uris) expect(u.startsWith("data:image/svg+xml")).toBe(true);
   });
 
-  it('nuclear-fuel power rows get the trefoil even via the power toggle', () => {
-    expect(facilityStyle({ category: 'power', fuel: 'Nuclear' }).imageUri).toBe(
-      facilityStyle({ category: 'nuclear' }).imageUri,
+  it("nuclear-fuel power rows get the trefoil even via the power toggle", () => {
+    expect(facilityStyle({ category: "power", fuel: "Nuclear" }).imageUri).toBe(
+      facilityStyle({ category: "nuclear" }).imageUri,
     );
   });
 
-  it('unknown category falls back to a neutral tile rather than dropping the icon', () => {
-    expect(facilityStyle({ category: 'wat' }).imageUri.startsWith('data:image/svg+xml')).toBe(true);
+  it("unknown category falls back to a neutral tile rather than dropping the icon", () => {
+    expect(
+      facilityStyle({ category: "wat" }).imageUri.startsWith(
+        "data:image/svg+xml",
+      ),
+    ).toBe(true);
   });
 });
 
-describe('facilityLabelText', () => {
-  it('labels by name, falling back to the professional subcategory label', () => {
-    expect(facilityLabelText({ name: 'Diablo Canyon' })).toBe('Diablo Canyon');
-    expect(facilityLabelText({ subcategory: 'nuclear power station' })).toBe('nuclear power station');
+describe("facilityLabelText", () => {
+  it("labels by name, falling back to the professional subcategory label", () => {
+    expect(facilityLabelText({ name: "Diablo Canyon" })).toBe("Diablo Canyon");
+    expect(facilityLabelText({ subcategory: "nuclear power station" })).toBe(
+      "nuclear power station",
+    );
     expect(facilityLabelText({})).toBeNull();
   });
 });
 
-describe('registry: infrastructure/military facility descriptors', () => {
+describe("registry: infrastructure/military facility descriptors", () => {
   const facilityIds = [
-    'infra.power', 'infra.nuclear', 'infra.water', 'infra.desalination',
-    'infra.datacenters', 'infra.telecom', 'infra.ground_stations',
-    'infra.telescopes', 'infra.launch', 'military.installations',
+    "infra.power",
+    "infra.nuclear",
+    "infra.water",
+    "infra.desalination",
+    "infra.datacenters",
+    "infra.telecom",
+    "infra.ground_stations",
+    "infra.telescopes",
+    "infra.launch",
+    "military.installations",
   ];
 
-  it('every facility layer exists, off by default, on the places routes', () => {
+  it("every facility layer exists, off by default, on the places routes", () => {
     for (const id of facilityIds) {
       const d = defaultLayers.find((l) => l.id === id);
       expect(d, id).toBeDefined();
       expect(d?.visibleByDefault, id).toBe(false);
-      expect(d?.endpoint, id).toMatch(/^\/api\/places\/(infrastructure|military)/);
+      expect(d?.endpoint, id).toMatch(
+        /^\/api\/places\/(infrastructure|military)/,
+      );
     }
   });
 
-  it('every facility layer id routes to the facility StyleKind + bbox gate', () => {
-    expect(COMPOSITOR_SRC).toMatch(/FACILITY_LAYER_IDS\.has\(d\.id\)\s*\n?\s*\?\s*["']facility["']/);
+  it("every facility layer id routes to the facility StyleKind + bbox gate", () => {
+    expect(COMPOSITOR_SRC).toMatch(
+      /FACILITY_LAYER_IDS\.has\(d\.id\)\s*\n?\s*\?\s*["']facility["']/,
+    );
     for (const id of facilityIds) {
       expect(COMPOSITOR_SRC.includes(`'${id}'`) || COMPOSITOR_SRC.includes(`"${id}"`), id).toBe(true);
     }
     // and the bbox/LOD zoom gate includes the facility set
-    expect(COMPOSITOR_SRC).toMatch(/FACILITY_LAYER_IDS\.has\(d\.id\)\s*\n?\s*\) \{/);
+    expect(COMPOSITOR_SRC).toMatch(
+      /FACILITY_LAYER_IDS\.has\(d\.id\)\s*\n?\s*\) \{/,
+    );
   });
 
-  it('StyleKind union + applyStyle handle facility', () => {
+  it("StyleKind union + applyStyle handle facility", () => {
     expect(ADAPTER_SRC).toMatch(/\|\s*["']facility["']/);
     expect(ADAPTER_SRC).toMatch(/case ["']facility["']: \{/);
   });

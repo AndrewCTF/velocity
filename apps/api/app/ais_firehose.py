@@ -34,7 +34,10 @@ _task: asyncio.Task[None] | None = None
 # Static vessel names arrive on type 5/24 messages; position reports (1/2/3/18)
 # don't carry them, so cache by MMSI like ais.py does for ship type.
 _name_by_mmsi: dict[int, str] = {}
-_NAME_CACHE_MAX = 50_000
+# 50 000 was sized for the regional feeds. The bridged union (ShipXplorer +
+# OpenWaters + VesselFinder) is past 100 000 named vessels, and at the old cap
+# every ingest cycle evicted and re-inserted most of the cache.
+_NAME_CACHE_MAX = 300_000
 
 # Message types carrying a usable lat/lon fix vs. static voyage data.
 _STATIC_TYPES = frozenset({5, 19, 24})  # 19 carries both a fix and static data

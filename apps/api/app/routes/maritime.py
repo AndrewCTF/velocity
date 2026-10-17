@@ -25,9 +25,9 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from app import maritime_keyless
+from app import ais_pipeline, maritime_keyless
 from app.config import get_settings
-from app.correlate.store import store
+from app.correlate.store import DEFAULT_RETENTION_SEC, store
 from app.correlate.types import Observation
 from app.routes import adsb as adsb_routes
 from app.routes.adsb import viewport_filter
@@ -274,6 +274,33 @@ async def digitraffic_vessels(
 # retention forever (2026-07-15: a wedged MyShipTracking sidecar froze 21944 of
 # 57174 vessels this way; see ais_keyless._myshiptracking_stale_age). Feeding this
 # store an optimistic timestamp is therefore a correctness bug, not a rounding one.
+#
+# ShipXplorer and OpenWaters reach this store through app.ais_pipeline._mirror,
+# which carries its own freshness gate (strictly newer than the id's current fix,
+# upstream fix time, never wall clock) precisely because nothing here will.
+
+
+def _source_count(o: Observation, mmsi: Any) -> int | None:
+    """Independent sources that reported this MMSI inside the store's retention.
+
+    The shared store keeps one fix per id and so only ever knows the LAST
+    writer; the pipeline store remembers every source and when it last spoke.
+    Windowed on purpose: a lifetime count would call a vessel corroborated on
+    the strength of a source that went quiet hours ago. None means unknown,
+    which the corroboration lens treats as "do not dim".
+    """
+    names = {o.source} if o.source else set()
+    try:
+        # Some writers omit attrs.mmsi; the id always carries it.
+        st = ais_pipeline.vessels.get(int(mmsi if mmsi is not None else o.id.rsplit(":", 1)[-1]))
+    except (TypeError, ValueError):
+        st = None
+    if st is not None:
+        cutoff = time.time() - DEFAULT_RETENTION_SEC
+        # list(): the ingest loop adds keys to this dict from the event loop
+        # while the blob builder walks it in a thread.
+        names.update(src for src, t in list(st.sources.items()) if t >= cutoff)
+    return len(names) or None
 
 
 def _obs_to_vessel_feature(o: Observation) -> dict[str, Any]:
@@ -293,9 +320,11 @@ def _obs_to_vessel_feature(o: Observation) -> dict[str, Any]:
             "cog": a.get("cog"),
             "heading": a.get("heading"),
             "shipType": a.get("shipType"),
+            "flag": a.get("flag"),
             "t": o.t,
             "kind": "vessel",
             "source": o.source,
+            "source_count": _source_count(o, a.get("mmsi")),
             "parked": bool(parked),
         },
     }
@@ -355,7 +384,11 @@ def vessel_snapshot(parked_only: bool = False) -> dict[str, Any]:
     if parked_only:
         return {"type": "FeatureCollection", "features": list(_PARKED.values())}
     by_id = {o.id: _obs_to_vessel_feature(o) for o in store.latest("vessel")}
-    for vid, feat in _PARKED.items():
+    # .copy(): _update_parked rewrites _PARKED from a worker thread, and iterating
+    # the live dict here raised "dictionary changed size during iteration" as a
+    # 500 on the globe's world-view request (seen 2026-10-04, worst right after
+    # boot while the cache fills). dict.copy() is one atomic step under the GIL.
+    for vid, feat in _PARKED.copy().items():
         by_id.setdefault(vid, feat)  # add parked ships the live store has aged out
     return {"type": "FeatureCollection", "features": list(by_id.values())}
 
@@ -404,21 +437,43 @@ def _vessel_cycle_s() -> float:
     return _VESSEL_IDLE_CYCLE_S
 
 
-def _build_vessel_blob(parked: bool) -> tuple[bytes, str]:
+def _build_vessel_payload(parked: bool) -> tuple[dict[str, Any], bytes, str]:
     fc = vessel_snapshot(parked_only=parked)
     blob = adsb_routes._gzip_blob(adsb_routes._dumps_compact(fc))
-    return blob, hashlib.md5(blob).hexdigest()  # noqa: S324 — cache validator, not security
+    return fc, blob, hashlib.md5(blob).hexdigest()  # noqa: S324 — cache validator, not security
+
+
+def _build_vessel_blob(parked: bool) -> tuple[bytes, str]:
+    _fc, blob, etag = _build_vessel_payload(parked)
+    return blob, etag
+
+
+# The feature collections behind the two blobs, kept so a viewport (bbox) or
+# capped request filters THIS CYCLE's list instead of rebuilding every feature
+# on the event loop per camera move. With the VesselFinder tier the union is
+# several times larger than when that rebuild cost 0.5 s. Read-only by
+# convention: viewport_filter builds new lists and never mutates its input.
+_VESSEL_FC: dict[str, Any] | None = None
+_VESSEL_FC_PARKED: dict[str, Any] | None = None
+
+
+def _cycle_snapshot(parked: bool) -> dict[str, Any]:
+    """This blob cycle's features, or a fresh build when the loop is not running."""
+    fc = _VESSEL_FC_PARKED if parked else _VESSEL_FC
+    return fc if fc is not None else vessel_snapshot(parked_only=parked)
 
 
 async def _refresh_vessel_blob_forever() -> None:
     global _VESSEL_BLOB, _VESSEL_ETAG, _VESSEL_BLOB_PARKED, _VESSEL_ETAG_PARKED
-    global _VESSEL_BUILT_AT
+    global _VESSEL_BUILT_AT, _VESSEL_FC, _VESSEL_FC_PARKED
     while True:
         t0 = time.monotonic()
         try:
-            _VESSEL_BLOB, _VESSEL_ETAG = await asyncio.to_thread(_build_vessel_blob, False)
-            _VESSEL_BLOB_PARKED, _VESSEL_ETAG_PARKED = await asyncio.to_thread(
-                _build_vessel_blob, True
+            _VESSEL_FC, _VESSEL_BLOB, _VESSEL_ETAG = await asyncio.to_thread(
+                _build_vessel_payload, False
+            )
+            _VESSEL_FC_PARKED, _VESSEL_BLOB_PARKED, _VESSEL_ETAG_PARKED = await asyncio.to_thread(
+                _build_vessel_payload, True
             )
             _VESSEL_BUILT_AT = time.time()
         except Exception:  # noqa: BLE001 — the loop must never die
@@ -442,6 +497,45 @@ async def stop_vessel_blob() -> None:
             await t
 
 
+# ── the capped world view (?limit=N, no bbox) ────────────────────────────────
+# This is what the globe actually asks for at world view (LayerCompositor's
+# viewportQuery sends `limit=20000`), and it never reached the blob above: the
+# whole union was rebuilt, decimated and serialised ON THE EVENT LOOP per
+# request, with no ETag although the adapter sends If-None-Match there.
+# Measured 2026-10-04: 0.49 s at 39k vessels, 0.7-0.9 s at 48k. So the capped
+# form gets the same treatment — rendered once per blob cycle, in a thread,
+# served as bytes with ETag/304. Keyed by the blob's build stamp, so it is
+# exactly as fresh as the uncapped blob and rebuilt at most once per cycle.
+_LIMIT_BLOBS: dict[tuple[int, bool], tuple[float, bytes, str]] = {}
+_LIMIT_BLOBS_MAX = 8  # the globe sends one or two distinct limits; bound the rest
+
+
+def _build_limit_blob(limit: int, parked: bool) -> tuple[bytes, str]:
+    fc = viewport_filter(_cycle_snapshot(parked), None, None, None, None, limit)
+    blob = adsb_routes._gzip_blob(adsb_routes._dumps_compact(fc))
+    return blob, hashlib.md5(blob).hexdigest()  # noqa: S324 — cache validator, not security
+
+
+async def _limit_blob(limit: int, parked: bool) -> tuple[bytes, str] | None:
+    """The capped world payload for this blob cycle, or None to fall back inline."""
+    built_at = _VESSEL_BUILT_AT
+    if not built_at:
+        return None  # blob loop not running (tests, background disabled)
+    key = (limit, parked)
+    hit = _LIMIT_BLOBS.get(key)
+    if hit is not None and hit[0] == built_at:
+        return hit[1], hit[2]
+    try:
+        blob, etag = await asyncio.to_thread(_build_limit_blob, limit, parked)
+    except Exception:  # noqa: BLE001 — a racing store write; the inline path still answers
+        log.warning("capped vessel blob build failed", exc_info=True)
+        return None
+    if len(_LIMIT_BLOBS) >= _LIMIT_BLOBS_MAX and key not in _LIMIT_BLOBS:
+        _LIMIT_BLOBS.clear()
+    _LIMIT_BLOBS[key] = (built_at, blob, etag)
+    return blob, etag
+
+
 def vessel_blob_state() -> dict[str, Any]:
     """For /api/status/perf — is the pre-rendered payload live, and how big?"""
     return {
@@ -449,6 +543,7 @@ def vessel_blob_state() -> dict[str, Any]:
         "age_s": round(time.time() - _VESSEL_BUILT_AT, 1) if _VESSEL_BUILT_AT else None,
         "bytes": len(_VESSEL_BLOB) if _VESSEL_BLOB else 0,
         "bytes_parked": len(_VESSEL_BLOB_PARKED) if _VESSEL_BLOB_PARKED else 0,
+        "capped_variants": len(_LIMIT_BLOBS),
         "cycle_s": _vessel_cycle_s(),
     }
 
@@ -464,11 +559,17 @@ async def maritime_snapshot(
     parked: int | None = Query(None, description="1 = parking mode: stationary vessels only"),
 ) -> Any:
     note_vessel_demand()
-    world = lamin is None and lomin is None and lamax is None and lomax is None and limit is None
-    if world:
-        blob = _VESSEL_BLOB_PARKED if parked else _VESSEL_BLOB
-        etag = _VESSEL_ETAG_PARKED if parked else _VESSEL_ETAG
-        if blob is not None and "gzip" in request.headers.get("accept-encoding", ""):
+    no_bbox = lamin is None and lomin is None and lamax is None and lomax is None
+    gzip_ok = "gzip" in request.headers.get("accept-encoding", "")
+    if no_bbox:
+        blob: bytes | None
+        if limit is None:
+            blob = _VESSEL_BLOB_PARKED if parked else _VESSEL_BLOB
+            etag = _VESSEL_ETAG_PARKED if parked else _VESSEL_ETAG
+        else:
+            capped = await _limit_blob(limit, bool(parked)) if gzip_ok else None
+            blob, etag = capped if capped else (None, "")
+        if blob is not None and gzip_ok:
             headers = {"ETag": etag, "Cache-Control": "no-cache"}
             if request.headers.get("if-none-match") == etag:
                 return Response(status_code=304, headers=headers)
@@ -477,9 +578,12 @@ async def maritime_snapshot(
                 media_type="application/json",
                 headers={**headers, "Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
             )
-        return vessel_snapshot(parked_only=bool(parked))
-    full = vessel_snapshot(parked_only=bool(parked))
-    return viewport_filter(full, lamin, lomin, lamax, lomax, limit)
+        if limit is None:
+            return vessel_snapshot(parked_only=bool(parked))
+    # Viewport request: filter this cycle's features off the event loop.
+    return await asyncio.to_thread(
+        viewport_filter, _cycle_snapshot(bool(parked)), lamin, lomin, lamax, lomax, limit
+    )
 
 
 # ── 24/7 background AIS poller ───────────────────────────────────────────────

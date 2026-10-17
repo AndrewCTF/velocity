@@ -75,6 +75,7 @@ from app.routes import ai_selection as ai_selection_routes
 from app.routes import airhazards as airhazards_routes
 from app.routes import airspace as airspace_routes
 from app.routes import ais as ais_routes
+from app.routes import ais_pipeline as ais_pipeline_routes
 from app.routes import alert_rules as alert_rules_routes
 from app.routes import alerts as alerts_routes
 from app.routes import answers as answers_routes
@@ -390,6 +391,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import ais_keyless  # noqa: PLC0415
 
             ais_keyless.start()
+            # Keyless global ingest pipeline (app/ais_pipeline): the ShipXplorer
+            # world pull + the OpenWaters sweep, merged into a FRESHNESS-WINS
+            # MMSI store that /api/maritime/coverage and /api/maritime/vessels
+            # read, and bridged (freshness-gated per id) into the shared
+            # last-write-wins store behind /api/maritime/snapshot.
+            from app import ais_pipeline  # noqa: PLC0415
+
+            ais_pipeline.start()
             # 24/7 background AIS poll: keep the keyless REST sources flowing into
             # the unified vessel store (/api/maritime/snapshot) without a viewer.
             # maritime_routes is module-imported — do NOT re-import locally.
@@ -533,6 +542,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app import (
                 ais_firehose,  # noqa: PLC0415
                 ais_keyless,  # noqa: PLC0415
+                ais_pipeline,  # noqa: PLC0415
                 history,  # noqa: PLC0415
                 marinetraffic,  # noqa: PLC0415
             )
@@ -541,6 +551,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
             await ais_firehose.stop()
             await ais_keyless.stop()
+            await ais_pipeline.stop()
             await marinetraffic.stop()
             await maritime_routes.stop_background_poll()
             await maritime_routes.stop_vessel_blob()
@@ -744,6 +755,7 @@ def create_app() -> FastAPI:
     app.include_router(ai_batch_routes.router)
     app.include_router(firms_routes.router)
     app.include_router(ais_routes.router)
+    app.include_router(ais_pipeline_routes.router)
     app.include_router(seismic_routes.router)
     app.include_router(events_routes.router)
     app.include_router(geocode_routes.router)

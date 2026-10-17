@@ -277,3 +277,101 @@ async def test_create_watch_rule_no_gate_returns_structured_422(
         out = await M.create_watch_rule(label="no gate at all")
         assert out["error"] == "backend_422"
         assert "identity pin" in out["detail"] or "AOI" in out["detail"]
+
+
+# ── AIS pipeline tools (2026-10-04) ───────────────────────────────────────
+
+
+def _capture(monkeypatch: pytest.MonkeyPatch, payload: dict) -> dict:
+    captured: dict = {}
+
+    async def fake_get(path: str, params=None):  # type: ignore[no-untyped-def]
+        captured["path"] = path
+        captured["params"] = params
+        return payload
+
+    monkeypatch.setattr(M, "_get", fake_get)
+    return captured
+
+
+@pytest.mark.asyncio
+async def test_maritime_pipeline_stats_is_returned_whole(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {"store": {"bySource": {f"s{i}": i for i in range(9)}}, "coverageNote": "x" * 900}
+    captured = _capture(monkeypatch, payload)
+    out = await M.maritime_pipeline_stats()
+    assert captured["path"] == "/api/maritime/pipeline/stats"
+    # Unshaped: the honesty note must reach the model untruncated.
+    assert out == payload
+
+
+@pytest.mark.asyncio
+async def test_maritime_coverage_keeps_the_dense_grid(monkeypatch: pytest.MonkeyPatch) -> None:
+    grid = {"rows": 36, "cols": 72, "cells": [[0] * 72 for _ in range(36)]}
+    captured = _capture(monkeypatch, grid)
+    out = await M.maritime_coverage(max_age_s=900.0)
+    assert captured["path"] == "/api/maritime/coverage"
+    assert captured["params"] == {"max_age_s": 900.0}
+    # shape() would cut this to 5 rows of 5 — a grid nobody could read.
+    assert len(out["cells"]) == 36 and len(out["cells"][0]) == 72
+
+
+@pytest.mark.asyncio
+async def test_maritime_vessels_bbox_short_vs_long(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {
+        "bbox": [103.0, 0.0, 105.0, 2.0],
+        "count": 1537,
+        "returned": 30,
+        "truncated": False,
+        "vessels": [{"mmsi": 100000000 + i} for i in range(30)],
+    }
+    captured = _capture(monkeypatch, payload)
+    short = await M.maritime_vessels_bbox("103,0,105,2")
+    assert captured["path"] == "/api/maritime/vessels"
+    assert captured["params"] == {"bbox": "103,0,105,2", "max_age_s": 3600.0, "limit": 200}
+    assert len(short["vessels"]) == 5 and short["vessels_total"] == 30
+    # The route's true in-box count survives the trim.
+    assert short["count"] == 1537
+    long = await M.maritime_vessels_bbox("103,0,105,2", detail="long")
+    assert len(long["vessels"]) == 30
+
+
+@pytest.mark.asyncio
+async def test_sar_scenes_calls_the_dark_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {"sceneCount": 1, "scenes": [{"id": "S1C"}], "detections": [], "candidates": []}
+    captured = _capture(monkeypatch, payload)
+    out = await M.sar_scenes("55,24,58,27", days=5)
+    assert captured["path"] == "/api/maritime/dark"
+    assert captured["params"] == {"bbox": "55,24,58,27", "days": 5, "limit": 3, "detect": False}
+    assert out["sceneCount"] == 1
+    await M.sar_scenes("56.3,26.5,56.8,26.8", detect=True)
+    assert captured["params"]["detect"] is True
+
+
+@pytest.mark.asyncio
+async def test_maritime_satellite_positions_keeps_the_true_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "type": "FeatureCollection",
+        "count": 40,
+        "complete": True,
+        "features": [{"id": f"satpos:{i}", "properties": {"identified": False}} for i in range(40)],
+    }
+    captured = _capture(monkeypatch, payload)
+    short = await M.maritime_satellite_positions()
+    assert captured["path"] == "/api/maritime/satellite"
+    assert captured["params"] == {"bbox": None}
+    assert len(short["features"]) == 5 and short["count"] == 40
+    await M.maritime_satellite_positions(bbox="60,-30,90,0", detail="long")
+    assert captured["params"] == {"bbox": "60,-30,90,0"}
+
+
+@pytest.mark.asyncio
+async def test_pipeline_tools_pass_backend_errors_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _capture(monkeypatch, {"error": "backend_400", "detail": "bbox must be lon0,lat0,lon1,lat1"})
+    out = await M.maritime_vessels_bbox("nope")
+    assert out["error"] == "backend_400"

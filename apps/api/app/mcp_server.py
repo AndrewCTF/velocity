@@ -1727,6 +1727,71 @@ async def tinygs_packets(detail: str = "short") -> dict[str, Any]:
     return shape(await _get("/api/space/tinygs"), detail)
 
 
+# ── 2026-10-04 AIS pipeline: the freshness-wins vessel store + SAR scenes ────
+# These read app.ais_pipeline's own store (ShipXplorer + OpenWaters), which is
+# also bridged into the union query_vessels reads. Use these when the question
+# is about COVERAGE or source health; use query_vessels for classified traffic.
+
+
+@mcp.tool()
+async def maritime_pipeline_stats() -> dict[str, Any]:
+    """Health of the keyless AIS pipeline: vessels per source, the OpenWaters
+    sweep (tiles failed/truncated, whether it completed), fix-age percentiles,
+    and the standing note that keyless AIS is coastal, not open-ocean."""
+    return await _get("/api/maritime/pipeline/stats")
+
+
+@mcp.tool()
+async def maritime_coverage(max_age_s: float = 3600.0) -> dict[str, Any]:
+    """Where keyless AIS actually reaches: a dense 36x72 grid of live-vessel
+    counts in 5 degree cells (row 0 = 90S..85S, col 0 = 180W..175W). A zero
+    cell means no feed reports there, not that the sea is empty. Returned
+    whole; a trimmed grid would be unreadable."""
+    return await _get("/api/maritime/coverage", {"max_age_s": max_age_s})
+
+
+@mcp.tool()
+async def maritime_vessels_bbox(
+    bbox: str, max_age_s: float = 3600.0, limit: int = 200, detail: str = "short"
+) -> dict[str, Any]:
+    """Vessels in a box from the freshness-wins AIS store, freshest first, each
+    with its fix age and every source that reported it. bbox =
+    lon0,lat0,lon1,lat1 (lon0 > lon1 crosses the antimeridian). `count` is the
+    true number in the box even when the list is trimmed."""
+    data = await _get(
+        "/api/maritime/vessels", {"bbox": bbox, "max_age_s": max_age_s, "limit": limit}
+    )
+    return shape(data, detail)
+
+
+@mcp.tool()
+async def sar_scenes(
+    bbox: str, days: int = 2, limit: int = 3, detect: bool = False, detail: str = "short"
+) -> dict[str, Any]:
+    """Recent keyless Sentinel-1 SAR scenes over a box, for water AIS does not
+    reach. bbox = lon0,lat0,lon1,lat1. By default a SCENE INVENTORY (id, time,
+    footprint, public download URL). detect=True also returns LOCATED radar
+    contacts for a box up to one degree a side, each classified against AIS:
+    'dark' only where enough nearby AIS makes absence meaningful, otherwise
+    'unknown'. Read `note`: it says when detection did not run and why."""
+    data = await _get(
+        "/api/maritime/dark", {"bbox": bbox, "days": days, "limit": limit, "detect": detect}
+    )
+    return shape(data, detail)
+
+
+@mcp.tool()
+async def maritime_satellite_positions(
+    bbox: str | None = None, detail: str = "short"
+) -> dict[str, Any]:
+    """Unidentified satellite AIS positions: where ships are in OPEN OCEAN,
+    beyond coastal AIS. Each is a position, a type class and a heading only;
+    upstream publishes no MMSI, name or position age for them, so do not
+    present one as a tracked, identified vessel. bbox = lon0,lat0,lon1,lat1
+    (optional). `count` is the true total even when the list is trimmed."""
+    return shape(await _get("/api/maritime/satellite", {"bbox": bbox}), detail)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="OSINT GEOINT MCP server")
     parser.add_argument("--http", action="store_true", help="serve over streamable-HTTP")
