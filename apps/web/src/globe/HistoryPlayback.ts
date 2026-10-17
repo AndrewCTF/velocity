@@ -70,7 +70,7 @@ export interface PlaybackInfo {
   from: number; // epoch seconds
   to: number;
   source: PlaybackSource;
-  label: string; // human-readable source description, e.g. "aircraft · adsb.fi archive · vessels · own archive since 2026-08-09"
+  label: string; // human-readable source description, e.g. "aircraft · adsb.lol archive · vessels · own archive since 2026-08-09"
   maxMultiplier: number; // 600 while the current chunk's aircraft come from upstream, else 3600
 }
 
@@ -440,11 +440,30 @@ export function installHistoryPlayback(
             .map((x) => x.day)
             .filter((d) => d !== "legacy")
             .sort();
-          if (days.length === 0) return { ms: 0, day: null };
-          const day = days[0]!;
-          return { ms: Date.parse(`${day}T00:00:00Z`), day };
+          if (days.length > 0) {
+            const day = days[0]!;
+            return { ms: Date.parse(`${day}T00:00:00Z`), day };
+          }
+          // The default keyless archive is ONE legacy SQLite file: stats names
+          // no dated shard and no oldest_ts. coverage() answers MIN(t) for it.
+          // Without this, `ms: 0` read every half hour back to 2024 as "own
+          // archive" and the upstream aircraft replay never ran (measured
+          // 2026-10-17: a 2024-06-01 link drew 0 aircraft).
+          const c = await apiFetch(
+            "/api/history/coverage?window_hours=1&bucket_hours=1",
+          );
+          if (c.ok) {
+            const cv = (await c.json()) as { oldest_ts?: number | null };
+            if (typeof cv.oldest_ts === "number" && cv.oldest_ts > 0) {
+              const ms = cv.oldest_ts * 1000;
+              return { ms, day: dayUtc(ms) };
+            }
+          }
+          // An empty archive starts now: every past half hour's aircraft come
+          // from upstream (vessels still ask the own archive, and find none).
+          return { ms: Date.now(), day: null };
         } catch {
-          return { ms: 0, day: null };
+          return { ms: Date.now(), day: null };
         }
       })();
     }
@@ -493,6 +512,10 @@ export function installHistoryPlayback(
         cacheSet(key, null);
         return null;
       }
+      // Name the aggregator that actually served it; "cache" says nothing
+      // about where the chunk came from, so it leaves the label generic.
+      const host = r.headers?.get?.("x-heatmap-host");
+      if (host && host !== "cache") upstreamHost = host;
       const buf = await r.arrayBuffer();
       const decoded = await decoder.decode(buf);
       cacheSet(key, decoded);
@@ -503,12 +526,18 @@ export function installHistoryPlayback(
     }
   }
 
+  // The host named in the last upstream chunk's X-Heatmap-Host. This read
+  // "adsb.fi archive" unconditionally while the chunks came from adsb.lol.
+  let upstreamHost: string | null = null;
+  let labelDay: string | null = null;
   function sourceLabel(oldestDay: string | null): string {
+    const air = upstreamHost
+      ? `${upstreamHost} archive`
+      : "public readsb archive";
     return oldestDay
-      ? `aircraft · adsb.fi archive · vessels · own archive since ${oldestDay}`
-      : `aircraft · adsb.fi archive · vessels · own archive`;
+      ? `aircraft · ${air} · vessels · own archive since ${oldestDay}`
+      : `aircraft · ${air} · vessels · own archive`;
   }
-  let staticLabel = sourceLabel(null);
 
   function buildInfo(
     source: PlaybackSource,
@@ -521,7 +550,7 @@ export function installHistoryPlayback(
       from,
       to,
       source,
-      label: staticLabel,
+      label: sourceLabel(labelDay),
       maxMultiplier: source === "upstream" || source === "mixed" ? 600 : 3600,
     };
   }
@@ -668,7 +697,7 @@ export function installHistoryPlayback(
     ensureTickListener();
 
     const oldest = await resolveOldest();
-    staticLabel = sourceLabel(oldest.day);
+    labelDay = oldest.day;
 
     const { day, index } = chunkKeyForMs(startMs);
     currentKey = `${day} ${index}`;
