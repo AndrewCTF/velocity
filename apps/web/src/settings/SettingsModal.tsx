@@ -24,6 +24,7 @@ import { SCHEMES } from "../theme/schemes.js";
 import { AccountSecurity } from "../auth/AuthForm.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { isSupabaseConfigured } from "../transport/supabase.js";
+import { useIsMobile } from "../shell/useIsMobile.js";
 
 interface Me {
   email?: string;
@@ -41,6 +42,9 @@ export function SettingsModal({
 }): JSX.Element {
   const [me, setMe] = useState<Me | null>(null);
   const { user } = useAuth();
+  // On a phone Settings is the screen, with Done where a thumb finds it; "esc"
+  // names a key a phone does not have.
+  const phone = useIsMobile();
 
   useEffect(() => {
     let live = true;
@@ -67,23 +71,47 @@ export function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-(--z-modal) flex items-start justify-center bg-black/60 backdrop-blur-xs pt-[8vh]"
+      className={
+        phone
+          ? "fixed inset-0 z-(--z-modal) bg-bg-1"
+          : "fixed inset-0 z-(--z-modal) flex items-start justify-center bg-black/60 backdrop-blur-xs pt-[8vh]"
+      }
       onClick={onClose}
     >
       <div
-        className="w-[420px] max-w-[92vw] max-h-[80vh] overflow-y-auto rounded-md border border-line bg-bg-1 shadow-2xl"
+        className={
+          phone
+            ? "h-full overflow-y-auto pb-[env(safe-area-inset-bottom)]"
+            : "w-[420px] max-w-[92vw] max-h-[80vh] overflow-y-auto rounded-md border border-line bg-bg-1 shadow-2xl"
+        }
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-          <span className="mono text-[12px] tracking-[0.12em] uppercase text-txt-1">
+        <div
+          className={
+            phone
+              ? "sticky top-0 z-1 flex h-[52px] items-center justify-between border-b border-line bg-bg-1 pl-4 pr-2 pt-[env(safe-area-inset-top)]"
+              : "flex items-center justify-between border-b border-line px-4 py-2.5"
+          }
+        >
+          <span
+            className={
+              phone
+                ? "text-[17px] font-semibold text-txt-0"
+                : "mono text-[12px] tracking-[0.12em] uppercase text-txt-1"
+            }
+          >
             Settings
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="mono text-[11px] px-2 py-0.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
+            className={
+              phone
+                ? "min-h-[44px] px-3 text-[15px] font-semibold text-accent-fg"
+                : "mono text-[11px] px-2 py-0.5 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent"
+            }
           >
-            esc
+            {phone ? "Done" : "esc"}
           </button>
         </div>
 

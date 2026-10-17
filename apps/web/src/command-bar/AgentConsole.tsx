@@ -959,9 +959,11 @@ export function AgentConsole({
             ↵ run
           </Btn>
         )}
-        <span className="mono text-[10px] text-txt-3 border border-line-2 rounded-sm px-1.5 py-px">
-          ⌘J
-        </span>
+        {!isMobile && (
+          <span className="mono text-[10px] text-txt-3 border border-line-2 rounded-sm px-1.5 py-px">
+            ⌘J
+          </span>
+        )}
       </div>
 
       {/* ── slash hints (resting desktop only) ── */}
