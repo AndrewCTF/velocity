@@ -16,7 +16,7 @@ import { imageryOverlayUrl } from "../imagery/gibsUrl.js";
 import { loadLod1, loadLod1Bbox, clearLod1 } from "../lod1/lod1Layer.js";
 import { LayerCompositor } from "./LayerCompositor.js";
 import { installSelectionReticle } from "./selectionReticle.js";
-import { installLongPress } from "./longPress.js";
+import { consumeLongPressClick, installLongPress } from "./longPress.js";
 import { installSearchTargetMarker } from "./searchTargetMarker.js";
 import { installSelectionTrack } from "./selectionTrack.js";
 import { installSpotlight } from "./SpotlightLayer.js";
@@ -976,6 +976,8 @@ export function GlobeCanvas({
     // Click → useSelection
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
     handler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
+      // The lift that ends a long-press is not a tap (longPress.ts).
+      if (consumeLongPressClick()) return;
       const picked = scene.pick(click.position);
       // EntityCluster picks return picked.id as an Entity[] (the merged
       // cluster contents) rather than a single Entity. Treating that as a

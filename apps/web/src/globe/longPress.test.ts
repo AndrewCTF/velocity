@@ -7,7 +7,7 @@ import { useSearchTarget, useSelection } from "../state/stores.js";
 import { useInvestigation } from "../graph/investigationStore.js";
 import { useContextMenu } from "./contextMenuStore.js";
 import { setDrawController, type DrawController } from "./draw.js";
-import { installLongPress } from "./longPress.js";
+import { consumeLongPressClick, installLongPress } from "./longPress.js";
 
 // On touch the globe's context menu used to need an unmentioned 1.5 s hold
 // (Cesium's own touch-hold, which is what raises RIGHT_CLICK). installLongPress
@@ -333,10 +333,12 @@ describe("installLongPress: what cancels a hold", () => {
 describe("installLongPress: what the lift leaves behind", () => {
   // Cesium raises LEFT_CLICK from the pointer events when a lift comes sooner
   // than its own 1.5 s hold, and GlobeCanvas answers a click on empty ground by
-  // clearing the selection and the search pin. This listener stands in for the
-  // pair; it is registered BEFORE installLongPress, like Cesium's handler.
+  // clearing the selection and the search pin, unless consumeLongPressClick
+  // says the click is a long-press lift. This listener stands in for the pair;
+  // it is registered BEFORE installLongPress, like Cesium's handler.
   function standInForCesiumClick(canvas: HTMLCanvasElement): void {
     canvas.addEventListener("pointerup", () => {
+      if (consumeLongPressClick()) return;
       useSelection.getState().select(null);
       useSearchTarget.getState().setTarget(null);
     });
@@ -495,7 +497,7 @@ describe("installLongPress: what the lift leaves behind", () => {
     expect(useSelection.getState().selectedEntityId).toBe("aircraft:ab1234");
   });
 
-  it("restores what stood just before the lift, not what stood before the hold", () => {
+  it("leaves a selection made during the hold alone", () => {
     const r = install();
     useSelection.getState().select("vessel:7");
     pointer(r.canvas, "pointerdown");
@@ -519,6 +521,16 @@ describe("installLongPress: what the lift leaves behind", () => {
     } finally {
       off();
     }
+  });
+
+  it("leaves nothing to consume when Cesium raised no click on the lift", () => {
+    // A hold past Cesium's 1.5 s gets its RIGHT_CLICK and no LEFT_CLICK, so
+    // nothing asks during the lift; the next tap must still deselect.
+    const r = install(undefined, false);
+    pointer(r.canvas, "pointerdown");
+    vi.advanceTimersByTime(500);
+    pointer(r.canvas, "pointerup");
+    expect(consumeLongPressClick()).toBe(false);
   });
 
   it("does not interfere with a tap, whose click deselects as it always did", () => {
@@ -584,6 +596,8 @@ describe("the printed hint stays true", () => {
     );
     expect(src).toContain("installLongPress(viewer)");
     expect(src).toContain("detachLongPress()");
+    // The lift's LEFT_CLICK is consumed, or it clears what the hold kept.
+    expect(src).toContain("if (consumeLongPressClick()) return;");
   });
 
   // While a draw is armed a long-press is left to Cesium's own touch-hold, which

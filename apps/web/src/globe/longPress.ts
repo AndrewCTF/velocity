@@ -1,9 +1,5 @@
 import * as Cesium from "cesium";
-import {
-  useSearchTarget,
-  useSelection,
-  type SearchTarget,
-} from "../state/stores.js";
+import { useSelection } from "../state/stores.js";
 import { useInvestigation } from "../graph/investigationStore.js";
 import { useContextMenu } from "./contextMenuStore.js";
 import { getDrawController } from "./draw.js";
@@ -27,6 +23,26 @@ const HOLD_MS = 500;
 const SLOP_PX = 10;
 // How long after the lift the click the browser may still send is swallowed.
 const CLICK_GUARD_MS = 400;
+
+// Up from the acting lift's window-capture pointerup to its window-bubble one.
+// Cesium's canvas listeners run in between, so a LEFT_CLICK raised then is the
+// lift itself.
+let liftInFlight = false;
+
+/**
+ * Cesium turns a lift that comes before ITS 1.5 s hold into a LEFT_CLICK, and
+ * GlobeCanvas answers a click on empty ground by clearing the selection and the
+ * search pin. That click is made from pointer events, not from the DOM `click`,
+ * so it cannot be swallowed like one; the LEFT_CLICK handler asks this first
+ * and returns on true. A hold that outlasts Cesium's own 1.5 s raises its
+ * RIGHT_CLICK instead and sends no LEFT_CLICK, so nothing asks, and the flag
+ * drops with the lift.
+ */
+export function consumeLongPressClick(): boolean {
+  const was = liftInFlight;
+  liftInFlight = false;
+  return was;
+}
 
 /**
  * What a right-click does at a screen point: a contact (aircraft, vessel, sim,
@@ -70,11 +86,6 @@ export function contextActionAt(
   return true;
 }
 
-interface Held {
-  sel: string | null;
-  pin: SearchTarget | null;
-}
-
 /**
  * Listens on the globe canvas for a touch that rests for 500 ms (under 10 px
  * of drift, one finger, no draw armed) and runs the right-click action there.
@@ -98,8 +109,6 @@ export function installLongPress(viewer: Cesium.Viewer): () => void {
   let holdTimer: number | undefined;
   // The finger whose hold has acted, until its lift has been dealt with.
   let fired: { id: number } | null = null;
-  // Selection and search pin as they were just before that lift reached Cesium.
-  let before: Held | null = null;
   let clickGuard = false;
   let guardTimer: number | undefined;
 
@@ -143,7 +152,6 @@ export function installLongPress(viewer: Cesium.Viewer): () => void {
       down.clear();
       cancelHold();
       fired = null;
-      before = null;
     }
     down.add(e.pointerId);
     if (down.size > 1) {
@@ -169,20 +177,11 @@ export function installLongPress(viewer: Cesium.Viewer): () => void {
     if (Math.hypot(p.x - p.x0, p.y - p.y0) >= SLOP_PX) cancelHold();
   };
 
-  // Cesium turns a lift that comes before ITS 1.5 s hold into a LEFT_CLICK, and
-  // GlobeCanvas answers a LEFT_CLICK on empty ground by clearing the selection
-  // and the search pin. That click is made from pointer events, not from the
-  // DOM `click`, so nothing here can stop it; instead the selection is read
-  // just before the lift reaches Cesium (window capture runs ahead of every
-  // listener on the canvas) and put back just after (window bubble runs behind
-  // them). A hold that outlasts Cesium's own 1.5 s raises its RIGHT_CLICK
-  // instead and sends no LEFT_CLICK, so that case finds nothing to restore.
+  // Window capture runs ahead of every listener on the canvas, window bubble
+  // behind them: see consumeLongPressClick.
   const onEndCapture = (e: PointerEvent): void => {
     if (!fired || e.pointerId !== fired.id) return;
-    before = {
-      sel: useSelection.getState().selectedEntityId,
-      pin: useSearchTarget.getState().target,
-    };
+    liftInFlight = true;
   };
 
   const onEnd = (e: PointerEvent): void => {
@@ -190,15 +189,8 @@ export function installLongPress(viewer: Cesium.Viewer): () => void {
     down.delete(e.pointerId);
     if (pending && pending.id === e.pointerId) cancelHold();
     if (!fired || e.pointerId !== fired.id) return;
-    const held = before;
     fired = null;
-    before = null;
-    if (held) {
-      if (useSelection.getState().selectedEntityId !== held.sel)
-        useSelection.getState().select(held.sel);
-      if (useSearchTarget.getState().target !== held.pin)
-        useSearchTarget.getState().setTarget(held.pin);
-    }
+    liftInFlight = false;
     armClickGuard();
   };
 
@@ -247,6 +239,6 @@ export function installLongPress(viewer: Cesium.Viewer): () => void {
     disarmClickGuard();
     down.clear();
     fired = null;
-    before = null;
+    liftInFlight = false;
   };
 }

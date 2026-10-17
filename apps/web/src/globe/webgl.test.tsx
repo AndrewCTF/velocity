@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasWebGL2 } from "./webgl.js";
+import { MemoryRouter } from "react-router-dom";
 import { NoWebGL, RequireWebGL2 } from "./NoWebGL.js";
+import { LowEndBanner } from "./LowEndBanner.js";
 
 // A device that cannot give the globe a WebGL 2 context used to land in the
 // generic "globe" error boundary: a panel that "stopped rendering", with no
@@ -162,5 +164,38 @@ describe("the globe is rendered behind the gate", () => {
     expect(readFileSync(join(SRC, "App.tsx"), "utf8")).toMatch(
       /<RequireWebGL2>\s*<GlobeCanvas[\s\S]*?\/>\s*<\/RequireWebGL2>/,
     );
+  });
+
+  // MapLibre needs WebGL 2 as well: /2d threw "WebGL2 is required" into the
+  // shell boundary on exactly the devices sent there.
+  it("the 2D map sits behind the same gate", () => {
+    expect(readFileSync(join(SRC, "App2D.tsx"), "utf8")).toMatch(
+      /<RequireWebGL2>\s*<MapLibreCanvas[\s\S]*?\/>\s*<\/RequireWebGL2>/,
+    );
+  });
+});
+
+describe("LowEndBanner", () => {
+  function banner(): void {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <LowEndBanner />
+      </MemoryRouter>,
+    );
+  }
+
+  it("offers the 2D map on a weak GPU that has WebGL 2", () => {
+    // No WebGL 1 context reads as a failed probe: deviceTier() is "low".
+    stubGetContext((type) =>
+      type === "webgl2" ? { getExtension: () => null } : null,
+    );
+    banner();
+    expect(screen.getByText("Switch to 2D")).toBeTruthy();
+  });
+
+  it("offers nothing without WebGL 2, where the 2D map cannot draw either", () => {
+    stubGetContext(() => null);
+    banner();
+    expect(screen.queryByText("Switch to 2D")).toBeNull();
   });
 });

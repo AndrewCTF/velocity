@@ -5,6 +5,7 @@ import { LayerRail } from "./layer-rail/LayerRail.js";
 import { EntityPanel } from "./entity-panel/EntityPanel.js";
 import { Timeline } from "./timeline/Timeline.js";
 import { MapLibreCanvas } from "./maplibre/MapLibreCanvas.js";
+import { RequireWebGL2 } from "./globe/NoWebGL.js";
 import { LayerRegistry } from "./registry/LayerRegistry.js";
 import { registerDefaults } from "./registry/defaults.js";
 import { fetchRuntimeConfig } from "./transport/config.js";
@@ -40,7 +41,11 @@ export function App2D(): JSX.Element {
           />
         }
         left={<LayerRail registry={registry} viewer={null} />}
-        globe={<MapLibreCanvas registry={registry} />}
+        globe={
+          <RequireWebGL2>
+            <MapLibreCanvas registry={registry} />
+          </RequireWebGL2>
+        }
         right={<EntityPanel />}
         bottom={<Timeline />}
       />

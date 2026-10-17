@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { deviceTier } from "../shell/device.js";
+import { hasWebGL2 } from "./webgl.js";
 import { Icon } from "../normal/Icon.js";
 
 // One-shot low-end suggestion. When the graded device probe (shell/device.ts:
@@ -21,9 +22,12 @@ function alreadyDismissed(): boolean {
 export function LowEndBanner(): JSX.Element | null {
   const loc = useLocation();
   const [dismissed, setDismissed] = useState(alreadyDismissed);
+  // Without WebGL 2 the 2D map cannot draw either (MapLibre needs it), and the
+  // globe's own NoWebGL message already says what to do.
+  const [webgl2] = useState(hasWebGL2);
   // Only the 3D console home; never /2d, auth, news, studio.
   if (loc.pathname !== "/") return null;
-  if (dismissed) return null;
+  if (dismissed || !webgl2) return null;
   if (deviceTier() !== "low") return null;
 
   const dismiss = (): void => {
