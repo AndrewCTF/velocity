@@ -127,3 +127,30 @@ def test_status_never_500s_on_snapshot_error(
     r = client.get("/api/status")
     assert r.status_code == 200
     assert r.json()["status"] == "down"
+
+
+def test_a_stalled_loop_names_the_line_that_stalled_it() -> None:
+    """The lag number alone cannot say what the loop was stuck behind, and no
+    outside tool can attach here. A blocking call on the loop has to turn up in
+    /api/status/perf under the function that made it."""
+    import asyncio
+    import time
+
+    from app.routes import status
+
+    async def hog() -> None:
+        time.sleep(0.8)  # noqa: ASYNC251 - the bug being looked for
+
+    async def run() -> None:
+        status.start_lag_probe()
+        await asyncio.sleep(0.2)
+        await hog()
+        await asyncio.sleep(0.1)
+        await status.stop_lag_probe()
+
+    status._STALLS.clear()
+    asyncio.run(run())
+    site, (samples, wall_ms, cpu_ms) = max(status._STALLS.items(), key=lambda kv: kv[1][1])
+    assert "hog" in site, site
+    assert wall_ms >= 300  # 0.8 s blocked, less the 0.1 s before it counts as a stall
+    assert cpu_ms < wall_ms / 2  # asleep, not computing: the two columns tell them apart

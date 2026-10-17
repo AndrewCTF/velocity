@@ -767,3 +767,44 @@ async def test_incremental_vacuum_mode_and_reclaim(
     finally:
         monkeypatch.delenv("HISTORY_INCREMENTAL_VACUUM", raising=False)
         get_settings.cache_clear()
+
+
+# ── first-sight vessel resolution stays off the event loop ────────────────────
+
+
+async def test_first_sight_resolution_does_not_run_on_the_event_loop(monkeypatch):
+    """`resolve()` opens SQLite and commits, ~40 ms a call. Inline, the first
+    Kystdatahuset poll after a boot (thousands of first sights) froze the loop
+    for over two minutes. With a loop running it must go to the worker."""
+    import asyncio
+    import threading
+
+    from app.intel import resolve
+
+    loop_thread = threading.get_ident()
+    ran_on: list[int] = []
+    done = threading.Event()
+
+    def fake_resolve(kind, ids):
+        ran_on.append(threading.get_ident())
+        done.set()
+
+    monkeypatch.setattr(resolve, "resolve", fake_resolve)
+    H._resolved_seen.discard("vessel:257000001")
+    H.ingest_vessels([{"id": "vessel:257000001", "lon": 5.0, "lat": 60.0, "name": "MS TEST"}])
+    await asyncio.to_thread(done.wait, 5.0)
+    assert ran_on and ran_on[0] != loop_thread
+    # Seen is recorded at hand-off, so a second fix does not queue it again.
+    H.ingest_vessels([{"id": "vessel:257000001", "lon": 5.1, "lat": 60.0}])
+    await asyncio.sleep(0.05)
+    assert len(ran_on) == 1
+
+
+def test_first_sight_resolution_runs_inline_without_a_loop(monkeypatch):
+    from app.intel import resolve
+
+    seen: list[dict] = []
+    monkeypatch.setattr(resolve, "resolve", lambda kind, ids: seen.append(ids))
+    H._resolved_seen.discard("vessel:257000002")
+    H.ingest_vessels([{"id": "vessel:257000002", "lon": 5.0, "lat": 60.0, "name": "MS SYNC"}])
+    assert seen == [{"mmsi": "257000002", "name": "MS SYNC"}]

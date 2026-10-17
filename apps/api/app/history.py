@@ -33,6 +33,7 @@ import os
 import sqlite3
 import time
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -106,6 +107,7 @@ _db_path_override: str | None = None  # set by tests via override_db_path()
 # Phase 1: vessels we've already run through entity resolution this process, so
 # the resolver fires once per distinct vessel (on first sight) — not every poll.
 _resolved_seen: set[str] = set()
+_RESOLVE_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vessel-resolve")
 _RESOLVE_SEEN_MAX: int = 200_000
 # SQLite's compile-time SQLITE_MAX_ATTACHED default is 10, and `main` uses one
 # of the slots. Keep a margin.
@@ -511,10 +513,28 @@ def _resolve_vessel(entity_id: str, row: dict[str, Any]) -> None:
             val = row.get(src_key)
             if val:
                 ids.setdefault(dst_key, val)
-        resolve.resolve("vessel", ids)
         if len(_resolved_seen) < _RESOLVE_SEEN_MAX:
             _resolved_seen.add(entity_id)
+        # resolve() opens SQLite, writes and COMMITS: ~40 ms each, measured
+        # 2026-10-04. Inline, the first Kystdatahuset poll after a boot (about
+        # 3 400 first sights through ais_firehose.publish_vessel) froze the
+        # event loop for 130-160 s, and with it the 1 s aircraft cycle and every
+        # request. One worker, so the writes stay serialized; no loop running
+        # (a script, a sync test) means nothing to protect, so it runs inline.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            resolve.resolve("vessel", ids)
+        else:
+            loop.run_in_executor(_RESOLVE_POOL, _resolve_quietly, resolve.resolve, ids)
     except Exception:  # noqa: BLE001
+        pass
+
+
+def _resolve_quietly(fn: Any, ids: dict[str, Any]) -> None:
+    try:
+        fn("vessel", ids)
+    except Exception:  # noqa: BLE001 — a resolver hiccup must not surface anywhere
         pass
 
 

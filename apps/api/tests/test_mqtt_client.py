@@ -18,6 +18,7 @@ import asyncio
 import json
 
 import pytest
+import pytest_asyncio
 
 from app import mqtt_client
 from app.foundry import connections as C
@@ -86,8 +87,29 @@ class FakeBroker:
             writer.close()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def broker():  # type: ignore[no-untyped-def]
+    """The fake broker, as a real async fixture.
+
+    BOTH halves are load-bearing; getting either one alone still fails.
+
+    1. `pytest_asyncio.fixture`, not a bare `@pytest.fixture`. This suite runs
+       pytest-asyncio in `auto` mode (pyproject.toml:139), which does NOT await a
+       bare async fixture — the test receives the un-awaited generator, so
+       `broker` is None (`AttributeError: 'NoneType' object has no attribute
+       'publish_later'`).
+    2. `@pytest.mark.asyncio` on the tests below, not `anyio`. With
+       pytest-asyncio owning async tests and no `anyio_backend` fixture defined
+       anywhere in the suite, `anyio` puts the test on a DIFFERENT event loop
+       than the one this fixture's `asyncio.start_server` bound to. The server is
+       listening but `_serve` is never scheduled, so a raw CONNECT goes
+       unanswered and every test died on its `wait_s` deadline with an opaque
+       `TimeoutError`. Proven by swapping the marker alone: the same raw
+       exchange then gets its CONNACK in 0.02 s.
+
+    This is the only file in the suite with an async fixture, which is why these
+    four tests were the only failures.
+    """
     b = FakeBroker()
     await b.start()
     try:
@@ -109,7 +131,7 @@ async def _collect(url: str, topic: str, n: int, wait_s: float = 5.0):  # type: 
     return got
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_subscribes_and_receives_over_tcp(broker: FakeBroker) -> None:
     broker.publish_later("sensors/1", b'{"t": 21.5}')
     got = await _collect(f"mqtt://127.0.0.1:{broker.port}", "sensors/#", 1)
@@ -117,7 +139,7 @@ async def test_subscribes_and_receives_over_tcp(broker: FakeBroker) -> None:
     assert broker.subscribed_topic == "sensors/#"
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_receives_several_messages_in_order(broker: FakeBroker) -> None:
     for i in range(3):
         broker.publish_later(f"sensors/{i}", str(i).encode())
@@ -125,7 +147,7 @@ async def test_receives_several_messages_in_order(broker: FakeBroker) -> None:
     assert [t for t, _ in got] == ["sensors/0", "sensors/1", "sensors/2"]
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_a_refused_connection_raises_rather_than_hanging(broker: FakeBroker) -> None:
     """A broker that says no must surface, not sit in the read loop forever —
     the runner's backoff can only work if the failure reaches it."""
@@ -134,7 +156,7 @@ async def test_a_refused_connection_raises_rather_than_hanging(broker: FakeBroke
         await _collect(f"mqtt://127.0.0.1:{broker.port}", "x", 1, wait_s=5.0)
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_an_unreachable_broker_raises() -> None:
     with pytest.raises((ConnectionError, OSError)):
         await _collect("mqtt://127.0.0.1:1", "x", 1, wait_s=5.0)
@@ -144,13 +166,13 @@ async def test_an_unreachable_broker_raises() -> None:
     "url,err",
     [("http://h/x", "unsupported"), ("mqtt://", "no host"), ("nonsense", "unsupported")],
 )
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_a_bad_url_is_rejected_before_dialling(url: str, err: str) -> None:
     with pytest.raises(ValueError, match=err):
         await _collect(url, "x", 1, wait_s=5.0)
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_the_default_port_is_1883() -> None:
     """A url with no port must not dial port 0."""
     with pytest.raises((ConnectionError, OSError)):
@@ -160,7 +182,7 @@ async def test_the_default_port_is_1883() -> None:
 # ── the connection runner, end to end over the same socket ────────────────────
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_an_mqtt_connection_lands_rows_and_mints_ontology_objects(
     broker: FakeBroker, client
 ) -> None:  # type: ignore[no-untyped-def]
