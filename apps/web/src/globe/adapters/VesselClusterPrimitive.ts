@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { liveHidden, registerLiveLayer } from "../liveVisibility.js";
 
 // World-view vessel count bubbles — the replacement for Cesium EntityCluster.
 //
@@ -44,6 +45,7 @@ export class VesselClusterPrimitive {
   private readonly bb: Cesium.BillboardCollection;
   private readonly lbl: Cesium.LabelCollection;
   private readonly removeMove: () => void;
+  private readonly unregisterLive: () => void;
   private readonly ring = vesselClusterRing();
 
   constructor(
@@ -56,6 +58,9 @@ export class VesselClusterPrimitive {
     this.lbl = new Cesium.LabelCollection({ scene });
     scene.primitives.add(this.bb);
     scene.primitives.add(this.lbl);
+    // Live vessel clusters vanish with the rest of the live map during replay.
+    this.bb.show = this.lbl.show = !liveHidden();
+    this.unregisterLive = registerLiveLayer(this);
     const onMove = (): void => this.recompute();
     viewer.camera.moveEnd.addEventListener(onMove);
     this.removeMove = () => {
@@ -126,8 +131,14 @@ export class VesselClusterPrimitive {
     this.viewer.scene.requestRender();
   }
 
+  setLiveHidden(hidden: boolean): void {
+    this.bb.show = this.lbl.show = !hidden;
+    if (!this.viewer.isDestroyed()) this.viewer.scene.requestRender();
+  }
+
   destroy(): void {
     this.removeMove();
+    this.unregisterLive();
     try {
       this.viewer.scene.primitives.remove(this.bb);
     } catch {

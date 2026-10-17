@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { setLiveLayersHidden } from "./liveVisibility.js";
 import { aircraftStyle, vesselStyle } from "./adapters/styles.js";
 import { labelFor } from "./adapters/labelStyle.js";
 import { apiFetch } from "../transport/http.js";
@@ -127,6 +128,7 @@ export function installHistoryPlayback(
   const ds = new Cesium.CustomDataSource("history-replay");
   void viewer.dataSources.add(ds);
   let hiddenLive: Cesium.DataSource[] = [];
+  let stopWatchingAdds: (() => void) | null = null;
   let active = false;
 
   // Hide every other (live) data source so the replay reads cleanly; remember
@@ -144,10 +146,25 @@ export function installHistoryPlayback(
       d.show = false;
       hiddenLive.push(d);
     }
+    // A live layer that attaches after replay started (a rewind link opens
+    // replay before the layers have loaded) is hidden as it arrives.
+    stopWatchingAdds =
+      viewer.dataSources.dataSourceAdded?.addEventListener(
+        (_c: unknown, d: Cesium.DataSource) => {
+          if (d === ds || !d.show) return;
+          d.show = false;
+          hiddenLive.push(d);
+        },
+      ) ?? null;
+    // Batched primitive layers follow no data source (globe/liveVisibility.ts).
+    setLiveLayersHidden(true);
   }
   function restoreLive(): void {
+    stopWatchingAdds?.();
+    stopWatchingAdds = null;
     for (const d of hiddenLive) d.show = true;
     hiddenLive = [];
+    setLiveLayersHidden(false);
   }
 
   // ── Shared per-id sample store ────────────────────────────────────────────
